@@ -152,6 +152,24 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// Cue 自己醒来的一轮里已经用 tell 问了你：最后那句回复不再写成灰色的一行（几乎是同一句）。
+    @Test func 自己醒来已经说过话就不再写动态() async throws {
+        let rig = try await Rig()
+        try await rig.say("请建个任务并开工")
+        try await rig.message(.cue, containing: "办好了")
+        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
+        let session = try #require(rig.app.host.extensions.values.first)
+        let task = try #require(try await rig.store.cueBoard().first?.task)
+        try await rig.store.linkCard(task.id, toSession: session.sessionID)
+        try await rig.store.updateCard(task.id) { $0.body = "修好登录页 请收一下" }  // 标题进信封：假模型据此 tell
+        session.setState(["kind": "thinking"])
+        session.setState(["kind": "idle"])
+        let asked = try await rig.message(.cue, containing: "收下吗？")
+        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已问用户") }
+        #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
+        await rig.stop()
+    }
+
     /// 刚启用的那一轮出错（模型一时出错）：隔一会儿再醒一次，照常看一眼。
     @Test func 刚启用的一轮出错后重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
@@ -201,7 +219,7 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("第一句")
         try await rig.message(.handoff, containing: "交接：在跟登录页")
-        try await rig.message(.note, containing: "接上了：交接：在跟登录页")
+        try await rig.message(.cue, containing: "接上了：交接：在跟登录页")  // 写下交接的那一轮是你发起的：换新后照样给你看
         #expect(rig.brainPIDs.count == 1 && rig.brainPIDs.first != first)
         await rig.stop()
     }
@@ -226,6 +244,8 @@ nonisolated final class FakeModel: Sendable {
     private let usage: Int
     private let played = Mutex<Set<String>>([])
     private let failingOnce: [String]
+    /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
+    private let finishedAfter = Mutex<[String]>([])
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
 
@@ -308,6 +328,9 @@ nonisolated final class FakeModel: Sendable {
     }
 
     /// 剧本：看最后一条消息。工具的结果——建好了任务就开工，否则说"办好了"；你的话与信封——按关键词调工具或回一句。
+    /// 已就结果含 `fragment` 的工具调用回了这一轮最后一句。
+    func answered(_ fragment: String) -> Bool { finishedAfter.withLock { $0.contains { $0.contains(fragment) } } }
+
     private func once(_ key: String) -> Bool { played.withLock { $0.insert(key).inserted } }
 
     private func script(_ request: [String: Any]) -> Reply {
@@ -329,6 +352,7 @@ nonisolated final class FakeModel: Sendable {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
                 return call("task", ["action": "start", "task": String(id), "model": "fake/fake-model", "effort": "high"])
             }
+            finishedAfter.withLock { $0.append(text) }
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
@@ -339,6 +363,7 @@ nonisolated final class FakeModel: Sendable {
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return .error("bad things happened") }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
+        if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") { return call("tell", ["text": "收下吗？", "choices": ["收下", "再改改"]]) }
         if text.contains("醒来：跟进的会话有动静") {
             if text.contains("先出一次错"), once("error") { return .error("bad things happened") }
             return say("登录页那边歇下了")
