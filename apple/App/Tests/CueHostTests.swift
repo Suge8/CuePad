@@ -219,7 +219,7 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("第一句")
         try await rig.message(.handoff, containing: "交接：在跟登录页")
-        try await rig.message(.note, containing: "接上了：交接：在跟登录页")
+        try await rig.message(.cue, containing: "接上了：交接：在跟登录页")  // 写下交接的那一轮是你发起的：换新后照样给你看
         #expect(rig.brainPIDs.count == 1 && rig.brainPIDs.first != first)
         await rig.stop()
     }

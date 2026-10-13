@@ -39,7 +39,8 @@ nonisolated struct CueTiming: Sendable {
 /// 6. 空闲巡视：没在跟进任何事、你很久没说话、本地 9–23 点，每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
-/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送）；
+/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
+/// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮里已经用 tell 对你说过话的，最后的回复不再写 note（几乎是同一句）。
 /// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
@@ -104,6 +105,7 @@ final class CueKeeper {
         var retryAt: Date?
         var wake: CueWake
         var extra: String?
+        var author: CueAuthor
     }
 
     private nonisolated enum Input: Sendable {
@@ -132,6 +134,8 @@ final class CueKeeper {
     private var turn: Turn?
     private var contextUsed: Int?
     private var lastTurnEnd = Date.now
+    /// 上一轮的回复写成谁的（换新时接着用）
+    private var lastTurnAuthor: CueAuthor = .note
     private var failures = 0
     private var restarting = false
     private var stuck: String?
@@ -188,7 +192,8 @@ final class CueKeeper {
 
     // MARK: 班次
 
-    private func startShift(wake: CueWake? = nil) async {
+    /// `wake`：新班次第一轮醒来的原因（换新），回复写成 `author` 的。
+    private func startShift(wake: CueWake? = nil, author: CueAuthor = .note) async {
         restarting = false
         let profile = setup.profile
         guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
@@ -214,7 +219,7 @@ final class CueKeeper {
             mergesTried = []
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
-            if let wake { _ = try await wakeUp(wake) }
+            if let wake { _ = try await wakeUp(wake, as: author) }
         } catch {
             setup.startFailed()
             await broke(error.localizedDescription)
@@ -272,9 +277,10 @@ final class CueKeeper {
             guard let finished = turn else { return }
             turn = nil
             lastTurnEnd = .now
+            lastTurnAuthor = finished.author
             failures = 0
             if let failure = finished.failure {
-                if let woke = finished.selfStarted { await setBack(failure, retrying: woke) }
+                if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
                 await advanceBaseline(finished.baseline)
@@ -301,11 +307,12 @@ final class CueKeeper {
     }
 
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
-    private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?)) async {
+    private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
         let latest = try? await setup.store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init)).map(\.at).max()
         let kind = PiErrorSummary(failure).kind
         let retry = setback == nil && kind != .quota && kind != .authentication
-        setback = Setback(latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra)
+        setback = Setback(
+            latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
     }
 
     // MARK: 对账
@@ -347,7 +354,8 @@ final class CueKeeper {
             if let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shiftStart }) {
                 await brain.stop()
                 self.brain = nil
-                await startShift(wake: .renewed(handoff: handoff.text))
+                // 换新后的第一轮接着写下交接的那一轮：那一轮是你发起的，回复照样给你看
+                await startShift(wake: .renewed(handoff: handoff.text), author: lastTurnAuthor)
                 return
             }
 
@@ -379,7 +387,7 @@ final class CueKeeper {
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
                     window = nil
-                    return _ = try await wakeUp(held.wake, extra: held.extra)
+                    return _ = try await wakeUp(held.wake, as: held.author, extra: held.extra)
                 } else {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
@@ -441,9 +449,9 @@ final class CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`delivering` 是随信封交出去的你的消息与回答。
     /// 发不进去时按大脑出了问题处理，返回 false。
     private func wakeUp(
-        _ wake: CueWake, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
+        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
     ) async throws -> Bool {
-        let author = Self.author(of: wake)
+        let author = chosen ?? Self.author(of: wake)
         guard let brain else { return false }
         let store = setup.store, now = Date.now
         let board = try await store.cueBoard()
@@ -506,7 +514,7 @@ final class CueKeeper {
         }
     }
 
-    /// 这一轮的回复写成谁的：你发来消息、刚启用（你正看着屏幕）写成 cue；其余 Cue 自己醒来的写成 note。
+    /// 这一轮的回复写成谁的：你发来消息、刚启用（你正看着屏幕）写成 cue；其余 Cue 自己醒来的写成 note（换新由调用方按写下交接的那一轮定）。
     private static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
