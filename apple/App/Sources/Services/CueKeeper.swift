@@ -210,6 +210,7 @@ final class CueKeeper {
     }
 
     private func handle(_ event: CueBrainEvent) async {
+        if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
         switch event {
         case .turnStarted:
             if turn == nil { turn = .cue }  // 没有醒来就开始的一轮只能是插进来的你的话开的
@@ -220,7 +221,7 @@ final class CueKeeper {
             contextUsed = used
         case .failed(let raw):
             let summary = PiErrorSummary(raw)
-            let line = summary.title == raw ? raw : "\(summary.title)\n\(raw)"
+            let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
             await say(.cue, "这一轮出错了：\(line)")
@@ -373,6 +374,7 @@ final class CueKeeper {
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         turn = author
+        Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
         do {
             try await brain.send(parts.joined(separator: "\n"))
         } catch {
