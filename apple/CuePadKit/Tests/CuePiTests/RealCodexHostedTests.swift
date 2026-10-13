@@ -87,6 +87,17 @@ struct RealCodexHostedTests {
             #expect(roster.map(\.name) == ["pong"])
             #expect(roster.first?.phase == .known(.done) && roster.first?.settledAt != nil)
             #expect(roster.first?.action.contains("PONG") == true)
+
+            // 子代理自己的会话文件与主会话同层，会话索引里只有主会话
+            let main = try #require(rig.bridge.session(id: id)?.sessionID)
+            let files = try #require(FileManager.default.enumerator(at: rig.codex.home.appending(path: "sessions"), includingPropertiesForKeys: nil))
+                .compactMap { $0 as? URL }.filter { $0.pathExtension == "jsonl" }
+            #expect(files.count == 2)
+            let history = HistoryEventLog(PiHistoryIndexer(root: rig.codex.home.appending(path: "sessions"), agent: .codex, files: scratchFiles) { _ in nil })
+            try await eventually("回填完") { history.finishedBackfill }
+            #expect(history.updates.map(\.checkpoint.sessionID) == [main])
+            let indexed = history.events.compactMap { if case .backfillFinished(let files) = $0 { files } else { nil } }.first
+            #expect(indexed?.map(\.lastPathComponent).allSatisfy { $0.contains(main) } == true && indexed?.count == 1)
         }
     }
 }

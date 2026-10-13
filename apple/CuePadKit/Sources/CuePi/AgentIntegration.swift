@@ -124,7 +124,7 @@ public struct AgentIntegration: Sendable {
     private func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
         switch kind {
         case .claudeCode: ClaudeCodeHooks(home: home(of: kind))
-        case .codex: CodexHooks(home: home(of: kind), locator: locator)
+        case .codex: CodexHooks(home: home(of: kind), locator: locator, environment: paths.environment)
         case .pi, .opencode: nil
         }
     }

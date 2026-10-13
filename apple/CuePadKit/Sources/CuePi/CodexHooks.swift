@@ -16,6 +16,8 @@ import Foundation
 struct CodexHooks: AgentHookConfig {
     let home: URL
     let locator: ExecutableLocator
+    /// 起 codex 时的基础环境（`AgentPaths.environment`），在它之上换掉配置目录与查找路径
+    let environment: [String: String]
 
     /// 全部 12 个事件；权限确认要等 CuePad 作答（远程的回答可能很久才来，超时后 Codex 当作钩子没给决定，回到终端里问），
     /// 会话结束与中断 Codex 最多给 3 秒，其余当场就回。
@@ -171,7 +173,7 @@ struct CodexHooks: AgentHookConfig {
     /// 起一个指向这个配置目录的 `codex app-server`，用完关掉并等它退出。
     private func withCodex(_ body: @MainActor (CodexRPC) async throws -> Void) async throws {
         guard let codex = locator.candidates(AgentKind.codex.command).first else { throw CodexHooksError.codexNotFound }
-        var environment = ProcessInfo.processInfo.environment
+        var environment = environment
         environment["CODEX_HOME"] = home.path
         environment["PATH"] = locator.searchDirectories.map(\.path).joined(separator: ":")
         try await Self.run(codex, environment, body)

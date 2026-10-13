@@ -30,6 +30,8 @@ enum CodexHistory {
         case ("session_meta", _):
             cp.sessionID = line.payload.id
             cp.cwd = line.payload.cwd
+            // 子代理自己的会话文件与主会话同层，它的过程在主会话的子代理里看
+            if line.payload.parentThreadID != nil { cp.excluded = true }
         case ("event_msg", "task_started"):
             cp.round = .init(startedAt: at)
         case ("event_msg", "turn_aborted"):
@@ -155,7 +157,13 @@ enum CodexHistory {
         var type: String?
         var id: String?
         var cwd: String?
+        var parentThreadID: String?
         var item: Item?
+
+        private enum CodingKeys: String, CodingKey {
+            case type, id, cwd, item
+            case parentThreadID = "parent_thread_id"
+        }
     }
 
     private struct Item: Decodable {
