@@ -16,7 +16,6 @@ DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 BUNDLE_ID=com.sugeh.cuepad
 
 mkdir -p "$DERIVED"
-[ -f "$DERIVED/.gitignore" ] || echo '*' > "$DERIVED/.gitignore"
 xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
   -destination "platform=iOS Simulator,name=$DEVICE" -derivedDataPath "$DERIVED" -quiet build \
   DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' \

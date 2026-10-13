@@ -2,7 +2,8 @@
 .DS_Store
 Thumbs.db
 
-# Xcode / Swift（apple/.derived 与 CuePadKit/.build 各自带 .gitignore）
+# Xcode / Swift（构建产物目录，含 perf 脚本的 -perf-* 变体；CuePadKit/.build 自带 .gitignore）
+/apple/.derived*/
 xcuserdata/
 # 在没有 Package.swift 的目录（如 apple/）误跑 swift build/test 时 SwiftPM 也会留下空的 .build
 .build/

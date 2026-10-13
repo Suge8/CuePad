@@ -43,7 +43,6 @@ esac
 app="$products/CuePad.app"
 
 mkdir -p "$DERIVED"
-[ -f "$DERIVED/.gitignore" ] || echo '*' > "$DERIVED/.gitignore"
 
 # 本机模式：ad-hoc 签名。工程默认是团队 + 自动签名（给发布用），iCloud/推送这类受限能力在 ad-hoc 下无法启动，
 # 所以日常构建覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。

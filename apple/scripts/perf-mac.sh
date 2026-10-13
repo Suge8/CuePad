@@ -16,7 +16,6 @@ EXE="$DERIVED/Build/Products/Release/CuePad.app/Contents/MacOS/CuePad"
 LIBRARY="$DERIVED/library-perf"
 
 mkdir -p "$DERIVED"
-[ -f "$DERIVED/.gitignore" ] || echo '*' > "$DERIVED/.gitignore"
 # 本机 ad-hoc 签名；关掉 hardened runtime，否则 ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
 xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED" -quiet build \
