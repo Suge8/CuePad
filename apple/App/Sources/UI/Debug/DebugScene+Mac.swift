@@ -16,6 +16,9 @@ extension DebugScene {
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
         case "agentsetup": workspace.showsAgentSetup = true
+        case "connected":
+            await connectAgents(workspace.services)
+            workspace.show(.agent)
         case "select":
             // 批量选择：选上本页前三条灵感
             try? await Task.sleep(for: .seconds(1))
@@ -57,6 +60,17 @@ extension DebugScene {
         case "chatresize": Task { await ChatResizeBench.run() }
         case "chatscroll": Task { await ChatScrollBench.run() }
         default: break
+        }
+    }
+
+    /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
+    /// 配置目录建出来就算装着（没有命令时按目录认）。
+    private static func connectAgents(_ services: AppServices) async {
+        for kind in AgentKind.allCases {
+            let skill = URL(filePath: (services.agents.skillPath(kind) as NSString).expandingTildeInPath)
+            try? FileManager.default.createDirectory(at: skill.deletingLastPathComponent().deletingLastPathComponent(), withIntermediateDirectories: true)
+            await services.agents.detect(kind)
+            try? await services.agents.install(kind)
         }
     }
 

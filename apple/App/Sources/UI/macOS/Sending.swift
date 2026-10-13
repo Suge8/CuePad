@@ -102,8 +102,21 @@ final class SendState {
             }
             return true
         } catch SendError.piSessionBusy {
+            // 会话正忙：做不到马上说的只剩等它做完再说，不问
+            guard capabilities(of: target.session).contains(.steer) else {
+                return try await send(stored, to: AgentTarget(session: target.session, mode: .followUp), card: card)
+            }
             busy = Busy(text: stored, session: target.session, card: card)
             return false
+        }
+    }
+
+    /// 这个会话从 CuePad 能做什么（`AgentCapabilities`）：本机在线的看桥上的，别的 Mac 上的看同步记录；已结束的发话时会被唤醒、不会正忙。
+    private func capabilities(of sessionID: String) -> AgentCapabilities {
+        switch route(of: sessionID) {
+        case .local(let live): live.capabilities
+        case .remote(let session): session.capabilities
+        case .ended: .all
         }
     }
 }
@@ -130,7 +143,7 @@ extension Workspace {
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
         }
-        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt) {}
+        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt, agent: services.defaultAgent) {}
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。

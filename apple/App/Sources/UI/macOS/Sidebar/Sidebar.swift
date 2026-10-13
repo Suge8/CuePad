@@ -348,11 +348,11 @@ private struct FooterPage: View {
     }
 }
 
-/// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
+/// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
 /// 同一个顺序（`liveRows`，要你注意的在前），全部列出（两个以上需要 /reload 的合成一行，`PiNowRow`，点开再列）；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。
-/// 点会话在内容区打开它的整页，在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话。没有在线会话时一行说怎么开始。
-/// 没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装；装了 Pi 而没接入 CuePad（本机的会话因此看不到）时，没有本机会话就在这里就地接入。
+/// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（有接入了的 Agent 时）。
+/// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
 private struct PiSection: View {
     let recorded: [PiSessionState]
     let deliveries: [String: DeliveryRequest]
@@ -368,7 +368,9 @@ private struct PiSection: View {
     @State private var reloadOpen = false
 
     var body: some View {
-        let status = services.agents.status(.pi)
+        let agents = services.agents
+        let detected = AgentKind.allCases.contains { agents.status($0) != nil }
+        let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
         let live = services.pi.sessions
         let rows = PiSessionState.liveRows(
             live: live.map {
@@ -376,24 +378,21 @@ private struct PiSection: View {
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
-        if let status, !status.isAvailable {
+        if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
-                SidebarHeader(title: "Agent") { EmptyView() }
-                PiSetupRow(presence: status.presence).padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset)
-            }
-        } else if status != nil || total > 0 {
-            VStack(alignment: .leading, spacing: 0) {
-                SidebarHeader(title: "Agent") { NewSessionButton(showing: $startingSession) }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityAddTraits(.isHeader)
-                // 没接入：本机的会话看不到，在这一区里就地接入，别的 Mac 上在线的照样列在下面
-                if status?.files == .missing, live.isEmpty {
-                    PiConnectCard().padding(.horizontal, SidebarMetrics.edge)
+                SidebarHeader(title: "Agent") {
+                    if !services.launchableAgents.isEmpty { NewSessionButton(showing: $startingSession) }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isHeader)
+                // 没接入：本机的会话看不到，在这一区里接入，别的 Mac 上在线的照样列在下面
+                if detected, !connected, live.isEmpty {
+                    AgentConnectCard().padding(.horizontal, SidebarMetrics.edge)
                 } else if rows.isEmpty {
                     // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
                     VStack(alignment: .leading, spacing: 2) {
                         Text("没有运行中的 Agent 会话").foregroundStyle(palette.ink3)
-                        Text("在终端运行 pi 开始").foregroundStyle(palette.ink3)
+                        Text("在终端里开一个，或点 + 在后台开").foregroundStyle(palette.ink3)
                     }
                     .font(Typography.meta)
                     .padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset).padding(.vertical, 4)
@@ -438,7 +437,7 @@ private struct PiSection: View {
                 if MacDelivery.canRename(session) {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }
-                if let bridge, !bridge.hosted {
+                if let bridge, bridge.canJump {
                     Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                 }
             }
@@ -474,72 +473,34 @@ private struct AllSessionsRow: View {
     }
 }
 
-/// 没装 Pi 或版本太低：侧栏 Pi 分组里的一行引导，点开是安装说明（`AgentSetupGuide`）。
-private struct PiSetupRow: View {
-    let presence: AgentStatus.Presence
-    @State private var showing = false
-
-    var body: some View {
-        Button { showing = true } label: {
-            Label {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(presence == .notFound ? "安装 Pi" : "升级 Pi").foregroundStyle(.primary)
-                    Text("把灵感和任务直接发进 Pi").font(Typography.meta).foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "terminal")
-            }
-        }
-        .buttonStyle(PressStyle())
-        .popover(isPresented: $showing, arrowEdge: .trailing) {
-            AgentSetupGuide(kind: .pi, presence: presence)
-        }
-    }
-}
-
-/// 接入 Pi 的小卡（扩展与技能一起装，见 `AgentIntegrations`）：一个图标、一句话说接入了能做什么，右边"接入"。
+/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，各家一行开关与安装方法）。
 /// 没有"不用了"：没接入时本机的会话在这一区里看不到，这张卡就是这一区如实的空态。
-private struct PiConnectCard: View {
+private struct AgentConnectCard: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var installing = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: "puzzlepiece.extension").font(.system(size: 14)).foregroundStyle(palette.ink2)
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text("接入 Pi").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text("看会话、交任务").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                Text("接入 Agent").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
+                Text("看会话、发话、作答、后台开").font(Typography.meta).foregroundStyle(palette.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
-            Button(action: install) {
-                Text(installing ? "接入中" : "接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
+            Button { workspace.showsAgentSetup = true } label: {
+                Text("接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
                     .padding(.horizontal, 12).frame(height: 24)
                     .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
-            .disabled(installing)
         }
         .padding(10)
         .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("CuePad 往 Pi 目录的 extensions 与 skills 里各写一个文件：看到会话的实时状态、把话发进会话，Agent 也能把页面和截图发到手机上看。在设置里关掉即删除。")
+        .help("接入 Pi、Claude Code、Codex 或 OpenCode：它们的会话出现在这里，在 Mac 和手机上看进展、发话、回答提问，也能在后台开会话。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
         .transition(.opacity)
-    }
-
-    private func install() {
-        installing = true
-        let agents = services.agents
-        Task {
-            defer { installing = false }
-            do {
-                try await agents.install(.pi)
-                workspace.say("已接入；已在运行的 Pi 会话执行 /reload 后生效")
-            } catch {
-                workspace.fail(error)
-            }
-        }
     }
 }
 
