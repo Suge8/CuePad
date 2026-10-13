@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
-# 用法：xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+# 用法：xc.sh check                 快速静态门：lint.sh、CuePadKit 的 swift build、iOS 编译；不跑测试
+#       xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
+#       xc.sh clean-sims          删掉产物目录已不在的专用模拟器（见下）
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
-# ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
+# 提交钩子在 apple/scripts/hooks（只跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
+# ios 是 iPhone 模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
+# 模拟器是这个产物目录自己的一台（_sim.sh），第一次建、之后复用；脚本启动的跑完就关。
+# test 里每个测试最多 TEST_TIME_LIMIT 秒（xcodebuild 的测试时限，Xcode 27 实测对 Swift Testing 也生效，主线程死锁也会被结束）：
+# 超时的测试记一条 "Time limit was exceeded"，测试宿主重启后接着跑，最后非零退出。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
 # CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析）。
@@ -14,11 +20,16 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
+# shellcheck source=_sim.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_sim.sh"
 absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 DERIVED="$(absolute "${CUEPAD_DERIVED:-$APPLE_DIR/.derived}")"
 BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
+# 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
+TEST_TIME_LIMIT=120
+USAGE="用法：$0 <check|build|test|shot|clean-sims|release|device|provision> [mac|ios|ipad] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -34,20 +45,23 @@ case "$cmd" in
     esac ;;
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
+  clean-sims) sim_clean; exit 0 ;;
+  check) platform=ios ;;
 esac
 out="${3:-$DERIVED/shot-$platform.png}"
 launch_args=()
 if [ "$#" -gt 3 ] && [ "$4" = "--" ]; then launch_args=("${@:5}"); fi
 
+mkdir -p "$DERIVED"
 case "$platform" in
   mac) destination='platform=macOS,arch=arm64'; products="$DERIVED/Build/Products/Debug" ;;
-  ios) device="$IOS_DEVICE"; destination="platform=iOS Simulator,name=$device"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
-  ipad) device="$IPAD_DEVICE"; destination="platform=iOS Simulator,name=$device"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
-  *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
+  ios|ipad)
+    if [ "$platform" = ios ]; then model="$IOS_DEVICE"; else model="$IPAD_DEVICE"; fi
+    device="$(sim_udid "$DERIVED" "$model")"
+    destination="platform=iOS Simulator,id=$device"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
+  *) echo "$USAGE" >&2; exit 2 ;;
 esac
 app="$products/CuePad.app"
-
-mkdir -p "$DERIVED"
 
 # 本机模式：ad-hoc 签名。工程默认是团队 + 自动签名（给发布用），iCloud/推送这类受限能力在 ad-hoc 下无法启动，
 # 所以日常构建覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。
@@ -126,21 +140,14 @@ shot_mac() {
   echo "$out"
 }
 
-# 这个名字的模拟器是否已启动：按设备名整行精确比较（子串匹配会把别人的"critic8 iPhone 18 Pro"当成"iPhone 18 Pro"，并行时装到别人的设备上）。
-# 先取全文再比：pipefail 下管道里的 grep -q 提前退出会让前面的命令吃 SIGPIPE
-sim_booted() {
-  local list names
-  list="$(xcrun simctl list devices booted)"
-  names="$(sed -nE 's/^ +(.+) \([0-9A-F-]{36}\) \(Booted\) *$/\1/p' <<< "$list")"
-  grep -qxF "$1" <<< "$names"
-}
+sim_booted() { [ "$(sim_state "$device")" = Booted ]; }
 
 # iOS/iPadOS：库与偏好放进隔离目录（每个设备各一个，默认 .derived/library-<ios|ipad>），启动参数原样传给 App。
 # simctl 用 SIMCTL_CHILD_ 前缀把环境变量传给模拟器里的进程。
 shot_sim() {
   mkdir -p "$(dirname "$out")"
   local booted_here=0
-  if ! sim_booted "$device"; then
+  if ! sim_booted; then
     xcrun simctl boot "$device"; booted_here=1
   fi
   xcrun simctl bootstatus "$device" -b >/dev/null
@@ -161,21 +168,26 @@ shot_ios() { shot_sim; }
 shot_ipad() { shot_sim; }
 
 case "$cmd" in
+  check)
+    "$APPLE_DIR/scripts/lint.sh"
+    (cd "$APPLE_DIR/CuePadKit" && swift build --quiet)
+    xcb -quiet build ;;
   build) xcb -quiet build ;;
   test)
+    limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
     # xcodebuild 会启动模拟器且不关；本次启动的由脚本关掉，已开着的不动
-    if [ -n "${device:-}" ] && ! sim_booted "$device"; then
+    if [ -n "${device:-}" ] && ! sim_booted; then
       trap 'xcrun simctl shutdown "$device" 2>/dev/null || true' EXIT
     fi
     # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试用 swift test）。
     # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
     status=0
-    xcb test "${@:3}" || status=$?
+    xcb test "${limits[@]}" "${@:3}" || status=$?
     if [ "$platform" != mac ] && [ "$#" -le 2 ]; then
-      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" 2>&1) \
+      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" 2>&1) \
         | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
     fi
     exit $status ;;
   shot) xcb -quiet build; "shot_$platform" ;;
-  *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
+  *) echo "$USAGE" >&2; exit 2 ;;
 esac

@@ -5,7 +5,8 @@
 #   --resume   公证有时要等很久（新账号首次提交可能数小时）：中断后接着等这次提交，再装订并继续后面的步骤
 # 下载位置只有一处：Release $TAG 的三个资产，不新建版本或标签，每次发布原地替换；三个资产各自的用途与上传顺序的理由见 docs/release.md。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），回读校验从 App 的 Info.plist 读这个地址。
-# 前提：docs/release.md 里的凭据与 Developer ID 证书；gh 已登录且有仓库写权限。
+# 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发。
+# 前提：docs/release.md 里的凭据、Developer ID 证书与 CloudKit 管理令牌；gh 已登录且有仓库写权限。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
@@ -36,6 +37,7 @@ done
 notary=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 # 上传要 gh 能写这个 Release：打包要几分钟，先确认
 $dry_run || gh release view "$TAG" -R "$REPO" --json tagName >/dev/null
+"$APPLE_DIR/scripts/ck-production.sh"
 
 if [ -z "$resume" ]; then
 rm -rf "$OUT"; mkdir -p "$OUT"
