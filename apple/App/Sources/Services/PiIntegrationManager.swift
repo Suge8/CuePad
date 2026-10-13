@@ -28,6 +28,18 @@ final class PiIntegrationManager {
         return !settings.piConnectDeclined
     }
 
+    /// 设置里的开关能不能拨：已接入时总能移除（移除不需要 Pi，卸了或降级了 Pi 也能删干净）；没接入时要 Pi 可用且没有位置被别人占着。
+    var canToggle: Bool {
+        guard isEnabled, let status else { return false }
+        return status.isConnected || (status.pi.isSupported && status.blocked.isEmpty)
+    }
+
+    /// 能不能"修复"：已接入、有哪样不是最新、Pi 可用、没有位置被别人占着。
+    var canRepair: Bool {
+        guard isEnabled, let status else { return false }
+        return status.isConnected && !status.isCurrent && status.pi.isSupported && status.blocked.isEmpty
+    }
+
     /// 读状态；已接入而有哪样不是最新时静默修复。修复失败抛错，状态仍反映磁盘上的样子。
     func refresh() async throws {
         status = await installer.status()

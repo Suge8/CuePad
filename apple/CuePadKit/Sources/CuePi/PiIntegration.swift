@@ -252,26 +252,41 @@ public struct PiIntegration: Sendable {
     }
 
     private func extensionState() -> PiItemState {
-        guard let text = read(location(of: .bridgeExtension)) else { return .missing }
+        let file = location(of: .bridgeExtension)
+        guard exists(file) else { return .missing }
+        guard let text = read(file) else { return .foreign }
         if text == PiExtensionBundle.source { return .current }
         return text.hasPrefix(PiExtensionBundle.ownershipMarker) ? .outdated : .foreign
     }
 
     private func skillState() -> PiItemState {
-        guard let text = read(location(of: .skill)) else { return .missing }
-        guard text.contains(PiSkillBundle.ownershipMarker) else { return .foreign }
+        let file = location(of: .skill)
+        guard exists(file) else { return .missing }
+        guard let text = read(file), text.contains(PiSkillBundle.ownershipMarker) else { return .foreign }
         return text == PiSkillBundle.text(cuepad: location(of: .commandLink)) ? .current : .outdated
     }
 
+    /// 链接是 CuePad 的：指向的 App 包是 CuePad（看包标识）；App 已被移走、指向的地方不存在时，只认名叫 CuePad.app 的包。
     private func linkState() -> PiItemState {
-        let link = location(of: .commandLink).path, files = FileManager.default
-        // attributesOfItem 不跟随符号链接：失效的链接也能看到
-        guard let type = (try? files.attributesOfItem(atPath: link))?[.type] as? FileAttributeType else { return .missing }
-        guard type == .typeSymbolicLink, let target = try? files.destinationOfSymbolicLink(atPath: link) else { return .foreign }
+        let link = location(of: .commandLink)
+        guard exists(link) else { return .missing }
+        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: link.path) else { return .foreign }
         if target == helper.path { return .current }
-        return target.hasSuffix(".app/Contents/Helpers/cuepad") ? .outdated : .foreign
+        let suffix = "Contents/Helpers/cuepad"
+        guard target.hasSuffix("/" + suffix) else { return .foreign }
+        let app = URL(filePath: String(target.dropLast(suffix.count)), directoryHint: .isDirectory)
+        if let identifier = Bundle(url: app)?.bundleIdentifier { return identifier == Self.appBundleIdentifier ? .outdated : .foreign }
+        return !exists(app) && app.lastPathComponent == "CuePad.app" ? .outdated : .foreign
     }
 
+    static let appBundleIdentifier = "com.sugeh.cuepad"
+
+    /// 不跟随符号链接：失效的链接也算在。
+    private func exists(_ file: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil
+    }
+
+    /// 读不出来或不是 UTF-8 文本为 nil（调用方已确认它在：那就不是 CuePad 写的）。
     private func read(_ file: URL) -> String? {
         (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) }
     }

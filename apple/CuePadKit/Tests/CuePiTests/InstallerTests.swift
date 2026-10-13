@@ -63,22 +63,25 @@ struct InstallerTests {
 
     // MARK: 三样一起写
 
-    /// 三样一起写：中途写不进去时，已写的还原成原来的样子（原来没有就删掉），不留半接入的状态。
+    /// 三样一起写：最后一步（建链接）失败时，已写的扩展与 skill 还原成原来的样子（原来没有就删掉），不留半接入的状态。
     @Test func aFailureMidwayRestoresWhatWasAlreadyWritten() async throws {
         try fakePi(printing: "0.87.1")
         let old = "// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 1;\n"
         try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
         try old.write(to: installedFile, atomically: true, encoding: .utf8)
-        try FileManager.default.createDirectory(at: skillFile, withIntermediateDirectories: true)  // SKILL.md 的位置被一个目录占着：写不进去
+        try FileManager.default.createDirectory(at: paths.binDirectory, withIntermediateDirectories: true)
+        chmod(paths.binDirectory.path, 0o500)  // 链接目录不可写：链接建不出来
+        defer { chmod(paths.binDirectory.path, 0o755) }
 
         await #expect(throws: (any Error).self) { try await installer().install() }
         #expect(try String(contentsOf: installedFile, encoding: .utf8) == old)
+        #expect(!exists(skillFile))
         #expect(!exists(link))
 
         try FileManager.default.removeItem(at: installedFile)  // 原来没有扩展：失败后仍然没有
         await #expect(throws: (any Error).self) { try await installer().install() }
         #expect(!exists(installedFile))
-        #expect(!exists(link))
+        #expect(!exists(skillFile))
     }
 
     @Test func installRefusesWithoutSupportedPiAndWritesNothing() async throws {

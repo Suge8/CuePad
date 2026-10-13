@@ -182,14 +182,32 @@ struct PiConnectTests {
         let rig = try rigWithPi(version: "0.90.0")
         let manager = rig.services.piIntegration, files = Files(rig)
         let mine = "我自己的东西\n"
-        for occupied in files.all {
+        // 别的 App 包里同样位置的 cuepad（包在、标识不是 CuePad），与已不存在的、不叫 CuePad.app 的包
+        let other = rig.directory.appending(path: "Other.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: other.appending(path: "Contents/Helpers"), withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "com.example.other"], format: .xml, options: 0)
+            .write(to: other.appending(path: "Contents/Info.plist"))
+        let occupants: [(URL, () throws -> Void)] = [
+            (files.bridgeExtension, { try mine.write(to: files.bridgeExtension, atomically: true, encoding: .utf8) }),
+            (files.bridgeExtension, { try Data([0xff, 0xfe, 0x00]).write(to: files.bridgeExtension) }),  // 不是 UTF-8 文本
+            (files.skill, { try mine.write(to: files.skill, atomically: true, encoding: .utf8) }),
+            (files.skill, { try Data([0xff, 0xfe, 0x00]).write(to: files.skill) }),
+            (files.link, { try mine.write(to: files.link, atomically: true, encoding: .utf8) }),
+            (files.link, { try FileManager.default.createSymbolicLink(atPath: files.link.path, withDestinationPath: other.path + "/Contents/Helpers/cuepad") }),
+            (files.link, { try FileManager.default.createSymbolicLink(atPath: files.link.path, withDestinationPath: "/Volumes/Gone/Other.app/Contents/Helpers/cuepad") }),
+        ]
+        for (occupied, occupy) in occupants {
             for file in files.all where exists(file) { try FileManager.default.removeItem(at: file) }
             try FileManager.default.createDirectory(at: occupied.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try mine.write(to: occupied, atomically: true, encoding: .utf8)
+            try occupy()
+            let before = try FileManager.default.attributesOfItem(atPath: occupied.path)[.modificationDate] as? Date
+            let target = try? FileManager.default.destinationOfSymbolicLink(atPath: occupied.path)
 
             await #expect(throws: PiInstallError.occupied([occupied])) { try await manager.connect() }
+            try await manager.disconnect()  // 什么都没接入：移除也不能碰它
 
-            #expect(try String(contentsOf: occupied, encoding: .utf8) == mine)
+            #expect(try FileManager.default.attributesOfItem(atPath: occupied.path)[.modificationDate] as? Date == before)
+            #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: occupied.path)) == target)
             for file in files.all where file != occupied { #expect(!exists(file), "被占用时 \(file.lastPathComponent) 不该写") }
         }
 
@@ -219,6 +237,21 @@ struct PiConnectTests {
         #expect(try runHelp(rig, via: files.link).status == 0)
         #expect(rig.services.piIntegration.status?.isCurrent == true)
         #expect(!rig.services.piIntegration.needsConsent)
+    }
+
+    /// 接入后 Pi 卸了（或降级到不支持的版本）：设置里仍能关掉开关，三样照样删干净。
+    @Test func Pi不可用后仍能移除() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        try await rig.services.piIntegration.connect()
+        try FileManager.default.removeItem(at: rig.directory.appending(path: "bin/pi"))
+
+        let manager = rig.relaunch().piIntegration
+        try await manager.refresh()
+        #expect(manager.status?.pi == .notFound)
+        #expect(manager.canToggle)
+
+        try await manager.disconnect()
+        for file in Files(rig).all { #expect(!exists(file)) }
     }
 
     /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。

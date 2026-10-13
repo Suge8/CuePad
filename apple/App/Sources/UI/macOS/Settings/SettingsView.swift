@@ -192,9 +192,9 @@ private struct PiConnectRows: View {
         }
         HStack {
             Toggle("接入 Pi", isOn: Binding(get: { status?.isConnected == true }, set: { apply($0) }))
-                .disabled(!canToggle(status))
+                .disabled(working || !manager.canToggle)
             Spacer()
-            if let status, status.isConnected, !status.isCurrent, status.blocked.isEmpty {
+            if manager.canRepair {
                 Button("修复") { apply(true) }.disabled(working)
             }
         }
@@ -207,11 +207,6 @@ private struct PiConnectRows: View {
             }
         }
         if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
-    }
-
-    private func canToggle(_ status: PiIntegrationStatus?) -> Bool {
-        guard manager.isEnabled, !working, let status, status.pi.isSupported else { return false }
-        return status.isConnected || status.blocked.isEmpty
     }
 
     private func itemLine(_ item: PiConnectItem, state: PiItemState) -> some View {
