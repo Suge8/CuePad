@@ -127,7 +127,7 @@ private struct LeafDetail: View {
             } else if let item {
                 let state = workspace.withLiveState(item.state)
                 let shown = services.settings.shown(state, delivery: item.delivery)
-                let look = Look(shown, line: PiRowLine.of(state, draft: nil, end: nil, failure: shown.undelivered(item.delivery)?.failure)?.speech)
+                let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
             } else {

@@ -400,16 +400,18 @@ extension DebugScene {
         // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)
         func settled(_ name: String, _ role: String, _ phase: PiSubagentPhase, _ action: String, after seconds: TimeInterval) -> PiSubagentState {
-            PiSubagentState(name: name, role: role, phase: .known(phase), action: action, startedAt: started, settledAt: started.addingTimeInterval(seconds))
+            PiSubagentState(name: name, role: role, phase: .known(phase), action: action, startedAt: started, settledAt: started.addingTimeInterval(seconds),
+                            model: "anthropic/claude-sonnet-5-5")
         }
         _ = try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
-            PiSubagentState(name: "计费额度", role: "审查员", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started),
-            PiSubagentState(name: "同步冲突", role: "工程师", phase: .known(.running), action: "改 CardLinks.repairs", startedAt: started.addingTimeInterval(40)),
+            PiSubagentState(name: "计费额度", role: "哨兵", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started, model: "anthropic/claude-opus-5-5"),
+            PiSubagentState(name: "同步冲突", role: "工程师", phase: .known(.running), action: "改 CardLinks.repairs", startedAt: started.addingTimeInterval(40),
+                            model: "openai-codex/gpt-6.1-sol"),
             settled("登录回调", "工程师", .failed, "请求超时", after: 95),
-            settled("文档", "写手", .done, "已补完 README 的同步一节", after: 180),
+            settled("文档", "批量工", .done, "已补完 README 的同步一节", after: 180),
             settled("迁移脚本", "工程师", .done, "已在测试库上跑通", after: 150),
-            settled("类型检查", "审查员", .done, "没有新增警告", after: 60),
-            settled("截图", "设计", .done, "已出浅色、深色各一组", after: 120),
+            settled("类型检查", "哨兵", .done, "没有新增警告", after: 60),
+            settled("截图", "设计师", .done, "已出浅色、深色各一组", after: 120),
             PiSubagentState(name: "性能", role: "工程师", phase: .known(.idle), action: ""),
         ])
         await seedBindings(store, projects: projects)

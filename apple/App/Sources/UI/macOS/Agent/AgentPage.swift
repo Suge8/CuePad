@@ -94,7 +94,8 @@ struct AgentPage: View {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                         case .reload(let items):
                             PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                .padding(.horizontal, 12).padding(.vertical, 10)
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                .background { SessionCard() }
                             if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                         }
                     }
@@ -120,21 +121,17 @@ struct AgentPage: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 一组行垫一张纸。组里的行也懒加载：历史的"更早"一组可能有几千行，普通 VStack 会把它们全建出来
+    /// 一组会话卡片（每张自带卡片面，`SessionCard`）。组里的卡片也懒加载：历史的"更早"一组可能有几千张，普通 VStack 会把它们全建出来
     /// （真实库三千条历史滚到底时内存涨到 1.4GB、每读一页卡一两秒）。
     private func card(@ViewBuilder _ rows: () -> some View) -> some View {
-        LazyVStack(spacing: 0) { rows() }
-            .padding(4)
-            .paper(radius: 14)
+        LazyVStack(spacing: 8) { rows() }
     }
 
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let session = item.state
         let endable = MacDelivery.canEnd(session) && end?.isOpen != true
         return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
-            .padding(.horizontal, 12).padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .sessionLink(session.sessionID)
+            .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {

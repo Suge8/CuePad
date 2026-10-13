@@ -313,16 +313,17 @@ struct DeliveryStatusLabel: View {
 }
 
 /// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚刚"（等你确认的第一分钟）、"2 小时前"。
-/// 列表里到分钟；会话页顶栏传 `.second`。
+/// 列表里到分钟；会话页顶栏传 `.second`；会话行只写时长（`.bare`）。
 struct PiElapsed: View {
     let shown: PiShown
     var font: Font = Typography.meta
     var precision = PiClock.Precision.minute
+    var wording = PiClock.Wording.sentence
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let clock = shown.clock {
-            PiClockText(clock: clock, precision: precision)
+            PiClockText(clock: clock, precision: precision, wording: wording)
                 .font(font.monospacedDigit())
                 // 状态标与状态词已带色，计时保持中性，一行里只有一处彩色
                 .foregroundStyle(palette.ink3)
@@ -334,7 +335,8 @@ struct PiElapsed: View {
 struct PiClockText: View {
     let clock: PiClock
     var precision = PiClock.Precision.minute
+    var wording = PiClock.Wording.sentence
 
-    var body: some View { Text(.currentDate, format: clock.live(precision)) }
+    var body: some View { Text(.currentDate, format: clock.live(precision, wording: wording)) }
 }
 

@@ -164,11 +164,12 @@ struct SessionPage: View {
 
 extension View {
     /// 会话行：点按在内容区打开这个会话的整页；正打开着的那个垫选中底。
-    func sessionLink(_ sessionID: String) -> some View { modifier(SessionLink(sessionID: sessionID)) }
+    func sessionLink(_ sessionID: String, press: Press = .control) -> some View { modifier(SessionLink(sessionID: sessionID, press: press)) }
 }
 
 private struct SessionLink: ViewModifier {
     let sessionID: String
+    let press: Press
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -181,7 +182,7 @@ private struct SessionLink: ViewModifier {
         } label: {
             content.contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(PressStyle(press))
         .background(opened ? palette.selection : .clear, in: .rect(cornerRadius: 8))
         .accessibilityAddTraits(opened ? .isSelected : [])
         .accessibilityHint("打开会话")

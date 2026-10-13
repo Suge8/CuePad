@@ -108,7 +108,7 @@ struct MacSyncTests {
         let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
         let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
         let subagents = [
-            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started, model: "anthropic/claude-opus-5-5"),
             PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
         ]
         let commands = [

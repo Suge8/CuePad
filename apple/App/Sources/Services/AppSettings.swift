@@ -119,7 +119,7 @@ final class AppSettings {
             .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
     }
 
-    /// 会话行上的草稿（`PiRowLine.draft`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
+    /// 会话回复框草稿的预览（会话行据此写"有草稿"，`PiRowFacts`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {

@@ -17,6 +17,11 @@ struct AgentDayTests {
 
     private func label(_ sessionID: String) async throws -> String { settings.shown(try await item(sessionID)).label }
 
+    /// 行上状态词后面的短词（"有草稿""没能改名"……）。
+    private func note(_ item: PiSessionListItem) -> PiRowFacts.Note? {
+        settings.facts(item.state, shown: settings.shown(item), end: nil, rename: item.rename).note
+    }
+
     @discardableResult
     private func say(_ text: String, to sessionID: String, mode: DeliveryMode = .send) async throws -> DeliveryRequest {
         let state = try await item(sessionID).state
@@ -43,11 +48,11 @@ struct AgentDayTests {
         #expect(try await label("atlas") == "该你了")
         #expect(!app.relaunch().settings.isUnread(done.state))  // 看过记在本机偏好，退出再回来还算看过
 
-        // 回复框里没发的草稿写在第三行；清空后回到最后的回答
+        // 回复框里没发的草稿：行上写"有草稿"；只剩空白不算
         settings.setReplyDraft(ComposerDraft(text: "改完再跑一遍\n顺便看看覆盖率"), for: done.state.id)
-        #expect(PiRowLine.of(done.state, draft: settings.draftPreview(for: done.state.id), end: nil) == .draft("改完再跑一遍"))
+        #expect(note(done) == .draft)
         settings.setReplyDraft(ComposerDraft(text: "  \n"), for: done.state.id)
-        #expect(PiRowLine.of(done.state, draft: settings.draftPreview(for: done.state.id), end: nil) == .progress("全部通过。"))
+        #expect(note(done) == nil)
 
         // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时排队的话只是个小标记
         try await say("看看 scheduler", to: "atlas")
@@ -78,7 +83,7 @@ struct AgentDayTests {
         #expect(try await label("gone") == "正在唤醒")
     }
 
-    @Test func 改会话名_在路上是新名_没改成回到旧名并写原因_Pi改好以会话记录为准() async throws {
+    @Test func 改会话名_在路上是新名_没改成回到旧名并写没能改名_Pi改好以会话记录为准() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-d")
         try await recorder.update(sessionID: "delta", state: .settled, title: "delta")
         func title() async throws -> String {
@@ -94,8 +99,9 @@ struct AgentDayTests {
         try await macAnswers(request, host: "mac-d", .failed("Pi 已经退出"))
         let failed = try await item("delta")
         #expect(PiRename.title(of: failed.state, request: failed.rename) == "delta")
-        #expect(PiRowLine.of(failed.state, draft: nil, end: nil, failure: PiRename.failure(failed.rename, seen: nil)) == .failed("没能改名：Pi 已经退出"))
-        #expect(PiRename.failure(failed.rename, seen: .now.addingTimeInterval(1)) == nil)
+        #expect(note(failed) == .renameFailed)
+        settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
+        #expect(note(failed) == nil)  // 看过就不再写
 
         let again = try await app.services.rename(failed.state, to: "排队调度")
         try await macAnswers(again, host: "mac-d", .succeeded)

@@ -15,6 +15,10 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     /// 走字的计时写到哪一位：列表里到分钟，会话页顶栏到秒。
     enum Precision: Hashable, Codable, Sendable { case minute, second }
 
+    /// 怎么写：`sentence` 按计时的种类带说法（"运行了 4 分钟""等了 4 分钟""2 小时前"），会话页顶栏、任务行、书架用；
+    /// `bare` 只写在这个状态里待了多久（"刚刚""4 分钟""2 小时""3 天"），会话行用——一列卡片里只有一种写法，状态由状态词说。
+    enum Wording: Hashable, Codable, Sendable { case sentence, bare }
+
     /// 工作中的记录总带着这段处理的起点（`busySince`，Mac 的状态记录器写入时保证）；万一没有就不写计时，不拿别的时刻冒充。
     static func reading(_ state: Open<PiWorkState>, stateSince: Date, busySince: Date?) -> PiClock? {
         if state == .known(.waitingForUser) { return .waiting(since: stateSince) }
@@ -22,14 +26,15 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         return .ago(stateSince)
     }
 
-    /// 全 App 唯一的时长写法：只取最大的一个单位，"42 秒"、"4 分钟"、"3 小时"（处理中的活跃感交给转圈）。
+    /// 全 App 唯一的时长写法：只取最大的一个单位，"42 秒"、"4 分钟"、"3 小时"、"2 天"（处理中的活跃感交给动效）。
     /// 数字与单位之间空一格，与"24 条灵感""11 分钟前"同一种排法；
     /// 不用系统的单位格式：中文的宽格式把秒写成"秒钟"、数字与单位之间不空。
     static func duration(_ seconds: TimeInterval) -> String {
         let whole = max(Int(seconds), 1)
         if whole < 60 { return "\(whole) 秒" }
         if whole < 3600 { return "\(whole / 60) 分钟" }
-        return "\(whole / 3600) 小时"
+        if whole < 86_400 { return "\(whole / 3600) 小时" }
+        return "\(whole / 86_400) 天"
     }
 
     /// 走字的计时（不是"多久前"）。
@@ -42,8 +47,9 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     }
 
     /// 此刻的文字（读屏、不走字的地方，以及 `live` 的每一次更新）：列表里（`.minute`）不到一分钟写"刚开始"这类，不每秒换字。
-    func text(now: Date, precision: Precision = .minute, calendar: Calendar = .current) -> String {
+    func text(now: Date, precision: Precision = .minute, wording: Wording = .sentence, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(since)
+        if wording == .bare { return elapsed < 60 ? "刚刚" : Self.duration(elapsed) }
         if case .ago = self { return DateLabel.short(since, now: now, calendar: calendar) }
         if precision == .minute, elapsed < 60 {
             switch self {
@@ -61,15 +67,17 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
     }
 
     /// 界面里的系统时间文本：`Text(.currentDate, format: clock.live(.minute))`。
-    func live(_ precision: Precision) -> Live { Live(clock: self, precision: precision) }
+    func live(_ precision: Precision, wording: Wording = .sentence) -> Live { Live(clock: self, precision: precision, wording: wording) }
 
     /// 计时的格式：文字就是 `text(now:precision:)`，并告诉系统下一次在什么时刻会变——到秒的第一分钟每秒，
-    /// 之后（以及到分钟的）一小时内每整分钟、再往后每整小时；"多久前"一小时内每整分钟、一天内每整小时、再往前每天零点。
+    /// 之后（以及到分钟的）一小时内每整分钟、再往后每整小时；"多久前"一小时内每整分钟、一天内每整小时、再往前每天零点；
+    /// 只写时长的（`bare`）一小时内每整分钟、一天内每整小时、再往后每整天（从起点算）。
     struct Live: DiscreteFormatStyle {
         let clock: PiClock
         let precision: Precision
+        var wording = Wording.sentence
 
-        func format(_ now: Date) -> String { clock.text(now: now, precision: precision) }
+        func format(_ now: Date) -> String { clock.text(now: now, precision: precision, wording: wording) }
 
         func discreteInput(after now: Date) -> Date? { segment(around: now).next }
 
@@ -79,6 +87,11 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         private func segment(around now: Date) -> (start: Date, next: Date) {
             let since = clock.since
             let elapsed = max(now.timeIntervalSince(since), 0)
+            if wording == .bare {
+                let step: TimeInterval = elapsed < 3600 ? 60 : elapsed < 86_400 ? 3600 : 86_400
+                let start = since.addingTimeInterval((elapsed / step).rounded(.down) * step)
+                return (start, start.addingTimeInterval(step))
+            }
             if !clock.isRunningClock, elapsed >= 86_400 {
                 let calendar = Calendar.current
                 let midnight = calendar.startOfDay(for: now)
