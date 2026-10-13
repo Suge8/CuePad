@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CuePi
 import CueStore
 import Darwin
@@ -23,11 +24,12 @@ struct CueHostTests {
         var services: AppServices { app.services }
         var store: CueStore { services.store }
 
-        init(usage: Int = 100) async throws {
-            model = try FakeModel(usage: usage)
+        /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
+        init(usage: Int = 100, failingOnce: [String] = []) async throws {
+            model = try FakeModel(usage: usage, failingOnce: failingOnce)
             let port = try await model.start()
             let timing = CueTiming(
-                quiet: .milliseconds(500), quietLimit: .seconds(2), talking: .zero, patrolAfter: .seconds(3600), mergeAfter: .seconds(3600),
+                quiet: .milliseconds(500), quietLimit: .seconds(2), talking: .zero, patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
@@ -150,6 +152,21 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 刚启用的那一轮出错（模型一时出错）：隔一会儿再醒一次，照常看一眼。
+    @Test func 刚启用的一轮出错后重试() async throws {
+        let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
+        try await rig.message(.cue, containing: "bad things happened")
+        await rig.stop()
+    }
+
+    /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
+    @Test func 记忆待合并时空闲后醒来合并() async throws {
+        let rig = try await Rig()
+        for index in 0..<(CueMemoryView.defaultBudget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
+        try await rig.message(.note, containing: "记忆合并好了")
+        await rig.stop()
+    }
+
     /// 大脑在一轮中途被杀：这一轮里交出去的你的话退回，重起后重新交给新的大脑，照常回答。
     @Test func 一轮中途被杀_你的话重新交出() async throws {
         let rig = try await Rig()
@@ -208,6 +225,7 @@ nonisolated final class FakeModel: Sendable {
     private let queue = DispatchQueue(label: "fake-model")
     private let usage: Int
     private let played = Mutex<Set<String>>([])
+    private let failingOnce: [String]
     /// 不回的请求的连接：留着，免得释放时断开
     private let hung = Mutex<[NWConnection]>([])
 
@@ -217,7 +235,8 @@ nonisolated final class FakeModel: Sendable {
         case hang
     }
 
-    init(usage: Int) throws {
+    init(usage: Int, failingOnce: [String] = []) throws {
+        self.failingOnce = failingOnce
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -317,7 +336,9 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "先做哪个？", "choices": ["A", "B"]]) }
+        if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return .error("bad things happened") }
         if text.contains("请慢慢想"), once("hang") { return .hang }
+        if text.contains("写回：memory merge") { return say("记忆合并好了") }
         if text.contains("醒来：跟进的会话有动静") {
             if text.contains("先出一次错"), once("error") { return .error("bad things happened") }
             return say("登录页那边歇下了")

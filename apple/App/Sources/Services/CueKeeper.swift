@@ -41,7 +41,7 @@ nonisolated struct CueTiming: Sendable {
 ///
 /// 一轮是谁发起的决定回复写成什么：你发起的（含插进来的话）写成 `cue`，Cue 自己醒来的写成 `note`（折成灰色一行、不推送）。
 /// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
-/// Cue 自己醒来（5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
+/// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
 final class CueKeeper {
@@ -85,7 +85,7 @@ final class CueKeeper {
     private struct Turn {
         /// 回复写成谁的
         var author: CueAuthor
-        /// Cue 自己醒来的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
+        /// Cue 自己醒来（回复写成 note）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: (wake: CueWake, extra: String?)?
         /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达
         var delivered: [UUID] = []
@@ -108,11 +108,11 @@ final class CueKeeper {
         case brain(Int, CueBrainEvent)
     }
 
-    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。
+    /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆整份在内：记一条、忘掉、合并都可能改变待合并的块。
     private nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]
         var board: [CueBoardItem]
-        var reminder: Date?
+        var memory: CueMemory
     }
 
     private nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
@@ -156,7 +156,7 @@ final class CueKeeper {
             group.addTask {
                 do {
                     for try await _ in store.observe({ store in
-                        Signal(messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), reminder: try store.nextCueReminder(after: .distantPast))
+                        Signal(messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemory())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -374,7 +374,7 @@ final class CueKeeper {
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
                     window = nil
-                    return _ = try await wakeUp(held.wake, as: .note, selfStarted: true, extra: held.extra)
+                    return _ = try await wakeUp(held.wake, as: .note, extra: held.extra)
                 } else {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
@@ -387,7 +387,7 @@ final class CueKeeper {
                 let ready = max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
                 if now >= ready {
                     window = nil
-                    return _ = try await wakeUp(.sessionActivity, as: .note, selfStarted: true)
+                    return _ = try await wakeUp(.sessionActivity, as: .note)
                 }
                 deadlines.append(ready)
             } else {
@@ -400,7 +400,7 @@ final class CueKeeper {
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
                     progress.patrolDay = today
                     progress.patrolledIdle = lastSpoke ?? setup.profile.enabledAt
-                    return _ = try await wakeUp(.idle, as: .note, selfStarted: true)
+                    return _ = try await wakeUp(.idle, as: .note)
                 }
                 deadlines.append(due)
             }
@@ -410,7 +410,7 @@ final class CueKeeper {
                 let ready = lastTurnEnd + timing.mergeAfter.seconds
                 if now >= ready {
                     mergesTried.insert([merge.lo, merge.hi])
-                    return _ = try await wakeUp(.idle, as: .note, selfStarted: true, extra: CueMemoryView.mergePrompt(merge))
+                    return _ = try await wakeUp(.idle, as: .note, extra: CueMemoryView.mergePrompt(merge))
                 }
                 deadlines.append(ready)
             }
@@ -436,7 +436,7 @@ final class CueKeeper {
     /// 发一个信封让 Cue 醒来，这一轮的回复写成 `author` 的；`delivering` 是随信封交出去的你的消息与回答。
     /// 发不进去时按大脑出了问题处理，返回 false。
     private func wakeUp(
-        _ wake: CueWake, as author: CueAuthor, selfStarted: Bool = false, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
+        _ wake: CueWake, as author: CueAuthor, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
     ) async throws -> Bool {
         guard let brain else { return false }
         let store = setup.store, now = Date.now
@@ -450,7 +450,7 @@ final class CueKeeper {
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         turn = Turn(
-            author: author, selfStarted: selfStarted ? (wake, extra) : nil, delivered: delivering, baseline: (now, board.map(\.task.id)))
+            author: author, selfStarted: author == .note ? (wake, extra) : nil, delivered: delivering, baseline: (now, board.map(\.task.id)))
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
         do {
             try await brain.send(parts.joined(separator: "\n"))
