@@ -229,7 +229,7 @@ public struct CueTools: Sendable {
     guard ["now", "after"].contains(when) else { throw Failure("when 只能是 now、after 或 answer") }
     let text = try args.required("text")
     if leaf.piSessionID == nil {
-      if try await !store.launchingCards([leaf.id]).isEmpty { throw CueStoreError.launching(title(leaf)) }
+      if try await !store.launchingLeaves([leaf.id]).isEmpty { throw CueStoreError.launching(title(leaf)) }
       throw Failure("「\(title(leaf))」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句")
     }
     let request: DeliveryRequest

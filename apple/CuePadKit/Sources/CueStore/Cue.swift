@@ -91,8 +91,8 @@ extension CueMemoryLine: Record {
   }
 }
 
-/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。区间里有行在摘要写下之后被忘掉、或行序变了（别处同步来更早的行），
-/// 它就作废：读出时已滤掉（`CueMemory`）。
+/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。区间里有行在摘要写下之后被忘掉（含同步晚到的）、或行序变了
+/// （别处同步来更早的行），它就作废：读出时已滤掉（`CueStore.cueMemory`）。
 public struct CueMemorySummary: Equatable, Sendable {
   public var lo: Int
   public var hi: Int

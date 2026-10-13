@@ -80,6 +80,8 @@ import Testing
     #expect(launch.launch?.project == project.id && launch.launch?.prompt == "先读 release.sh")
     #expect(launch.launch?.model == PiModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
     #expect(try await store.workingLeaf(of: task).id == step.id)
+    let starting = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
+    #expect(starting.first?["launching"] as? Bool == true)
 
     _ = try await server.call("tell", ["text": "要不要顺便升级 Node？", "choices": ["要", "不要"], "task": task.uuidString])
     #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["要不要顺便升级 Node？"])

@@ -100,14 +100,13 @@ extension CueStore {
     ) { Int($0.int(0)) } ?? 0
   }
 
-  /// 忘掉一条（软删，位置不变）；覆盖它的摘要作废。已忘掉的不变。
+  /// 忘掉一条（软删，位置不变）；覆盖它的摘要随之作废（摘要的指纹含各行忘没忘，见 `cueMemory`）。已忘掉的不变。
   public func forgetCueLine(_ id: UUID) throws {
     try write {
       guard let line = try find(CueMemoryLine.self, id) else { throw CueStoreError.notFound }
       guard line.deletedAt == nil else { return }
       let now = Date.stamp
       try db.run("UPDATE cueLines SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
-      try db.run("DELETE FROM cueSummaries WHERE lo <= ?1 AND ?1 < hi", [try index(of: line)])
     }
   }
 
@@ -134,7 +133,8 @@ extension CueStore {
     try db.first("SELECT MIN(remindAt) FROM cueLines WHERE remindAt > ? AND deletedAt IS NULL", [now]) { $0.dateOrNil(0) } ?? nil
   }
 
-  /// 全部记忆与有效的摘要，一次读出。
+  /// 全部记忆与有效的摘要，一次读出。摘要写下时区间里各行的 id 与忘没忘记成指纹，现在对不上（别处同步来更早的行、
+  /// 本机或别的设备忘掉了其中一行，哪怕忘掉的时刻早于摘要、同步晚到）就作废。
   public func cueMemory() throws -> CueMemory {
     let lines = try select(CueMemoryLine.self, orderBy: Self.lineOrder)
     let summaries = try db.query("SELECT lo, hi, text, lineIDs, createdAt FROM cueSummaries ORDER BY lo, hi") { row in
@@ -143,8 +143,7 @@ extension CueStore {
     let valid = summaries.filter { entry in
       let (lo, hi) = (entry.summary.lo, entry.summary.hi)
       guard lo >= 0, hi <= lines.count, lo < hi else { return false }
-      let range = lines[lo..<hi]
-      return Self.fingerprint(range) == entry.ids && !range.contains { $0.deletedAt.map { $0 > entry.summary.createdAt } ?? false }
+      return Self.fingerprint(lines[lo..<hi]) == entry.ids
     }
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
@@ -168,7 +167,7 @@ extension CueStore {
   }
 
   private static func fingerprint(_ lines: ArraySlice<CueMemoryLine>) -> String {
-    SHA256.hash(data: Data(lines.map { $0.id.uuidString }.joined(separator: ",").utf8)).prefix(12).hex
+    SHA256.hash(data: Data(lines.map { $0.id.uuidString + ($0.deletedAt == nil ? "" : "-") }.joined(separator: ",").utf8)).prefix(12).hex
   }
 
 }

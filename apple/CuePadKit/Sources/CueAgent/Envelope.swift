@@ -98,9 +98,9 @@ public enum CueEnvelope {
       case .joined: "交给你跟进"
       case .left: "不再由你跟进"
       }
-    var text = "[\(label)] \(where_(change.task, change.leaf))"
+    var text = "[\(label)] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
-    if change.kind == .settled, let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
+    if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
   }
 
@@ -133,9 +133,9 @@ public enum CueEnvelope {
     }
   }
 
-  private static func where_(_ task: Card, _ leaf: Card?) -> String {
-    let base = "\(title(task))（\(short(task.id))）"
-    guard let leaf, leaf.id != task.id else { return base }
+  private static func where_(_ change: CueChange) -> String {
+    let base = change.task.map { "\(title($0))（\(short($0.id))）" } ?? "已永久删除的任务（\(short(change.taskID))）"
+    guard let leaf = change.leaf, leaf.id != change.taskID else { return base }
     return "\(base) › \(title(leaf))"
   }
 

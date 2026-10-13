@@ -29,15 +29,30 @@ import Testing
     #expect(try await store.cueChanges(since: since).isEmpty)  // 不给上次的看板就不比
   }
 
-  /// 你把一件事交给 Cue，Cue 醒来看到它加入；它完成了只报完成，不另报不再跟进。
+  /// 你把一件事交给 Cue，Cue 醒来看到它加入；它完成了只报完成（带会话的回复摘要），不另报不再跟进。
   @Test func joiningAndFinishingShowAsJoinedThenDone() async throws {
     let task = try await store.createTask("写周报", in: nil)
+    try await store.linkCard(task.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "写周报")
+    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "写周报", lastReply: "周报写好了")))
+    try await Task.sleep(for: .milliseconds(2))
     let since = Date()
     try await store.setCueFollows(task.id, true)
     #expect(try await store.cueChanges(since: since, followed: []).map(\.kind) == [.joined])
 
     try await store.setStatus(task.id, .done)
-    #expect(try await store.cueChanges(since: since, followed: [task.id]).map(\.kind) == [.done])
+    let changes = try await store.cueChanges(since: since, followed: [task.id])
+    #expect(changes.map(\.kind) == [.done] && changes.first?.recap?.lastReply == "周报写好了")
+  }
+
+  /// 跟进中的任务被永久删除：Cue 醒来照样知道它不再跟进，是删了。
+  @Test func aFollowedTaskPurgedShowsAsLeft() async throws {
+    let task = try await store.createTask("清理旧分支", in: nil)
+    try await store.setCueFollows(task.id, true)
+    let since = Date()
+    try await store.purgeCard(task.id)
+    let changes = try await store.cueChanges(since: since, followed: [task.id])
+    #expect(changes.map(\.kind) == [.left] && changes.first?.taskID == task.id && changes.first?.detail == "删了")
   }
 
   /// 只有顶层任务能由 Cue 跟进：挂到别的任务下就不再是。

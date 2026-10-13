@@ -51,15 +51,31 @@ public struct CueChange: Equatable, Sendable {
   }
 
   public var kind: Kind
-  /// 顶层任务。
-  public var task: Card
-  /// 变化所在的叶子；任务本身完成为 nil。
+  /// 顶层任务的 id。
+  public var taskID: UUID
+  /// 顶层任务；已永久删除（只会是 `left`）为 nil。
+  public var task: Card?
+  /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
   public var at: Date
   /// 提问、错误、你说的话、为什么不再跟进。
   public var detail: String?
-  /// 会话记录里已有的摘要。
+  /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
   public var recap: PiRecap?
+
+  init(kind: Kind, task: Card, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil) {
+    self.init(kind: kind, taskID: task.id, task: task, leaf: leaf, at: at, detail: detail, recap: recap)
+  }
+
+  init(kind: Kind, taskID: UUID, task: Card?, leaf: Card?, at: Date, detail: String?, recap: PiRecap?) {
+    self.kind = kind
+    self.taskID = taskID
+    self.task = task
+    self.leaf = leaf
+    self.at = at
+    self.detail = detail
+    self.recap = recap
+  }
 }
 
 /// 一件事的细节（Cue 的 peek）：叶子、各自的草稿、会话、最近几轮问答与预览。
@@ -105,7 +121,7 @@ extension CueStore {
       let target = SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: sessionID)
       return .sent(try requestDelivery(content, to: target, on: state?.hostID ?? host, mode: mode, card: carrier, cue: cue))
     }
-    guard try launchingCards([leaf] + (draft.map { [$0.id] } ?? [])).isEmpty else { throw CueStoreError.launching(card.title) }
+    guard try launchingLeaves([leaf]).isEmpty else { throw CueStoreError.launching(card.title) }
     guard let project = card.projectID else { throw CueStoreError.noFolder("") }
     guard let launchHost = try launchHost(for: project, preferring: host) else {
       throw CueStoreError.noFolder(try find(Project.self, project)?.name ?? "")
@@ -115,14 +131,18 @@ extension CueStore {
     return .started(try requestLaunch(launch, title: card.title, on: launchHost, card: carrier, cue: cue))
   }
 
-  /// 这些卡里正在开新会话的：带着它的开新会话请求还在路上，或成功了、会话记录还没到（还没认领）。
-  public func launchingCards(_ cards: [UUID]) throws -> Set<UUID> {
-    guard !cards.isEmpty else { return [] }
+  /// 这些叶子里正在开新会话的：带着叶子或它的草稿（交出草稿时请求带的是草稿，送达后改记到叶子上）的开新会话请求还在路上，
+  /// 或成功了、会话记录还没到（还没认领）。
+  public func launchingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
+    guard !leaves.isEmpty else { return [] }
     return Set(try db.query(
       """
-      SELECT cardID FROM deliveryRequests WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = 'start'
-        AND status IN ('pending', 'executing', 'succeeded') AND \(Self.launchUnclaimed)
-      """, [Self.idList(cards)]) { $0.uuid(0) })
+      WITH leaves(id) AS (SELECT value FROM json_each(?))
+      SELECT CASE WHEN deliveryRequests.cardID IN leaves THEN deliveryRequests.cardID ELSE c.parentID END
+      FROM deliveryRequests LEFT JOIN cards c ON c.id = deliveryRequests.cardID AND c.todoAt IS NULL
+      WHERE (deliveryRequests.cardID IN leaves OR c.parentID IN leaves) AND deliveryRequests.mode = 'start'
+        AND deliveryRequests.status IN ('pending', 'executing', 'succeeded') AND \(Self.launchUnclaimed)
+      """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。
@@ -226,7 +246,7 @@ extension CueStore {
     let leaves = try cards(Set(tasks.map { links.home(of: $0.id) }))
     let sessions = try sessionStates(Array(leaves.values.compactMap(\.piSessionID)))
     let progress = try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(tasks.map(\.id))])
-    let launching = try launchingCards(Array(leaves.keys))
+    let launching = try launchingLeaves(Array(leaves.keys))
     return tasks.map { task in
       let leaf = leaves[links.home(of: task.id)] ?? task
       let session = leaf.piSessionID.flatMap { sessions[$0] }
@@ -255,11 +275,11 @@ extension CueStore {
       let leaves = tasks.flatMap { task in (steps[task.id] ?? [task]).map { (task: task, leaf: $0) } }
       let sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
       for task in tasks where task.completedAt.map({ $0 > since }) ?? false {
-        changes.append(CueChange(kind: .done, task: task, leaf: nil, at: task.completedAt!))
+        changes.append(CueChange(kind: .done, task: task, at: task.completedAt!, recap: try latestRecap(of: task.id)))
       }
       for (task, leaf) in leaves {
         if leaf.id != task.id, let done = leaf.completedAt, done > since {
-          changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done))
+          changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
         }
         guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
         let (kind, detail): (CueChange.Kind?, String?) =
@@ -286,16 +306,29 @@ extension CueStore {
     return changes.sorted { $0.at < $1.at }
   }
 
-  /// 跟进集合的差异：此刻看板上有、`followed` 里没有的是 `joined`；反过来的是 `left`，带上原因。
-  /// 完成了的报 `done`（`reported` 里的已经报过，不重复）；永久删除的卡已读不到，不报。
+  /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
+  private func latestRecap(of task: UUID) throws -> PiRecap? {
+    try select(
+      PiSessionState.self,
+      where: "sessionID IN (SELECT piSessionID FROM cards WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND piSessionID IS NOT NULL)",
+      [task], orderBy: "stateSince DESC, id", limit: 1
+    ).first?.recap
+  }
+
+  /// 跟进集合的差异：此刻看板上有、`followed` 里没有的是 `joined`；反过来的是 `left`，带上原因（永久删除的也报，只有 id）。
+  /// 完成了的报 `done`（`reported` 里的已经报过，不重复）。
   private func membershipChanges(from followed: Set<UUID>, since: Date, reported: Set<UUID>) throws -> [CueChange] {
     let current = try followedTasks(where: Self.onBoard)
-    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, task: $0, leaf: nil, at: $0.modifiedAt) }
+    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, task: $0, at: $0.modifiedAt) }
     let gone = followed.subtracting(current.map(\.id))
     let trashedProjects = Set(try select(Project.self, where: "deletedAt IS NOT NULL").map(\.id))
-    for card in try cards(gone).values {
+    let remaining = try cards(gone)
+    for id in gone where remaining[id] == nil {
+      changes.append(CueChange(kind: .left, taskID: id, task: nil, leaf: nil, at: Date.stamp, detail: "删了", recap: nil))
+    }
+    for card in remaining.values {
       if let done = card.completedAt {
-        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, task: card, leaf: nil, at: done)) }
+        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, task: card, at: done, recap: try latestRecap(of: card.id))) }
         continue
       }
       let reason =
@@ -304,7 +337,7 @@ extension CueStore {
         else if card.todoAt == nil { "改回了灵感" }
         else if card.parentID != nil { "挂到了别的任务下" }
         else { "你接手了" }
-      changes.append(CueChange(kind: .left, task: card, leaf: nil, at: card.modifiedAt, detail: reason))
+      changes.append(CueChange(kind: .left, task: card, at: card.modifiedAt, detail: reason))
     }
     return changes
   }
