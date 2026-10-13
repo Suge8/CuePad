@@ -71,7 +71,7 @@ struct PiHistoryPersistenceTests {
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events)
+        await rig.services.consumePiHistory(events, agent: .pi)
 
         let rows = try await rig.services.store.piSessions()
         #expect(rows.map(\.id) == ["sess-1"])
@@ -106,7 +106,7 @@ struct PiHistoryPersistenceTests {
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events)
+        await rig.services.consumePiHistory(events, agent: .pi)
 
         #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
     }

@@ -136,14 +136,14 @@ final class TestApp {
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
-         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path]
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path]
     }
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: pi,
             hotkeys: hotkeys,
-            paths: piPaths,
+            paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegration(
                 paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
@@ -154,8 +154,8 @@ final class TestApp {
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                 linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
             updater: nil,
-            host: host,
-            locatePi: { Self.piExecutable },
+            hooks: AgentHookServer(path: piPaths.hookSocket),
+            runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard)
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)

@@ -33,7 +33,7 @@ extension AppServices {
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
                 } else {
-                    try await piStateRecorder.exited(sessionID: session.sessionID, file: session.sessionFile, hosted: session.hosted)
+                    try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke, hosted: session.hosted)
                 }
             case .incompatible: break
             }
@@ -54,7 +54,7 @@ extension AppServices {
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
-            commands: session.commands)
+            commands: session.commands, agent: session.agent)
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
