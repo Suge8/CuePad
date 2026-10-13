@@ -34,6 +34,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
     var recap = PiRecap()
+    /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它。可选：旧检查点没有这一项
+    var excluded: Bool?
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
