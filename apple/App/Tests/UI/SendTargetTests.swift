@@ -130,6 +130,8 @@ struct SendTargetTests {
         #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "提示词", deliveryID: request.id.uuidString)])
+        // 提示在送达结果落库后才出（比扩展收到话晚一步）
+        try await eventually("workspace.notice != nil") { workspace.notice != nil }
         #expect(workspace.notice?.text.visible == "已唤醒 Agent 会话「alpha」并发送")
         _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }
         #expect(try await store.card(task.id)?.piSessionID == "a")
