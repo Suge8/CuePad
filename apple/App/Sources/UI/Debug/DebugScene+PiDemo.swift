@@ -296,12 +296,22 @@ extension DebugScene {
         await set(.settled)
     }
 
-    /// 演示会话的模型配置：两家各一个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换）。
+    /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
+    /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
     private static let demoModels: PiModelState = {
-        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "claude-opus-5-5-20260901"), name: "Claude Opus 5.5",
-                                 thinkingLevels: [.low, .medium, .high, .max])
-        let luna = PiModelOption(key: PiModelKey(provider: "openai", id: "gpt-6-luna"), name: "GPT-6 Luna", thinkingLevels: [.off, .low, .high])
-        return PiModelState(model: opus, thinking: .known(.medium), models: [opus, luna])
+        func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
+            PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+        }
+        let opus = model("anthropic", "claude-opus-5-5-20260901", "Claude Opus 5.5", [.low, .medium, .high, .max])
+        return PiModelState(model: opus, thinking: .known(.medium), models: [
+            opus,
+            model("anthropic", "claude-sonnet-5-20260801", "Claude Sonnet 5", [.off, .low, .medium, .high]),
+            model("openai-codex", "gpt-6-luna", "GPT-6 Luna", [.off, .low, .high]),
+            model("deepseek", "deepseek-v4", "DeepSeek V4", [.off, .high]),
+            model("kimi-coding", "kimi-k3", "Kimi K3", [.off]),
+            model("xiaomi", "mimo-v3-pro", "MiMo V3 Pro", [.off, .high]),
+            model("lab-proxy", "house-1", "", [.off]),
+        ])
     }()
 
     /// 演示会话的斜杠命令清单：内置、扩展、提示词模板、技能各有几条（回复框输入 "/" 弹出的面板）。

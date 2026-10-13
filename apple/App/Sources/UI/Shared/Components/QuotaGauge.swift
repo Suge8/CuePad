@@ -36,21 +36,29 @@ struct QuotaStrip: View {
     }
 }
 
-/// 按额度读数画的内容：此刻画一次，之后只在还没到的各个重置时刻各重画一次（`TimelineView` 的显式时刻表，由系统在那一刻唤醒），
-/// 过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）。
+/// 按额度读数画的内容：此刻画一次，之后只在下一个重置时刻再画一次（等到那一刻是业务语义：`task(id:)` 睡到那一刻，不周期刷新），
+/// 过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）；画完再等下一个。新观测到达时照常重画、重新算下一个时刻。
+/// 否决的方案：`TimelineView(.explicit(时刻))`——iOS 27 模拟器实测只在头一次画时调用内容（给的日期是时刻表里第一个时刻，
+/// 还没到就按已到画），到了那一刻并不重画。
 struct QuotaMoments<Content: View>: View {
-    let moments: [Date]
+    let quotas: [AccountQuota]
     @ViewBuilder let content: (Date) -> Content
+    /// 睡到的那个重置时刻：读数不早于它（醒来与重画之间读 `.now` 不会还差一丝没到）
+    @State private var reached = Date.distantPast
 
     init(_ quotas: [AccountQuota], @ViewBuilder content: @escaping (Date) -> Content) {
-        let now = Date.now
-        moments = Set(quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }).sorted()
+        self.quotas = quotas
         self.content = content
     }
 
     var body: some View {
-        // 时刻表开始前的那一帧，时刻表给的日期可能早于此刻：取两者较晚的
-        TimelineView(.explicit(moments)) { context in content(max(context.date, .now)) }
+        let now = max(Date.now, reached)
+        let next = quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min()
+        content(now)
+            .task(id: next) {
+                guard let next, (try? await Task.sleep(for: .seconds(next.timeIntervalSinceNow))) != nil else { return }
+                reached = next
+            }
     }
 }
 

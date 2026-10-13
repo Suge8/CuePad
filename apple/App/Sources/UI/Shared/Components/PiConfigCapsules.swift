@@ -1,22 +1,34 @@
 import CueStore
 import SwiftUI
 
+/// 模型胶囊：提供方图标 + 模型短名。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
+/// SwiftUI 在 Mac 上把菜单项里的图片丢掉，分组标题与模型项要带提供方图标）。
+/// 有订阅额度的提供方：图标外一圈细环是卡着的那个窗口用了多少（`ProviderBadge`），菜单的分组标题写各窗口的用量
+/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`QuotaMoments`）。
 struct PiModelCapsule: View {
     let models: [PiModelOption]
     let current: PiModelOption?
     let pending: Bool
     let maxWidth: CGFloat
-    /// 订阅额度：分组标题写各窗口的用量，胶囊上的图标外一圈环是卡着的那个窗口
     let quotas: [AccountQuota]
     let choose: (PiModelKey) -> Void
+    #if os(macOS)
+    /// 弹出 AppKit 的模型菜单。
+    let pick: () -> Void
+    #endif
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 卡着的窗口到了重置时刻，环与分组标题随即按已重置画
-        QuotaMoments(quotas) { now in menu(at: now) }
+        QuotaMoments(quotas) { now in capsule(at: now) }
     }
 
-    private func menu(at now: Date) -> some View {
+    @ViewBuilder private func capsule(at now: Date) -> some View {
+        #if os(macOS)
+        Button(action: pick) { label(at: now) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("模型")
+            .accessibilityValue(spoken(at: now))
+        #else
         Menu {
             ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
                 Section(PiModelLabel.title(group.provider, quotas: quotas, at: now)) {
@@ -24,37 +36,44 @@ struct PiModelCapsule: View {
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
                             Text(PiModelLabel.levels(model))
+                            group.provider.image
                         }
                     }
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
-                ProviderBadge(provider: current.map { PiProvider(id: $0.key.provider) }, binding: binding(at: now))
-                    .modifier(Breathing(active: pending))
-                    .accessibilityHidden(true)
-                Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
-                    .contentTransition(.opacity)
-            }
-            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            .padding(.leading, 7).padding(.trailing, 11)
-            // 按内容宽，最宽 `maxWidth`，再长截断
-            .frame(maxWidth: maxWidth, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(height: 30)
-            .background(palette.fill, in: .capsule)
-            .frame(minHeight: 44)
-            .contentShape(.capsule)
-            .animation(Motion.quick, value: current?.key)
+            label(at: now)
         }
         .menuIndicator(.hidden)
-        #if os(macOS)
-        .menuStyle(.button)
-        #endif
         .buttonStyle(.plain)
         .accessibilityLabel("模型")
-        .accessibilityValue(Dotted(current?.name ?? "未知", binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken)
+        .accessibilityValue(spoken(at: now))
+        #endif
+    }
+
+    private func label(at now: Date) -> some View {
+        HStack(spacing: 5) {
+            // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
+            ProviderBadge(provider: current.map { PiProvider(id: $0.key.provider) }, binding: binding(at: now))
+                .modifier(Breathing(active: pending))
+                .accessibilityHidden(true)
+            Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
+                .contentTransition(.opacity)
+        }
+        .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+        .padding(.leading, 6).padding(.trailing, 11)
+        // 按内容宽，最宽 `maxWidth`，再长截断
+        .frame(maxWidth: maxWidth, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(height: 30)
+        .background(palette.fill, in: .capsule)
+        .frame(minHeight: 44)
+        .contentShape(.capsule)
+        .animation(Motion.quick, value: current?.key)
+    }
+
+    private func spoken(at now: Date) -> String {
+        Dotted(current?.name ?? "未知", binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
@@ -66,19 +85,17 @@ struct PiModelCapsule: View {
 
 
 /// 胶囊上的提供方图标（次要墨色）；这家有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaArc`，不画匀速刻度），
-/// 没有额度的提供方只有图标、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标，淡一档。
+/// 没有额度的提供方只有图标、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标（`PiProvider.unknown`）。
 struct ProviderBadge: View {
     let provider: PiProvider?
     let binding: QuotaMeter.Window?
-    @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
 
     var body: some View {
         ZStack {
             if let binding { QuotaArc(window: binding, inset: 0, line: 1.5, showsPace: false) }
-            (provider?.image ?? Image(systemName: "cpu"))
+            (provider?.image ?? PiProvider.unknown)
                 .font(.system(size: side * 0.52))
-                .foregroundStyle(provider == nil ? palette.ink3 : palette.ink2)
                 .contentTransition(.opacity)
         }
         .frame(width: side, height: side)

@@ -27,7 +27,10 @@ nonisolated struct PiProvider: Equatable, Identifiable {
     }
 
     /// 嵌进文字用：`Text("\(provider.image) opus-5-5")`。
-    var image: Image { symbol.map { Image($0) } ?? Image(systemName: Self.generic) }
+    var image: Image { symbol.map { Image($0) } ?? Self.unknown }
+
+    /// 通用图标：没见过的提供方，以及还不知道是哪个模型时。
+    static var unknown: Image { Image(systemName: generic) }
 
     #if os(macOS)
     /// AppKit 菜单项用的同一个图标。
