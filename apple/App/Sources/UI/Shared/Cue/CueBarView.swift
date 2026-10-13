@@ -18,12 +18,12 @@ struct CueBarView: View {
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .glass(in: .rect(cornerRadius: 22))
             Composer(
-                draft: Bindable(cue).draft, prompt: "对 \(cue.name) 说", label: "对 \(cue.name) 说", focus: $focused, accepts: .images,
+                draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "启用后才能对 \(cue.name) 说", label: "对 \(cue.name) 说", focus: $focused, accepts: .images,
                 form: .open, shortcuts: [.send: send],
                 header: { EmptyView() }, tools: { EmptyView() },
                 send: {
-                    Button(action: send) { SubmitGlyph(.send, enabled: !sending) }
-                        .buttonStyle(.plain).disabled(sending)
+                    Button(action: send) { SubmitGlyph(.send, enabled: !sending && cue.canHear) }
+                        .buttonStyle(.plain).disabled(sending || !cue.canHear)
                         .accessibilityLabel("发送")
                         .help("发送（\(ReplyShortcut.send.symbols)）")
                 })
@@ -34,7 +34,7 @@ struct CueBarView: View {
 
     private func send() {
         let draft = workspace.cue.draft
-        guard !sending, !draft.isEmpty(accepting: .images) else { return }
+        guard !sending, workspace.cue.canHear, !draft.isEmpty(accepting: .images) else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }

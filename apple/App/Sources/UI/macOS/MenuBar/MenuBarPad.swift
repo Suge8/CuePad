@@ -54,7 +54,7 @@ struct MenuBarPad: View {
     }
 
     private var cueRow: some View {
-        let empty = capture.draft.isEmpty(accepting: .images)
+        let empty = capture.draft.isEmpty(accepting: .images) || !workspace.cue.canHear
         return CueStatusRow {
             Button("交给 \(workspace.cue.name)", systemImage: "paperplane", action: handToCue)
                 .font(Typography.meta.weight(.semibold))

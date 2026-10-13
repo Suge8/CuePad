@@ -3,41 +3,54 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（头像的表情与环、页头的一句、菜单栏面板的一行）。Cue 住在这台 Mac 上时就是管理器的状态（`services.cue.state`，见 `CueWatch`）；
-/// 手机与别的 Mac 上没有管理器，由库推出（`derive`）：
-/// 没启用是睡着；你最近一句已交给它、之后它还没说话是在想；没交出去超过 `undeliveredGrace` 是起不来（它住的那台 Mac 多半没开）。
+/// 手机与别的 Mac 上没有管理器，由库推出（`derive`）：没启用；你最近一句已交给它、之后它还没说话是在想；
+/// 没交出去超过 `undeliveredGrace` 是在睡觉（它住的那台 Mac 多半没开）。
 nonisolated enum CuePresence: Equatable, Sendable {
+    /// 还没启用（Cue 页的主按钮是启用）。
+    case disabled
+    /// 启用了，但它住的那台 Mac 不在线。
     case asleep
     case idle
     case thinking
-    /// 起不来：参数是给你看的原因。
+    /// 管理器起不来：参数是给你看的原因。
     case unreachable(String)
 
-    /// 你的话多久没交给 Cue 就算它没在。
+    /// 你的话多久没交给 Cue 就算它住的那台 Mac 不在线。
     static let undeliveredGrace: TimeInterval = 30
-    static let offline = "Cue 住在那台 Mac 上，它好像没开"
 
     static func derive(_ digest: CueDigest, overdue: Bool) -> CuePresence {
-        guard digest.enabled else { return .asleep }
+        guard digest.enabled else { return .disabled }
         guard let pending = digest.pendingYou else { return .idle }
         if pending.delivered { return .thinking }
-        return overdue ? .unreachable(offline) : .thinking
+        return overdue ? .asleep : .thinking
     }
 
     #if os(macOS)
+    /// 管理器的状态（只在 Cue 启用且住在这台 Mac 时用）：还没开始值班的那一下算空闲。
     init(_ state: CueState) {
         switch state {
-        case .asleep: self = .asleep
-        case .idle: self = .idle
+        case .asleep, .idle: self = .idle
         case .thinking: self = .thinking
         case .failed(let reason): self = .unreachable(reason)
         }
     }
     #endif
 
+    /// 头像变暗、闭眼：它此刻不会接话。
+    var isAway: Bool {
+        switch self {
+        case .disabled, .asleep, .unreachable: true
+        case .idle, .thinking: false
+        }
+    }
+
+    var isUnreachable: Bool { if case .unreachable = self { true } else { false } }
+
     /// 页头、菜单栏面板那一句；空闲时不写。
     func line(name: String) -> String? {
         switch self {
-        case .asleep: "\(name) 在睡觉"
+        case .disabled: "\(name) 还没启用"
+        case .asleep: "\(name) 在睡觉：它住的那台 Mac 好像没开"
         case .idle: nil
         case .thinking: "在想…"
         case .unreachable(let reason): reason
@@ -54,7 +67,7 @@ nonisolated enum CueMood: String, Sendable {
     /// 哪个表情只在这里定：睡着、起不来闭眼；在想；有等你的；你正在写（在听）；它刚报了一件做完的；平时在听。
     static func of(_ presence: CuePresence, waiting: Int, composing: Bool = false, justDone: Bool = false) -> CueMood {
         switch presence {
-        case .asleep, .unreachable: .sleeping
+        case .disabled, .asleep, .unreachable: .sleeping
         case .thinking: .thinking
         case .idle: waiting > 0 ? .waiting : composing ? .listening : justDone ? .done : .listening
         }
@@ -65,8 +78,9 @@ nonisolated enum CueMood: String, Sendable {
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     var enabled: Bool
-    /// 住在哪台 Mac。
+    /// 住在哪台 Mac（与它的名字：绑过文件夹的 Mac 才知道名字）。
     var hostID: String?
+    var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
     /// Cue 最近对你说的一句（纯文字）。
@@ -81,7 +95,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         var delivered: Bool
     }
 
-    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostID: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
+    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -93,6 +107,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
             enabled: profile?.enabledAt != nil && profile?.hostID != nil, hostID: profile?.hostID,
+            hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.map { CueFormat.plainText($0.text) },
             lastSaidDone: saidTask?.status == .done,

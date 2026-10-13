@@ -51,8 +51,62 @@ struct CueHead: View {
     }
 }
 
-extension CuePresence {
-    var isUnreachable: Bool { if case .unreachable = self { true } else { false } }
+
+/// 还没启用时 Cue 页输入框上方的那一块：Mac 上主按钮直接是"在这台 Mac 上启用"（经管理器，挑这台装好并登录了的 Agent；
+/// 一家都没有时就地说明）；手机上说明去哪台 Mac 启用（之前住过的那台写出名字）。没启用时输入框发不出去。
+struct CueEnableCard: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var enabling = false
+    @State private var failure: String?
+
+    var body: some View {
+        let cue = workspace.cue
+        VStack(alignment: .leading, spacing: 10) {
+            #if os(macOS)
+            Text("启用后 \(cue.name) 住在这台 Mac 上，替你派活、跟进，只在要你拿主意时找你").font(Typography.secondary).foregroundStyle(palette.ink2)
+            HStack(spacing: 10) {
+                Button(action: enable) {
+                    HStack(spacing: 6) {
+                        if enabling { Spinner(.mini) }
+                        Text("在这台 Mac 上启用")
+                    }
+                }
+                .buttonStyle(ControlButtonStyle(kind: .primary))
+                .disabled(enabling)
+                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure).lineLimit(2) }
+            }
+            #else
+            Label {
+                Text(cue.digest.hostName.map { "到「\($0)」上打开 CuePad，在设置里启用 \(cue.name)" } ?? "到你的 Mac 上打开 CuePad，在设置里启用 \(cue.name)")
+            } icon: {
+                Image(systemName: "desktopcomputer")
+            }
+            .font(Typography.secondary).foregroundStyle(palette.ink2)
+            #endif
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+    }
+
+    #if os(macOS)
+    private func enable() {
+        enabling = true
+        failure = nil
+        let cue = services.cue, services = services
+        Task {
+            defer { enabling = false }
+            do {
+                try await cue.enable()
+                await services.upload(CueProfile.recordID)
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
+    }
+    #endif
 }
 
 /// 派出去的一件活：一张纸，任务圈、标题、在做那一步的状态标与一句近况，右边是最近一份预览的缩略图；随库就地更新。

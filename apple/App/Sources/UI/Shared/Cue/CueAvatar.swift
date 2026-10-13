@@ -35,12 +35,7 @@ struct CueAvatar: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var dimmed: Bool {
-        switch presence {
-        case .asleep, .unreachable: true
-        case .idle, .thinking: false
-        }
-    }
+    private var dimmed: Bool { presence.isAway }
 
     var body: some View {
         ZStack {

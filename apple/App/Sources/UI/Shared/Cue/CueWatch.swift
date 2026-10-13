@@ -26,6 +26,8 @@ final class CueWatch {
         return CuePresence.derive(digest, overdue: overdue)
     }
     var name: String { digest.name }
+    /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。
+    var canHear: Bool { presence != .disabled }
 
     func mood(composing: Bool = false) -> CueMood {
         CueMood.of(presence, waiting: digest.waiting, composing: composing, justDone: digest.lastSaidDone)

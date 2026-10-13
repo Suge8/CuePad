@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 设置里的"Cue"一节：名字、住在哪台 Mac（这台与绑过文件夹的别的 Mac）、它的大脑用哪个 Agent 与模型、启用或停用。都写进同步的 `CueProfile`，
-/// 别的设备上看到的是同一份。启用、停用经这台 Mac 的管理器（`services.cue`）：启用就是让 Cue 住在这台 Mac，挑第一家装好并登录了的 Agent；
+/// 别的设备上看到的是同一份；改完立即上传这一条（同其他记录）。启用、停用经这台 Mac 的管理器（`services.cue`）：启用就是让 Cue 住在这台 Mac，挑第一家装好并登录了的 Agent；
 /// 这台一家都没有时就地说明。Agent 只列这台装好的（住在别的 Mac 上时全列）。
 struct CueSettingsSection: View {
     @Environment(AppServices.self) private var services
@@ -12,6 +12,10 @@ struct CueSettingsSection: View {
     @State private var name = ""
     @State private var model = ""
     @State private var failure: String?
+    @FocusState private var editing: Field?
+
+    /// 名字与模型在回车或离开输入框时写入。
+    private enum Field { case name, model }
 
     nonisolated struct Data: Equatable, Sendable {
         var profile: CueProfile
@@ -38,6 +42,9 @@ struct CueSettingsSection: View {
             }
             return Data(profile: try store.cueProfile() ?? CueProfile(), hosts: hosts)
         }
+        .onChange(of: editing) { left, _ in
+            if let left, let profile = data?.profile { commit(left, profile) }
+        }
         .onChange(of: data?.profile, initial: true) { _, profile in
             name = profile?.name ?? CueProfile.defaultName
             model = profile?.model ?? ""
@@ -48,7 +55,8 @@ struct CueSettingsSection: View {
         let profile = data.profile
         LabeledContent("名字") {
             TextField("名字", text: $name, prompt: Text(CueProfile.defaultName)).labelsHidden().multilineTextAlignment(.trailing)
-                .onSubmit { let text = name; update { $0.name = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? CueProfile.defaultName : text } }
+                .focused($editing, equals: .name)
+                .onSubmit { commit(.name, profile) }
         }
         Picker("住在哪台 Mac", selection: Binding(get: { profile.hostID }, set: { host in update { $0.hostID = host } })) {
             Text("还没选").tag(String?.none)
@@ -62,7 +70,8 @@ struct CueSettingsSection: View {
         }
         LabeledContent("模型") {
             TextField("模型", text: $model, prompt: Text("默认")).labelsHidden().multilineTextAlignment(.trailing)
-                .onSubmit { let text = model.trimmingCharacters(in: .whitespaces); update { $0.model = text.isEmpty ? nil : text } }
+                .focused($editing, equals: .model)
+                .onSubmit { commit(.model, profile) }
         }
         Picker("思考强度", selection: Binding(get: { profile.effort?.known }, set: { level in update { $0.effort = level.map { .known($0) } } })) {
             Text("默认").tag(PiThinkingLevel?.none)
@@ -74,12 +83,27 @@ struct CueSettingsSection: View {
         }
     }
 
+    /// 写入一个输入框的值；和库里一样就不写。
+    private func commit(_ field: Field, _ profile: CueProfile) {
+        switch field {
+        case .name:
+            let text = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = text.isEmpty ? CueProfile.defaultName : text
+            if value != profile.name { update { $0.name = value } }
+        case .model:
+            let text = model.trimmingCharacters(in: .whitespaces)
+            let value = text.isEmpty ? nil : text
+            if value != profile.model { update { $0.model = value } }
+        }
+    }
+
     private func enable(_ on: Bool) {
         failure = nil
-        let cue = services.cue
+        let cue = services.cue, services = services
         Task {
             do {
                 if on { try await cue.enable() } else { try await cue.disable() }
+                await services.upload(CueProfile.recordID)
             } catch {
                 failure = error.localizedDescription
             }
@@ -88,10 +112,11 @@ struct CueSettingsSection: View {
 
     private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) {
         failure = nil
-        let store = services.store
+        let store = services.store, services = services
         Task {
             do {
                 try await store.updateCueProfile(edit)
+                await services.upload(CueProfile.recordID)
             } catch {
                 failure = error.localizedDescription
             }

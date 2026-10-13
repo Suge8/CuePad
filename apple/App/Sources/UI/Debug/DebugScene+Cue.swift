@@ -7,7 +7,7 @@ import SwiftUI
 /// 部署那一步发来一张截图、在等你收下）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态与一条"等你"；记忆有钉住的与其他，还有一条忘掉的。
 /// 上次离开 Cue 页记在两小时前，回到页里有"你不在时"。
-/// `-CuePadCuePresence <thinking|offline|asleep>`：你的最后一句已交给 Cue 还没回（在想）、没交出去超过 30 秒（起不来）、没启用（睡着）。
+/// `-CuePadCuePresence <thinking|asleep|disabled>`：你的最后一句已交给 Cue 还没回（在想）、没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
@@ -17,7 +17,7 @@ extension DebugScene {
         do {
             _ = try await store.updateCueProfile { profile in
                 profile.hostID = "demo-mac"
-                profile.enabledAt = presence == "asleep" ? nil : .now
+                profile.enabledAt = presence == "disabled" ? nil : .now
             }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
@@ -50,7 +50,7 @@ extension DebugScene {
             try await store.forgetCueLine(forgotten.line.id)
             switch presence {
             case "thinking": try await you("顺便看看登录回调那个超时")
-            case "offline":
+            case "asleep":
                 // 两分钟前说的、一直没交出去
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
             default: break

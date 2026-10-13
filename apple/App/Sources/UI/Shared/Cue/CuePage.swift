@@ -162,18 +162,22 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 8) {
             if let thread { CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 } }
-            if case .unreachable(let reason) = cue.presence {
-                Label(reason, systemImage: "moon.zzz").font(Typography.meta).foregroundStyle(palette.failure)
+            if cue.presence == .disabled {
+                CueEnableCard().transition(.opacity)
+            } else if cue.presence == .asleep || cue.presence.isUnreachable, let line = cue.presence.line(name: cue.name) {
+                Label(line, systemImage: "moon.zzz").font(Typography.meta)
+                    .foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18)
                     .transition(.opacity)
             }
             Composer(
-                draft: Bindable(cue).draft, prompt: "对 \(cue.name) 说", label: "对 \(cue.name) 说", focus: $focused, accepts: .images,
+                draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "启用后才能对 \(cue.name) 说", label: "对 \(cue.name) 说",
+                focus: $focused, accepts: .images,
                 form: Self.form, shortcuts: [.send: send],
                 header: { EmptyView() }, tools: { EmptyView() },
                 send: {
-                    Button(action: send) { SubmitGlyph(.send, enabled: !sending) }
-                        .buttonStyle(.plain).disabled(sending)
+                    Button(action: send) { SubmitGlyph(.send, enabled: !sending && cue.canHear) }
+                        .buttonStyle(.plain).disabled(sending || !cue.canHear)
                         .accessibilityLabel("发送")
                         #if os(macOS)
                         .help("发送（\(ReplyShortcut.send.symbols)）")
@@ -192,7 +196,7 @@ struct CuePage: View {
 
     private func send() {
         let draft = cue.draft
-        guard !sending, !draft.isEmpty(accepting: .images) else { return }
+        guard !sending, cue.canHear, !draft.isEmpty(accepting: .images) else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }

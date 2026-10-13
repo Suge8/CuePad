@@ -3,12 +3,13 @@ import AppKit
 import Observation
 import SwiftUI
 
-/// "对 Cue 说"的输入条：全局快捷键（默认 ⌥Space，设置里可改）在屏幕上方三分之一处唤出，再按一次或 Esc、失去焦点即收起。
+/// "对 Cue 说"的输入条：全局快捷键（默认 ⌥⇧Space，设置里可改）在屏幕上方三分之一处唤出，再按一次或 Esc、失去焦点即收起。
 /// 与菜单栏面板同一种宿主（`MenuBarPanel`：不激活应用的浮动面板）与同一种全局快捷键做法（`GlobalHotkey`，单槽，换键时先注册新的成功才放旧的）。
 /// 快捷键存在设备偏好里；注册失败记成启动问题，设置里换一个。
 @Observable
 final class CueBar {
-    static let defaultShortcut = "Alt+Space"
+    /// ⌥Space 是"显示或隐藏 CuePad"的默认，这里错开一个 ⇧。
+    static let defaultShortcut = "Alt+Shift+Space"
     private static let shortcutKey = "cueShortcut"
     /// 唤出处离屏幕顶边的比例。
     private static let anchorFraction: CGFloat = 0.28
