@@ -45,7 +45,8 @@ struct HistoryRulesTests {
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: paths, installer: installer, terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, wakeNotifications: NotificationCenter(),
-                updater: nil, host: host, locatePi: { realPi }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")))
+                updater: nil, host: host, locatePi: { realPi }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
+                cue: CueDependencies(scan: { CueRuntimeScan(available: [], path: "", agents: []) }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
