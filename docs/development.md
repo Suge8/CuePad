@@ -27,6 +27,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 **资料库位置与隔离。**
 - 位置只经 `CueStore` 的 `LibraryLocation` 取，App、命令行与测试同一份规则。
 - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录：资料库、偏好设置（主题、快捷键、上次打开的项目、窗口位置）都放进去，不碰真实的 `com.sugeh.cuepad` 偏好域，并行实例互不影响。
+- Mac 上只有正式版（Developer ID 签名的 App 与随它分发的命令行）能打开真实资料库；本机构建（`xc.sh`、测量构建、Xcode 直接运行、`swift build` 编的命令行）不给 `CUEPAD_LIBRARY_DIR` 就报错不打开：没发布的代码一打开就会升级库结构、改写数据并同步出去，正式版之后就打不开了。
 - 资料库打不开（更早或更新版本建的库、损坏）时不终止进程，也不换成空库：入口 `AppServices.openLibrary(at:)` 抛 `LibraryFailure`，两端显示 `UnreadableLibraryView`，没有任何写入入口。位置本身有误（没有 App Group 权限、路径不是绝对路径）时 iOS 走同一页，Mac 提示后退出。
 
 **数据。**
