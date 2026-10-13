@@ -36,8 +36,8 @@ extension SessionDigest {
 }
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
-/// 会话名与状态（`PiSessionSubtitle`，在跑或要你注意时才有）在窗口工具栏居中（与对话的阅读栏同一条中线），"⋯"（重命名、跳到终端、结束会话）在工具栏右上——
-/// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
+/// 会话名与状态（`PiSessionSubtitle`，在跑或要你注意时才有）在窗口工具栏居中（与对话的阅读栏同一条中线），绑着任务时同一块玻璃里还有这件事与它的完成圈（`SessionTitleSlot`），
+/// "⋯"（完成或绑定任务、重命名、跳到终端、结束会话）在工具栏右上——Mac 的窗口本来就有一条工具栏，页头全在它上面，内容区里不另起一行。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
 /// 看历史时标题让开（"⋯"不让开：工具栏本来就一直在，让开只留一格空位），回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`SessionChat`，与手机同一个：只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"；
@@ -50,6 +50,7 @@ struct SessionPage: View {
     @Environment(\.palette) private var palette
     private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
+    @State private var task: SessionTaskLink?
     @State private var askedForTranscript = false
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
@@ -68,9 +69,6 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
-                SessionTaskBar(sessionID: sessionID, projectID: session.projectID, title: session.title)
-                    .padding(.horizontal, 24).padding(.top, 8)
-                    .frame(maxWidth: Self.readingWidth)
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
@@ -111,7 +109,7 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd, menu: secondary), initial: true) { _, state in header.set(state) }
+        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
         .onAppear {
             header.rename = { renaming = $0 }
             header.end = { confirmingEnd = $0 }
@@ -127,19 +125,29 @@ struct SessionPage: View {
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
+        .observing(services.store, id: TaskKey(session: sessionID, project: digest.session?.projectID), into: $task,
+                   onError: workspace.fail) { [sessionID, project = digest.session?.projectID] store in
+            try SessionTaskLink.read(sessionID: sessionID, project: project, from: store)
+        }
         .onChange(of: stored) { askForTranscriptIfNeeded() }
         // 开着这页就算看过：侧栏与菜单栏里的"有新回复"据此消失
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
     /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool) -> SessionHeader.State? {
+    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
             session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
-            showsHeader: follow.showsHeader, showsMenu: menu)
+            showsHeader: follow.showsHeader, showsMenu: menu, task: task)
+    }
+
+    /// 绑着的任务按会话与所在项目读（没绑时能绑的是本项目的任务）。
+    private struct TaskKey: Equatable {
+        var session: String
+        var project: UUID?
     }
 
     /// 窗口右缘系统滚动条（悬浮式）占的宽。

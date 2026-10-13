@@ -46,10 +46,12 @@ enum Typography {
     static let lead = Font.system(size: 16)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
-    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其下一行。
+    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其后的状态；标题下面还有一行（任务 · 步骤）时标题收小，两行放进一个控件的高度。
     static let toolbarLabel = Font.system(size: 13, weight: .medium)
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
+    static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)
     static let toolbarSubtitle = Font.system(size: 12)
+    static let toolbarPath = Font.system(size: 11)
     /// 侧栏：行、行下的一句（项目的"此刻"）、分组标题。
     static let sidebarRow = Font.system(size: 14)
     static let sidebarDetail = Font.system(size: 12)

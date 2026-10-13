@@ -42,8 +42,8 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态与提示词：圆桌"乱序"的步骤"复现乱序""改成按首次加入时间排序""部署到预发环境"的提示词发给了会话 notes、atlas、deploy
-    /// （送达，提示词已用掉，步骤记着会话；复现乱序随后完成），"补 3 个重连用例"的没发；
+    /// 任务三态与提示词：圆桌"乱序"的步骤"复现乱序""改成按首次加入时间排序""部署到预发环境"的提示词发给了会话 piwork、atlas、deploy
+    /// （送达，提示词已用掉，步骤记着会话；复现乱序随后完成，它的会话 piwork 已结束：会话页看完成了的任务），"补 3 个重连用例"的没发；
     /// CuePad"投送超时"的提示词发给 notes（同样用掉）；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
@@ -57,7 +57,7 @@ extension DebugScene {
             _ = try? await store.recordSend(prompt.body, to: SendTarget(kind: .piSession, name: session, ref: session), card: prompt.id)
             try? await store.purgeCard(prompt.id)
         }
-        await send(await prompts("复现乱序").first, to: "notes")
+        await send(await prompts("复现乱序").first, to: "piwork")
         await send(await prompts("投送队列").first, to: "notes")
         await send(await prompts("改成按首次").first, to: "atlas")
         await send(await prompts("部署到预发").first, to: "deploy")
