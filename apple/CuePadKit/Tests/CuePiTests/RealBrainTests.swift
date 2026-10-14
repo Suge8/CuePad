@@ -105,7 +105,9 @@ struct RealBrainTests {
         try await rig.finished()
 
         #expect(rig.failures == [], "\(rig.events)")
-        #expect(rig.events.first == .turnStarted && rig.events.last == .turnFinished)
+        // 正在说的话的清除可能落在这一轮开始之前（Claude 会），轮次的起止只看别的事件
+        let turn = rig.events.filter { if case .speaking = $0 { false } else { true } }
+        #expect(turn.first == .turnStarted && turn.last == .turnFinished, "\(rig.events)")
         #expect(rig.replies.count == 1 && rig.replies[0].contains(rig.codename))
         let context = try #require(rig.contexts.last)
         #expect(context.used > 0 && (context.window ?? 0) > context.used)

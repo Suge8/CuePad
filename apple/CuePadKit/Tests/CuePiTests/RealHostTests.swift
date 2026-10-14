@@ -273,7 +273,8 @@ struct RealHostTests {
     /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展。会自己重新载入的（`PiHost.selfReloadingExtension` 起）：
     /// 新 App 装上新扩展后它空闲时自己换上、以新协议重新连上，同一个进程接着收话。更早的没有终端能 /reload：CuePad 让它退出，
     /// 下次发话用新扩展恢复。两种都是话送达、有回答。
-    @Test(arguments: [true, false])
+    /// 只连真 Pi 跑：两个 Pi 进程交替上桥、中途热换扩展文件，回放排不稳先后（三次两次等不到旧扩展上桥）。
+    @Test(RealAgents.live(.pi, "两个进程交替与热换扩展，回放排不稳先后"), arguments: [true, false])
     func anOldHostedProcessComesBackOnTheNewExtension(reloadsItself: Bool) async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
