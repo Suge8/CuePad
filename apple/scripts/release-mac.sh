@@ -24,7 +24,7 @@ Site: https://cue-pad.com"
 ASSET=CuePad-mac-arm64.zip
 DOWNLOAD="https://github.com/$REPO/releases/latest/download"
 
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
+DERIVED="$APPLE_DIR/.derived"
 OUT="$DERIVED/release/mac"
 dry_run=false resume=""
 while [ "$#" -gt 0 ]; do

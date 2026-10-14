@@ -176,10 +176,13 @@ public struct TimedOut: Error, CustomStringConvertible {
   public let description: String
 }
 
+/// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
+/// 不空等到测试时限。重活经 xc.sh 全机排队，机器不再过载到一步慢几十秒；等真子进程起来的地方自己写更宽的上限。
+public let conditionTimeout: Duration = .seconds(5)
+
 /// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
-/// 条件一成立马上返回，到了上限抛 `TimedOut`。上限只是"确实不会来了"的兜底：机器负载高时一步会慢上几十秒，
-/// 所以取得宽，各处不另写。库里的变化用下面按读取订阅的那个。
-public func eventually(_ what: String, timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
+/// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
+public func eventually(_ what: String, timeout: Duration = conditionTimeout, _ condition: () async throws -> Bool) async throws {
   let deadline = ContinuousClock.now + timeout
   while try await !condition() {
     guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
@@ -193,13 +196,23 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
-/// 订阅读取直到条件成立（事件驱动，配合测试的时间限制，不轮询）。
+/// 订阅读取直到条件成立（事件驱动，不轮询），到了上限抛 `TimedOut`。
 public func eventually<T: Sendable & Equatable>(
-  _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
-  until predicate: @Sendable (T) -> Bool
+  _ store: CueStore, timeout: Duration = conditionTimeout, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
+  until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
-  for try await value in store.observe(read) where predicate(value) { return value }
-  throw CancellationError()
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask {
+      for try await value in store.observe(read) where predicate(value) { return value }
+      throw CancellationError()
+    }
+    group.addTask {
+      try await Task.sleep(for: timeout)
+      throw TimedOut(description: "等不到：库里的读取在 \(timeout) 内满足条件")
+    }
+    defer { group.cancelAll() }
+    return try await group.next()!
+  }
 }
 
 public struct RawError: Error { public let message: String }

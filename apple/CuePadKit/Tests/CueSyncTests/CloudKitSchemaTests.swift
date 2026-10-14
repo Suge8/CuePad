@@ -34,7 +34,7 @@ import Testing
   @Test func committedSchemaFileMatchesTheRecordMapping() async throws {
     let generated = try await CloudKitSchema.generate()
     let committed = try String(contentsOf: Self.schemaFile, encoding: .utf8)
-    #expect(generated == committed, "记录映射变了：运行 CUEPAD_REGENERATE_SCHEMA=1 swift test --filter regenerateSchemaFile 重新生成，再用 cktool import-schema 导入（见 docs/release.md「CloudKit 数据结构」）")
+    #expect(generated == committed, "记录映射变了：运行 CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit --filter regenerateSchemaFile 重新生成，再用 cktool import-schema 导入（见 docs/release.md「CloudKit 数据结构」）")
   }
 
   @Test(.enabled(if: CloudKitSchemaTests.regenerating))
