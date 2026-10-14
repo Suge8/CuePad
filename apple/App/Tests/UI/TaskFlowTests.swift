@@ -121,9 +121,9 @@ struct TaskFlowTests {
         #expect(try await ends() == ["s1"])
     }
 
-    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、还有没做完的步骤时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
-    /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
-    @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
+    /// 分步做一件事（与 Cue 同一条规则）：上一步还开着时下一步"开始"接着用它——话发进那个会话，不开新会话；要新会话就在"绑定会话"里选"开新会话"。
+    /// 做完一步，它的会话没有下一步在用就结束：下一步在用时留着，用它的那一步做完才结束，不等别的步骤。
+    @Test func 分步做_下一步接着用上一步的会话_没人再用就结束() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
@@ -136,9 +136,6 @@ struct TaskFlowTests {
         try await workspace.bind("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
-        try await workspace.toggle(first.id)
-        #expect(try await requests(.end).isEmpty)
-
         let draft = try await store.createCard(body: "照 --lang 的用法写 README", under: second.id)
         workspace.handOff(draft)
         let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
@@ -150,11 +147,18 @@ struct TaskFlowTests {
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
-        try await store.linkCard(second.id, toSession: "s1")  // 送达时由执行的 Mac 绑上（这里没有执行端）
+        try await workspace.toggle(first.id)
+        #expect(try await requests(.end).isEmpty)  // "写 README"的话正送进它
+        // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
+        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request in
+            _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+            return .succeeded
+        }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+        await executor.stop()
         try await workspace.toggle(second.id)
-        #expect(try await requests(.end).isEmpty)  // 还有"发版"没做完
-        try await workspace.toggle(third.id)
-        #expect(try await requests(.end).map(\.target.ref) == ["s1"])
+        #expect(try await requests(.end).map(\.target.ref) == ["s1"])  // "发版"还没做完，但不用这个会话
     }
     #endif
 
