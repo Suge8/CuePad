@@ -135,6 +135,7 @@ actor RecordSender {
   }
 
   private func batches() async -> End {
+    var zoneCreated = false
     for _ in 0..<Self.batchesPerRound {
       guard let batch = await coordinator.nextBatch(first: first, limit: limit) else { return .done }
       let names = Set(batch.saves.map(\.recordID.recordName) + batch.deletes.map(\.recordName))
@@ -143,19 +144,36 @@ actor RecordSender {
         let sent = try await uploader.upload(saving: batch.saves, deleting: batch.deletes)
         let outcome = await coordinator.sent(sent)
         resolve(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)))
-        failures = 0
         if outcome.zoneMissing { try await uploader.saveZone() }
         if outcome.blocked {
           blockedUntil = .now + Self.blockedPause
           return .halted
         }
+        // 有记录被限流、服务忙：这一轮到此为止，按服务器给的等待或退避再发，不立刻原样重传
+        if let throttled = outcome.throttled {
+          if let wait = throttled { notBefore = .now + wait }
+          return .retry(at: .now + (throttled ?? backoff()))
+        }
         if !outcome.progressed { return .retry(at: .now + backoff()) }
+        failures = 0
       } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
         first.formUnion(names)
         limit /= 2  // 这一批太大：减半再试
+      } catch let error as CKError where error.code == .zoneNotFound && !zoneCreated {
+        // 整个请求因同步区不在被拒（新装的第一次上传）：建区再发这一批
+        first.formUnion(names)
+        zoneCreated = true
+        do { try await uploader.saveZone() } catch {
+          resolve(names, received: [])
+          return .retry(at: .now + backoff())
+        }
       } catch {
         resolve(names, received: [])
         Self.log.notice("上传整批失败：\(error.brief, privacy: .public)")
+        if let error = error as? CKError, error.code == .userDeletedZone {
+          await coordinator.handle(.zoneMissing(deletedByUser: true))
+          return .halted
+        }
         guard let error = error as? CKError, Self.retryable.contains(error.code) else {
           if let error = error as? CKError { await coordinator.uploadFailed(error) }
           blockedUntil = .now + Self.blockedPause
@@ -169,7 +187,7 @@ actor RecordSender {
     return .more
   }
 
-  private static let retryable: Set<CKError.Code> = [
+  static let retryable: Set<CKError.Code> = [
     .networkFailure, .networkUnavailable, .serviceUnavailable, .requestRateLimited, .zoneBusy, .serverResponseLost,
     .accountTemporarilyUnavailable, .operationCancelled,
   ]

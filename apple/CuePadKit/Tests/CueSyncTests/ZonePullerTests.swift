@@ -67,4 +67,76 @@ import Testing
     #expect(try await store.cards(in: nil).map(\.body) == ["期间新建"])
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
   }
+
+  @Test func aRecordDeletedWhileTheZoneWasBeingScannedIsDeletedHere() async throws {
+    let card = try await store.createCard(in: nil, body: "翻的途中在别处删了")
+    try await rig.simulatePush()
+    let onServer = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let deleted = ZoneChangeBatch(modifications: [], deletions: [(onServer.recordID, "cards")], token: Data("v2".utf8), moreComing: false)
+    let zone = FakeZone([page("v1", [version(of: onServer)], more: true), .success(deleted), page("t1")])
+
+    try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
+
+    #expect(try await store.cards(in: nil).isEmpty)
+  }
+
+  /// 拉到的一页没能应用（这里是期间换了账号、停下来等你决定）：令牌不前移，之后从同一处再拉。
+  @Test func aPageThatWasNotAppliedDoesNotMoveTheToken() async throws {
+    await rig.coordinator.handle(.account("user-a"))
+    try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
+    let fresh = remoteRecord(.cards, cardFields(project: nil, body: "别处新建", modifiedAt: 2_000))
+    let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator)
+
+    await #expect(throws: (any Error).self) { try await ZonePuller(source: zone, coordinator: rig.coordinator).pull() }
+
+    #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t0".utf8))
+    #expect(try await store.cards(in: nil).isEmpty)
+  }
+
+  /// 同时来的几次拉取一个接一个跑：不会两个同时拉、用同一个令牌拉两遍。
+  @Test func concurrentPullsRunOneAfterAnother() async throws {
+    try await store.setSyncState(ZonePuller.tokenKey, Data("0".utf8))
+    let zone = CountingZone()
+    let puller = ZonePuller(source: zone, coordinator: rig.coordinator)
+
+    await withThrowingTaskGroup { group in
+      for _ in 0..<4 { group.addTask { try await puller.pull() } }
+    }
+
+    #expect(await zone.mostAtOnce == 1)
+    let tokens = await zone.tokens
+    #expect(Set(tokens).count == tokens.count)
+  }
+
+  /// 拉一页时那头换了账号。
+  actor SwitchingZone: ZoneChangeSource {
+    let page: ZoneChangeBatch
+    let coordinator: SyncCoordinator
+    init(page: ZoneChangeBatch, coordinator: SyncCoordinator) {
+      self.page = page
+      self.coordinator = coordinator
+    }
+    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+      await coordinator.handle(.account("user-b"))
+      return page
+    }
+    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { [] }
+  }
+
+  /// 每次给一页空变化、令牌加一，记下同时在拉的最多几个与每次带的令牌。
+  actor CountingZone: ZoneChangeSource {
+    private var active = 0
+    private(set) var mostAtOnce = 0
+    private(set) var tokens: [String] = []
+    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+      active += 1
+      mostAtOnce = max(mostAtOnce, active)
+      let current = token.map { String(decoding: $0, as: UTF8.self) } ?? ""
+      tokens.append(current)
+      try await Task.sleep(for: .milliseconds(20))
+      active -= 1
+      return ZoneChangeBatch(modifications: [], deletions: [], token: Data(String((Int(current) ?? 0) + 1).utf8), moreComing: false)
+    }
+    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { [] }
+  }
 }

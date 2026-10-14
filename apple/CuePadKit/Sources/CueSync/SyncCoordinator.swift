@@ -152,6 +152,20 @@ actor SyncCoordinator {
     }
   }
 
+  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下来等你决定）时抛出，拉取器不前移令牌。
+  /// 单条记录不合法只报告（见 `ZonePuller`）。
+  func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
+    guard needsDecision == nil else { throw SyncPaused() }
+    guard !modifications.isEmpty || !deletions.isEmpty else { return }
+    do {
+      try await applyFetched(modifications, deletions)
+    } catch {
+      report(error, recordName: nil)
+      throw error
+    }
+    if case .failed = status { status = .idle }
+  }
+
   /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
   func sent(_ sent: SentRecords) async -> SendOutcome {
     guard needsDecision == nil else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
@@ -290,6 +304,7 @@ actor SyncCoordinator {
         outcome.progressed = true
       default:
         outcome.blocked = classify(error, recordType: record.recordType, recordName: name) || outcome.blocked
+        outcome.wait(for: error)
       }
     }
     for (id, error) in sent.failedDeletes {
@@ -301,7 +316,9 @@ actor SyncCoordinator {
       case .zoneNotFound:
         try await store.dropSyncMetadata(id.recordName)
         outcome.progressed = true
-      default: outcome.blocked = classify(error, recordName: id.recordName) || outcome.blocked
+      default:
+        outcome.blocked = classify(error, recordName: id.recordName) || outcome.blocked
+        outcome.wait(for: error)
       }
     }
     // 收下了：之前的失败与空间不足都过去了
@@ -355,6 +372,21 @@ extension SyncStatus {
     switch self {
     case .failed, .quotaExceeded: true
     default: false
+    }
+  }
+}
+
+/// 停下来等你决定：这一页不应用，令牌不前移。
+struct SyncPaused: Error {}
+
+extension SendOutcome {
+  /// 这条被拒的原因是可重试的（限流、服务忙等）：记下要等，取服务器给的最长等待。
+  fileprivate mutating func wait(for error: CKError) {
+    guard RecordSender.retryable.contains(error.code) else { return }
+    let given = error.retryAfterSeconds.map { Duration.seconds($0) }
+    switch throttled {
+    case nil: throttled = .some(given)
+    case .some(let current): throttled = .some([current, given].compactMap { $0 }.max())
     }
   }
 }

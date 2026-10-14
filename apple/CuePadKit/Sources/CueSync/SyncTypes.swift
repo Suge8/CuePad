@@ -125,4 +125,6 @@ struct SendOutcome: Sendable {
   var blocked: Bool
   /// 同步区不在：先建区
   var zoneMissing: Bool
+  /// 有记录因限流、服务忙等可重试的原因被拒：先等再发。里面是服务器给的等待（没给为 nil，退避）；没有这种记录时整个为 nil。
+  var throttled: Duration?? = nil
 }
