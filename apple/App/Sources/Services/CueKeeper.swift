@@ -119,7 +119,7 @@ final class CueKeeper {
     }
 
     /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。
-    private struct BrainSettings: Equatable {
+    private nonisolated struct BrainSettings: Equatable, Sendable {
         var name: String
         var runtime: Open<AgentKind>
         var model: String?
@@ -654,10 +654,16 @@ final class CueKeeper {
                 brainSettings = wanted
                 Self.log.notice("Cue 就地换了模型或强度：\(wanted.model ?? "默认", privacy: .public) · \(wanted.effort?.rawValue ?? "默认", privacy: .public)")
             } catch {
-                // 大脑不认：设置改回它在用的（设置跟着事实走，选择器上看到的就是在用的），告诉你一声
+                // 大脑不认：设置改回它在用的（设置跟着事实走，选择器上看到的就是在用的），告诉你一声。
+                // 等回应时你又改了设置就不动：你后来的选择照常生效，下一次对账再去对上
+                var restored = wanted
+                (restored.model, restored.effort) = (current.model, current.effort)
                 do {
-                    try await setup.store.updateCueProfile { ($0.model, $0.effort) = (current.model, current.effort.map(Open.known)) }
-                    await setup.upload([CueProfile.recordID])
+                    let profile = try await setup.store.updateCueProfile { profile in
+                        guard BrainSettings(profile) == wanted else { return }
+                        (profile.model, profile.effort) = (current.model, current.effort.map(Open.known))
+                    }
+                    if BrainSettings(profile) == restored { await setup.upload([CueProfile.recordID]) }
                 } catch {
                     Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")
                 }

@@ -287,12 +287,14 @@ extension CueStore {
   /// Cue 的设置；从没设过为 nil。
   public func cueProfile() throws -> CueProfile? { try find(CueProfile.self, CueProfile.recordID) }
 
-  /// 改设置（没有就从默认值建一行）；返回改后的。
+  /// 改设置（没有就从默认值建一行）；返回改后的。读、改、写在同一个事务里，`edit` 可按读到的最新值决定改不改；什么都没改就不写。
   @discardableResult
   public func updateCueProfile(_ edit: @Sendable (inout CueProfile) -> Void) throws -> CueProfile {
     try write {
-      var profile = try cueProfile() ?? CueProfile()
+      let stored = try cueProfile()
+      var profile = stored ?? CueProfile()
       edit(&profile)
+      if let stored, profile == stored { return stored }
       profile.modifiedAt = Date.stamp
       try db.run(
         """
