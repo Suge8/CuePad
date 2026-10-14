@@ -172,7 +172,7 @@ private struct LeafDetail: View {
 
         init(_ shown: PiShown, line: String?) {
             switch shown.status {
-            case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? "Agent 在等 Cue 回答" : "Agent 正在做", "做完会在这里告诉你")
+            case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
             case .asking: (mascot, title, note) = (.error, "Agent 在等你回答", line)
             case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
             case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
