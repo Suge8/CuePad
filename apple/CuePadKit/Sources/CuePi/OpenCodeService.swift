@@ -146,6 +146,52 @@ struct OpenCodeEvent: Decodable, Sendable {
     }
 }
 
+/// 事件流里各会话正在说的话（`PiDraft`）：正文的增量（`session.text.delta`）按回答（`assistantMessageID`）累积，同一条回答的几段按段号
+/// （`ordinal`）排、换行连接（与对话里这条回答的写法一致，见 `OpenCodeHistory`），一段说完（`session.text.ended`）换成这段的全文；
+/// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
+/// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
+struct OpenCodeDrafts {
+    private struct Entry {
+        var message: String
+        var parts: [Int: String] = [:]
+        var since: Date
+        var draft: PiDraft { PiDraft(text: parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n"), since: since) }
+    }
+    private var entries: [String: Entry] = [:]
+
+    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关或没有变化为 nil。
+    mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
+        let data = event.data
+        guard let sessionID = data.sessionID else { return nil }
+        switch event.type {
+        case "session.text.delta":
+            guard let message = data.assistantMessageID, let delta = data.delta else { return nil }
+            var entry = entries[sessionID].flatMap { $0.message == message ? $0 : nil } ?? Entry(message: message, since: .now)
+            entry.parts[data.ordinal ?? 0, default: ""] += delta
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.text.ended":
+            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text,
+                  entry.parts[data.ordinal ?? 0].map({ $0 != text }) == true else { return nil }
+            entry.parts[data.ordinal ?? 0] = text
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
+             "session.deleted":
+            guard entries.removeValue(forKey: sessionID) != nil else { return nil }
+            return (sessionID, nil)
+        default:
+            return nil
+        }
+    }
+
+    /// 全部清掉（断线重连），返回原先有草稿的会话。
+    mutating func reset() -> [String] {
+        defer { entries = [:] }
+        return Array(entries.keys)
+    }
+}
+
 struct OpenCodeLocation: Codable, Sendable, Equatable { var directory: String }
 
 struct OpenCodeModelRef: Codable, Sendable, Equatable {
