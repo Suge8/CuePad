@@ -45,6 +45,8 @@ final class Navigation {
         var card: UUID?
         /// 会话名：为提示词开的是它的任务的标题（`CueStore.handOffPlan`）；nil 是不起名（以项目名称呼）。
         var name: String?
+        /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
+        var host: String?
     }
 
     var layout: Layout = .tabs
@@ -108,11 +110,17 @@ final class Navigation {
     }
 
     /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
-    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, name: String?) {
-        let project = outbox?.project
+    /// 在哪开、由哪台 Mac 开、会话名按交到哪的决定（`plan`）；未分类的没有项目可开，用输入框自己的默认。
+    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
+        let (project, host): (UUID?, String?) =
+            switch plan?.destination {
+            case .launch(let project, let host): (project, host)
+            case .noFolder(let project, _): (project, nil)
+            default: (outbox?.project, nil)
+            }
         outbox = nil
         task = nil
-        newSession = NewSession(project: project, draft: draft, card: card, name: name)
+        newSession = NewSession(project: project, draft: draft, card: card, name: plan?.name, host: host)
     }
 
     /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。

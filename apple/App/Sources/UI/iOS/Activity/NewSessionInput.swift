@@ -25,7 +25,11 @@ struct NewSessionInput: View {
         ProjectFolders.launchPlaces(projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil)
     }
     private var chosen: ProjectFolders.LaunchPlace? {
-        places.first { $0.id == choice } ?? start.project.flatMap { project in places.first { $0.project.id == project } } ?? places.first
+        places.first { $0.id == choice }
+            ?? start.project.flatMap { project in
+                let own = places.filter { $0.project.id == project }
+                return own.first { start.host != nil && $0.binding?.hostID == start.host } ?? own.first
+            } ?? places.first
     }
     private var phase: LaunchProgress.Phase { progress?.phase ?? .idle }
     /// 发出且还没失败：输入框锁住，等它开好。

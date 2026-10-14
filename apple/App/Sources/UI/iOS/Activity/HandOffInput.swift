@@ -19,10 +19,10 @@ struct HandOffInput: View {
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 交到哪的规则读出的：默认目标是叶子绑着的会话（没绑为 nil，即新会话）；开新会话时的会话名（叶子的标题）。
+    /// 交到哪的规则读出的：决定本身（不是从提示词来的为 nil），与叶子绑着的会话的会话行（默认目标；没绑为 nil，即新会话）。
     nonisolated private struct Planned: Equatable, Sendable {
+        var plan: HandOffPlan?
         var bound: PiSessionListItem?
-        var name: String?
     }
 
     /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
@@ -73,8 +73,8 @@ struct HandOffInput: View {
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
             let plan = try store.handOffPlan(card, host: nil)
-            guard case .session(let id, _, _) = plan.destination else { return Planned(name: plan.name) }
-            return Planned(bound: try store.piSessions(sessionIDs: [id])[id], name: plan.name)
+            guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan) }
+            return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id])
         }
         // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
         .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
@@ -115,7 +115,11 @@ struct HandOffInput: View {
 
     private func send() {
         guard canSend else { return }
-        guard let session = chosen?.state else { return newSession() }
+        guard let session = chosen?.state else {
+            // 默认目标就是交到哪的决定：未分类的开不了会话（与 Mac 上发给 Agent 同一句）；要在别的项目开，从菜单选"新会话…"
+            if choice == nil, planned?.plan?.destination == .unfiled { return workspace.say("未分类的任务没有文件夹，开不了会话", isError: true) }
+            return newSession()
+        }
         let sent = draft, mode = MacDelivery.modes(for: session).first ?? .send
         let line = PiSlash.line(of: sent, in: session.commands)
         sending = true
@@ -134,7 +138,7 @@ struct HandOffInput: View {
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        navigation.handOffToNewSession(draft, card: outbox.card, name: planned?.name)
+        navigation.handOffToNewSession(draft, card: outbox.card, plan: planned?.plan)
     }
 }
 #endif

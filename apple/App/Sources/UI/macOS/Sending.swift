@@ -10,6 +10,8 @@ import SwiftUI
 struct AgentTarget: Equatable {
     var session: String
     var mode: DeliveryMode = .send
+    /// 会话记录所在的 Mac（`CueStore.handOffPlan` 定下的）；nil 为本机。会话不在线时请那台 Mac 唤醒它。
+    var host: String?
 }
 
 /// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
@@ -20,15 +22,16 @@ final class SendState {
     struct Busy {
         var text: String
         var session: String
+        var host: String?
         var card: UUID?
     }
 
-    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；本机桥上没有的会话（已结束的，或托管着、进程歇着的）：
-    /// 发送时由本机执行器在后台唤醒。
+    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；不在线的会话（已结束的，或托管着、进程歇着的）：
+    /// 发送时由它所在那台 Mac（`host`）的执行器在后台唤醒。
     enum Route {
         case local(CuePi.PiSession)
         case remote(PiSessionState)
-        case ended
+        case ended(host: String?)
     }
 
     var busy: Busy?
@@ -61,17 +64,18 @@ final class SendState {
         HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
     }
 
-    func route(of sessionID: String) -> Route {
+    /// `host`：会话记录所在的 Mac，nil 为本机。
+    func route(of sessionID: String, host: String? = nil) -> Route {
         if let live = liveSession(sessionID) { return .local(live) }
         if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
             return .remote(remote.state)
         }
-        return .ended
+        return .ended(host: host)
     }
 
-    /// 本机桥上没有这个会话：发送时先在后台唤醒它。
+    /// 会话不在线：发送时先在后台唤醒它。
     func isEnded(_ target: AgentTarget) -> Bool {
-        if case .ended = route(of: target.session) { true } else { false }
+        if case .ended = route(of: target.session, host: target.host) { true } else { false }
     }
 
     /// Pi 会话的显示名：本机在线的取桥上的，别的 Mac 上的与刚结束的取同步记录里的。
@@ -95,14 +99,14 @@ final class SendState {
     /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
         do {
-            switch route(of: target.session) {
+            switch route(of: target.session, host: target.host) {
             case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)
             case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
-            case .ended: try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
+            case .ended(let host): try await services.send(stored, toEnded: target.session, named: sessionName(target.session), on: host, card: card)
             }
             return true
         } catch SendError.piSessionBusy {
-            busy = Busy(text: stored, session: target.session, card: card)
+            busy = Busy(text: stored, session: target.session, host: target.host, card: card)
             return false
         }
     }
@@ -120,8 +124,8 @@ extension Workspace {
     private func handOff(_ text: String, prompt: UUID) async throws {
         let plan = try await services.store.handOffPlan(prompt, host: services.hostID)
         switch plan.destination {
-        case .session(let session, _, _):
-            await send(text, to: AgentTarget(session: session), card: prompt)
+        case .session(let session, _, let host):
+            await send(text, to: AgentTarget(session: session, host: host), card: prompt)
         case .launch(let project, let host):
             _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name, name: plan.name, on: host, card: prompt) {}
         case .noFolder(let project, _):
@@ -150,7 +154,7 @@ extension Workspace {
     func resolveBusySend(_ mode: DeliveryMode) {
         guard let pending = sendState.busy else { return }
         sendState.busy = nil
-        Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode), card: pending.card) }
+        Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode, host: pending.host), card: pending.card) }
     }
 }
 

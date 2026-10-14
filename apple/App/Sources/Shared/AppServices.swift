@@ -157,7 +157,7 @@ final class AppServices {
     }
 
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
-    private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
+    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
         return request
     }
