@@ -318,6 +318,7 @@ private enum CueRunFormat {
         case .idle: "空闲巡视"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
         case .renewed: "换新后接着做"
+        case .settingsChanged: "换班次前写交接"
         }
     }
 
@@ -329,6 +330,7 @@ private enum CueRunFormat {
         case .idle: "eye"
         case .reminder: "alarm"
         case .renewed: "arrow.triangle.2.circlepath"
+        case .settingsChanged: "arrow.left.arrow.right"
         }
     }
 

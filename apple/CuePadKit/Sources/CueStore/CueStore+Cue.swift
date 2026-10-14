@@ -131,6 +131,16 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
+  /// 新上下文从哪接上（唯一规则）：最近一份交接备忘与它之后的对话（你的话、Cue 的话、动态），从早到晚，只取最近的 `limit` 条；
+  /// 没写过交接就从头算。界面在交接处画"换了新上下文"的分隔，说的是分隔以下都在 Cue 眼前：新班次第一次醒来把这些交给大脑（`CueKeeper`），这句话才一直成立。
+  public func cueResume(limit: Int) throws -> CueResume {
+    let handoff = try select(CueMessage.self, where: "author = 'handoff'", orderBy: "createdAt DESC, rowid DESC", limit: 1).first
+    let after = try select(
+      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
+      orderBy: "createdAt DESC, rowid DESC", limit: limit + 1)
+    return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
+  }
+
   /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：还开着的提问（`openQuestion`），
   /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
@@ -277,12 +287,14 @@ extension CueStore {
   /// Cue 的设置；从没设过为 nil。
   public func cueProfile() throws -> CueProfile? { try find(CueProfile.self, CueProfile.recordID) }
 
-  /// 改设置（没有就从默认值建一行）；返回改后的。
+  /// 改设置（没有就从默认值建一行）；返回改后的。读、改、写在同一个事务里，`edit` 可按读到的最新值决定改不改；什么都没改就不写。
   @discardableResult
   public func updateCueProfile(_ edit: @Sendable (inout CueProfile) -> Void) throws -> CueProfile {
     try write {
-      var profile = try cueProfile() ?? CueProfile()
+      let stored = try cueProfile()
+      var profile = stored ?? CueProfile()
       edit(&profile)
+      if let stored, profile == stored { return stored }
       profile.modifiedAt = Date.stamp
       try db.run(
         """

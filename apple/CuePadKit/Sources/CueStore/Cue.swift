@@ -47,6 +47,22 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   var notify: Bool = false
 }
 
+/// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
+public struct CueResume: Equatable, Sendable {
+  /// 没写过交接为 nil
+  public var handoff: CueMessage?
+  /// 交接之后的对话，从早到晚
+  public var messages: [CueMessage]
+  /// 更早的还有，没取
+  public var truncated: Bool
+
+  public init(handoff: CueMessage?, messages: [CueMessage], truncated: Bool) {
+    self.handoff = handoff
+    self.messages = messages
+    self.truncated = truncated
+  }
+}
+
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [

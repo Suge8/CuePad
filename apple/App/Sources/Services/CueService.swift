@@ -29,7 +29,7 @@ protocol CueNotifying: AnyObject {
 /// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（没装或没登录）才换成
 ///   `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
-/// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
+/// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
 /// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
 ///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
@@ -49,18 +49,10 @@ final class CueService {
     @ObservationIgnored private let library: URL
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
-    private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
+    private var duty: (keeper: CueKeeper, task: Task<Void, Never>)?
     /// 上次看到的设置里的运行时：变了就重新查本机的运行时
     @ObservationIgnored private var lastRuntime: Open<AgentKind>?
     private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
-
-    /// 换了就要新班次的设置。
-    private struct Shift: Equatable {
-        var name: String
-        var runtime: Open<AgentKind>
-        var model: String?
-        var effort: Open<PiThinkingLevel>?
-    }
 
     init(store: CueStore, sync: (any SyncControlling)?, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
         self.store = store
@@ -135,17 +127,15 @@ final class CueService {
             Task { await refreshRuntimes() }
         }
         lastRuntime = profile?.runtime ?? lastRuntime
-        guard let profile, profile.activeHost == hostID else { return await endDuty() }
-        let shift = Shift(name: profile.name, runtime: profile.runtime, model: profile.model, effort: profile.effort)
-        guard duty?.shift != shift else { return }
-        await endDuty()
+        guard profile?.activeHost == hostID else { return await endDuty() }
+        guard duty == nil else { return }
         let keeper = CueKeeper(
             CueKeeper.Setup(
-                store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
+                store: store, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
                 upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
-        duty = (shift, keeper, Task { await keeper.run() })
+        duty = (keeper, Task { await keeper.run() })
     }
 
     private func endDuty() async {
