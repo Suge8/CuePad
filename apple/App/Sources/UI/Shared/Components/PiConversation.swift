@@ -293,8 +293,7 @@ struct PiSessionSubtitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: workspace.cueOnDuty).speaking(drafting)
+        let shown = workspace.shownInHeader(session)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {
@@ -322,14 +321,6 @@ struct PiSessionSubtitle: View {
 
     private static let font = Typography.caption
 
-    /// 这台 Mac 上它此刻有正在说的话（手机上没有）
-    private var drafting: Bool {
-        #if os(macOS)
-        workspace.services.pi.slot(sessionID: session.sessionID)?.draft != nil
-        #else
-        false
-        #endif
-    }
 }
 
 

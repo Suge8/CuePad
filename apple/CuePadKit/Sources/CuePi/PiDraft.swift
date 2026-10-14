@@ -58,6 +58,8 @@ struct DraftParts {
 @MainActor @Observable
 public final class PiDraftFeed {
     public private(set) var draft: PiDraft?
+    /// `draft != nil`，只在有无变化时通知
+    public private(set) var speaking = false
     /// 最近交来、还没显示的与等着显示它的那一拍
     @ObservationIgnored private var offered: PiDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
@@ -87,6 +89,7 @@ public final class PiDraftFeed {
         flush = nil
         shownAt = now
         if draft != offered { draft = offered }
+        if speaking != (offered != nil) { speaking = offered != nil }
     }
 }
 #endif

@@ -1,3 +1,6 @@
+#if os(macOS)
+import CuePi
+#endif
 import CueStore
 import Foundation
 import Synchronization
@@ -81,6 +84,22 @@ struct AgentDayTests {
         #expect(queued.label == "运行工具")
         #expect(queued.note == "你的话排队中")
     }
+
+    #if os(macOS)
+    /// 这台 Mac 上它正在出字：会话行与会话页顶栏同一个说法"输出中"，说完（正在说的话清掉）回到"思考中"。
+    @Test func 正在出字时列表与顶栏都写输出中() async throws {
+        let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "atlas", state: .thinking, title: "atlas")
+
+        app.services.pi.setDraft(ext.id, PiDraft(text: "先看", since: .now))
+        let row = try await item("atlas")
+        #expect(workspace.shown(row).label == "输出中")
+        #expect(workspace.shownInHeader(row.state).label == "输出中")
+
+        app.services.pi.setDraft(ext.id, nil)
+        #expect(workspace.shown(row).label == "思考中")
+    }
+    #endif
 
     @Test func 没能送达留到看过为止_发给已结束的会话是正在唤醒() async throws {
         let beta = PiStateRecorder(store: store, hostID: "mac-b")
