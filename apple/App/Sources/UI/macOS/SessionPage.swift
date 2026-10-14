@@ -67,7 +67,8 @@ struct SessionPage: View {
     private static let readingWidth: CGFloat = 760
 
     var body: some View {
-        let live = services.pi.session(sessionID: sessionID)
+        let slot = services.pi.slot(sessionID: sessionID)
+        let live = slot?.session
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
@@ -76,7 +77,9 @@ struct SessionPage: View {
             if let session = digest.session {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
-                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
+                    SessionChat(
+                        session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth,
+                        slot: slot)
                         .replyNotes(session: session.id, messages: digest.messages)
                         .fadesUnderBars()
                         .frame(maxHeight: .infinity)

@@ -395,6 +395,21 @@ struct MacSyncTests {
         #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
+    /// Cue 在这台值班也是在等：你在手机上对它说的话、"等你"的回答只经主动拉取到达，会话都关着、没有在路上的请求时也拉。
+    @Test(.timeLimit(.minutes(1)))
+    func 主动拉取的条件_Cue在这台值班时也拉() async throws {
+        #expect(services.pollingCadence == nil)
+        try await services.store.updateCueProfile { [hostID = TestApp.hostID] in
+            $0.hostID = hostID
+            $0.enabledAt = .now
+        }
+        services.start()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+        #expect(services.pi.slots.isEmpty && !services.hasOpenDeliveries)
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+    }
+
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
