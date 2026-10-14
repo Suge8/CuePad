@@ -27,7 +27,7 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
-/// 记录调用的同步引擎替身；`emit` 推一个状态快照给订阅者。
+/// 记录调用的同步替身；`emit` 推一个状态快照给订阅者。
 nonisolated final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
@@ -57,25 +57,27 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         if let error = startError.withLock({ $0 }) { throw error }
     }
 
-    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步引擎）。
+    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步）。
     let stopHangs = Mutex(false)
 
     func stop() async {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
     func syncNow() async throws {
         state.withLock { $0.syncNows += 1 }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func pullChanges() async throws {}
-    func preparePull() async throws {}
-    /// 立即上传过的记录名，按调用顺序。
+    /// 马上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
-    func sendNow(recordName: String, deleted: Bool) async throws { uploads.continuation.yield(recordName) }
+    func send(recordName: String) async -> Bool {
+        uploads.continuation.yield(recordName)
+        return true
+    }
+    func push() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {
         state.withLock { $0.resolutions.append("\(resolution)") }
@@ -106,7 +108,7 @@ final class TestApp {
     #endif
     private(set) var services: AppServices!
 
-    /// 同步引擎的来源；默认用记录型替身 `sync`。
+    /// 同步的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
 
     #if os(macOS)

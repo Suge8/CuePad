@@ -61,7 +61,6 @@ import Testing
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q1")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()  // 带标志的记录已被服务端接受
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
@@ -73,12 +72,15 @@ import Testing
 
   // MARK: 订阅的形状
 
-  @Test func subscriptionsMatchTheFlagAndCarryOnlyGenericLocalizedText() {
-    let subscriptions = AlertSubscriptions(zoneID: zone).desired()
+  @Test func subscriptionsMatchTheFlagAndCarryOnlyGenericLocalizedText() throws {
+    let all = AlertSubscriptions(zoneID: zone).desired()
+    let subscriptions = all.compactMap { $0 as? CKQuerySubscription }
 
-    #expect(subscriptions.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled", "cuepad.cue"])
+    #expect(all.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled", "cuepad.cue", "cuepad.changes"])
+    let changes = try #require(all.last as? CKDatabaseSubscription)  // 同步区有变化的静默推送：收到就拉
+    #expect(changes.notificationInfo?.shouldSendContentAvailable == true && changes.notificationInfo?.alertLocalizationKey == nil)
     #expect(
-      subscriptions.map { ($0 as CKQuerySubscription).predicate.predicateFormat }
+      subscriptions.map { $0.predicate.predicateFormat }
         == [#"notify == "waitingForUser""#, #"notify == "settled""#, #"notify == "cue""#])
     #expect(subscriptions.map(\.recordType) == ["piSessionStates", "piSessionStates", "cueMessages"])
     for subscription in subscriptions {
@@ -122,7 +124,6 @@ import Testing
     let text = try #require(CueAlertText.content(message: record, profile: profile))
     #expect(text.title == "小管家" && text.body == "要合并到 main 吗？\n允许一次 / 以后合并到共享分支都不用问 / 拒绝")
 
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))
     let answered = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
@@ -138,7 +139,7 @@ import Testing
     let manager = AlertSubscriptions(zoneID: zone)
 
     #expect(await manager.ensure(in: fake) == .active)
-    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
 
     await fake.resetCounters()
     #expect(await manager.ensure(in: fake) == .active)
@@ -166,18 +167,19 @@ import Testing
     #expect(reason.contains("2006"))
   }
 
-  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {
+  @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAndForeignDatabaseOnesAreRemovedButForeignQueriesAreLeftAlone() async throws {
     let manager = AlertSubscriptions(zoneID: zone)
     var drifted = manager.desired()[0]
     drifted = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(format: "notify == %@", "other"), subscriptionID: drifted.subscriptionID, options: [.firesOnRecordCreation])
     let stale = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(value: true), subscriptionID: "cuepad.pi.old", options: [.firesOnRecordCreation])
     let foreign = CKQuerySubscription(recordType: "other", predicate: NSPredicate(value: true), subscriptionID: "somebody.else", options: [.firesOnRecordCreation])
-    let fake = store(preloaded: [drifted, stale, foreign])
+    let engines = CKDatabaseSubscription(subscriptionID: "engine-made")  // CKSyncEngine 当年建的：和我们的静默推送重复
+    let fake = store(preloaded: [drifted, stale, foreign, engines])
 
     #expect(await manager.ensure(in: fake) == .active)
 
-    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
-    #expect(await fake.deleted == ["cuepad.pi.old"])
+    #expect(await fake.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.deleted.sorted() == ["cuepad.pi.old", "engine-made"])
     #expect(await fake.ids.contains("somebody.else"))
   }
 
@@ -189,7 +191,7 @@ import Testing
     let secondAccount = store()  // 账号切换：新账号的数据库里什么都没有
     _ = await manager.ensure(in: secondAccount)
 
-    #expect(await secondAccount.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await secondAccount.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
   }
 
   // MARK: 点通知的路由

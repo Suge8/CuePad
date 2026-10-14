@@ -6,16 +6,18 @@ import Testing
 @testable import CueSync
 
 @Suite struct CrossProcessSyncTests {
+  /// 命令行（另一个进程）写的记录也会被 App 传上去。
   @Test(.timeLimit(.minutes(1)))
-  func anotherProcessWriteTriggersReconcile() async throws {
+  func anotherProcessWriteIsUploaded() async throws {
     let rig = try Rig()
-    try await rig.coordinator.start()
+    let server = FakeUploader()
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
     let cli = try CueStore(url: rig.fixture.url)  // 另一个进程
 
     let card = try await cli.createCard(in: nil, body: "written by cli")
-    let id = rig.id(card.id)
-    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
+    await server.uploaded(rig.id(card.id))
 
-    await rig.coordinator.stop()
+    await sender.stop()
   }
 }

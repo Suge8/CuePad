@@ -43,7 +43,6 @@ import Testing
   @Test func remotelyPurgedProjectReleasesLocalCardsToUnfiled() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     try await store.setDirectory("/work/p", for: project.id)
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     // 本机离线期间在该项目下新增的内容（另一台设备的 purge 不知道它们）
     let card = try await store.createCard(in: project.id, body: "written offline")
@@ -61,7 +60,6 @@ import Testing
   @Test func remotelyPurgedProjectDoesNotResurrectCardsTheOtherDeviceAlsoDeleted() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "known to both")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 
     await rig.coordinator.handle(.fetched(modifications: [], deletions: [

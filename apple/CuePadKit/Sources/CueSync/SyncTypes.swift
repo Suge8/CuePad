@@ -3,7 +3,7 @@ import Foundation
 
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
-  /// 正在连接 iCloud：引擎刚创建，还没确认账号状态。
+  /// 正在连接 iCloud：同步刚开始，还没确认账号状态。
   case starting
   /// 空闲（已同步，或尚无可同步的内容）。
   case idle
@@ -20,7 +20,7 @@ public enum SyncStatus: Equatable, Sendable {
   case needsDecision(SyncDecision)
   /// 出现了未预期的失败（描述给用户看，详情在 `issues`）；下一次本机改动会重试。
   case failed(String)
-  /// 这台设备没有在同步（原因给用户看）：没有同步引擎（隔离模式、构建没有 iCloud 权限）或引擎没能启动。由 App 层设置。
+  /// 这台设备没有在同步（原因给用户看）：没有同步（隔离模式、构建没有 iCloud 权限）或同步没能启动。由 App 层设置。
   case unavailable(String)
 }
 
@@ -43,15 +43,12 @@ public enum SyncResolution: Sendable {
 
 public enum SyncError: Error, Equatable, Sendable {
   case nothingToResolve
-  /// 立即上传时服务器没有收下这条记录；它仍待推送，引擎会重试。
-  case notUploaded
 }
 
 extension SyncError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .nothingToResolve: "没有需要处理的同步决定"
-    case .notUploaded: "服务器没有收下这条记录，稍后自动重试"
     }
   }
 }
@@ -105,26 +102,29 @@ public struct SyncState: Equatable, Sendable {
   }
 }
 
-enum AccountChange: Sendable { case signedIn, signedOut, switched }
-
-enum CloudDataLoss: Sendable { case deleted, purged, encryptedDataReset }
-
-/// CKSyncEngine 的事件，收窄成同步逻辑真正用到的部分（真实引擎经 `EngineBridge` 翻译，测试直接构造）。
+/// 拉取器、发送者与账号检查交给协调器的事件（测试直接构造）。
 enum CloudEvent: Sendable {
-  case stateUpdate(Data)
   case accountStatus(CKAccountStatus)
-  case accountChange(AccountChange)
-  case cloudDataLost(CloudDataLoss)
-  case syncing(Bool)
+  /// 此刻登录的账号（用户记录名）
+  case account(String)
+  /// 拉取时同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）
+  case zoneMissing(deletedByUser: Bool)
+  /// 发送者开始、结束一轮上传
+  case sending(Bool)
+  /// 拉取器开始、结束按版本对账（没有令牌时那一遍）
+  case catchingUp(Bool)
   case fetched(modifications: [CKRecord], deletions: [(id: CKRecord.ID, recordType: String)])
-  case sent(
-    saved: [CKRecord], failedSaves: [(record: CKRecord, error: CKError)], deleted: [CKRecord.ID],
-    failedDeletes: [(id: CKRecord.ID, error: CKError)])
-  case zoneSaveFailed(CKError)
+  case sent(SentRecords)
 }
 
-/// 同步逻辑向引擎登记待办的窄接口（真实实现写 `CKSyncEngine.state`）。
-protocol ChangeQueue: Sendable {
-  func enqueue(saves: [CKRecord.ID], deletes: [CKRecord.ID]) async
-  func ensureZone(_ zoneID: CKRecordZone.ID) async
+/// 一批上传之后发送者怎么接着做。
+struct SendOutcome: Sendable {
+  /// 有记录被收下，或被拒的已处理好（带上了服务器的版本标签等），接着发下一批不会原样再被拒
+  var progressed: Bool
+  /// 配额、登录或未预期的失败：先停下，等下一次明确的触发
+  var blocked: Bool
+  /// 同步区不在：先建区
+  var zoneMissing: Bool
+  /// 有记录因限流、服务忙等可重试的原因被拒：先等再发。里面是服务器给的等待（没给为 nil，退避）；没有这种记录时整个为 nil。
+  var throttled: Duration?? = nil
 }

@@ -1,10 +1,10 @@
 import CueStore
 import Foundation
 
-/// 有理由等就拉：同步引擎靠静默推送得知别的设备的改动，而这种推送不保证送达与时效，引擎自己也不会在没有推送时
-/// 向服务器拉（见 `ZoneChangePuller`）。手里有正在等的东西时，按条件给出的节奏主动拉一次，推送仍是主通道。
+/// 有理由等就拉：Mac 不收推送，别的设备写来的东西只靠拉；手机的推送不保证送达与时效。手里有正在等的东西时，
+/// 按条件给出的节奏拉（等什么只在 `AppServices.pollingCadence` 定义）。
 ///
-/// 条件流给出此刻的节奏（nil：不在等）：每收到一个节奏就从头开始——立即拉一次（令牌与最新状态不等第一个间隔），之后按它的档位隔着拉；
+/// 条件流给出此刻的节奏（nil：不在等）：每收到一个节奏就从头开始——立即拉一次（最新状态不等第一个间隔），之后按它的档位隔着拉；
 /// 收到 nil 即停，条件流结束或任务取消时返回。
 public struct SyncPoller: Sendable {
   /// 怎么拉：几档，每档隔多久拉一次、持续多久（`lasting` 为 nil 是一直），按顺序走；最后一档有期限的，走完就不再拉。
@@ -70,15 +70,16 @@ public struct SyncPoller: Sendable {
 
 extension SyncPoller.Cadence {
   /// Mac：在等（等什么见 `AppServices.pollingCadence`）时每 2 秒，别的设备写来的东西平均约 1 秒、最坏约 2 秒到。
-  /// Mac 上会话一连几天，这是一天四万多次；实测推送到不了 Mac，所以不放慢（docs/sync.md「拉取节奏」）。
+  /// Mac 上会话一连几天，这是一天四万多次；Mac 不收推送，所以不放慢（docs/sync.md「拉取节奏」）。
   public static func mac(waiting: Bool) -> Self? {
     waiting ? Self(.every(.seconds(2))) : nil
   }
 
-  /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
-  /// 不靠推送），离开即停；两者都有时每 2 秒、不限时。
-  public static func phone(hasOpenDeliveries: Bool, isViewingAgents: Bool) -> Self? {
-    switch (hasOpenDeliveries, isViewingAgents) {
+  /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟（等回执的时限 `Speech.receiptLimit` 是 1 分钟：
+  /// 报了没能送达之后还接着拉一分钟，晚到的回执照样拉回来；再晚的靠推送）；正在看 Agent 页、会话近况或 Cue 页时每 3 秒
+  /// （状态与对话是活的，不只靠推送），离开即停；两者都有时每 2 秒、不限时。
+  public static func phone(hasOpenDeliveries: Bool, isWatching: Bool) -> Self? {
+    switch (hasOpenDeliveries, isWatching) {
     case (true, true): Self(.every(.seconds(2)))
     case (true, false): Self(.every(.seconds(2), for: .seconds(120)))
     case (false, true): Self(.every(.seconds(3)))

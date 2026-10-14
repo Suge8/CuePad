@@ -25,10 +25,11 @@ extension AppServices {
         backgroundFlushes[token] = nil
     }
 
-    /// 进入后台前调用：等所有登记的落盘完成，并把小组件快照刷到最新（挂起后观察任务就不会再跑了）。
+    /// 进入后台前调用：等所有登记的落盘完成，把待推送发完（挂起后发送者就不会再跑了），并把小组件快照刷到最新（观察任务同理）。
     func prepareForBackground() async {
         stopPolling()
         for flush in backgroundFlushes.values { await flush() }
+        await sync?.push()
         do {
             try await writeSnapshots()
         } catch {

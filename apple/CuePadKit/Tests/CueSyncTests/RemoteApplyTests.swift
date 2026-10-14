@@ -16,7 +16,6 @@ import Testing
   /// 本机记录已推送过（服务器有），随后本机再改：返回该卡。
   private func pushedCard(body: String = "base") async throws -> Card {
     let card = try await store.createCard(in: nil, body: body)
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     return card
   }
@@ -89,7 +88,6 @@ import Testing
   func deliveredPromptIsDeletedOnTheServerToo() async throws {
     let task = try await store.createTask("修乱序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
     try await executor.start()
@@ -105,7 +103,6 @@ import Testing
 
   @Test func newerLocalEditWinsNonBodyFieldsAndStaysPendingForPush() async throws {
     let project = try await store.createProject(name: "local", color: "#111")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     let local = try await editProject(project.id, name: "local edit")
 
@@ -117,7 +114,6 @@ import Testing
 
   @Test func newerRemoteEditWinsAndTiesGoToTheServer() async throws {
     let project = try await store.createProject(name: "local", color: "#111")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     let local = try await editProject(project.id, name: "local edit")
 
@@ -196,37 +192,19 @@ import Testing
     #expect(try await rig.reconcileDelta().saves.isEmpty)
   }
 
-  /// 一批是整体提交的：其中一条被拒，同批没被拒的也以 batchRequestFailed 失败，引擎不会替它们重试。
-  /// 它们仍是待推送，必须立刻重新登记；被拒的那条不立刻重试（会空转），等下一次本机改动时对账。
-  @Test func recordsThatOnlyFailedBecauseTheirBatchFailedAreQueuedAgain() async throws {
-    let rejected = try await store.createCard(in: nil, body: "a")
-    let collateral = try await store.createCard(in: nil, body: "b")
-    try await rig.coordinator.reconcile()
-    let rejectedRecord = try #require(await rig.coordinator.record(for: rig.recordID(rejected.id)))
-    let collateralRecord = try #require(await rig.coordinator.record(for: rig.recordID(collateral.id)))
-    await rig.queue.clear()
-
-    await rig.coordinator.handle(.sent(
-      saved: [], failedSaves: [(rejectedRecord, CKError(.permissionFailure)), (collateralRecord, CKError(.batchRequestFailed))],
-      deleted: [], failedDeletes: []))
-
-    #expect(await rig.queue.saves == [rig.id(collateral.id)])
-  }
-
-  /// 服务器上的版本更旧、本机版本胜出：记录仍是待推送，要重新登记，否则要等到它下一次被改。
-  @Test func aLocalVersionThatWinsAServerConflictIsQueuedAgain() async throws {
+  /// 服务器上的版本更旧、本机版本胜出：本机版本留下、仍待推送，下一批带着服务器的版本标签重传。
+  @Test func aLocalVersionThatWinsAServerConflictStaysPending() async throws {
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, pinned: true)
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     let server = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "base", modifiedAt: local - 1_000))
-    await rig.queue.clear()
 
     await rig.coordinator.handle(.sent(
       saved: [], failedSaves: [(client, CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server]))],
       deleted: [], failedDeletes: []))
 
     #expect(try await store.card(card.id)?.isPinned == true)
-    #expect(await rig.queue.saves == [rig.id(card.id)])
+    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id)])
   }
 
   @Test func unknownItemOnSaveResurrectsTheRecord() async throws {
@@ -241,7 +219,6 @@ import Testing
   @Test func confirmedDeletesAndAlreadyGoneRecordsAreForgotten() async throws {
     let one = try await pushedCard()
     let two = try await store.createCard(in: nil, body: "two")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
     try await store.purgeCard(one.id)
     try await store.purgeCard(two.id)
@@ -257,11 +234,12 @@ import Testing
     let card = try await pushedCard()
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
+    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
 
     guard case .failed = await rig.coordinator.status else {
       Issue.record("status should be .failed, got \(await rig.coordinator.status)")
       return
     }
-    #expect(!(await rig.coordinator.issues).isEmpty)
+    #expect(await rig.coordinator.issues.count == 1)  // 同一个错只进问题列表一次
   }
 }

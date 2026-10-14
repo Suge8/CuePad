@@ -20,5 +20,11 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
         alerts.registrationFailed(error)
     }
+
+    /// 同步区有变化的静默推送（后台也会把 App 叫起来一会儿）：拉一次再交还系统。
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        await alerts.services?.pullForPush()
+        return .newData
+    }
 }
 #endif

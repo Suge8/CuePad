@@ -40,14 +40,14 @@ final class AppServices {
     /// 崩溃诊断（MetricKit）：设置页的"上次崩溃"。
     let diagnostics: Diagnostics
 
-    /// iCloud 同步引擎从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
-    /// 没有默认值：入口必须写明，不能悄悄没有引擎。
+    /// iCloud 同步从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
+    /// 没有默认值：入口必须写明，不能悄悄没有同步。
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
     }
 
-    /// iCloud 同步引擎；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
+    /// iCloud 同步；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
@@ -71,13 +71,15 @@ final class AppServices {
     @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    /// 有还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
+    /// 有还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的）。只在按节奏的拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅），
-    /// iOS 顶上的提示横幅也让给 Cue 页自己的。
+    /// iOS 顶上的提示横幅也让给 Cue 页自己的；手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
+    /// 立即同步（`syncNow`）还没返回：两个"立即同步"按钮的忙碌与禁用都读 `canSyncNow`。
+    var isSyncingNow = false
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -175,7 +177,7 @@ final class AppServices {
         return request
     }
 
-    /// 立即上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
+    /// 马上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
     func upload(_ record: UUID, deleted: Bool = false) async {
         await sync?.upload(record, deleted: deleted)
     }
@@ -251,14 +253,9 @@ final class AppServices {
     }
 
     /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），立即上传，等它写回结果，返回分段的往返时间。
-    /// 主动拉取的令牌先取好，第一次的取令牌不算进往返。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。
+    /// 超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。
     /// 用过的请求删掉。
     func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> PingTiming {
-        do {
-            try await sync?.preparePull()
-        } catch {
-            Self.log.error("连接测试取主动拉取的令牌失败，第一次往返会把它算进去：\(error.localizedDescription)")
-        }
         let started = ContinuousClock.now
         let request = try await store.requestPing(on: host)
         let written = ContinuousClock.now
@@ -346,7 +343,7 @@ final class AppServices {
         try CueStore(url: location.databaseURL)
     }
 
-    /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
+    /// 同步没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
     func syncFailedToStart(_ error: any Error) {
         let reason = "同步没能启动：\(error.localizedDescription)"
         syncStatus = .unavailable(reason)

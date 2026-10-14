@@ -200,7 +200,7 @@ public actor PiStateRecorder {
   }
 
   /// 没给的字段（nil）沿用上一次的值；`question` 与 `detail` 每次整体替换。
-  /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不等引擎的自动调度。
+  /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不排在其余待推送后面。
   @discardableResult
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,

@@ -58,7 +58,7 @@ extension AppServices {
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
             commands: session.commands, agent: session.agent, process: PiProcess.running(pid: session.pid))
-        // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
+        // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
             Task { await upload(record) }
