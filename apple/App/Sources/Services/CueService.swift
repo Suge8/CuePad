@@ -38,6 +38,8 @@ protocol CueNotifying: AnyObject {
 final class CueService {
     /// Cue 在这台 Mac 值班（同步据此保持主动拉取，见 `AppServices.pollingCadence`）。
     var onDuty: Bool { duty != nil }
+    /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
+    var keeper: CueKeeper? { duty?.keeper }
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
     private(set) var runtimes: [AgentKind]?
 
@@ -143,7 +145,8 @@ final class CueService {
             CueKeeper.Setup(
                 store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
-                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing))
+                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
+                upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
         duty = (shift, keeper, Task { await keeper.run() })
     }
 

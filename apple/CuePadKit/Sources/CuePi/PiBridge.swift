@@ -21,12 +21,18 @@ public final class PiBridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
+        /// 此刻正在说的这条回答（见 `PiDraft`，刷新节奏见 `PiDraftFeed`）：出字时只有读它的视图重算
+        public var draft: PiDraft? { feed.draft }
+        private let feed = PiDraftFeed()
+
         init(_ session: PiSession) {
             id = session.id
             sessionID = session.sessionID
             cwd = session.cwd
             self.session = session
         }
+
+        func offer(_ next: PiDraft?) { feed.offer(next) }
     }
 
     /// 在线会话的格子，按出现先后。界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
@@ -36,7 +42,10 @@ public final class PiBridge {
     public var sessions: [PiSession] { slots.map(\.session) }
 
     /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
-    public func session(sessionID: String) -> PiSession? { slots.first { $0.sessionID == sessionID }?.session }
+    public func session(sessionID: String) -> PiSession? { slot(sessionID: sessionID)?.session }
+
+    /// 这个会话（`sessionID`）在线的那一格，规则同 `session(sessionID:)`；只随会话出现、消失通知。
+    public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
     /// 这个连接（`PiSession.id`）的会话。
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
@@ -262,6 +271,12 @@ public final class PiBridge {
         emit(session.state == previous ? .infoChanged(session) : .stateChanged(session, from: previous))
     }
 
+    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由 `PiDraftFeed` 统一定；只改这一格的 `draft`，
+    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做；会话下线时随它的格子一起没了。
+    public func setDraft(_ id: PiSession.ID, _ draft: PiDraft?) {
+        slots.first { $0.id == id }?.offer(draft)
+    }
+
     /// 一个会话下线（进程退出、会话结束）。
     public func detach(_ id: PiSession.ID, reason: PiSessionEndReason) {
         controls[id] = nil
@@ -376,6 +391,9 @@ public final class PiBridge {
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let bye):
             link.bye = bye
+        case .draft(let draft):
+            guard let session = link.session else { throw HandlingError.messageBeforeHello }
+            setDraft(session.id, draft)
         case .quota(let report):
             guard link.session != nil else { throw HandlingError.messageBeforeHello }
             emit(.quota(report))

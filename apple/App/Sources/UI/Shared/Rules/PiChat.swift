@@ -17,7 +17,7 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     var tools: PiChatMessage.Tools?
     /// 预览卡：一次发来的几个文件，按发的先后
     var previews: [PiPreview] = []
-    /// 你的话这一格其实是 Cue 发进会话的（投送请求的 `origin` 是 cue）：气泡上标出 Cue。
+    /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
 
     var isUser: Bool { role == .user }
@@ -55,7 +55,7 @@ nonisolated enum PiChat {
             place(before: message.at)
             entries.append(PiChatEntry(
                 id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools,
-                fromCue: message.deliveryID.map(cueSent.contains) ?? false))
+                fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
         return entries

@@ -30,7 +30,6 @@ struct AgentFilter {
 }
 
 struct AgentScreen: View {
-    var inPanel = false
     /// 从项目页进来：先筛这个项目，在这里换的筛选不记下。
     var project: UUID?
     @Environment(Workspace.self) private var workspace
@@ -41,11 +40,9 @@ struct AgentScreen: View {
     @State private var filterChoice: AgentFilter
     @FocusState private var searchFocused: Bool
     @State private var searchHidden = false
-    /// 还没有文件夹的项目的同名建议（顶上筛选钮的菜单里一键绑）。
     @Environment(\.tabPageReady) private var tabPageReady
 
-    init(inPanel: Bool = false, project: UUID? = nil) {
-        self.inPanel = inPanel
+    init(project: UUID? = nil) {
         self.project = project
         _filterChoice = State(initialValue: AgentFilter(entered: project))
     }
@@ -82,7 +79,7 @@ struct AgentScreen: View {
     }
 
     /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了文件夹的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
-    /// 钮始终在（两个标签根页的顶上一排结构一致）；一个能筛的项目都没有时点开写明原因，并给还没绑文件夹的项目各一项去绑。
+    /// 钮始终在（标签根页的顶上一排结构一致）；一个能筛的项目都没有时点开写明原因，并给还没绑文件夹的项目各一项去绑。
     @ViewBuilder private var filterMenu: some View {
         let projects = model.filterable(in: workspace.catalog, current: filter)
         let current = workspace.catalog?.project(filter)
@@ -307,13 +304,14 @@ struct SearchCapsule: View {
     }
 }
 
-/// 从项目页推入的那一页：悬浮顶栏写此刻筛的项目名（换成"全部"时写"全部会话"）与会话数，右边新会话。标签根页与 iPad 面板不挂顶栏，
-/// 标题"Agent"只作读屏、切换器与返回菜单里的名字。
+/// 从项目页推入的那一页：悬浮顶栏写此刻筛的项目名（换成"全部"时写"全部会话"）与会话数，右边新会话。标签根页不挂顶栏（同书架：
+/// 顶上只有那一排），iPad 分栏里是系统导航栏的标题；标题"会话"也是读屏、切换器与返回菜单里的名字。
 private struct Header: ViewModifier {
     let pushed: Bool
     let count: Int?
     let filter: UUID?
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
 
     func body(content: Content) -> some View {
         if pushed {
@@ -322,6 +320,7 @@ private struct Header: ViewModifier {
             }
         } else {
             content.navigationTitle("会话").navigationBarTitleDisplayMode(.inline)
+                .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         }
     }
 }
@@ -384,7 +383,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, cueFollows: item.cueFollows, style: .page).equatable()
+            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))
@@ -401,4 +400,3 @@ private extension View {
     }
 }
 #endif
-

@@ -7,9 +7,12 @@ import Foundation
 ///   只加载内置的 MCP 支持与一个临时扩展，后者用 `pi.registerMcpServer` 登记 CuePad 的 MCP 服务（工具直接声明给模型）；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 工具只有 `read,grep,find,ls` 与 `mcp__cuepad__*`：清单里有 `mcp__` 开头的项时，其余 MCP 服务的工具都不给；
+/// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
-/// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）。
+/// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
+/// - 正在说的话从 `message_update` 的逐字增量累积（RPC 只发增量，见 Pi 的 docs/json.md「Reconstruct streaming messages」）：文字块按
+///   `contentIndex` 分开、换行连接（同会话文件里取回答的规则），`text_end` 与 `message_end` 给的是定稿、照它换；开出工具调用后这条不再算。
 @MainActor
 final class PiBrain: CueBrain {
     private let session = BrainSession()
@@ -20,12 +23,16 @@ final class PiBrain: CueBrain {
     private var nextID = 0
     private var closed = false
     private var window: Int?
+    private(set) var seesImages = false
     /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
     private var turn: Turn?
     private struct Turn {
-        var reply: String?
         var error: String?
     }
+    /// 正在说的这条助手消息的各文字块（按 `contentIndex`）；开出工具调用后为 nil，直到下一条消息
+    private var blocks: [Int: String]?
+    /// 报出去的正在说的话
+    private var spoken: PiDraft?
 
     func start(_ config: CueBrainConfig) async throws {
         do {
@@ -52,15 +59,18 @@ final class PiBrain: CueBrain {
                 ended(await process.exited())
             }
             let state = try await command(["type": "get_state"])
-            window = ((state["data"] as? [String: Any])?["model"] as? [String: Any])?["contextWindow"] as? Int
+            let model = (state["data"] as? [String: Any])?["model"] as? [String: Any]
+            window = model?["contextWindow"] as? Int
+            seesImages = (model?["input"] as? [String])?.contains("image") == true
         } catch {
             await session.abandon(stop())
             throw error
         }
     }
 
-    func send(_ text: String) async throws {
-        _ = try await command(["type": "prompt", "message": text, "streamingBehavior": "steer"])
+    func send(_ text: String, images: [PiImage]) async throws {
+        let images = images.map { ["type": "image", "data": $0.data.base64EncodedString(), "mimeType": $0.mimeType] }
+        _ = try await command(["type": "prompt", "message": text, "images": images, "streamingBehavior": "steer"])
     }
 
     func abort() async throws {
@@ -105,17 +115,24 @@ final class PiBrain: CueBrain {
             session.emit(.turnStarted)
         // 嵌套的调用（工具里再调工具）带 parentToolCallId，不报
         case "tool_execution_start" where event["parentToolCallId"] == nil:
-            guard turn != nil, let name = event["toolName"] as? String else { return }
-            session.emit(.tool(name: brainToolName(name), arguments: jsonString(event["args"] ?? [:])))
+            guard turn != nil, let id = event["toolCallId"] as? String, let name = event["toolName"] as? String else { return }
+            session.emit(.tool(id: id, name: brainToolName(name), arguments: jsonString(event["args"] ?? [:])))
         case "tool_execution_end" where event["parentToolCallId"] == nil:
-            if turn != nil { session.emit(.toolDone) }
+            guard turn != nil, let id = event["toolCallId"] as? String else { return }
+            let result = event["result"] as? [String: Any]
+            session.emit(.toolDone(id: id, result: brainText(result?["content"]), failed: event["isError"] as? Bool == true))
+        case "message_start":
+            guard (event["message"] as? [String: Any])?["role"] as? String == "assistant" else { return }
+            blocks = [:]
+            speak()
+        case "message_update":
+            streamed(event["assistantMessageEvent"] as? [String: Any] ?? [:])
         case "message_end":
             guard let message = event["message"] as? [String: Any], message["role"] as? String == "assistant" else { return }
             assistantMessage(message)
         case "agent_settled":
             guard let finished = turn else { return }
             turn = nil
-            if event["aborted"] as? Bool != true, let reply = finished.reply { session.emit(.reply(reply)) }
             if let error = finished.error { session.emit(.failed(error)) }
             session.emit(.turnFinished)
         default:
@@ -128,12 +145,38 @@ final class PiBrain: CueBrain {
             let used = ["input", "cacheRead", "cacheWrite"].reduce(0) { $0 + (usage[$1] as? Int ?? 0) }
             if used > 0 { session.emit(.context(used: used, window: window)) }
         }
-        let text = (message["content"] as? [[String: Any]] ?? [])
-            .filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty { turn?.reply = text }
+        let stop = message["stopReason"] as? String
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
-        turn?.error = message["stopReason"] as? String == "error" ? (message["errorMessage"] as? String ?? "未知错误") : nil
+        turn?.error = stop == "error" ? (message["errorMessage"] as? String ?? "未知错误") : nil
+        if stop == "error" || stop == "aborted" {
+            blocks = nil
+        } else if blocks != nil {
+            let content = message["content"] as? [[String: Any]] ?? []
+            blocks = Dictionary(uniqueKeysWithValues: content.enumerated().compactMap { index, block in
+                block["type"] as? String == "text" ? (block["text"] as? String).map { (index, $0) } : nil
+            })
+        }
+        speak()
+    }
+
+    private func streamed(_ update: [String: Any]) {
+        guard blocks != nil, let index = update["contentIndex"] as? Int else { return }
+        switch update["type"] as? String {
+        case "text_delta": blocks?[index, default: ""] += update["delta"] as? String ?? ""
+        case "text_end": blocks?[index] = update["content"] as? String ?? blocks?[index]
+        case "toolcall_start": blocks = nil
+        default: return
+        }
+        speak()
+    }
+
+    /// 按此刻的文字块报正在说的话（没变不报）：起点是这条第一次有字的时刻；还没字、开出了工具调用、停下或出错的报 nil。
+    private func speak() {
+        let text = blocks.map { $0.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n") } ?? ""
+        let next = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: spoken?.since ?? .now)
+        guard next != spoken else { return }
+        spoken = next
+        session.emit(.speaking(next))
     }
 }
 #endif

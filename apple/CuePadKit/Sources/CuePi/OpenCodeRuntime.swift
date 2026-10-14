@@ -13,6 +13,7 @@ import OSLog
 ///   记在父会话的 `subagents` 里。一个服务承载全部会话，会话的 `pid` 是服务进程；服务端不知道终端的 tty，所以跳不到终端。
 /// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，CuePad 退出后照常在，终端里的 OpenCode 也用它）；
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
+/// - 正在说的话（`PiDraft`）：顶层会话的由 `OpenCodeDrafts` 从事件流累积，交给桥；终端里开的会话也一样（都在同一个服务里），子代理的不要。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
@@ -48,6 +49,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     private var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     private var ingestQueue: [String] = []
     private var ingesting: Task<Void, Never>?
+    /// 顶层会话正在说的话（桥上那一格的来源）
+    private var drafts = OpenCodeDrafts()
 
     /// 连着的一个服务进程。
     @MainActor private final class Connection {
@@ -158,6 +161,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         childTools = [:]
         ended = [:]
         catalogs = [:]
+        drafts = OpenCodeDrafts()
         listed = nil
         ingestQueue = []
     }
@@ -202,6 +206,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         } while cursor != nil
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
         guard self.connection === connection else { return }
+        for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
 
         let topLevel = all.filter { $0.parentID == nil }
         for info in topLevel {
@@ -316,9 +321,10 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
         if let parent = data.parentID ?? parents[sessionID] {
-            child(sessionID, of: parent, event)
+            if event.type != "session.text.delta" { child(sessionID, of: parent, event) }
             return
         }
+        if let (id, draft) = drafts.apply(event) { bridge.setDraft(bridgeID(id, connection), draft) }
         switch event.type {
         case "session.created":
             guard let location = data.location else { return }

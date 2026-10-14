@@ -1,21 +1,24 @@
 import CueStore
 import SwiftUI
+#if os(macOS)
+import CuePi
+#endif
 
-/// Cue 页（Mac 内容区的一页、iPhone Agent 标签的第一屏、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
+/// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`），它在做事时末尾一行进展（`LiveLine`，同会话页）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
-/// 跟进的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
+/// 连着的动态折成一行灰字（`CueNotes`），末尾是它此刻在做什么（`CueEnding`）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// Cue 在做的事在任务与 Agent 页里看，这里不另列。
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
+/// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
-    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上），"会话"换到侧栏的 Agent 页。
+    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
     var inPanel = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     #if os(iOS)
-    @Environment(Navigation.self) private var navigation
     @Environment(\.tabPageReady) private var tabPageReady
     #endif
     @State private var thread: CueThread?
@@ -50,13 +53,21 @@ struct CuePage: View {
 
     #if os(macOS)
     private var page: some View {
-        VStack(spacing: 0) {
-            chat.fadesUnderBars().frame(maxHeight: .infinity)
-            bottom
-                .padding(.horizontal, Self.inset).padding(.bottom, 16)
-                .frame(maxWidth: Self.readingWidth)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                chat.fadesUnderBars().frame(maxHeight: .infinity)
+                bottom
+                    .padding(.horizontal, Self.inset).padding(.bottom, 16)
+                    .frame(maxWidth: Self.readingWidth)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if cue.showsRun, let keeper = services.cue.keeper {
+                CueRunPanel(keeper: keeper, handoff: thread?.lastHandoff)
+                    .padding([.trailing, .bottom], 12)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(Motion.panel, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
@@ -92,17 +103,14 @@ struct CuePage: View {
         }
     }
 
-    /// 右上角：会话列表是常用入口，单独一颗圆钮（角标是在跑的会话数）；"⋯"里只留次要的（记忆）。
+    /// 右上角"⋯"：Cue 记得什么。会话在 Agent 标签里，这里不另放入口。
     private var trailing: some View {
-        HStack(spacing: 4) {
-            SessionsButton { navigation.push(.agent) }
-            Menu {
-                Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .accessibilityLabel("更多")
+        Menu {
+            Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
+        } label: {
+            Image(systemName: "ellipsis")
         }
+        .accessibilityLabel("更多")
     }
     #endif
 
@@ -115,28 +123,38 @@ struct CuePage: View {
         return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
-                if let shown = cue.presence.shown, let progress = cue.presence.progress {
-                    LiveLine(shown: shown, text: progress).transition(.entry)
-                }
+                let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
+                CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             .animation(Motion.quick, value: cue.presence.progress)
         }
         .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef]) -> some View {
+    /// `lastYou`：你最后一句，只在它下面写"已送达"。
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?) -> some View {
         switch row {
         case .you(let message):
-            UserBubble(stored: message.text).padding(.top, 14)
+            SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
+                .padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
-                CueSays(message: message)
+                CueSays(message: message, fadesIn: !swapsInPlace)
                 if let task, let ref = tasks[task] { CueTaskLine(ref: ref) }
             }
         case .notes(let notes):
             CueNotes(notes: notes)
         }
+    }
+
+    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        services.cue.keeper != nil
+        #else
+        false
+        #endif
     }
 
     private func showEarlier() {
@@ -177,35 +195,37 @@ struct CuePage: View {
     }
 }
 
-#if os(iOS)
-/// Cue 页顶栏的会话钮：图标右上一个墨色小角标写在跑的会话数（没有在跑的不画；墨色不是注意色：在跑不用你管）。
-private struct SessionsButton: View {
-    let action: () -> Void
+/// Cue 页对话的末尾：它在做事时一行进展（`LiveLine`，同会话页）。Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
+/// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
+/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
+/// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+private struct CueEnding: View {
+    /// 对话里最近一条 Cue 的话的时刻
+    let newestSaid: Date?
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 9
-    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 15
 
     var body: some View {
-        let running = services.liveSessions.live.count { $0.state.isWorking }
-        Button(action: action) {
-            Image(systemName: "rectangle.stack")
-                .overlay(alignment: .topTrailing) {
-                    if running > 0 {
-                        Text("\(running)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(palette.paper)
-                            .padding(.horizontal, 3).frame(minWidth: diameter, minHeight: diameter)
-                            .background(palette.ink, in: .capsule)
-                            .offset(x: diameter * 0.6, y: -diameter * 0.45)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(Motion.quick, value: running)
+        #if os(macOS)
+        let draft = services.cue.keeper?.speech.draft
+        let landed = draft?.landed(newestReply: newestSaid) ?? false
+        if let draft, !landed {
+            DraftReply(text: draft.text) { EmptyView() }
+        } else if !landed {
+            live
         }
-        .accessibilityLabel("会话")
-        .accessibilityValue(running > 0 ? "\(running) 个在跑" : "")
+        #else
+        live
+        #endif
+    }
+
+    @ViewBuilder private var live: some View {
+        let presence = workspace.cue.presence
+        if let shown = presence.shown, let progress = presence.progress {
+            LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
     }
 }
-#endif
 
 /// Cue 页在前台时算一个在看的（`AppServices.cueViewers`）。Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
 private struct CueViewing: ViewModifier {

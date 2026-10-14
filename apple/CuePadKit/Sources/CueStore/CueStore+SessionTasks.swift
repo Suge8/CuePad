@@ -1,9 +1,10 @@
+import CueText
 import Foundation
 
-/// 每个会话都属于一个任务叶子：任务树是会话的唯一归处，看板、Cue 与项目页都从任务看到会话，没有"游离的会话"。
-/// 从任务开的会话由认领绑上（`claimLaunchedCards`）；不经任务开的（终端里、"新会话"、别家 Agent、只在会话文件里找到的历史），
-/// 由写它记录的那台 Mac 在同一个写事务里建一个同名任务挂上：归到会话所在文件夹的项目（没有就未分类），排在项目顶层最后；
-/// 会话还在就是进行中，已经结束的（历史）直接完成并归档，不占看板。
+/// 活着的会话都属于一个任务叶子：任务树是它的归处，看板、Cue 与项目页都从任务看到会话。
+/// 从任务开的会话由认领绑上（`claimLaunchedCards`）；不经任务开的（终端里、"新会话"、别家 Agent），
+/// 由写它记录的那台 Mac 在同一个写事务里建一个同名任务挂上（进行中，名字超长截断，`CueName.clipped`）：
+/// 归到会话所在文件夹的项目（没有就未分类），排在项目顶层最后。已结束的（历史，含只在会话文件里找到的）不补：留在 Agent 页的历史里。
 /// 叶子换会话（开新会话、改绑、Cue 换新会话）时，换下来的会话留在这个叶子下，作为它以前用过的（`Card.formerSessionIDs`，
 /// 写在换会话的同一条语句里，`keepingFormerSession`），不另长任务。会话只有在你亲手解绑、改回灵感、永久删除后没了归处，才补建。
 /// 正在用它、用过它的任务都是它的归处，在回收站、已归档的也算。
@@ -17,7 +18,7 @@ extension CueStore {
     try write { try adoptSessions(force: true) }
   }
 
-  /// 给这台 Mac 记录的、没有任务绑着的会话建同名任务（见类型注释）。写事务改到卡片时查全部会话；
+  /// 给这台 Mac 记录的、没结束、没有任务绑着的会话建同名任务（见类型注释）。写事务改到卡片时查全部会话；
   /// 只写了会话记录时（状态更新，最频繁的写入）只查写到的那几条。
   func adoptSessions(force: Bool = false) throws {
     guard let host = sessionHost else { return }
@@ -30,7 +31,7 @@ extension CueStore {
     let orphans = try select(
       PiSessionState.self,
       where: """
-        hostID = ? \(scope.sql)
+        hostID = ? AND state != '\(PiWorkState.ended.rawValue)' \(scope.sql)
           AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = piSessionStates.sessionID AND c.todoAt IS NOT NULL)
           AND NOT EXISTS (
             SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
@@ -45,14 +46,11 @@ extension CueStore {
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE projectID IS ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
       let base = SortKey.after(last)
       for (session, key) in zip(sessions, SortKey.sequence(count: sessions.count)) {
-        let ended = session.state == .known(.ended)
-        let at = ended ? session.stateSince : now
         let own = Self.sessionTaskID(session.sessionID)
         _ = try insert(Card(
           id: try find(Card.self, own) == nil ? own : UUID(), projectID: project, body: Self.taskTitle(session.title),
           isPinned: false, variableValues: [:], conflictOf: nil, sortKey: base + key, deletedAt: nil, createdAt: now, modifiedAt: now,
-          parentID: nil, todoAt: at, startedAt: at, completedAt: ended ? at : nil, piSessionID: session.sessionID,
-          archivedAt: ended ? at : nil))
+          parentID: nil, todoAt: now, startedAt: now, completedAt: nil, piSessionID: session.sessionID, archivedAt: nil))
       }
     }
   }
@@ -74,9 +72,11 @@ extension CueStore {
   /// 为会话自动建的任务的 id。
   static func sessionTaskID(_ sessionID: String) -> UUID { DeterministicID.uuid("session-task/\(sessionID)") }
 
-  /// 会话名作任务标题：只取第一行有字的（任务正文只有标题）。会话名没有文字时（工作目录也不知道）用 `untitledSession`。
+  /// 会话名作任务标题：只取第一行有字的（任务正文只有标题），超长截断（终端会话的名字常是第一句话）。
+  /// 会话名没有文字时（工作目录也不知道）用 `untitledSession`。
   static func taskTitle(_ title: String) -> String {
-    title.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? untitledSession
+    CueName.clipped(
+      title.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? untitledSession)
   }
 
   static let untitledSession = "Agent 会话"

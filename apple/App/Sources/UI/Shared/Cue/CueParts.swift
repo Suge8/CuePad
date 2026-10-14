@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 打开一件任务（Cue 页里提到的那一行、"等你"关联的任务）：Mac 是任务浮窗，iOS 是半屏浮窗。
+/// 打开一件任务（Cue 页里提到的那一行、"等你"关联的任务）：Mac 是任务浮窗，iOS 推入任务的纸页。
 struct CueTaskButton<Label: View>: View {
     let task: UUID
     @ViewBuilder let label: Label
@@ -18,7 +18,7 @@ struct CueTaskButton<Label: View>: View {
 
     private func open() {
         #if os(iOS)
-        navigation.openTask(task)
+        navigation.push(.card(task))
         #else
         let store = workspace.services.store, id = task
         workspace.attempt { if let card = try await store.card(id) { workspace.open(card) } }
@@ -176,6 +176,8 @@ struct CueNotes: View {
 /// 关掉或撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
+    /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
+    var fadesIn = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -186,7 +188,7 @@ struct CueSays: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.entry)
+        .transition(fadesIn ? .entry : .identity)
     }
 }
 
@@ -217,7 +219,7 @@ struct CueWaitingDock: View {
                         .disabled(ending == message.id)
                         .help("不选，关掉这条")
                 }
-                // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
+                // 关联任务发来看的文件就是证据：在手机上看完图再决定允不允许
                 if let previews = ref?.previews, !previews.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }

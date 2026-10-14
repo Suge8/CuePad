@@ -35,6 +35,8 @@ final class RecordingHost: AgentRuntime {
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
+    /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
+    var resumeFailures: [any Error] = []
     private let bridge: PiBridge
     private let socketDirectory: URL
 
@@ -48,6 +50,7 @@ final class RecordingHost: AgentRuntime {
 
     func resume(_ session: IndexedSession) async throws -> String {
         calls.append(.resume(sessionFile: session.path, directory: session.cwd))
+        if !resumeFailures.isEmpty { throw resumeFailures.removeFirst() }
         return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 

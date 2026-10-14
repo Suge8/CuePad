@@ -25,14 +25,6 @@ extension Table {
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
-  /// 远端记录没有这些列（更早的版本写的）时本机落的值：NOT NULL 的列不能写 NULL。
-  var missingDefaults: [String: SQLValue] {
-    switch self {
-    case .cards: ["cueFollows": .int(0)]
-    default: [:]
-    }
-  }
-
   /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
     switch self {
@@ -113,9 +105,6 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
-  /// 这件事由 Cue 跟进（否则是你自己）：只有顶层任务能是真，挂到别的任务下、改回灵感时归零（库里的触发器守住，见 `Schema`）。
-  /// 你在 CuePad 里亲自对它的会话说话时也归零（`requestDelivery`）。
-  public internal(set) var cueFollows = false
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
   /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
@@ -420,6 +409,8 @@ public enum CueStoreError: Error, Equatable {
   case cueNotEnabled
   /// 这条提问已经结束了（答了、关掉了或撤回了）。
   case questionEnded
+  /// 你已说过这类事以后不用问（参数是那条规矩在记忆里的序号）。
+  case alreadyAllowed(Int)
 }
 
 extension CueStoreError: LocalizedError {
@@ -447,7 +438,7 @@ extension CueStoreError: LocalizedError {
     case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
     case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
-    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
+    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
     case .draftNeeded(let title): "「\(title)」还没有草稿：先用 edit 写草稿再 start，草稿会作为第一句"
     case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
@@ -463,6 +454,7 @@ extension CueStoreError: LocalizedError {
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
+    case .alreadyAllowed(let line): "用户说过这类事以后不用问（记忆 #\(line)）：直接做，做完告诉他"
     }
   }
 }
@@ -486,12 +478,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows", "formerSessionIDs",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows, JSONColumn.encodeList(formerSessionIDs),
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -500,8 +492,8 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16),
-      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(17)))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。

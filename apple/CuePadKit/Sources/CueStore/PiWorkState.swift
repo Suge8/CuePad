@@ -63,20 +63,15 @@ public enum PiAlert: String, Sendable, CaseIterable {
 
 extension PiAlert {
   /// 这次转换要不要提示你：做完了照常；进入等回答只在会话真在等你时（`PiSessionState.asksYou`）。
-  public func reaches(_ state: PiSessionState, cueFollows: Bool) -> Bool { self != .waitingForUser || state.asksYou(cueFollows: cueFollows) }
-}
-
-extension PiSessionListItem {
-  /// 在等你（`PiSessionState.asksYou`）。
-  public var asksYou: Bool { state.asksYou(cueFollows: cueFollows) }
-
-  /// 相对上一次读到的版本，要提示你的转换（`PiSessionState.alert(since:)` 里只留 `PiAlert.reaches` 的）。
-  public func alert(since previous: PiSessionState?) -> PiAlert? {
-    state.alert(since: previous).flatMap { $0.reaches(state, cueFollows: cueFollows) ? $0 : nil }
-  }
+  public func reaches(_ state: PiSessionState, cueOnDuty: Bool) -> Bool { self != .waitingForUser || state.asksYou(cueOnDuty: cueOnDuty) }
 }
 
 extension PiSessionState {
+  /// 相对上一次读到的版本，要提示你的转换（`alert(since:)` 里只留 `PiAlert.reaches` 的）。
+  public func alert(since previous: PiSessionState?, cueOnDuty: Bool) -> PiAlert? {
+    alert(since: previous).flatMap { $0.reaches(self, cueOnDuty: cueOnDuty) ? $0 : nil }
+  }
+
   /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换。手机读到的是同步合并后的版本：状态没变而
   /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。
   public func alert(since previous: PiSessionState?) -> PiAlert? {

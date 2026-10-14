@@ -60,10 +60,7 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                HStack(spacing: 4) {
-                    if digest?.cueFollows == true { CueFollowMark() }
-                    PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0), cueFollows: digest?.cueFollows ?? false)
-                }
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0))
             }
         } trailing: {
             if let session {
@@ -115,7 +112,6 @@ struct SessionScreen: View {
                 .environment(\.composerInk, .solid)
             }
         }
-        .ownsBottomEdge()
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)

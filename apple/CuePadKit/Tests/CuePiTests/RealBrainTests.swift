@@ -71,7 +71,20 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮开始", timeout: .seconds(60)) { self.count(.turnStarted) >= n }
         }
 
-        var replies: [String] { events.compactMap { if case .reply(let text) = $0 { text } else { nil } } }
+        /// 每轮的回答：做完时还留着的正在说的话
+        var replies: [String] {
+            var speaking: PiDraft?, replies: [String] = []
+            for event in events {
+                switch event {
+                case .speaking(let draft): speaking = draft
+                case .turnFinished:
+                    if let text = speaking?.text { replies.append(text) }
+                    speaking = nil
+                default: break
+                }
+            }
+            return replies
+        }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
         var contexts: [(used: Int, window: Int?)] { events.compactMap { if case .context(let used, let window) = $0 { (used, window) } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
@@ -96,6 +109,19 @@ struct RealBrainTests {
         #expect(rig.replies.count == 1 && rig.replies[0].contains(rig.codename))
         let context = try #require(rig.contexts.last)
         #expect(context.used > 0 && (context.window ?? 0) > context.used)
+        }
+    }
+
+    /// 带一张图问颜色：图按这家原生的图片输入交给模型，它看得见（红色）。
+    @Test(arguments: runtimes) func anImageIsSeen(_ runtime: AgentKind) async throws {
+        AgentTape.use(runtime)
+        try await withRig(runtime) { rig in
+        #expect(rig.brain.seesImages)
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)])
+        try await rig.finished()
+
+        #expect(rig.failures == [], "\(rig.events)")
+        #expect(rig.replies.last?.lowercased().contains("red") == true, "\(rig.replies)")
         }
     }
 
@@ -227,5 +253,9 @@ struct RealBrainProcessTests {
             ((try? FileManager.default.contentsOfDirectory(atPath: root.appending(path: project).path)) ?? []).filter { $0.hasSuffix(".jsonl") }
         }
     }
+}
+
+private extension CueBrain {
+    func send(_ text: String) async throws { try await send(text, images: []) }
 }
 #endif

@@ -67,7 +67,7 @@ struct PiAlertRoutingTests {
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
         navigation.open(alert: alerts.consumeTap())
 
-        #expect(navigation.tab == .projects)
+        #expect(navigation.tab == .cue)
         #expect(navigation.agentPath.isEmpty)
         #expect(navigation.splitPath.isEmpty)
     }

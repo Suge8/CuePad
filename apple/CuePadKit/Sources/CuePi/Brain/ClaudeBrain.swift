@@ -11,12 +11,15 @@ import Foundation
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；
-/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`。
+/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
+/// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
 final class ClaudeBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var stream: ClaudeStream?
+    /// Claude 的模型都能看图
+    let seesImages = true
     private var turn: Turn?
     private struct Turn {
         var used: Int?
@@ -41,6 +44,7 @@ final class ClaudeBrain: CueBrain {
                 executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
             self.stream = stream
             stream.onMessage = { [weak self] in self?.received($0) }
+            stream.onDraft = { [weak self] in self?.session.emit(.speaking($0)) }
             let process = stream.process
             stream.onClose = { [weak self] in
                 Task { self?.session.exited(await process.exited()) }
@@ -51,9 +55,9 @@ final class ClaudeBrain: CueBrain {
         }
     }
 
-    func send(_ text: String) async throws {
+    func send(_ text: String, images: [PiImage]) async throws {
         guard let stream else { throw CueBrainError.notRunning }
-        try stream.write(["type": "user", "message": ["role": "user", "content": .string(text)], "parent_tool_use_id": .null])
+        try stream.write(["type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: text, images: images)], "parent_tool_use_id": .null])
     }
 
     func abort() async throws {
@@ -81,7 +85,8 @@ final class ClaudeBrain: CueBrain {
             // 子代理的消息带 parent_tool_use_id；用量为 0 的是 Claude Code 自己合成的（报错等），不是模型请求
             guard event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
             for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_use" {
-                session.emit(.tool(name: brainToolName(block["name"]?.string ?? "?"), arguments: String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)))
+                let arguments = String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)
+                session.emit(.tool(id: block["id"]?.string ?? "", name: brainToolName(block["name"]?.string ?? "?"), arguments: arguments))
             }
             guard let usage = event["message"]?["usage"] else { return }
             let used = Int(["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.number }.reduce(0, +))
@@ -90,7 +95,13 @@ final class ClaudeBrain: CueBrain {
             session.emit(.context(used: used, window: nil))
         case "user":
             // 工具的结果回来了
-            if turn != nil, event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null { session.emit(.toolDone) }
+            guard turn != nil, event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
+            for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_result" {
+                let content = block["content"]
+                let result = content?.string ?? (content?.array ?? []).compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }
+                    .joined(separator: "\n")
+                session.emit(.toolDone(id: block["tool_use_id"]?.string ?? "", result: result, failed: block["is_error"]?.bool == true))
+            }
         case "result":
             finish(event)
         default:
@@ -103,11 +114,11 @@ final class ClaudeBrain: CueBrain {
         turn = nil
         let windows = (result["modelUsage"]?.object ?? [:]).values.compactMap { $0["contextWindow"]?.number }
         if let used = finished.used, let window = windows.max() { session.emit(.context(used: used, window: Int(window))) }
-        let text = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if result["is_error"]?.bool == true {
-            if !finished.aborted { session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? "未知错误") : text)) }
-        } else if !finished.aborted, !text.isEmpty {
-            session.emit(.reply(text))
+        if finished.aborted {
+            session.emit(.speaking(nil))
+        } else if result["is_error"]?.bool == true {
+            let text = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? "未知错误") : text))
         }
         session.emit(.turnFinished)
     }

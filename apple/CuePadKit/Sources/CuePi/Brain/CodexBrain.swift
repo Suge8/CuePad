@@ -9,8 +9,10 @@ import Foundation
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
+/// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
-/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
+/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
+/// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明（commentary）说完、停下与失败的一轮它已清掉，留下的只有给你看的回答。
 @MainActor
 final class CodexBrain: CueBrain {
     private let session = BrainSession()
@@ -19,11 +21,11 @@ final class CodexBrain: CueBrain {
     private var thread: String?
     /// 交给 `turn/start` 的强度（已夹到模型支持的档位）
     private var effort: String?
+    private(set) var seesImages = false
     /// 进行中的一轮
     private var turn: Turn?
     private struct Turn {
         let id: String
-        var reply: String?
     }
 
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
@@ -37,6 +39,10 @@ final class CodexBrain: CueBrain {
                 environment: BrainSession.environment(config), directory: config.workingDirectory)
             self.rpc = rpc
             rpc.onNotification = { [weak self] in self?.notification($0, $1) }
+            rpc.onDraft = { [weak self] thread, draft in
+                guard let self, thread == self.thread else { return }
+                session.emit(.speaking(draft))
+            }
             let process = rpc.process
             rpc.onClose = { [weak self] in
                 Task { self?.session.exited(await process?.exited()) }
@@ -60,17 +66,14 @@ final class CodexBrain: CueBrain {
         if let model = config.model { params["model"] = model }
         let started = try await rpc.call("thread/start", params)
         thread = (started["thread"] as? [String: Any])?["id"] as? String
-        if let level = config.effort, let model = started["model"] as? String {
-            let models = try await rpc.call("model/list", ["includeHidden": true, "limit": 500])["data"] as? [[String: Any]] ?? []
-            let supported = (models.first { $0["id"] as? String == model }?["supportedReasoningEfforts"] as? [[String: Any]] ?? [])
-                .compactMap { ($0["reasoningEffort"] as? String).flatMap { CodexModel.thinking($0).known } }
-            effort = CodexModel.effort(level.clamped(to: supported))
-        }
+        let model = try await CodexModel.list(rpc, hidden: true).first { $0.id == started["model"] as? String }
+        seesImages = model?.seesImages == true
+        if let level = config.effort, let model { effort = CodexModel.effort(level.clamped(to: model.efforts)) }
     }
 
-    func send(_ text: String) async throws {
+    func send(_ text: String, images: [PiImage]) async throws {
         guard let rpc, let thread else { throw CueBrainError.notRunning }
-        let input: [[String: Any]] = [["type": "text", "text": text, "text_elements": [] as [Any]]]
+        let input = CodexRPC.input(text: text, images: images)
         if let active = turn?.id {
             do {
                 try await rpc.call("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])
@@ -110,17 +113,26 @@ final class CodexBrain: CueBrain {
         case "item/started":
             guard turn != nil, let item = params["item"] as? [String: Any] else { return }
             switch item["type"] as? String {
-            case "mcpToolCall": session.emit(.tool(name: brainToolName(item["tool"] as? String ?? "?"), arguments: jsonString(item["arguments"] ?? [:])))
-            case "commandExecution": session.emit(.tool(name: "bash", arguments: jsonString(["command": item["command"] as? String ?? ""])))
+            case "mcpToolCall":
+                let name = brainToolName(item["tool"] as? String ?? "?")
+                session.emit(.tool(id: item["id"] as? String ?? "", name: name, arguments: jsonString(item["arguments"] ?? [:])))
+            case "commandExecution":
+                let command = jsonString(["command": item["command"] as? String ?? ""])
+                session.emit(.tool(id: item["id"] as? String ?? "", name: "bash", arguments: command))
             default: break
             }
         case "item/completed":
-            if turn != nil, ["mcpToolCall", "commandExecution"].contains((params["item"] as? [String: Any])?["type"] as? String) { session.emit(.toolDone) }
-            // 只认给你看的回答，过程中的说明（commentary）不算
-            guard let item = params["item"] as? [String: Any], item["type"] as? String == "agentMessage",
-                  item["phase"] as? String != "commentary", let text = item["text"] as? String else { return }
-            let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !reply.isEmpty { turn?.reply = reply }
+            guard let item = params["item"] as? [String: Any] else { return }
+            let id = item["id"] as? String ?? "", failed = ["failed", "declined"].contains(item["status"] as? String)
+            switch item["type"] as? String {
+            case "mcpToolCall" where turn != nil:
+                let error = (item["error"] as? [String: Any])?["message"] as? String
+                let result = error ?? brainText((item["result"] as? [String: Any])?["content"])
+                session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
+            case "commandExecution" where turn != nil:
+                session.emit(.toolDone(id: id, result: item["aggregatedOutput"] as? String ?? "", failed: failed))
+            default: break
+            }
         case "thread/tokenUsage/updated":
             guard let usage = params["tokenUsage"] as? [String: Any], let last = usage["last"] as? [String: Any],
                   let input = last["inputTokens"] as? Int else { return }
@@ -128,11 +140,8 @@ final class CodexBrain: CueBrain {
             session.emit(.context(used: input, window: usage["modelContextWindow"] as? Int))
         case "turn/completed":
             let completed = params["turn"] as? [String: Any]
-            let finished = turn
             turn = nil
-            let status = completed?["status"] as? String
-            if status != "interrupted", let reply = finished?.reply { session.emit(.reply(reply)) }
-            if status == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
+            if completed?["status"] as? String == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
             session.emit(.turnFinished)
         default:
             break

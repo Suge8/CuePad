@@ -7,7 +7,7 @@ import SwiftUI
 /// 左栏是这件事：标题、做到第几步、每个步骤一行（圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
 /// 右边是选中的那一步——没有步骤的任务就是它自己。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
 /// 开始就交给会话（上一步的会话还开着就接着用它，否则开一个以它命名的新会话）；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
-/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（会话还绑着别的没做完的事、或这件事还有下一步时不结束：下一步"开始"就接着用它，规则在 `CueStore`）。
+/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（还有没做完的事绑着它、或下一步会接着用它时不结束，规则在 `CueStore.endUnusedSessions`）。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         /// 顶层任务。
@@ -95,7 +95,7 @@ private struct StepRow: View {
 
     var body: some View {
         let done = step.status == .done
-        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery, cueFollows: $0.cueFollows) }
+        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
         HStack(spacing: TaskRow.columnGap) {
             TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
             if selected {
@@ -133,7 +133,7 @@ private struct LeafDetail: View {
                 if let item { openSession(item.state.sessionID, primary: false) }
             } else if let item {
                 let state = workspace.withLiveState(item.state)
-                let shown = workspace.shown(state, delivery: item.delivery, cueFollows: item.cueFollows)
+                let shown = workspace.shown(state, delivery: item.delivery)
                 let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
