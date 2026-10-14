@@ -8,7 +8,7 @@
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
-# 提交钩子在 apple/scripts/hooks（只跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
+# 提交钩子在 apple/scripts/hooks（主检出只收合并，其余检出跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
 # ios 是 iPhone 模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # 模拟器是这个产物目录自己的一台（_sim.sh），第一次建、之后复用；脚本启动的跑完就关。
 # test 里每个测试最多 TEST_TIME_LIMIT 秒（xcodebuild 的测试时限，Xcode 27 实测对 Swift Testing 也生效，主线程死锁也会被结束）：
