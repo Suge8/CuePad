@@ -33,6 +33,8 @@ final class RecordingHost: PiHosting {
     private(set) var calls: [Call] = []
     /// 已连上桥的假扩展，按 Pi 自己的会话 id。
     private(set) var extensions: [String: FakeExtension] = [:]
+    /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
+    var openFailure: String?
     private let bridge: PiBridge
     private let socketDirectory: URL
 
@@ -58,6 +60,7 @@ final class RecordingHost: PiHosting {
     ) async throws -> String {
         calls.append(.open(
             directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
+        if let openFailure { throw PiHostError.exited(openFailure) }
         return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 

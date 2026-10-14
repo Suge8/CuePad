@@ -49,7 +49,7 @@ nonisolated struct CueTiming: Sendable {
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，第一轮醒来带上交接。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
-/// 5. 跟进的事有变化：攒安静窗口再醒；你还在和 Cue 说话时先压着。
+/// 5. 跟进的事有变化（含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
 /// 6. 空闲巡视：没在跟进任何事、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -156,6 +156,8 @@ final class CueKeeper {
         var messages: [CueMessage]
         var board: [CueBoardItem]
         var memory: CueMemoryVersion
+        /// Cue 的请求最近一次失败：失败不一定改动看板（说话、作答没能送达），单独订阅
+        var failed: Date?
     }
 
     private nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
@@ -198,7 +200,9 @@ final class CueKeeper {
             group.addTask {
                 do {
                     for try await _ in store.observe({ store in
-                        Signal(messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion())
+                        Signal(
+                            messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion(),
+                            failed: try store.lastCueRequestFailure())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")

@@ -65,7 +65,7 @@ public struct CueChange: Equatable, Sendable {
     case settled
     /// 会话在等回答
     case waitingForUser
-    /// 会话出错
+    /// 会话出错，或 Cue 发起的请求（开工、说话、作答、停下、结束）没能执行（`detail` 是"动作：Mac 报的原因"；你发起的失败界面上看得见，不报）
     case failed
     /// 叶子或任务完成
     case done
@@ -85,7 +85,7 @@ public struct CueChange: Equatable, Sendable {
   /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
   public var at: Date
-  /// 提问、错误、你说的话、为什么不再跟进。
+  /// 提问、错误、你说的话、为什么不再跟进、哪个请求为什么没成。
   public var detail: String?
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
   public var recap: PiRecap?
@@ -412,7 +412,7 @@ extension CueStore {
   private static let onBoard = "t.completedAt IS NULL AND t.archivedAt IS NULL"
 
   /// `since` 之后 Cue 跟进的事里的变化，从早到晚：会话歇下、等回答、出错（按会话进入这个状态的时刻），叶子或任务完成，
-  /// 你在会话的终端里亲自说了话。`followed` 是上次醒来时看板上的任务 id：给了就和此刻的看板比，
+  /// 你在会话的终端里亲自说了话，Cue 发起的请求没能执行（按本机得知结果的时刻）。`followed` 是上次醒来时看板上的任务 id：给了就和此刻的看板比，
   /// 多出来的是交给了 Cue（`joined`），少了的是不再跟进（`left`，完成了的只报 `done`）；nil 不比（如管理器刚启动）。
   public func cueChanges(since: Date, followed: Set<UUID>? = nil) throws -> [CueChange] {
     let tasks = try topTasks(followedOnly: true, where: "(t.completedAt IS NULL OR t.completedAt > ?)", [since])
@@ -452,8 +452,46 @@ extension CueStore {
             recap: sessions[message.sessionID]?.recap))
         }
       }
+      // 请求带着卡（叶子或它的草稿）就算在那个叶子上，否则算在会话绑着的叶子上
+      let failed = try select(
+        DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND \(Self.resultKnownAt) > ?", [since],
+        orderBy: "createdAt, rowid")
+      for request in failed {
+        let card = try request.cardID.flatMap { try find(Card.self, $0) }
+        let pairs = card.map { card in leaves.filter { $0.leaf.id == card.id || $0.leaf.id == card.parentID } }
+          ?? request.target.ref.flatMap { bySession[$0] } ?? []
+        let at = request.resultReceivedAt ?? request.completedAt ?? request.createdAt
+        let detail = "\(Self.action(request.mode))：\(request.failure ?? "")"
+        for pair in pairs {
+          changes.append(CueChange(
+            kind: .failed, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: at, detail: detail,
+            recap: pair.leaf.piSessionID.flatMap { sessions[$0] }?.recap))
+        }
+      }
     }
     return changes.sorted { $0.at < $1.at }
+  }
+
+  /// 本机得知请求结果的时刻：发起的这台收到结果时记的（本机时钟），本机执行的是完成时刻。
+  private static let resultKnownAt = "COALESCE(resultReceivedAt, completedAt)"
+
+  /// 请求的动作在变化里的说法。
+  private static func action(_ mode: Open<DeliveryMode>) -> String {
+    switch mode.known {
+    case .start: "开工"
+    case .send, .steer, .followUp: "说话"
+    case .answer: "作答"
+    case .stop: "停下"
+    case .end: "结束"
+    default: mode.rawValue
+    }
+  }
+
+  /// Cue 发起的请求最近一次失败的时刻（本机得知结果的时刻）：管理器订阅它，请求一失败就对账、醒来。
+  public func lastCueRequestFailure() throws -> Date? {
+    try db.first(
+      "SELECT MAX(\(Self.resultKnownAt)) FROM deliveryRequests WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed'"
+    ) { $0.dateOrNil(0) } ?? nil
   }
 
   /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。

@@ -134,6 +134,17 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// Cue 开工，Mac 开不了会话（这里是 Pi 起来就退出）：这次失败是一条跟进的变化，叫醒 Cue，信封里写着动作与 Mac 报的原因。
+    @Test func 开工失败_Cue醒来看到原因() async throws {
+        let rig = try await Rig()
+        rig.app.host.openFailure = #"Error: Model "fake/nope" not found"#
+        try await rig.say("请建个任务并开工")
+        try await rig.message(.cue, containing: "办好了")
+        let seen = try await rig.message(.note, containing: "看到了")
+        #expect(seen.text.contains("修好登录页") && seen.text.contains("开工") && seen.text.contains(#"Model "fake/nope" not found"#))
+        await rig.stop()
+    }
+
     /// Cue 带选项问你；你回答后 Cue 被唤醒，回答写成 Cue 说的。"等你"推了通知。
     @Test func 等你被回答_Cue被唤醒() async throws {
         let rig = try await Rig()
@@ -360,6 +371,9 @@ nonisolated final class FakeModel: Sendable {
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
+        if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[[^\]]+\] [^\n]*开工[^\n]*)/)?.1 {
+            return say("看到了：\(failed)")
+        }
         if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") {
             return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": "- 登录测试全过"])
         }
