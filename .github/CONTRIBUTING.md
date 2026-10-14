@@ -18,7 +18,7 @@ apple/scripts/xc.sh build ios     # build for the iPhone simulator
 apple/scripts/xc.sh test kit      # shared package: store, sync, editor, Pi bridge, command line
 ```
 
-`xc.sh` builds into the checkout's `apple/.derived/` and queues heavy work machine-wide (at most three builds or test runs at once), so parallel checkouts don't overload the machine.
+`xc.sh` builds into the checkout's `apple/.derived/`; runs in the same checkout wait for each other, and iOS runs share a small fixed pool of simulators.
 
 Conventions and guardrails are in [AGENTS.md](../AGENTS.md); UI, sync, verification, and release notes are in [docs/](../docs/). Run `apple/scripts/xc.sh check` before committing.
 

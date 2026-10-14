@@ -5,13 +5,13 @@
 #   与交互预算（docs/verify.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
 # 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定；产物在 apple/.derived-perf-release（Instruments 也用这份）。
-# 独占全部槽位（_slot.sh）：别的编译、测试同时跑，指令数之外的数都会被拖歪。iOS 的单次交互见 perf-ios.sh。
+# 独占机器（_lock.sh）：别的编译、测试同时跑，指令数之外的数都会被拖歪。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=_slot.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_slot.sh"
-slot_enter all "$0" "$@"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
+xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
 
 DERIVED="$APPLE_DIR/.derived-perf-release"
