@@ -4,7 +4,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）/ `refreshQuota`（查一次订阅额度，只有 Pi）；订阅额度的观测也经 `changes()` 报出（`.quota`）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
+| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新；`draft` 是它此刻正在说的话 `PiDraft`，各家接入每个增量调一次 `setDraft`，桥在这一处把刷新合并到每 100ms 一次，只在内存、不进 `changes()`，会话下线随格子一起没了）直接给界面观察，`slot(sessionID:)` / `session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）/ `refreshQuota`（查一次订阅额度，只有 Pi）；订阅额度的观测也经 `changes()` 报出（`.quota`）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
 | 各家接入 | `AgentRuntime`：`PiRuntime`、`ClaudeCodeRuntime`、`CodexRuntime`、`OpenCodeRuntime` | 发现会话并接上桥、后台开新会话（`open`：会话名、模型、思考强度一起生效，Pi 作为启动参数，其余开出后一次配好，配不上就结束它、整体失败）、接着已结束的会话（`resume`）、结束（`end`）、补写对话（`transcript`）；投送执行器按会话的 Agent 找到它。能做什么由 CueStore 的 `AgentCapabilities.of` 决定，界面只露出做得到的 |
 | 钩子转发 | `AgentHookServer` / `cuepad hook <agent>` | Claude Code、Codex 的钩子命令把这次调用（输入、环境、所在终端）发到 `PiPaths.hookSocket`，等 CuePad 回一行再写到标准输出；CuePad 没在运行时什么都不输出，Agent 照常往下走 |
 | 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（Pi 读 `pi --version`，≥ 0.84.4；其余有命令或有配置目录就算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级（技能写不进去时扩展还原）；Claude Code、Codex 另把钩子合并进它们的配置（`AgentHookConfig`，见下文），OpenCode 直连它的后台服务、不用装。技能很短（`AgentSkill`），写着 App 里 `cuepad` 的绝对路径、发到手机的用法与做 HTML 页的约定，其余看 `--help`；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。状态只有一份：任一个是别人的同名文件为 `foreign`（不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
@@ -40,7 +40,7 @@ CuePad 起的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex�
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录、命令行链接目录 `CUEPAD_BIN_DIR`）。
 
-## 协议（v13）
+## 协议（v14）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -52,6 +52,7 @@ CuePad 起的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex�
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
 | `info` | 变化时只带变了的那几项（没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`、上下文余量 `context` 与命令清单 `commands`（见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
+| `draft` | 正在说的话（`PiDraft`）：`text` 是主会话当前这条助手消息到目前为止的正文（文字块按换行连接，同下"对话与摘要"取回答的规则；不含思考、工具参数与子代理），`since` 是它开始出字的时刻（ms）。增量在扩展里合并到约每 100ms 一条，这条说完（`message_end`）时立即补发全文；它转成工具调用（`toolcall_start`）、被停下或出错（`message_end` 的 `stopReason` 为 `aborted`/`error`）、新一轮开始（`agent_start`）时发 `text: null` 清掉。正常说完的不清：说完的那条以会话文件为准，CuePad 在对话里出现它之后自己换下 |
 | `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（受理了却没来得及交给 Pi 的话的投送请求 id，见下"压缩"） |
 
@@ -65,7 +66,7 @@ CuePad 起的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex�
 
 会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`info` 的任一字段变化时 `changes()` 给出 `.infoChanged`。
 
-对话与摘要只来自会话文件（扩展不上报问答近况）：`PiHistory` 按文件里的先后读出，一行一个序号（`seq`，文件只追加，重读不变）。
+对话与摘要只来自会话文件（扩展不上报问答近况；说完之前的正文只经 `draft` 给 Mac 逐字显示，不入库、不同步）：`PiHistory` 按文件里的先后读出，一行一个序号（`seq`，文件只追加，重读不变）。
 
 - 你的消息：`role == "user"` 的消息，写成 CuePad 正文格式（`CueFormat`，与投送请求的 content 同一种）：文字块与图片块按原顺序、换行连接，文字块末尾 Pi 附给模型的图片说明行（`[Image: original …]`、`[Image converted …]`）去掉（规则只有 `PiSessionName.withoutImageNotes` 一处，会话名、对话、摘要都经它），图片块在读的时候存进附件目录（按内容哈希，已有的不重写；CuePad 发出的图片就是附件目录里那份原字节，终端里直接贴的图附件目录里原本没有）、正文里留 `![](cuepad://img/<哈希>)`；不是图片的块跳过。摘要（`recap`）、机器消息判断用去掉图片后的纯文字。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（如 FireCode 的子代理事件、观察员、审查结果信封），不进对话、只开始一轮；块与块之间夹着真人文字就不是机器消息。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
 - 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字固定是"已压缩上下文"（不写压缩前的 token 数：这里不知道窗口多大，一个孤零零的数用户读不懂）。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。

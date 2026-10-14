@@ -26,8 +26,7 @@ struct ToolActivityLine: View {
                 header(chevron: false).accessibilityElement(children: .ignore).accessibilityLabel(spoken)
             }
         }
-        .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 4)
-        .background(palette.fill, in: ChatBlock.shape)
+        .roundNoteFrame()
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
     }
 
@@ -42,8 +41,7 @@ struct ToolActivityLine: View {
             ForEach(note.summaries, id: \.self) { line($0, chevron: chevron).fixedSize() }
             line(note.summaries.last, chevron: chevron)
         }
-        .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
-        .frame(minHeight: 24)
+        .roundNoteLine()
         .contentShape(.rect)
     }
 
@@ -95,6 +93,30 @@ struct ToolActivityLine: View {
         case .search: "magnifyingglass"
         case .other: "wrench.and.screwdriver"
         }
+    }
+}
+
+extension View {
+    /// 一轮回答上方那一块的外形：注脚（`ToolActivityLine`）与正在说的话上方的进展（`DraftProgress`）同一块淡底、同样高，草稿原位换成说完的那条时正文不动。
+    func roundNoteFrame() -> some View { modifier(RoundNoteFrame()) }
+
+    /// 那一块里的一行：小字、次要墨色、固定的最小行高。
+    func roundNoteLine() -> some View { modifier(RoundNoteLine()) }
+}
+
+private struct RoundNoteFrame: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 4).background(palette.fill, in: ChatBlock.shape)
+    }
+}
+
+private struct RoundNoteLine: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2).frame(minHeight: 24)
     }
 }
 
