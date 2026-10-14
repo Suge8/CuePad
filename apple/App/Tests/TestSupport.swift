@@ -35,6 +35,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         var started = 0
         var stopped = 0
         var syncNows = 0
+        var pulls = 0
         var resolutions: [String] = []
     }
 
@@ -48,6 +49,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     var started: Int { state.withLock { $0.started } }
     var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
+    var pulls: Int { state.withLock { $0.pulls } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 
     var stateUpdates: AsyncStream<SyncState> { updates }
@@ -73,7 +75,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.syncNows += 1 }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func pullChanges() async throws {}
+    func pullChanges() async throws { state.withLock { $0.pulls += 1 } }
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()

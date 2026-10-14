@@ -59,6 +59,8 @@ final class AppServices {
     #endif
     /// 说的话到哪了的"此刻"与同步通着的起点，整个 App 一份（`start()` 开始跟着库）。
     let speechClock: SpeechClock
+    /// App 的钟：说的话到点翻状态（`SpeechClock`）与主动拉取的节奏（`SyncPoller`）共用。
+    @ObservationIgnored let timing: Timing
     /// 此刻有事的 Pi 会话，整个 App 一份（`start()` 开始跟随）：界面与服务都从这里取，不各自订阅。
     let liveSessions = LiveSessions()
     /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
@@ -298,6 +300,7 @@ final class AppServices {
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        self.timing = timing
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
@@ -327,6 +330,7 @@ final class AppServices {
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        self.timing = timing
         self.pasteboard = pasteboard
     }
     #endif
@@ -349,9 +353,13 @@ final class AppServices {
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
 
+    /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（交回了引擎）当场传出、在等的回执当场拉回，
+    /// 不等引擎自己的调度；主动拉取也随之重开一个窗口（`pollingCondition`）。
     func setSyncState(_ state: SyncState) {
+        let recovered = state.status.reachesMac && speech.reachableSince == nil
         syncStatus = state.status
         speechClock.setReachable(state.status.reachesMac)
+        if recovered { Task { await syncNow() } }
         syncIssues = state.issues
         alertSubscription = state.alerts
     }

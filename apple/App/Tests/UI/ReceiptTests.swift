@@ -73,13 +73,15 @@ struct ReceiptTests {
         services.liveSessions.live.first { $0.state.sessionID == id }.map(Workspace(services: services).shown)
     }
 
-    /// 断网时说的话（对 Cue、对会话）当场是"同步不通"，等多久都不说 Mac 没有回应、不说 Cue 在睡觉；恢复后回到发送中，
-    /// 时限从恢复那一刻重新算；回执来了就是已送达。
+    /// 断网时说的话（对 Cue、对会话）当场是"同步不通"，等多久都不说 Mac 没有回应、不说 Cue 在睡觉。断网超过手机主动拉取的
+    /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；时限从恢复那一刻重新算。
+    /// 传出与回执经同步走完一圈见 CueSync 的 DeviceFlowTests（断网写下的请求恢复后到 Mac、结果回到手机）。
     @Test(.timeLimit(.minutes(1)))
-    func 断网时说的话_报同步不通不报没回应_恢复后时限重算_回执来了送达() async throws {
+    func 断网时说的话_报同步不通不报没回应_恢复后立即同步并重开拉取_时限重算() async throws {
         try await enableCue()
         let target = try await session()
         try await start()
+        services.startPolling()
         let workspace = Workspace(services: services)
 
         try await setSync(.offline)
@@ -97,26 +99,30 @@ struct ReceiptTests {
         #expect(services.liveSessions.undelivered["atlas"] == 1)
         #expect(try await cuePresence() != .asleep)
 
-        clock.advance(.seconds(Speech.receiptLimit + 1))  // 断网时没有在等的时限，App 不睡
+        // 断网两分钟多：拉取的窗口走完（手机）；断网时没有在等的时限，说法不变
+        try await eventually("在等回执时主动拉取") { app.sync.pulls > 0 }
+        await clock.waitForSleeper()
+        clock.advance(.seconds(121))
+        #if os(iOS)
+        try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉
+        #else
+        try await eventually("拉取醒来又睡下") { app.sync.pulls > 1 && clock.sleeperCount > 0 }  // Mac 在等就一直拉
+        #endif
         #expect(try await trips() == [.failed(.offline), .failed(.offline)])
+        let (pulls, syncs) = (app.sync.pulls, app.sync.syncNows)
 
         try await setSync(.idle)
         try await eventually("恢复") { services.speech.reachableSince != nil }
+        try await eventually("恢复时立即同步") { app.sync.syncNows > syncs }
+        try await eventually("恢复时拉取重新开始") { app.sync.pulls > pulls }  // 钟没动：是新窗口的第一拉
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行回到发送中") { row("atlas")?.status == .delivery(.inTransit(.sending)) }
         #expect(services.liveSessions.undelivered["atlas"] == nil)
 
         // 写下已过两个时限，但恢复才 59 秒：还在发送中
-        try await advance(Speech.receiptLimit - 1)
+        clock.advance(.seconds(Speech.receiptLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await cuePresence() == .sending)
-
-        try await store.markCueMessagesDelivered([toCue.id])
-        let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .succeeded }
-        try await executor.start()
-        _ = try await eventually(store, { try $0.deliveryRequest(toSession.id)?.isOpen }) { $0 == false }
-        await executor.stop()
-        #expect(try await trips() == [.delivered, .delivered])
     }
 
     /// 会话行与"N 句没送到"跟着同一个"此刻"：过了时限没回执，不用重开页面就翻成没能送达。

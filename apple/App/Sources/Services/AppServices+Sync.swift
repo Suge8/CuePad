@@ -75,9 +75,9 @@ extension AppServices {
     func startPolling() {
         guard let sync, polling == nil else { return }
         let waiting = pollingCondition()
-        let log = Self.log
+        let log = Self.log, poller = SyncPoller(timing: timing)
         polling = Task {
-            await SyncPoller().run(while: waiting) {
+            await poller.run(while: waiting) {
                 do {
                     try await sync.pullChanges()
                 } catch {
