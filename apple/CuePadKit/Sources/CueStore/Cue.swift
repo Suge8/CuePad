@@ -80,6 +80,20 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
 
   /// 一条最多这么多字节（UTF-8），超了拒绝。
   public static let maxBytes = 280
+
+  /// 这段话能记成一条（去掉首尾空白后不空、不超过 `maxBytes` 字节）：界面输入时与写入时同一个判断。
+  public static func fits(_ text: String) -> Bool {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !trimmed.isEmpty && trimmed.utf8.count <= maxBytes
+  }
+}
+
+/// 记忆的版本读数：行数、最后改动（记、忘、钉、提醒）与摘要的变化，任一变了它就变。管理器订阅它，不必每次读整份记忆。
+public struct CueMemoryVersion: Equatable, Sendable {
+  public var lines: Int
+  public var linesModifiedAt: Date?
+  public var summaries: Int
+  public var summariesWrittenAt: Date?
 }
 
 extension CueMemoryLine: Record {
@@ -126,6 +140,9 @@ public struct CueProfile: Equatable, Sendable {
   public var enabledAt: Date?
   public var modifiedAt: Date
 
+  /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
+  public var activeHost: String? { enabledAt == nil ? nil : hostID }
+
   public static let defaultName = "Cue"
   /// 只有一行：任何设备上都是这个 id。
   static let recordID = DeterministicID.uuid("cue-profile")
@@ -155,5 +172,19 @@ extension CueProfile: Record {
     self.init(
       name: name.isEmpty ? Self.defaultName : name, hostID: row.textOrNil(2), runtime: Open(rawValue: row.text(3)),
       model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
+  }
+}
+
+/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
+/// 正文是那条消息的文字（去掉图片，至多 `bodyLimit` 字），"等你"再附上选项。
+public enum CueAlert {
+  public static let bodyLimit = 300
+
+  public static func content(name: String?, text: String, choices: [String]?) -> (title: String, body: String) {
+    var body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
+    if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
+    if let choices, !choices.isEmpty { body += "\n" + choices.joined(separator: " / ") }
+    let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return (name.isEmpty ? CueProfile.defaultName : name, body)
   }
 }

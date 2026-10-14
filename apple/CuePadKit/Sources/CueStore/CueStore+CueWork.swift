@@ -109,8 +109,13 @@ public struct CueLeafDetail: Equatable, Sendable {
 }
 
 extension Card {
-  /// 标题（`CueSummary` 的规则）。不公开：App 有自己的 `title`（空白时的占位说法）。
-  var title: String { CueSummary(body).title }
+  /// 标题（`CueSummary` 的规则，唯一一处）：Cue 的工具、信封与界面都用它。空白的卡是空串（App 的 `title` 另给占位说法）。
+  public var heading: String { CueSummary(body).title }
+}
+
+extension UUID {
+  /// 给 Cue 与人看的短 id：小写的前 8 位（Cue 的工具接受至少 4 位的前缀）。
+  public var shortID: String { String(uuidString.lowercased().prefix(8)) }
 }
 
 extension CueStore {
@@ -126,23 +131,23 @@ extension CueStore {
     host: String, cue: Bool = false
   ) throws -> CueHandOff {
     let card = try requireLeaf(leaf)
-    let draft = try Self.draft(of: leaf, in: db).flatMap { try find(Card.self, $0) }
+    let draft = try draft(of: leaf)
     let content = text ?? draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
     let carrier = text == nil ? draft?.id ?? leaf : leaf
     if let sessionID = card.piSessionID {
       let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
       if mode == .send, state?.state.known?.isTurnRunning == true { throw CueStoreError.sessionBusy }
-      let target = SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: sessionID)
+      let target = SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: sessionID)
       return .sent(try requestDelivery(content, to: target, on: state?.hostID ?? host, mode: mode, card: carrier, cue: cue))
     }
-    guard try launchingLeaves([leaf]).isEmpty else { throw CueStoreError.launching(card.title) }
+    guard try launchingLeaves([leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
     guard let project = card.projectID else { throw CueStoreError.noFolder("") }
     guard let launchHost = try launchHost(for: project, preferring: host) else {
       throw CueStoreError.noFolder(try find(Project.self, project)?.name ?? "")
     }
     let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-    let launch = PiLaunch(project: project, prompt: trimmed.isEmpty ? nil : content, token: UUID().uuidString, name: card.title, model: model, thinking: thinking)
-    return .started(try requestLaunch(launch, title: card.title, on: launchHost, card: carrier, cue: cue))
+    let launch = PiLaunch(project: project, prompt: trimmed.isEmpty ? nil : content, token: UUID().uuidString, name: card.heading, model: model, thinking: thinking)
+    return .started(try requestLaunch(launch, title: card.heading, on: launchHost, card: carrier, cue: cue))
   }
 
   /// 这些叶子里正在开新会话的：带着叶子或它的草稿（交出草稿时请求带的是草稿，送达后改记到叶子上）的开新会话请求还在路上，
@@ -173,7 +178,7 @@ extension CueStore {
       throw CueStoreError.nothingToAnswer
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
-    let target = SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: card.piSessionID)
+    let target = SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: card.piSessionID)
     return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: target, on: state?.hostID ?? host, cue: cue)
   }
 
@@ -198,7 +203,7 @@ extension CueStore {
   /// 停止叶子的会话正在跑的这一轮。
   public func stopLeaf(_ leaf: UUID, host: String, cue: Bool = false) throws -> DeliveryRequest {
     let (card, state) = try requireSession(of: leaf)
-    return try requestStop(of: SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: card.piSessionID), on: state?.hostID ?? host, cue: cue)
+    return try requestStop(of: SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: card.piSessionID), on: state?.hostID ?? host, cue: cue)
   }
 
   /// 完成一件事并结束它的会话（写结束请求），返回结束请求。叶子直接完成；有步骤的任务要步骤都完成了才行
@@ -215,7 +220,7 @@ extension CueStore {
       guard let sessionID = leaf.piSessionID else { return nil }
       let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
       guard state?.state != .known(.ended) else { return nil }
-      return try requestEnd(of: SendTarget(kind: .piSession, name: state?.title ?? leaf.title, ref: sessionID), on: state?.hostID ?? host, cue: cue)
+      return try requestEnd(of: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), on: state?.hostID ?? host, cue: cue)
     }
   }
 
@@ -253,7 +258,7 @@ extension CueStore {
 
   private func requireSession(of leaf: UUID) throws -> (Card, PiSessionState?) {
     let card = try requireLeaf(leaf)
-    guard let sessionID = card.piSessionID else { throw CueStoreError.noSession(card.title) }
+    guard let sessionID = card.piSessionID else { throw CueStoreError.noSession(card.heading) }
     return (card, try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)))
   }
 
@@ -393,10 +398,49 @@ extension CueStore {
         ).reversed()
       } ?? []
       return CueLeafDetail(
-        leaf: leaf, draft: try Self.draft(of: leaf.id, in: db).flatMap { try find(Card.self, $0) },
+        leaf: leaf, draft: try draft(of: leaf.id),
         session: sessionID.flatMap { sessions[$0] }, recent: Array(recent), previews: try sessionID.map(previews(of:)) ?? [])
     }
     return CueTaskDetail(task: card, progress: try subtaskProgress(of: top)[top], leaves: details)
+  }
+
+  /// 叶子的草稿（提示词）；没有为 nil。
+  public func draft(of leaf: UUID) throws -> Card? {
+    try Self.draft(of: leaf, in: db).flatMap { try find(Card.self, $0) }
+  }
+
+  /// 一批任务各自的预览（任务自己与它的步骤的会话发到手机上的，从早到晚）：一次查完，界面不必逐件取细节。没有预览的不在结果里。
+  public func previews(ofTasks tasks: [UUID]) throws -> [UUID: [PiPreview]] {
+    guard !tasks.isEmpty else { return [:] }
+    let rows = try db.query(
+      """
+      WITH tasks(id) AS (SELECT value FROM json_each(?))
+      SELECT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", ")), CASE WHEN c.id IN tasks THEN c.id ELSE c.parentID END
+      FROM previews p JOIN cards c ON c.piSessionID = p.sessionID
+      WHERE c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND (c.id IN tasks OR c.parentID IN tasks)
+      ORDER BY p.createdAt, p.id
+      """, [Self.idList(tasks)]
+    ) { (task: $0.uuid(Int32(PiPreview.columns.count)), preview: PiPreview(row: $0)) }
+    return Dictionary(grouping: rows, by: \.task).mapValues { $0.map(\.preview) }
+  }
+
+  /// 由 Cue 跟进的会话（Pi 的会话 id）：会话绑着的叶子所在的顶层任务 `cueFollows` 为真。界面与通知规则都读它。
+  public func cueFollowedSessions() throws -> Set<String> {
+    Set(try db.query("SELECT DISTINCT s.piSessionID FROM cards s WHERE s.piSessionID IS NOT NULL AND \(Self.followedByCue("s.piSessionID"))") { $0.text(0) })
+  }
+
+  /// 会话 `session`（SQL 表达式）绑着的叶子所在的顶层任务的 id：会话 → 叶子 → 顶层任务（任务最多两级，叶子没有上级就是它自己）。
+  /// "这个会话由 Cue 跟进"与"你接手"只认这一段。
+  static func topTasks(ofSession session: String) -> String {
+    """
+    SELECT CASE WHEN l.parentID IS NULL THEN l.id ELSE l.parentID END FROM cards l
+    WHERE l.piSessionID = \(session) AND l.todoAt IS NOT NULL AND l.deletedAt IS NULL
+    """
+  }
+
+  /// 会话 `session`（SQL 表达式）由 Cue 跟进。
+  static func followedByCue(_ session: String) -> String {
+    "EXISTS (SELECT 1 FROM cards t WHERE t.cueFollows = 1 AND t.parentID IS NULL AND t.deletedAt IS NULL AND t.id IN (\(topTasks(ofSession: session))))"
   }
 
   private func followedTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {

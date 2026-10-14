@@ -73,7 +73,7 @@ public enum CueEnvelope {
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { message in
-      "- \(clip(CueFormat.plainText(message.text), 80))（\(short(message.id))）选项：\((message.choices ?? []).joined(separator: " / "))"
+      "- \(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
     }
 
     lines.append("醒来：" + wake(input.wake))
@@ -115,11 +115,11 @@ public enum CueEnvelope {
   /// 看板上一件事的一行（信封与 peek 共用）。
   /// `showingFollower` 写上谁在跟进（看所有事时用；看板上都是 Cue 跟进的，不写）。
   static func boardLine(_ item: CueBoardItem, now: Date, showingFollower: Bool = false) -> String {
-    var parts = ["\(title(item.task))（\(short(item.task.id))）"]
+    var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
     let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : "没开工")
-    let leaf = item.leaf.id == item.task.id ? "" : "\(title(item.leaf)) › "
+    let leaf = item.leaf.id == item.task.id ? "" : "\(item.leaf.heading) › "
     parts.append("\(leaf)\(state) \(duration(now.timeIntervalSince(item.since)))")
     if let session = item.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts.joined(separator: " · ")
@@ -144,15 +144,10 @@ public enum CueEnvelope {
   }
 
   private static func where_(_ change: CueChange) -> String {
-    let base = change.task.map { "\(title($0))（\(short($0.id))）" } ?? "已永久删除的任务（\(short(change.taskID))）"
+    let base = change.task.map { "\($0.heading)（\($0.id.shortID)）" } ?? "已永久删除的任务（\(change.taskID.shortID)）"
     guard let leaf = change.leaf, leaf.id != change.taskID else { return base }
-    return "\(base) › \(title(leaf))"
+    return "\(base) › \(leaf.heading)"
   }
-
-  static func title(_ card: Card) -> String { CueSummary(card.body).title }
-
-  /// 给 Cue 看的短 id（工具接受至少 4 位的前缀）。
-  static func short(_ id: UUID) -> String { String(id.uuidString.lowercased().prefix(8)) }
 
   static func clip(_ text: String, _ limit: Int) -> String {
     let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)

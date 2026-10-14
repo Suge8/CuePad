@@ -118,7 +118,7 @@ final class CueKeeper {
     private nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]
         var board: [CueBoardItem]
-        var memory: CueMemory
+        var memory: CueMemoryVersion
     }
 
     private nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
@@ -164,7 +164,7 @@ final class CueKeeper {
             group.addTask {
                 do {
                     for try await _ in store.observe({ store in
-                        Signal(messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemory())
+                        Signal(messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -325,17 +325,16 @@ final class CueKeeper {
         guard !restarting else { return }
         do {
             let store = setup.store, now = Date.now
-            let yours = try await store.undeliveredCueMessages()
-            let answers = try await store.undeliveredCueAnswers()
-            if !yours.isEmpty || !answers.isEmpty {
+            let pending = try await store.cueMessagesToDeliver()
+            if !pending.isEmpty {
                 if stuck != nil {
                     stuck = nil
                     failures = 0
                     await startShift()
                 }
                 guard let brain else { return }
-                let ids = (yours + answers).map(\.id)
-                let said = (yours.map(\.text) + answers.map(Self.answerLine)).joined(separator: "\n\n")
+                let ids = pending.map(\.id)
+                let said = pending.map { $0.author == .known(.you) ? $0.text : Self.answerLine($0) }.joined(separator: "\n\n")
                 if turn != nil {
                     do {
                         try await brain.send(said)

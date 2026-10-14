@@ -80,21 +80,12 @@ public enum CueAlertRoute {
   public static var profileRecordName: String { CueProfile.syncRecordName }
 }
 
-/// Cue 通知的具体文案：标题是 Cue 的名字（读不到为 `CueProfile.defaultName`），正文是那条消息（纯文字），"等你"再附上选项。
+/// 从通知取回的 Cue 消息与设置记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。
 public enum CueAlertText {
-  static let bodyLimit = 300
-
   public static func content(message: CKRecord, profile: CKRecord?) -> (title: String, body: String)? {
     guard let text = message.encryptedValues["text"] as? String else { return nil }
-    let name = (profile?.encryptedValues["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-    var body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-    if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
-    if let choices = (message.encryptedValues["choices"] as? String).flatMap({ try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }),
-      !choices.isEmpty
-    {
-      body += "\n" + choices.joined(separator: " / ")
-    }
-    return (name.flatMap { $0.isEmpty ? nil : $0 } ?? CueProfile.defaultName, body)
+    let choices = (message.encryptedValues["choices"] as? String).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
+    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, choices: choices)
   }
 }
 

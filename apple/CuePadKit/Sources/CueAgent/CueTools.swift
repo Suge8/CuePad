@@ -110,6 +110,7 @@ public struct CueTools: Sendable {
     case .nothingToAnswer: "会话此刻没有等回答的提问：用 say when=now 或 after 说话"
     case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
+    case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case let error?: error.localizedDescription
     case nil: (error as? LocalizedError)?.errorDescription ?? "\(error)"
     }
@@ -129,18 +130,18 @@ public struct CueTools: Sendable {
     case "stop":
       let leaf = try await workingLeaf(try args.required("task"))
       let request = try await store.stopLeaf(leaf.id, host: try await host(), cue: true)
-      return .ok("已请会话停下这一轮：「\(title(leaf))」（\(short(leaf.id))）。", ["task": id(leaf.id), "request": id(request.id)])
+      return .ok("已请会话停下这一轮：「\(leaf.heading)」（\(leaf.id.shortID)）。", ["task": id(leaf.id), "request": id(request.id)])
     case "done":
       let card = try await task(args.required("task"))
       let ends = try await store.completeTask(card.id, host: try await host(), cue: true)
       return .ok(
-        "「\(title(card))」（\(short(card.id))）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
+        "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
         ["task": id(card.id), "requests": ends.map { id($0.id) }])
     case "follow":
       let who = try args.required("who")
       guard ["cue", "you"].contains(who) else { throw Failure("who 只能是 cue 或 you") }
       let top = try await store.setCueFollows(try await task(args.required("task")).id, who == "cue")
-      return .ok("「\(title(top))」（\(short(top.id))）" + (who == "cue" ? "由你跟进。" : "交还给用户，不再跟进。"), ["task": id(top.id), "follows": who == "cue"])
+      return .ok("「\(top.heading)」（\(top.id.shortID)）" + (who == "cue" ? "由你跟进。" : "交还给用户，不再跟进。"), ["task": id(top.id), "follows": who == "cue"])
     case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done / follow")
     }
   }
@@ -154,13 +155,13 @@ public struct CueTools: Sendable {
       steps.append(try await store.createTask(step, under: created.id).id)
     }
     let top = try await store.setCueFollows(created.id, true)
-    var text = "建好了「\(title(top))」（\(short(top.id))）" + (steps.isEmpty ? "" : "，\(steps.count) 个步骤")
+    var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个步骤")
     var prompt: UUID?
     if let body = args.string("prompt") {
       let draft = try await store.createCard(body: body, under: top.id)
       prompt = draft.id
       let leaf = try await store.workingLeaf(of: top.id)
-      text += leaf.id == top.id ? "，带着草稿" : "，草稿在「\(title(leaf))」上"
+      text += leaf.id == top.id ? "，带着草稿" : "，草稿在「\(leaf.heading)」上"
     }
     text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里，由你跟进。"
     return .ok(text, ["task": id(top.id), "steps": steps.map(id), "prompt": prompt.map(id) ?? NSNull()])
@@ -176,7 +177,7 @@ public struct CueTools: Sendable {
     }
     if let steps = args.strings("steps") {
       guard card.parentID == nil else { throw Failure("步骤只能加在顶层任务上：task 写它的顶层任务") }
-      let existing = Set(try await store.children(of: card.id).filter(\.isTask).map { title($0) })
+      let existing = Set(try await store.children(of: card.id).filter(\.isTask).map { $0.heading })
       var added = 0
       for step in steps where !step.isEmpty && !existing.contains(step) {
         _ = try await store.createTask(step, under: card.id)
@@ -186,12 +187,12 @@ public struct CueTools: Sendable {
     }
     if let body = args.string("prompt") {
       let leaf = try await store.workingLeaf(of: card.id)
-      if let draft = try await store.cueTaskDetail(leaf.id).leaves.first(where: { $0.leaf.id == leaf.id })?.draft {
+      if let draft = try await store.draft(of: leaf.id) {
         try await store.updateCard(draft.id) { $0.body = body }
       } else {
         _ = try await store.createCard(body: body, under: leaf.id)
       }
-      done.append("草稿写在「\(title(leaf))」上")
+      done.append("草稿写在「\(leaf.heading)」上")
     }
     if let ref = args.string("project") {
       let project = try await project(ref)
@@ -200,14 +201,14 @@ public struct CueTools: Sendable {
       done.append("连同步骤与草稿挪到了项目「\(project.name)」" + (try await store.cueProjects().first { $0.id == project.id }?.hasFolder == true ? "" : "（它没绑文件夹，开工前请用户绑一个）"))
     }
     guard !done.isEmpty else { throw Failure("edit 至少给 title、prompt、steps、project 之一") }
-    return .ok("「\(title(card))」（\(short(card.id))）：\(done.joined(separator: "，"))。", ["task": id(card.id)])
+    return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。", ["task": id(card.id)])
   }
 
   private func start(_ args: Args) async throws -> Result {
     if let agent = args.string("agent"), agent != "pi" { throw Failure("目前只能开 Pi 会话（agent 省略或写 pi）") }
     let leaf = try await workingLeaf(try args.required("task"))
-    let detail = try await store.cueTaskDetail(leaf.id).leaves.first { $0.leaf.id == leaf.id }
-    if leaf.piSessionID != nil, detail?.draft == nil { throw Failure("「\(title(leaf))」已有会话：用 say 对它说话") }
+    let draft = try await store.draft(of: leaf.id)
+    if leaf.piSessionID != nil, draft == nil { throw Failure("「\(leaf.heading)」已有会话：用 say 对它说话") }
     let model = try args.string("model").map { ref -> PiModelKey in
       let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
       guard parts.count == 2 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开") }
@@ -220,10 +221,10 @@ public struct CueTools: Sendable {
     let result = try await store.handOff(leaf.id, model: model, thinking: effort, host: try await host(), cue: true)
     let text: String =
       switch result {
-      case .sent: "草稿已发进「\(title(leaf))」的会话。"
-      case .started: "已请 Mac 为「\(title(leaf))」开新会话" + (detail?.draft == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
+      case .sent: "草稿已发进「\(leaf.heading)」的会话。"
+      case .started: "已请 Mac 为「\(leaf.heading)」开新会话" + (draft == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
       }
-    return .ok(text + "（\(short(leaf.id))）", ["task": id(leaf.id), "request": id(result.request.id), "started": { if case .started = result { true } else { false } }()])
+    return .ok(text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(result.request.id), "started": { if case .started = result { true } else { false } }()])
   }
 
   private func say(_ args: Args) async throws -> Result {
@@ -233,13 +234,13 @@ public struct CueTools: Sendable {
     if when == "answer" {
       guard let value = args.string("value") ?? args.string("text") else { throw Failure("answer 要给 value（选项原文、序号或 yes/no）") }
       let request = try await store.answerLeaf(leaf.id, value, host: host, cue: true)
-      return .ok("已回答「\(title(leaf))」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
+      return .ok("已回答「\(leaf.heading)」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
     }
     guard ["now", "after"].contains(when) else { throw Failure("when 只能是 now、after 或 answer") }
     let text = try args.required("text")
     if leaf.piSessionID == nil {
-      if try await !store.launchingLeaves([leaf.id]).isEmpty { throw CueStoreError.launching(title(leaf)) }
-      throw Failure("「\(title(leaf))」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句")
+      if try await !store.launchingLeaves([leaf.id]).isEmpty { throw CueStoreError.launching(leaf.heading) }
+      throw Failure("「\(leaf.heading)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句")
     }
     let request: DeliveryRequest
     do {
@@ -248,7 +249,7 @@ public struct CueTools: Sendable {
       request = try await store.handOff(leaf.id, text: text, mode: when == "now" ? .steer : .followUp, host: host, cue: true).request
     }
     let how = request.mode == .known(.steer) ? "（会话正忙，马上说）" : request.mode == .known(.followUp) ? "（会话正忙，等它做完再说）" : ""
-    return .ok("已对「\(title(leaf))」的会话说了\(how)。（\(short(leaf.id))）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
+    return .ok("已对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
   }
 
   private func board() async throws -> Result {
@@ -260,7 +261,7 @@ public struct CueTools: Sendable {
       [
         "tasks": items.map { item -> [String: Any] in
           [
-            "id": id(item.task.id), "title": title(item.task), "leaf": id(item.leaf.id),
+            "id": id(item.task.id), "title": item.task.heading, "leaf": id(item.leaf.id),
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
             "session": item.session?.sessionID ?? NSNull(), "state": item.session?.state.rawValue ?? NSNull(),
             "launching": item.launching, "since": iso(item.since),
@@ -293,7 +294,7 @@ public struct CueTools: Sendable {
       [
         "tasks": items.map { item -> [String: Any] in
           [
-            "id": id(item.task.id), "title": title(item.task), "project": item.task.projectID.map(id) ?? NSNull(),
+            "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(),
             "follows": item.task.cueFollows, "leaf": id(item.leaf.id),
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
             "state": item.session?.state.rawValue ?? NSNull(), "since": iso(item.since),
@@ -312,11 +313,11 @@ public struct CueTools: Sendable {
     let detail = try await store.cueTaskDetail(card.id)
     let now = Date()
     var lines = [
-      "「\(title(detail.task))」（\(short(detail.task.id))）" + (detail.progress.map { " · 步骤 \($0.done)/\($0.total)" } ?? "")
+      "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 步骤 \($0.done)/\($0.total)" } ?? "")
         + " · " + (detail.task.cueFollows ? "由你跟进" : "用户自己做") + " · " + status(detail.task)
     ]
     for leaf in detail.leaves {
-      var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(title(leaf.leaf))」（\(short(leaf.leaf.id))）\(status(leaf.leaf))"
+      var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
       if let session = leaf.session {
         head += " · 会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
         if let question = session.question { head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）") }
@@ -345,7 +346,7 @@ public struct CueTools: Sendable {
         "task": id(detail.task.id), "follows": detail.task.cueFollows,
         "leaves": detail.leaves.map { leaf -> [String: Any] in
           [
-            "id": id(leaf.leaf.id), "title": title(leaf.leaf), "status": leaf.leaf.status?.rawValue ?? NSNull(),
+            "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "status": leaf.leaf.status?.rawValue ?? NSNull(),
             "session": leaf.session?.sessionID ?? NSNull(), "state": leaf.session?.state.rawValue ?? NSNull(),
             "draft": leaf.draft.map { id($0.id) } ?? NSNull(), "previews": leaf.previews.map(\.name),
           ]
@@ -371,7 +372,7 @@ public struct CueTools: Sendable {
       .cue, text: text, choices: args.strings("choices"), urgent: args.bool("urgent") ?? false, task: related?.id)
     let waits = message.choices != nil
     return .ok(
-      (waits ? "已问用户，等他选。" : "已告诉用户。") + "（\(short(message.id))）",
+      (waits ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）",
       ["message": id(message.id), "waiting": waits])
   }
 
@@ -386,7 +387,7 @@ public struct CueTools: Sendable {
       let found = try await store.recallCue(try args.required("query"))
       var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(CueEnvelope.clip(CueFormat.plainText($0.text), 160))" }
-      lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\(title($0))」（\(short($0.id))）" }
+      lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
       return .ok(
         lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"),
         ["lines": found.lines.map(\.index), "messages": found.messages.map { id($0.id) }, "cards": found.cards.map { id($0.id) }])
@@ -411,7 +412,7 @@ public struct CueTools: Sendable {
       return .ok("#\(lo)-\(hi - 1) 合成了一行。", ["lo": lo, "hi": hi])
     case "renew":
       let message = try await store.addCueMessage(.handoff, text: try args.required("handoff"))
-      return .ok("交接备忘写好了，接下来换新上下文。（\(short(message.id))）", ["message": id(message.id)])
+      return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）", ["message": id(message.id)])
     case let other: throw Failure("memory 没有 \(other)：可用 note / recall / forget / pin / remind / merge / renew")
     }
   }
@@ -439,7 +440,7 @@ public struct CueTools: Sendable {
   // MARK: 引用
 
   private func host() async throws -> String {
-    guard let host = try await store.cueProfile()?.hostID else { throw Failure("Cue 还没选住在哪台 Mac，派不了活：请用户在 CuePad 里启用 Cue") }
+    guard let host = try await store.cueProfile()?.activeHost else { throw CueStoreError.cueNotEnabled }
     return host
   }
 
@@ -460,7 +461,7 @@ public struct CueTools: Sendable {
       if hits.count == 1 { return hits[0] }
       if hits.count > 1 { throw Failure("前缀 \(key) 对上了 \(hits.count) 个任务：多写几位") }
     }
-    let named = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { title($0).caseInsensitiveCompare(key) == .orderedSame }
+    let named = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { $0.heading.caseInsensitiveCompare(key) == .orderedSame }
     if named.count == 1 { return named[0] }
     if named.count > 1 { throw Failure("有 \(named.count) 个任务叫「\(key)」：用 id（peek 里有）") }
     throw Failure("找不到任务「\(key)」：用 task peek 看看板上的 id")
@@ -471,8 +472,6 @@ public struct CueTools: Sendable {
     try await store.workingLeaf(of: try await task(ref).id)
   }
 
-  private func title(_ card: Card) -> String { CueEnvelope.title(card) }
-  private func short(_ id: UUID) -> String { CueEnvelope.short(id) }
   private func id(_ id: UUID) -> String { id.uuidString.lowercased() }
   private func iso(_ date: Date) -> String { date.formatted(.iso8601) }
 }

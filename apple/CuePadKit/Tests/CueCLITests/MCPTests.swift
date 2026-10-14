@@ -56,7 +56,10 @@ import Testing
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
-    try await store.updateCueProfile { $0.hostID = "mac-a" }
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
 
@@ -96,6 +99,26 @@ import Testing
     #expect(try await store.cueMemory().lines.map { $0.deletedAt != nil } == [true])
   }
 
+  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，住在哪台 Mac 还留着）。
+  @Test(.timeLimit(.minutes(1))) func aDisabledCueCannotDispatchWork() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("演示")
+    try await store.setDirectory("/tmp/demo", for: project.id)
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = nil
+    }
+    let task = try await store.createTask("跑检查", in: project.id)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    let result = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString]])
+    #expect(result["isError"] as? Bool == true)
+    #expect(try await store.deliveryRequests().isEmpty)
+  }
+
   /// 没给项目建的任务落在未分类：Cue 用 edit 的 project 把它连同步骤与草稿挪进项目，就能开工。
   @Test(.timeLimit(.minutes(1))) func cueMovesAnUnfiledTaskIntoAProject() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
@@ -103,7 +126,10 @@ import Testing
     let store = sandbox.store
     let project = try await sandbox.project("greet")
     try await store.setDirectory("/tmp/greet", for: project.id)
-    try await store.updateCueProfile { $0.hostID = "mac-a" }
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
 

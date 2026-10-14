@@ -171,9 +171,10 @@ final class CueService {
             }
             seen.formUnion(fresh.map(\.id))
             guard duty != nil, pageViewers == 0, !dependencies.timing.quietHours.contains(Calendar.current.component(.hour, from: .now)) else { continue }
-            let name = (try? await store.cueProfile())?.name ?? CueProfile.defaultName
+            let name = (try? await store.cueProfile())?.name
             for message in fresh {
-                await dependencies.notifier.post(id: message.id, title: name, body: CueFormat.plainText(message.text))
+                let alert = CueAlert.content(name: name, text: message.text, choices: message.choices)
+                await dependencies.notifier.post(id: message.id, title: alert.title, body: alert.body)
                 do {
                     try await store.flagCueMessageForPush(message.id)
                 } catch {

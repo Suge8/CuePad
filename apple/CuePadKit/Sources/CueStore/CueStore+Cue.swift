@@ -32,15 +32,24 @@ extension CueStore {
     }
   }
 
-  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 住的那台 Mac 写）。已记过的不改，回答在那之后改过的再记一次。
+  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与"等你"上还没交、或交过之后又改了的回答。
+  private static let toDeliver = """
+    ((author = 'you' AND deliveredAt IS NULL)
+      OR (author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
+    """
+
+  /// 待交给 Cue 的大脑的你的消息与回答（`toDeliver`），从早到晚。
+  public func cueMessagesToDeliver() throws -> [CueMessage] {
+    try select(CueMessage.self, where: Self.toDeliver, orderBy: "createdAt, rowid")
+  }
+
+  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 住的那台 Mac 写）。只记还待交的（`toDeliver`）：已记过的不改，回答在那之后改过的再记一次。
   public func markCueMessagesDelivered(_ ids: [UUID], at time: Date = .now) throws {
     guard !ids.isEmpty else { return }
     try write {
       try db.run(
-        """
-        UPDATE cueMessages SET deliveredAt = ?1, modifiedAt = ?2 WHERE id IN (SELECT value FROM json_each(?3))
-          AND (deliveredAt IS NULL OR (answeredAt IS NOT NULL AND answeredAt > deliveredAt))
-        """, [time, Date.stamp, Self.idList(ids)])
+        "UPDATE cueMessages SET deliveredAt = ?1, modifiedAt = ?2 WHERE id IN (SELECT value FROM json_each(?3)) AND \(Self.toDeliver)",
+        [time, Date.stamp, Self.idList(ids)])
     }
   }
 
@@ -67,18 +76,6 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
-  /// 你说了、还没交给 Cue 的大脑的消息，从早到晚。
-  public func undeliveredCueMessages() throws -> [CueMessage] {
-    try select(CueMessage.self, where: "author = 'you' AND deliveredAt IS NULL", orderBy: "createdAt, rowid")
-  }
-
-  /// "等你"上你的回答还没交给 Cue 的大脑的（没交过，或交过之后改了），从早到晚。
-  public func undeliveredCueAnswers() throws -> [CueMessage] {
-    try select(
-      CueMessage.self, where: "author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)",
-      orderBy: "createdAt, rowid")
-  }
-
   /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：Cue 带选项问的、还没答，
   /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
@@ -98,14 +95,14 @@ extension CueStore {
 extension CueStore {
   private static let lineOrder = "createdAt, id"
 
-  /// 记一条。超过 `CueMemoryLine.maxBytes` 字节或空白的拒绝。返回这一条与它的序号。
+  /// 记一条。记不成一条的（`CueMemoryLine.fits`：空白、超过 `CueMemoryLine.maxBytes` 字节）拒绝。返回这一条与它的序号。
   @discardableResult
   public func noteCueLine(
     _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil
   ) throws -> (line: CueMemoryLine, index: Int) {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
-    guard text.utf8.count <= CueMemoryLine.maxBytes else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
+    guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     return try write {
       let now = Date.stamp
       let line = CueMemoryLine(
@@ -183,13 +180,20 @@ extension CueStore {
     return CueMemory(lines: lines, summaries: valid.map(\.summary))
   }
 
+  /// 记忆的版本读数（`CueMemoryVersion`）：两条聚合，不读行的内容。
+  public func cueMemoryVersion() throws -> CueMemoryVersion {
+    let lines = try db.first("SELECT count(*), MAX(modifiedAt) FROM cueLines") { (Int($0.int(0)), $0.dateOrNil(1)) } ?? (0, nil)
+    let summaries = try db.first("SELECT count(*), MAX(createdAt) FROM cueSummaries") { (Int($0.int(0)), $0.dateOrNil(1)) } ?? (0, nil)
+    return CueMemoryVersion(lines: lines.0, linesModifiedAt: lines.1, summaries: summaries.0, summariesWrittenAt: summaries.1)
+  }
+
   /// 写区间 [lo, hi) 的摘要（覆盖旧的）：对齐的 2 的幂区间（至少两行），行要都在；摘要同一条记忆的长度上限。
   public func setCueSummary(lo: Int, hi: Int, text: String) throws {
     let size = hi - lo
     guard lo >= 0, size >= 2, size & (size - 1) == 0, lo % size == 0 else { throw CueStoreError.invalidSummaryRange }
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
-    guard text.utf8.count <= CueMemoryLine.maxBytes else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
+    guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     try write {
       let lines = try select(CueMemoryLine.self, orderBy: Self.lineOrder, limit: size, offset: lo)
       guard lines.count == size else { throw CueStoreError.invalidSummaryRange }

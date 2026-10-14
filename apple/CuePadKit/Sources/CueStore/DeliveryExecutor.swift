@@ -30,13 +30,8 @@ extension CueStore {
   /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。
   private func takeOver(session: String, at now: Date) throws {
     try db.run(
-      """
-      UPDATE cards SET cueFollows = 0, modifiedAt = ?2 WHERE cueFollows = 1 AND id IN (
-        WITH RECURSIVE up(id, parentID) AS (
-          SELECT id, parentID FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND deletedAt IS NULL
-          UNION SELECT c.id, c.parentID FROM cards c JOIN up ON c.id = up.parentID WHERE c.deletedAt IS NULL)
-        SELECT id FROM up WHERE parentID IS NULL)
-      """, [session, now])
+      "UPDATE cards SET cueFollows = 0, modifiedAt = ?2 WHERE cueFollows = 1 AND parentID IS NULL AND id IN (\(Self.topTasks(ofSession: "?1")))",
+      [session, now])
   }
 
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
