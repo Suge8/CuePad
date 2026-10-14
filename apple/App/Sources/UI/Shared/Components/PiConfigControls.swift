@@ -15,14 +15,21 @@ struct PiModelGroup: Identifiable {
     var provider: PiProvider?
     let items: [Item]
 
+    /// 一项：一个模型，或这一组没有清单时的"默认"（`model` 为 nil）。名字与图标都按模型定，这里一处。
     struct Item: Identifiable {
         let id: String
-        let name: String
-        /// 菜单项的图标；nil 不带。
-        var provider: PiProvider?
+        let model: PiModelOption?
         let checked: Bool
         let choose: () -> Void
+
+        var name: String { model.map(\.displayName) ?? "默认" }
+        var provider: PiProvider? { model.map { PiProvider(id: $0.key.provider) } }
     }
+}
+
+extension PiModelOption {
+    /// 有显示名用显示名，没有用 id。
+    var displayName: String { name.isEmpty ? key.id : name }
 }
 
 
@@ -129,9 +136,9 @@ struct SessionConfigControls: View {
     private var groups: [PiModelGroup] {
         PiModelLabel.groups(session.models).map { group in
             PiModelGroup(id: group.provider.id, provider: group.provider, items: group.models.map { model in
-                PiModelGroup.Item(
-                    id: "\(model.key.provider)/\(model.key.id)", name: model.name.isEmpty ? model.key.id : model.name, provider: group.provider,
-                    checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
+                PiModelGroup.Item(id: "\(model.key.provider)/\(model.key.id)", model: model, checked: shown.model?.key == model.key) {
+                    configure(PiConfig(model: model.key))
+                }
             })
         }
     }

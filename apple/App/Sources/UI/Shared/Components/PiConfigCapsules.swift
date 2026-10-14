@@ -72,7 +72,7 @@ struct PiModelCapsule: View {
     }
 
     private func spoken(at now: Date) -> String {
-        Dotted(current.map { $0.name.isEmpty ? $0.key.id : $0.name } ?? unnamed, binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken
+        Dotted(current?.displayName ?? unnamed, binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。

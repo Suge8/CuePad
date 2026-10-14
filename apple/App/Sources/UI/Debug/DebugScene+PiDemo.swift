@@ -338,7 +338,30 @@ extension DebugScene {
             context: session.context)
     }
 
-    /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
+    /// 演示会话的模型配置（`agent` 为 nil 是 Pi）：Pi 是下面那份；Codex 与 Claude Code 是它们自己报的清单，照录像带里
+    /// Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）与 Claude Code 的 `initialize`（Claude 系），
+    /// 提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
+    static func demoModels(for agent: AgentKind?) -> PiModelState {
+        func listed(_ agent: AgentKind, _ models: [(id: String, name: String)], current: Int, thinking: PiThinkingLevel) -> PiModelState {
+            let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+            let options = models.map { PiModelOption(key: PiModelKey(provider: agent.modelProvider ?? "", id: $0.id), name: $0.name, thinkingLevels: levels) }
+            return PiModelState(model: options[current], thinking: .known(thinking), models: options)
+        }
+        switch agent {
+        case .codex:
+            return listed(.codex, [
+                ("gpt-6.1-sol", "GPT-6.1-Sol"), ("gpt-6-astra", "GPT-6-Astra"), ("gpt-6-sol", "GPT-6-Sol"), ("gpt-6-luna", "GPT-6-Luna"),
+                ("gpt-5.6-terra", "GPT-5.6-Terra"),
+            ], current: 0, thinking: .medium)
+        case .claudeCode:
+            return listed(.claudeCode, [("default", "Default (recommended)"), ("opus", "Opus"), ("fable", "Fable"), ("sonnet", "Sonnet"), ("haiku", "Haiku")],
+                          current: 1, thinking: .high)
+        default:
+            return demoModels
+        }
+    }
+
+    /// Pi 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
     /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
     static let demoModels: PiModelState = {
         func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
@@ -389,8 +412,9 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
-        // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
-        guard (try? await store.piSessionPage(.live).items.isEmpty) == true, let projects = try? await store.projects() else { return }
+        // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
+        // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
+        guard (try? await store.piSessionPage(.live).items.contains { $0.state.hostID == "demo-mac" }) == false, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
@@ -444,7 +468,7 @@ extension DebugScene {
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
