@@ -53,6 +53,30 @@ struct RealHostTests {
         try await eventually("后台进程回答了") { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
+    /// 托管的标记只属于托管的那个 Pi：它起的子进程（Agent 的命令、里面再起的 pi）看不到 CUEPAD_HOSTED，不会也自认托管、空闲到点自己退出；
+    /// 它自己 /reload 后仍是托管的。
+    @Test func theHostedMarkStaysWithTheHostedProcessAndIsNotInheritedByItsChildren() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        let seen = pi.cwd.appending(path: "hosted-env.txt")
+
+        _ = try await bridge.send(PiMessage(text: "[[tool:printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)']] 看环境"), to: resumed.id)
+        try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8)) != nil }
+        #expect(try String(contentsOf: seen, encoding: .utf8) == "unset")
+
+        let log = ChangeLog(bridge)
+        try await bridge.command("/reload", in: resumed.id)
+        try await eventually("重载后重新连上") { !log.ended.isEmpty && bridge.sessions.contains { $0.sessionID == sessionID } }
+        #expect(bridge.sessions.first { $0.sessionID == sessionID }?.hosted == true)
+    }
+
     /// 结束会话：托管的进程被关掉（空闲时与正在跑一轮时一样），会话从桥上消失，是正常退出（bye quit）。
     @Test(arguments: ["", "[[slow]] 正在跑的一轮"])
     func endingAHostedSessionClosesItsProcessEvenMidTurn(prompt: String) async throws {

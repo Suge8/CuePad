@@ -67,9 +67,14 @@ function entriesOnDisk(file: string): number {
 	return fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length - 1;
 }
 /** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，值是空闲多少秒后自己退出（格式见 CuePi README「协议」）；
- * 扩展在 hello 里带回"托管"。 */
+ * 扩展在 hello 里带回"托管"。托管的只是这个进程：读出后存进进程内（/reload 重新载入扩展时还认得出）并从环境里删掉，
+ * 否则 Agent 起的子进程（命令、里面再起的 pi）都继承它，也自认托管、空闲到点自己退出。 */
 const HOSTED_ENV = "CUEPAD_HOSTED";
-const HOSTED_IDLE_SECONDS = Number(process.env[HOSTED_ENV]);
+const HOSTED_KEY = Symbol.for("cuepad.hostedIdleSeconds");
+const processScope = globalThis as { [HOSTED_KEY]?: number };
+processScope[HOSTED_KEY] ??= Number(process.env[HOSTED_ENV]);
+delete process.env[HOSTED_ENV];
+const HOSTED_IDLE_SECONDS = processScope[HOSTED_KEY];
 const IS_HOSTED = Number.isFinite(HOSTED_IDLE_SECONDS) && HOSTED_IDLE_SECONDS > 0;
 /** Pi 的思考强度，由弱到强（pi-ai 的 `ModelThinkingLevel`） */
 const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
