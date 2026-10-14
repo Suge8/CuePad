@@ -336,7 +336,7 @@ struct TaskFlowTests {
     }
 
     private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), now: now, relay: { _ in .idle })
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), now: now, reaches: { _ in true })
     }
 
     private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {

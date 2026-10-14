@@ -7,7 +7,7 @@ extension Workspace {
     /// 跟随 Cue 的现状（窗口根视图调用）。
     func observeCue() async {
         let services = services
-        cue.relay = { host in services.relay(to: host) }
+        cue.reaches = { host in services.reaches(host) }
         do {
             try await cue.follow(services.store)
         } catch is CancellationError {

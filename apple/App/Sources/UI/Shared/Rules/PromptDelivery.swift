@@ -1,5 +1,4 @@
 import CueStore
-import CueSync
 import Foundation
 
 /// 一条提示词发没发出去。提示词是准备发给任务那个 Agent 会话的话：确认送达就用掉了（资料库里删掉，原话在会话里），
@@ -12,19 +11,19 @@ nonisolated enum PromptDelivery: Equatable, Sendable {
     /// 这一条的请求没能送达，带着它与原因。只有它能重发：重发前先撤回它（没被 Mac 领取的，免得 Mac 回来再发一遍）。
     case failed(DeliveryRequest, Speech.Failure)
 
-    /// `handoff` 是它交给的会话（含发给那个会话的最近一条请求）；`launching` 是正为它开新会话；`relay` 给出到那台 Mac 要经过的同步。
-    init(_ prompt: UUID, handoff: PiSessionListItem?, launching: Bool, now: Date, relay: (String) -> SyncStatus?) {
+    /// `handoff` 是它交给的会话（含发给那个会话的最近一条请求）；`launching` 是正为它开新会话；`reaches` 给出到那台 Mac 的同步通不通（`AppServices.reaches`）。
+    init(_ prompt: UUID, handoff: PiSessionListItem?, launching: Bool, now: Date, reaches: (String) -> Bool) {
         if launching { self = .sending; return }
         guard let request = Self.request(of: prompt, handoff: handoff) else { self = .unsent; return }
-        switch Speech.trip(request, now: now, relay: relay(request.hostID)) {
+        switch Speech.trip(request, now: now, reachable: reaches(request.hostID)) {
         case .sending: self = .sending
         case .delivered: self = .unsent
         case .failed(let failure): self = .failed(request, failure)
         }
     }
 
-    init(_ prompt: UUID, agents: AgentLinks, now: Date, relay: (String) -> SyncStatus?) {
-        self.init(prompt, handoff: agents.items[prompt], launching: agents.launching.contains(prompt), now: now, relay: relay)
+    init(_ prompt: UUID, agents: AgentLinks, now: Date, reaches: (String) -> Bool) {
+        self.init(prompt, handoff: agents.items[prompt], launching: agents.launching.contains(prompt), now: now, reaches: reaches)
     }
 
     /// 这一条还在等回执的请求到这一刻算超时。

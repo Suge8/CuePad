@@ -154,15 +154,15 @@ final class AppServices {
         Task { await upload(said.id, deleted: true) }
     }
 
-    /// 到 `host` 那台 Mac 要经过的同步（`Speech` 判断超时原因用）：本机就是那台 Mac 时为 nil（不经同步）。
-    func relay(to host: String?) -> SyncStatus? {
+    /// 到 `host` 那台 Mac 的同步此刻通不通（`Speech` 判断超时原因的输入）：本机就是那台 Mac 时不经同步，算通。
+    func reaches(_ host: String?) -> Bool {
         #if os(macOS)
-        if host == nil || host == hostID { return nil }
+        if host == nil || host == hostID { return true }
         #else
         // 演示 Mac 就在本机库里接手，不经同步
-        if DebugHooks.preset.demoMac { return nil }
+        if DebugHooks.preset.demoMac { return true }
         #endif
-        return syncStatus
+        return syncStatus.reachesMac
     }
 
     /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
@@ -194,14 +194,14 @@ final class AppServices {
     }
 
     /// 换会话的模型或思考强度：写一条配置请求给会话所在的 Mac（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
-    /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `outcome(of:)` 等。
+    /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `CueStore.outcome(of:)` 等。
     func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestConfig(
             config, to: session.target, on: session.hostID))
     }
 
     /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
-    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `outcome(of:)` 等。
+    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `CueStore.outcome(of:)` 等。
     func end(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestEnd(
             of: session.target, on: session.hostID))
@@ -209,7 +209,7 @@ final class AppServices {
 
     /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc；与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
     /// 会话随后回到等你下一句（状态记录里是"完成"，被中止）；只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
-    /// 结果用 `outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
+    /// 结果用 `CueStore.outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
     func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestStop(
             of: session.target, on: session.hostID))
@@ -224,7 +224,7 @@ final class AppServices {
     }
 
     /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定），
-    /// 与发送同一条投送通道，写出后立即上传。结果用 `outcome(of:)`；绑好后目录绑定记录随同步回来。
+    /// 与发送同一条投送通道，写出后立即上传。结果用 `CueStore.outcome(of:)`；绑好后目录绑定记录随同步回来。
     func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
@@ -232,15 +232,6 @@ final class AppServices {
     /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用），写出后立即上传。
     func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestTranscript(of: session))
-    }
-
-    /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
-    func outcome(of request: UUID) async throws -> DeliveryRequest {
-        for try await current in store.observe({ try $0.deliveryRequest(request) }) {
-            guard let current else { throw CueStoreError.notFound }
-            if !current.isOpen { return current }
-        }
-        throw CancellationError()
     }
 
     /// 连接测试一次往返的分段。`upload`（写库完成 → 上传完成）与 `total`（开始写库 → 看到结果）用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
@@ -292,7 +283,7 @@ final class AppServices {
     ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
         try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
             group.addTask {
-                let done = try await self.outcome(of: request)
+                let done = try await self.store.outcome(of: request)
                 return (done, (ContinuousClock.now, Date()))
             }
             group.addTask {

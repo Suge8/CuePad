@@ -1,4 +1,5 @@
 import CueStore
+import CueSync
 import CueText
 import SwiftUI
 
@@ -204,7 +205,7 @@ struct SpeechBubble<Menu: View>: View {
     @State private var now = Date.now
 
     var body: some View {
-        let trip = said.trip(now: now, relay: services.relay(to: said.host))
+        let trip = said.trip(now: now, reachable: services.reaches(said.host))
         VStack(alignment: .trailing, spacing: 6) {
             UserBubble(stored: said.content, trip: trip.bubble, fromCue: fromCue) { menu(trip) }
             status(trip).font(Typography.caption)
@@ -227,7 +228,7 @@ struct SpeechBubble<Menu: View>: View {
             }
         case .failed(let failure):
             HStack(spacing: 10) {
-                Text(failure.text).foregroundStyle(palette.failure).lineLimit(2)
+                Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure).lineLimit(2)
                 Button("移除", role: .destructive, action: remove)
                     .foregroundStyle(palette.ink2).buttonStyle(.plain)
                     .frame(minHeight: 44).contentShape(.rect)
@@ -264,11 +265,11 @@ extension Speech.Trip {
 }
 
 extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（同步状态那套说法）与 Mac 没有回应。
-    var text: String {
+    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 没有回应。
+    func text(sync: SyncStatus) -> String {
         switch self {
         case .reported(let reason): reason
-        case .offline(let status): "\(SyncSummary(status).title)，发不到 Mac"
+        case .offline: "\(SyncSummary(sync).title)，发不到 Mac"
         case .noReply: "Mac 没有回应：它可能睡着了，或没开 CuePad"
         }
     }

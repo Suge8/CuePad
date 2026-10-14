@@ -181,8 +181,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时直接发送会被拒绝，只能等它做完再说（默认，不打断）或马上说（次级，
-  /// 只给做得到的会话，见 `AgentCapabilities.steer`）。已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
+  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时让你选等它做完再说（默认，不打断）或马上说（次级，只给做得到的会话，
+  /// 见 `AgentCapabilities.steer`）——要不要打断是你的意图，记录推不出来；没在跑时直接发送（执行时撞上会话刚开始一轮也按等它做完再说送达）。
+  /// 已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
   public var deliveryModes: [DeliveryMode] {
     guard state.known?.isTurnRunning == true else { return [.send] }
     return capabilities.contains(.steer) ? [.followUp, .steer] : [.followUp]

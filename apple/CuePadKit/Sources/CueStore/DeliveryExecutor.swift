@@ -123,6 +123,16 @@ extension CueStore {
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
 
+  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+  public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {
+    for try await current in observe({ try $0.deliveryRequest(request) }) {
+      guard let current else { throw CueStoreError.notFound }
+      if !current.isOpen { return current }
+    }
+    throw CancellationError()
+  }
+
   /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
   public func deliveryRequests(toSession sessionID: String) throws -> [DeliveryRequest] {
     try select(

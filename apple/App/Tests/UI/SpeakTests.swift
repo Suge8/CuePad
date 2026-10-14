@@ -32,8 +32,8 @@ struct SpeakTests {
         try await store.cueMessages().filter { $0.author == .known(.you) }
     }
 
-    private func presence(at now: Date, relay: SyncStatus?) async throws -> CuePresence {
-        CuePresence.derive(try await CueDigest.read(from: store), now: now, relay: relay)
+    private func presence(at now: Date, reachable: Bool = true) async throws -> CuePresence {
+        CuePresence.derive(try await CueDigest.read(from: store), now: now, reachable: reachable)
     }
 
     /// 让这张表的写入失败（磁盘满、库坏了一类的写库失败）。
@@ -61,12 +61,12 @@ struct SpeakTests {
         let message = try #require(said.first)
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
-        #expect(Said.cue(message, host: "mac-cue").trip(now: .now, relay: .idle) == .sending)
-        #expect(try await presence(at: .now, relay: .idle) == .sending)  // Cue 页头与气泡同一个"在路上"
+        #expect(Said.cue(message, host: "mac-cue").trip(now: .now, reachable: true) == .sending)
+        #expect(try await presence(at: .now, reachable: true) == .sending)  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
-        #expect(Said.cue(delivered, host: "mac-cue").trip(now: .now, relay: .idle) == .delivered)
+        #expect(Said.cue(delivered, host: "mac-cue").trip(now: .now, reachable: true) == .delivered)
     }
 
     /// 回执晚到但在时限内：一直是发送中，Cue 也是话在路上、不在睡觉；过了时限同步通着是 Mac 没有回应、Cue 在睡觉；
@@ -81,20 +81,20 @@ struct SpeakTests {
         let inTime = message.createdAt.addingTimeInterval(Speech.receiptLimit - 1)
         let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
 
-        #expect(said.trip(now: inTime, relay: .idle) == .sending)
-        #expect(try await presence(at: inTime, relay: .idle) == .sending)
+        #expect(said.trip(now: inTime, reachable: true) == .sending)
+        #expect(try await presence(at: inTime, reachable: true) == .sending)
 
-        #expect(said.trip(now: late, relay: .idle) == .failed(.noReply))
-        #expect(try await presence(at: late, relay: .idle) == .asleep)
+        #expect(said.trip(now: late, reachable: true) == .failed(.noReply))
+        #expect(try await presence(at: late, reachable: true) == .asleep)
         #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
 
-        #expect(said.trip(now: late, relay: .noAccount) == .failed(.offline(.noAccount)))
-        #expect(try await presence(at: late, relay: .noAccount) == .idle)
+        #expect(said.trip(now: late, reachable: false) == .failed(.offline))
+        #expect(try await presence(at: late, reachable: false) == .idle)
 
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
-        #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(now: late, relay: .idle) == .delivered)
-        #expect(try await presence(at: late, relay: .idle) == .working(.thinking, detail: nil))
+        #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(now: late, reachable: true) == .delivered)
+        #expect(try await presence(at: late, reachable: true) == .working(.thinking, detail: nil))
     }
 
     @Test func 对Cue说_没能送达后重发_撤回旧的写一条同样的_交出去的撤不回也不重发() async throws {
@@ -171,13 +171,13 @@ struct SpeakTests {
         #expect(requests.map(\.content) == ["把断言也改了"] && requests.first?.hostID == "mac-b")
         let request = try #require(requests.first)
         #expect(PiChat.outgoing(requests, messages: []).map(\.id) == [request.id])
-        #expect(Said.request(request).trip(now: .now, relay: .idle) == .sending)
+        #expect(Said.request(request).trip(now: .now, reachable: true) == .sending)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
         let done = try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0?.isOpen == false }
         await executor.stop()
-        #expect(Said.request(try #require(done)).trip(now: .now, relay: .idle) == .delivered)
+        #expect(Said.request(try #require(done)).trip(now: .now, reachable: true) == .delivered)
     }
 
     /// Mac 报的失败写它的原因；没被领取、过了时限是 Mac 没有回应（领取了在执行的不算超时）；重发撤回旧的、写同样内容与方式的新的。
@@ -193,7 +193,7 @@ struct SpeakTests {
         try await executor.start()
         let failed = try #require(try await eventually(store, { try $0.deliveryRequest(lost.id) }) { $0?.isOpen == false })
         await executor.stop()
-        #expect(Said.request(failed).trip(now: .now, relay: .idle) == .failed(.reported("Pi 已经退出")))
+        #expect(Said.request(failed).trip(now: .now, reachable: true) == .failed(.reported("Pi 已经退出")))
 
         workspace.resend(.request(failed), restoringInto: box)
         let retried = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != lost.id }
@@ -202,12 +202,12 @@ struct SpeakTests {
 
         // Mac 一直没领取：过了时限是 Mac 没有回应，本机同步不通时写同步的原因
         let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Said.request(retried[0]).trip(now: late, relay: .idle) == .failed(.noReply))
-        #expect(Said.request(retried[0]).trip(now: late, relay: .noAccount) == .failed(.offline(.noAccount)))
+        #expect(Said.request(retried[0]).trip(now: late, reachable: true) == .failed(.noReply))
+        #expect(Said.request(retried[0]).trip(now: late, reachable: false) == .failed(.offline))
         // 领取了在执行（如正在唤醒已结束的会话）：还是发送中
         var claimed = retried[0]
         claimed.status = .known(.executing)
-        #expect(Said.request(claimed).trip(now: late, relay: .idle) == .sending)
+        #expect(Said.request(claimed).trip(now: late, reachable: true) == .sending)
 
         workspace.resend(.request(retried[0]), restoringInto: box)
         let again = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != retried[0].id }

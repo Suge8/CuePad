@@ -35,7 +35,7 @@ struct PromptList: View {
             }
             ForEach(prompts) { prompt in
                 PromptCard(
-                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents, now: now, relay: { services.relay(to: $0) }),
+                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents, now: now, reaches: { services.reaches($0) }),
                     primary: prompt.id == primary, open: { open(prompt) },
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -167,7 +167,7 @@ struct PromptCard: View {
             }
             .font(TaskMetrics.caption)
         case .failed(_, let failure):
-            Text(failure.text).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
+            Text(failure.text(sync: workspace.services.syncStatus)).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
         }
     }
 }

@@ -5,8 +5,6 @@ nonisolated enum SendError: Error, Equatable {
     case imageUnavailable(String)
     /// 目标只收文字，而正文含图片。
     case imagesNotSupported
-    /// Pi 会话正在工作，且调用方没有指定马上说还是等它做完再说。
-    case piSessionBusy
     /// 手机指定的 Pi 会话已结束，或不在这台 Mac 上。
     case sessionNotOnThisMac(String)
     /// 这台 Mac 不支持的投送目标（来自更新版本或缺少必要信息）。
@@ -41,7 +39,6 @@ extension SendError: LocalizedError {
         switch self {
         case .imageUnavailable: "正文里有图片找不到了，无法发送"
         case .imagesNotSupported: "这个目标只能接收文字，请先移除图片"
-        case .piSessionBusy: "Agent 会话正在工作，请选择马上说或等它做完再说"
         case .sessionNotOnThisMac(let name): "Agent 会话「\(name)」已经结束，或不在这台 Mac 上"
         case .unsupportedTarget(let name): "这台 Mac 不支持发送到「\(name)」"
         case .unsupportedMode(let raw): "这台 Mac 上的 CuePad 不认识这种发送方式（\(raw)），请更新"

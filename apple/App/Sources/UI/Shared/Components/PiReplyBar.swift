@@ -286,7 +286,7 @@ struct PiReplyBar: View {
         let session = session
         workspace.attempt {
             let request = try await services.stop(session)
-            if let failure = try await services.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
+            if let failure = try await services.store.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
         }
     }
 

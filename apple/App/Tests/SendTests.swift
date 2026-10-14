@@ -71,6 +71,18 @@ struct SendTests {
         #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
     }
 
+    /// 回复框看到会话歇着、写了直接发送，Mac 执行时会话已经开始了一轮（库里的记录过时）：不报错，按等它做完再说送达
+    /// （桥缺省就是等它做完再说），会话页那句是已送达。
+    @Test func 直接发送时会话刚忙起来_按等它做完再说送达() async throws {
+        let ext = try await connectedSession(busy: true)
+        let session = try #require(services.pi.session(sessionID: ext.sessionID))
+        _ = await Workspace(services: services).speak("hi", to: .session(session.sendTarget, host: TestApp.hostID, mode: .send, card: nil)).value
+
+        let request = try await settled()
+        #expect(Said.request(request).trip(now: .now, reachable: true) == .delivered)
+        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: nil, deliveryID: request.id.uuidString)])
+    }
+
     /// 桥上没有、记录里也不在线的会话当作已结束：写给本机，由执行器去唤醒；这台 Mac 上没有它的会话文件就带原因没能送达，不记发送。
     @Test func 不在这台Mac上的会话_没能送达带原因且不记发送() async throws {
         try await services.executor.start()

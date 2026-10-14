@@ -1,5 +1,4 @@
 import CueStore
-import CueSync
 import CueText
 import Foundation
 
@@ -21,11 +20,11 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 管理器起不来：参数是给你看的原因。
     case unreachable(String)
 
-    /// `relay`：到 Cue 住的那台 Mac 要经过的同步（`AppServices.relay`）。
-    static func derive(_ digest: CueDigest, now: Date, relay: SyncStatus?) -> CuePresence {
+    /// `reachable`：到 Cue 住的那台 Mac 的同步通不通（`AppServices.reaches`）。
+    static func derive(_ digest: CueDigest, now: Date, reachable: Bool) -> CuePresence {
         guard digest.enabled else { return .disabled }
         if let pending = digest.pendingYou {
-            switch Speech.trip(said: pending.at, delivered: pending.deliveredAt, now: now, relay: relay) {
+            switch Speech.trip(said: pending.at, delivered: pending.deliveredAt, now: now, reachable: reachable) {
             case .sending: return .sending
             case .failed(.noReply): return .asleep
             case .delivered, .failed: break
@@ -142,7 +141,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
 nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按写快照这一刻由库推出的状态定（小组件里没有到点翻状态的计时，同步状态也不在这里，按通着算）。
     init(digest: CueDigest) {
-        let mood = CueMood.of(CuePresence.derive(digest, now: .now, relay: nil), waiting: digest.waiting.count, justDone: digest.lastSaidDone)
+        let mood = CueMood.of(CuePresence.derive(digest, now: .now, reachable: true), waiting: digest.waiting.count, justDone: digest.lastSaidDone)
         self.init(name: digest.name, waiting: digest.waiting.count, lastSaid: digest.lastSaid, mood: mood.rawValue)
     }
 }

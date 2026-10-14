@@ -1,5 +1,4 @@
 import CueStore
-import CueSync
 import Foundation
 import Observation
 
@@ -10,8 +9,8 @@ final class CueWatch {
     private(set) var digest = CueDigest.empty
     /// 推 Cue 在不在用的"此刻"：你最近一句变了、或它等回执到点时刷新。
     private(set) var now = Date.now
-    /// 到 Cue 住的那台 Mac 要经过的同步（`AppServices.relay`，`Workspace.observeCue` 接上）。
-    @ObservationIgnored var relay: (String?) -> SyncStatus? = { _ in nil }
+    /// 到 Cue 住的那台 Mac 的同步通不通（`AppServices.reaches`，`Workspace.observeCue` 接上）。
+    @ObservationIgnored var reaches: (String?) -> Bool = { _ in true }
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
@@ -22,7 +21,7 @@ final class CueWatch {
     #endif
     @ObservationIgnored private var deadline: Task<Void, Never>?
 
-    var presence: CuePresence { CuePresence.derive(digest, now: now, relay: relay(digest.hostID)) }
+    var presence: CuePresence { CuePresence.derive(digest, now: now, reachable: reaches(digest.hostID)) }
     var name: String { digest.name }
     /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。
     var canHear: Bool { presence != .disabled }
