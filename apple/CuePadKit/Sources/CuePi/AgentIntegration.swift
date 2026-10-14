@@ -245,12 +245,16 @@ public struct AgentIntegration: Sendable {
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
     }
 
-    /// 运行并取标准输出；超时或无法启动返回 nil。
+    /// 运行并取标准输出；超时或无法启动返回 nil。数据目录给一个用完即删的临时目录：OpenCode 每次运行（`--version` 也是）都往
+    /// `$XDG_DATA_HOME/opencode/log` 写日志，不能写进用户的。不运行就读出版本的办法没有通用的：npm 包有 package.json，
+    /// Homebrew 与官方脚本装的是裸可执行文件，v2 的里面嵌着版本、v1 的没有同样的标记。
     private static func capture(_ executable: URL, _ arguments: [String], locator: ExecutableLocator, timeout: Duration = .seconds(10)) async -> String? {
+        let scratch = FileManager.default.temporaryDirectory.appending(path: "cuepad-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: scratch) }
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
-        process.environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1"])
+        process.environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         return await runCapturing(process, timeout: timeout)?.output

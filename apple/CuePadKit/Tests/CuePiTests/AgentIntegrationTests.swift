@@ -141,6 +141,25 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: .opencode) == AgentStatus(presence: .found(AgentVersion(2, 0, 25)), files: .current))
     }
 
+    /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
+    /// 检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
+    @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {
+        let record = root.appending(path: "data-home.txt")
+        let script = bin.appending(path: "opencode")
+        try """
+        #!/bin/sh
+        printf '%s' "${XDG_DATA_HOME-unset}" > '\(record.path)'
+        if [ -n "$XDG_DATA_HOME" ]; then mkdir -p "$XDG_DATA_HOME/opencode/log" && echo started >> "$XDG_DATA_HOME/opencode/log/opencode.log"; fi
+        echo 'opencode v2.0.29'
+        """.write(to: script, atomically: true, encoding: .utf8)
+        chmod(script.path, 0o755)
+
+        #expect(await integration().status(of: .opencode).presence == .found(AgentVersion(2, 0, 29)))
+        let dataHome = try String(contentsOf: record, encoding: .utf8)
+        #expect(dataHome != "unset" && !dataHome.isEmpty, "给了它数据目录，不落到用户的 ~/.local/share")
+        #expect(!FileManager.default.fileExists(atPath: dataHome), "临时数据目录用完删掉")
+    }
+
     /// 用户自己的同名技能或扩展不覆盖、不删除；Pi 的两样一起拒绝。
     @Test func foreignFilesWithTheSameNameAreNeverTouched() async throws {
         try installAll()
