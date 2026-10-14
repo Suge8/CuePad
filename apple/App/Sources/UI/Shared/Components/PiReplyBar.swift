@@ -18,6 +18,8 @@ struct PiReplyBar: View {
     let session: PiSessionState
     /// 模型与思考强度的显示值（在线会话放在工具排"＋"的右边）。
     let config: PiConfigShown?
+    /// 可换的模型与能用的斜杠命令（`SessionDigest.catalog`）。
+    let catalog: AgentCatalog?
     /// 在看历史：收成短胶囊（只有手机这样）。
     var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
@@ -51,7 +53,7 @@ struct PiReplyBar: View {
 
     /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。
     private var hasTools: Bool {
-        config != nil && session.capabilities.contains(.model) && session.state != .known(.ended) && !session.models.isEmpty
+        config != nil && session.capabilities.contains(.model) && session.state != .known(.ended) && !models.isEmpty
     }
 
     private var form: ComposerForm {
@@ -62,6 +64,8 @@ struct PiReplyBar: View {
         #endif
     }
 
+    private var models: [PiModelOption] { catalog?.models ?? [] }
+
     private var reply: PiReply { MacDelivery.reply(to: session) }
 
     private var answering: PiQuestion? {
@@ -70,7 +74,7 @@ struct PiReplyBar: View {
 
     private var accepts: ComposerKinds { answering == nil ? session.composerKinds : [] }
     /// 输入 "/" 时弹出的命令（作答时不弹）。
-    private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands : [] }
+    private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && reachable && !sending }
@@ -114,7 +118,7 @@ struct PiReplyBar: View {
                     }
                 },
                 tools: {
-                    if hasTools, let config { PiConfigControls(session: session, shown: config, opening: $opening) }
+                    if hasTools, let config { PiConfigControls(session: session, models: models, shown: config, opening: $opening) }
                 },
                 send: { sendControl }
             )

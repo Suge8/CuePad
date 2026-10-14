@@ -126,8 +126,13 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 35：撤掉 36（本机的会话进程表）。
-  static let undoSchema36 = "DROP TABLE piProcesses;"
+  /// 把新建的库退回结构 36：撤掉 37（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema37 = """
+    DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
+    ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
+    """
+  /// 退回结构 35：再撤掉 36（承载会话的进程）。
+  static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
   static let undoSchema35 = undoSchema36 + "DROP TABLE cueState;"
   /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。
@@ -145,6 +150,19 @@ import Testing
   static let undoSchema31 = undoSchema32 + "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent;"
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
+
+  /// 结构 36 的库升到 37：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
+  @Test func schema36LibraryMovesModelListsOffSessionRecords() async throws {
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
+    try RawDB(fixture.url).exec(Self.undoSchema37 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 36;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
+    let compact = PiSlashCommand(name: "compact", summary: nil, source: .known(.builtin))
+    try await PiStateRecorder(store: upgraded, hostID: "mac").update(sessionID: "s1", state: .settled, directory: "/w", commands: [compact])
+    let catalog = try #require(try await upgraded.allPiSessionStates().first?.catalogID)
+    #expect(try await upgraded.agentCatalog(catalog)?.commands == [compact])
+  }
 
   /// 结构 32 的库升到 33：已有的消息原样都在（都不是验收），之后写的验收带着标记，答"收下"完成任务。
   @Test func schema32LibraryUpgradesForAcceptance() async throws {

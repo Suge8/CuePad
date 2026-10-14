@@ -14,6 +14,8 @@ enum PiConfigPick { case model, thinking }
 /// （原因由调用方写在输入框头部）。只给在线会话（已结束的不为换模型去唤醒 Pi），由调用方决定放不放。减弱动态效果时没有流光与呼吸。
 struct PiConfigControls: View {
     let session: PiSessionState
+    /// 可以换成的模型（`AgentCatalog.models`）。
+    let models: [PiModelOption]
     let shown: PiConfigShown
     /// 键盘请弹出的菜单（Mac）：弹出后清掉。
     var opening: Binding<PiConfigPick?> = .constant(nil)
@@ -61,12 +63,12 @@ struct PiConfigControls: View {
 
     private var modelCapsule: some View {
         #if os(macOS)
-        PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
+        PiModelCapsule(models: models, current: shown.model, pending: shown.pending,
                        maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items,
                        choose: { configure(PiConfig(model: $0)) }, pick: { open(.model) })
             .popUpAnchor(anchors[.model])
         #else
-        PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
+        PiModelCapsule(models: models, current: shown.model, pending: shown.pending,
                        maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items) {
             configure(PiConfig(model: $0))
         }

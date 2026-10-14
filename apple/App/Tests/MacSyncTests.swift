@@ -134,9 +134,11 @@ struct MacSyncTests {
         #expect(stored.sessionID == "s1" && stored.hostID == TestApp.hostID)
         #expect(stored.stateSince == started && stored.busySince == started)
         #expect(stored.subagents == subagents)
-        #expect(stored.model == opus && stored.thinking == .unknown("ultra") && stored.models.map(\.key.id) == ["sonnet", "opus"])
+        #expect(stored.model == opus && stored.thinking == .unknown("ultra"))
         #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
-        #expect(stored.commands == commands)
+        let catalogID = try #require(stored.catalogID)
+        let catalog = try #require(try await services.store.agentCatalog(catalogID))
+        #expect(catalog.models.map(\.key.id) == ["sonnet", "opus"] && catalog.commands == commands)
         #expect(stored.question == question)
         #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-1")).items.map(\.state.sessionID) == ["s1"])
     }

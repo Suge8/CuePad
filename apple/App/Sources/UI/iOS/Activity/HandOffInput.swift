@@ -15,7 +15,8 @@ struct HandOffInput: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var draft = ComposerDraft()
-    @State private var configs: [UUID: PiConfigShown]?
+    /// 在线会话各自的模型显示值与可换的模型、命令（按会话记录 id）。
+    @State private var digests: [UUID: SessionDigest]?
     @State private var choice: UUID?
     @State private var planned: Planned?
     @State private var sending = false
@@ -42,13 +43,15 @@ struct HandOffInput: View {
     }
     private var canSend: Bool { services.reachesPiHost && !sending && planned != nil }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
-    private var config: PiConfigShown? { chosen.flatMap { configs?[$0.state.id] } }
+    private var config: PiConfigShown? { chosen.flatMap { digests?[$0.state.id]?.config } }
+    private var catalog: AgentCatalog? { chosen.flatMap { digests?[$0.state.id]?.catalog } }
+    private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card,
-            commands: chosen?.state.usableCommands ?? [],
+            commands: commands,
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if !services.reachesPiHost {
@@ -61,8 +64,8 @@ struct HandOffInput: View {
                 }
             },
             tools: {
-                if let session = chosen?.state, let config, session.capabilities.contains(.model), !session.models.isEmpty {
-                    PiConfigControls(session: session, shown: config)
+                if let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty {
+                    PiConfigControls(session: session, models: models, shown: config)
                 }
             },
             send: {
@@ -81,14 +84,15 @@ struct HandOffInput: View {
             guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan) }
             return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true))
         }
-        // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
-        .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
-            var configs: [UUID: PiConfigShown] = [:]
+        // 改模型、思考强度的请求与目录记录不在会话列表那一页里：按在线会话读各自的（会话变了就带着新的会话状态重读）
+        .observing(services.store, id: services.liveSessions.live, into: $digests, onError: workspace.fail) { [live = services.liveSessions.live] store in
+            var digests: [UUID: SessionDigest] = [:]
             for item in live {
-                let deliveries = try store.deliveryRequests(toSession: item.state.sessionID)
-                configs[item.state.id] = SessionDigest(session: item.state, project: nil, deliveries: deliveries).config
+                digests[item.state.id] = SessionDigest(
+                    session: item.state, project: nil, deliveries: try store.deliveryRequests(toSession: item.state.sessionID),
+                    catalog: try item.state.catalogID.flatMap { try store.agentCatalog($0) })
             }
-            return configs
+            return digests
         }
     }
 
@@ -125,7 +129,7 @@ struct HandOffInput: View {
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, workspace: workspace, navigation: navigation)
         }
         let sent = draft.accepting(session.composerKinds), mode = session.deliveryModes[0]
-        let line = PiSlash.line(of: sent, in: session.usableCommands)
+        let line = PiSlash.line(of: sent, in: commands)
         sending = true
         workspace.attempt {
             defer { sending = false }

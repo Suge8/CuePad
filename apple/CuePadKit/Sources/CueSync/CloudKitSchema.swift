@@ -16,6 +16,8 @@ enum CloudKitSchema {
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
     "piMessages": [("toolCount", "INT64")],
+    // 可换的模型与斜杠命令拆进了 agentCatalogs
+    "piSessionStates": [("models", "ENCRYPTED STRING"), ("commands", "ENCRYPTED STRING")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),

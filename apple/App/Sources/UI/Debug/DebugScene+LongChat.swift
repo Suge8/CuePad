@@ -15,7 +15,7 @@ extension DebugScene {
 
     static func seedLongChat(_ store: CueStore, project: UUID?) async {
         try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
-            sessionID: longChat, state: .settled, title: longChat, folder: longChat, projectID: project)
+            sessionID: longChat, state: .settled, title: longChat, directory: longChat, projectID: project)
         let start = Date.now.addingTimeInterval(-Double(longChatRounds) * 240)
         let turns = (0..<longChatRounds).map { round in
             let asked = start.addingTimeInterval(Double(round) * 240)
@@ -29,7 +29,7 @@ extension DebugScene {
         guard let session = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
         let recorder = PiStateRecorder(store: store, hostID: session.hostID)
         func set(_ state: PiWorkState) async {
-            try? await recorder.update(sessionID: sessionID, state: state, title: session.title, folder: session.folder, projectID: session.projectID)
+            try? await recorder.update(sessionID: sessionID, state: state, title: session.title, directory: session.folder, projectID: session.projectID)
         }
         for round in 0..<rounds {
             try? await Task.sleep(for: .seconds(2))

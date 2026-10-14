@@ -53,7 +53,7 @@ extension AppServices {
     private func recordPiState(of session: CuePi.PiSession) async throws {
         let alert = try await piStateRecorder.update(
             sessionID: session.sessionID, state: session.state, detail: session.detail, title: session.displayName,
-            folder: CueStore.folderName(ofWorkingDirectory: session.cwd.path(percentEncoded: false)),
+            directory: session.cwd.path(percentEncoded: false),
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,

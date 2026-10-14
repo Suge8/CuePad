@@ -57,7 +57,7 @@ struct SendTargetTests {
     /// 别的 Mac 上在线的会话（同步记录里 hostID 不是本机）。
     private func remoteSession(_ id: String, title: String, state: PiWorkState = .settled) async throws {
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
-            sessionID: id, state: state, title: title, folder: title, projectID: project.id)
+            sessionID: id, state: state, title: title, directory: title, projectID: project.id)
     }
 
     @Test func 没绑会话的叶子_交出时在项目文件夹开以任务命名的新会话并绑上_草稿用掉() async throws {
@@ -231,7 +231,7 @@ struct SendTargetTests {
         _ = try await open("a", in: "/work/alpha")
         try await remoteSession("r", title: "atlas")
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
-            sessionID: "stale", state: .settled, title: "stale", folder: "stale", projectID: project.id)
+            sessionID: "stale", state: .settled, title: "stale", directory: "stale", projectID: project.id)
         try await eventually("liveSessions.live 有三条") { rig.services.liveSessions.live.count == 3 }
 
         #expect(Set(workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID)) == ["a", "r"])
