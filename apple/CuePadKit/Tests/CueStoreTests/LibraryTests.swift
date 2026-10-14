@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 31：撤掉 32（Cue）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
-  static let undoSchema32 = """
+  /// 把新建的库退回结构 32：撤掉 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
+  static let undoSchema33 = "ALTER TABLE cueMessages DROP COLUMN acceptance;"
+  /// 退回结构 31：再撤掉 32（Cue）。
+  static let undoSchema32 = undoSchema33 + """
     DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
@@ -137,6 +139,20 @@ import Testing
   static let undoSchema31 = undoSchema32 + "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent;"
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
+
+  /// 结构 32 的库升到 33：还没答的验收（那时按选项文字认）补上标记，答"收下"照样完成任务；选项碰巧相同的、没关联任务的问题不算。
+  @Test func schema32LibraryMarksPendingAcceptances() async throws {
+    let task = try await store.createTask("发布", in: nil)
+    let asked = try await store.askToAccept(task.id, evidence: "- 测试全过").message
+    let other = try await store.addCueMessage(.cue, text: "先收下草稿？", choices: CueAcceptance.choices)
+    try RawDB(fixture.url).exec(Self.undoSchema33 + "PRAGMA user_version = 32;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    let messages = try await upgraded.cueMessages()
+    #expect(messages.first { $0.id == asked.id }?.isAcceptance == true && messages.first { $0.id == other.id }?.isAcceptance == false)
+    try await upgraded.answerCueMessage(asked.id, answer: CueAcceptance.accept)
+    #expect(try await upgraded.card(task.id)?.status == .done)
+  }
 
   /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
   @Test func schema31LibraryUpgradesForCue() async throws {

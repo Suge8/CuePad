@@ -37,7 +37,7 @@ public struct CueTools: Sendable {
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成，会话留给下一步；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
+          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成（还有下一步时会话留着）；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
           """,
         "inputSchema": schema(
           [
@@ -133,8 +133,7 @@ public struct CueTools: Sendable {
     _ = try await host()  // 停用后不能再收尾
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
     guard card.parentID == nil, args.bool("accepted") != true else {
-      // 步骤收尾不结束会话：同一任务的下一步接着用，你收下整件事时一起结束
-      let ends = try await store.completeTask(card.id, requireStepsDone: true, endsSessions: card.parentID == nil, cue: true)
+      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
       return .ok(
         "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
         ["task": id(card.id), "requests": ends.map { id($0.id) }])

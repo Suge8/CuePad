@@ -286,8 +286,8 @@ import Testing
     #expect(changes.first?.taskID == task.id)
   }
 
-  /// 分步做一件事：上一步收尾不结束会话，下一步开工接着用它——绑上、草稿作为下一句发进去，不开新会话；
-  /// 你收下整件事时，这个会话按做完了的规则结束。
+  /// 分步做一件事：上一步收尾、还有没做完的步骤时不结束会话，下一步开工接着用它——绑上、草稿作为下一句发进去，不开新会话；
+  /// 最后一步做完，会话按做完了的规则结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
   @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -317,12 +317,45 @@ import Testing
     #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
     #expect(sent.first?.content == "照调研结论改 release.sh")
 
+    // 最后一步做完：没有没做完的步骤了，会话按做完了的规则结束；收下时不再请第二次
+    let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) }
     _ = try await server.call("task", ["action": "done", "task": second.id.uuidString, "evidence": "- 改好了"])
+    #expect(try await ends() == ["s1"])
     _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 两步都做完了"])
-    #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
     let asked = try #require(try await store.cueMessagesWaitingForYou().first)
     try await store.answerCueMessage(asked.id, answer: CueAcceptance.accept)
-    #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) == ["s1"])
+    #expect(try await ends() == ["s1"])
+  }
+
+  /// 验收由消息上的标记认，选项文字只用来显示：Cue 用 tell 问的、选项碰巧也是"收下 / 再改改"的问题不是验收——
+  /// 答"收下"不完成任务，返工不作废它，收尾照样另写一条验收。
+  @Test(.timeLimit(.minutes(1))) func acceptanceIsMarkedNotGuessedFromItsChoices() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let task = try await store.createTask("加语言参数", in: nil)
+    try await store.setCueFollows(task.id, true)
+    try await store.linkCard(task.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    _ = try await server.call("tell", ["text": "README 写好了，先收下这部分？", "choices": CueAcceptance.choices, "task": task.id.uuidString])
+    let lookalike = try #require(try await store.cueMessagesWaitingForYou().first)
+    _ = try await server.call("task", ["action": "say", "task": task.id.uuidString, "text": "接着写用例"])
+    #expect(try await store.cueMessagesWaitingForYou().map(\.id) == [lookalike.id])
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 用例写好了"])
+    let waiting = try await store.cueMessagesWaitingForYou()
+    #expect(waiting.count == 2 && waiting.filter(\.isAcceptance).count == 1 && !lookalike.isAcceptance)
+
+    try await store.answerCueMessage(lookalike.id, answer: CueAcceptance.accept)
+    #expect(try await store.card(task.id)?.status != .done)
+    try await store.answerCueMessage(try #require(waiting.first(where: \.isAcceptance)).id, answer: CueAcceptance.accept)
+    #expect(try await store.card(task.id)?.status == .done)
   }
 
   /// 验收挂着时 Cue 又对这件事的会话说话（返工）：那条验收作废——去掉选项，留在对话里当一句话，不再算等你；
@@ -388,10 +421,18 @@ import Testing
 
     _ = try await store.toggleDone(first.id)
     #expect(try await shown().session == "s2")  // 在做第二步
-    try await Task.sleep(for: .milliseconds(5))  // 完成时刻分得出先后
     _ = try await store.toggleDone(second.id)
+    // 完成时刻直接给定先后（毫秒）：取的是最后做完的那一步，不是排在最后的那一步
+    func finish(_ step: Card, atMinute minute: Int) throws {
+      try RawDB(sandbox.directory.appending(path: "cuepad.db"))
+        .exec("UPDATE cards SET completedAt = \(1_800_000_000_000 + minute * 60_000) WHERE id = '\(step.id.uuidString.lowercased())'")
+    }
+    try finish(first, atMinute: 0)
+    try finish(second, atMinute: 1)
     let done = try await shown()
     #expect(done.session == "s2" && done.leaf == second.id.uuidString.lowercased())
+    try finish(first, atMinute: 2)
+    #expect(try await shown().session == "s1")
   }
 
   /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
