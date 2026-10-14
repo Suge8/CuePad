@@ -1,5 +1,6 @@
 import CueStore
 import CueSync
+import CueTestSupport
 import Foundation
 import SQLite3
 import SwiftUI
@@ -32,8 +33,15 @@ struct SpeakTests {
         try await store.cueMessages().filter { $0.author == .known(.you) }
     }
 
-    private func presence(at now: Date, reachable: Bool = true) async throws -> CuePresence {
-        CuePresence.derive(try await CueDigest.read(from: store), now: now, reachable: reachable)
+    /// Cue 在不在由库在读的那一刻推出（`CueStore.cueSpeech`），界面只补本机同步通不通。
+    private func presence(reachable: Bool = true) async throws -> CuePresence {
+        CuePresence.derive(try await CueDigest.read(from: store), reachable: reachable)
+    }
+
+    /// 把你这句话的写下时刻挪到 `ago` 秒前：时限从真实的此刻起算，不等一分钟。
+    private func backdate(_ message: CueMessage, by ago: TimeInterval) throws {
+        try RawDB(app.services.location.databaseURL).exec(
+            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - ago) * 1000)) WHERE id = '\(message.id.uuidString.lowercased())'")
     }
 
     /// 让这张表的写入失败（磁盘满、库坏了一类的写库失败）。
@@ -62,7 +70,7 @@ struct SpeakTests {
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
         #expect(Said.cue(message, host: "mac-cue").trip(now: .now, reachable: true) == .sending)
-        #expect(try await presence(at: .now, reachable: true) == .sending)  // Cue 页头与气泡同一个"在路上"
+        #expect(try await presence() == .sending)  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
@@ -82,19 +90,22 @@ struct SpeakTests {
         let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
 
         #expect(said.trip(now: inTime, reachable: true) == .sending)
-        #expect(try await presence(at: inTime, reachable: true) == .sending)
+        try backdate(message, by: Speech.receiptLimit - 1)
+        #expect(try await presence() == .sending)
 
         #expect(said.trip(now: late, reachable: true) == .failed(.noReply))
-        #expect(try await presence(at: late, reachable: true) == .asleep)
+        try backdate(message, by: Speech.receiptLimit + 1)
+        #expect(try await presence() == .asleep)
+        #expect(try await !store.cueOnDuty())  // 值班与"在睡觉"同一条
         #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
 
         #expect(said.trip(now: late, reachable: false) == .failed(.offline))
-        #expect(try await presence(at: late, reachable: false) == .idle)
+        #expect(try await presence(reachable: false) == .idle)
 
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(now: late, reachable: true) == .delivered)
-        #expect(try await presence(at: late, reachable: true) == .working(.thinking, detail: nil))
+        #expect(try await presence() == .working(.thinking, detail: nil))
     }
 
     @Test func 对Cue说_没能送达后重发_撤回旧的写一条同样的_交出去的撤不回也不重发() async throws {

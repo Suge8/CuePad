@@ -405,13 +405,13 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多了一条你的、一直记着的规矩。"等你"推了通知。
+    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多了一条你的、一直记着的规矩。"等你"推了通知（正文是要你定什么，不露原话）。
     @Test func 等你被回答_Cue被唤醒_以后都不用问记成规矩() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
         #expect(question.choices == ["允许一次", "以后推送都不用问", "拒绝"])
-        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要推送吗？\n允许一次 / 以后推送都不用问 / 拒绝"] }
+        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要不要推送？\n允许一次 / 以后推送都不用问 / 拒绝"] }
         try await rig.message(.cue, containing: "办好了")
         try await Workspace(services: rig.services).endCueQuestion(question, .answered("以后推送都不用问"))
         try await rig.message(.cue, containing: "知道了：以后推送都不用问")

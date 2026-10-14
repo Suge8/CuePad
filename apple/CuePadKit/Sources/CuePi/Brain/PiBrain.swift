@@ -11,8 +11,8 @@ import Foundation
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
-/// - 正在说的话从 `message_update` 的逐字增量累积（RPC 只发增量，见 Pi 的 docs/json.md「Reconstruct streaming messages」）：文字块按
-///   `contentIndex` 分开、换行连接（同会话文件里取回答的规则），`text_end` 与 `message_end` 给的是定稿、照它换；开出工具调用后这条不再算。
+/// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
+///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
 @MainActor
 final class PiBrain: CueBrain {
     private let session = BrainSession()
@@ -29,10 +29,8 @@ final class PiBrain: CueBrain {
     private struct Turn {
         var error: String?
     }
-    /// 正在说的这条助手消息的各文字块（按 `contentIndex`）；开出工具调用后为 nil，直到下一条消息
-    private var blocks: [Int: String]?
-    /// 报出去的正在说的话
-    private var spoken: PiDraft?
+    /// 正在说的这条助手消息（段号是 `contentIndex`）；开出工具调用、停下或出错后为 nil，直到下一条消息
+    private var speech: DraftParts?
 
     func start(_ config: CueBrainConfig) async throws {
         do {
@@ -123,7 +121,7 @@ final class PiBrain: CueBrain {
             session.emit(.toolDone(id: id, result: brainText(result?["content"]), failed: event["isError"] as? Bool == true))
         case "message_start":
             guard (event["message"] as? [String: Any])?["role"] as? String == "assistant" else { return }
-            blocks = [:]
+            speech = DraftParts()
             speak()
         case "message_update":
             streamed(event["assistantMessageEvent"] as? [String: Any] ?? [:])
@@ -148,35 +146,24 @@ final class PiBrain: CueBrain {
         let stop = message["stopReason"] as? String
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
         turn?.error = stop == "error" ? (message["errorMessage"] as? String ?? "未知错误") : nil
-        if stop == "error" || stop == "aborted" {
-            blocks = nil
-        } else if blocks != nil {
-            let content = message["content"] as? [[String: Any]] ?? []
-            blocks = Dictionary(uniqueKeysWithValues: content.enumerated().compactMap { index, block in
-                block["type"] as? String == "text" ? (block["text"] as? String).map { (index, $0) } : nil
-            })
+        if stop == "error" || stop == "aborted" { speech = nil }
+        for (index, block) in (message["content"] as? [[String: Any]] ?? []).enumerated() where block["type"] as? String == "text" {
+            speech?.finish(index, with: block["text"] as? String ?? "")
         }
         speak()
     }
 
     private func streamed(_ update: [String: Any]) {
-        guard blocks != nil, let index = update["contentIndex"] as? Int else { return }
+        guard let index = update["contentIndex"] as? Int else { return }
         switch update["type"] as? String {
-        case "text_delta": blocks?[index, default: ""] += update["delta"] as? String ?? ""
-        case "text_end": blocks?[index] = update["content"] as? String ?? blocks?[index]
-        case "toolcall_start": blocks = nil
+        case "text_delta": speech?.append(update["delta"] as? String ?? "", to: index)
+        case "text_end": if let text = update["content"] as? String { speech?.finish(index, with: text) }
+        case "toolcall_start": speech = nil
         default: return
         }
         speak()
     }
 
-    /// 按此刻的文字块报正在说的话（没变不报）：起点是这条第一次有字的时刻；还没字、开出了工具调用、停下或出错的报 nil。
-    private func speak() {
-        let text = blocks.map { $0.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n") } ?? ""
-        let next = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: spoken?.since ?? .now)
-        guard next != spoken else { return }
-        spoken = next
-        session.emit(.speaking(next))
-    }
+    private func speak() { session.emit(.speaking(speech?.draft)) }
 }
 #endif

@@ -5,12 +5,12 @@ import OSLog
 
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
-/// - 状态来自钩子（托管的会话也一样，钩子在承载线程的进程里跑；托管会话的“输出中”另由正在说的话给出，见下）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
+/// - 状态来自钩子（托管的会话也一样，钩子在承载线程的进程里跑）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
 ///   `Stop`/`Interrupt` 歇下，`SessionEnd` 下线。会话 id 是线程 id，承载进程是钩子的父进程（终端会话是常驻服务，托管的是 CuePad 起的进程）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置 30 分钟才卸载并报 `SessionEnd`），
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
-/// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好（回答项说完换成全文）交给桥，
-///   开始出字时状态从思考进入输出；终端里的会话不订阅，也就没有。
+/// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好（回答项说完换成全文）交给桥；
+///   终端里的会话不订阅，也就没有。
 /// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/steer`（马上说，
 ///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
@@ -207,14 +207,8 @@ public final class CodexRuntime: AgentRuntime {
         let pid = rpc.pid
         hosted[pid] = rpc
         rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
-        rpc.onDraft = { [weak self] thread, draft in self?.drafted("\(thread).\(pid)", draft) }
+        rpc.onDraft = { [weak self] thread, draft in self?.bridge.setDraft("\(thread).\(pid)", draft) }
         rpc.onClose = { [weak self] in self?.processGone(pid) }
-    }
-
-    /// 托管会话正在说的话交给桥；开始出字时从思考进入输出（钩子不报输出，与 Claude Code 托管会话同一规则）。
-    private func drafted(_ id: PiSession.ID, _ draft: PiDraft?) {
-        if draft != nil, bridge.session(id: id)?.state == .thinking { change(id) { Self.move(&$0, to: .outputting) } }
-        bridge.setDraft(id, draft)
     }
 
     private func attachHosted(_ result: CodexRPC.Object, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {

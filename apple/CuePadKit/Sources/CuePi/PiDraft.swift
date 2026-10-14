@@ -19,6 +19,40 @@ public struct PiDraft: Equatable, Sendable {
     }
 }
 
+/// 一条回答正在说的话怎么拼（各家协议层共用，各自只把事件映射到这几个动作）：依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；
+/// 说到一半的段由增量追加，说完的段换成运行时给的定稿（不发增量也照样有全文）；起点是第一次出字的时刻，或由调用方给；全是空白时没有。
+/// 换一条回答（`message` 变了）、转成工具调用等就新建一个。没变也照样交出去：去重只在下游一处（`PiDraftFeed`）。
+struct DraftParts {
+    /// 这条回答的标识（消息、项）；不分条的为 nil
+    let message: String?
+    private var parts: [Int: String] = [:]
+    private var since: Date?
+
+    init(message: String? = nil, since: Date? = nil) {
+        self.message = message
+        self.since = since
+    }
+
+    /// 最后一段的段号
+    var lastPart: Int? { parts.keys.max() }
+
+    mutating func append(_ delta: String, to part: Int) {
+        parts[part, default: ""] += delta
+        since = since ?? .now
+    }
+
+    mutating func finish(_ part: Int, with text: String) {
+        parts[part] = text
+        since = since ?? .now
+    }
+
+    var draft: PiDraft? {
+        let text = parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n")
+        guard let since, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return PiDraft(text: text, since: since)
+    }
+}
+
 /// 给界面看的正在说的话（`draft`），出字时只有读它的视图重算。来源每个增量交一次（`offer`），刷新节奏只定在这里：
 /// 同一条话的增长最多每 `interval` 显示一次（落后的那次在这一拍末尾补上）；清掉与开始另一条（起点不同）立即显示，不让上一条的尾巴晚到。
 @MainActor @Observable

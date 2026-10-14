@@ -148,8 +148,8 @@ struct OpenCodeEvent: Decodable, Sendable {
     }
 }
 
-/// 事件流里各会话正在说的话（`PiDraft`）：正文的增量（`session.text.delta`）按回答（`assistantMessageID`）累积，同一条回答的几段按段号
-/// （`ordinal`）排、换行连接（与对话里这条回答的写法一致，见 `OpenCodeHistory`），一段说完（`session.text.ended`）换成这段的全文；
+/// 事件流里各会话正在说的话（`PiDraft`，拼法见 `DraftParts`）：一条回答（`assistantMessageID`）的段号是 `ordinal`（与对话里这条回答的写法一致，
+/// 见 `OpenCodeHistory`），正文的增量（`session.text.delta`）追加，一段说完（`session.text.ended`）换成这段的全文；
 /// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
 /// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
 ///
@@ -157,17 +157,11 @@ struct OpenCodeEvent: Decodable, Sendable {
 /// （`OpenCodeMessage.at`，与 `started` 是同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`PiDraft.landed`），
 /// 说完后草稿与对话里的回答会叠成两份。没看到这一步开始（中途连上）的回答不给草稿。
 struct OpenCodeDrafts {
-    private struct Entry {
-        var message: String
-        var parts: [Int: String] = [:]
-        var since: Date
-        var draft: PiDraft { PiDraft(text: parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n"), since: since) }
-    }
-    private var entries: [String: Entry] = [:]
+    private var entries: [String: DraftParts] = [:]
     /// 每个会话最近开始的一步：哪条回答、它的时刻
     private var steps: [String: (message: String, at: Date)] = [:]
 
-    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关或没有变化为 nil。
+    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关为 nil。
     mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
         let data = event.data
         guard let sessionID = data.sessionID else { return nil }
@@ -178,23 +172,21 @@ struct OpenCodeDrafts {
             }
             return nil
         case "session.text.delta":
-            guard let message = data.assistantMessageID, let delta = data.delta else { return nil }
-            let current = entries[sessionID].flatMap { $0.message == message ? $0 : nil }
-            guard var entry = current ?? steps[sessionID].flatMap({ $0.message == message ? Entry(message: message, since: $0.at) : nil })
+            guard let message = data.assistantMessageID, let delta = data.delta, var entry = entries[sessionID].flatMap({ $0.message == message ? $0 : nil })
+                ?? steps[sessionID].flatMap({ $0.message == message ? DraftParts(message: message, since: $0.at) : nil })
             else { return nil }
-            entry.parts[data.ordinal ?? 0, default: ""] += delta
+            entry.append(delta, to: data.ordinal ?? 0)
             entries[sessionID] = entry
             return (sessionID, entry.draft)
         case "session.text.ended":
-            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text,
-                  entry.parts[data.ordinal ?? 0].map({ $0 != text }) == true else { return nil }
-            entry.parts[data.ordinal ?? 0] = text
+            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text else { return nil }
+            entry.finish(data.ordinal ?? 0, with: text)
             entries[sessionID] = entry
             return (sessionID, entry.draft)
         case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
              "session.deleted":
             if event.type == "session.deleted" { steps[sessionID] = nil }
-            guard entries.removeValue(forKey: sessionID) != nil else { return nil }
+            entries[sessionID] = nil
             return (sessionID, nil)
         default:
             return nil

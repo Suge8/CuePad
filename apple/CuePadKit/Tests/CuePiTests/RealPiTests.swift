@@ -143,8 +143,6 @@ struct RealPiTests {
 
             let states = log.states
             #expect(states.first == .thinking)
-            let outputting = try #require(states.firstIndex(of: .outputting))
-            #expect(outputting < states.count - 1, "outputting 在 done 之前")
 
             try await eventually("会话文件写入回复") { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
             #expect(try history(of: s).displayName == "hello")
@@ -197,7 +195,7 @@ struct RealPiTests {
             let working = log.changes.compactMap { change -> PiSession? in
                 guard case .stateChanged(let session, _) = change else { return nil }
                 switch session.state {
-                case .thinking, .outputting, .tool: return session
+                case .thinking, .tool: return session
                 default: return nil
                 }
             }

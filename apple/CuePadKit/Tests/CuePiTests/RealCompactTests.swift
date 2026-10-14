@@ -135,7 +135,7 @@ struct RealCompactTests {
             let working = log.changes.compactMap { change -> PiSession? in
                 if case .stateChanged(let session, _) = change, session.state != .settled { session } else { nil }
             }
-            #expect(Set(working.map(\.stateSince)).count == 1, "思考、输出、压缩是同一段工作")
+            #expect(Set(working.map(\.stateSince)).count == 1, "思考、工具、压缩是同一段工作")
             #expect(try compactions(in: s) == 1)
         }
     }
