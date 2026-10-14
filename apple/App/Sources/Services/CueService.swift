@@ -29,7 +29,7 @@ protocol CueNotifying: AnyObject {
 /// - 启用：按 `CueRuntimes.order` 选第一家装了且登录了的运行时，写 `cueProfile`（住这台 Mac、默认模型、低思考强度）；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
-/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时、大脑起不来与启动时就在这台值班时查（状态命令慢）。
+/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页不在前台、不在打扰时段（`CueTiming.quietHours`），
 ///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
@@ -37,7 +37,7 @@ final class CueService {
     /// 值班时 Cue 此刻的样子（管理器说了算）；不在这台 Mac 值班为 nil，界面按库推（`CuePresence.derive`）。
     private(set) var state: CuePresence?
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
-    private(set) var runtimes: [CueRuntime] = []
+    private(set) var runtimes: [CueRuntime]?
 
     @ObservationIgnored private let store: CueStore
     @ObservationIgnored private let sync: (any SyncControlling)?
@@ -98,8 +98,9 @@ final class CueService {
 
     @discardableResult
     func refreshRuntimes() async -> [CueRuntime] {
-        runtimes = await dependencies.scan()
-        return runtimes
+        let found = await dependencies.scan()
+        runtimes = found
+        return found
     }
 
     /// 跟着设置值班，直到任务取消。
@@ -127,8 +128,7 @@ final class CueService {
     }
 
     private func apply(_ profile: CueProfile?) async {
-        // 换了运行时，或 App 启动时 Cue 就在这台值班（设置页要知道本机哪几家能用），才查一遍
-        if let runtime = profile?.runtime, runtime != lastRuntime, lastRuntime != nil || profile?.activeHost == hostID {
+        if let runtime = profile?.runtime, let last = lastRuntime, runtime != last {
             Task { await refreshRuntimes() }
         }
         lastRuntime = profile?.runtime ?? lastRuntime
