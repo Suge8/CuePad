@@ -22,6 +22,8 @@ final class ClaudeHostedSession: SessionLink {
     private var commands: Set<String> = []
     /// 停下这一轮后的 `result` 是被打断的，不算出错
     private var stopping = false
+    /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
+    private var apiError: String?
     private var contextWindow: Int?
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
@@ -85,6 +87,12 @@ final class ClaudeHostedSession: SessionLink {
         case "assistant":
             guard message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null else { return }
             if let usage = message["message"]?["usage"] { context(usage) }
+            // 这一轮出错时 Claude Code 合成一条带错误类型的回答（`is_api_error_message`），原话就是对话里的那条
+            if message["is_api_error_message"]?.bool == true, let code = message["error"]?.string {
+                apiError = ClaudeCode.failure(
+                    code: code, status: message["api_error_status"]?.int,
+                    message: (message["message"]?["content"]?.array ?? []).compactMap { $0["text"]?.string }.joined(separator: "\n"))
+            }
             for block in message["message"]?["content"]?.array ?? [] {
                 switch block["type"]?.string {
                 case "tool_use": facts.work(.tool, detail: ToolDetail.line(block["name"]?.string ?? "?", block["input"]))
@@ -101,11 +109,12 @@ final class ClaudeHostedSession: SessionLink {
                 if let window = usage["contextWindow"]?.int { contextWindow = window }
             }
             if let usage = message["usage"] { context(usage) }
-            let failed = message["is_error"]?.bool == true && !stopping
+            let failed = (message["is_error"]?.bool == true || apiError != nil) && !stopping
             stopping = false
             permission = nil
             let raw = (message["errors"]?.array?.compactMap(\.string) ?? []).joined(separator: "\n")
-            facts.endTurn(failure: failed ? message["result"]?.string ?? raw : nil)
+            facts.endTurn(failure: failed ? apiError ?? message["result"]?.string ?? raw : nil)
+            apiError = nil
         default:
             return
         }

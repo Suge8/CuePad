@@ -14,6 +14,13 @@ enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`sonnet`）在它自己的命名空间里
     static let provider = AgentKind.claudeCode.modelProvider!
 
+    /// 一轮出错的原文（交给 `PiErrorSummary` 归类）：状态码与详情在前，错误类型与 Claude Code 写进对话的那句原话按提供方错误体写，
+    /// 归类认类型、说明带上原话（对话里那条回答就是它，不再另显示一处）。
+    static func failure(code: String, status: Int? = nil, details: String? = nil, message: String?) -> String {
+        let body: JSONValue = ["error": ["type": .string(code), "message": message.map(JSONValue.string) ?? .null]]
+        return [status.map(String.init), details, String(decoding: body.data, as: UTF8.self)].compactMap { $0 }.joined(separator: " ")
+    }
+
     static func model(_ id: String, name: String? = nil, levels: [PiThinkingLevel] = []) -> PiModelOption {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
     }

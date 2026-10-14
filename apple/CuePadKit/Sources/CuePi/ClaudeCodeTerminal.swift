@@ -101,9 +101,8 @@ final class ClaudeTerminalSession: SessionLink {
         case "Stop":
             facts.endTurn()
         case "StopFailure":
-            let raw = [input["error"]?.string, input["error_details"]?.string, input["last_assistant_message"]?.string]
-                .compactMap { $0 }.joined(separator: "\n")
-            facts.endTurn(failure: raw)
+            facts.endTurn(failure: ClaudeCode.failure(
+                code: input["error"]?.string ?? "unknown", details: input["error_details"]?.string, message: input["last_assistant_message"]?.string))
         case "PreCompact":
             facts.compacting = true
         case "PostCompact":

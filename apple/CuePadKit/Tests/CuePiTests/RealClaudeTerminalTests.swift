@@ -54,6 +54,24 @@ struct RealClaudeTerminalTests {
         }
     }
 
+    /// 一轮出错：按 Claude Code 报的错误类型归类成一句人话；它把错误也写成了对话里的最后一条回答，对话里只显示那一处。
+    @Test func aFailedTurnIsClassifiedAndShownOnce() async throws {
+        try await ClaudeTestbed.run { testbed in
+            try testbed.runtime.start()
+            let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            _ = try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
+            @MainActor func reply() throws -> String? { try testbed.transcript(session.sessionFile).messages.last { $0.role == .known(.pi) }?.text }
+            try await eventually("这一轮出错、那句原话进了对话", timeout: .seconds(90)) {
+                try testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
+            }
+            let detail = try #require(testbed.bridge.session(id: session.id)?.detail)
+            #expect(detail.hasPrefix("模型不存在或没有权限"), "\(detail)")
+            let reply = try reply()
+            #expect(PiErrorSummary.echoes(reply, line: detail), "\(String(describing: reply)) / \(detail)")
+        }
+    }
+
     /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
     /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
     @Test(arguments: [
