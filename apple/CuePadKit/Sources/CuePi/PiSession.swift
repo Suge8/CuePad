@@ -213,6 +213,8 @@ public enum PiBridgeError: Error, Equatable {
 }
 
 extension PiBridgeError: LocalizedError {
+    private static let failedPrefix = "failed: "
+
     public var errorDescription: String? {
         switch self {
         case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
@@ -229,7 +231,9 @@ extension PiBridgeError: LocalizedError {
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
         case .rejected("compacting"): "Agent 正在压缩上下文，压完再发这个命令"
-        case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
+        // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
+        case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): String(reason.dropFirst(Self.failedPrefix.count))
+        case .rejected(let reason): "Agent 没有接受：\(reason)"
         }
     }
 }

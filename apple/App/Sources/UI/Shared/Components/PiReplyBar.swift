@@ -22,7 +22,7 @@ struct PiReplyBar: View {
     var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
-    /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
+    /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方显示一行，成功、之后有新请求或对话时就收起。
     var commandProgress: MacDelivery.CommandProgress?
     /// 排队的话（`PiChat.queued`，页面传进来）。
     var queued: [DeliveryRequest] = []
