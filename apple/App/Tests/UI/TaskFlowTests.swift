@@ -74,6 +74,54 @@ struct TaskFlowTests {
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
+    // MARK: 会话与任务
+
+    /// 灵感挂到绑了会话的任务上：不成为提示词，接到那个会话回复框已写的字后面；撤销时灵感回来、回复框回到挂之前。
+    @Test func 灵感挂到绑了会话的任务上_接进回复框_撤销都还原() async throws {
+        let workspace = Workspace(services: rig.services)
+        let settings = rig.services.settings, box = PiSessionState.recordID(sessionID: "s1")
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let task = try await store.createTask("修乱序", in: project.id)
+        try await store.bindSession("s1", to: task.id)
+        settings.setReplyDraft(ComposerDraft(text: "先跑一遍测试"), for: box)
+        let idea = try await store.createCard(in: project.id, body: "顺便看下重连日志")
+
+        try await workspace.attach(idea.id, to: task.id)
+        #expect(workspace.notice?.text == "已放进会话的回复框")
+        #expect(settings.replyDraft(for: box).text == "先跑一遍测试\n\n顺便看下重连日志")
+        #expect(try await store.children(of: task.id).isEmpty)
+        #expect(try await store.card(idea.id) == nil)
+
+        try await #require(workspace.notice?.action).run()
+        #expect(settings.replyDraft(for: box).text == "先跑一遍测试")
+        #expect(try await store.card(idea.id)?.parentID == nil)
+    }
+
+    #if os(macOS)
+    /// 一个会话绑两件事：写好的草稿接进回复框；做完一件会话照常，都做完才请它所在的 Mac 结束。
+    @Test func 一个会话绑两件事_草稿接进回复框_都做完才结束会话() async throws {
+        let workspace = Workspace(services: rig.services)
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let first = try await store.createTask("复现乱序", in: project.id)
+        let second = try await store.createTask("补重连用例", in: project.id)
+        _ = try await store.createCard(body: "先复现，别改代码", under: first.id)
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+
+        try await workspace.bind("s1", to: first.id)
+        try await workspace.bind("s1", to: second.id)
+        #expect(rig.services.settings.replyDraft(for: PiSessionState.recordID(sessionID: "s1")).text == "先复现，别改代码")
+        #expect(try await store.children(of: first.id).isEmpty)
+        #expect(try await Set(store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
+
+        let ends = { [store] in try await store.deliveryRequests().filter { $0.mode == .known(.end) }.map(\.target.ref) }
+        try await workspace.toggle(first.id)
+        #expect(try await ends().isEmpty)
+        try await workspace.toggle(second.id)
+        #expect(try await ends() == ["s1"])
+    }
+    #endif
+
     // MARK: 撤销与批量
 
     @Test func 设为任务_删除_挂成提示词_都能撤销_勾选以最新状态为准() async throws {

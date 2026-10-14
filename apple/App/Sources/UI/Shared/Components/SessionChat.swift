@@ -34,6 +34,7 @@ struct SessionChat: View {
         .environment(\.chatHighlight, highlight.id)
         .overlay(alignment: .trailing) { scrubber }
         .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier() } }
+        .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id) } }
         .onChange(of: pendingJump) {
             guard let id = pendingJump else { return }
             pendingJump = nil
@@ -43,14 +44,16 @@ struct SessionChat: View {
 
     @ViewBuilder private var scrubber: some View {
         if !derived.marks.isEmpty {
-            ChatScrubber(marks: derived.marks, scrolling: follow.scrolling) { id in
-                // 先描圈、排开：那句所在的段这一下才排成真的（离屏远的段是空白，`PiConversation`），排好了再跳
-                highlight.flash(id)
-                window = max(window, PiConversation.window(reaching: id, in: derived.items) ?? 0)
-                pendingJump = id
-            }
-            .padding(.trailing, scrubberInset)
+            ChatScrubber(marks: derived.marks, scrolling: follow.scrolling) { follow.seek($0) }
+                .padding(.trailing, scrubberInset)
         }
+    }
+
+    /// 先描圈、排开：那条所在的段这一下才排成真的（离屏远的段是空白，`PiConversation`），排好了再跳。
+    private func seek(_ id: UUID) {
+        highlight.flash(id)
+        window = max(window, PiConversation.window(reaching: id, in: derived.items) ?? 0)
+        pendingJump = id
     }
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。

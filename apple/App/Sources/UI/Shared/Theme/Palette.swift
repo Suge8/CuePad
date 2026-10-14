@@ -4,9 +4,9 @@ import SwiftUI
 /// 纸、墨与靛青：内容层（卡片、编辑页、列表）的实色与全部颜色 token。控件层用系统玻璃，不在这里。
 ///
 /// 底子是纸与墨（logo、吉祥物的两种颜色）：文字、图标、系统控件的 tint 都是墨。**签名色是靛青**（蓝染与花青墨的冷蓝，比系统蓝沉），
-/// 只落在焦点上——选中、主按钮、焦点环——一屏里通常只有一两处，所以它一出现就是"这里"。在动的状态（任务进行中、Agent 在工作）
-/// 是墨色，靠形状与动效。其余彩色只表达要你注意的状态（等你确认是赭黄、出错是胭脂）与项目身份（项目图标）；三种状态色色相拉开
-/// （靛青是冷蓝，赭黄、胭脂偏玫红都是暖色），再配上状态标的形状，色弱也分得出。
+/// 只落在焦点上——选中、主按钮、焦点环——一屏里通常只有一两处，所以它一出现就是"这里"。任务进行中是墨色，靠形状与动效。
+/// Agent 会话的状态一眼要分得出，四种状态色各管一件事：等你确认赭黄、出错胭脂、在跑（工作中、话在路上）晴蓝、有新回复石绿；
+/// 其余彩色只表达项目身份。四种色相拉开（暖的赭黄、偏玫红的胭脂、比靛青亮而偏天色的晴蓝、石绿），再配上状态图形各不相同的轮廓，色弱也分得出。
 /// 深色是"夜里的纸"：暖黑的桌面、同一色温略亮的纸、更深一档的侧栏，三层靠明度分开，不用中性灰或冷蓝；
 /// 彩色在深色下提亮一档，保持同样的对比。增强对比度时加深次要文字与描边。
 struct Palette {
@@ -87,6 +87,24 @@ struct Palette {
     var attention: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0xA8740A) }
     /// 出错：胭脂。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
+    /// Agent 在跑（工作中、话在路上）：晴蓝，比签名色靛青亮、偏天色，两者不混。对比度（WCAG）：纸上标准 5.1、增强对比度 7，深色下 ≥ 6.5。
+    var live: Color {
+        switch (dark, highContrast) {
+        case (false, false): Color(hex: 0x2E66CF)
+        case (false, true): Color(hex: 0x1F4FA8)
+        case (true, false): Color(hex: 0x6E9BEE)
+        case (true, true): Color(hex: 0x9DBCF5)
+        }
+    }
+    /// Agent 有新回复（这轮答完了、你还没看）：石绿。对比度（WCAG）：纸上标准 4.8、增强对比度 7，深色下 ≥ 6.8。
+    var replied: Color {
+        switch (dark, highContrast) {
+        case (false, false): Color(hex: 0x1E7F55)
+        case (false, true): Color(hex: 0x156343)
+        case (true, false): Color(hex: 0x55B988)
+        case (true, true): Color(hex: 0x8FDCB2)
+        }
+    }
 
     // MARK: 行动作（轻扫露出的按钮）
 

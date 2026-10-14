@@ -15,8 +15,8 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 24;
-const PROTOCOL_VERSION = 11;
+const EXTENSION_VERSION = 25;
+const PROTOCOL_VERSION = 12;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -198,11 +198,20 @@ function clip(text: string, limit: number): string | null {
 	return chars.length <= limit ? chars.join("") : chars.slice(0, limit - 1).join("") + "…";
 }
 
-/** 手机上看的一个子代理：`state` 是 FireCode 名册的状态原文（running/review/done/failed/interrupted/idle），时刻是毫秒 */
-type Subagent = { name: string; role: string; state: string; action: string; startedAt: number | null; settledAt: number | null };
+/** 手机上看的一个子代理：`state` 是 FireCode 名册的状态原文（running/review/done/failed/interrupted/idle），时刻是毫秒，
+ * `model` 是名册里的模型原子（`provider/model`） */
+type Subagent = {
+	name: string;
+	role: string;
+	state: string;
+	action: string;
+	startedAt: number | null;
+	settledAt: number | null;
+	model: string | null;
+};
 
 /** FireCode 名册里的一项：来自另一个扩展发布的事件，字段类型没有保证 */
-type Worker = Partial<Record<"name" | "role" | "state" | "action" | "startedAt" | "settledAt", unknown>>;
+type Worker = Partial<Record<"name" | "role" | "state" | "action" | "startedAt" | "settledAt" | "model", unknown>>;
 
 function subagentsOf(workers: unknown): Subagent[] {
 	if (!Array.isArray(workers)) return [];
@@ -213,6 +222,7 @@ function subagentsOf(workers: unknown): Subagent[] {
 		action: clip(String(worker.action ?? ""), SUBAGENT_ACTION_LIMIT) ?? "",
 		startedAt: typeof worker.startedAt === "number" ? worker.startedAt : null,
 		settledAt: typeof worker.settledAt === "number" ? worker.settledAt : null,
+		model: typeof worker.model === "string" && worker.model ? worker.model : null,
 	}));
 }
 

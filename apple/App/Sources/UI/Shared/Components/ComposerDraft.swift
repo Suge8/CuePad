@@ -11,12 +11,14 @@ struct Outbox: Identifiable {
     var project: UUID?
 }
 
-/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那条提示词）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
+/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那条提示词）、
+/// 对 Agent 回答的批注（只有会话的回复框有，按在对话里的先后）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
     var text = ""
     var images: [PickedImage] = []
     var attachments: [Outbox] = []
+    var notes: [ReplyNote] = []
 
     /// 一行的草稿预览（会话行"草稿 …"、看历史时收起的回复框）：文字的第一行，没有文字时写带了什么；空的为 nil。
     var preview: String? {
@@ -25,6 +27,7 @@ struct ComposerDraft {
             return line
         }
         let parts = [
+            notes.isEmpty ? nil : "\(notes.count) 条批注",
             attachments.isEmpty ? nil : "\(attachments.count) 条灵感",
             images.isEmpty ? nil : "\(images.count) 张图片",
         ].compactMap { $0 }
@@ -51,11 +54,14 @@ struct ComposerDraft {
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
         text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
+            && (!kinds.contains(.notes) || notes.isEmpty)
     }
 
-    /// 存储格式正文：图片文件在这里写入图片库。
+    /// 存储格式正文：图片文件在这里写入图片库。批注（`ReplyNote.message`）排在你写的话前面。
     func stored(in files: AttachmentFiles) throws -> String {
-        StoredBody.make(attachments: attachments.map(\.content), text: text, imageHashes: try images.map { try files.store($0.data) })
+        StoredBody.make(
+            attachments: attachments.map(\.content), text: [ReplyNote.message(notes), text].filter { !$0.isEmpty }.joined(separator: "\n\n"),
+            imageHashes: try images.map { try files.store($0.data) })
     }
 }
 
@@ -64,6 +70,7 @@ struct ComposerKinds: OptionSet {
     let rawValue: Int
     static let images = ComposerKinds(rawValue: 1)
     static let cards = ComposerKinds(rawValue: 2)
+    static let notes = ComposerKinds(rawValue: 4)
 }
 
 /// 左边"＋"能打开的来源：卡片两端都有；图片 iOS 是相册与拍照，Mac 是图片文件（各平台的选项见 `imageChoices`）。

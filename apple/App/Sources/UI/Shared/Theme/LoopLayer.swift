@@ -1,17 +1,22 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：工作中的转圈与等待的转圈（`orbit`，后者经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
+/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三层上箭头（`climb`）、等你确认的外扩波纹（`ripple`）、
+/// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
 /// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）。
 struct LoopLayer {
     enum Kind: Equatable {
-        /// 铺满的圆从 0.7 倍呼到 1.6 倍、淡到看不见，再回来，一呼一吸 2.4s。
-        case breath
         /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
         case orbit
+        /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
+        case heartbeat
+        /// 三层向上的箭头从下往上依次亮起再暗下去，1.2s 一轮，相邻两层差 0.18s；线宽是边长的 9%。
+        case climb
+        /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
+        case ripple
         /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
@@ -73,10 +78,6 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
-            case .breath:
-                loop.frame = bounds
-                (loop as? CAShapeLayer)?.path = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size), transform: nil)
-                (loop as? CAShapeLayer)?.fillColor = color
             case .orbit:
                 loop.frame = bounds
                 let width = min(bounds.width, bounds.height) * 0.14
@@ -86,6 +87,17 @@ struct LoopLayer {
                     shape.path = ring
                     shape.lineWidth = width
                     shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.22) : color
+                }
+            case .heartbeat, .climb, .ripple:
+                loop.frame = bounds
+                let side = min(bounds.width, bounds.height)
+                let paths = Self.strokes(kind, side: side)
+                for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
+                    shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+                    shape.path = paths[index]
+                    shape.lineWidth = side * (kind == .ripple ? 0.07 : 0.09)
+                    // 心电线的第一层是垫底的淡波形
+                    shape.strokeColor = kind == .heartbeat && index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
                 }
             case .pulse:
                 loop.frame = bounds
@@ -107,20 +119,6 @@ struct LoopLayer {
 
         private static func make(_ kind: Kind) -> CALayer {
             switch kind {
-            case .breath:
-                let layer = CAShapeLayer()
-                let grow = CABasicAnimation(keyPath: "transform.scale")
-                grow.fromValue = 0.7
-                grow.toValue = 1.6
-                let fade = CABasicAnimation(keyPath: "opacity")
-                fade.fromValue = 1
-                fade.toValue = 0
-                let breath = CAAnimationGroup()
-                breath.animations = [grow, fade]
-                breath.duration = 1.2
-                breath.autoreverses = true
-                breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                return loop(breath, on: layer)
             case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()
@@ -134,6 +132,52 @@ struct LoopLayer {
                 spin.byValue = Double.pi * 2
                 spin.duration = 1.1
                 return loop(spin, on: layer)
+            case .heartbeat:
+                let layer = CALayer()
+                let base = stroke(), run = stroke()
+                // 一截实色沿波形走：终点先走、起点晚一点跟上，两者之间就是走着的那一截
+                let head = CAKeyframeAnimation(keyPath: "strokeEnd")
+                head.values = [0, 1, 1]
+                head.keyTimes = [0, 0.78, 1]
+                let tail = CAKeyframeAnimation(keyPath: "strokeStart")
+                tail.values = [0, 0, 1]
+                tail.keyTimes = [0, 0.32, 1]
+                let walk = CAAnimationGroup()
+                walk.animations = [head, tail]
+                walk.duration = 1.4
+                walk.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0.05, 0.55, 0.95)
+                for sublayer in [base, run] { layer.addSublayer(sublayer) }
+                _ = loop(walk, on: run)
+                return layer
+            case .climb:
+                let layer = CALayer()
+                // 从下往上：每层比下面一层晚亮一点（用相位而不是 beginTime：层进窗口前就开始算时间）
+                for delay in [0, 0.18, 0.36] {
+                    let chevron = stroke()
+                    let glow = CAKeyframeAnimation(keyPath: "opacity")
+                    glow.values = [0.2, 1, 0.2, 0.2]
+                    glow.keyTimes = [0, 0.25, 0.6, 1]
+                    glow.duration = 1.2
+                    glow.timeOffset = glow.duration - delay
+                    chevron.opacity = 0.2
+                    layer.addSublayer(loop(glow, on: chevron))
+                }
+                return layer
+            case .ripple:
+                let layer = CALayer()
+                let ring = stroke()
+                let grow = CABasicAnimation(keyPath: "transform.scale")
+                grow.fromValue = 1
+                grow.toValue = 1.6
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 0.5
+                fade.toValue = 0
+                let wave = CAAnimationGroup()
+                wave.animations = [grow, fade]
+                wave.duration = 2.4
+                wave.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.6, 0.3, 1)
+                layer.addSublayer(loop(wave, on: ring))
+                return layer
             case .pulse:
                 let layer = CALayer()
                 let fade = CABasicAnimation(keyPath: "opacity")
@@ -165,6 +209,45 @@ struct LoopLayer {
                 sweep.isAdditive = true
                 sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(sweep, on: layer)
+            }
+        }
+
+        /// 只描边、圆头圆角的一层（心电线、箭头、波纹）。
+        private static func stroke() -> CAShapeLayer {
+            let shape = CAShapeLayer()
+            shape.fillColor = nil
+            shape.lineCap = .round
+            shape.lineJoin = .round
+            return shape
+        }
+
+        /// 描边类动效每一层的路径，画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。macOS 的层 y 朝上，
+        /// 统一翻过来，否则箭头朝下、心电线上下颠倒。
+        private static func strokes(_ kind: Kind, side: CGFloat) -> [CGPath] {
+            let unit = side / 22
+            func path(_ points: [CGPoint]) -> CGPath {
+                let path = CGMutablePath()
+                path.addLines(between: points.map { point in
+                    #if os(macOS)
+                    CGPoint(x: point.x * unit, y: (22 - point.y) * unit)
+                    #else
+                    CGPoint(x: point.x * unit, y: point.y * unit)
+                    #endif
+                })
+                return path
+            }
+            switch kind {
+            case .heartbeat:
+                let wave = path([CGPoint(x: 1, y: 11), CGPoint(x: 5.5, y: 11), CGPoint(x: 7.5, y: 4.5), CGPoint(x: 11, y: 17.5),
+                                 CGPoint(x: 13.5, y: 8), CGPoint(x: 15, y: 11), CGPoint(x: 21, y: 11)])
+                return [wave, wave]
+            case .climb:
+                return [15.4, 11, 6.6].map { tip in path([CGPoint(x: 6.5, y: tip + 4.5), CGPoint(x: 11, y: tip), CGPoint(x: 15.5, y: tip + 4.5)]) }
+            case .ripple:
+                let inset = side * 0.07 / 2
+                return [CGPath(ellipseIn: CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2), transform: nil)]
+            default:
+                return []
             }
         }
 

@@ -17,8 +17,10 @@ extension CueStore {
     }
 
     /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）；撤销把它放回原来所在的项目、原来的位置。
-    func attaching(_ idea: UUID, _ move: TaskMove) async throws -> Undo {
-        undoing(try moveCard(idea, to: move.slot, after: move.after))
+    /// 回执给界面看落到了哪（挂到绑了会话的叶子上是 `.handed`，界面把话接进回复框）。
+    func attaching(_ idea: UUID, _ move: TaskMove) async throws -> (CardChange, Undo) {
+        let change = try moveCard(idea, to: move.slot, after: move.after)
+        return (change, undoing(change))
     }
 
     private nonisolated func undoing(_ change: CardChange?) -> Undo { undoing(change.map { [$0] } ?? []) }

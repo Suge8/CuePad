@@ -10,13 +10,15 @@ struct CardActions: View {
     var more = false
     /// 在能批量选择的地方（Mac 项目页的墙与列表）：菜单里多一项"选择"。
     var selectable = false
+    /// 这是 Mac 上的叶子任务（没有步骤）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
+    var leaf = false
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     #endif
 
     var body: some View {
-        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable)
+        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
@@ -45,6 +47,10 @@ struct CardActions: View {
         case .select:
             #if os(macOS)
             Button(item.title, systemImage: item.symbol) { workspace.presses.toggle(id) }
+            #endif
+        case .bindSession:
+            #if os(macOS)
+            Menu(item.title, systemImage: item.symbol) { SessionBindItems(leaf: card) }
             #endif
         // 只在轻扫里（`CardMenu.swipes`）
         case .indent, .outdent: EmptyView()
@@ -91,6 +97,7 @@ extension CardMenu.Item {
         case .copy: "复制"
         case .trash: "删除"
         case .select: "选择"
+        case .bindSession: "绑定会话"
         case .indent: "缩进"
         case .outdent: "反缩进"
         }
@@ -112,6 +119,7 @@ extension CardMenu.Item {
         case .copy: "doc.on.doc"
         case .trash: "trash"
         case .select: "checkmark.circle"
+        case .bindSession: "link"
         case .indent: "increase.indent"
         case .outdent: "decrease.indent"
         }

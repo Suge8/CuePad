@@ -207,10 +207,10 @@ nonisolated extension PiShown {
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
 
-    /// 此刻显示为没能送达时就是那条请求（`request` 是算这个状态用的那条），行上据此写原因（`PiRowLine`）。
+    /// 此刻显示为没能送达时就是那条请求（`request` 是算这个状态用的那条），Mac 任务面板据此写原因（`PiProgress.note`）。
     func undelivered(_ request: DeliveryRequest?) -> DeliveryRequest? { status == .delivery(.failed) ? request : nil }
 
-    /// 在动：工作中（转圈）、话在路上（呼吸）。
+    /// 在动：工作中（心电线）、话在路上（三层上箭头）。
     var isLive: Bool {
         switch status {
         case .working, .delivery(.sending), .delivery(.delivering), .delivery(.waking), .delivery(.delivered): true

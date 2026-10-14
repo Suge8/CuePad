@@ -2,98 +2,117 @@ import CueStore
 import SwiftUI
 
 extension PiShown {
-    /// 状态标的颜色只回答"要不要你管"：要你确认的赭黄、出错与没能送达胭脂；在动的（工作中、话在路上）是墨色、靠动效表达，
-    /// 不占签名色；有新回复墨色；需要 /reload 次要墨色；其余是灰。
+    /// 状态色，四种各管一件事：等你确认赭黄、出错与没能送达胭脂、在跑（工作中、话在路上）晴蓝、有新回复石绿；
+    /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking: palette.attention
         case .failed, .delivery(.failed): palette.failure
-        case .working, .delivery, .unread: palette.ink
+        case .working, .delivery: palette.live
+        case .unread: palette.replied
         case .restart: palette.ink2
         case .idle, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
 
-    /// 状态词的颜色：只有要你动手的那几个字带色，有新回复是墨色（由调用方加粗），已结束是灰，其余次要墨色。整句不上色。
-    func labelTint(_ palette: Palette) -> Color {
-        needsYou ? tint(palette) : isUnread ? palette.ink : status == .ended ? palette.ink3 : palette.ink2
+    /// 带色的状态（状态词与状态标同色）：要你管的、在跑的、有新回复。
+    var isColored: Bool {
+        switch status {
+        case .asking, .failed, .working, .delivery, .unread: true
+        case .restart, .idle, .fresh, .ended, .unknown: false
+        }
     }
 
-    /// 状态标的形状，与颜色一起表达状态（色弱也分得出）。工作中与有新回复是自绘的（`PiStateDot`），这里是它们静止时的样子。
+    /// 状态词的颜色：带色的状态与状态标同色，已结束是灰，其余次要墨色。
+    func labelTint(_ palette: Palette) -> Color {
+        isColored ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
+    }
+
+    /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）铺一层很淡的状态色，其余是纸。
+    /// 在跑的不铺：会动的心电线与蓝字已经够醒目，整屏都上色颜色就不再表示"要你看"。
+    func wash(_ palette: Palette) -> Color? { needsYou || isUnread ? tint(palette) : nil }
+
+    /// 状态的静止图形（SF Symbols）：没有自绘动效的状态直接画它；在跑、话在路上是自绘的循环动效（`PiStateDot`），
+    /// 这里是减弱动态效果与菜单里的样子。每种轮廓各不相同（缩到 10 点也认得出），要你看的三种是实心，其余是线条。
     var symbol: String {
         switch status {
         case .asking: "questionmark.circle.fill"
-        case .failed: "exclamationmark.circle.fill"
+        // 三角：轮廓与等你确认的圆分开
+        case .failed: "exclamationmark.triangle.fill"
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
-        case .restart: "arrow.clockwise.circle.fill"
-        // 唤醒：电源键（把歇下的会话打开），不用日出——圈里一道横线加向上箭头读成天气图标
-        case .delivery(.waking): "power.circle"
-        case .delivery: "arrow.up.circle"
-        case .working: "smallcircle.filled.circle"
-        case .unread: "circle.fill"
-        // 轮到你说话：空的对话气泡。不用对勾——对勾只表示完成与记下，"该你了"读成"做完了"正好相反
-        case .idle: "bubble.left"
-        case .fresh: "circle.dashed"
-        // 不用空心圈：待办任务的圆圈就是它，任务行旁挨着会话状态时分不清
+        case .restart: "arrow.clockwise.circle"
+        case .delivery: "chevron.up.2"
+        case .working: "waveform.path.ecg"
+        // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
+        case .unread: "bell.fill"
+        // 输入光标：轮到你打字
+        case .idle: "character.cursor.ibeam"
+        case .fresh: "sparkle"
+        // 不用空心圈：待办任务的圆圈就是它
         case .ended: "circle.slash"
         case .unknown: "questionmark.circle"
         }
     }
 }
 
-/// 会话状态标（全 App 只此一份：Agent 页、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：颜色 + 形状表达状态——
-/// 等你确认赭黄问号、出错胭脂叹号、没能送达胭脂折回箭头、工作中墨色转圈、话在路上墨色向上箭头（唤醒是电源键）在呼吸、
-/// 有新回复墨色实心点、该你了灰色空气泡、新会话灰虚线圈、已结束更淡的带斜线圈（不与待办任务的空心圈相混）。`size` 是点的直径，符号按它放大到同样的视觉分量。
-/// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
-/// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。
-/// 旁边有状态文字时读屏跳过它；`announces` 用在不写状态词的地方（整页的会话行），标自己带读屏标签。
+/// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：
+/// 颜色 + 不带外框的整体图形——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂三角、没能送达胭脂折回箭头、
+/// 在跑晴蓝心电线（一截实色沿波形走）、话在路上晴蓝三层上箭头（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
+/// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
+/// 心电线、箭头、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
+/// 两个都是 SF Symbols 时由系统原地替换。减弱动态效果时循环动效换成同一状态的静止符号，没有波纹与摇铃。
+/// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
     var announces = false
-    /// 要你动手的状态（等你确认、出错、没能送达）在标后垫一圈同色淡晕：整页列表里一眼先看到它们。静止，不占动效。
-    var halo = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 跟着旁边的字随辅助字号放大
     @ScaledMetric private var scale: CGFloat = 1
-    /// 每做完一轮加一：放一次涟漪。
-    @State private var finished = 0
+    /// 每变成一次有新回复加一：铃铛摇一下。
+    @State private var rings = 0
 
     private var box: CGFloat { size * 1.8 * scale }
     /// 字的中线在基线以上多高，按标的外框算（外框约等于旁边的字号）。
     private nonisolated static let midline = 0.36
 
+    /// 画法：自绘的循环动效，或一个静止符号。换画法时整块换（缩放淡入淡出），同为符号时原地替换。
+    private enum Look: Hashable { case heartbeat, climb, symbol }
+
+    private var look: Look {
+        guard !reduceMotion else { return .symbol }
+        switch shown.status {
+        case .working: return .heartbeat
+        case .delivery(let phase) where phase != .failed: return .climb
+        default: return .symbol
+        }
+    }
+
     var body: some View {
         let tint = shown.tint(palette)
-        let mark = glyph(tint)
-            .frame(width: box, height: box)
-            .keyframeAnimator(initialValue: Ripple(), trigger: finished) { content, ripple in
-                content
-                    .scaleEffect(ripple.pop)
-                    .background { Circle().stroke(tint, lineWidth: 1.5).scaleEffect(ripple.ring).opacity(ripple.ringOpacity) }
-            } keyframes: { _ in
-                KeyframeTrack(\.pop) {
-                    SpringKeyframe(1.3, duration: 0.14, spring: .snappy)
-                    SpringKeyframe(1, duration: 0.4, spring: .bouncy)
-                }
-                KeyframeTrack(\.ring) { CubicKeyframe(2.4, duration: 0.6) }
-                KeyframeTrack(\.ringOpacity) {
-                    LinearKeyframe(0.8, duration: 0.05)
-                    CubicKeyframe(0, duration: 0.55)
-                }
+        let mark = ZStack {
+            switch look {
+            case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
+            case .climb: LoopLayer(kind: .climb, color: tint).transition(Self.swap)
+            case .symbol:
+                Image(systemName: shown.symbol)
+                    .font(.system(size: box * 0.86, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
+                    .background {
+                        if shown.status == .asking, !reduceMotion { LoopLayer(kind: .ripple, color: tint).frame(width: box * 0.86, height: box * 0.86) }
+                    }
+                    .transition(Self.swap)
             }
-            .background {
-                if halo, shown.needsYou { Circle().fill(tint.opacity(palette.dark ? 0.2 : 0.13)).frame(width: box * 1.55, height: box * 1.55) }
-            }
-            .animation(Motion.quick, value: shown)
-            // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
-            // 符号有基线、转圈与实心点没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成
-            .alignmentGuide(.firstTextBaseline) { [box] in $0[VerticalAlignment.center] + box * Self.midline }
-            .onChange(of: shown.status) { old, new in
-                if !reduceMotion, case .working = old, [.unread, .idle].contains(new) { finished += 1 }
-            }
+        }
+        .frame(width: box, height: box)
+        .animation(Motion.quick, value: shown)
+        .onChange(of: shown.isUnread) { _, unread in if unread, !reduceMotion { rings += 1 } }
+        // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
+        // 符号有基线、自绘的动效没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成
+        .alignmentGuide(.firstTextBaseline) { [box] in $0[VerticalAlignment.center] + box * Self.midline }
         if announces {
             // 只给读屏：每行一个悬停提示会让整页每行都挂一块跟踪区，滚动时跟着重算
             mark.accessibilityLabel(shown.presence)
@@ -102,27 +121,5 @@ struct PiStateDot: View {
         }
     }
 
-    @ViewBuilder private func glyph(_ tint: Color) -> some View {
-        switch shown.status {
-        case .working where !reduceMotion:
-            // 圈点的圈换成转着的一段弧：静止的列表里只有渲染服务在动
-            ZStack {
-                LoopLayer(kind: .orbit, color: tint).padding(box * 0.1)
-                Circle().fill(tint).frame(width: box * 0.36, height: box * 0.36)
-            }
-        case .unread:
-            Circle().fill(tint).frame(width: size * scale, height: size * scale)
-        default:
-            Image(systemName: shown.symbol).font(.system(size: box, weight: .semibold))
-                .foregroundStyle(tint)
-                .contentTransition(.symbolEffect(.replace))
-                .background { if shown.isLive, !reduceMotion { LoopLayer(kind: .breath, color: tint.opacity(0.28)) } }
-        }
-    }
-
-    private struct Ripple {
-        var pop: CGFloat = 1
-        var ring: CGFloat = 1
-        var ringOpacity: Double = 0
-    }
+    private static let swap = AnyTransition.scale(scale: 0.6).combined(with: .opacity)
 }

@@ -3,8 +3,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话回复框：草稿只有一份（`AppSettings`，iOS 与 Mac 同一份）：离开会话再回来还在；文字存在本机偏好、跨退出保留，
-/// 带上的卡片与图片只留在这次运行；iOS"发到 Mac"带来的卡片写进同一份草稿；排队的话在回复框上方一叠、没被 Mac 领取前可撤回。
+/// 会话回复框：草稿只有一份（`AppSettings`，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注存在本机偏好、跨退出保留，
+/// 带上的卡片与图片只留在这次运行；批注随下一句发出；iOS"发到 Mac"带来的卡片写进同一份草稿；排队的话在回复框上方一叠、没被 Mac 领取前可撤回。
 /// 数每个键被写了几次的偏好套件。
 nonisolated private final class CountingDefaults: UserDefaults, @unchecked Sendable {
     private(set) var writes: [String: Int] = [:]
@@ -59,6 +59,34 @@ struct ReplyTests {
         settings.flush()
         #expect(defaults.writes["replyTexts"] == 2)
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).replyDraft(for: session).text == "没写完")
+    }
+
+    /// 批注随下一句发出，排在你写的话前面：原文已在 Agent 的上下文里，只带认得出位置的摘录（列表符、换行收掉，过长只留头尾），
+    /// 不重发原文。
+    @Test func 批注跨退出保留_随下一句发出时只带头尾摘录() async throws {
+        let suite = "notes-\(UUID())"
+        let app = TestApp()
+        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
+        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
+        let settings = settings(suite)
+        var draft = settings.replyDraft(for: session.id)
+        draft.text = "按这个改"
+        draft.notes = [
+            ReplyNote(entry: UUID(), run: 0, location: 2, quote: "• 绑定时不碰草稿，既不提示，也不丢弃。\n• 补上后，绑定时“删草稿、塞进回复框”这条特殊路径可以整段删掉", note: "同意，先做这条"),
+            ReplyNote(entry: UUID(), run: 1, location: 0, quote: "会话 ↔ 任务改成多对一", note: "这条先不做"),
+        ]
+        settings.setReplyDraft(draft, for: session.id)
+        settings.flush()
+
+        let request = try await app.services.requestMacDelivery(self.settings(suite).replyDraft(for: session.id), to: session, mode: .send)
+
+        #expect(request.content == """
+            对你回答的批注（「」里是原话摘录）：
+            1.「绑定时不碰草稿，既不提示…这条特殊路径可以整段删掉」同意，先做这条
+            2.「会话 ↔ 任务改成多对一」这条先不做
+
+            按这个改
+            """)
     }
 
     private func message(_ seq: Int64, _ text: String, delivery: UUID?) -> PiChatMessage {

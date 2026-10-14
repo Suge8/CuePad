@@ -4,9 +4,10 @@ import CueStore
 import SwiftUI
 
 /// 任务浮窗："任务 → 步骤 → 会话"。点任务、步骤或它的草稿（项目页、任务面板、⌘K、归档）就在当前页上弹出，不换页。
-/// 左栏是这件事：标题、做到第几步、每个步骤一行（圈、名字、会话在动时一个状态点），末尾添加步骤；右边是选中的那一步——
-/// 没有步骤的任务就是它自己。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，开始就开一个以它命名的
-/// 新会话；开始了右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说。完成它，它的会话也一起结束。
+/// 左栏是这件事：标题、做到第几步、每个步骤一行（圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
+/// 右边是选中的那一步——没有步骤的任务就是它自己。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
+/// 开始就开一个以它命名的新会话；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
+/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（会话还绑着别的没做完的事时不结束）。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         /// 顶层任务。
@@ -42,6 +43,8 @@ struct TaskSheet: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background(palette.desk)
+        // 浮窗挂在页面之外：步骤的状态点、叶子去会话的入口读的"交给了哪个会话"在这里补上
+        .modifier(WindowCardAgents(workspace: workspace))
         .observing(services.store, id: taskID, into: $data, onError: workspace.fail) { [taskID] in try SheetData.read(taskID, from: $0) }
         // 别处删掉、归档了它，或改回了灵感：浮窗收起
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
@@ -80,7 +83,7 @@ struct TaskSheet: View {
     }
 }
 
-/// 左栏的一个步骤：圈（完成它，它的会话也结束）、名字、会话在动或在等你时一个状态点；点行在右边看这一步。
+/// 左栏的一个步骤：圈（完成它，它的会话也结束）、名字（选中时就地可改）、会话在动或在等你时一个状态点；点行在右边看这一步。
 private struct StepRow: View {
     let step: Card
     let selected: Bool
@@ -95,7 +98,11 @@ private struct StepRow: View {
         let shown = done ? nil : agents.items[step.id].map { services.settings.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
         HStack(spacing: TaskRow.columnGap) {
             TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
-            Text(step.title).font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
+            if selected {
+                TaskHeading(task: step, font: Typography.body).id(step.id)
+            } else {
+                Text(step.title).font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
+            }
             Spacer(minLength: 4)
             if let shown, TaskNext.wantsLook(shown) { PiStateDot(shown: shown, size: 6) }
         }
@@ -104,7 +111,7 @@ private struct StepRow: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture { workspace.openTask?.step = step.id }
-        .contextMenu { CardActions(card: step) }
+        .contextMenu { CardActions(card: step, leaf: true) }
     }
 }
 
@@ -127,7 +134,7 @@ private struct LeafDetail: View {
             } else if let item {
                 let state = workspace.withLiveState(item.state)
                 let shown = services.settings.shown(state, delivery: item.delivery)
-                let look = Look(shown, line: PiRowLine.of(state, draft: nil, end: nil, failure: shown.undelivered(item.delivery)?.failure)?.speech)
+                let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
             } else {
@@ -202,7 +209,7 @@ private struct MascotFigure: View {
 }
 
 /// 还没开始的叶子任务的输入框：一块玻璃，里面是这件事的草稿（任务下的那条提示词，编辑器自动保存，⌘↩ 同"开始"）；
-/// 还没有草稿时是一行提示，点了新建一条接着写。左下"绑定已有会话"把它绑到本项目一个在跑的会话上（写好的话挪进那个会话的回复框，不自动发）。
+/// 还没有草稿时是一行提示，点了新建一条接着写。左下"绑定已有会话"把它绑到本项目一个在跑的会话上（写好的话接进那个会话的回复框，不自动发）。
 private struct DraftComposer: View {
     let leaf: Card
     let draft: Card?
@@ -226,7 +233,10 @@ private struct DraftComposer: View {
                 .buttonStyle(.plain)
             }
             HStack(spacing: 10) {
-                BindMenu(leaf: leaf)
+                Menu { SessionBindItems(leaf: leaf) } label: {
+                    Text("绑定已有会话").font(Typography.meta).foregroundStyle(palette.ink3)
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 Spacer(minLength: 0)
                 Text("⌘↩").font(Typography.meta).foregroundStyle(palette.ink3)
                 Button {
@@ -269,37 +279,6 @@ private struct DraftEditor: View {
             editing?.handle.focus()
         }
         .onDisappear { editing?.leave() }
-    }
-}
-
-/// "绑定已有会话"：本项目此刻在线的会话（所有 Mac 上的）；选一个就把这件事绑上它。
-private struct BindMenu: View {
-    let leaf: Card
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let sessions = workspace.sendState.onlineTargets(for: leaf.projectID).filter { $0.state.projectID == leaf.projectID }
-        Menu {
-            ForEach(sessions) { item in
-                Button(item.state.title) { bind(item.state.sessionID) }
-            }
-            if sessions.isEmpty { Button("本项目没有在跑的会话") {}.disabled(true) }
-        } label: {
-            Text("绑定已有会话").font(Typography.meta).foregroundStyle(palette.ink3)
-        }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-    }
-
-    /// 绑上之后，写好没发的话挪进那个会话的回复框，由你决定发不发。
-    private func bind(_ sessionID: String) {
-        let store = services.store, id = leaf.id, settings = services.settings
-        workspace.attempt {
-            if let text = try await store.bindSession(sessionID, to: id) {
-                settings.setReplyDraft(ComposerDraft(text: text), for: PiSessionState.recordID(sessionID: sessionID))
-            }
-        }
     }
 }
 

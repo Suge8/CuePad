@@ -72,6 +72,7 @@ struct SessionPage: View {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
+                        .replyNotes(session: session.id, messages: digest.messages)
                         .fadesUnderBars()
                         .frame(maxHeight: .infinity)
                 } else {
@@ -88,7 +89,8 @@ struct SessionPage: View {
                             stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
                             commandProgress: MacDelivery.commandProgress(digest.deliveries),
                             queued: PiChat.queued(digest.deliveries, messages: digest.messages),
-                            recall: PiChat.lastSaid(digest.messages)
+                            recall: PiChat.lastSaid(digest.messages),
+                            revealNote: { follow.seek($0.entry) }
                         ) {
                             follow.jumpToNewest()
                         }
@@ -164,11 +166,12 @@ struct SessionPage: View {
 
 extension View {
     /// 会话行：点按在内容区打开这个会话的整页；正打开着的那个垫选中底。
-    func sessionLink(_ sessionID: String) -> some View { modifier(SessionLink(sessionID: sessionID)) }
+    func sessionLink(_ sessionID: String, press: Press = .control) -> some View { modifier(SessionLink(sessionID: sessionID, press: press)) }
 }
 
 private struct SessionLink: ViewModifier {
     let sessionID: String
+    let press: Press
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -181,7 +184,7 @@ private struct SessionLink: ViewModifier {
         } label: {
             content.contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(PressStyle(press))
         .background(opened ? palette.selection : .clear, in: .rect(cornerRadius: 8))
         .accessibilityAddTraits(opened ? .isSelected : [])
         .accessibilityHint("打开会话")

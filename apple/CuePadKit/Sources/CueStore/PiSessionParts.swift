@@ -162,9 +162,12 @@ public struct PiSubagentState: Sendable, Equatable, Codable {
   public var action: String
   public var startedAt: Date?
   public var settledAt: Date?
+  /// 实际用的模型（FireCode 名册原文 `provider/model`）；旧扩展上报的没有。
+  public var model: String?
 
   public init(
-    name: String, role: String, phase: Open<PiSubagentPhase>, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil
+    name: String, role: String, phase: Open<PiSubagentPhase>, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil,
+    model: String? = nil
   ) {
     self.name = name
     self.role = role
@@ -172,6 +175,7 @@ public struct PiSubagentState: Sendable, Equatable, Codable {
     self.action = action
     self.startedAt = startedAt
     self.settledAt = settledAt
+    self.model = model
   }
 
   /// 去掉"在做什么"的样子：谁在、什么角色、什么状态。动作文字随每次工具调用变，不算名册变了（记录器据此不为它绕开写入节流）。
@@ -182,7 +186,7 @@ public struct PiSubagentState: Sendable, Equatable, Codable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case name, role, action, startedAt, settledAt
+    case name, role, action, startedAt, settledAt, model
     case phase = "state"
   }
 }

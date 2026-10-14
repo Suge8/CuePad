@@ -86,6 +86,8 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
+  /// 会话名（Pi 的 `/name`）：从任务开的会话叫那个叶子的标题，由 `CueStore.requestLaunch` 按带着的卡定；nil 是 Pi 的默认名（第一句话）。
+  public internal(set) var name: String?
 
   public init(project: UUID, prompt: String?, token: String) {
     self.project = project

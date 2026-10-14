@@ -67,7 +67,7 @@ struct TaskRow: View {
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(perform: open)
-        .contextMenu { CardActions(card: task) }
+        .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
         .padding(.vertical, 2)
         // 读屏：整行一个元素"任务内容，项目，步骤进度，下一步"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)

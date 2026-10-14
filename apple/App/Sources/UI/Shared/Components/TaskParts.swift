@@ -10,6 +10,8 @@ import SwiftUI
 /// 任务的标题（单行），就地改、自动保存。回车结束编辑。
 struct TaskHeading: View {
     let task: Card
+    /// 任务页、浮窗顶上是大标题；Mac 浮窗左栏里选中的步骤就地改名时是正文字号。
+    var font = TaskMetrics.title
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -19,7 +21,7 @@ struct TaskHeading: View {
 
     var body: some View {
         TextField("这件事是…", text: $title, axis: .vertical)
-            .font(TaskMetrics.title).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
+            .font(font).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
             .lineLimit(1...3).focused($focused)
             .onChange(of: title) { _, next in
                 // 标题只有一行：回车结束编辑
