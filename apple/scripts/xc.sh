@@ -114,7 +114,9 @@ start_mac() {
     pid="$(cat "$pidfile")"
     if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "$exe" ]; then
       kill -TERM "$pid"
-      while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+      for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+      # 5 秒没退出（卡在收尾里）：PID 已核对是自己的实例，强制结束，不无限等
+      if kill -0 "$pid" 2>/dev/null; then echo "上一个实例 $pid 5 秒没退出，强制结束" >&2; kill -KILL "$pid"; fi
     fi
     rm -f "$pidfile"
   fi
