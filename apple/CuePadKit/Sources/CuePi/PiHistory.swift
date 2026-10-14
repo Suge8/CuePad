@@ -8,7 +8,7 @@ public struct PiSessionHistory: Sendable, Equatable {
     public var sessionID: String?
     public var cwd: String?
     public var name: String?
-    /// 文件里第一条有文字的用户消息（文字块用空格连接，最多 `PiSessionName.firstMessageLimit` 字）。
+    /// 第一条有文字的你的话（`PiSessionName.firstMessage`）。
     public var firstMessage: String?
     public var lastActivity: Date?
 
@@ -19,6 +19,7 @@ public struct PiSessionHistory: Sendable, Equatable {
 }
 
 /// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。只存摘要与跨行的轮次状态，不存正文。
+/// 解不开（格式随 CuePi 升级变了）的检查点当作没有，从头重读。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
@@ -29,17 +30,29 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var name: String?
     var lastActivity: Date?
     var firstMessage: String?
-    /// 已消费的行数（对话消息的 `seq`）。加对话之前的检查点没有它、解不开，从头重读一次补出对话
+    /// 已消费的行数（对话消息的 `seq`）
     var seq: Int64 = 0
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
     var recap = PiRecap()
-    /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它。可选：旧检查点没有这一项
-    var excluded: Bool?
+    /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
+    var excluded = false
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
         var tools = PiToolLog()
+    }
+}
+
+/// 索引一个会话文件从哪接着读：上次的检查点（没有或解不开为 nil），与本机是否已存着它的对话
+/// （范围内的会话要有全部消息：没有就从头读一遍补齐；范围外的存着对话的也整份重读，已存的消息跟着读文件的规则更新）。
+public struct PiHistoryStart: Sendable {
+    public var checkpoint: PiHistoryCheckpoint?
+    public var hasTranscript: Bool
+
+    public init(checkpoint: PiHistoryCheckpoint?, hasTranscript: Bool) {
+        self.checkpoint = checkpoint
+        self.hasTranscript = hasTranscript
     }
 }
 
@@ -50,13 +63,15 @@ public struct PiHistoryUpdate: Sendable {
     public var history: PiSessionHistory
     /// 这次新读到的对话（从头读时是全部）；`includesTranscript` 为 false 时（只读了摘要）为空
     public var messages: [PiChatMessage]
-    /// 这次读的时候要不要对话（调用方——索引器按文件修改时间——的判定）：写不写对话以它为准
+    /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话 id：会话文件头里的；Claude Code 的文件名就是会话 id，文件头还没读到时用它。
-    public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    /// 会话文件的修改时间（列目录或读文件时取的）
+    public var modified: Date?
     /// 算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
-    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。Claude Code 的文件名就是会话 id，总算。
-    public var isSession: Bool { history.sessionID != nil || agent == .claudeCode }
+    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。文件名就是会话 id 的（Claude Code）总算（`SessionFileFormat`）。
+    public var isSession: Bool
+    /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
+    public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.recap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -71,36 +86,54 @@ public enum PiHistoryEvent: Sendable {
     case backfillFinished(sessionFiles: [URL])
 }
 
-/// Agent 会话文件（JSONL）的增量解析：读取、检查点与摘要的规则各家共用，逐行的解码按 Agent 分（`LineParser`；
-/// Pi 的在这里，Claude Code、Codex 的在 `ClaudeHistory`、`CodexHistory`）。OpenCode 的会话在它的数据库里，不经这里。
-/// Pi 的会话文件是 v3 树结构：当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，与 Pi 加载会话时确定叶子的规则一致。
-public enum PiHistory {
-    /// 一行会话文件（不含换行）的解码：更新检查点里的摘要与轮次状态，你的话与每轮的回答加进 `transcript`。损坏或不认识的行跳过。
-    typealias LineParser = (UnsafeRawBufferPointer, inout PiHistoryCheckpoint, inout Transcript) throws -> Void
+/// 一家 Agent 的会话文件怎么认、怎么读：唯一的一处（会话目录本身在 `AgentPaths.sessionsDirectory`）。OpenCode 的会话在它的数据库里，没有。
+struct SessionFileFormat: Sendable {
+    /// 一行会话文件（不含换行）的解码：经检查点上的那几个变化（`said`、`answered`……）更新摘要与轮次，你的话与每轮的回答加进对话。
+    /// 损坏或不认识的行跳过。
+    typealias Ingest = @Sendable (UnsafeRawBufferPointer, inout PiHistoryCheckpoint, inout PiHistory.Transcript) throws -> Void
 
-    static func parser(for agent: AgentKind) -> LineParser {
+    let ingest: Ingest
+    /// 会话文件在会话目录下第几层，与各家自己的会话列表一致：Pi 与 Claude Code 是 `<项目目录>/*.jsonl`（更深的，如子代理的
+    /// `<项目目录>/…/subagents/*.jsonl`，不是会话列表里的会话）；Codex 是 `YYYY/MM/DD/rollout-*.jsonl`。
+    let depth: Int
+    /// Agent 写会话文件时一直开着它（Codex 的常驻服务整段会话都开着）：FSEvents 只在关闭时报，要另盯追加
+    let keepsFilesOpen: Bool
+    /// 文件名就是会话 id（Claude Code）：文件头还没读到也算会话
+    let nameIsSessionID: Bool
+    /// 只读摘要有快速路径（Pi：会话文件动辄几百 MB，见 `PiHistory.skim`）；没有的逐行全读、丢掉对话
+    let skims: Bool
+
+    static func of(_ agent: AgentKind) -> SessionFileFormat? {
         switch agent {
-        case .pi: ingestLine
-        case .claudeCode: ClaudeHistory.ingest
-        case .codex: CodexHistory.ingest
-        case .opencode: preconditionFailure("OpenCode 的会话不在文件里")
+        case .pi: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: false, skims: true)
+        case .claudeCode: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: true, skims: false)
+        case .codex: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, keepsFilesOpen: true, nameIsSessionID: false, skims: false)
+        case .opencode: nil
         }
     }
+}
 
+/// Agent 会话文件（JSONL）的增量解析：读取、检查点、轮次与摘要的规则各家共用（检查点上的 `said`、`answered`、`interrupted`、
+/// `compacted` 与工具活动），逐行的解码按 Agent 分（`SessionFileFormat`；Pi 的在这里，Claude Code、Codex 的在 `ClaudeHistory`、
+/// `CodexHistory`；OpenCode 的会话在它的数据库里，`OpenCodeHistory` 经它的接口逐条读进同样的检查点）。
+/// Pi 的会话文件是 v3 树结构：当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，与 Pi 加载会话时确定叶子的规则一致。
+public enum PiHistory {
     private static let fingerprintPrefix = 256
     private static let blockSize = 8 * 1024 * 1024
 
     /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
     /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
     ///
-    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：Pi 的会话文件是图片唯一的来源，
+    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：会话文件是图片唯一的来源，
     /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
     ///
-    /// `transcript` 为 false 时不要对话（7 天外的会话）：从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
+    /// `transcript` 为 false 时不要对话（7 天外的会话）：Pi 从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
     /// 最近一轮的问答从文件尾往回解码到够用为止；得到的检查点与逐行全读一样，之后增量读接得上。
     public static func index(
-        file: URL, agent: AgentKind = .pi, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, files: AttachmentFiles
+        file: URL, agent: AgentKind, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, modified: Date? = nil,
+        files: AttachmentFiles
     ) throws -> PiHistoryUpdate {
+        guard let format = SessionFileFormat.of(agent) else { preconditionFailure("\(agent.name) 的会话不在文件里") }
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()
@@ -110,10 +143,8 @@ public enum PiHistory {
         let start = state.offset
         var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: files)
         let consumed: UInt64
-        // 只读摘要的快速路径只有 Pi 的（它的会话文件动辄几百 MB）；其余逐行全读、丢掉对话
-        if wanted || resumed != nil || agent != .pi {
-            let parse = parser(for: agent)
-            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try parse(line, &state, &transcript) }
+        if wanted || resumed != nil || !format.skims {
+            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try format.ingest(line, &state, &transcript) }
             if !wanted { transcript.messages = [] }
         } else {
             var lines: [Skimmed] = []
@@ -122,9 +153,11 @@ public enum PiHistory {
         }
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
+        let history = PiSessionHistory(
+            sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
-            file: file, agent: agent, checkpoint: state, history: history(of: state), messages: transcript.messages, includesTranscript: wanted,
-            bytesRead: Int(consumed - start))
+            file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
+            modified: modified, isSession: history.sessionID != nil || format.nameIsSessionID, bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`，带行首偏移；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
@@ -190,7 +223,76 @@ public enum PiHistory {
         return hash
     }
 
-    // MARK: 解码
+    // MARK: 对话与轮次（各家共用）
+
+    /// 一条消息在会话里的位置：条目 id（没有时用行号）、行号（`seq`）、时间。
+    struct Entry {
+        var id: String
+        var seq: Int64
+        var at: Date
+    }
+
+    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。`files` 是你的消息里的图片要存进的附件目录；
+    /// nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
+    struct Transcript {
+        let fallbackID: String
+        let files: AttachmentFiles?
+        var messages: [PiChatMessage] = []
+
+        mutating func add(
+            _ cp: PiHistoryCheckpoint, _ entry: Entry, role: PiChatRole, text: String, tools: PiChatMessage.Tools? = nil,
+            roundStartedAt: Date? = nil, deliveryID: String? = nil
+        ) {
+            messages.append(PiChatMessage(
+                sessionID: cp.sessionID ?? fallbackID, entryID: entry.id, seq: entry.seq, role: role, text: text, at: entry.at, tools: tools,
+                roundStartedAt: roundStartedAt, deliveryID: deliveryID.flatMap(UUID.init(uuidString:))))
+        }
+
+        /// 拼你说的一句话：按块的原顺序加文字与图片。
+        func said() -> Said { Said(files: files) }
+    }
+
+    /// 你说的一句：文字块去掉 Pi 附给模型的图片说明行（`PiSessionName.withoutImageNotes`），图片存进附件目录。
+    /// `text` 是文字块用换行连接（标题、摘要、机器消息判断都用它），`stored` 是文字与图片按块的原顺序拼成的正文格式（`CueFormat`，
+    /// 与投送请求的 content 同一种；不存图片时等同 `text`）。
+    struct Said {
+        fileprivate let files: AttachmentFiles?
+        private var texts: [String] = []
+        private var pieces: [String] = []
+
+        fileprivate init(files: AttachmentFiles?) { self.files = files }
+
+        mutating func text(_ block: String?) {
+            let text = PiSessionName.withoutImageNotes(block ?? "")
+            guard !text.isEmpty else { return }
+            texts.append(text)
+            pieces.append(text)
+        }
+
+        /// 图片原字节；不是图片的跳过。
+        mutating func image(_ data: Data?) throws {
+            guard let files, let data else { return }
+            do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage {}
+        }
+
+        var text: String { texts.joined(separator: "\n") }
+        var stored: String { files == nil ? text : pieces.joined(separator: "\n") }
+    }
+
+    /// 去掉首尾空白后截到 `limit` 个字符（超出的以省略号结尾）；空文字为 nil。
+    static func clip(_ text: String, _ limit: Int) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit - 1)) + "…"
+    }
+
+    /// 单行：空白与控制字符折成一个空格。
+    static func collapsed(_ text: String) -> String {
+        text.split(whereSeparator: { $0.isWhitespace || $0.unicodeScalars.allSatisfy { CharacterSet.controlCharacters.contains($0) } })
+            .joined(separator: " ")
+    }
+
+    // MARK: Pi 的会话文件
 
     private struct Line: Decodable {
         var type: String
@@ -234,14 +336,11 @@ public enum PiHistory {
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
         }
 
-        /// 文字块用空格连接（与 Pi 会话列表取首条消息一致）
-        var text: String { joined(" ") }
-
-        /// 文字块（去掉 Pi 附给模型的图片说明，`PiSessionName.withoutImageNotes`）用 `separator` 连接。
-        func joined(_ separator: String) -> String {
+        /// 回答：文字块用换行连接
+        var reply: String {
             switch self {
-            case .text(let s): PiSessionName.withoutImageNotes(s)
-            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text.map(PiSessionName.withoutImageNotes) : nil }.joined(separator: separator)
+            case .text(let s): s
+            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
             }
         }
 
@@ -250,24 +349,19 @@ public enum PiHistory {
             return b.filter { $0.type == "toolCall" }
         }
 
-        /// 你说的一句：`text` 是文字块用换行连接（`joined`），摘要、机器消息判断都用它；
-        /// `stored` 是文字与图片按块的原顺序拼成的正文格式（`files` 为 nil 时不要图片，等同 `text`）。
-        func said(storing files: AttachmentFiles?) throws -> (text: String, stored: String) {
-            guard case .blocks(let blocks) = self else { return (text, text) }
-            var texts: [String] = [], pieces: [String] = []
-            for block in blocks {
-                switch block.type {
-                case "text":
-                    let piece = PiSessionName.withoutImageNotes(block.text ?? "")
-                    if !piece.isEmpty { texts.append(piece); pieces.append(piece) }
-                case "image":
-                    guard let files, let data = block.data.flatMap({ Data(base64Encoded: $0) }) else { continue }
-                    do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage { continue }
-                default: break
+        /// 你说的一句（`files` 为 nil 时不存图片）。
+        func said(into said: inout Said) throws {
+            switch self {
+            case .text(let s): said.text(s)
+            case .blocks(let blocks):
+                for block in blocks {
+                    switch block.type {
+                    case "text": said.text(block.text)
+                    case "image": try said.image(block.data.flatMap { Data(base64Encoded: $0) })
+                    default: break
+                    }
                 }
             }
-            let text = texts.joined(separator: "\n")
-            return (text, files == nil ? text : pieces.joined(separator: "\n"))
         }
     }
 
@@ -283,37 +377,17 @@ public enum PiHistory {
     private static let headLength = 512
     private static let tailLength = 128
 
-    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。`files` 是你的消息里的图片要存进的附件目录；
-    /// nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
-    struct Transcript {
-        let fallbackID: String
-        let files: AttachmentFiles?
-        var messages: [PiChatMessage] = []
-
-        mutating func add(
-            _ cp: PiHistoryCheckpoint, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date,
-            tools: PiChatMessage.Tools? = nil, roundStartedAt: Date? = nil, deliveryID: String? = nil
-        ) {
-            messages.append(PiChatMessage(
-                sessionID: cp.sessionID ?? fallbackID, entryID: entryID, seq: seq, role: role, text: text, at: at, tools: tools,
-                roundStartedAt: roundStartedAt, deliveryID: deliveryID.flatMap(UUID.init(uuidString:))))
-        }
-    }
-
-    private static func ingestLine(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout Transcript) throws {
-        try ingest(raw, into: &cp, transcript: &transcript)
-    }
-
-    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) throws {
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout Transcript) throws {
         cp.seq += 1
         if let result = toolResult(raw) {
-            cp.round?.tools.finish(id: result.id, failed: result.failed)
+            cp.toolFinished(id: result.id, failed: result.failed)
             return
         }
         guard let line = decode(raw) else { return } // 损坏行跳过
         let time = line.time
         // 最后活动：最后一行的时间（Pi 按时间追加）
         if let time { cp.lastActivity = time }
+        let entry = Entry(id: line.id ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         switch line.type {
         case "session":
             cp.sessionID = line.id
@@ -321,80 +395,31 @@ public enum PiHistory {
         case "session_info":
             cp.name = line.name
         case "compaction":
-            transcript.add(
-                cp, entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: "已压缩上下文", at: time ?? cp.lastActivity ?? .distantPast)
+            cp.compacted(entry, into: &transcript)
         case "message":
             guard let message = line.message else { return }
-            if cp.firstMessage == nil, message.role == "user" {
-                let text = message.content?.text ?? ""
-                if !text.isEmpty { cp.firstMessage = String(text.prefix(PiSessionName.firstMessageLimit)) }
-            }
-            let entry = (id: line.id ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
             switch message.role {
-            case "user": try userMessage(message, entry, into: &cp, transcript: &transcript)
-            case "assistant": assistantMessage(message, entry, into: &cp, transcript: &transcript)
+            case "user":
+                var said = transcript.said()
+                try message.content?.said(into: &said)
+                cp.said(said, entry, deliveryID: message.cuepadDelivery, into: &transcript)
+            case "assistant":
+                for call in message.content?.toolCalls ?? [] {
+                    cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? PiToolArguments())
+                }
+                // 中途调工具时说的话不算回答；被停下（Esc）的一轮没有回答
+                switch message.stopReason {
+                case "toolUse": break
+                case "aborted": cp.interrupted(entry, into: &transcript)
+                default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
+                }
             case "toolResult":
-                if let id = message.toolCallId { cp.round?.tools.finish(id: id, failed: message.isError == true) }
+                if let id = message.toolCallId { cp.toolFinished(id: id, failed: message.isError == true) }
             default: break
             }
         default:
             break
         }
-    }
-
-    private typealias Entry = (id: String, seq: Int64, at: Date)
-
-    /// 你说的一句：进对话、成为进行中的提问。机器消息（扩展投进来的信封）不进对话，只开始一轮。
-    private static func userMessage(
-        _ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript
-    ) throws {
-        if cp.round?.startedAt == nil { cp.round = .init(startedAt: entry.at, tools: cp.round?.tools ?? PiToolLog()) }
-        let said = try message.content?.said(storing: transcript.files) ?? (text: "", stored: "")
-        guard !isMachineMessage(said.text) else { return }
-        transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .user, text: said.stored, at: entry.at, deliveryID: message.cuepadDelivery)
-        cp.recap.pendingPrompt = clip(collapsed(said.text), PiRecap.promptLimit)
-    }
-
-    /// 助手消息：中途调工具的（`stopReason` 为 `toolUse`）只累计这一轮的工具活动；结束一轮的成一条 Pi 消息，问与答一起更新摘要。
-    private static func assistantMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
-        var round = cp.round ?? .init(startedAt: nil)
-        for call in message.content?.toolCalls ?? [] {
-            round.tools.start(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? PiToolArguments(), cwd: cp.cwd)
-        }
-        guard message.stopReason != "toolUse" else {
-            cp.round = round
-            return
-        }
-        let text = (message.content?.joined("\n") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            transcript.add(
-                cp, entryID: entry.id, seq: entry.seq, role: .pi, text: text, at: entry.at, tools: round.tools.summary(),
-                roundStartedAt: round.startedAt)
-        }
-        cp.recap = PiRecap(
-            lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: clip(text, PiRecap.replyLimit), pendingPrompt: nil)
-        cp.round = nil
-    }
-
-    /// 扩展投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成（如 FireCode 的 `<firecode_master_event>`、
-    /// `<firecode_review>`）。块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配。
-    private static let machineMessage = try! NSRegularExpression(pattern: #"^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n</\1>)[\s\S])*\n</\1>\s*)+$"#)
-
-    static func isMachineMessage(_ text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return machineMessage.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
-    }
-
-    static func collapsed(_ text: String) -> String {
-        text.split(whereSeparator: { $0.isWhitespace || $0.unicodeScalars.allSatisfy { CharacterSet.controlCharacters.contains($0) } })
-            .joined(separator: " ")
-    }
-
-    /// 去掉首尾空白后截到 `limit` 个字符（超出的以省略号结尾）；空文字为 nil。
-    static func clip(_ text: String, _ limit: Int) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit - 1)) + "…"
     }
 
     private static let decoder = JSONDecoder()
@@ -429,7 +454,7 @@ public enum PiHistory {
         return (String(decoding: head[start..<end], as: UTF8.self), contains(tail, failedMarker))
     }
 
-    // MARK: 只读摘要
+    // MARK: 只读摘要（Pi）
 
     /// 只读摘要时记下的一行：行首偏移、长度；元信息行（文件头、改名）已当场读过。
     private struct Skimmed {
@@ -464,14 +489,16 @@ public enum PiHistory {
         }
         if cp.firstMessage == nil, contains(head, userMarker) || !contains(head, roleMarker),
            let line = decode(raw), line.type == "message", line.message?.role == "user" {
-            let text = line.message?.content?.text ?? ""
-            if !text.isEmpty { cp.firstMessage = String(text.prefix(PiSessionName.firstMessageLimit)) }
+            var said = Said(files: nil)
+            try? line.message?.content?.said(into: &said)
+            cp.firstMessage = PiSessionName.firstMessage(said.text)
         }
         lines.append(Skimmed(offset: offset, length: raw.count, kind: .other))
     }
 
-    /// 从文件尾往回解码：最后活动（最后一行的时间）、最近一轮做完的问答；还没做完的那一轮（最后一条回答之后的行）
-    /// 按逐行读的规则重放，得到它的开始时间、已调的工具与进行中的提问——与逐行全读得到的一样。
+    /// 从文件尾往回解码，得到与逐行全读一样的摘要：最后活动（最后一行的时间）；回答是最后一个做完的一轮的；提问是那一轮的提问，
+    /// 那一轮由机器消息触发（没有你的提问）时沿用再往前做完的一轮的——被停下的一轮里的提问不算（它在停下时就清掉了）。
+    /// 最后一轮结束（做完或被停下）之后的行按逐行读的规则重放，得到还没做完的那一轮：开始时间、已调的工具与进行中的提问。
     private static func settle(_ cp: inout PiHistoryCheckpoint, lines: [Skimmed], handle: FileHandle) throws {
         func read(_ line: Skimmed) throws -> Data? {
             try handle.seek(toOffset: line.offset)
@@ -486,43 +513,108 @@ public enum PiHistory {
                 break
             }
         }
-        var final: String?
-        var lastPrompt: String?
-        var unfinished = 0 // 最后一条回答之后的第一行
-        for (index, skimmed) in lines.enumerated().reversed() where skimmed.kind == .other {
-            guard let line = try decoded(skimmed), line.type == "message", let message = line.message else { continue }
-            let text: String
-            if message.role == "user" {
-                text = try message.content?.said(storing: nil).text ?? ""
-            } else {
-                text = message.content?.joined("\n") ?? ""
-            }
-            if final == nil {
-                if message.role == "assistant", message.stopReason != "toolUse" {
-                    final = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    unfinished = index + 1
+        enum Event { case prompt(String), answered(String), interrupted }
+        func event(_ line: Line) throws -> Event? {
+            guard line.type == "message", let message = line.message else { return nil }
+            switch message.role {
+            case "user":
+                var said = Said(files: nil)
+                try message.content?.said(into: &said)
+                return PiSessionName.isMachineMessage(said.text) ? nil : .prompt(said.text)
+            case "assistant":
+                switch message.stopReason {
+                case "toolUse": return nil
+                case "aborted": return .interrupted
+                default: return .answered(message.content?.reply ?? "")
                 }
-            } else if message.role == "user", !isMachineMessage(text) {
-                lastPrompt = clip(collapsed(text), PiRecap.promptLimit)
-                break
+            default: return nil
+            }
+        }
+        var unfinished: Int? // 最后一轮结束之后的第一行
+        var reply: String?
+        var prompt: String?
+        var skipping = false // 往回越过被停下的一轮：它的提问不算
+        search: for (index, skimmed) in lines.enumerated().reversed() where skimmed.kind == .other {
+            guard let line = try decoded(skimmed), let event = try event(line) else { continue }
+            switch event {
+            case .interrupted, .answered:
+                if unfinished == nil { unfinished = index + 1 }
+                if case .answered(let text) = event, reply == nil { reply = text }
+                guard reply != nil else { continue }
+                if case .interrupted = event { skipping = true } else { skipping = false }
+            case .prompt(let text):
+                guard reply != nil, !skipping else { continue }
+                prompt = text
+                break search
             }
         }
         var rest = cp
         rest.round = nil
         rest.recap.pendingPrompt = nil
         var ignored = Transcript(fallbackID: "", files: nil)
-        for line in lines[unfinished...] where line.kind != .meta {
-            try read(line)?.withUnsafeBytes { try ingest($0, into: &rest, transcript: &ignored) }
+        for line in lines[(unfinished ?? 0)...] where line.kind != .meta {
+            try read(line)?.withUnsafeBytes { try ingest($0, &rest, &ignored) }
         }
         cp.round = rest.round
         cp.recap = PiRecap(
-            lastPrompt: final == nil ? nil : lastPrompt, lastReply: final.flatMap { clip($0, PiRecap.replyLimit) },
-            pendingPrompt: rest.recap.pendingPrompt)
+            lastPrompt: reply == nil ? nil : prompt.flatMap { clip(collapsed($0), PiRecap.promptLimit) },
+            lastReply: reply.flatMap { clip($0, PiRecap.replyLimit) }, pendingPrompt: rest.recap.pendingPrompt)
+    }
+}
+
+// MARK: - 轮次与摘要的规则（各家共用）
+
+extension PiHistoryCheckpoint {
+    /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮；机器消息（扩展投进来的信封，
+    /// `PiSessionName.isMachineMessage`）只开始一轮，其余进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
+    mutating func said(_ said: PiHistory.Said, _ entry: PiHistory.Entry, deliveryID: String?, into transcript: inout PiHistory.Transcript) {
+        if firstMessage == nil { firstMessage = PiSessionName.firstMessage(said.text) }
+        if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
+        guard !PiSessionName.isMachineMessage(said.text) else { return }
+        transcript.add(self, entry, role: .user, text: said.stored, deliveryID: deliveryID)
+        recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(said.text), PiRecap.promptLimit)
     }
 
-    static func history(of cp: PiHistoryCheckpoint) -> PiSessionHistory {
-        PiSessionHistory(
-            sessionID: cp.sessionID, cwd: cp.cwd, name: cp.name, firstMessage: cp.firstMessage, lastActivity: cp.lastActivity)
+    /// 这一轮开始（Agent 自己标出开始的，如 Codex 的 `task_started`）：重新计时、清掉工具活动。
+    mutating func roundStarted(at date: Date) {
+        round = Round(startedAt: date)
+    }
+
+    mutating func toolStarted(id: String, name: String, arguments: PiToolArguments) {
+        var current = round ?? Round(startedAt: nil)
+        current.tools.start(id: id, name: name, arguments: arguments, cwd: cwd)
+        round = current
+    }
+
+    mutating func toolFinished(id: String, failed: Bool) {
+        round?.tools.finish(id: id, failed: failed)
+    }
+
+    /// 这一轮做完：回答（去掉首尾空白，可以为空——如只调了工具、出错）成一条消息，带这一轮的工具活动；
+    /// 问与答一起更新——提问是这一轮里你说的话，机器消息触发的轮沿用上一次的提问。
+    mutating func answered(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+        let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = round ?? Round(startedAt: nil)
+        if !reply.isEmpty {
+            transcript.add(self, entry, role: .pi, text: reply, tools: current.tools.summary(), roundStartedAt: current.startedAt)
+        }
+        recap = PiRecap(
+            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply, PiRecap.replyLimit), pendingPrompt: nil)
+        round = nil
+    }
+
+    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"）：没有回答，问答不变，这一轮的提问不再算进行中；
+    /// 对话里在停下的地方留一行系统行。
+    mutating func interrupted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+        guard round != nil else { return }
+        transcript.add(self, entry, role: .system, text: "已停止")
+        round = nil
+        recap.pendingPrompt = nil
+    }
+
+    /// 压缩上下文：一行系统行，不动问答。
+    mutating func compacted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+        transcript.add(self, entry, role: .system, text: "已压缩上下文")
     }
 }
 #endif

@@ -23,7 +23,7 @@ struct PiHistoryFailureTests {
 
     private func events(for files: [URL]) -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
-            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: services.store.files))) }
+            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: services.store.files))) }
             continuation.finish()
         }
     }
@@ -45,7 +45,7 @@ struct PiHistoryFailureTests {
         try breakPiSessionTable()
 
         // 读失败：当作从头重读，但必须可见
-        #expect(await services.loadPiCheckpoint(for: broken) == nil)
+        #expect(await services.loadHistoryStart(for: broken) == nil)
         guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else {
             Issue.record("读检查点失败没有进入 startupIssues：\(services.startupIssues)")
             return
@@ -92,9 +92,9 @@ struct PiHistoryFailureTests {
         try await services.store.upsertPiSession(
             IndexedSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
-        #expect(await services.loadPiCheckpoint(for: file) == nil)
+        #expect(await services.loadHistoryStart(for: file)?.checkpoint == nil)
         await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: services.store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }, agent: .pi)

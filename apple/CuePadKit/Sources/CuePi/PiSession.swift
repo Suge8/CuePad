@@ -102,6 +102,23 @@ public enum PiSessionName {
         [name, firstMessage.map(withoutImageNotes)].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
     }
 
+    /// 你的一句话当首条消息记下的样子：去掉首尾空白后的开头 `firstMessageLimit` 个字符；没有文字为 nil（接着看下一条）。
+    /// 与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
+    public static func firstMessage(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
+    }
+
+    /// 扩展或 Agent 自己投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成（如 FireCode 的
+    /// `<firecode_master_event>`、Codex 子代理的通知）。块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配。
+    /// 它们不进对话、不是提问，只开始一轮。
+    public static func isMachineMessage(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return machineMessage.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
+    }
+
+    private static let machineMessage = try! NSRegularExpression(pattern: #"^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n</\1>)[\s\S])*\n</\1>\s*)+$"#)
+
     /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
     /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行（说明行后面的空行不挡），其余原样。
     public static func withoutImageNotes(_ text: String) -> String {
@@ -199,6 +216,8 @@ public enum PiBridgeError: Error, Equatable {
 }
 
 extension PiBridgeError: LocalizedError {
+    private static let failedPrefix = "failed: "
+
     public var errorDescription: String? {
         switch self {
         case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
@@ -216,7 +235,9 @@ extension PiBridgeError: LocalizedError {
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
         case .rejected("compacting"): "Agent 正在压缩上下文，压完再发这个命令"
-        case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
+        // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
+        case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): String(reason.dropFirst(Self.failedPrefix.count))
+        case .rejected(let reason): "Agent 没有接受：\(reason)"
         }
     }
 }

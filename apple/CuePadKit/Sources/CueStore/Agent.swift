@@ -91,13 +91,16 @@ public struct AgentHookEnvelope: Codable, Sendable, Equatable {
   }
 
   /// Pi 会话与钩子 socket 所在的目录（`CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`）：`sun_path` 上限 104 字节，所以不用 `$TMPDIR`；
-  /// Pi 扩展用同一缺省值。
-  public static func socketDirectory(environment: [String: String]) -> URL {
-    URL(filePath: environment["CUEPAD_PI_SOCKET_DIR"] ?? "/tmp/cuepad-\(getuid())", directoryHint: .isDirectory)
+  /// Pi 扩展用同一缺省值。隔离运行（开发构建，`isolatedLibrary` 是它的资料库目录）没给时按资料库目录另起一个：缺省目录是正式版的，
+  /// 用它桥会连上用户正在跑的会话，钩子 socket 也会把正式版的抢走。
+  public static func socketDirectory(environment: [String: String], isolatedLibrary: URL? = nil) -> URL {
+    if let given = environment["CUEPAD_PI_SOCKET_DIR"], !given.isEmpty { return URL(filePath: given, directoryHint: .isDirectory) }
+    let suffix = isolatedLibrary.map { "-" + DeterministicID.uuid($0.standardizedFileURL.path).uuidString.prefix(8).lowercased() } ?? ""
+    return URL(filePath: "/tmp/cuepad-\(getuid())\(suffix)", directoryHint: .isDirectory)
   }
 
   /// 钩子 socket。不带 `.sock` 后缀：Pi 桥扫目录时不把它当 Pi 会话去连。
-  public static func socketPath(environment: [String: String]) -> URL {
-    socketDirectory(environment: environment).appending(path: "agent-hooks")
-  }
+  public static func socketPath(in directory: URL) -> URL { directory.appending(path: "agent-hooks") }
+
+  public static func socketPath(environment: [String: String]) -> URL { socketPath(in: socketDirectory(environment: environment)) }
 }

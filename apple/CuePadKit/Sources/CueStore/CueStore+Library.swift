@@ -840,6 +840,11 @@ extension CueStore {
     }
   }
 
+  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。
+  public func deletePiSessions(of agent: AgentKind) throws {
+    try write { try db.run("DELETE FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) }
+  }
+
   /// 全部目录绑定（各台 Mac 的），按项目、Mac 名排。
   public func directoryBindings() throws -> [DirectoryBinding] {
     try select(DirectoryBinding.self, orderBy: "projectID, hostName, hostID")

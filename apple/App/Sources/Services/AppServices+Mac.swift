@@ -22,19 +22,11 @@ extension AppServices {
         do {
             try pi.start()
             try hooks.start()
-            for runtime in runtimes.values { try runtime.start() }
+            for (agent, runtime) in runtimes where !runtimeIndexes(agent) { try runtime.start() }
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        for agent in AgentKind.allCases {
-            guard let root = paths.sessionsDirectory(of: agent) else { continue }
-            let indexer = PiHistoryIndexer(
-                root: root, agent: agent, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
-            ) { [weak self] file in
-                await self?.loadPiCheckpoint(for: file)
-            }
-            follow { await self.consumePiHistory(indexer.events(), agent: agent) }
-        }
+        follow { await self.indexConnectedAgents() }
         follow { await self.historyStore.keepPruned() }
         follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {
             try await self.resetPiState()
@@ -129,13 +121,65 @@ extension AppServices {
 
     /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
-    nonisolated func loadPiCheckpoint(for file: URL) async -> PiHistoryCheckpoint? {
+    nonisolated func loadHistoryStart(for file: URL) async -> PiHistoryStart? {
         do {
-            return try await historyStore.checkpoint(for: file)
+            return try await historyStore.start(for: file)
         } catch {
             await reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
             return nil
         }
+    }
+
+    /// 会话索引只为接入了的 Agent 建（`AgentStatus.isConnected`，与设置里的开关同一个含义）：接入时起它的索引并回填，
+    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时停掉并删掉它的本机索引；会话的同步记录与对话不动。
+    private func indexConnectedAgents() async {
+        var indexing: [AgentKind: Task<Void, Never>] = [:]
+        var forgotten: Set<AgentKind> = []
+        defer { for task in indexing.values { task.cancel() } }
+        let statuses = Observations { [agents] in AgentKind.allCases.map { agents.status($0)?.isConnected } }
+        for await connected in statuses {
+            for (agent, isConnected) in zip(AgentKind.allCases, connected) {
+                switch isConnected {
+                case true? where indexing[agent] == nil:
+                    forgotten.remove(agent)
+                    indexing[agent] = Task { await self.index(agent) }
+                case false? where !forgotten.contains(agent):
+                    forgotten.insert(agent)
+                    let task = indexing.removeValue(forKey: agent)
+                    task?.cancel()
+                    await task?.value
+                    do {
+                        try await historyStore.forget(agent)
+                    } catch {
+                        reportIssue(.piHistoryUnavailable("删掉 \(agent.name) 的会话索引失败：\(error)"))
+                    }
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// 没有会话文件的 Agent（OpenCode）由它的运行时连着它的服务建索引。
+    private func runtimeIndexes(_ agent: AgentKind) -> Bool { paths.sessionsDirectory(of: agent) == nil }
+
+    /// 建一家的索引，直到任务取消：有会话文件的读文件，其余起它的运行时、取消时停掉。
+    private func index(_ agent: AgentKind) async {
+        if let indexer = PiHistoryIndexer(
+            agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
+            start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
+            return await consumePiHistory(indexer.events(), agent: agent)
+        }
+        guard let runtime = runtimes[agent] else { return }
+        do {
+            try runtime.start()
+        } catch {
+            return reportIssue(.piBridgeUnavailable("\(agent.name) 没能接上：\(error)"))
+        }
+        let (untilCancelled, held) = AsyncStream<Never>.makeStream()
+        for await _ in untilCancelled {}
+        held.finish()
+        await runtime.stop()()
     }
 
     /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
@@ -163,7 +207,7 @@ extension AppServices {
                 backfilling = false
                 do {
                     try await historyStore.retain(files, of: agent)
-                    try await piStateRecorder.dropUnindexedHosted()
+                    try await piStateRecorder.dropUnindexedHosted(of: agent)
                 } catch {
                     reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))
                 }

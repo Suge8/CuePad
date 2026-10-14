@@ -32,6 +32,7 @@ struct SessionIndexTests {
         // 回填一次写一批：另一个完整的会话被记下，就是回填读过这个空文件了
         let other = try codexFile(app, "01a1396a-0000-7000-8000-000000000002")
         try meta("01a1396a-0000-7000-8000-000000000002").write(to: other)
+        try await app.connect(.codex)
         app.services.start()
         let store = app.services.store
         try await eventually("回填读过这两个文件") { try await store.piSession("01a1396a-0000-7000-8000-000000000002") != nil }
@@ -60,6 +61,7 @@ struct SessionIndexTests {
         }, host: TestApp.hostID)
         #expect(try await store.allPiSessionStates().contains { $0.sessionID == stem })
 
+        try await app.connect(.codex)
         app.services.start()
         try await eventually("孤儿清掉了") { try await !store.piSessions().contains { $0.id == stem } }
         #expect(try await store.piSessions().filter { $0.path == file.path }.map(\.id) == [realID])
@@ -79,6 +81,7 @@ struct SessionIndexTests {
             session: IndexedSession(id: stem, path: file.path, cwd: "", lastActivityAt: .now, agent: .codex), checkpoint: nil, transcript: nil)
         ], host: TestApp.hostID)
 
+        try await app.connect(.codex)
         app.services.start()
         try await eventually("孤儿清掉了") {
             let sessions = try await store.piSessions(), states = try await store.allPiSessionStates()

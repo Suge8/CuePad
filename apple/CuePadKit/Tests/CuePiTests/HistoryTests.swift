@@ -228,7 +228,35 @@ struct HistorySummaryOnlyTests {
         try errored.append(
             SessionFile.header(id: "errored"), SessionFile.user("u1", nil, [["type": "text", "text": "两块"], ["type": "text", "text": "文字"]], at: 1),
             SessionFile.assistant("a1", "u1", text: nil, stop: "error", error: "429", at: 2))
-        return [done, running, empty, errored]
+        // 被停下（Esc）的一轮没有回答、不改问答；它之后机器消息触发的一轮沿用再往前那一轮的提问
+        var stopped = SessionFile(directory: dir, name: "stopped.jsonl")
+        try stopped.append(
+            SessionFile.header(id: "stopped"), SessionFile.user("u1", nil, "第一问", at: 1), SessionFile.assistant("a1", "u1", text: "第一答", at: 2),
+            SessionFile.user("u2", "a1", "第二问", at: 3), SessionFile.assistant("a2", "u2", text: "说了半句", stop: "aborted", at: 4),
+            SessionFile.user("u3", "a2", "<some_event>\n子任务完成\n</some_event>", at: 5), SessionFile.assistant("a3", "u3", text: "汇报", at: 6),
+            SessionFile.user("u4", "a3", "第三问", at: 7), SessionFile.assistant("a4", "u4", text: nil, stop: "aborted", at: 8))
+        return [done, running, empty, errored, stopped]
+    }
+
+    /// 只读摘要得到的检查点与逐行全读完全一样（之后增量读接得上），只是不给出对话。
+    @Test func aSummaryOnlyReadEqualsAFullReadWithoutTheTranscript() throws {
+        for file in try shapes() {
+            let full = try PiHistory.index(file: file.url, from: nil)
+            let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
+            #expect(summary.checkpoint == full.checkpoint, "\(file.url.lastPathComponent)")
+            #expect(summary.history == full.history && summary.messages.isEmpty)
+        }
+    }
+
+    /// 中途被停下的一轮：没有回答、不改问答，这一轮的提问也不再算进行中；之后机器消息触发的一轮沿用再往前你说的那句。
+    /// 对话里在停下的地方留一行系统行"已停止"（四家同一规则）。
+    @Test func aStoppedRoundLeavesTheRecapAsItWasAndAStoppedLine() throws {
+        let stopped = try shapes().last!
+        let read = try PiHistory.index(file: stopped.url, from: nil)
+        #expect(read.recap == PiRecap(lastPrompt: "第一问", lastReply: "汇报", pendingPrompt: nil))
+        #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == [
+            "user:第一问", "pi:第一答", "user:第二问", "system:已停止", "pi:汇报", "user:第三问", "system:已停止",
+        ])
     }
 
 }
@@ -253,8 +281,12 @@ final class HistoryEventLog: Sendable {
 }
 
 struct HistoryIndexerTests {
+    /// Pi 的会话目录（Codex 的用例把它当 `CODEX_HOME/sessions`）
     let root: URL
-    init() throws { root = try makeTempDirectory() }
+    init() throws {
+        root = try makeTempDirectory().appending(path: "sessions")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    }
 
     @discardableResult
     private func makeSession(_ project: String, _ name: String, prompt: String, modified: Date) throws -> SessionFile {
@@ -273,7 +305,7 @@ struct HistoryIndexerTests {
         try makeSession("p2", "c.jsonl", prompt: "new", modified: now.addingTimeInterval(-100))
         let known = try PiHistory.index(file: upToDate.url, from: nil).checkpoint
 
-        let log = HistoryEventLog(PiHistoryIndexer(root: root) { url in url.lastPathComponent == "b.jsonl" ? known : nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root) { url in url.lastPathComponent == "b.jsonl" ? PiHistoryStart(checkpoint: known, hasTranscript: true) : nil })
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["c.jsonl", "a.jsonl"])
         // 完成信号在全部回填更新之后
@@ -284,7 +316,7 @@ struct HistoryIndexerTests {
     @Test func subagentSessionsAreNotHistoryLikePisSessionList() async throws {
         let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
         try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
-        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root))
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
         guard case .backfillFinished(let files) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
@@ -299,7 +331,7 @@ struct HistoryIndexerTests {
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
-        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root))
         try await eventually("回填完成") { log.finishedBackfill }
 
         let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
@@ -339,7 +371,7 @@ struct HistoryIndexerTests {
     func codexSessionKeptOpenStaysFollowedWhileManyOldFilesAreRead() async throws {
         let day = root.appending(path: "2026/10/14")
         try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
-        let log = HistoryEventLog(PiHistoryIndexer(root: root, agent: .codex, files: scratchFiles) { _ in nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: root, agent: .codex))
         try await eventually("回填完成") { log.finishedBackfill }
 
         let url = day.appending(path: "rollout-live.jsonl")
@@ -368,7 +400,7 @@ struct HistoryIndexerTests {
     @Test(.timeLimit(.minutes(1)))
     func codexRescanOverManyOldFilesKeepsTheLiveSessionFollowed() async throws {
         let sessions = root.appending(path: "sessions")
-        let log = HistoryEventLog(PiHistoryIndexer(root: sessions, agent: .codex, files: scratchFiles) { _ in nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions, agent: .codex))
         try await eventually("回填完成") { log.finishedBackfill }
 
         let staging = root.appending(path: "staging")
@@ -396,7 +428,7 @@ struct HistoryIndexerTests {
     @Test(.timeLimit(.minutes(1)))
     func sessionsDirectoryCreatedAfterStartIsWatchedAndSurvivesRecreation() async throws {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
-        let log = HistoryEventLog(PiHistoryIndexer(root: sessions) { _ in nil })
+        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions))
         try await eventually("回填完成") { log.finishedBackfill }
 
         let project = sessions.appending(path: "--work-x--")

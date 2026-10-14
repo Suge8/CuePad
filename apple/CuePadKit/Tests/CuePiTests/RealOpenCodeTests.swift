@@ -126,7 +126,7 @@ struct RealOpenCodeTests {
     /// 终端里（`opencode run`，连着后台服务）说过话的会话出现在 CuePad：实时状态、对话进资料库；CuePad 接着跟它说、改名、换模型与强度、
     /// 回答它要你确认的命令；服务停了会话就下线。
     @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
-        try await withOpenCode { sandbox, store, bridge, _ in
+        try await withOpenCode { sandbox, store, bridge, runtime in
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
             try await eventually("终端里的会话上了桥、歇下", timeout: .seconds(60)) { session(bridge)?.state == .settled }
@@ -179,8 +179,61 @@ struct RealOpenCodeTests {
                 try await store.piMessages(of: live.sessionID).contains { $0.role == .known(.system) }
             }
 
+            // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
+            await runtime.stop()()
+            #expect(session(bridge) == nil)
+            try await store.deletePiSessions(of: .opencode)
+            try runtime.start()
+            try await eventually("再接入后会话回来、索引写回", timeout: .seconds(60)) {
+                let indexed = try await store.piSession(live.sessionID)
+                return session(bridge) != nil && indexed != nil
+            }
+
             try await sandbox.run(["service", "stop"])
             try await eventually("服务停了，会话下线") { session(bridge) == nil }
+        }
+    }
+
+    /// 忙的时候先排一句、再插一句：OpenCode 按送进对话的先后排（插的话先进），排队那句的消息 id 却在入队时就定了、比插话的早。
+    /// CuePad 的对话按对话里的位置读，三句话与两次回答一条不少、先后与终端里一致。
+    @Test func aQueuedAndASteeredMessageKeepTheirPlaceInTheConversation() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 20 . Then reply SLEPT."), to: id)
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
+            _ = try await bridge.send(PiMessage(text: "Queued: reply LATER", whenBusy: .followUp), to: id)
+            _ = try await bridge.send(PiMessage(text: "Steer: what is 6+6", whenBusy: .steer), to: id)
+
+            try await eventually("排队那句也答完", timeout: .seconds(180)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
+                    && messages.contains { $0.role == .known(.user) && $0.text.contains("Queued") }
+            }
+            let messages = try await store.piMessages(of: sessionID)
+            let said = messages.filter { $0.role == .known(.user) }.map(\.text)
+            #expect(said.count == 3 && said[1].contains("Steer") && said[2].contains("Queued"), "\(said)")
+            let steer = try #require(messages.firstIndex { $0.text.contains("Steer") })
+            let queued = try #require(messages.firstIndex { $0.text.contains("Queued") })
+            #expect(messages[steer..<queued].contains { $0.role == .known(.pi) }, "插话的回答在排队那句之前")
+            #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
+        }
+    }
+
+    /// 在 CuePad 里停下跑着的一轮：没有回答，对话里留一行"已停止"（四家同一规则）。
+    @Test func aStoppedRoundLeavesAStoppedLine() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
+            // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state == .tool }
+            try await bridge.abort(id)
+            try await eventually("停下了，对话里留下'已停止'", timeout: .seconds(60)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+            #expect(try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.isEmpty)
         }
     }
 

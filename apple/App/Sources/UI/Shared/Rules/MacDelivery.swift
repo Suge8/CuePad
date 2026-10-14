@@ -36,8 +36,9 @@ extension MacDelivery {
         }
     }
 
-    /// 斜杠命令的进度（读投送请求，不另存）：只看最近一条命令——在路上写"正在执行 /compact…"、没成功写原因、成功就消失
-    /// （命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。回复框上方一行显示。
+    /// 斜杠命令的进度（读投送请求与对话，不另存）：最近一条请求是命令时才有——在路上写"正在执行 /compact…"、没成功写原因、
+    /// 成功就消失（命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。失败的在之后有新的请求、对话里多了话时收起。
+    /// 回复框上方一行显示。
     enum CommandProgress: Equatable {
         case running(String)
         case failed(command: String, reason: String)
@@ -52,11 +53,13 @@ extension MacDelivery {
         }
     }
 
-    static func commandProgress(_ deliveries: [DeliveryRequest]) -> CommandProgress? {
-        guard let latest = deliveries.last(where: { $0.mode == .known(.command) }) else { return nil }
+    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> CommandProgress? {
+        guard let latest = deliveries.max(by: { $0.createdAt < $1.createdAt }), latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
-        if let failure = latest.failure { return .failed(command: command, reason: failure) }
-        return latest.isOpen ? .running(command) : nil
+        if latest.isOpen { return .running(command) }
+        guard let failure = latest.failure else { return nil }
+        let failedAt = latest.completedAt ?? latest.modifiedAt
+        return messages.contains { $0.at > failedAt } ? nil : .failed(command: command, reason: failure)
     }
 
     /// 回复框的主按钮（一颗，按状态切换；iOS 与 Mac 同一条）：空着而 Agent 自己在跑一轮是停止（这时最可能想做的就是叫停，同 ChatGPT、Claude），

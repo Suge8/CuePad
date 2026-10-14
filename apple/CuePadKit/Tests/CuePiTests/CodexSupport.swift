@@ -87,7 +87,7 @@ struct CodexHome {
             sandbox_mode = "workspace-write"
             check_for_update_on_startup = false
 
-            [projects."\(CodexHooks.realPath(work))"]
+            [projects."\(work.realPath.path)"]
             trust_level = "trusted"
 
             """
@@ -192,7 +192,7 @@ final class CodexRig {
         let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator] in locator }, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: PiProcess.cuepad).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()

@@ -9,7 +9,7 @@ extension Command {
     path: ["show"], summary: "把文件发到用户手机上的 CuePad 预览：在当前 Agent 会话的对话里出现一张卡片", arguments: "<文件>",
     options: [Opt("title", "一句标题，说明这是什么（默认用文件名）", value: "标题")],
     notes: """
-      会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话。
+      会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话；在一家的命令里又起了另一家时，按上面的先后取第一个。
       可发：\(PiPreviewKind.supportedList)；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
       HTML 在手机上只读渲染、不联网，也读不到别的文件：必须是单个文件，样式与脚本写进同一个 HTML，图片用 data: 地址内联，否则会缺失
       （命令会列出页面引用了、手机上拿不到的地址 outsideReferences，改成单个文件后再发一次）。

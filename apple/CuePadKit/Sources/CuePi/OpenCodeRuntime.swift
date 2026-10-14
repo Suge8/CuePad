@@ -111,14 +111,16 @@ public final class OpenCodeRuntime: AgentRuntime {
         refresh()
     }
 
+    /// 停下后可再 `start()`（接入开关关了又开）：会话下桥，读到哪的缓存一并丢掉——索引随断开接入删了，再接入从头读。
     public func stop() -> @concurrent @Sendable () async -> Void {
         watching?.cancel()
         watcher?.stop()
         watcher = nil
-        if let connection { close(connection) }
-        connection = nil
+        disconnect()
+        checkpoints = [:]
         ingesting?.cancel()
         let ingesting = ingesting
+        self.ingesting = nil
         let stopService = stopStartedService()
         return {
             await ingesting?.value
@@ -764,6 +766,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         do {
             let stored = Dictionary(
                 try await store.piSessions().filter { $0.agent == .opencode }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            guard self.connection === connection else { return }  // 读的时候停下了（断开接入）：索引已删，不再写回
             var summaries: [PiSessionUpsert] = []
             let recent = Date().addingTimeInterval(-transcriptWindow)
             for info in infos {
@@ -813,7 +816,7 @@ public final class OpenCodeRuntime: AgentRuntime {
                 let next = self.ingestQueue.removeFirst()
                 await self.ingest(next)
             }
-            self?.ingesting = nil
+            if !Task.isCancelled { self?.ingesting = nil }  // 取消的是被 stop 换下的，不清掉新起的
         }
     }
 
