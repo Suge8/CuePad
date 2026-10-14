@@ -15,6 +15,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var undelivered = 0
     /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
+    /// 由 Cue 跟进（会话列表同一条，`PiSessionListItem.cueFollows`）：顶栏带 Cue 的小头像，等回答写"等 Cue 回答"。
+    var cueFollows = false
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
     var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
@@ -52,7 +54,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
             undelivered: item?.undelivered ?? 0,
-            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
+            cueFollows: item?.cueFollows ?? false)
     }
 }
 

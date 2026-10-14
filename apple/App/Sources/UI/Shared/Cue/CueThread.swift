@@ -17,13 +17,17 @@ nonisolated struct CueThread: Equatable, Sendable {
     static func read(from store: isolated CueStore) throws -> CueThread {
         let messages = try store.cueMessages(limit: limit)
         let waiting = try store.cueMessagesWaitingForYou()
+        let mentioned = Set((messages + waiting).compactMap(\.taskID))
+        let items = try store.cueBoard()
+        // 提到的与跟进中的一次取完预览与步骤进度，不逐件读细节
+        let previews = try store.previews(ofTasks: Array(mentioned.union(items.map(\.id))))
+        let progress = try store.subtaskProgress()
         var tasks: [UUID: CueTaskRef] = [:]
-        for id in Set((messages + waiting).compactMap(\.taskID)) {
-            if let ref = try CueTaskRef.read(id, from: store) { tasks[id] = ref }
+        for id in mentioned {
+            guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { continue }
+            tasks[id] = CueTaskRef(task: card, progress: progress[id], previews: CueTaskRef.newest(previews[id]))
         }
-        let board = try store.cueBoard().map { item in
-            CueLiveTask(item: item, preview: try CueTaskRef.previews(of: item.task.id, from: store).first)
-        }
+        let board = items.map { CueLiveTask(item: $0, preview: previews[$0.id]?.last) }
         return CueThread(messages: messages, tasks: tasks, waiting: waiting, board: board)
     }
 
@@ -66,26 +70,13 @@ nonisolated struct CueThread: Equatable, Sendable {
 nonisolated struct CueTaskRef: Equatable, Sendable {
     var task: Card
     var progress: TaskProgress?
-    /// 新的在前，至多 `previewLimit` 份（"等你"放全部：验收看的就是它们）。
+    /// 新的在前，至多 `previewLimit` 份（"等你"放全部：验收看的就是它们）。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
     var previews: [PiPreview]
 
     static let previewLimit = 4
 
-    /// 卡片不在了（删掉、改回灵感）为 nil：那句话照常显示，不带引用。
-    static func read(_ id: UUID, from store: isolated CueStore) throws -> CueTaskRef? {
-        guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { return nil }
-        let detail = try store.cueTaskDetail(id, rounds: 0)
-        return CueTaskRef(task: detail.task, progress: detail.progress, previews: previews(of: detail))
-    }
-
-    /// 一件活各步骤会话发来看的文件，新的在前。
-    static func previews(of task: UUID, from store: isolated CueStore) throws -> [PiPreview] {
-        previews(of: try store.cueTaskDetail(task, rounds: 0))
-    }
-
-    private static func previews(of detail: CueTaskDetail) -> [PiPreview] {
-        Array(detail.leaves.flatMap(\.previews).sorted { $0.createdAt > $1.createdAt }.prefix(previewLimit))
-    }
+    /// `previews(ofTasks:)` 给的是从早到晚：取最新的 `previewLimit` 份，新的在前。
+    static func newest(_ previews: [PiPreview]?) -> [PiPreview] { Array((previews ?? []).suffix(previewLimit).reversed()) }
 
     var done: Bool { task.status == .done }
 }

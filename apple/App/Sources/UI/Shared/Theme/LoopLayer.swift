@@ -10,10 +10,8 @@ struct LoopLayer {
     enum Kind: Equatable {
         /// 铺满的圆从 0.7 倍呼到 1.6 倍、淡到看不见，再回来，一呼一吸 2.4s。
         case breath
-        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
-        case orbit
-        /// 同 `orbit`，线宽给定（Cue 头像外的状态环，粗细随头像尺寸另定）。
-        case halo(lineWidth: CGFloat)
+        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽默认是直径的 14%，给了就用给的（Cue 头像外的状态环，粗细随头像尺寸另定）。
+        case orbit(lineWidth: CGFloat? = nil)
         /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
@@ -79,9 +77,9 @@ struct LoopLayer {
                 loop.frame = bounds
                 (loop as? CAShapeLayer)?.path = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size), transform: nil)
                 (loop as? CAShapeLayer)?.fillColor = color
-            case .orbit, .halo:
+            case .orbit(let line):
                 loop.frame = bounds
-                let width = if case .halo(let line) = kind { line } else { min(bounds.width, bounds.height) * 0.14 }
+                let width = line ?? min(bounds.width, bounds.height) * 0.14
                 let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = loop.bounds
@@ -123,7 +121,7 @@ struct LoopLayer {
                 breath.autoreverses = true
                 breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(breath, on: layer)
-            case .orbit, .halo:
+            case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()
                 for shape in [track, arc] {
@@ -208,7 +206,7 @@ struct Spinner: View {
                     .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
                     .padding(width / 2)
             } else {
-                LoopLayer(kind: .orbit, color: palette.ink2)
+                LoopLayer(kind: .orbit(), color: palette.ink2)
             }
         }
         .frame(width: size.side, height: size.side)

@@ -199,12 +199,14 @@ extension PiConversation {
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
+    /// 由 Cue 跟进（`SessionDigest.cueFollows`）：等回答时写"等 Cue 回答"。
+    var cueFollows = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session)
-        let speaks = shown.isLive || shown.needsYou || shown.status == .restart || shown.status == .ended
+        let shown = PiShown(session, cueFollows: cueFollows)
+        let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         if speaks || undelivered != nil {
             HStack(spacing: 4) {
                 if speaks {

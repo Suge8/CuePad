@@ -18,7 +18,7 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let undelivered = try undeliveredCounts(to: ids)
-    let followed = try cueFollowedSessions(ids)
+    let followed = try cueFollowedSessions()
     return Dictionary(
       states.map {
         (

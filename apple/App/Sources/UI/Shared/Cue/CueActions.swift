@@ -17,15 +17,16 @@ extension Workspace {
         }
     }
 
-    /// 对 Cue 说一句（文字可带图片，存储格式）。
-    func sayToCue(_ stored: String) async throws {
-        let message = try await services.store.addCueMessage(.you, text: stored)
-        await services.upload(message.id)
+    /// 把 Cue 的草稿（`CueWatch.draft`，文字可带图片）说给它：图片写进图片库，写一条你的消息并上传；说出去了草稿清空。
+    func sayToCue() async throws {
+        try await sayToCue(cue.draft)
+        cue.draft = ComposerDraft()
     }
 
-    /// 把输入框里的草稿说给 Cue：图片在这里写进图片库。
+    /// 把一份别处的草稿说给 Cue（菜单栏的随手记直接交给它）。
     func sayToCue(_ draft: ComposerDraft) async throws {
-        try await sayToCue(try draft.stored(in: services.store.files))
+        let message = try await services.store.addCueMessage(.you, text: try draft.stored(in: services.store.files))
+        await services.upload(message.id)
     }
 
     /// 回答 Cue 的一条"等你"。
@@ -47,10 +48,9 @@ extension Workspace {
         }
     }
 
-    /// 这个会话（记录 id）绑着的任务由 Cue 跟进。
+    /// 这个会话（记录 id）绑着的任务由 Cue 跟进：读在线会话那一份（`LiveSessions.cueFollowed`）。
     func cueFollows(sessionRecord: UUID) async throws -> Bool {
-        guard let sessionID = services.liveSessions.items?.first(where: { $0.state.id == sessionRecord })?.state.sessionID else { return false }
-        return try await CueWaiting.followed(sessionID, in: services.store)
+        services.liveSessions.items?.first { $0.state.id == sessionRecord }?.cueFollows ?? false
     }
 
     // MARK: 记忆

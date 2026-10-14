@@ -14,7 +14,8 @@ struct CueMemoryPage: View {
 
     private var title: String { "\(workspace.cue.name) 记得什么" }
     private var kept: [CueMemoryLine] { (memory?.lines ?? []).filter { $0.deletedAt == nil }.reversed() }
-    private var tooLong: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).utf8.count > CueMemoryLine.maxBytes }
+    /// 有字但记不成一条（`CueMemoryLine.fits`：写入时同一个判断）。
+    private var tooLong: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueMemoryLine.fits(text) }
 
     var body: some View {
         content
@@ -99,8 +100,8 @@ struct CueMemoryPage: View {
     }
 
     private func add() {
+        guard CueMemoryLine.fits(text) else { return }
         let line = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !tooLong else { return }
         workspace.attempt {
             try await workspace.noteCueLine(line)
             text = ""

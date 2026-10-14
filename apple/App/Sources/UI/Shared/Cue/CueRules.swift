@@ -133,9 +133,4 @@ nonisolated enum CueWaiting {
         let sessions = try store.piSessionPage(.live).items.count { $0.state.waitsForYou && !$0.cueFollows }
         return asked + sessions
     }
-
-    /// 会话绑着的任务由 Cue 跟进（`cueFollowedSessions`，会话列表的 `cueFollows` 同一条）。
-    static func followed(_ sessionID: String, in store: isolated CueStore) throws -> Bool {
-        try !store.cueFollowedSessions([sessionID]).isEmpty
-    }
 }

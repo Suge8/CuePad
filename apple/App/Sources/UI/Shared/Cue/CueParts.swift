@@ -37,12 +37,7 @@ struct CueHead: View {
         VStack(spacing: 8) {
             CueAvatar(mood: cue.mood(composing: composing), presence: cue.presence, size: .head)
             Text(cue.name).font(Typography.emptyTitle).foregroundStyle(palette.ink)
-            if let line = cue.presence.line(name: cue.name) {
-                Text(line)
-                    .font(Typography.secondary).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
-            }
+            CueStatusLine(font: Typography.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -225,8 +220,8 @@ struct CueTrayCard: View {
         if item.launching { return "正在开会话" }
         guard let session else { return "还没开始" }
         let shown = services.settings.shown(session, delivery: nil, cueFollows: true)
-        if session.waitsForYou { return session.question?.text.firstLine ?? shown.label }
-        if session.state == .known(.error) { return session.detail?.firstLine ?? shown.label }
+        if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }
+        if session.state == .known(.error) { return PiProgress.firstLine(session.detail) ?? shown.label }
         if shown.isLive { return session.detail.flatMap(PiProgress.action) ?? shown.label }
         return session.lastReply.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0)) } ?? shown.label
     }
@@ -292,13 +287,6 @@ struct CuePreviewThumb: View {
     }
 }
 
-nonisolated extension String {
-    /// 第一行非空的字（近况、提问只占一行）。
-    var firstLine: String {
-        split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
-    }
-}
-
 /// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字，点开看全。
 struct CueNotes: View {
     let notes: [CueMessage]
@@ -311,7 +299,7 @@ struct CueNotes: View {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Text(Dotted(CueFormat.plainText(notes.last?.text ?? "").firstLine, notes.count > 1 ? "\(notes.count) 条" : nil))
+                    Text(Dotted(PiProgress.firstLine(CueFormat.plainText(notes.last?.text ?? "")), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
