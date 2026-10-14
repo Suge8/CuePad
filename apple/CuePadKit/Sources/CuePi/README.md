@@ -21,14 +21,14 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 | --- | --- | --- | --- |
 | 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`）；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`） | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
 | 终端会话的说话 | 它的收件箱 socket，只收文字；插话不打断在跑的工具 | 常驻服务的控制 socket（`turn/steer`、`thread/queue/add`），能带图 | `POST /prompt`（steer / queue），能带图 |
-| 远程作答 | 阻塞的 PermissionRequest 钩子（权限与 AskUserQuestion），终端里同时弹出，哪边先答算哪边 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式的提问只能在终端里答 | 权限与单个问题的表单 |
+| 远程作答 | 权限：阻塞的 PermissionRequest 钩子，终端里同时弹出，哪边先答算哪边。提问（AskUserQuestion 的 PreToolUse 钩子）与 MCP 要你填的表单（Elicitation 钩子，只有一个字段时能答）：挂住时终端不弹，所以与 Codex 的权限一样按人在不在分 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式的提问：终端会话的只能在终端里答，托管会话的经 `item/tool/requestUserInput`、只有一个问题时能从 CuePad 答 | 权限与单个问题的表单 |
 | 后台托管 | `claude --input-format stream-json --output-format stream-json`，全部能力；会话开在终端里时拒绝接着（两边会各写各的） | `codex app-server --listen stdio://`；线程被常驻服务持有时改走控制 socket | 在它的服务里开会话，服务没开时 `opencode service start` |
 | 终端会话做不到 | 图片、停止、换模型与强度、斜杠命令 | 结束会话、上下文余量 | 跳到终端（服务不知道终端） |
 | 认出 CuePad 发的话 | 消息的 uuid 就是投送请求 id | `clientUserMessageId` = `cuepad-<投送请求 id>` | 消息的 `metadata` |
 
 CuePad 起的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex）都是 `LineProcess`：一行一条收发，自成进程组、退出后不留子进程，只继承三个标准描述符。协议层各家一份，托管会话与大脑共用：Codex 是 `CodexRPC`，Claude Code 是 `ClaudeStream`。找可执行文件与给子进程的 PATH 只经 `ExecutableLocator`。模型的提供方：Claude Code、Codex 的模型名在它们自己的命名空间里，提供方写成这家（`AgentKind.modelProvider`）；思考强度一律按 `PiThinkingLevel.clamped` 夹到模型支持的档位（取最近的一档，一样近取低的）。Codex 托管会话一轮失败（`turn/completed` 的 `status` 为 failed，没有 Stop 钩子）记成出错，原因取自这一轮的 `error`。
 
-已知边界：Claude Code 的收件箱格式、改名控制、用 PermissionRequest 回答 AskUserQuestion 都来自实测（2.1.293），不在官方文档里；经收件箱发进终端会话的话 Claude Code 当作"另一个会话发来的"。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
+已知边界：Claude Code 的收件箱消息格式与改名控制来自实测（2.1.299），不在官方文档里；经收件箱发进终端会话的话 Claude Code 当作"另一个会话发来的"，带上会话的收件箱令牌后跳过权限确认的会话也直接收下（令牌只在钩子到过之后才有）。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
 
 ## Cue 的大脑（`Brain/`）
 
@@ -129,4 +129,4 @@ CuePad → 扩展（都带 `id`）：
 - FSEvents 不报告"仅 bind"的 socket 创建，扩展 `chmod` 之后才可见；客户端在启动与任何目录事件时全量重扫，扫描跳过已有连接的名字。/reload 在同一路径重建 socket（名字不变），新文件的事件可能在旧连接还挂着时就被扫过，所以一条连接断开时文件还在就当场再连一次；被判为不兼容的按文件本身（inode 与创建时间）记，同一路径的新 socket 照常去连。
 - 终端跳转：tmux、Terminal.app（按 tty）、Ghostty（按工作目录，唯一匹配才聚焦）；其他终端只激活应用。herdr 等再套一层的复用器无法定位到 pane。
 - 会话冻结（SIGSTOP）或机器休眠造成的假死不会被发现——既定取舍：不做心跳。
-- 已进 Pi 队列的话（`send` 在会话正忙时以 `followUp`/`steer` 排进去的）收不回、也改不了方式：扩展接口只有 `ctx.hasPendingMessages()`，清队列与读队列（`clearQueue`、`getFollowUpMessages`）只在 Pi 自己的会话对象与 RPC 模式的 `clear_queue` 上，扩展拿不到（Pi 1.1.0 核对）。所以 CuePad 的撤回与"改为马上说"只对还没被 Mac 领取的投送请求。
+- 已进 Pi 队列的话（`send` 在会话正忙时以 `followUp`/`steer` 排进去的）收不回、也改不了方式：扩展接口只有 `ctx.hasPendingMessages()`，清队列与读队列（`clearQueue`、`getFollowUpMessages`）只在 Pi 自己的会话对象与 RPC 模式的 `clear_queue` 上，扩展拿不到（Pi 1.2.0 核对）。所以 CuePad 的撤回与"改为马上说"只对还没被 Mac 领取的投送请求。
