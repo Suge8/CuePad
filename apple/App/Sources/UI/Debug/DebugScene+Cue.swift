@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：启用在演示 Mac 上，跟进圆桌的"乱序"（步骤在 Agent 会话里跑，
-/// 部署那一步发来一张截图、在等你收下）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
+/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；记忆有钉住的与其他，还有一条忘掉的。
 /// `-CuePadCuePresence <thinking|tool|asleep|disabled>`：你的最后一句已交给 Cue、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。演示 Mac 不值班，此刻在做什么直接写进库（`CueStore.setCueState`）。
@@ -49,7 +49,7 @@ extension DebugScene {
             _ = try await store.addCueMessage(.cue, text: "README 的截图换好了，浅色深色各一张。", task: panel?.id)
             _ = try await store.addCueMessage(
                 .cue, text: """
-                    预发部署好了，截图在这里。重连用例都过了：
+                    预发上验过了，截图在这里。重连用例都过了：
 
                     ```
                     $ swift test --filter Reconnect
@@ -60,8 +60,8 @@ extension DebugScene {
                     Executed 4 tests, with 0 failures
                     ```
 
-                    看着没问题就**收下**，我把这件事关掉。
-                    """, choices: ["收下", "再改改", "先别部署"], task: order?.id)
+                    要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
+                    """, ask: .push, task: order?.id)
             for (text, pinned) in [("部署前先在测试群说一声", true), ("回复要短，先说结论", true), ("圆桌的预发环境是 staging-2", false), ("周五不发版", false)] {
                 _ = try await store.noteCueLine(text, source: pinned ? .you : .cue, pinned: pinned)
             }

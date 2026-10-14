@@ -217,7 +217,7 @@ struct CueWaitingDock: View {
                         .disabled(ending == message.id)
                         .help("不选，关掉这条")
                 }
-                // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
+                // 关联任务发来看的文件就是证据：在手机上看完图再决定允不允许
                 if let previews = ref?.previews, !previews.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }

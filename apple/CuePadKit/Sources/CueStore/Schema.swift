@@ -123,13 +123,15 @@ enum Schema {
     Upgrade(stringLiteral: cueState),
     // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
     Upgrade(stringLiteral: piProcesses),
+    // 37：Cue 自己验收、做完告诉你，不再请你收下：验收标记下线（还开着的旧验收照常是一条提问，答了交给 Cue）
+    "ALTER TABLE cueMessages DROP COLUMN acceptance;",
   ]
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
     """
 
-  /// 34 加的列与索引：建新库时跟在 `cueAcceptance` 之后。
+  /// 34 加的列与索引：建新库时跟在 `cue` 之后。
   private static let formerSessions = """
     ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
     CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
@@ -137,7 +139,7 @@ enum Schema {
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
-  /// 33 加的列：建新库时跟在 `cue` 之后（`cue` 是 32 建的样子，升级 32 也用它）。
+  /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
 
   private static let accountQuotas = """
@@ -297,7 +299,6 @@ enum Schema {
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
     \(cue)
-    \(cueAcceptance)
     \(formerSessions)
     \(cueState)
 

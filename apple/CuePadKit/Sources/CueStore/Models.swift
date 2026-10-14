@@ -420,6 +420,8 @@ public enum CueStoreError: Error, Equatable {
   case cueNotEnabled
   /// 这条提问已经结束了（答了、关掉了或撤回了）。
   case questionEnded
+  /// 你已说过这类事以后不用问（参数是那条规矩在记忆里的序号）。
+  case alreadyAllowed(Int)
 }
 
 extension CueStoreError: LocalizedError {
@@ -447,7 +449,7 @@ extension CueStoreError: LocalizedError {
     case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
     case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
-    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
+    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
     case .draftNeeded(let title): "「\(title)」还没有草稿：先用 edit 写草稿再 start，草稿会作为第一句"
     case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
@@ -463,6 +465,7 @@ extension CueStoreError: LocalizedError {
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
+    case .alreadyAllowed(let line): "用户说过这类事以后不用问（记忆 #\(line)）：直接做，做完告诉他"
     }
   }
 }
