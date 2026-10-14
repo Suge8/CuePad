@@ -183,6 +183,40 @@ struct RealOpenCodeTests {
     }
 
     /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
+    /// 重新接上（App 重开）：没有标题的会话（模型不存在，这一轮出错，OpenCode 不起标题）仍以首条消息作名字。
+    /// 停止接入时只停 CuePad 拉起的服务：终端拉起的不动，CuePad 拉起的停掉。
+    @Test func reconnectingKeepsTheFirstMessageAndOnlyTheServiceCuePadStartedIsStopped() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let opencode = try #require(realOpenCodeURL)
+            _ = await ChildProcess.run(
+                opencode, ["run", "-m", "opencode/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
+                timeout: .seconds(120))
+            try await eventually("终端的会话出现、名字是首条消息", timeout: .seconds(60)) { session(bridge)?.displayName.contains("say hi") == true }
+            let terminalService = try #require(sandbox.service)
+
+            await runtime.stop()()
+            #expect(sandbox.service?.pid == terminalService.pid && kill(terminalService.pid, 0) == 0, "终端拉起的服务不动")
+            // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
+            for _ in 0..<2 {
+                let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+                try reconnected.start()
+                try await eventually("重新接上", timeout: .seconds(60)) { session(bridge) != nil }
+                try await Task.sleep(for: .seconds(2))
+                #expect(session(bridge)?.displayName.contains("say hi") == true, "名字仍是首条消息：\(String(describing: session(bridge)?.displayName))")
+                await reconnected.stop()()
+            }
+
+            try await sandbox.run(["service", "stop"])
+            try await eventually("服务停了") { kill(terminalService.pid, 0) != 0 }
+            let host = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+            try host.start()
+            _ = try await host.open(in: sandbox.work, launchToken: "t-service", name: nil, model: nil, thinking: nil)
+            let started = try #require(sandbox.service)
+            await host.stop()()
+            try await eventually("CuePad 拉起的服务停掉了") { kill(started.pid, 0) != 0 && sandbox.service == nil }
+        }
+    }
+
     @Test func cuePadStartsTheServiceAndHostsSessionsFromOpenToResume() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             #expect(sandbox.service == nil)

@@ -16,6 +16,8 @@ final class AgentIntegrations {
     /// 不会把真实配置目录里 CuePad 写的东西改成指向开发构建。
     let isEnabled: Bool
     @ObservationIgnored private let integration: AgentIntegration
+    /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
+    @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
 
     init(_ integration: AgentIntegration, isEnabled: Bool = true) {
         self.integration = integration
@@ -55,6 +57,7 @@ final class AgentIntegrations {
     /// 删掉 CuePad 写给它的全部文件。
     func uninstall(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.uninstall(kind) }
+        await uninstalled(kind)
     }
 
     /// 改完（成功或失败）都重读这一个的状态。

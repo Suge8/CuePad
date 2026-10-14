@@ -11,7 +11,8 @@ import OSLog
 /// - 在线：服务活着期间有过活动（建立、发话、执行、提问）的顶层会话在线——连上时按"最后修改晚于服务启动"认，之后按事件认；
 ///   没在跑就是歇着。服务停了、会话被删了下线；在 CuePad 里结束的会话也下线，直到它再有活动。子代理（子会话）不单独上线，
 ///   记在父会话的 `subagents` 里。一个服务承载全部会话，会话的 `pid` 是服务进程；服务端不知道终端的 tty，所以跳不到终端。
-/// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，CuePad 退出后照常在，终端里的 OpenCode 也用它）；
+/// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，终端里的 OpenCode 也用它）；CuePad 拉起的那个在停止接入
+///   （App 退出、关掉开关）时由 CuePad `opencode service stop`，本来就在跑的不动。
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
@@ -47,6 +48,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     private var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     private var ingestQueue: [String] = []
     private var ingesting: Task<Void, Never>?
+    /// CuePad 拉起的服务（它的 `opencode` 与环境），停止接入时由 CuePad 停掉；本来就在跑的为 nil
+    private var startedService: (executable: URL, environment: [String: String])?
 
     /// 连着的一个服务进程。
     @MainActor private final class Connection {
@@ -116,7 +119,18 @@ public final class OpenCodeRuntime: AgentRuntime {
         connection = nil
         ingesting?.cancel()
         let ingesting = ingesting
-        return { await ingesting?.value }
+        let stopService = stopStartedService()
+        return {
+            await ingesting?.value
+            await stopService()
+        }
+    }
+
+    /// 停掉 CuePad 拉起的服务（`opencode service stop`，它删掉登记文件，会话随之下线）；本来就在跑的不动。
+    public func stopStartedService() -> @concurrent @Sendable () async -> Void {
+        guard let service = startedService else { return {} }
+        startedService = nil
+        return { _ = await ChildProcess.run(service.executable, ["service", "stop"], environment: service.environment, timeout: AgentTimeouts.end) }
     }
 
     /// 登记文件变了：换了服务就断开旧的、连上新的，没了就断开。
@@ -233,6 +247,10 @@ public final class OpenCodeRuntime: AgentRuntime {
             }
         }
         for (id, tracked) in sessions where tracked.online { try await refreshLive(id, tracked, client) }
+        guard self.connection === connection else { return }
+        for (id, tracked) in sessions where tracked.online && tracked.firstMessage == nil {
+            sessions[id]?.firstMessage = try await checkpoint(of: id)?.history.firstMessage
+        }
         guard self.connection === connection else { return }
         listed = present
         connection.ready = true
@@ -717,6 +735,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, collect: false)
         else { throw AgentRuntimeError.launchTimedOut(.opencode) }
         guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, "opencode service start 退出码 \(result.status)") }
+        startedService = (executable, environment)
     }
 
     // MARK: 会话索引与对话
@@ -787,16 +806,18 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
     }
 
+    /// 读到哪了（含首条消息）：这次连上读过的在内存里，之前的在资料库里。
+    private func checkpoint(of sessionID: String) async throws -> OpenCodeHistory.Checkpoint? {
+        if let checkpoint = checkpoints[sessionID] { return checkpoint }
+        return try await store.piCheckpoint(of: sessionID).flatMap { try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: $0) }
+    }
+
     private func ingest(_ sessionID: String) async {
         guard let connection else { return }
         do {
             let info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data
             guard info.parentID == nil else { return }
-            var checkpoint = checkpoints[sessionID]
-            if checkpoint == nil, let data = try await store.piCheckpoint(of: sessionID) {
-                checkpoint = try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: data)
-            }
-            let (next, transcript) = try await OpenCodeHistory.read(connection.client, info, from: checkpoint, files: store.files)
+            let (next, transcript) = try await OpenCodeHistory.read(connection.client, info, from: try await checkpoint(of: sessionID), files: store.files)
             // 读的时候会话被删了：删除时已对过账，这里再写就把索引写回来了
             guard self.connection === connection, sessions[sessionID] != nil else { return }
             checkpoints[sessionID] = next
