@@ -1,12 +1,13 @@
 # shellcheck shell=bash
-# 被 xc.sh 与 perf-ios.sh source：每个槽位（_slot.sh）每种机型一台固定的模拟器，名为"CuePad <机型> #<槽号>"，
+# 被 xc.sh 与 perf-ios.sh source：每种机型固定一小池模拟器（SIM_POOL 台，名为"CuePad <机型> #<号>"），
+# 任务从 _lock.sh 领到号（CUEPAD_SIM）；只编译不运行的用 0 号做目标（不开机、不占）。
 # 第一次用时新建，开机后一直开着给后来的任务复用（脚本不关）：冷启动一次要 15–30 秒。
-# 开机时停用系统的 PosterBoard（管壁纸与锁屏海报）：iOS 27.0 模拟器里它的海报库会坏，之后每次开机都反复崩溃，
-# 每崩一次 Mac 上弹一个"PosterBoard 意外退出"；开关机越频繁越容易坏。App 的截图与测试用不到它，停用后桌面与 App 照常。
+# 开机时停用系统的 PosterBoard（管壁纸与锁屏海报）：iOS 27.0 模拟器里它的海报库会坏（新设备第一次开机、反复开关机时），
+# 之后每次开机都反复崩溃，每崩一次 Mac 上弹一个"PosterBoard 意外退出"。App 的截图与测试用不到它，停用后桌面与 App 照常。
 
-# sim_udid <机型>：输出本槽这台设备的 UDID，没有就建（只建不开机）。
+# sim_udid <机型>：输出领到的这台（没领就 0 号）的 UDID，没有就建（只建不开机）。
 sim_udid() {
-  local name="CuePad $1 #$CUEPAD_SLOT" udid
+  local name="CuePad $1 #${CUEPAD_SIM:-0}" udid
   udid="$(xcrun simctl list devices -j | jq -r --arg n "$name" 'first(.devices[][] | select(.name == $n and .isAvailable) | .udid) // empty')"
   [ -n "$udid" ] || udid="$(xcrun simctl create "$name" "$1")"
   echo "$udid"

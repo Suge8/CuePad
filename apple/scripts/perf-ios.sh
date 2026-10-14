@@ -5,16 +5,16 @@
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单在进程内没有入口：App 写 `AWAIT 名 x y`，这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
-# 用 Release（带 DEBUG 条件，只为留下测量代码）；产物在 apple/.derived-perf-ios。独占全部槽位（_slot.sh），设备是 0 号槽的模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
+# 用 Release（带 DEBUG 条件，只为留下测量代码）；产物在 apple/.derived-perf-ios。独占机器（_lock.sh），设备是 0 号模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
 command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/axe）" >&2; exit 1; }
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
-# shellcheck source=_slot.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_slot.sh"
-slot_enter all "$0" "$@"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
+xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
 DERIVED="$APPLE_DIR/.derived-perf-ios"
 BUNDLE_ID=com.sugeh.cuepad

@@ -167,7 +167,7 @@ struct RealClaudeTerminalTests {
 
 /// 接入（装钩子）与关掉接入（删钩子）只动 settings.json 里 CuePad 的条目：不起 Claude Code，只要它的测试台（录像带是空的）。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode))
+@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
 struct ClaudeSettingsTests {
     /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
     /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
