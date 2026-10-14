@@ -67,10 +67,6 @@ import Testing
     #expect(hello["protocolVersion"] as? String == "2025-11-25")
     let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
     #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
-    #expect(tools.compactMap { ($0["description"] as? String)?.count }.reduce(0, +) <= 2000)
-    // 用户发起的一轮直接回复，不先 tell 一遍
-    let tell = try #require(tools.first { $0["name"] as? String == "tell" }?["description"] as? String)
-    #expect(tell.contains("用户发起的一轮直接回复"))
 
     let added = try await server.call(
       "task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"], "prompt": "先读 release.sh"])

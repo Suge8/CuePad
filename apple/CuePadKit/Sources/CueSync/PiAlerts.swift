@@ -75,9 +75,6 @@ public enum CueAlertRoute {
     else { return nil }
     return UUID(uuidString: name)
   }
-
-  /// Cue 设置的记录名（只有一行）：改写通知时取 Cue 的名字。
-  public static var profileRecordName: String { CueProfile.syncRecordName }
 }
 
 /// 从通知取回的 Cue 消息与设置记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。

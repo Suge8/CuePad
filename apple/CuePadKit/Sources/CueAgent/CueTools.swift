@@ -96,23 +96,8 @@ public struct CueTools: Sendable {
     } catch let failure as Failure {
       return Result(text: failure.message, structured: [:], isError: true)
     } catch {
-      return Result(text: Self.describe(error), structured: [:], isError: true)
-    }
-  }
-
-  private static func describe(_ error: any Error) -> String {
-    switch error as? CueStoreError {
-    case .notALeaf: "这件事有步骤，会话在步骤上：task 写具体步骤"
-    case .sessionBusy: "会话正在做事：say 用 when=now 马上说，或 when=after 等它做完"
-    case .noSession(let title): "「\(title)」还没有会话：先 task start（草稿作为第一句）"
-    case .noFolder(let project):
-      project.isEmpty ? "这件事不在项目里，没有文件夹开会话：用 tell 请用户把它放进一个绑了文件夹的项目" : "项目「\(project)」没绑文件夹：用 tell 请用户在 CuePad 里给它绑一个"
-    case .nothingToAnswer: "会话此刻没有等回答的提问：用 say when=now 或 after 说话"
-    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
-    case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
-    case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
-    case let error?: error.localizedDescription
-    case nil: (error as? LocalizedError)?.errorDescription ?? "\(error)"
+      // Kit 里只有 Cue 会碰到的错误，文案本来就是写给 Cue 的（见 `CueStoreError`）
+      return Result(text: (error as? LocalizedError)?.errorDescription ?? "\(error)", structured: [:], isError: true)
     }
   }
 
@@ -207,8 +192,6 @@ public struct CueTools: Sendable {
   private func start(_ args: Args) async throws -> Result {
     if let agent = args.string("agent"), agent != "pi" { throw Failure("目前只能开 Pi 会话（agent 省略或写 pi）") }
     let leaf = try await workingLeaf(try args.required("task"))
-    let draft = try await store.draft(of: leaf.id)
-    if leaf.piSessionID != nil, draft == nil { throw Failure("「\(leaf.heading)」已有会话：用 say 对它说话") }
     let model = try args.string("model").map { ref -> PiModelKey in
       let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
       guard parts.count == 2 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开") }
@@ -218,13 +201,13 @@ public struct CueTools: Sendable {
       guard let level = PiThinkingLevel(rawValue: raw) else { throw Failure("effort 只能是 \(PiThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
       return level
     }
-    let result = try await store.handOff(leaf.id, model: model, thinking: effort, host: try await host(), cue: true)
-    let text: String =
-      switch result {
-      case .sent: "草稿已发进「\(leaf.heading)」的会话。"
-      case .started: "已请 Mac 为「\(leaf.heading)」开新会话" + (draft == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
-      }
-    return .ok(text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(result.request.id), "started": { if case .started = result { true } else { false } }()])
+    let request = try await store.startLeaf(leaf.id, model: model, thinking: effort, host: try await host(), cue: true)
+    let started = request.mode == .known(.start)
+    let text =
+      started
+      ? "已请 Mac 为「\(leaf.heading)」开新会话" + (request.launch?.prompt == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
+      : "草稿已发进「\(leaf.heading)」的会话。"
+    return .ok(text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "started": started])
   }
 
   private func say(_ args: Args) async throws -> Result {
@@ -236,18 +219,13 @@ public struct CueTools: Sendable {
       let request = try await store.answerLeaf(leaf.id, value, host: host, cue: true)
       return .ok("已回答「\(leaf.heading)」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
     }
-    guard ["now", "after"].contains(when) else { throw Failure("when 只能是 now、after 或 answer") }
-    let text = try args.required("text")
-    if leaf.piSessionID == nil {
-      if try await !store.launchingLeaves([leaf.id]).isEmpty { throw CueStoreError.launching(leaf.heading) }
-      throw Failure("「\(leaf.heading)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句")
+    let timing: SayTiming
+    switch when {
+    case "now": timing = .now
+    case "after": timing = .after
+    default: throw Failure("when 只能是 now、after 或 answer")
     }
-    let request: DeliveryRequest
-    do {
-      request = try await store.handOff(leaf.id, text: text, host: host, cue: true).request
-    } catch CueStoreError.sessionBusy {
-      request = try await store.handOff(leaf.id, text: text, mode: when == "now" ? .steer : .followUp, host: host, cue: true).request
-    }
+    let request = try await store.sayToLeaf(leaf.id, text: try args.required("text"), when: timing, host: host, cue: true)
     let how = request.mode == .known(.steer) ? "（会话正忙，马上说）" : request.mode == .known(.followUp) ? "（会话正忙，等它做完再说）" : ""
     return .ok("已对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
   }

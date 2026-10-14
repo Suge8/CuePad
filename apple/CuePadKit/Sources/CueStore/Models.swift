@@ -28,8 +28,6 @@ extension Table {
   var missingDefaults: [String: SQLValue] {
     switch self {
     case .cards: ["cueFollows": .int(0)]
-    case .cueMessages: ["urgent": .int(0)]
-    case .cueLines: ["pinned": .int(0)]
     default: [:]
     }
   }
@@ -379,10 +377,11 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
-  /// 会话正在跑一轮，直接发送不写请求：改用马上说（steer）或等它做完再说（followUp）。
-  case sessionBusy
+  // 以下除 memoryLineTooLong 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它）。
   /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
+  /// 叶子已有会话、没有草稿可交，开工无事可做（参数是叶子标题）。
+  case alreadyStarted(String)
   /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
   case stepsRemaining(Int)
   /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
@@ -397,7 +396,7 @@ public enum CueStoreError: Error, Equatable {
   case memoryLineTooLong(Int)
   /// 摘要的区间不是记忆里对齐的 2 的幂区间。
   case invalidSummaryRange
-  /// Cue 还没启用（没有 `cueProfile`，或没选住在哪台 Mac）。
+  /// Cue 没启用（没有 `cueProfile`、停用了或没选住在哪台 Mac）。
   case cueNotEnabled
 }
 
@@ -422,16 +421,19 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
-    case .sessionBusy: "会话正在做事，直接发送会被拒：改用马上说，或等它做完再说"
-    case .noSession(let title): "「\(title)」还没有会话，先开工"
-    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成"
-    case .launching(let title): "正在为「\(title)」开会话，等它开好"
-    case .noFolder(let project): project.isEmpty ? "未分类的任务没有文件夹，开不了会话" : "项目「\(project)」没绑文件夹，开不了会话"
-    case .nothingToAnswer: "会话此刻没有等你回答的提问（或只能在 Pi 里答）"
-    case .invalidAnswer(let options): "答案要是其中之一：\(options.joined(separator: " / "))"
+    case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
+    case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
+    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
+    case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
+    case .noFolder(let project):
+      project.isEmpty
+        ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
+        : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
+    case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Pi 里答）：用 say 说话"
+    case .invalidAnswer(let options): "答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
-    case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）"
-    case .cueNotEnabled: "Cue 还没启用"
+    case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
+    case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     }
   }
 }

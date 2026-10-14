@@ -8,7 +8,7 @@ import Testing
 @Suite struct EngineDelegateTests {
   @Test func cloudSyncKeepsItsEngineDelegateAlive() throws {
     let fixture = try Fixture()
-    var sync: CloudSync? = CloudSync(store: fixture.store, subscribesToPiAlerts: false)
+    var sync: CloudSync? = CloudSync(store: fixture.store, subscribesToAlerts: false)
     weak let delegate = sync?.engineDelegate
     #expect(delegate != nil, "外部没有任何引用时，委托仍由 CloudSync 持有")
     sync = nil

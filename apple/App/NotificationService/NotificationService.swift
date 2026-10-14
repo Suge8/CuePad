@@ -29,7 +29,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         let database = CKContainer(identifier: Self.container).privateCloudDatabase
         if CueAlertRoute.message(from: userInfo) != nil {
             pending.withLock { $0 = Pending(content: content, deliver: handler) }
-            let profile = CKRecord.ID(recordName: CueAlertRoute.profileRecordName, zoneID: recordID.zoneID)
+            let profile = CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: recordID.zoneID)
             database.fetch(withRecordIDs: [recordID, profile]) { result in
                 let records = (try? result.get()) ?? [:]
                 if let message = try? records[recordID]?.get(),

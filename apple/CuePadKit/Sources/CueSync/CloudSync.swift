@@ -15,26 +15,26 @@ public actor CloudSync {
   /// CKSyncEngine 只弱引用委托：这里是它唯一的强持有者，与 CloudSync 同生命周期。
   /// 曾经只是 `start()` 里的局部变量，返回后即被释放，引擎的事件全被丢掉（"the delegate may have been deallocated"）。
   nonisolated let engineDelegate: EngineBridge
-  private let subscribesToPiAlerts: Bool
+  private let subscribesToAlerts: Bool
   private var engine: CKSyncEngine?
   private var puller: ZoneChangePuller?
   private var uploader: (any RecordUploader)?
   private var accountWatcher: Task<Void, Never>?
 
-  /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"与 Cue 消息的服务端通知订阅（`AlertSubscriptions`）。默认只有 iOS 建立
+  /// `subscribesToAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"与 Cue 消息的服务端通知订阅（`AlertSubscriptions`）。默认只有 iOS 建立
   /// （Mac 是记录的写方，不需要）。App 需要请求通知权限并注册远程通知，见 `PiAlertRoute`、`CueAlertRoute`。
   public init(
     store: CueStore, containerIdentifier: String = "iCloud.com.sugeh.cuepad", zoneName: String = "CuePad",
-    subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault
+    subscribesToAlerts: Bool = CloudSync.subscribesToAlertsByDefault
   ) {
-    self.subscribesToPiAlerts = subscribesToPiAlerts
+    self.subscribesToAlerts = subscribesToAlerts
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)
     engineDelegate = EngineBridge(coordinator: coordinator, zoneID: zoneID)
   }
 
-  public static var subscribesToPiAlertsByDefault: Bool {
+  public static var subscribesToAlertsByDefault: Bool {
     #if os(iOS)
     true
     #else
@@ -117,7 +117,7 @@ public actor CloudSync {
   /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试，并按数据库重新登记待推送（回到前台时调用）。
   public func syncNow() async throws {
     guard let engine else { return }
-    if subscribesToPiAlerts, await coordinator.alertSubscription != .active {
+    if subscribesToAlerts, await coordinator.alertSubscription != .active {
       await ensureAlertSubscriptions(CKContainer(identifier: containerIdentifier))
     }
     try await engine.fetchChanges()
@@ -126,7 +126,7 @@ public actor CloudSync {
   }
 
   private func ensureAlertSubscriptions(_ container: CKContainer) async {
-    guard subscribesToPiAlerts else { return }
+    guard subscribesToAlerts else { return }
     let status = await AlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
     await coordinator.setAlerts(status)
   }
