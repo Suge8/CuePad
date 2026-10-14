@@ -382,7 +382,7 @@ extension CueStore {
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
     fields["cueFollows"] = .int(0)
-    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID"] { fields[column] = .null }
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))
