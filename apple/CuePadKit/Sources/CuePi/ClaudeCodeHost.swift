@@ -292,13 +292,15 @@ final class ClaudeHostedSession: SessionLink {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed?.isEmpty == true { throw PiBridgeError.rejected("bad_request") }
         if let model {
-            // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证）照原话报。
-            // 兼容网关不认的模型多半直接回 400（DeepSeek："The supported API model names are …"），核对请求里能错的只有模型
+            // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证、余额）照原话报。
+            // 兼容网关不认的模型常只回 400/404 而没有上面的短语（DeepSeek 400："…but you passed <id>"；官方 404："model: <id>"），
+            // 但 400 也可能是别的原因（官方余额不足："Your credit balance is too low…"），所以 400/404 还要原文里点了这次的模型 id 才算
             do {
                 _ = try await request(["subtype": "set_model", "model": .string(model.id)])
             } catch PiBridgeError.rejected(let reason) {
-                let unknown = ["unsupported model", "not found", "unknown model", "invalid model", "api error: 400", "api error: 404"]
-                    .contains { reason.lowercased().contains($0) }
+                let text = reason.lowercased()
+                let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { text.contains($0) }
+                    || (["api error: 400", "api error: 404"].contains { text.contains($0) } && text.contains(model.id.lowercased()))
                 throw PiBridgeError.rejected(unknown ? "unknown_model" : "failed: \(reason)")
             }
             update { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
