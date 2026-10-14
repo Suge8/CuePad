@@ -215,12 +215,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     private func running() async throws -> [Running] {
         let claude = try await executable()
-        let process = Process()
-        process.executableURL = claude.url
-        process.arguments = ["agents", "--json"]
-        process.environment = claude.environment
-        process.standardError = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: .seconds(15)), result.status == 0 else {
+        guard let result = await runCapturing(claude.url, ["agents", "--json"], environment: claude.environment, timeout: .seconds(15)),
+              result.status == 0 else {
             throw ClaudeCodeError.listingFailed
         }
         return try JSONDecoder().decode([Running].self, from: Data(result.output.utf8))

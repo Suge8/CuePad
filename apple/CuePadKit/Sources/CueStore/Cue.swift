@@ -22,7 +22,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var author: Open<CueAuthor>
   /// 正文（`CueFormat`）；你的消息可带图片引用。
   public var text: String
-  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。
+  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。只用来显示，不用来认是哪种问题。
   public var choices: [String]?
   /// 要推送到手机。
   public var urgent: Bool
@@ -37,24 +37,30 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
   var notify: Bool = false
+  /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，返工时作废（变回普通的话）。
+  public var isAcceptance: Bool = false
 }
 
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify",
+    "acceptance",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
-    [id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt, notify ? Self.notifyFlag : nil]
+    [
+      id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
+      notify ? Self.notifyFlag : nil, isAcceptance,
+    ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil)
+      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil, isAcceptance: row.bool(12))
   }
 }
 
@@ -130,7 +136,7 @@ public struct CueProfile: Equatable, Sendable {
   /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
   public var runtime: Open<AgentKind>
   public var model: String?
-  /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。
+  /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
@@ -147,7 +153,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
@@ -171,7 +177,8 @@ extension CueProfile: Record {
   }
 }
 
-/// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`），你答 `accept` 就是收下（`CueStore.answerCueMessage` 完成任务）。
+/// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`，消息标着 `CueMessage.isAcceptance`），
+/// 你答 `accept` 就是收下（`CueStore.answerCueMessage` 完成任务）。选项只是显示的文字。
 public enum CueAcceptance {
   public static let accept = "收下"
   public static let revise = "再改改"

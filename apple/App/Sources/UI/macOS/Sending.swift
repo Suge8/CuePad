@@ -136,7 +136,16 @@ extension Workspace {
         attempt { try await self.handOff(text, prompt: id) }
     }
 
-    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定已有会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
+    /// 给叶子开一个新会话，不接着用绑着的或上一步的会话（"绑定会话"里的"开新会话"；与 Cue 开工带 fresh 同一条规则，
+    /// `CueStore.handOffPlan(fresh:)`）：写好的草稿作为第一句，没有就只开会话。
+    func startFresh(_ leaf: UUID) {
+        attempt {
+            let draft = try await self.services.store.draft(of: leaf)
+            try await self.handOff(draft.map(Outgoing.text(of:)), prompt: draft?.id ?? leaf, fresh: true)
+        }
+    }
+
+    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
     func bind(_ sessionID: String, to leaf: UUID) async throws {
         guard let draft = try await services.store.bindSession(sessionID, to: leaf) else { return }
         putInReplyBox(draft, of: sessionID)
@@ -148,20 +157,22 @@ extension Workspace {
         try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
     }
 
-    private func handOff(_ text: String, prompt: UUID) async throws {
-        let plan = try await services.store.handOffPlan(prompt, host: services.hostID)
+    /// `text` 为 nil 只在开新会话时（没有草稿）。
+    private func handOff(_ text: String?, prompt: UUID, fresh: Bool = false) async throws {
+        let plan = try await services.store.handOffPlan(prompt, host: services.hostID, fresh: fresh)
         switch plan.destination {
         case .session(let session, _, let host):
+            guard let text else { return }
             await send(text, to: AgentTarget(session: session, host: host), card: prompt)
         case .launch(let project, let host):
             // 会话名由带着的提示词定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
             let projectName = try await services.store.project(project)?.name
             let title = plan.name ?? projectName ?? CaptureCopy.unfiled
-            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: prompt, agent: services.defaultAgent) {}
+            _ = try await startSession(in: project, prompt: text?.nonEmpty, title: title, on: host, card: prompt, agent: services.defaultAgent) {}
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
-            try await handOff(text, prompt: prompt)
+            try await handOff(text, prompt: prompt, fresh: fresh)
         case .unfiled:
             say("未分类的任务没有文件夹，开不了会话", isError: true)
         }

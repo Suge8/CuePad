@@ -3,10 +3,10 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// CuePad 起的一个说行协议的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex）：标准输入一行一条写入，
+/// CuePad 起的子进程，唯一的一套起法（Cue 的大脑、后台托管的 Claude Code 与 Codex、超时跑命令 `runCapturing`）：标准输入一行一条写入，
 /// 标准输出按行读出（`lines`），标准错误只留末尾给退出原因。
 /// - 自成一个进程组（`POSIX_SPAWN_SETPGROUP`）：进程退出后把组里剩下的（它起的、没跟着走的子进程）一并结束，不留孤儿；
-/// - 只继承三个标准描述符（`POSIX_SPAWN_CLOEXEC_DEFAULT`）：App 打开的文件与连接不漏进去；
+/// - 只继承三个标准描述符（`POSIX_SPAWN_CLOEXEC_DEFAULT`）：App 打开的文件与连接不漏进去；信号处置与屏蔽都是缺省的；
 /// - 写入排在一条串行队列上（大图片写进管道时不卡调用方，先后不变），写端设了 `F_SETNOSIGPIPE`：进程已退出时写入只是失败，
 ///   不给 App 发 SIGPIPE；关了输入之后的写入丢掉（描述符号可能已被别的文件复用）。
 final class LineProcess: Sendable {
@@ -41,8 +41,15 @@ final class LineProcess: Sendable {
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
+        // 信号的处置与屏蔽不随本进程：本进程（如测试宿主）屏蔽或忽略了 SIGTERM 时，子进程也会收不到，结束它就只剩 SIGKILL
+        posix_spawnattr_setflags(
+            &attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
         posix_spawnattr_setpgroup(&attributes, 0)
+        var everySignal = sigset_t(), noSignal = sigset_t()
+        sigfillset(&everySignal)
+        sigemptyset(&noSignal)
+        posix_spawnattr_setsigdefault(&attributes, &everySignal)
+        posix_spawnattr_setsigmask(&attributes, &noSignal)
         let argv = ([executable.path] + arguments).map { strdup($0) } + [nil]
         let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { (argv + envp).forEach { free($0) } }
@@ -138,6 +145,16 @@ final class LineProcess: Sendable {
         return tail.isEmpty ? code : "\(code)：\(tail)"
     }
 
+    /// 等进程退出，返回退出码；被信号结束的是 -1。
+    func exitCode() async -> Int32 {
+        _ = await exited(within: nil)
+        let status = shared.state.withLock { $0.status ?? -1 }
+        return (status & 0x7F) == 0 ? (status >> 8) & 0xFF : -1
+    }
+
+    /// 已经退出了。
+    var hasExited: Bool { shared.state.withLock { $0.status != nil } }
+
     /// 标准错误的末尾（至多 4 KB）。
     var stderrTail: String {
         String(decoding: shared.state.withLock { $0.stderr }, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,7 +186,7 @@ final class LineProcess: Sendable {
         return (fds[0], fds[1])
     }
 
-    /// 专用线程读到 EOF，按 `\n` 切行（JSON 字符串里的 U+2028/2029 不是行界）。
+    /// 专用线程读到 EOF，按 `\n` 切行（JSON 字符串里的 U+2028/2029 不是行界）；最后没有换行的那一段也算一行。
     private static func drain(_ fd: Int32, line: @escaping @Sendable (Data) -> Void, done: @escaping @Sendable () -> Void) {
         Thread.detachNewThread {
             var buffer = [UInt8](repeating: 0, count: 64 * 1024)
@@ -186,6 +203,8 @@ final class LineProcess: Sendable {
                     pending.removeSubrange(pending.startIndex...nl)
                 }
             }
+            if pending.last == 0x0D { pending.removeLast() }
+            if !pending.isEmpty { line(pending) }
             close(fd)
             done()
         }

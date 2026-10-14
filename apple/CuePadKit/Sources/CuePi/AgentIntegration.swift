@@ -251,13 +251,8 @@ public struct AgentIntegration: Sendable {
     private static func capture(_ executable: URL, _ arguments: [String], locator: ExecutableLocator, timeout: Duration = .seconds(10)) async -> String? {
         let scratch = FileManager.default.temporaryDirectory.appending(path: "cuepad-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: scratch) }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        return await runCapturing(process, timeout: timeout)?.output
+        let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "XDG_DATA_HOME": scratch.path])
+        return await runCapturing(executable, arguments, environment: environment, timeout: timeout)?.output
     }
 }
 

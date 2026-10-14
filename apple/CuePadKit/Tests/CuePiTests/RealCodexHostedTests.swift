@@ -8,7 +8,7 @@ import Testing
 
 /// 端到端：CuePad 在后台托管 Codex（`codex app-server`，真模型，账号里最便宜的），状态来自真钩子，对话来自真会话文件。
 @MainActor
-@Suite(.enabled(if: realCodexSignedIn, "需要本机装有并登录了 codex"), .timeLimit(.minutes(4)), .serialized)
+@Suite(.enabled(if: realCodexSignedIn, RealAgents.skipped(.codex, needs: "本机装有并登录了 codex")), .timeLimit(.minutes(4)), .serialized)
 struct RealCodexHostedTests {
     /// 开一个新会话、发一句带图的话：会话出现在桥上（后台托管、带着认领标识），做完一轮后歇下；会话文件里你的话带着这次投送的 id 与图片，
     /// 回答是一条 Codex 消息；换模型、强度与改名生效。结束后下线；再接着这个已结束的会话说，它在后台恢复、接着回答。

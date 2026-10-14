@@ -26,7 +26,8 @@ protocol CueNotifying: AnyObject {
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
 /// - 设置只经这里写（启用、停用、`update`），写完立即上传：手机与别的 Mac 马上看到。
-/// - 启用：按 `CueRuntimes.order` 选第一家装了且登录了的运行时，写 `cueProfile`（住这台 Mac、默认模型、低思考强度）；
+/// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（没装或没登录）才换成
+///   `CueRuntimes.order` 里第一家能用的，模型随原来那家清掉；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
 /// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
@@ -74,15 +75,18 @@ final class CueService {
         var errorDescription: String? { "这台 Mac 上没有装好并登录的 Pi、Codex 或 Claude Code" }
     }
 
-    /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）。
+    /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）：只改住在哪、启用时刻。选的 Agent 这台用不了才换成第一家能用的，
+    /// 模型属于原来那家，一并清掉；强度留着（运行时自己取档）。
     func enable() async throws {
-        guard let pick = await refreshRuntimes().first else { throw EnableError.noRuntime }
+        let available = await refreshRuntimes()
+        guard let first = available.first else { throw EnableError.noRuntime }
         try await update { [hostID] profile in
             profile.hostID = hostID
-            profile.runtime = .known(pick)
-            profile.model = nil
-            profile.effort = .known(.low)
             profile.enabledAt = .now
+            if profile.runtime.known.map(available.contains) != true {
+                profile.runtime = .known(first)
+                profile.model = nil
+            }
         }
     }
 

@@ -118,7 +118,7 @@ public enum CueEnvelope {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
-    let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : "没开工")
+    let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : item.sending ? "发送中" : "没开工")
     let leaf = item.leaf.id == item.task.id ? "" : "\(item.leaf.heading) › "
     parts.append("\(leaf)\(state) \(duration(now.timeIntervalSince(item.since)))")
     if let session = item.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }

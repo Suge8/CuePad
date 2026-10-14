@@ -200,7 +200,7 @@ struct CueTrayCard: View {
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let shown {
                 PiStateDot(shown: shown, size: 6)
-            } else if item.launching {
+            } else if item.launching || item.sending {
                 Spinner(.mini)
             }
             Text(Dotted(item.leaf.id == item.task.id ? nil : item.leaf.title, note)).lineLimit(1)
@@ -219,6 +219,7 @@ struct CueTrayCard: View {
 
     private var note: String {
         if item.launching { return "正在开会话" }
+        if item.sending { return "发送中" }
         guard let session else { return "还没开始" }
         let shown = workspace.shown(session, delivery: nil, cueFollows: true)
         if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }

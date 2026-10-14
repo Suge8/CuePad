@@ -4,7 +4,8 @@ import SwiftUI
 
 /// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），提示词的正文已经带在里面，可以补一句；
 /// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。默认交到哪与 Mac 的发给 Agent、
-/// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑就是新会话。
+/// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑而上一步的会话
+/// 还开着就接着用它，否则是新会话；选"新会话…"就不接着用（同 Cue 的 fresh）。
 /// 发出即收起，提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
 /// 选中会话做不到的（图片、斜杠命令、换模型，`AgentCapabilities`）不露出。
 struct HandOffInput: View {
@@ -20,10 +21,12 @@ struct HandOffInput: View {
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 交到哪的规则读出的：决定本身（不是从提示词来的为 nil），与叶子绑着的会话的会话行（默认目标；没绑为 nil，即新会话）。
+    /// 交到哪的规则读出的：决定本身（不是从提示词来的为 nil）、决定交给的会话的会话行（默认目标；没有为 nil，即新会话），
+    /// 与选"新会话…"时的决定（`handOffPlan(fresh:)`，与 Cue 开工带 fresh 同一条规则）。
     nonisolated private struct Planned: Equatable, Sendable {
         var plan: HandOffPlan?
         var bound: PiSessionListItem?
+        var fresh: HandOffPlan?
     }
 
     /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
@@ -75,8 +78,8 @@ struct HandOffInput: View {
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
             let plan = try store.handOffPlan(card, host: nil)
-            guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan) }
-            return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id])
+            guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan) }
+            return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true))
         }
         // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
         .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
@@ -146,7 +149,7 @@ struct HandOffInput: View {
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        navigation.handOffToNewSession(draft, card: outbox.card, plan: planned?.plan)
+        navigation.handOffToNewSession(draft, card: outbox.card, plan: planned?.fresh)
     }
 }
 #endif

@@ -403,6 +403,10 @@ public enum CueStoreError: Error, Equatable {
   case noSession(String)
   /// 叶子已有会话、没有草稿可交，开工无事可做（参数是叶子标题）。
   case alreadyStarted(String)
+  /// 叶子没有草稿，开工没有第一句可交（参数是叶子标题）。
+  case draftNeeded(String)
+  /// 叶子还没绑会话，它的话正送进上一步的会话（参数是叶子标题）。
+  case sending(String)
   /// 叶子绑着会话，不留草稿：话在会话里说（参数是叶子标题）。
   case leafHasSession(String)
   /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
@@ -451,6 +455,8 @@ extension CueStoreError: LocalizedError {
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
     case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
     case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先 done 做完的步骤，或用 tell 问用户剩下的还做不做"
+    case .draftNeeded(let title): "「\(title)」还没有草稿：先用 edit 写草稿再 start，草稿会作为第一句"
+    case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
     case .noFolder(let project):
       project.isEmpty
