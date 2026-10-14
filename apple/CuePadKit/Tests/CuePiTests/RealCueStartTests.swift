@@ -7,21 +7,14 @@ import Testing
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
 /// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走 DeepSeek，OpenCode 用免费模型。
-/// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 列出的几家）。
-/// 开了、本机也装着（测试台要的都在）的几家
-private let enabledAgents = RealAgents.enabled.filter {
-    switch $0 {
-    case .pi: realPiAvailable
-    case .codex: realCodexAvailable
-    case .claudeCode: realClaudeAvailable
-    case .opencode: realOpenCodeURL != nil
-    }
-}
+/// 默认回放录像带（OpenCode 没有录像带，列出它时直连），见 `RealAgents`。
+private let agents = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 
 @MainActor
-@Suite(.enabled(if: !enabledAgents.isEmpty, "要花钱，默认不跑：开关见 RealAgents（CUEPAD_AGENT_TESTS）"), .serialized, .timeLimit(.minutes(6)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), .timeLimit(.minutes(6)))
 struct RealCueStartTests {
-    @Test(arguments: enabledAgents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
+    @Test(arguments: agents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
+        AgentTape.use(agent)
         try await withAgent(agent) { runtime, bridge, work, model in
             // 强度给的不是测试台配置里的 low：生效了才看得出来
             let id = try await runtime.open(in: work, launchToken: "cue-1", name: "Cue 开的", model: model, thinking: .medium)
@@ -78,7 +71,7 @@ struct RealCueStartTests {
             try bridge.start()
             let host = PiHost(bridge: bridge, paths: pi.paths, idleLimit: .seconds(120), extraArguments: PiProcess.quietArguments)
             host.start()
-            try await body(PiRuntime(host: host, locate: { realPiURL }), bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
+            try await body(PiRuntime(host: host, locate: { AgentTape.executable("pi") }), bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:
             try await withCodexRig { rig in
                 try await body(rig.runtime, rig.bridge, rig.codex.work, PiModelKey(provider: CodexModel.provider, id: codexTestModel))
