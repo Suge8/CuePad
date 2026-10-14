@@ -325,7 +325,7 @@ import Testing
   }
 
   /// 验收挂着时 Cue 又对这件事的会话说话（返工）：那条验收作废——去掉选项，留在对话里当一句话，不再算等你；
-  /// 返工完再收尾写一条新的验收、带新证据。Cue 别的提问不动。
+  /// 返工完再收尾写一条新的验收、带新证据。Cue 开工同样作废；Cue 别的提问不动，你自己对会话说话也不动。
   @Test(.timeLimit(.minutes(1))) func reworkWithdrawsThePendingAcceptance() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -353,6 +353,17 @@ import Testing
     _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 新证据"])
     let fresh = try await store.cueMessagesWaitingForYou().filter { $0.choices == CueAcceptance.choices }
     #expect(fresh.count == 1 && fresh.first?.id != stale.id && fresh.first?.text.contains("新证据") == true)
+
+    // Cue 带着新草稿开工：同样作废
+    _ = try await store.createCard(body: "再跑一遍测试", under: task.id)
+    _ = try await server.call("task", ["action": "start", "task": task.id.uuidString])
+    #expect(try await store.cueMessagesWaitingForYou().filter { $0.choices == CueAcceptance.choices }.isEmpty)
+
+    // 你自己经 CuePad 对会话说话：验收还挂着
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 又跑了一遍"])
+    let latest = try #require(try await store.cueMessagesWaitingForYou().first { $0.choices == CueAcceptance.choices })
+    _ = try await store.requestDelivery("我先看看", to: SendTarget(kind: .piSession, name: "加语言参数", ref: "s1"), on: "mac-a")
+    #expect(try await store.cueMessagesWaitingForYou().contains { $0.id == latest.id })
   }
 
   /// 看板上一件事的近况取在做的那一步；步骤都做完、等你收下时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
