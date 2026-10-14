@@ -58,6 +58,9 @@ nonisolated struct CueTiming: Sendable {
 /// 6. 空闲巡视：没有在做的事（`CueBoardItem.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
+/// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
+/// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
+/// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写。
@@ -145,6 +148,8 @@ final class CueKeeper {
         var delivered: [UUID] = []
         /// 这一轮中途插进了你的话（`delivered` 不算数：随信封记下送达的还有你关掉的提问，那不是在等回答）
         var youSpoke = false
+        /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
+        var speaking: PiDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
 
@@ -212,6 +217,9 @@ final class CueKeeper {
     var context: (used: Int, window: Int?)? { shift?.context }
     /// 此刻班次从什么时候起。
     var shiftStartedAt: Date? { shift?.startedAt }
+    /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
+    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
+    let speech = PiDraftFeed()
 
     /// Cue 此刻在做什么：一轮里在想或在用工具，起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
     private var work: (state: PiWorkState, detail: String?) {
@@ -353,6 +361,7 @@ final class CueKeeper {
                 archive(round)
             }
             await shift.brain.stop()()
+            speech.offer(nil)
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
                     try await setup.store.unmarkCueMessagesDelivered(delivered)
@@ -380,17 +389,15 @@ final class CueKeeper {
         if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
         switch event {
         case .turnStarted:
+            speech.offer(nil)
             // 没有醒来就开始的一轮只能是插进来的你的话开的
             if turn == nil {
                 let round = beginRound(.message, sent: [])
                 updateShift { $0.turn = Turn(author: .cue, round: round) }
             }
-        case .reply(let text):
-            lastFailure = nil
-            let author = turn?.author ?? .note
-            // 不是在回答你的一轮里已经对你说过了：最后那句只是复述（动态那一行、刚启用的开场都一样）
-            if turn?.answersYou != true, await hasTold(since: turn?.round.startedAt ?? lastTurnEnd) { return }
-            await say(author, text)
+        case .speaking(let draft):
+            updateShift { $0.turn?.speaking = draft }
+            speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used, let window):
             updateShift { $0.context = (used, window ?? $0.context?.window) }
         case .tool(let id, let name, let arguments):
@@ -408,6 +415,12 @@ final class CueKeeper {
             await say(.cue, "这一轮出错了：\(line)")
         case .turnFinished:
             guard let finished = turn else { return }
+            if let reply = finished.speaking?.text.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty {
+                lastFailure = nil
+                // 不是在回答你的一轮里已经对你说过了：最后那句只是复述（动态那一行、刚启用的开场都一样）
+                let repeated = !finished.answersYou ? await hasTold(since: finished.round.startedAt) : false
+                if !repeated { await say(finished.author, reply) }
+            }
             archive(finished.round)
             updateShift {
                 $0.turn = nil
