@@ -318,6 +318,24 @@ struct HistoryIndexerTests {
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
+    /// Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报内容变化：开着写的文件每次追加也要跟上。
+    @Test(.timeLimit(.minutes(1)))
+    func appendsToAFileKeptOpenAreIndexedWhileItStaysOpen() async throws {
+        let dir = root.appending(path: "p1")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appending(path: "a.jsonl")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let writer = try FileHandle(forWritingTo: url)
+        defer { try? writer.close() }
+        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
+        try await eventually("回填完成") { log.finishedBackfill }
+
+        try writer.write(contentsOf: Data((SessionFile.header(id: "a") + "\n" + SessionFile.user("u", nil, "kept open", at: 1) + "\n").utf8))
+        try await eventually("开着写的第一句被索引") { log.updates.contains { $0.history.displayName == "kept open" } }
+        try writer.write(contentsOf: Data((SessionFile.assistant("a", "u", text: "still open", at: 2) + "\n").utf8))
+        try await eventually("开着写的回答被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(2) } }
+    }
+
     /// 新用户常见顺序是先开 CuePad、后装 Pi：开始监听时会话目录还不存在。之后建出目录、写入会话（会话还没结束），
     /// 历史要跟上；目录被删掉再建也要恢复。
     @Test(.timeLimit(.minutes(1)))

@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件）：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
-/// 用 FSEvents 跟随文件变化，只读新增字节。
+/// 用 FSEvents 跟随文件变化，只读新增字节；最近写过的几个文件另盯追加（开着写的文件 FSEvents 只在关闭时报，见 `FSEventsWatcher.follow`）。
 ///
 /// 不持有全部检查点：起点由调用方通过 `checkpoint` 提供（App 层从 Store 读），每个 `updated`
 /// 里带回新检查点由调用方持久化。索引器只对最近修改/最近被触碰的若干文件在内存里保留检查点，
@@ -16,6 +16,8 @@ public struct PiHistoryIndexer: Sendable {
     private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
 
     private static let liveCacheLimit = 64
+    /// 另盯追加的文件数：每个占一个文件描述符，GUI 应用默认只有 256 个
+    private static let followLimit = 8
 
     /// - Parameter transcriptWindow: 首次读（没有检查点）时只为这么久之内修改过的会话文件解析对话（按修改时间，不读内容），
     ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:files:)`）。
@@ -46,8 +48,17 @@ public struct PiHistoryIndexer: Sendable {
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
         var excluded: Set<URL> = []
+        var followed: [String] = []
 
-        func index(_ file: URL, modified: Date?, remember: Bool) async {
+        /// 刚写过的文件另盯追加，只留最近的 `followLimit` 个
+        func follow(_ file: URL) {
+            followed.removeAll { $0 == file.path }
+            followed.append(file.path)
+            watcher.follow(file.path)
+            if followed.count > Self.followLimit { watcher.unfollow(followed.removeFirst()) }
+        }
+
+        func index(_ file: URL, modified: Date?, remember: Bool, follows: Bool = true) async {
             let base: PiHistoryCheckpoint?
             if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
             let recent = (modified ?? Self.modified(file)).map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
@@ -58,6 +69,7 @@ public struct PiHistoryIndexer: Sendable {
                 excluded.insert(file)
                 return
             }
+            if follows { follow(file) }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
 
@@ -67,14 +79,16 @@ public struct PiHistoryIndexer: Sendable {
         let found = Self.sessionFiles(under: root, depth: depth)
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
-            await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
+            await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit, follows: rank < Self.followLimit)
         }
         continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
-                for file in Self.sessionFiles(under: root, depth: depth) { await index(file.url, modified: file.modified, remember: true) }
+                for (rank, file) in Self.sessionFiles(under: root, depth: depth).enumerated() {
+                    await index(file.url, modified: file.modified, remember: true, follows: rank < Self.followLimit)
+                }
                 continue
             }
             for path in Set(paths) where Self.isSessionFile(path, under: root, depth: depth) {
