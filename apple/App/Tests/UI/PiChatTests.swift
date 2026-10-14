@@ -16,10 +16,6 @@ struct PiChatTests {
             tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
-    func preview(_ title: String, at second: TimeInterval = 0) -> PiPreview {
-        PiPreview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
-    }
-
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {
         let app = TestApp()
         let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")

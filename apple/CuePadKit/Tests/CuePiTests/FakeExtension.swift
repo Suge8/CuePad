@@ -38,10 +38,10 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var context: (tokens: Int?, window: Int)?
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
-        /// CuePad 在后台托管的（hello 里带 `hosted`）
-        var hosted = false
         var tty: String? = "ttys009"
         var socketMode: mode_t = 0o600
+        /// CuePad 在后台托管的进程（hello 里带 `hosted`）
+        var hosted = false
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
                                      "TMUX_PANE": "%3", "TMUX": "/private/tmp/tmux-501/default,123,0"]
     }

@@ -97,6 +97,34 @@ struct CueHostTests {
         }
     }
 
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
+    /// （别的设备上说的话经主动拉取到达这台 Mac，那一段见 CueSync 的 `CueMessageArrivalTests`。）
+    @Test func 库正忙时你的话马上送进Cue() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let busy = Task {
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            var round = 0
+            while !Task.isCancelled {
+                round += 1
+                for index in 0..<10 {
+                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        defer { busy.cancel() }
+        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
+        let start = ContinuousClock.now
+        try await rig.say("库正忙时说的")
+        try await eventually("交给 Cue", timeout: .milliseconds(500)) {
+            try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
+        }
+        print("送进 Cue：\(ContinuousClock.now - start)")
+        busy.cancel()
+        await rig.stop()
+    }
+
     /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
@@ -306,7 +334,7 @@ struct CueHostTests {
         let running = try await store.createTask("托管着在跑", under: task.id), upgraded = try await store.createTask("升级前就在跑", under: task.id)
         let file = rig.folder.appending(path: "h0.jsonl")
         try Data("{}\n".utf8).write(to: file)
-        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, sessionFile: file.path, hosted: true)
+        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, hosted: true, sessionFile: file.path)
         try await store.linkCard(running.id, toSession: "h0")
         // 升级前写的记录：在跑、托管的，本机没有它的进程
         let helper = PiSubagentState(name: "helper", role: "工程师", phase: .known(.running))
