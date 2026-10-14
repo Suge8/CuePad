@@ -154,8 +154,9 @@ public struct CueProfile: Equatable, Sendable {
   public var name: String
   /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
-  /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
+  /// 大脑跑在哪家 Agent 里（`runtimes` 之一）
   public var runtime: Open<AgentKind>
+  /// 大脑用的模型，按 `runtime` 那家的写法（`AgentKind.modelRef`）；nil 是用这家自己的默认。
   public var model: String?
   /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
@@ -171,6 +172,8 @@ public struct CueProfile: Equatable, Sendable {
   public func onDuty(_ state: CueState?, asleep: Bool) -> Bool { activeHost != nil && !asleep && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
+  /// 能当大脑的几家，按启用时挑选的顺序（OpenCode 不能当大脑）：Mac 查本机能用的、两端 Cue 页的模型菜单都按它。
+  public static let runtimes: [AgentKind] = [.pi, .codex, .claudeCode]
   /// 只有一行：任何设备上都是这个 id。
   public static let recordID = DeterministicID.uuid("cue-profile")
   /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。

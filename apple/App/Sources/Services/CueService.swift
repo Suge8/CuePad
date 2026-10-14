@@ -25,9 +25,9 @@ protocol CueNotifying: AnyObject {
 }
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
-/// - 设置只经这里写（启用、停用、`update`），写完立即上传：手机与别的 Mac 马上看到。
+/// - 启用、停用经这里写，与别处改设置同一个写入口（`AppServices.updateCue`，写完立即上传）。
 /// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（没装或没登录）才换成
-///   `CueRuntimes.order` 里第一家能用的，模型随原来那家清掉；
+///   `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
 /// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
@@ -95,10 +95,8 @@ final class CueService {
         try await update { $0.enabledAt = nil }
     }
 
-    /// 改设置（名字、运行时、模型、思考强度）并立即上传。
-    func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
-        try await store.updateCueProfile(edit)
-        await sync?.upload(CueProfile.recordID)
+    private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
+        try await AppServices.updateCue(edit, store: store, sync: sync)
     }
 
     @discardableResult
