@@ -100,6 +100,14 @@ struct RealClaudeTerminalTests {
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(question.promptID), in: session.id)
             try await testbed.waitForTurn(session.id)
             #expect(await terminal.screen.contains("→ 咖啡"))
+
+            // 终端里每道选择题都能自己填：从 CuePad 写一个不在选项里的
+            try await terminal.type("再用 AskUserQuestion 工具问我一次喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我给的回答")
+            let again = try await testbed.waitForQuestion(session.id, on: terminal)
+            #expect(again.allowsOther)
+            try await testbed.bridge.answer(.text("果汁"), to: try #require(again.promptID), in: session.id)
+            try await testbed.waitForTurn(session.id)
+            #expect(await terminal.screen.contains("→ 果汁"))
         }
     }
 
@@ -132,7 +140,7 @@ struct RealClaudeTerminalTests {
     }
 
     /// MCP 服务要你填的只有一个字段的表单（Elicitation）：人不在时从 CuePad 答，答案交给 MCP 服务；
-    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是拒绝）它就收起。
+    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是取消）它就收起。
     @Test func cuePadAnswersAnMCPFormWhileTheUserIsAway() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.runtime.start()
@@ -155,10 +163,7 @@ struct RealClaudeTerminalTests {
             try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
             try await eventually("终端里弹表单", timeout: .seconds(30)) { await terminal.screen.contains("饮料") }
-            try await terminal.keys("Down")  // 到 Accept 那一行，再右移到 Decline：终端里拒绝
-            try await eventually("选到按钮") { await terminal.screen.contains("❯ Accept") }
-            try await terminal.keys("Right")
-            try await terminal.keys("Enter")
+            try await terminal.keys("Escape")  // 在终端里取消这个表单
             try await eventually("CuePad 上收起", timeout: .seconds(60)) { testbed.bridge.session(id: session.id)?.question == nil }
         }
     }

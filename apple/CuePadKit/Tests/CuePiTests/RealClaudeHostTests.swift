@@ -34,7 +34,7 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
             let session = try #require(testbed.bridge.session(id: id))
             #expect(session.hosted && session.launchToken == "token-1" && session.agent == .claudeCode)
-            #expect(session.availableModels.contains { $0.key.id == "mimo-v2.5" })
+            #expect(session.availableModels.contains { $0.key.id == claudeTestModel })
             #expect(session.commands.contains { $0.name == "compact" })
 
             let delivery = UUID().uuidString
@@ -67,7 +67,11 @@ struct RealClaudeHostTests {
             #expect(FileManager.default.fileExists(atPath: touched.path))
 
             _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 sleep 120（不要放到后台），然后只回复 SLEPT"), to: id)
-            try await eventually("在跑 sleep", timeout: .seconds(60)) { testbed.bridge.session(id: id)?.state == .tool }
+            // sleep 也要确认（模型不同，问不问不一定）：问了就允许
+            try await eventually("在跑 sleep", timeout: .seconds(60)) {
+                if let asked = testbed.bridge.session(id: id)?.question?.promptID { try? await testbed.bridge.answer(.confirmed(true), to: asked, in: id) }
+                return testbed.bridge.session(id: id)?.state == .tool
+            }
             try await testbed.bridge.abort(id)
             try await eventually("停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
 
@@ -83,10 +87,9 @@ struct RealClaudeHostTests {
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
-            // 测试网关上除了缺省的 mimo-v2.5，还能用的另一个模型
-            let pro = PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro")
+            let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
-            try await testbed.bridge.configure(model: pro, thinking: .low, name: "托管改名", in: id)
+            try await testbed.bridge.configure(model: other, thinking: .low, name: "托管改名", in: id)
             await #expect(throws: PiBridgeError.rejected("unknown_model")) {
                 try await testbed.bridge.configure(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model"), in: id)
             }
@@ -99,7 +102,7 @@ struct RealClaudeHostTests {
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id)
             let answered = try #require(lastAnswer(in: file))
-            #expect(answered.model == "mimo-v2.5-pro")
+            #expect(answered.model?.contains(claudeOtherModel) == true, "\(String(describing: answered.model))")
             #expect(answered.effort == "low")
             #expect(try testbed.transcript(file).history.name == "命令改名")
         }

@@ -79,7 +79,7 @@ struct RealCueStartTests {
         case .claudeCode:
             try await ClaudeTestbed.run { testbed in
                 try testbed.runtime.start()
-                try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro"))
+                try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel))
             }
         case .opencode:
             let sandbox = try await OpenCodeSandbox()
