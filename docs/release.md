@@ -62,7 +62,13 @@ xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
 xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
 ```
 
-生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，由用户本人在控制台确认；agent 只做导出、回读与对比（`cktool export-schema --environment production`），不代为部署。映射再改时重复"生成 → 导入开发环境 → 用户在控制台部署"。发布带新字段或新记录类型的版本前先部署：生产容器里写未部署的字段或类型会让整条记录保存失败，这类记录就同步不上去。`release-mac.sh` 发布前回读生产结构与 `cuepad.ckdb` 对比，缺的先部署再发。
+生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构（cktool 不能部署），由 agent 自己做，不找用户：
+
+1. 部署前回读开发与生产（`export-schema`，生产加 `--environment production`）与 `cuepad.ckdb` 逐类型对比，开发环境除系统的 `Users` 外与 `cuepad.ckdb` 一致（别的检出导入过的试验类型会随部署永久进生产；重新导入 `cuepad.ckdb` 会把它们从开发环境去掉）。
+2. 用 better-browser-use 的 `--login` 车道打开控制台（未登录时 `bbu import apple.com icloud.developer.apple.com developer.apple.com idmsa.apple.com`），开发环境点「Deploy Schema Changes…」，确认页列出的改动只有这次映射新增的，再点 Deploy。
+3. 再回读生产与 `cuepad.ckdb` 对比；交回时附确认页与部署完成的截图。
+
+映射再改时重复"生成 → 导入开发环境 → 部署到生产"。发布带新字段或新记录类型的版本前先部署：生产容器里写未部署的字段或类型会让整条记录保存失败，这类记录就同步不上去。`release-mac.sh` 发布前回读生产结构与 `cuepad.ckdb` 对比，缺的先部署再发。
 
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。
 

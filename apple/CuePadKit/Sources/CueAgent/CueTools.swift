@@ -33,11 +33,11 @@ public struct CueTools: Sendable {
         "description": """
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。prompt、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
-          start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
+          start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步还开着的会话（要接着用就在上一步 done 之前开工），上下文太长或要换 Agent 时用 fresh:true；
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence} 收尾：你按证据验收过就完成，不请用户收下。evidence 写两三条证据要点。步骤完成后还有下一步时会话留着；
+          done{task,evidence} 收尾：你按证据验收过就完成，不请用户收下。evidence 写两三条证据要点。完成后它的会话没有下一步在用就结束；
           顶层任务（步骤要都完成）完成时把标题与 evidence 作为结果告诉用户，不用再 tell。
           """,
         "inputSchema": schema(
@@ -55,7 +55,7 @@ public struct CueTools: Sendable {
         "name": "tell",
         "description": """
           对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他允许时才 tell 带 ask。
-          ask 是请他允许、等他选（"等你"），只有这几类：\(asks)。选项由 CuePad 给（\(CueAsk.once) / 以后这类事都不用问 / \(CueAsk.deny)），
+          ask 是请他允许、等他选（"等你"），只有这几类：\(CuePrompt.asks)。选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），
           text 写清要做什么、为什么、不做会怎样；他说过这类事以后不用问的，ask 会被拒，直接做。urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。
           withdraw 写"等你"里你问的那条的 id：你已拿了主意或情况变了，撤回它（从"等你"里消失）；可同时带 text 说为什么，或换个问法再问。
           """,
@@ -87,8 +87,6 @@ public struct CueTools: Sendable {
 
   private static var string: [String: Any] { ["type": "string"] }
 
-  /// ask 的取值与说法（"push 推送"）。
-  private static var asks: String { CueAsk.allCases.map { "\($0.rawValue) \($0.name)" }.joined(separator: "、") }
 
   private static func schema(_ properties: [String: Any], required: [String]) -> [String: Any] {
     ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
@@ -417,7 +415,7 @@ public struct CueTools: Sendable {
       return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。", ["withdrawn": id(withdrawn.id)])
     }
     let ask = try args.string("ask").map { raw -> CueAsk in
-      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是 \(Self.asks)；别的事你自己定，做完告诉他") }
+      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
       return ask
     }
     let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)

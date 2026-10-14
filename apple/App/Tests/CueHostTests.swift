@@ -229,6 +229,23 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处）：建任务时是"建任务 · 任务名"，
+    /// 这一轮说完回到歇着。
+    @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {
+        let rig = try await Rig()
+        let watch = Task {
+            var seen: [CueState] = []
+            do { for try await state in rig.store.observe({ try $0.cueState() }) { if let state { seen.append(state) } } } catch {}
+            return seen
+        }
+        try await rig.say("请建个任务并开工")
+        try await rig.message(.cue, containing: "办好了")
+        try await eventually("这一轮歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        watch.cancel()
+        #expect(await watch.value.contains { $0.state == .known(.tool) && $0.detail == "建任务 · 修好登录页" })
+        await rig.stop()
+    }
+
     /// 跟进的会话在等回答（如"允许使用 Bash？"）是活被卡住了：不攒安静窗口，你刚和 Cue 说过话也不压着，马上叫醒 Cue。
     @Test func 会话等回答时Cue马上醒来() async throws {
         let rig = try await Rig(quiet: .seconds(30), talking: .seconds(30))

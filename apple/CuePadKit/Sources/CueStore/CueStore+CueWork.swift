@@ -225,13 +225,18 @@ extension CueStore {
     }
   }
 
-  /// 同一件事别的步骤绑着、还没结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
+  /// 同一件事别的步骤绑着、还没结束也没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
   private func continuableSession(for leaf: UUID, agent: AgentKind?) throws -> PiSessionState? {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
+    let ending = Set(try db.query(
+      "SELECT targetRef FROM deliveryRequests WHERE mode = '\(DeliveryMode.end.rawValue)' AND status IN ('pending', 'executing') AND targetRef IS NOT NULL"
+    ) { $0.text(0) })
     let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
     return sessions.values
-      .filter { session in session.state != .known(.ended) && agent.map { session.agent == .known($0) } != false }
+      .filter { session in
+        session.state != .known(.ended) && !ending.contains(session.sessionID) && agent.map { session.agent == .known($0) } != false
+      }
       .max { $0.stateSince < $1.stateSince }
   }
 
@@ -374,10 +379,10 @@ extension CueStore {
     }
   }
 
-  /// 会话的去留只在这里定。刚完成的 `task` 所在的那件事里（连同它的各个步骤：最后一步做完时，前几步留着的会话也到了结束的时候）
-  /// 绑着的会话，满足这些才请它所在的 Mac 结束：
-  /// 1. 它绑着的事（`tasks(boundTo:)`，一个会话可以绑好几件）都做完了；
-  /// 2. 这些事所在的那件事都没有没做完的步骤了——还有下一步时会话留着，下一步接着用它（`handOffPlan`）；
+  /// 会话的去留只在这里定（你点完成 `toggleDone` 与 Cue 收尾 `finishTask` 都走这里）。刚完成的 `task` 所在的那件事里绑着的会话，
+  /// 不会再有叶子接着用它时就请它所在的 Mac 结束——做完一步就收尾，不留着歇：
+  /// 1. 没有没做完的叶子正绑着它（下一步没开工、或换了别的会话，都不算接着用；以前用过它的叶子也不算）；
+  /// 2. 没有话正送进去（下一步接着用上一步的会话时，话送到才绑上，见 `handOffPlan`）；
   /// 3. 做得到（`PiSessionState.canEnd`：终端里开的 Codex 会话这类结束不了的留着）；已结束的、记录还没到的不动。
   /// 必须在写事务内调用。
   func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
@@ -385,18 +390,20 @@ extension CueStore {
       "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [try topTask(of: task)]
     ) { $0.text(0) }
     return try sessions.compactMap { sessionID in
-      guard try tasks(boundTo: sessionID).allSatisfy({ try $0.task.status == .done && !hasNextStep(after: $0.task) }),
+      guard try db.first(Self.stillInUse, [sessionID], { _ in true }) == nil,
         let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }
   }
 
-  /// 叶子是步骤、它所在的那件事还有没做完的步骤。
-  private func hasNextStep(after leaf: Card) throws -> Bool {
-    guard leaf.parentID != nil, let top = try find(Card.self, try topTask(of: leaf.id)) else { return false }
-    return try leaves(of: top).contains { $0.completedAt == nil }
-  }
+  /// 会话（参数）还有叶子在用：没做完的叶子绑着它，或有话正送进去。
+  private static let stillInUse = """
+    SELECT 1 WHERE EXISTS (
+        SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL)
+      OR EXISTS (
+        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(toSessionModes)) AND status IN ('pending', 'executing'))
+    """
 
   /// 这件事由 Cue 跟进（`on`）还是你自己：给步骤也行，记在它的顶层任务上。返回顶层任务。
   @discardableResult

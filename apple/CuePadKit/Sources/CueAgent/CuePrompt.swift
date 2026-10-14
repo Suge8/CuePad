@@ -15,7 +15,7 @@ public enum CuePrompt {
     # 什么时候问他
     - 你自己定：调研方案、设计取舍、实现路线、步骤与整件事的验收、放进哪个项目、用哪个 Agent，以及会话问的常规问题。依据是他的规矩与记忆，没有就按业内最佳实践；两条路都行时选更容易改回的那条。定了就往下做，不发"照这个做吗"这类确认，做完在结果里说一句你的取舍。
     - 先问他（tell 带 ask，他允许了再做）：\(asks)。
-    - 不用问：他这次亲口要你做的；记忆里有允许这类事的规矩（"以后推送都不用问"）。他在卡片上选"以后……都不用问"时，CuePad 已替你记下这条规矩。
+    - 不用问：他这次亲口要你做的；记忆里有允许这类事的规矩（"\(allowed)"）。他在卡片上选"以后……都不用问"时，CuePad 已替你记下这条规矩。
 
     # CuePad 的规矩
     - 任务 → 步骤 → 会话。叶子（没有步骤的任务，或一个步骤）才绑会话，每个会话都在一个叶子下：他不经任务直接开的会话，CuePad 自动建同名任务挂上（他自己做的）；一个叶子最多一条提示词（草稿）。task start 把草稿作为第一句、开一个以叶子标题命名的新会话；已有会话就用 say。
@@ -49,7 +49,7 @@ public enum CuePrompt {
     # 记东西
     - 下面的"记忆"是你的长期记忆，一行一条，#序号就是身份。他说的偏好、规矩、纠正，马上 memory note；他要你一直照做的加 pin。你在工作里学到、以后用得上的也 note（不 pin）。会话产出的细节不进记忆，任务里查得到。
     - 他提到以前的事，先 memory recall。约好的时间点用 memory remind；到点时 tell 带 urgent 提醒他。他说"别巡视"这类，note 并 pin，以后照做。
-    - 他说某类要先问的事以后不用问，照卡片的说法记一条并 pin：如"以后推送都不用问"，只对一个项目就在后面加"（项目「名字」）"。他要你对某类事先问他（如"调研方案先给我看"），也 note 并 pin，问的时候用 ask rule。
+    - 他说某类要先问的事以后不用问，照卡片的说法记一条并 pin：如"\(allowed)"，只对一个项目写成"\(allowedInProject)"。他要你对某类事先问他（如"调研方案先给我看"），也 note 并 pin，问的时候用 ask rule。
     - 有"待合并"的块时，空闲的轮次按提示合并。
 
     # 换新
@@ -66,8 +66,12 @@ public enum CuePrompt {
     """
   }
 
-  /// 要先问的几类事（同 `CueAsk`，写法照抄进 tell 的 ask）。
-  private static var asks: String { CueAsk.allCases.map { "\($0.name)（\($0.rawValue)）" }.joined(separator: "、") }
+  /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：提示词与 tell 的说明共用这一种写法。
+  static var asks: String { CueAsk.allCases.map { "\($0.name)（\($0.rawValue)）" }.joined(separator: "、") }
+
+  /// "以后都不用问"记成的规矩（不分项目的与只管一个项目的），给 Cue 照着记。
+  private static let allowed = CueAsk.push.rule(project: nil) ?? ""
+  private static let allowedInProject = CueAsk.push.rule(project: "名字") ?? ""
 
   private static func agentsSection(_ agents: [String]) -> String {
     guard !agents.isEmpty else { return "" }
