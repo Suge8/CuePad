@@ -297,24 +297,31 @@ struct CueHostTests {
     }
 
     /// 重启 CuePad 时托管的会话还在跑（它不随 App 退出）：启动对账不把它记为被打断，Cue 看到的仍是工作中。
+    /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，照旧收尾成歇着，也不记为被打断。
     @Test func 重启时还活着的托管会话不算被打断() async throws {
         let rig = try await Rig()
         let store = rig.store
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("三步并行 托管着", in: project.id)
+        let running = try await store.createTask("托管着在跑", under: task.id), upgraded = try await store.createTask("升级前就在跑", under: task.id)
         let file = rig.folder.appending(path: "h0.jsonl")
         try Data("{}\n".utf8).write(to: file)
         _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, sessionFile: file.path, hosted: true)
-        try await store.linkCard(task.id, toSession: "h0")
-        try await eventually("记下在干活") { try await store.allPiSessionStates().first?.state.isWorking == true }
+        try await store.linkCard(running.id, toSession: "h0")
+        // 升级前写的记录：在跑、托管的，本机没有它的进程
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "h1", state: .tool, hosted: true)
+        try await store.linkCard(upgraded.id, toSession: "h1")
+        try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
         try await store.setCueFollows(task.id, true)
         _ = try await rig.message(.note, containing: "看板：")
 
         try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
-        #expect(try await store.allPiSessionStates().first?.state == .known(.thinking))
+        let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0.state) })
+        #expect(states["h0"] == .known(.thinking) && states["h1"] == .known(.settled))
         try await rig.say("念一下看板")
         let board = try await rig.message(.cue, containing: "看板：")
-        #expect(board.text.contains("工作中") && !board.text.contains("被打断"))
+        #expect(board.text.split(separator: "\n").first { $0.contains("托管着在跑") }?.contains("工作中") == true)
+        #expect(!board.text.contains("被打断"))
         await rig.stop()
     }
 
