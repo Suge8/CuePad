@@ -33,7 +33,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries).enumerated().map { ($1.id, $0) })
+        let followed = Set(live.filter(\.cueFollows).map(\.state.sessionID))
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, followed: followed).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)),
@@ -49,6 +50,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词；读数三列上下对齐——上下文（不知道时写"—"）、
 ///   会话的模型、子代理（角色图标，颜色是它的状态，后接在跑 / 共几个；没有时空着）。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
+/// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`）。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
 struct PiSessionRow: View {
@@ -63,8 +65,11 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
+    /// 由 Cue 跟进（`PiSessionListItem.cueFollows`）：名字前带 Cue 的小头像，歇下时只说"歇着"，不催你。
+    var cueFollows = false
     var style = Style.compact
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.searchHighlight) private var highlight
 
@@ -85,7 +90,7 @@ struct PiSessionRow: View {
     }
 
     var body: some View {
-        let shown = services.settings.shown(session, delivery: delivery)
+        let shown = workspace.shown(session, delivery: delivery, cueFollows: cueFollows)
         let facts = services.settings.facts(session, shown: shown, end: end, rename: rename)
         if style.card {
             card(shown: shown, facts: facts)
@@ -102,7 +107,8 @@ struct PiSessionRow: View {
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 HStack(spacing: 6) {
-                    if let place { place; Dot() }
+                    // 已结束的没有状态词：所在后面不留孤零零的分隔点
+                    if let place { place; if searchHit != nil || !ended { Dot() } }
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
                     } else if !ended {
@@ -143,9 +149,13 @@ struct PiSessionRow: View {
     /// 第一层：名字（有新回复时加粗）、"后台"小签、没送到的折回箭头、右上的时长。
     private func headline(shown: PiShown) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
+            // 头像的中线对着名字的字身：基线落在头像下缘往上约三成处
+            if cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + $0.height * 0.3 } }
             Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
+            // 是哪家 Agent（Pi 不标）：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
+            if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)
             if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
@@ -184,7 +194,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.style.card == b.style.card && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.cueFollows == b.cueFollows && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }
 

@@ -13,6 +13,10 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PiPreview] = []
     /// 没能送达的话有几句（会话列表查询带出的同一个数，`PiSessionListItem.undelivered`）。
     var undelivered = 0
+    /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
+    var cueSent: Set<UUID> = []
+    /// 由 Cue 跟进（会话列表同一条，`PiSessionListItem.cueFollows`）：顶栏带 Cue 的小头像，等回答写"等 Cue 回答"。
+    var cueFollows = false
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
     var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
@@ -42,24 +46,16 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
         let session = item?.state
         let ref = session?.sessionID ?? sessionID
+        let messages = try ref.map { try store.piMessages(of: $0) } ?? []
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
+            messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
-            undelivered: item?.undelivered ?? 0)
-    }
-}
-
-extension PiThinkingLevel {
-    /// 夹到 `supported` 里（与 Pi 的 clampThinkingLevel 同规则）：支持就是它，否则先往高找最近的一档，没有再往低找；
-    /// 不知道支持哪些时原样。
-    nonisolated func clamped(to supported: [PiThinkingLevel]) -> PiThinkingLevel {
-        guard !supported.isEmpty, !supported.contains(self) else { return self }
-        let all = Self.allCases
-        let index = all.firstIndex(of: self) ?? 0
-        return all[index...].first(where: supported.contains) ?? all[..<index].last(where: supported.contains) ?? supported[0]
+            undelivered: item?.undelivered ?? 0,
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
+            cueFollows: item?.cueFollows ?? false)
     }
 }
 

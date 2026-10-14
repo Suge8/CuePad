@@ -40,7 +40,7 @@ import Testing
     let now = Date.now
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for id in ["quiet", "active"] {
-      try await store.upsertPiSession(PiSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: id == "quiet" ? longAgo : now.addingTimeInterval(9 * 86_400)), host: "mac")
+      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: id == "quiet" ? longAgo : now.addingTimeInterval(9 * 86_400)), host: "mac")
       try await store.writePiTranscript(PiTranscript(
         sessionID: id, messages: [PiChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: PiRecap()))
     }

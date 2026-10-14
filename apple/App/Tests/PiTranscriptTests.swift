@@ -51,13 +51,13 @@ struct PiTranscriptTests {
             continuation.yield(.backfillFinished(sessionFiles: files))
             continuation.finish()
         }
-        await services.consumePiHistory(events)
+        await services.consumePiHistory(events, agent: .pi)
     }
 
     /// 桥上看到这个会话在线（状态记录器写出未结束的记录；不结束）。
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
-            id: "\(sessionID).100", sessionID: sessionID, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
@@ -169,7 +169,7 @@ struct PiTranscriptTests {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory, files: store.files) { _ in nil }
-        let consuming = Task { await services.consumePiHistory(indexer.events()) }
+        let consuming = Task { await services.consumePiHistory(indexer.events(), agent: .pi) }
         defer { consuming.cancel() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 
@@ -238,7 +238,7 @@ struct PiTranscriptTests {
             continuation.yield(.updated(try! PiHistory.index(file: recentInside, from: nil, transcript: false, files: store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
             continuation.finish()
-        })
+        }, agent: .pi)
 
         #expect(try await store.piMessages(of: "old-inside").count == 4)
         #expect(try await store.piMessages(of: "recent-inside").isEmpty)

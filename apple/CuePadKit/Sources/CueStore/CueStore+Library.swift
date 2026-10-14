@@ -187,7 +187,7 @@ extension CueStore {
   /// 提示词挂在哪个任务下：提示词只挂在叶子（没有步骤的任务）下，往有步骤的任务上挂的落到它的第一个没完成的步骤（没有就第一个步骤），
   /// 见 `CardLinks.home(of:)`。不拒绝而是改挂：远端收敛（`CardLinks.repairs`）与结构升级本来就这样处理，本机写入同一个结果，
   /// 界面不必为"挂在有步骤的任务上"另做一条出错的路。`task` 必须是任务。
-  private func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
+  func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
   /// 叶子绑着的会话；没绑为 nil。
   private func session(of leaf: UUID) throws -> String? {
@@ -312,24 +312,15 @@ extension CueStore {
   }
 
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
+  /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write { _ = try applyStatus(id, status) }
   }
 
-  /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态按库里此刻的值决定，读与改在一个事务里——
-  /// 界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
-  public func toggleDone(_ id: UUID) throws -> TaskStatus {
-    try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      guard let current = card.status else { throw CueStoreError.notATask }
-      return try applyStatus(id, current == .done ? .todo : .done)
-    }
-  }
-
   /// 把任务改成 `status`（必须在写事务内）；返回改后的状态。已经是它时不动。
   @discardableResult
-  private func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
+  func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
     guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
     guard let current = card.status else { throw CueStoreError.notATask }
     guard current != status else { return status }
@@ -572,13 +563,14 @@ extension CueStore {
   /// 对话里你的消息中带图片的行（只有你的消息引用图片）；`?1` 是图片引用或它的开头 `CueFormat.imagePrefix`。
   static let userImages = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）或对话里你的消息引用这张图片，或有预览用着这份文件。
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这张图片，或有预览用着这份文件。
   func isImageReferenced(_ hash: String) throws -> Bool {
     try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
       UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userImages)
+      UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
       UNION ALL SELECT 1 FROM previews WHERE hash = ?2
       """, [CueFormat.imageMarkup(id: hash), hash]) { _ in true } != nil
   }
@@ -631,7 +623,7 @@ extension CueStore {
     link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
   }
 
-  private static func idList(_ ids: [UUID]) -> String {
+  static func idList(_ ids: some Sequence<UUID>) -> String {
     "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 }
@@ -677,19 +669,28 @@ extension CueStore {
 extension CueStore {
   /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
   /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
-  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。
+  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
   @discardableResult
-  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
+  public func recordSend(
+    _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
+  ) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
       return record
     }
+  }
+
+  /// `deliveries`（会话消息的 `PiChatMessage.deliveryID`）里哪些是 Cue 说的：按发送记录认，送出它的请求清理了也认得出。
+  public func cueSentDeliveries(among deliveries: some Sequence<UUID>) throws -> Set<UUID> {
+    Set(try db.query(
+      "SELECT deliveryID FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND deliveryID IN (SELECT value FROM json_each(?))",
+      [Self.idList(deliveries)]) { $0.uuid(0) })
   }
 
   /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：
@@ -748,7 +749,8 @@ extension CueStore {
   }
 
   /// 用户亲手绑定、解绑是之后的一次交给：指向这个任务的开新会话请求不再认领它（`claimLaunchedCards` 只认最近一次），
-  /// 否则那个会话的记录一写（或同步过来）就把它抢回去。
+  /// 否则那个会话的记录一写（或同步过来）就把它抢回去；它们也就不再算"正在开会话"（`launchingLeaves` 按请求带着的卡认）。
+  /// 带着草稿的请求不必另管：绑定时草稿交出去（`handOut`），请求就指不到这个任务了。
   private func forgetLaunches(of task: UUID) throws {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }
@@ -784,14 +786,14 @@ extension CueStore {
   /// 插入或更新会话索引（本机，不同步）；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。
   /// 同一事务里把它写成这个会话的同步记录（见 `writePiHistory`），`host` 是这台 Mac。
   /// `transcript` 是同一次读会话文件得到的对话与摘要，在同一事务里写（见 `writePiTranscript`）。
-  public func upsertPiSession(_ session: PiSession, checkpoint: Data? = nil, host: String, transcript: PiTranscript? = nil) throws {
+  public func upsertPiSession(_ session: IndexedSession, checkpoint: Data? = nil, host: String, transcript: PiTranscript? = nil) throws {
     try upsertPiSessions([PiSessionUpsert(session: session, checkpoint: checkpoint, transcript: transcript)], host: host)
   }
 
   /// 一批会话索引在同一个事务里写（首次回填几千个文件时：一次提交、一次变更通知，界面不为每个文件重读重画）。
   public func upsertPiSessions(_ batch: [PiSessionUpsert], host: String) throws {
-    let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-    let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
+    let assignments = IndexedSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+    let placeholders = (IndexedSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
     try write {
       let bound = try boundDirectories()
       for item in batch {
@@ -799,7 +801,7 @@ extension CueStore {
         if let transcript = item.transcript { try applyTranscript(transcript) }
         try db.run(
           """
-          INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
+          INSERT INTO piSessions (\(IndexedSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
           ON CONFLICT(id) DO UPDATE SET \(assignments),
             checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
           """, item.session.bindings + [item.checkpoint])
@@ -811,17 +813,26 @@ extension CueStore {
   /// 同时让已结束的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，
   /// 如 `--no-session` 或没发过消息的——这也是已经留下的这类历史记录的清理，每次启动一次），补写有会话文件却没有记录的。在线的不动；
   /// 歇着的托管会话同样要有会话文件，由 `PiStateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。
+  /// 一个会话文件只算一个会话：同一个文件还按文件名记过一条的（旧版本在文件头写好之前读到它，见 `PiHistoryUpdate.isSession`），
+  /// 删掉按文件名的那条，它的已结束记录随之删掉。
+  /// 每个 Agent 的索引各自对账自己的会话（`agent`），别家的不动。
   @discardableResult
-  public func retainPiSessions(paths: Set<String>, host: String) throws -> Int {
+  public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
-      let stale = try db.query("SELECT id, path FROM piSessions") { ($0.text(0), $0.text(1)) }.filter { !paths.contains($0.1) }
+      let indexed = try db.query("SELECT id, path FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
+      let shared = Dictionary(grouping: indexed, by: \.1).filter { $0.value.count > 1 }
+      let orphans = shared.flatMap { path, rows in rows.filter { $0.0 == URL(filePath: path).deletingPathExtension().lastPathComponent } }
+      let stale = indexed.filter { !paths.contains($0.1) } + orphans
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
-        "DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND sessionID NOT IN (SELECT id FROM piSessions)",
-        [host, PiWorkState.ended.rawValue])
+        """
+        DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND COALESCE(agent, 'pi') = ?
+          AND sessionID NOT IN (SELECT id FROM piSessions)
+        """,
+        [host, PiWorkState.ended.rawValue, agent.rawValue])
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
       let unrecorded = try select(
-        PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
+        IndexedSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       let bound = try boundDirectories()
       for session in unrecorded { try writePiHistory(session, host: host, bound: bound) }
       try refreshSessionFolders()
@@ -860,11 +871,11 @@ extension CueStore {
   }
 
   /// 本机索引里的一个会话（会话文件路径与工作目录）。
-  public func piSession(_ id: String) throws -> PiSession? { try find(PiSession.self, id) }
+  public func piSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
   /// 会话文件索引写成同步记录：没有记录时插入一条已结束的；已结束的记录更新名字、所在与最后活动时间（没变不写，
   /// 免得每次启动把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
-  private func writePiHistory(_ session: PiSession, host: String, bound: [BoundDirectory]) throws {
+  private func writePiHistory(_ session: IndexedSession, host: String, bound: [BoundDirectory]) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
     let folder = Self.folderName(ofWorkingDirectory: session.cwd)
@@ -875,7 +886,7 @@ extension CueStore {
       _ = try insert(PiSessionState(
         id: id, sessionID: session.id, hostID: host, title: title, projectID: projectID, state: .known(.ended), detail: nil,
         folder: folder, lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: session.lastActivityAt,
-        busySince: nil, createdAt: now, modifiedAt: now))
+        busySince: nil, createdAt: now, modifiedAt: now, agent: .known(session.agent)))
       return
     }
     guard existing.state == .known(.ended) else { return }

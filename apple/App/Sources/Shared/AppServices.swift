@@ -27,6 +27,8 @@ final class AppServices {
     let store: CueStore
     #if os(macOS)
     let pi: PiBridge
+    /// 总控 Agent Cue（只在 Mac 上值班）。
+    let cue: CueService
     #endif
 
     /// 设备本地偏好（主题、快捷键、当前项目）。
@@ -73,6 +75,8 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
+    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：大于 0 时不推 Cue 的通知（Mac 本机通知、iOS 前台的系统横幅），iOS 顶上的提示横幅也让给 Cue 页自己的。
+    var cueViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -83,8 +87,8 @@ final class AppServices {
     #endif
 
     #if os(macOS)
-    /// Pi 扩展的检测与安装（写入前需征得同意）。
-    let piIntegration: PiIntegrationManager
+    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
+    let agents: AgentIntegrations
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
@@ -92,10 +96,10 @@ final class AppServices {
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
 
-    @ObservationIgnored let paths: PiPaths
+    @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let host: any PiHosting
-    @ObservationIgnored let locatePi: @Sendable () async -> URL?
+    @ObservationIgnored let hooks: AgentHookServer
+    @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
@@ -105,14 +109,16 @@ final class AppServices {
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, host: host, hostID: hostID, recorder: piStateRecorder, locatePi: locatePi,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
         uploadResult: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
-    @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
-        self?.windowShell?.toggleFromHotkey()
-    }
+    /// "显示或隐藏 CuePad"的全局快捷键。
+    @ObservationIgnored lazy var hotkey = GlobalHotkey(
+        label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
+        backend: hotkeyBackend
+    ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
     nonisolated enum StartupIssue: Equatable {
@@ -161,22 +167,14 @@ final class AppServices {
     }
 
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
-    private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
+    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
         return request
     }
 
-    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒），也不排在引擎正在做的事后面（`CloudSync.sendNow`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
-    /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
+    /// 立即上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
     func upload(_ record: UUID, deleted: Bool = false) async {
-        guard let sync else { return }
-        let began = Date.now
-        do {
-            try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
-            Self.log.info("立即上传 \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
-        } catch {
-            Self.log.notice("立即上传记录失败，等引擎自动上传：\(error.localizedDescription, privacy: .public)")
-        }
+        await sync?.upload(record, deleted: deleted)
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
@@ -318,12 +316,14 @@ final class AppServices {
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
-        locatePi = mac.locatePi
-        host = mac.host
-        piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings)
+        hooks = mac.hooks
+        runtimes = mac.runtimes(store)
+        agents = AgentIntegrations(mac.agents, isEnabled: !location.isIsolated || mac.paths.pi.isExplicit)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
+        cue = CueService(
+            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

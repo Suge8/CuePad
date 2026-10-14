@@ -103,10 +103,21 @@ final class TestApp {
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
 
+    #if os(macOS)
+    /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
+    private let cue: CueDependencies?
+
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil) {
+        syncSource = source
+        self.cue = cue
+        services = makeServices()
+    }
+    #else
     init(sync source: AppServices.SyncSource? = nil) {
         syncSource = source
         services = makeServices()
     }
+    #endif
 
     isolated deinit {
         #if os(macOS)
@@ -130,27 +141,35 @@ final class TestApp {
 
     #if os(macOS)
     var piPaths: PiPaths {
-        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory)
+        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory, binDirectory: directory.appending(path: "home/.local/bin"))
+    }
+    /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
+    lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
+
+    /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
+    var agentHomes: [String: String] {
+        ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path]
     }
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: pi,
             hotkeys: hotkeys,
-            paths: piPaths,
-            installer: PiIntegration(
-                paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
-                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
+            paths: AgentPaths(pi: piPaths, environment: agentHomes),
+            agents: AgentIntegration(
+                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+                cuepad: helper),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
-            commandLineTool: CommandLineToolInstaller(
-                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
+            commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: nil,
-            host: host,
-            locatePi: { Self.piExecutable },
-            pasteboard: pasteboard)
+            hooks: AgentHookServer(path: piPaths.hookSocket),
+            runtimes: { [host] _ in [.pi: host] },
+            pasteboard: pasteboard,
+            cue: cue ?? CueDependencies(
+                scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services

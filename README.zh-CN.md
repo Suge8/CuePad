@@ -16,15 +16,16 @@
 
 ## 功能
 
+- **Cue，替你盯着 Agent**：用文字或在手机上告诉 Cue 你要什么，它把话变成任务、开好并命名 Agent 会话、催进度、核对证据、回答常规提问，只在要你拍板时来找你：所有在等你的事汇成一个数字“等你 N”，点一下就答完。Cue 跑在你的 Mac 上，用你已经登录的 Agent（Pi、Codex 或 Claude Code），记得你给它定的规矩，名字也能改。
 - **灵感 → 任务 → Agent**：灵感是你的资料库，承载任意长的文字，含内联图片、`{{变量}}` 与分割线；要动手时把灵感挂到任务下，它就成了任务的一条提示词（发给 Agent 的话），每条一键交出、看得到回没回复，任务里还可以列步骤当勾选清单。项目只是容器，带一句介绍。逐键自动保存。
 - **发给 Agent**：任务的提示词直达运行中的 Agent 会话（目前支持 [Pi](https://pi.dev)，图文皆可）。每次发送自动记录内容快照，可一键重发；随时也能复制正文。
 - **看见 Agent**：Agent 会话显示实时状态（思考中、跑工具、等你、完成）与历史，并按工作目录归入对应项目。
 - **批注回答（Mac）**：在 Agent 的回答里选中任意一段写一句批注，批注随你的下一句发出，只带简短摘录，不把长回答原样发回去。
-- **手机上看演示**：Agent 可以把页面、截图、PDF 或报告发给你，在手机的会话里是一张卡片，点开全屏预览。（CuePad 给 Pi 装了一个小技能，Agent 知道该运行 `cuepad show <文件>`。）
+- **手机上看演示**：Agent 可以把页面、截图、PDF 或报告发给你，在手机的会话里是一张卡片，点开全屏预览。（CuePad 给每家 Agent 的技能都教它运行 `cuepad show <文件>`。）
 - **懂代码的项目**：项目可绑定代码目录，Agent 会话与 `cuepad` 命令行按所在目录自动选中项目。
 - **选区与变量**：提示词整条发送，或选中一段只发这一段；把选中的几行转成任务；发送前集中填写 `{{变量}}`，每条记住上次的值。
 - **随处搜索**：`⌘K` 搜项目、灵感与任务，可按项目、含图片、是否交给过 Agent、时间筛选。
-- **Mac**：玻璃侧栏、随手记灵感的菜单栏小稿纸、全局快捷键（默认 `Option + Space`）随时唤回。
+- **Mac**：玻璃侧栏、随手记灵感的菜单栏小稿纸、全局快捷键（默认 `Option + Space`）随时唤回，`Option + Shift + Space` 对 Cue 说话。
 - **iPhone 与 iPad**：项目书架、随手记输入栏、分享扩展与小组件。手机上记的灵感稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Agent 会话。
 - **iCloud 同步**：按记录同步；同一条在两台设备离线并发编辑时，两个版本都保留，由你选择。
 
@@ -39,7 +40,9 @@ cuepad task add 写发布说明
 cuepad task done <id>
 ```
 
-在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。在 CuePad 设置里安装（链接到 `~/.local/bin/cuepad`）；完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
+在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
+
+**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开（之后在设置的 Agent 一节）每个 Agent 一个开关。打开后 CuePad 看得到它的会话在做什么，能把提示词发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode 不用再装，CuePad 直连它的后台服务。不打开就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
 
 ## 下载
 
@@ -56,7 +59,7 @@ apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
 cd apple/CuePadKit && swift test
 ```
 
-架构、命令与约定见 [docs/development.md](docs/development.md)。
+命令与开发约定见 [AGENTS.md](AGENTS.md) 与 [docs/](docs/)。
 
 ## 参与贡献
 

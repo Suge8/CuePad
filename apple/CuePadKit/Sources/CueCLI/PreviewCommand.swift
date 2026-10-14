@@ -2,14 +2,14 @@ import CueStore
 import Foundation
 
 extension Command {
-  /// Pi 给 Agent 的每条 bash 命令带着当前会话的 id。
-  private static let sessionVariable = "PI_SESSION_ID"
+  /// 各家 Agent 给它执行的每条 shell 命令带着当前会话的 id（Pi、Claude Code、Codex、OpenCode）。
+  private static let sessionVariables = ["PI_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID"]
 
   static let show = Command(
     path: ["show"], summary: "把文件发到用户手机上的 CuePad 预览：在当前 Agent 会话的对话里出现一张卡片", arguments: "<文件>",
     options: [Opt("title", "一句标题，说明这是什么（默认用文件名）", value: "标题")],
     notes: """
-      会话从环境变量 \(sessionVariable) 认出（Pi 给它的每条 bash 命令都带着）；不在 Pi 的命令里运行会报错，不猜是哪个会话。
+      会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话。
       可发：\(PiPreviewKind.supportedList)；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
       HTML 在手机上只读渲染、不联网，也读不到别的文件：必须是单个文件，样式与脚本写进同一个 HTML，图片用 data: 地址内联，否则会缺失
       （命令会列出页面引用了、手机上拿不到的地址 outsideReferences，改成单个文件后再发一次）。
@@ -18,8 +18,8 @@ extension Command {
       """
   ) { call in
     try call.args.expect("文件")
-    guard let session = call.environment[sessionVariable], !session.isEmpty else {
-      throw CLIError.usage("认不出是哪个 Agent 会话：环境变量 \(sessionVariable) 没有设置（目前只认 Pi 里运行的命令）")
+    guard let session = sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
+      throw CLIError.usage("认不出是哪个 Agent 会话：环境变量 \(sessionVariables.joined(separator: "、")) 都没有设置（要在 Agent 执行的命令里运行）")
     }
     let url = URL(filePath: call.args.positionals[0], relativeTo: URL(filePath: call.directory, directoryHint: .isDirectory)).standardizedFileURL
     let added = try await call.store.addPreview(fileAt: url, title: call.args.value("title"), sessionID: session)

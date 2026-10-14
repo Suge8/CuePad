@@ -22,17 +22,19 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
-final class RecordingHost: PiHosting {
+/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
+final class RecordingHost: AgentRuntime {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
-        case open(directory: String, launchToken: String)
+        case open(directory: String, launchToken: String, name: String? = nil, model: String? = nil, thinking: String? = nil)
         case end(String)
     }
 
     private(set) var calls: [Call] = []
     /// 已连上桥的假扩展，按 Pi 自己的会话 id。
     private(set) var extensions: [String: FakeExtension] = [:]
+    /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
+    var openFailure: String?
     private let bridge: PiBridge
     private let socketDirectory: URL
 
@@ -42,11 +44,11 @@ final class RecordingHost: PiHosting {
     }
 
     func start() {}
-    func closeAll() -> @concurrent @Sendable () async -> Void { {} }
+    func stop() -> @concurrent @Sendable () async -> Void { {} }
 
-    func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> String {
-        calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))
-        return try await connect(sessionFile.deletingPathExtension().lastPathComponent, cwd: directory.path).id
+    func resume(_ session: IndexedSession) async throws -> String {
+        calls.append(.resume(sessionFile: session.path, directory: session.cwd))
+        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 
     func end(_ id: String) async throws {
@@ -54,8 +56,12 @@ final class RecordingHost: PiHosting {
         extensions.values.first { $0.id == id }?.close(bye: "quit")
     }
 
-    func open(in directory: URL, launchToken: String, executable: URL) async throws -> String {
-        calls.append(.open(directory: directory.path, launchToken: launchToken))
+    func open(
+        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
+    ) async throws -> String {
+        calls.append(.open(
+            directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
+        if let openFailure { throw PiHostError.exited(openFailure) }
         return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 
@@ -92,6 +98,14 @@ extension FakeExtension {
                 whenBusy: (json["deliverAs"] as? String).flatMap(PiQueueMode.init(rawValue:)), deliveryID: json["deliveryId"] as? String)
         }
     }
+}
+
+/// 记下 Cue 推了哪些通知，不碰系统通知中心。
+final class RecordingCueNotifier: CueNotifying {
+    var onOpen: (() -> Void)?
+    private(set) var posted: [(title: String, body: String)] = []
+
+    func post(id: UUID, title: String, body: String) async { posted.append((title, body)) }
 }
 
 final class RecordingWindow: ShellWindow {

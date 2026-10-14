@@ -15,14 +15,16 @@ struct SessionGroup: Equatable {
     let key: Key
     let sessions: [PiSessionState]
 
-    static func grouped(live: [PiSessionState], ended: [PiSessionState], now: Date, calendar: Calendar = .current) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live))]
+    static func grouped(
+        live: [PiSessionState], ended: [PiSessionState], followed: Set<String> = [], now: Date, calendar: Calendar = .current
+    ) -> [SessionGroup] {
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, followed: followed))]
         let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }
 
-/// ⌘K 搜什么：卡片或 Pi 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
+/// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
 enum SearchScope: Hashable {
     case cards, sessions
 }
@@ -47,6 +49,8 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     var deliveries: [String: DeliveryRequest]
     /// 没能送达的话有几句（会话行的小标记）。
     var undelivered: [String: Int]
+    /// 由 Cue 跟进的（`PiSessionListItem.cueFollows`）。
+    var cueFollowed: Set<String>
 
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
@@ -54,7 +58,8 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-            undelivered: PiSessionListItem.undelivered(live.items + ended.items))
+            undelivered: PiSessionListItem.undelivered(live.items + ended.items),
+            cueFollowed: Set((live.items + ended.items).filter(\.cueFollows).map(\.state.sessionID)))
     }
 }
 
@@ -63,6 +68,7 @@ struct SessionResultList: View {
     let groups: [SessionGroup]
     let deliveries: [String: DeliveryRequest]
     let undelivered: [String: Int]
+    let cueFollowed: Set<String>
     /// 还没读到的已结束会话有多少（"显示更多"）。
     let more: Int
     let isFiltered: Bool
@@ -77,7 +83,7 @@ struct SessionResultList: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
-                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端运行 pi，会话就会出现在这里")
+                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
                             .font(Typography.secondary).foregroundStyle(.secondary).padding(16)
                     }
                     ForEach(groups, id: \.key) { group in
@@ -112,7 +118,7 @@ struct SessionResultList: View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            undelivered: undelivered[session.sessionID] ?? 0).equatable()
+            undelivered: undelivered[session.sessionID] ?? 0, cueFollows: cueFollowed.contains(session.sessionID)).equatable()
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)

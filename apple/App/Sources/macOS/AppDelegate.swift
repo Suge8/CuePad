@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var windowDelegate: MainWindowDelegate?
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
+    private var cueBar: CueBar?
     private var settingsWindow: SettingsWindowController?
     private var mainFrameKeeper: WindowFrameKeeper?
     private var sigterm: DispatchSourceSignal?
@@ -58,11 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainWindow = window
 
         let panel = MenuBarPanel()
-        // 菜单栏面板点会话：收起面板、把主窗口叫到前面，在它的内容区打开那个会话的整页（与侧栏同一处）
-        panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] id in
+        // 菜单栏面板点会话或 Cue：收起面板、把主窗口叫到前面，在它的内容区打开那一页（与侧栏同一处）
+        panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] route in
             panel?.hide()
             shell.show()
-            workspace.show(.session(id))
+            workspace.show(route)
         })
         menuBarPanel = panel
         statusItem = StatusItemController(
@@ -73,20 +74,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             },
             toggleWindow: { shell.toggleFromMenu() })
 
-        settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services) }
-
         services.start()
+        let cueBar = CueBar(services: services, workspace: workspace)
+        self.cueBar = cueBar
+        settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services, cueBar: cueBar) }
         DebugHooks.present(window)
-        if !location.isIsolated { Task { await offerCommandLineTool(services, in: workspace) } }
-    }
-
-    /// 首次启动提示一次（主窗口里的确认框，`Workspace.offersCommandLineTool`）：装了就不打扰；位置被占用等情况在设置里看。
-    private func offerCommandLineTool(_ services: AppServices, in workspace: Workspace) async {
-        guard !services.settings.commandLineToolPrompted else { return }
-        services.settings.commandLineToolPrompted = true
-        await services.commandLineTool.refresh()
-        guard services.commandLineTool.state == .notInstalled else { return }
-        workspace.offersCommandLineTool = true
+        // 首次启动出现一次接入 Agent 的面板（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
+        if !location.isIsolated, !services.settings.agentSetupShown {
+            services.settings.agentSetupShown = true
+            workspace.showsAgentSetup = true
+        }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
@@ -146,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         statusItem?.remove()
+        cueBar?.hotkey.unregister()
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {

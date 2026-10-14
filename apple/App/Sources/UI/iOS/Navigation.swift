@@ -43,6 +43,31 @@ final class Navigation {
         var draft: ComposerDraft?
         /// 为哪条提示词开的（发给 Agent 时定下）：开好后关联它。
         var card: UUID?
+        /// 显示的目标名：为提示词开的是它的任务的标题（`CueStore.handOffPlan`，与会话名同一条规则）；nil 时以项目名称呼。
+        var name: String?
+        /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
+        var host: String?
+
+        /// 默认在哪开：先选中的项目（有 `host` 时是它在那台 Mac 上的绑定），没有就是第一处。
+        func place(among places: [ProjectFolders.LaunchPlace]) -> ProjectFolders.LaunchPlace? {
+            project.flatMap { project in
+                let own = places.filter { $0.project.id == project }
+                return own.first { host != nil && $0.binding?.hostID == host } ?? own.first
+            } ?? places.first
+        }
+
+        /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent` 开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
+        /// （没有就是带上的第一张）。返回这一次的请求与认领标识。
+        func launch(
+            in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, services: AppServices
+        ) async throws -> Launched {
+            let token = UUID().uuidString
+            let opening = try draft.stored(in: services.store.files).nonEmpty
+            let request = try await services.launch(
+                PiLaunch(project: project.id, prompt: opening, token: token, agent: agent), title: name ?? project.name, on: binding.hostID,
+                card: card ?? draft.attachments.first?.card)
+            return Launched(request: request.id, token: token)
+        }
     }
 
     var layout: Layout = .tabs
@@ -106,11 +131,17 @@ final class Navigation {
     }
 
     /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
-    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?) {
-        let project = outbox?.project
+    /// 在哪开、由哪台 Mac 开、会话名按交到哪的决定（`plan`）；未分类的没有项目可开，用输入框自己的默认。
+    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
+        let (project, host): (UUID?, String?) =
+            switch plan?.destination {
+            case .launch(let project, let host): (project, host)
+            case .noFolder(let project, _): (project, nil)
+            default: (outbox?.project, nil)
+            }
         outbox = nil
         task = nil
-        newSession = NewSession(project: project, draft: draft, card: card)
+        newSession = NewSession(project: project, draft: draft, card: card, name: plan?.name, host: host)
     }
 
     /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。
@@ -187,6 +218,8 @@ final class Navigation {
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
+        case .cue:
+            show(.cue)
         }
     }
 
@@ -199,6 +232,10 @@ final class Navigation {
     /// 在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
         switch (route, layout) {
+        // Cue 是 Agent 标签的根
+        case (.cue, .tabs):
+            tab = .agent
+            agentPath = []
         case (.session, .tabs):
             tab = .agent
             agentPath = [route]
@@ -223,8 +260,8 @@ final class Navigation {
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
     func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
-        case .tabs: tab == .agent && agentPath.isEmpty
-        case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
+        case .tabs: tab == .agent && agentPath.last == .agent
+        case .split: splitRoot == .agent && splitPath.isEmpty
         }
         return !onAgentList && !isViewing(session: session)
     }

@@ -8,7 +8,7 @@ import SwiftUI
 /// 解释性的长句不上屏，放在悬停提示里（`help`）。
 struct SettingRow<Control: View, Fix: View>: View {
     let title: String
-    let symbol: String
+    let icon: Image
     var tone = StatusTone.calm
     var busy = false
     var status: Dotted?
@@ -37,7 +37,7 @@ struct SettingRow<Control: View, Fix: View>: View {
                     if busy {
                         Spinner(.small)
                     } else {
-                        Image(systemName: symbol).foregroundStyle(palette.color(tone))
+                        icon.foregroundStyle(palette.color(tone))
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
@@ -56,10 +56,10 @@ struct SettingRow<Control: View, Fix: View>: View {
 
 extension SettingRow where Fix == EmptyView {
     init(
-        title: String, symbol: String, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil, help: String? = nil,
+        title: String, icon: Image, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil, help: String? = nil,
         @ViewBuilder control: () -> Control
     ) {
-        self.init(title: title, symbol: symbol, tone: tone, busy: busy, status: status, help: help, control: control) { EmptyView() }
+        self.init(title: title, icon: icon, tone: tone, busy: busy, status: status, help: help, control: control) { EmptyView() }
     }
 }
 

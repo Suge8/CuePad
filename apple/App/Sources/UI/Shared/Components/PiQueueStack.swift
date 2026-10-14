@@ -3,12 +3,14 @@ import SwiftUI
 
 /// 排队的话（`PiChat.queued`）：Agent 在跑时"等它做完再说"发出、它还没开始处理的，排在回复框那块玻璃的上部、一句一行，
 /// 下面一道发丝线隔开输入区（`Composer` 的头部），按发出先后，同一句话不再同时是对话末尾的气泡。`folded` 时（手机上回复框聚焦，
-/// 键盘已占了半屏）收成一行"N 句排队中 ›"，点它展开。还没被 Mac 领取的每条可"马上说"或撤回；
+/// 键盘已占了半屏）收成一行"N 句排队中 ›"，点它展开。还没被 Mac 领取的每条可"马上说"（会话做得到时，`steers`）或撤回；
 /// Mac 已交给 Pi 的写"已发给 Agent"——Pi 的扩展接口没有撤回或提升已进它队列的话（只有 Pi 自己的终端能清队列），所以那之后做不了。
 /// 数据只在投送请求里：撤回是删掉它，马上说是改它的方式（`AppServices.withdraw` / `promote`），叠里不另存状态。
 struct PiQueueStack: View {
     let requests: [DeliveryRequest]
     let folded: Bool
+    /// 这个会话能马上说（`AgentCapabilities.steer`）。
+    let steers: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     /// 收着时点开了。
@@ -64,16 +66,18 @@ struct PiQueueStack: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(PiChat.shownText(of: request).spoken)
             if request.isWithdrawable {
-                Button { promote(request) } label: {
-                    Label(DeliveryMode.steer.label, systemImage: "bolt")
-                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink)
-                        .padding(.horizontal, 10).frame(height: 26)
-                        .background(palette.fill, in: .capsule)
-                        .frame(minHeight: Self.target).contentShape(.rect)
+                if steers {
+                    Button { promote(request) } label: {
+                        Label(DeliveryMode.steer.label, systemImage: "bolt")
+                            .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink)
+                            .padding(.horizontal, 10).frame(height: 26)
+                            .background(palette.fill, in: .capsule)
+                            .frame(minHeight: Self.target).contentShape(.rect)
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityLabel(DeliveryMode.steer.label)
+                    .help(DeliveryMode.steer.explanation ?? "")
                 }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel(DeliveryMode.steer.label)
-                .help(DeliveryMode.steer.explanation ?? "")
                 Button { withdraw(request) } label: {
                     Image(systemName: "xmark").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                         .frame(width: Self.target, height: Self.target).contentShape(.rect)

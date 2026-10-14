@@ -28,11 +28,17 @@ struct HistoryRulesTests {
             try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
             let paths = PiPaths(
                 agentDirectory: directory.appending(path: "agent"),
-                socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory))
-            let installer = PiIntegration(
-                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+                socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory),
+                binDirectory: directory.appending(path: "home/.local/bin"))
+            // 其余 Agent 的目录也指到临时目录：不读这台 Mac 上真实的会话
+            let agentPaths = AgentPaths(pi: paths, environment: [
+                "CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
+                "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
+            ])
+            let agents = AgentIntegration(
+                paths: agentPaths, locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
-            try await installer.install()
+            try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
@@ -42,12 +48,14 @@ struct HistoryRulesTests {
                 bridge: bridge, paths: paths, idleLimit: .seconds(2),
                 extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: paths, installer: installer, terminal: PiTerminalJumper(),
+                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: agents, terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-                updater: nil, host: host, locatePi: { realPi }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")))
+                updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
+                runtimes: { [host] _ in [.pi: PiRuntime(host: host, locate: { realPi })] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
+                cue: CueDependencies(scan: { [] }, launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
@@ -56,7 +64,8 @@ struct HistoryRulesTests {
 
         func shutdown() {
             services.cancelBackgroundWork()
-            host.closeAll()
+            // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
+            for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
             bridge.stop()
         }
 
@@ -92,7 +101,7 @@ struct HistoryRulesTests {
     @Test func 一句话没说过的会话关掉后不进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await (rig.host as any PiHosting).open(in: rig.cwd, launchToken: "silent", executable: realPi)
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", executable: realPi).id
         try await Self.until("会话记录写出") { try await rig.records(.all).count == 1 }
 
         try await rig.host.end(id)
@@ -105,7 +114,7 @@ struct HistoryRulesTests {
     @Test func 托管会话闲置退出后仍在现在_发话唤醒回复_用户结束才进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await (rig.host as any PiHosting).open(in: rig.cwd, launchToken: "hosted", executable: realPi)
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", executable: realPi).id
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
@@ -159,7 +168,7 @@ struct RestingTargetTests {
         let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(PiSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
+        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
         try await services.piStateRecorder.update(
             sessionID: "a", state: .settled, title: "alpha", projectID: project.id, hosted: true)
         services.startLiveSessions()
@@ -175,6 +184,26 @@ struct RestingTargetTests {
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         let request = try #require(try await store.deliveryRequests().first)
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
+    }
+}
+
+/// 托管开新会话：参数不对时 Pi 起来就退出，带着 Pi 的原话报错，桥上不留会话。
+@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .timeLimit(.minutes(1)))
+struct HostedLaunchTests {
+    @Test func 开新会话模型无效时整体失败() async throws {
+        let directory = TestLibraries.makeDirectory()
+        let paths = PiPaths(
+            agentDirectory: directory.appending(path: "agent"),
+            socketDirectory: URL(filePath: "/tmp/hl-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory),
+            binDirectory: directory.appending(path: "bin"))
+        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
+        try bridge.start()
+        defer { bridge.stop() }
+        let host = PiHost(bridge: bridge, paths: paths)
+        await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
+            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), executable: realPi)
+        }
+        #expect(bridge.sessions.isEmpty)
     }
 }
 #endif

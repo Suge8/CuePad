@@ -81,6 +81,7 @@ public struct PiPreviewAdded: Equatable, Sendable {
 extension CueStore {
   /// 把文件放进某个 Pi 会话的预览：按内容哈希存进附件目录（同内容共用一份），在同一事务里登记附件记录与预览记录（同步给手机）。
   /// 文件不存在、不是文件、太大或类型不支持时抛 `CueStoreError.preview…`，什么都不留下。
+  /// HTML 引用的外部资源只列出来让 Agent 改成单文件，不在这里替它内联：样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
   public func addPreview(fileAt url: URL, title: String?, sessionID: String) throws -> PiPreviewAdded {
     let path = url.path
     let attributes = try? FileManager.default.attributesOfItem(atPath: path)

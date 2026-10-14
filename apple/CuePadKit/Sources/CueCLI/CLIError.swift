@@ -4,7 +4,7 @@ import Foundation
 /// 命令行的失败：`kind.rawValue` 是 `--json` 时 stderr 里的稳定错误码；用法错误退出码 2，其余 1。
 struct CLIError: Error {
   enum Kind: String {
-    case usage, notFound = "not_found", ambiguous, invalid, noLibrary = "no_library", store
+    case usage, notFound = "not_found", ambiguous, invalid, noLibrary = "no_library", readOnly = "read_only", store
   }
 
   let kind: Kind
@@ -29,6 +29,8 @@ struct CLIError: Error {
       self = .invalid("项目不存在或在回收站里（cuepad project list 查看可用项目）")
     case CueStoreError.notAConflictCopy:
       self = .invalid("这条不是冲突副本（cuepad conflicts list 查看副本 id）")
+    case CueStoreError.readOnlyLibrary:
+      self = CLIError(kind: .readOnly, message: "资料库是只读的，写不进去：多半是 Agent 的沙箱挡住了写入（如 Codex），在沙箱外重跑这条命令")
     case CueStoreError.previewUnreadable, CueStoreError.previewTooLarge, CueStoreError.previewUnsupported:
       self = .invalid(error.localizedDescription)
     default:

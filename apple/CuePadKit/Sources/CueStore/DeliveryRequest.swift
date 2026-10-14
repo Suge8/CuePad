@@ -46,6 +46,11 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   }
 }
 
+/// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
+public enum DeliveryOrigin: String, Sendable, CaseIterable {
+  case cue
+}
+
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
 public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -64,6 +69,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
+  /// 谁写的（见 `DeliveryOrigin`）；nil 是你。
+  public var origin: Open<DeliveryOrigin>?
+
+  /// Cue 写的请求。
+  public var isFromCue: Bool { origin == .known(.cue) }
 
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
@@ -121,11 +131,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt",
+    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin",
   ]
   static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue]
   }
   init(row: Row) {
     self.init(
@@ -133,6 +143,7 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), resultDetail: row.textOrNil(9), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
+      origin: row.textOrNil(15).map(Open.init(rawValue:)))
   }
 }

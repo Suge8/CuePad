@@ -6,6 +6,7 @@ import Foundation
 /// 目录可以还不存在（先装 CuePad、后装 Pi），也可以被删掉再建：不存在时盯着最近的已存在上层目录，等它出现再切过去，
 /// 切过去时给出一次根路径（整体重扫，切换前写进去的文件不会漏）；根目录被删掉再建也一样。
 /// 不要依赖创建事件：FSEvents 不报告"仅 bind、没有后续属性变更"的 socket 文件创建。
+/// FSEvents 对一直开着写的文件只在关闭时报内容变化（Codex 的常驻服务整段会话都开着会话文件）：这类文件用 `follow` 另盯每次追加。
 final class FSEventsWatcher: Sendable {
     let paths: AsyncStream<[String]>
     private let core: Core
@@ -19,6 +20,15 @@ final class FSEventsWatcher: Sendable {
 
     func stop() {
         core.queue.sync { core.stop() }
+    }
+
+    /// 另盯一个文件的写入与追加（kqueue），变化时流里出现它的路径；已在盯的不重复。文件被删或换掉后不再盯，再调一次重新盯上。
+    func follow(_ path: String) {
+        core.queue.sync { core.follow(path) }
+    }
+
+    func unfollow(_ path: String) {
+        core.queue.sync { core.unfollow(path) }
     }
 
     deinit { stop() }
@@ -41,6 +51,7 @@ final class FSEventsWatcher: Sendable {
         let queue = DispatchQueue(label: "cuepi.fsevents")
         private var stream: FSEventStreamRef?
         private var ancestor: DispatchSourceFileSystemObject?
+        private var files: [String: DispatchSourceFileSystemObject] = [:]
         private var stopped = false
 
         init(root: String, continuation: AsyncStream<[String]>.Continuation) {
@@ -65,7 +76,27 @@ final class FSEventsWatcher: Sendable {
         func stop() {
             stopped = true
             disarm()
+            for path in Array(files.keys) { unfollow(path) }
             continuation.finish()
+        }
+
+        func follow(_ path: String) {
+            guard !stopped, files[path] == nil else { return }
+            let descriptor = open(path, O_EVTONLY)
+            guard descriptor >= 0 else { return }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: descriptor, eventMask: [.write, .extend, .delete, .rename], queue: queue)
+            source.setEventHandler { [self, unowned source] in
+                if !source.data.isDisjoint(with: [.delete, .rename]) { unfollow(path) }
+                continuation.yield([path])
+            }
+            source.setCancelHandler { close(descriptor) }
+            source.resume()
+            files[path] = source
+        }
+
+        func unfollow(_ path: String) {
+            files.removeValue(forKey: path)?.cancel()
         }
 
         private func disarm() {

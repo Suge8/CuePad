@@ -266,7 +266,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
-                        _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+                        _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
                     }
                     return .succeeded
                 }
@@ -340,7 +340,11 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示用的 Mac 端状态：各种状态的 Pi 会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
+    /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
+    /// homepage 是 Codex（能作答、换模型，没有斜杠命令），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
+    private static let demoAgents: [String: AgentKind] = ["cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
+
+    /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
@@ -390,14 +394,16 @@ extension DebugScene {
             try? await recorder.end(sessionID: id)
         }
         for (id, name, recap) in history {
-            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
+            _ = try? await recorder.update(
+                sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project), agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands)
+                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))

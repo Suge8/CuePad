@@ -33,16 +33,18 @@ extension CueStore {
 
   /// 把这些提示词按顺序并进 `keep`：文字接在末尾、空行隔开（图片引用照接），变量取值合并（同名的留 `keep` 的），被并的卡删掉。
   /// 图片都还在 `keep` 的正文里，没有要回收的附件。
+  /// 只读用到的列：结构升级里也调它，那时库还没有后来才加的列。
   static func fold(_ ids: [UUID], into keep: UUID, in db: SQLite, at now: Date) throws {
     let marks = ids.map { _ in "?" }.joined(separator: ", ")
-    let select = "SELECT \(Card.columns.joined(separator: ", ")) FROM cards"
-    guard let kept = try db.first("\(select) WHERE id = ?", [keep], { Card(row: $0) }) else { return }
-    let absorbed = try db.query("\(select) WHERE id IN (\(marks))", ids) { Card(row: $0) }.sorted { lhs, rhs in
+    let select = "SELECT id, body, variableValues FROM cards"
+    let read = { (row: Row) in (id: row.uuid(0), body: row.text(1), values: JSONColumn.decode([String: String].self, from: row.text(2)) ?? [:]) }
+    guard let kept = try db.first("\(select) WHERE id = ?", [keep], read) else { return }
+    let absorbed = try db.query("\(select) WHERE id IN (\(marks))", ids, read).sorted { lhs, rhs in
       ids.firstIndex(of: lhs.id)! < ids.firstIndex(of: rhs.id)!
     }
     let cards = [kept] + absorbed
     let body = mergedBody(cards.map(\.body))
-    let values = cards.reduce(into: [String: String]()) { $0.merge($1.variableValues) { first, _ in first } }
+    let values = cards.reduce(into: [String: String]()) { $0.merge($1.values) { first, _ in first } }
     try db.run(
       "UPDATE cards SET body = ?, variableValues = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?",
       [body, JSONColumn.encode(values), now, keep])

@@ -271,7 +271,7 @@ extension CueStore {
 
   public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
 
-  private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
+  func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
       SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards
@@ -341,8 +341,8 @@ extension CueStore {
     try db.first("SELECT checkpoint FROM piSessions WHERE id = ?", [session]) { $0.blobOrNil(0) } ?? nil
   }
 
-  public func piSessions() throws -> [PiSession] {
-    try select(PiSession.self, orderBy: "lastActivityAt DESC, id")
+  public func piSessions() throws -> [IndexedSession] {
+    try select(IndexedSession.self, orderBy: "lastActivityAt DESC, id")
   }
 
   // MARK: 汇总与搜索

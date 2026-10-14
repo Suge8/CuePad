@@ -14,22 +14,22 @@ final class AppSettings {
         case system, light, dark
     }
 
-    static let defaultGlobalShortcut = "Alt+Space"
     private static let draftDelay: Duration = .milliseconds(400)
 
     enum Key {
         static let theme = "theme"
-        static let globalShortcut = "globalShortcut"
         #if os(macOS)
+        static let globalShortcut = "globalShortcut"
+        static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
         #endif
-        static let piExtensionDeclined = "piExtensionDeclined"
         static let replyTexts = "replyTexts"
         static let replyNotes = "replyNotes"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let agentProject = "agentProject"
         static let holdSendLearned = "holdSendLearned"
+        static let lastAgent = "lastAgent"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -39,8 +39,6 @@ final class AppSettings {
     @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    /// W3C code 形式的加速键（如 `Alt+Space`）。
-    var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
     #if os(macOS)
     /// Mac 主窗口上次打开的项目（`Workspace.page` 的唯一事实源）；iOS 的当前项目从导航路径推出，不存偏好。
     var currentProject: UUID? {
@@ -48,14 +46,14 @@ final class AppSettings {
     }
     #endif
 
-    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
-    var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
-
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
     static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
 
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
+
+    /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
+    var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
 
     /// iOS Agent 页上次选的项目筛选；nil 是全部。存储属性：选的那一刻页面就跟着变。
     var agentProject: UUID? { didSet { defaults.set(agentProject?.uuidString, forKey: Key.agentProject) } }
@@ -140,18 +138,15 @@ final class AppSettings {
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
-        #if !DEBUG
-        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
-        #endif
+        DebugHooks.dropLaunchArguments(from: defaults)
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-        globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         #endif
-        piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
+        lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
@@ -185,11 +180,6 @@ final class AppSettings {
     private static let leavingForeground = NSApplication.willResignActiveNotification
     private static let terminating = NSApplication.willTerminateNotification
     #endif
-
-    private static func isTrue(_ value: Any) -> Bool {
-        if let flag = value as? Bool { return flag }
-        return ["yes", "true", "1"].contains(String(describing: value).lowercased())
-    }
 }
 
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。批注单独一格（`draft.notes` 恒为空）：读批注的对话不随打字重算。

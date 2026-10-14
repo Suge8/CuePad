@@ -95,7 +95,7 @@ private struct StepRow: View {
 
     var body: some View {
         let done = step.status == .done
-        let shown = done ? nil : agents.items[step.id].map { services.settings.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
+        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery, cueFollows: $0.cueFollows) }
         HStack(spacing: TaskRow.columnGap) {
             TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
             if selected {
@@ -133,7 +133,7 @@ private struct LeafDetail: View {
                 if let item { openSession(item.state.sessionID, primary: false) }
             } else if let item {
                 let state = workspace.withLiveState(item.state)
-                let shown = services.settings.shown(state, delivery: item.delivery)
+                let shown = workspace.shown(state, delivery: item.delivery, cueFollows: item.cueFollows)
                 let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
@@ -172,12 +172,12 @@ private struct LeafDetail: View {
 
         init(_ shown: PiShown, line: String?) {
             switch shown.status {
-            case .working, .delivery: (mascot, floats, title, note) = (.search, true, "Agent 正在做", "做完会在这里告诉你")
+            case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
             case .asking: (mascot, title, note) = (.error, "Agent 在等你回答", line)
             case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
             case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
             case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")
-            case .idle, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
+            case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
             }
         }
     }

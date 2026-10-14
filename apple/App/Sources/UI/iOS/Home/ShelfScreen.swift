@@ -66,8 +66,8 @@ struct ShelfScreen: View {
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
         // 在线会话读到前"此刻"先留空白（`ProjectNow.byProject`），Agent 那一张等读到再出
         let sessions = services.liveSessions.items
-        let now = data.now(projects: catalog.projects, sessions: sessions, shown: services.settings.shown)
-        let agent = sessions.flatMap { AgentNow.of($0, shown: services.settings.shown) }
+        let now = data.now(projects: catalog.projects, sessions: sessions, shown: workspace.shown)
+        let agent = sessions.flatMap { AgentNow.of($0, shown: workspace.shown) }
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if entries.isEmpty && catalog.unfiledCount == 0 {
@@ -495,6 +495,7 @@ private struct ActiveTaskRow: View {
     let divided: Bool
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .headline) private var scaledRing: CGFloat = 20
@@ -535,7 +536,7 @@ private struct ActiveTaskRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 project
                 if let session = row.session {
-                    let shown = services.settings.shown(session, delivery: row.delivery)
+                    let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
                     VStack(alignment: .leading, spacing: 2) {
                         presence(shown)
                         PiElapsed(shown: shown, font: .footnote)
@@ -556,7 +557,7 @@ private struct ActiveTaskRow: View {
         HStack(spacing: 6) {
             project.fixedSize()
             if let session = row.session {
-                let shown = services.settings.shown(session, delivery: row.delivery)
+                let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
                 if row.project != nil { Dot().foregroundStyle(palette.ink3) }
                 HStack(spacing: 4) {
                     presence(shown)
@@ -594,6 +595,7 @@ private struct AgentNowCard: View {
     let now: AgentNow
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     private static let radius: CGFloat = 20
@@ -626,7 +628,7 @@ private struct AgentNowCard: View {
         .buttonStyle(PressStyle(.card))
         .contextMenu {
             ForEach(now.faces) { item in
-                let shown = services.settings.shown(item)
+                let shown = workspace.shown(item)
                 Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                     Label { Text(item.state.title); Text(shown.label) } icon: { Image(systemName: shown.symbol) }
                 }
@@ -658,6 +660,7 @@ private struct AgentFaces: View {
     /// 这一条的底色：隔开头像的描边用它。
     let ground: Color
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 32
 
@@ -670,7 +673,7 @@ private struct AgentFaces: View {
 
     var body: some View {
         // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
-        let shown = faces.map { services.settings.shown($0) }
+        let shown = faces.map { workspace.shown($0) }
         HStack(spacing: -overlap) {
             ForEach(Array(faces.enumerated()), id: \.element.id) { index, item in
                 let badged = !shown[..<index].contains { $0.symbol == shown[index].symbol }

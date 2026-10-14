@@ -4,18 +4,20 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置窗口的内容：只放会主动去改的（外观、显示/隐藏的快捷键、自动检查更新）与几样连接各一行状态（iCloud、Pi、命令行）。
+/// 设置窗口的内容：只放会主动去改的（外观、Cue、显示/隐藏与"对 Cue 说"的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Agent、命令行）。
 /// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
 /// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
+    /// "对 Cue 说"的快捷键（调试画面里没有）。
+    @Environment(CueBar.self) private var cueBar: CueBar?
     @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var settings = services.settings
         Form {
             Section {
-                SettingRow(title: "外观", symbol: "sun.max") {
+                SettingRow(title: "外观", icon: Image(systemName: "sun.max")) {
                     Picker("外观", selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
@@ -25,14 +27,18 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                 }
-                ShortcutRow()
+                ShortcutRow(title: "显示/隐藏", symbol: "keyboard", accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
+                if let cueBar {
+                    ShortcutRow(title: "对 Cue 说", symbol: "bubble.left", accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
+                }
             }
+            CueSettingsSection()
             Section {
                 SyncRow()
                 if !services.conflicts.isEmpty { ConflictsRow() }
             }
             Section {
-                PiRow()
+                AgentRows()
                 CommandLineToolRow()
             }
             Section {
@@ -50,22 +56,27 @@ struct SettingsView: View {
     }
 }
 
-/// 显示/隐藏 CuePad 的全局快捷键：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。悬停时键帽左边露出"更改"。
+/// 一个全局快捷键（显示/隐藏 CuePad、对 Cue 说）：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。
+/// 悬停时键帽左边露出"更改"。
 private struct ShortcutRow: View {
+    let title: String
+    let symbol: String
+    let accelerator: String
+    /// 注册新的组合键；失败时抛出，原来的照用。
+    let apply: (String) throws -> Void
     @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
     @State private var recording = false
     @State private var hovering = false
     @State private var monitor: Any?
     @State private var error: String?
 
     var body: some View {
-        SettingRow(title: "显示/隐藏", symbol: "keyboard", tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
+        SettingRow(title: title, icon: Image(systemName: symbol), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
                         .opacity(hovering && !recording ? 1 : 0)
-                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(services.settings.globalShortcut))
+                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator))
                 }
                 .contentShape(.rect)
             }
@@ -108,7 +119,7 @@ private struct ShortcutRow: View {
             return
         }
         do {
-            try services.setGlobalShortcut(accelerator)
+            try apply(accelerator)
         } catch HotkeyError.occupied {
             error = "这个组合已被其他应用占用"
         } catch {
@@ -130,76 +141,6 @@ enum ShortcutText {
     }
 }
 
-/// CuePad 与 Pi 的连接（扩展与技能一起装）。平时由侧栏问一次、之后静默升级（`PiIntegrationManager`），
-/// 所以这一行多数时候只写"已连接"；没连上时右边是"连接"或"升级"，Pi 没装或太旧时状态后面给安装方法。
-private struct PiRow: View {
-    @Environment(AppServices.self) private var services
-    @State private var working = false
-    @State private var outcome: (text: String, failed: Bool)?
-    @State private var showsGuide = false
-
-    var body: some View {
-        let status = services.piIntegration.status
-        let (tone, line) = describe(status)
-        SettingRow(
-            title: "Pi", symbol: "puzzlepiece.extension", tone: tone, busy: working || status == nil, status: line,
-            help: "连上后 CuePad 能看到 Pi 会话的实时状态、把提示词（含图片）发进会话，Agent 也能把页面和截图发到手机上看"
-        ) {
-            if let action = action(status) {
-                Button(action, action: install).settingButton(primary: true).disabled(working)
-            }
-        } fix: {
-            if let installation = status?.pi, !installation.isSupported {
-                Button(installation == .notFound ? "安装方法" : "升级方法") { showsGuide = true }
-                    .settingFix()
-                    .popover(isPresented: $showsGuide, arrowEdge: .bottom) {
-                        PiSetupGuide(installation: installation).padding(16).frame(width: 360).settingPopoverBackground()
-                    }
-            }
-        }
-    }
-
-    private func describe(_ status: PiIntegrationStatus?) -> (StatusTone, Dotted) {
-        if working { return (.calm, "正在连接…") }
-        if let outcome, outcome.failed { return (.failure, Dotted(outcome.text)) }
-        guard let status else { return (.calm, "检测中…") }
-        switch status.pi {
-        case .notFound: return (.notice, "没有找到 pi 命令")
-        case .found(_, let version) where !status.pi.isSupported: return (.notice, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
-        case .found(_, let version):
-            return switch status.file {
-            case .current: (.calm, Dotted("已连接", "\(version)", outcome?.text))
-            case .outdated: (.notice, "需要升级")
-            case .missing: (.calm, "未连接")
-            case .foreign: (.failure, "Pi 目录里有同名的其他文件，没有改动")
-            }
-        }
-    }
-
-    private func action(_ status: PiIntegrationStatus?) -> String? {
-        guard status?.pi.isSupported == true else { return nil }
-        return switch status?.file {
-        case .missing: "连接"
-        case .outdated: "升级"
-        default: nil
-        }
-    }
-
-    private func install() {
-        working = true
-        outcome = nil
-        Task {
-            defer { working = false }
-            do {
-                try await services.piIntegration.install()
-                outcome = ("已在运行的会话 /reload 后生效", false)
-            } catch {
-                outcome = (error.localizedDescription, true)
-            }
-        }
-    }
-}
-
 /// 上次崩溃：要你注意的一行，"查看"弹出摘要与导出（启动参数 `-CuePadCrashSheet` 时一打开就弹）。
 private struct CrashRow: View {
     let report: CrashReport
@@ -207,7 +148,7 @@ private struct CrashRow: View {
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, symbol: "exclamationmark.triangle", tone: .notice,
+            title: report.kind.label, icon: Image(systemName: "exclamationmark.triangle"), tone: .notice,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()
@@ -228,7 +169,7 @@ private struct ConflictsRow: View {
 
     var body: some View {
         SettingRow(
-            title: "同步冲突", symbol: "square.on.square", tone: .notice,
+            title: "同步冲突", icon: Image(systemName: "square.on.square"), tone: .notice,
             status: "\(services.conflicts.count) 条灵感或任务有两个版本"
         ) {
             EmptyView()

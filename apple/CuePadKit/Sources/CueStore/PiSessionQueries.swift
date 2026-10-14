@@ -43,11 +43,12 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
     let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
+    let followed = try cueFollowedSessions()
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
           state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
+          undelivered: undelivered[$0.sessionID] ?? 0, cueFollows: followed.contains($0.sessionID))
       },
       total: total)
   }
@@ -101,6 +102,14 @@ extension CueStore {
     try select(
       PiSessionState.self, where: "state = ? AND hostID = ? AND stateSince >= ?", [PiWorkState.ended.rawValue, host, since],
       orderBy: "stateSince DESC, id", limit: limit)
+  }
+
+  /// `host` 那台 Mac 上每家 Agent 最近有动静的那个会话记录里的模型（没记下模型的不算）：Cue 开工时可选的模型。
+  public func latestModels(on host: String) throws -> [AgentKind: PiModelKey] {
+    let rows = try db.query(
+      "SELECT agent, model, max(stateSince) FROM piSessionStates WHERE hostID = ? AND model IS NOT NULL GROUP BY agent", [host]
+    ) { (Open<AgentKind>(rawValue: $0.textOrNil(0) ?? AgentKind.pi.rawValue).known, JSONColumn.decode(PiModelOption.self, from: $0.textOrNil(1))) }
+    return Dictionary(rows.compactMap { agent, model in agent.flatMap { agent in model.map { (agent, $0.key) } } }) { first, _ in first }
   }
 
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。

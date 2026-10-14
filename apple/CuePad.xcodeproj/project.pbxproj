@@ -29,6 +29,8 @@
 		E1000000000000000000000A /* cuepad in Embed CLI */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* cuepad */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
+		E10000000000000000000012 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000011 /* CueAgent */; };
+		E10000000000000000000014 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = E10000000000000000000013 /* CueAgent */; };
 		F1000000000000000000A003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = F1000000000000000000A002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -119,10 +121,20 @@
 		F1000000000000000000A004 /* CuePad-macOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "CuePad-macOS-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CueFaces.xcassets,
+			);
+			target = C1000000000000000000000A /* CuePadShare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000020 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Sources; sourceTree = "<group>"; };
 		A10000000000000000000021 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Tests; sourceTree = "<group>"; };
-		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/AppGroup; sourceTree = "<group>"; };
+		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */, ); path = App/AppGroup; sourceTree = "<group>"; };
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
@@ -149,6 +161,7 @@
 				B10000000000000000000007 /* CueStore in Frameworks */,
 				B1000000000000000000000B /* CueEditor in Frameworks */,
 				B10000000000000000000013 /* CuePi in Frameworks */,
+				E10000000000000000000014 /* CueAgent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,6 +200,7 @@
 			files = (
 				E1000000000000000000000F /* CueStore in Frameworks */,
 				E10000000000000000000010 /* CueText in Frameworks */,
+				E10000000000000000000012 /* CueAgent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -298,6 +312,7 @@
 				B10000000000000000000006 /* CueStore */,
 				B1000000000000000000000A /* CueEditor */,
 				B10000000000000000000012 /* CuePi */,
+				E10000000000000000000013 /* CueAgent */,
 			);
 			productName = CuePad;
 			productReference = A10000000000000000000002 /* CuePad.app */;
@@ -398,6 +413,7 @@
 			packageProductDependencies = (
 				E1000000000000000000000D /* CueStore */,
 				E1000000000000000000000E /* CueText */,
+				E10000000000000000000011 /* CueAgent */,
 			);
 			productName = CuePadCLI;
 			productReference = E10000000000000000000001 /* cuepad */;
@@ -666,7 +682,7 @@
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。";
 				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -708,7 +724,7 @@
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
 				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。";
 				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -1060,6 +1076,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueStore;
+		};
+		E10000000000000000000011 /* CueAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueAgent;
+		};
+		E10000000000000000000013 /* CueAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueAgent;
 		};
 		E1000000000000000000000E /* CueText */ = {
 			isa = XCSwiftPackageProductDependency;

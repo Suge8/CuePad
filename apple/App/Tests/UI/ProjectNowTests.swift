@@ -73,7 +73,7 @@ struct ProjectNowSeenTests {
             let current = try await store.piSessionPage(.current).items
             return ProjectNow.byProject(
                 [project.id], sessions: current, tasks: [project.id: tasks], intros: [project.id: "三家报价"],
-                shown: app.services.settings.shown)[project.id]?.text
+                shown: Workspace(services: app.services).shown)[project.id]?.text
         }
         func state(_ id: String) async throws -> PiSessionState {
             try #require(try await store.piSessionPage(PiSessionQuery(limit: 10)).items.first { $0.state.sessionID == id }?.state)
@@ -108,7 +108,7 @@ struct ProjectNowShelfTests {
         let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
-        #expect(shelf.now(projects: projects, sessions: sessions, shown: app.services.settings.shown)[project.id]?.text == "正在唤醒 Agent")
+        #expect(shelf.now(projects: projects, sessions: sessions, shown: Workspace(services: app.services).shown)[project.id]?.text == "正在唤醒 Agent")
     }
 
     @Test func 改一条普通灵感不改变书架读到的数据_进回收站才变() async throws {

@@ -8,6 +8,7 @@ final class ChatDerived {
     private struct Key: Equatable {
         let messages: [PiChatMessage]
         let previews: [PiPreview]
+        let cueSent: Set<UUID>
     }
 
     private var key: Key?
@@ -15,10 +16,10 @@ final class ChatDerived {
     private(set) var marks: [ChatMark] = []
 
     func refresh(_ digest: SessionDigest) {
-        let key = Key(messages: digest.messages, previews: digest.previews)
+        let key = Key(messages: digest.messages, previews: digest.previews, cueSent: digest.cueSent)
         guard key != self.key else { return }
         self.key = key
-        let entries = PiChat.entries(digest.messages, previews: digest.previews)
+        let entries = PiChat.entries(digest.messages, previews: digest.previews, cueSent: key.cueSent)
         items = ChatItem.of(entries)
         marks = ChatScrubber.marks(entries)
     }

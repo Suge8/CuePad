@@ -33,6 +33,8 @@ final class Workspace {
     }
 
     let services: AppServices
+    /// Cue 的现状与 Cue 页的草稿（`CueWatch`，根视图里 `observeCue` 跟随）。
+    let cue = CueWatch()
     /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
     private(set) var catalog: ProjectCatalog?
     /// 资料库读得出来（项目目录已读到）。没读到或读取失败时，凡是会写资料库的入口都不出现或不可用。
@@ -63,8 +65,8 @@ final class Workspace {
     var searching = false
     /// 右上角的任务面板开着（`TasksPanel`）。
     var showsTasks = false
-    /// 首次启动问要不要把 cuepad 命令行装进 PATH（`AppDelegate` 置起，主窗口弹出）。
-    var offersCommandLineTool = false
+    /// 接入 Agent 的面板（`AgentSetupPanel`；首次启动由 `AppDelegate` 置起，主窗口弹出）。
+    var showsAgentSetup = false
     #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
@@ -262,19 +264,14 @@ final class Workspace {
 
     /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
     /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
-    /// 完成就是做完了：它（和它的步骤）交给的会话还在线的，一起结束（`end`）。
+    /// 完成就是做完了：它（和它的步骤）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
+    /// 与 Cue 收尾同一条规则），结束请求写下就上传。
     func toggle(_ id: UUID) async throws {
+        let (status, ended) = try await services.store.toggleDone(id)
+        for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
-        guard try await services.store.toggleDone(id) == .done else { return }
+        guard status == .done else { return }
         say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
-        let store = services.store
-        let cards = [try await store.card(id)].compactMap(\.self) + (try await store.children(of: id))
-        let sessions = Set(cards.compactMap(\.piSessionID))
-        for state in services.liveSessions.live.map(\.state) where sessions.contains(state.sessionID) && state.state != .known(.ended) {
-            // 一个会话可以绑好几件事：它绑着的都做完了才结束
-            guard try await store.tasks(boundTo: state.sessionID).allSatisfy({ $0.task.status == .done }) else { continue }
-            await end(state)
-        }
     }
 
     /// 设为任务 / 改回灵感；提示里带"撤销"。

@@ -21,7 +21,7 @@ import Foundation
         if let timeout {
             group.addTask {
                 guard (try? await Task.sleep(for: timeout)) != nil, process.isRunning else { return .idle }
-                process.terminate()
+                process.end()
                 return .timedOut
             }
         }
@@ -40,6 +40,19 @@ import Foundation
         }
         return timedOut ? nil : (status, String(decoding: data, as: UTF8.self))
     } }.value
+}
+
+extension Process {
+    /// 请它退出：SIGTERM，宽限期过了还在就 SIGKILL。不等；之后等它退出的一定等得到（不理 SIGTERM 的也一样）。
+    func end(grace: Duration = .seconds(5)) {
+        guard isRunning else { return }
+        terminate()
+        let pid = processIdentifier
+        Task { [self] in
+            try? await Task.sleep(for: grace)
+            if isRunning { kill(pid, SIGKILL) }
+        }
+    }
 }
 
 @concurrent private func readToEnd(_ handle: FileHandle) async -> Data {

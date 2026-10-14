@@ -9,8 +9,8 @@ import SwiftUI
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）。
 struct LoopLayer {
     enum Kind: Equatable {
-        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
-        case orbit
+        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽默认是直径的 14%，给了就用给的（Cue 头像外的状态环，粗细随头像尺寸另定）。
+        case orbit(lineWidth: CGFloat? = nil)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
         /// 三层向上的箭头从下往上依次亮起再暗下去，1.2s 一轮，相邻两层差 0.18s；线宽是边长的 9%。
@@ -78,9 +78,9 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
-            case .orbit:
+            case .orbit(let line):
                 loop.frame = bounds
-                let width = min(bounds.width, bounds.height) * 0.14
+                let width = line ?? min(bounds.width, bounds.height) * 0.14
                 let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = loop.bounds
@@ -289,7 +289,7 @@ struct Spinner: View {
                     .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
                     .padding(width / 2)
             } else {
-                LoopLayer(kind: .orbit, color: palette.ink2)
+                LoopLayer(kind: .orbit(), color: palette.ink2)
             }
         }
         .frame(width: size.side, height: size.side)

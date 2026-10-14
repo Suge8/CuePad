@@ -74,19 +74,22 @@ import Testing
   // MARK: 订阅的形状
 
   @Test func subscriptionsMatchTheFlagAndCarryOnlyGenericLocalizedText() {
-    let subscriptions = PiAlertSubscriptions(zoneID: zone).desired()
+    let subscriptions = AlertSubscriptions(zoneID: zone).desired()
 
-    #expect(subscriptions.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled"])
-    #expect(subscriptions.map { ($0 as CKQuerySubscription).predicate.predicateFormat } == [#"notify == "waitingForUser""#, #"notify == "settled""#])
+    #expect(subscriptions.map(\.subscriptionID) == ["cuepad.pi.waiting", "cuepad.pi.settled", "cuepad.cue"])
+    #expect(
+      subscriptions.map { ($0 as CKQuerySubscription).predicate.predicateFormat }
+        == [#"notify == "waitingForUser""#, #"notify == "settled""#, #"notify == "cue""#])
+    #expect(subscriptions.map(\.recordType) == ["piSessionStates", "piSessionStates", "cueMessages"])
     for subscription in subscriptions {
-      #expect(subscription.recordType == "piSessionStates" && subscription.zoneID == zone)
+      #expect(subscription.zoneID == zone)
       #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
       let info: CKSubscription.NotificationInfo? = subscription.notificationInfo
       #expect(info?.shouldSendContentAvailable == false)  // 可见通知，不是静默推送
       #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
     }
-    #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled"])
+    #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled", "cue_alert"])
   }
 
   /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。
@@ -105,16 +108,37 @@ import Testing
     #expect(settled.title == "homepage" && settled.body == "完成了")
   }
 
+  /// Cue 的消息：值班的 Mac 置位的推送标志是明文字段、随那一次上传送出，服务端收下后本机清掉，之后的改动（你回答了）不再带它；
+  /// 远端带回来的标志不留。文案由通知服务扩展改写成 Cue 的名字与它说的话、附上选项。
+  @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
+    let rig = try Rig()
+    try await rig.store.updateCueProfile { $0.name = "小管家" }
+    let message = try await rig.store.addCueMessage(.cue, text: "要合并到 main 吗？", choices: ["合并", "先别"])
+    try await rig.store.flagCueMessageForPush(message.id)
+
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
+    #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？")
+    let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
+    let text = try #require(CueAlertText.content(message: record, profile: profile))
+    #expect(text.title == "小管家" && text.body == "要合并到 main 吗？\n合并 / 先别")
+
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+    try await rig.store.answerCueMessage(message.id, answer: "合并")
+    let answered = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
+    #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == "合并")
+  }
+
   // MARK: 幂等创建与账号切换后重建
 
   private func store(preloaded: [CKSubscription] = []) -> FakeSubscriptions { FakeSubscriptions(preloaded) }
 
   @Test func ensuringCreatesMissingSubscriptionsOnceAndThenChangesNothing() async throws {
     let fake = store()
-    let manager = PiAlertSubscriptions(zoneID: zone)
+    let manager = AlertSubscriptions(zoneID: zone)
 
     #expect(await manager.ensure(in: fake) == .active)
-    #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
 
     await fake.resetCounters()
     #expect(await manager.ensure(in: fake) == .active)
@@ -134,7 +158,7 @@ import Testing
       ])
     await fake.failSaves(with: rejection)
 
-    guard case .failed(let reason) = await PiAlertSubscriptions(zoneID: zone).ensure(in: fake) else {
+    guard case .failed(let reason) = await AlertSubscriptions(zoneID: zone).ensure(in: fake) else {
       Issue.record("没有报告失败")
       return
     }
@@ -143,7 +167,7 @@ import Testing
   }
 
   @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {
-    let manager = PiAlertSubscriptions(zoneID: zone)
+    let manager = AlertSubscriptions(zoneID: zone)
     var drifted = manager.desired()[0]
     drifted = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(format: "notify == %@", "other"), subscriptionID: drifted.subscriptionID, options: [.firesOnRecordCreation])
     let stale = CKQuerySubscription(recordType: "piSessionStates", predicate: NSPredicate(value: true), subscriptionID: "cuepad.pi.old", options: [.firesOnRecordCreation])
@@ -152,20 +176,20 @@ import Testing
 
     #expect(await manager.ensure(in: fake) == .active)
 
-    #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await fake.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
     #expect(await fake.deleted == ["cuepad.pi.old"])
     #expect(await fake.ids.contains("somebody.else"))
   }
 
   @Test func aNewAccountsEmptyDatabaseGetsTheSubscriptionsAgain() async throws {
-    let manager = PiAlertSubscriptions(zoneID: zone)
+    let manager = AlertSubscriptions(zoneID: zone)
     let firstAccount = store()
     _ = await manager.ensure(in: firstAccount)
 
     let secondAccount = store()  // 账号切换：新账号的数据库里什么都没有
     _ = await manager.ensure(in: secondAccount)
 
-    #expect(await secondAccount.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
+    #expect(await secondAccount.saved.sorted() == ["cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
   }
 
   // MARK: 点通知的路由
@@ -176,6 +200,13 @@ import Testing
       "ck": ["ce": 2, "cid": "iCloud.com.sugeh.cuepad", "nid": "n",
              "qry": ["dbs": 1, "fo": 1, "rid": record, "sid": subscription, "zid": "CuePad", "zoid": "__defaultOwner__"]],
     ]
+  }
+
+  @Test func tappingACueNotificationRoutesToTheMessage() {
+    let id = UUID()
+    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == id)
+    #expect(CueAlertRoute.message(from: payload(subscription: "cuepad.pi.waiting", record: id.uuidString.lowercased())) == nil)
+    #expect(PiAlertRoute.tap(from: payload(subscription: "cuepad.cue", record: id.uuidString.lowercased())) == nil)
   }
 
   @Test func tappingANotificationRoutesToTheSessionRecord() {

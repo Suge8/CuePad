@@ -63,6 +63,13 @@ enum DebugHooks {
         #endif
     }
 
+    /// 发布版不让启动参数改设置：标准偏好域自带一层启动参数覆盖，Release 里把它去掉；Debug 里留着给视觉验收用。
+    static func dropLaunchArguments(from defaults: UserDefaults) {
+        #if !DEBUG
+        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
+        #endif
+    }
+
     /// 稍后做一件摆画面的事（如编辑器载入后选中一段）：Debug 里记作"还在摆"，截图的就绪标记等它做完。
     static func later(_ delay: Duration = .zero, _ work: @escaping @MainActor () -> Void) {
         #if DEBUG
@@ -241,6 +248,7 @@ struct DebugStage<Main: View>: View {
         #if DEBUG
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
+        case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
         case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()

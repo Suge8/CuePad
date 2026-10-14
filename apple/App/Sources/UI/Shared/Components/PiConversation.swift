@@ -145,7 +145,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, highlighted: entry.id == highlight) {
+            UserBubble(stored: entry.text, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
                 MessageActions(text: entry.text, kind: .mine, session: session)
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
@@ -200,18 +200,27 @@ extension PiConversation {
 
 /// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
 /// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
-/// 歇着（该你了、新会话、有新回复）什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 不是 Pi 的会话最前面写是哪家 Agent（`AgentMark`），歇着时也写。
+/// 歇着（该你了、新会话、有新回复）的 Pi 会话什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
+    /// 由 Cue 跟进（`SessionDigest.cueFollows`）：等回答时写"等 Cue 回答"。
+    var cueFollows = false
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session)
-        let speaks = shown.isLive || shown.needsYou || shown.status == .restart || shown.status == .ended
-        if speaks || undelivered != nil {
+        let shown = PiShown(session, cue: cueFollows ? workspace.cue.name : nil)
+        let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
+        let mark = session.agentMark
+        if speaks || undelivered != nil || mark != nil {
             HStack(spacing: 4) {
+                if mark != nil {
+                    AgentMark(session: session, font: Self.font)
+                    if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+                }
                 if speaks {
                     #if os(iOS)
                     PiStateDot(shown: shown, size: 6)
@@ -241,7 +250,7 @@ struct PiSessionSubtitle: View {
 
 
 /// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
-/// 只能在 Mac 上答的写明原文与去处。
+/// 只能在 Agent 那边答的（问题本身答不了，或这个会话做不到，`PiSessionState.answerableQuestion`）写明原文与去处。
 struct PiQuestionDock: View {
     let session: PiSessionState
     var deliveries: [DeliveryRequest] = []
@@ -249,7 +258,7 @@ struct PiQuestionDock: View {
 
     var body: some View {
         if session.state == .known(.waitingForUser) {
-            if let question = session.question, question.isAnswerable {
+            if let question = session.answerableQuestion {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题

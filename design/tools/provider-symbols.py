@@ -32,6 +32,11 @@ ICONS = {
     "openrouter": ("openrouter", None),
     # 整个图标是两行字标，小字号读不出；只取下面那一行 MiMo 标
     "mimo": ("xiaomimimo", (0, 13.4, 24, 6.4)),
+    # 接入的 Agent（AgentKind 用哪个在 App 代码的 AgentMark 里）
+    "claudecode": ("claudecode", None),
+    "codex": ("codex", None),
+    "opencode": ("opencode", None),
+    "pi": ("pi", None),
 }
 
 # 模板的参考线（SF Symbols 模板 3.0，小号）：基线与大写字母高度
