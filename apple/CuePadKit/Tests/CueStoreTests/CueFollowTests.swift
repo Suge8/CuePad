@@ -7,6 +7,28 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
+  /// Cue 请会话停下没能做到（会话所在的 Mac 报错）：是一条跟进变化，带上动作与原因；完成的请求过了保留期就清理，它也还在，
+  /// Cue 醒来时一定看得到。你自己发起的请求失败了不报（界面上看得见）。
+  @Test func aFailedRequestFromCueIsAChangeThatOutlivesCleanup() async throws {
+    let task = try await store.createTask("发布", in: nil)
+    try await store.linkCard(task.id, toSession: "s1")
+    try await store.setCueFollows(task.id, true)
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .thinking)  // 正在跑一轮：停得了才发得出停下
+    let since = Date()
+    let executor = DeliveryExecutor(store: store, hostID: "mac", retention: .milliseconds(1), onIssue: { Issue.record("\($0)") }) { _ in
+      .failed("会话已关闭")
+    }
+    try await executor.start()
+    defer { Task { await executor.stop() } }
+    _ = try await store.stopLeaf(task.id, host: "mac", cue: true)
+    let mine = try await store.requestEnd(of: SendTarget(kind: .piSession, name: "发布", ref: "s1"), on: "mac")
+    _ = try await eventually(store, { try $0.deliveryRequest(mine.id) }) { $0 == nil }  // 清理过了
+
+    let changes = try await store.cueChanges(since: since)
+    #expect(changes.map(\.detail) == ["停下：会话已关闭"])
+    #expect(changes.first?.taskID == task.id && changes.first?.leaf?.id == task.id)
+  }
+
   /// 你经 CuePad 亲自对 Cue 跟进的叶子会话说话：任务收回给你，Cue 下次醒来和上次的看板一比就知道是你接手了；Cue 自己说的话不收回。
   @Test func speakingInAFollowedSessionTakesTheTaskBack() async throws {
     let task = try await store.createTask("发布", in: nil)

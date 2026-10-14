@@ -227,10 +227,13 @@ extension CueStore {
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 留着的算"还剩"：清理一轮轮排下去，认领后的那一轮就带走它。
-  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），只在完成早于 `undeliveredCutoff` 时清理。
+  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
+  /// 两者都只在完成早于 `undeliveredCutoff` 时清理。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
-    let undelivered = "status = 'failed' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND completedAt >= ?"
+    let undelivered = """
+      status = 'failed' AND (mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?
+      """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
@@ -361,7 +364,7 @@ public actor DeliveryExecutor {
     CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
-  /// 没能送达的话最多留多久（与对话的保留期一样是 7 天）。
+  /// 没能送达的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
   private static let undeliveredRetention: TimeInterval = 7 * 86_400
 
   private func scheduleCleanup() {
