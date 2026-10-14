@@ -14,7 +14,8 @@ import Testing
 /// Cue 在 Mac 上值班，端到端：真实的 Pi 当大脑（RPC），真实的 `cuepad mcp`（App 里的那份）读写同一个隔离库，
 /// 模型是本进程里的假 OpenAI 端点（按剧本回，零网络），执行器开的会话由假扩展扮演（`RecordingHost`）。
 /// Pi 的配置在临时目录（`PI_CODING_AGENT_DIR`），不碰 ~/.pi 与真实资料库。
-nonisolated private let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
+/// 本机的 Pi（真 Pi 的测试共用）
+nonisolated let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized, .timeLimit(.minutes(2)))
 struct CueHostTests {
@@ -42,7 +43,7 @@ struct CueHostTests {
                 scan: { [.pi] }, launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
-            try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)}]}}}"#.utf8)
+            try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
                 .write(to: agent.appending(path: "models.json"))
             try Data(#"{"defaultProvider":"fake","defaultModel":"fake-model"}"#.utf8).write(to: agent.appending(path: "settings.json"))
             folder = app.directory.appending(path: "demo", directoryHint: .isDirectory)
@@ -669,8 +670,13 @@ nonisolated final class FakeModel: Sendable {
         return body.count >= length ? Data(body.prefix(length)) : nil
     }
 
+    /// 收到的每个请求用的模型与思考强度（没带强度为 nil），先后有序
+    private let requested = Mutex<[(model: String, effort: String?)]>([])
+    var requests: [(model: String, effort: String?)] { requested.withLock { $0 } }
+
     private func respond(_ connection: NWConnection, _ body: Data) {
         let request = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
+        requested.withLock { $0.append((request["model"] as? String ?? "", request["reasoning_effort"] as? String)) }
         send(connection, script(request))
     }
 
@@ -730,6 +736,17 @@ nonisolated final class FakeModel: Sendable {
         default: ""
         }
         let sawImage = (last["content"] as? [[String: Any]] ?? []).contains { $0["type"] as? String == "image_url" }
+        // 问暗号：从这次请求带着的整段上下文里找你说过的暗号，找不到就是忘了
+        if text.contains("暗号是什么") {
+            let earlier = (request["messages"] as? [[String: Any]] ?? []).dropLast().map { message -> String in
+                switch message["content"] {
+                case let string as String: string
+                case let parts as [[String: Any]]: parts.compactMap { $0["text"] as? String }.joined()
+                default: ""
+                }
+            }
+            return say(earlier.lazy.compactMap { $0.firstMatch(of: /暗号是 (\S+)/)?.1 }.last.map { "记得，暗号是 \($0)" } ?? "不记得暗号")
+        }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
                 return call("task", ["action": "start", "task": String(id), "model": "fake/fake-model", "effort": "high"])
