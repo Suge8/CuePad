@@ -75,6 +75,30 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// 提问（`request_user_input`，这里开了让它在默认模式下也能用的开关）：会话停在"等你回答"、带着问题与选项；
+    /// 在 CuePad 里选了，答案交回 Codex，它接着说。
+    @Test func aQuestionIsAnsweredFromCuePad() async throws {
+        try await withCodexRig { rig in
+            let config = rig.codex.home.appending(path: "config.toml")
+            try (String(contentsOf: config, encoding: .utf8) + "[features]\ndefault_mode_request_user_input = true\n")
+                .write(to: config, atomically: true, encoding: .utf8)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
+
+            _ = try await rig.bridge.send(PiMessage(text: "Use the request_user_input tool to ask me exactly one question: which drink do I want, with the options Tea and Coffee. Then reply with only the option I chose."), to: id)
+            try await eventually("等你回答", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
+            let question = try #require(rig.bridge.session(id: id)?.question)
+            #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
+            let coffee = try #require(question.options.first { $0.lowercased().contains("coffee") })
+
+            try await rig.bridge.answer(.option(coffee), to: try #require(question.promptID), in: id)
+
+            try await eventually("拿到答案接着说", timeout: .seconds(120)) {
+                rig.bridge.session(id: id).map { rig.replies($0).last?.lowercased().contains("coffee") == true } == true
+            }
+            #expect(rig.bridge.session(id: id)?.question == nil)
+        }
+    }
+
     /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定。
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig { rig in
