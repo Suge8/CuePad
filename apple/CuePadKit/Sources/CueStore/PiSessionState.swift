@@ -95,7 +95,7 @@ public struct PiSessionPage: Sendable, Equatable {
 /// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
 /// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
 /// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
-/// 每个会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上（`CueStore+SessionTasks`）。
+/// 每个没结束的会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上；历史会话不补建（`CueStore+SessionTasks`）。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String

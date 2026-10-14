@@ -749,7 +749,7 @@ extension CueStore {
     return card
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常；会话没有别的叶子了，记录它的 Mac 给它另挂同名任务（`adoptSessions`）。
+  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常；会话没结束又没有别的叶子了，记录它的 Mac 给它另挂同名任务（`adoptSessions`）。
   public func unbindSession(from task: UUID) throws {
     try write {
       try forgetLaunches(of: task)
@@ -887,7 +887,8 @@ extension CueStore {
   public func piSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
   /// 会话文件索引写成同步记录：没有记录时插入一条已结束的；已结束的记录更新名字、所在与最后活动时间（没变不写，
-  /// 免得每次启动把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
+  /// 免得检查点作废、从头重读时把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
+  /// 变没变在 SQL 里按库里存的精度比：读会话文件得到的时间带亚毫秒，库里是毫秒，在 Swift 里比几乎总是"变了"。
   private func writePiHistory(_ session: IndexedSession, host: String, bound: [BoundDirectory]) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
@@ -903,13 +904,12 @@ extension CueStore {
       return
     }
     guard existing.state == .known(.ended) else { return }
-    let since = max(existing.stateSince, session.lastActivityAt)
-    guard existing.title != title || existing.folder != folder || existing.projectID != projectID || existing.stateSince != since
-    else { return }
     try followTitle(of: session.id, to: title)
     try db.run(
-      "UPDATE piSessionStates SET title = ?, folder = ?, projectID = ?, stateSince = ?, modifiedAt = ? WHERE id = ?",
-      [title, folder, projectID, since, now, id])
+      """
+      UPDATE piSessionStates SET title = ?1, folder = ?2, projectID = ?3, stateSince = MAX(stateSince, ?4), modifiedAt = ?5
+      WHERE id = ?6 AND (title IS NOT ?1 OR folder IS NOT ?2 OR projectID IS NOT ?3 OR stateSince < ?4)
+      """, [title, folder, projectID, session.lastActivityAt, now, id])
   }
 }
 
