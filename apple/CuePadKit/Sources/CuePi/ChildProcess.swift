@@ -180,13 +180,14 @@ public final class ChildProcess: Sendable {
     // MARK: 一次性的命令
 
     /// 跑一个命令（标准输入、标准错误是空设备），取它的退出码与标准输出（`collect` 为 false 时不接管，常驻的后代继承了管道就永远读不到结尾）。
-    /// 无法启动、或超过 `timeout`（这时让它退出）返回 nil。取消调用方不影响它：超时照样终止进程，退出码照实取。
+    /// 自成进程组：超过 `timeout` 时结束它连同它起的整组（不理 SIGTERM、握着输出管道的子进程也一样），返回 nil；无法启动也返回 nil。
+    /// 取消调用方不影响它：超时照样结束，退出码照实取。
     @concurrent public static func run(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
         collect: Bool = true
     ) async -> (status: Int32, output: String)? {
         guard let process = try? ChildProcess(
-            executable, arguments, directory: directory, environment: environment, placement: .inline, output: collect ? .raw : .null,
+            executable, arguments, directory: directory, environment: environment, placement: .group, output: collect ? .raw : .null,
             keepErrors: false)
         else { return nil }
         // 包一层不继承取消的任务（`withTaskCancellationShield` 要 macOS 27，部署目标是 26）

@@ -7,12 +7,11 @@ import Testing
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
 /// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走小米网关，OpenCode 用免费模型。
-/// 要花钱，默认不跑：`CUEPAD_START_TESTS=pi,codex,claude,opencode` 开启列出的。
-private let enabledAgents: [AgentKind] = (ProcessInfo.processInfo.environment["CUEPAD_START_TESTS"] ?? "").split(separator: ",")
-    .compactMap { AgentKind(rawValue: String($0)) }
+/// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 列出的几家）。
+private let enabledAgents = RealAgents.enabled
 
 @MainActor
-@Suite(.enabled(if: !enabledAgents.isEmpty, "要花钱：CUEPAD_START_TESTS=pi,codex,claude,opencode 开启"), .serialized, .timeLimit(.minutes(6)))
+@Suite(.enabled(if: !enabledAgents.isEmpty, "要花钱，默认不跑：开关见 RealAgents（CUEPAD_AGENT_TESTS）"), .serialized, .timeLimit(.minutes(6)))
 struct RealCueStartTests {
     @Test(arguments: enabledAgents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
         try await withAgent(agent) { runtime, bridge, work, model in

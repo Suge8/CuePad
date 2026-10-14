@@ -7,7 +7,7 @@ import Testing
 /// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
 /// 模型在 bash 里执行 `cuepad show`：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
+@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
 struct RealPreviewTests {
     private func sqlite(_ database: URL, _ query: String) throws -> String {
         let process = Process()

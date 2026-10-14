@@ -8,7 +8,8 @@ import Testing
 /// 真实 Pi（`~/.local/bin/pi`，RPC 模式）的测试驱动。
 /// 所有状态落在临时 agent 目录（`PI_CODING_AGENT_DIR`），绝不碰真实 ~/.pi；模型是假模型扩展，零网络。
 let realPiURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
-let realPiAvailable = FileManager.default.isExecutableFile(atPath: realPiURL.path)
+/// 真 Pi 的用例开了（`RealAgents`）且本机装了 Pi
+let realPiAvailable = RealAgents.on(.pi) && FileManager.default.isExecutableFile(atPath: realPiURL.path)
 
 private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures")
 

@@ -205,7 +205,7 @@ struct SendTargetTests {
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
         workspace.handOff(boundDraft)
         let mac = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
-        let cue = try #require(try await store.startLeaf(bound.id, host: TestApp.hostID, cue: true))
+        let cue = try await store.startLeaf(bound.id, host: TestApp.hostID, cue: true)
         #expect(cue.target.ref == "r" && mac.target.ref == "r" && cue.hostID == mac.hostID)
 
         // 绑着别的 Mac 上已结束的会话：都请那台 Mac 唤醒它
@@ -213,11 +213,11 @@ struct SendTargetTests {
         let (ended, endedDraft) = try await leaf(in: project, session: "gone")
         workspace.handOff(endedDraft)
         let macWake = try await eventually(store, { try $0.deliveryRequests().first { $0.target.ref == "gone" } }) { $0 != nil }!
-        let cueWake = try #require(try await store.startLeaf(ended.id, host: TestApp.hostID, cue: true))
+        let cueWake = try await store.startLeaf(ended.id, host: TestApp.hostID, cue: true)
         #expect(macWake.hostID == "mac-b" && cueWake.hostID == "mac-b" && cueWake.target.ref == "gone")
 
         let (fresh, freshDraft) = try await leaf(in: project)
-        let cueLaunch = try #require(try await store.startLeaf(fresh.id, host: TestApp.hostID, cue: true))
+        let cueLaunch = try await store.startLeaf(fresh.id, host: TestApp.hostID, cue: true)
         #expect(try await store.withdrawDelivery(cueLaunch.id))
         workspace.handOff(freshDraft)
         let macLaunch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }!

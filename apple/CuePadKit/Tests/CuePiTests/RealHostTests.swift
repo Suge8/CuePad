@@ -8,7 +8,7 @@ import CueStore
 /// 端到端：CuePad 在后台托管 Pi（RPC 模式，没有终端界面）——恢复已结束的会话、开新会话、空闲退出、用户在别处打开同一会话时交出、
 /// 不随 CuePad 结束、扩展协议变了的托管进程被换掉。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"), .timeLimit(.minutes(2)))
+@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")), .timeLimit(.minutes(2)))
 struct RealHostTests {
     /// 先用一个普通 Pi 进程（假模型装在 agent 目录里，托管进程也加载得到）跑一轮、落盘，再结束它，留下一个已结束的会话文件。
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {

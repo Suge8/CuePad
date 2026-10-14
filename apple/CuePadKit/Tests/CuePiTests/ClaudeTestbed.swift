@@ -17,7 +17,8 @@ private var claudeToken: String? {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
     return (try? Data(contentsOf: auth)).flatMap(JSONValue.parse)?["anthropic"]?["access"]?.string
 }
-let realClaudeAvailable = claudeURL != nil && claudeToken != nil
+/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有订阅令牌
+let realClaudeAvailable = RealAgents.on(.claudeCode) && claudeURL != nil && claudeToken != nil
 /// 测试用的模型与换模型时换到的另一个
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 

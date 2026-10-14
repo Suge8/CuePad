@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePi
@@ -19,6 +20,18 @@ struct ChildProcessTests {
         call.cancel()
         #expect(await call.value == nil)
         #expect(ContinuousClock.now - started < .seconds(10))
+    }
+
+    /// 超时结束的是起的命令连同它起的子进程：子进程握着输出管道、自己不退，也不让调用方等它。
+    @Test(.timeLimit(.minutes(1))) func aTimeoutEndsTheChildrenHoldingTheOutputToo() async throws {
+        let marker = try makeTempDirectory().appending(path: "child.pid")
+        // 子进程不理 SIGTERM（像 Agent 起的服务），后台跑着、继承了标准输出
+        let script = "sh -c \"trap '' TERM; echo \\$\\$ > '\(marker.path)'; sleep 30\" & wait"
+        let started = ContinuousClock.now
+        #expect(await ChildProcess.run(URL(filePath: "/bin/sh"), ["-c", script], timeout: .milliseconds(300)) == nil)
+        #expect(ContinuousClock.now - started < .seconds(10))
+        let child = try #require(pid_t(try String(contentsOf: marker, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        try await eventually("子进程也结束了") { kill(child, 0) != 0 }
     }
 
     /// 子进程（与它再起的进程）按默认处置收信号：本进程忽略或屏蔽了的信号不带过去，

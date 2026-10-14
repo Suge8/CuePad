@@ -10,7 +10,8 @@ import Testing
 
 /// 本机装的 Codex（不在就跳过真 Codex 的测试）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-let realCodexAvailable = realCodexURL != nil
+/// 真 Codex 的用例开了（`RealAgents`）且本机装了 codex
+let realCodexAvailable = RealAgents.on(.codex) && realCodexURL != nil
 let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 let realCodexSignedIn = realCodexAvailable && FileManager.default.fileExists(atPath: realCodexAuth.path)
 /// 账号里最便宜的模型
