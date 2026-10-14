@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import CueStore
 import Foundation
 import Testing
@@ -7,6 +8,8 @@ import Testing
 /// 会话索引：一个会话文件只记成一个会话，会话 id 是文件头里的。Codex 的会话文件先建出来、文件头（`session_meta`）随后才写，
 /// 这时读到它不能按文件名记一个会话——"全部"里会多出一行没名字的会话，读到文件头后又按真 id 记一条。
 struct SessionIndexTests {
+    /// 这台 Mac 上装的 Codex（接入时经它写钩子信任；配置目录是临时的）
+    private var realCodex: URL { get throws { try #require(ExecutableLocator.standard.executable(.codex), "这台 Mac 上没装 Codex") } }
     private let realID = "01a1396a-0000-7000-8000-000000000001"
 
     /// Codex 的会话文件（`<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<时间>-<会话 id>.jsonl`），建好目录；路径是真实路径
@@ -32,6 +35,7 @@ struct SessionIndexTests {
         // 回填一次写一批：另一个完整的会话被记下，就是回填读过这个空文件了
         let other = try codexFile(app, "01a1396a-0000-7000-8000-000000000002")
         try meta("01a1396a-0000-7000-8000-000000000002").write(to: other)
+        try await app.connect(.codex, executable: try realCodex)
         app.services.start()
         let store = app.services.store
         try await eventually("回填读过这两个文件") { try await store.piSession("01a1396a-0000-7000-8000-000000000002") != nil }
@@ -60,6 +64,7 @@ struct SessionIndexTests {
         }, host: TestApp.hostID)
         #expect(try await store.allPiSessionStates().contains { $0.sessionID == stem })
 
+        try await app.connect(.codex, executable: try realCodex)
         app.services.start()
         try await eventually("孤儿清掉了") { try await !store.piSessions().contains { $0.id == stem } }
         #expect(try await store.piSessions().filter { $0.path == file.path }.map(\.id) == [realID])
@@ -79,6 +84,7 @@ struct SessionIndexTests {
             session: IndexedSession(id: stem, path: file.path, cwd: "", lastActivityAt: .now, agent: .codex), checkpoint: nil, transcript: nil)
         ], host: TestApp.hostID)
 
+        try await app.connect(.codex, executable: try realCodex)
         app.services.start()
         try await eventually("孤儿清掉了") {
             let sessions = try await store.piSessions(), states = try await store.allPiSessionStates()

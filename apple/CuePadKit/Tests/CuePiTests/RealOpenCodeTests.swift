@@ -128,7 +128,7 @@ struct RealOpenCodeTests {
     /// 终端里（`opencode run`，连着后台服务）说过话的会话出现在 CuePad：实时状态、对话进资料库；CuePad 接着跟它说、改名、换模型与强度、
     /// 回答它要你确认的命令；服务停了会话就下线。
     @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
-        try await withOpenCode { sandbox, store, bridge, _ in
+        try await withOpenCode { sandbox, store, bridge, runtime in
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
             try await eventually("终端里的会话上了桥、歇下", timeout: .seconds(60)) { session(bridge)?.state == .settled }
@@ -178,6 +178,16 @@ struct RealOpenCodeTests {
             try await bridge.command("/compact", in: live.id)
             try await eventually("压缩上下文留下一行", timeout: .seconds(90)) {
                 try await store.piMessages(of: live.sessionID).contains { $0.role == .known(.system) }
+            }
+
+            // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
+            await runtime.stop()()
+            #expect(session(bridge) == nil)
+            try await store.deletePiSessions(of: .opencode)
+            try runtime.start()
+            try await eventually("再接入后会话回来、索引写回", timeout: .seconds(60)) {
+                let indexed = try await store.piSession(live.sessionID)
+                return session(bridge) != nil && indexed != nil
             }
 
             try await sandbox.run(["service", "stop"])

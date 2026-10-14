@@ -76,14 +76,14 @@ extension CueStore {
     }
   }
 
-  /// 删掉这台 Mac 上歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
-  func deleteUnindexedHostedStates(host: String, except live: Set<String>) throws {
+  /// 删掉这台 Mac 上这家 Agent 歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
+  func deleteUnindexedHostedStates(host: String, agent: AgentKind, except live: Set<String>) throws {
     let refs = live.isEmpty ? "" : "AND sessionID NOT IN (\(Array(repeating: "?", count: live.count).joined(separator: ", ")))"
-    var arguments: [any SQLBindable] = [host, PiWorkState.ended.rawValue]
+    var arguments: [any SQLBindable] = [host, agent.rawValue, PiWorkState.ended.rawValue]
     arguments += live.sorted().map { $0 as any SQLBindable }
     try write {
       try db.run(
-        "DELETE FROM piSessionStates WHERE hostID = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
+        "DELETE FROM piSessionStates WHERE hostID = ? AND COALESCE(agent, 'pi') = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
         arguments)
     }
   }
@@ -226,9 +226,10 @@ public actor PiStateRecorder {
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
   /// 它们的记录由状态变化自己写，对账与写入在这里排在同一条任务链上，不会删掉刚建立的会话。
-  public func dropUnindexedHosted() async throws {
+  /// 只对账这一家（它的索引刚回填完）：别家的索引此刻可能不在（没接入的不建索引），它们的记录不动。
+  public func dropUnindexedHosted(of agent: AgentKind) async throws {
     let live = Set(sessions.keys)
-    try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, except: live) }
+    try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, agent: agent, except: live) }
   }
 
   /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——

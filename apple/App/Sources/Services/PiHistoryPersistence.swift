@@ -128,6 +128,12 @@ actor PiHistoryPersistence {
         }
     }
 
+    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动），下次接入从头回填。
+    func forget(_ agent: AgentKind) async throws {
+        try await storage.deletePiSessions(of: agent)
+        starts = nil
+    }
+
     private func loadedStarts() async throws -> [String: IndexedSessionStart] {
         if let starts { return starts }
         let loaded = try await storage.piIndexStarts()

@@ -146,6 +146,49 @@ struct AgentUpgradeTests {
     }
 }
 
+/// "接入"一个开关一个含义：开了 CuePad 才跟这家打交道。会话索引只为接入了的 Agent 建：打开时回填，关掉时删掉这家的本地索引，
+/// 同步出去的会话记录不动。
+struct AgentIndexingTests {
+    /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
+    private func claudeSession(in rig: TestApp, id: String) throws {
+        let project = rig.directory.appending(path: "claude/projects/-work-x")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let stamp = "2026-10-14T01:00:00.000Z"
+        let lines = [
+            #"{"type":"user","uuid":"u1","sessionId":"\#(id)","cwd":"/work/x","timestamp":"\#(stamp)","message":{"role":"user","content":"修一下登录"}}"#,
+            #"{"type":"assistant","uuid":"a1","sessionId":"\#(id)","cwd":"/work/x","timestamp":"\#(stamp)","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"修好了"}]}}"#,
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: project.appending(path: "\(id).jsonl"), atomically: true, encoding: .utf8)
+    }
+
+    @Test func 只有接入了的Agent建会话索引_关掉即删掉本地索引_同步记录留着() async throws {
+        let rig = TestApp()
+        let id = "6f1c0d2e-0000-4000-8000-000000000001"
+        try claudeSession(in: rig, id: id)
+        let services: AppServices = rig.services
+        services.start()
+        defer { services.cancelBackgroundWork() }
+        let store = services.store
+        try await eventually("检测完各家") { AgentKind.allCases.allSatisfy { services.agents.status($0) != nil } }
+
+        // 用过 Claude Code（有配置目录）但没接入：不读它的会话
+        await quietPeriod(.seconds(1))
+        #expect(try await store.piSessions().filter { $0.agent == .claudeCode }.isEmpty)
+
+        try await rig.connect(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id })
+
+        try await services.agents.uninstall(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.count }) { $0 == 0 }
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id }, "同步出去的会话记录不动")
+
+        // 再接入：从头回填回来
+        try await services.agents.install(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
+    }
+}
+
 /// 查本机运行时的登录状态很慢（三家命令各最多 15 秒），只在启用、换运行时与大脑起不来时查。
 struct CueRuntimeScanTests {
     @Test func 启动时Cue已在本机值班_不查运行时() async throws {

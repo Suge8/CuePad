@@ -146,6 +146,21 @@ final class TestApp {
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
 
+    /// 接入一家 Agent（会话索引只为接入了的建），再装上 CuePad 的文件。可执行文件默认是只报版本的假的；
+    /// 装的时候要跟它对话的（Codex 经 `codex app-server` 写钩子信任）给真的（配置目录仍是临时的）。
+    func connect(_ kind: AgentKind, executable real: URL? = nil) async throws {
+        let bin = directory.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let executable = bin.appending(path: kind.command)
+        if let real {
+            try FileManager.default.createSymbolicLink(at: executable, withDestinationURL: real)
+        } else {
+            try "#!/bin/sh\necho 2.1.0\n".write(to: executable, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        }
+        try await services.agents.install(kind)
+    }
+
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
