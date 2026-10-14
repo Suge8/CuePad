@@ -51,6 +51,7 @@ struct IOSRoot: View {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
+            .background { Prewarm() }
             .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
