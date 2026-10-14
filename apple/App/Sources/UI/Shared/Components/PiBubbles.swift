@@ -75,7 +75,7 @@ struct BubbleText: View {
         let shape = Self.shape
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
-                PiStateGlyph(status: .delivery(.failed)).accessibilityHidden(false).accessibilityLabel("没能送达")
+                PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
             }
             Text(text)
                 .font(Typography.reading).foregroundStyle(palette.ink)

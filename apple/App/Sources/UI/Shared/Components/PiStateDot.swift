@@ -144,4 +144,7 @@ struct PiStateGlyph: View {
         let shown = PiShown(status: status)
         Image(systemName: shown.symbol).foregroundStyle(shown.tint(palette)).accessibilityHidden(true)
     }
+
+    /// 没能送达（会话行的"有话没送到"、气泡上的标记）：样子不随原因变，这里不带原因。
+    static let undelivered = PiStateGlyph(status: .delivery(.failed(.timedOut)))
 }
