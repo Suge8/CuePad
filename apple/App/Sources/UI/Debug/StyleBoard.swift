@@ -77,7 +77,7 @@ struct StyleBoard: View {
 
     private static let statuses: [PiShown.Status] = [
         .working(.thinking), .delivery(.sending), .delivery(.waking), .asking, .failed, .delivery(.failed), .restart,
-        .unread, .idle, .fresh, .ended, .unknown,
+        .cueAsking, .unread, .idle, .resting, .fresh, .ended, .unknown,
     ]
 
     private var motion: some View {

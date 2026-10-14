@@ -118,10 +118,10 @@ import Testing
 
   @Test func 点圆圈_以Store当前状态为准_返回新状态() async throws {
     let task = try await store.createTask("修乱序", in: nil)
-    #expect(try await store.toggleDone(task.id) == .done)
-    #expect(try await store.toggleDone(task.id) == .todo)  // 手里的副本再旧，也按库里此刻的状态切
+    #expect(try await store.toggleDone(task.id).status == .done)
+    #expect(try await store.toggleDone(task.id).status == .todo)  // 手里的副本再旧，也按库里此刻的状态切
     try await store.setStatus(task.id, .inProgress)
-    #expect(try await store.toggleDone(task.id) == .done)
+    #expect(try await store.toggleDone(task.id).status == .done)
 
     let idea = try await store.createCard(in: nil, body: "不是任务")
     await #expect(throws: CueStoreError.notATask) { try await store.toggleDone(idea.id) }

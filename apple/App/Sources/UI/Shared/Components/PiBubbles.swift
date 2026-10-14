@@ -20,6 +20,8 @@ struct UserBubble<Menu: View>: View {
     let stored: String
     var trip = BubbleTrip.arrived
     var highlighted = false
+    /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
+    var fromCue = false
     @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
@@ -29,6 +31,7 @@ struct UserBubble<Menu: View>: View {
         let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
         TrailingFraction(fraction: Self.widthFraction) {
             VStack(alignment: .trailing, spacing: 6) {
+                if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
                         text: Dotted(text), highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
@@ -47,8 +50,8 @@ struct UserBubble<Menu: View>: View {
 
 extension UserBubble where Menu == EmptyView {
     /// 没有长按菜单的气泡（近况里的上一句）。
-    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false) {
-        self.init(stored: stored, trip: trip, highlighted: highlighted) { EmptyView() }
+    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false, fromCue: Bool = false) {
+        self.init(stored: stored, trip: trip, highlighted: highlighted, fromCue: fromCue) { EmptyView() }
     }
 }
 
@@ -192,7 +195,7 @@ struct OutgoingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(stored: request.content, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived) {
+            UserBubble(stored: request.content, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived, fromCue: request.isFromCue) {
                 MessageActions(text: request.content, kind: .outgoing(failed: failed), session: session, resend: retry, remove: remove)
             }
             HStack(spacing: 10) {

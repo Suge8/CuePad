@@ -102,7 +102,7 @@ final class MacExecutor {
         try await pi.send(
             PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)
         do {
-            try await store.recordSend(request.content, to: session.sendTarget, card: request.cardID)
+            try await store.recordSend(request.content, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
         } catch {
             throw SendError.unrecorded(error.localizedDescription)
         }
@@ -163,22 +163,29 @@ final class MacExecutor {
         return (ref, try await host.resume(sessionFile: URL(filePath: indexed.path), in: directory, executable: executable))
     }
 
-    // MARK: 不指向某个会话的请求（都不写发送记录）
+    // MARK: 不指向某个会话的请求（除开新会话的开场白外不写发送记录）
 
     /// 开新会话：在后台托管（`PiHost`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
-    /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
+    /// 带上发起方的认领标识与会话名、模型、思考强度（Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话），
+    /// 连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它），并记发送记录（同 `deliver`：请求清理后对话仍认得出是谁说的）。
     private func startSession(_ request: DeliveryRequest) async throws {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         let directory = try await directory(of: .project(launch.project))
         try requireDirectory(directory)
         guard let executable = await locatePi() else { throw SendError.piNotInstalled }
-        let id = try await host.open(in: directory, launchToken: launch.token, executable: executable)
-        if let name = launch.name { try await pi.configure(name: name, in: id) }  // 先起名：第一句话不会先当了会话名
+        let id = try await host.open(
+            in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking, executable: executable)
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)
             let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
             try await pi.send(PiMessage(text: text, images: try piImages(in: content), deliveryID: request.id.uuidString), to: id)
+            guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+            do {
+                try await store.recordSend(opening, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
+            } catch {
+                throw SendError.unrecorded(error.localizedDescription)
+            }
         }
     }
 

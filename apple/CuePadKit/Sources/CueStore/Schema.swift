@@ -3,7 +3,8 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas。约束：
+/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
+/// cueMessages、cueLines、cueProfile。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -13,7 +14,8 @@ import Foundation
 ///
 /// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
+/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
@@ -101,6 +103,16 @@ enum Schema {
     "UPDATE piSessions SET checkpoint = NULL;",
     // 30：订阅账号的用量（每个提供方一条，Mac 写）
     Upgrade(stringLiteral: accountQuotas),
+    // 31：总控 Agent Cue：任务由谁跟进、请求来自谁（发送记录也记下送出它的请求与来源：请求清理后对话仍认得出 Cue 说的话），
+    // Cue 的对话、记忆、设置与记忆摘要缓存
+    Upgrade(stringLiteral: """
+      ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE deliveryRequests ADD COLUMN origin TEXT;
+      ALTER TABLE sendRecords ADD COLUMN deliveryID TEXT;
+      ALTER TABLE sendRecords ADD COLUMN origin TEXT;
+      CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
+      \(cue)
+      """),
   ]
 
   private static let accountQuotas = """
@@ -108,6 +120,36 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
+    """
+
+  /// Cue 的表与"只有顶层任务能由 Cue 跟进"的守卫：卡片挂到别的任务下、改回灵感时 `cueFollows` 归零（本机写入与远端同步一视同仁）。
+  private static let cue = """
+    CREATE TABLE cueMessages (
+      id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
+      taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
+      notify TEXT
+    ) STRICT;
+    CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
+    CREATE TABLE cueLines (
+      id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
+    ) STRICT;
+    CREATE INDEX cueLines_order ON cueLines(createdAt, id);
+    CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
+    CREATE TABLE cueProfile (
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT,
+      enabledAt INTEGER, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    -- lineIDs：区间里各行 id 的指纹，行序变了（别处同步来更早的行）摘要随之作废
+    CREATE TABLE cueSummaries (
+      lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
+    ) STRICT;
+    CREATE TRIGGER cards_cueFollows_insert AFTER INSERT ON cards
+      WHEN new.cueFollows <> 0 AND (new.parentID IS NOT NULL OR new.todoAt IS NULL)
+      BEGIN UPDATE cards SET cueFollows = 0 WHERE id = new.id; END;
+    CREATE TRIGGER cards_cueFollows_update AFTER UPDATE OF parentID, todoAt, cueFollows ON cards
+      WHEN new.cueFollows <> 0 AND (new.parentID IS NOT NULL OR new.todoAt IS NULL)
+      BEGIN UPDATE cards SET cueFollows = 0 WHERE id = new.id; END;
     """
 
   private static let syncSent = """
@@ -138,7 +180,8 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER
+      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
+      cueFollows INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
@@ -150,10 +193,11 @@ enum Schema {
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
       targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
-      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deliveryID TEXT, origin TEXT
     ) STRICT;
     CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
     CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
+    CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
 
     CREATE TABLE attachments (
       id TEXT PRIMARY KEY NOT NULL, hash TEXT NOT NULL, byteCount INTEGER NOT NULL, format TEXT NOT NULL,
@@ -197,7 +241,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER
+      resultReceivedAt INTEGER, origin TEXT
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 
@@ -223,6 +267,8 @@ enum Schema {
     -- 结果回来时按它记账（上传的记录只带改动的字段，不能读回来）。落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
     \(syncSent)
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
+
+    \(cue)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

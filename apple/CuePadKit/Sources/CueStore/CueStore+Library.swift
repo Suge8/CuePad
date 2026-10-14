@@ -187,7 +187,7 @@ extension CueStore {
   /// 提示词挂在哪个任务下：提示词只挂在叶子（没有步骤的任务）下，往有步骤的任务上挂的落到它的第一个没完成的步骤（没有就第一个步骤），
   /// 见 `CardLinks.home(of:)`。不拒绝而是改挂：远端收敛（`CardLinks.repairs`）与结构升级本来就这样处理，本机写入同一个结果，
   /// 界面不必为"挂在有步骤的任务上"另做一条出错的路。`task` 必须是任务。
-  private func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
+  func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
   /// 叶子绑着的会话；没绑为 nil。
   private func session(of leaf: UUID) throws -> String? {
@@ -318,19 +318,9 @@ extension CueStore {
     try write { _ = try applyStatus(id, status) }
   }
 
-  /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态按库里此刻的值决定，读与改在一个事务里——
-  /// 界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
-  public func toggleDone(_ id: UUID) throws -> TaskStatus {
-    try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      guard let current = card.status else { throw CueStoreError.notATask }
-      return try applyStatus(id, current == .done ? .todo : .done)
-    }
-  }
-
   /// 把任务改成 `status`（必须在写事务内）；返回改后的状态。已经是它时不动。
   @discardableResult
-  private func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
+  func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
     guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
     guard let current = card.status else { throw CueStoreError.notATask }
     guard current != status else { return status }
@@ -573,13 +563,14 @@ extension CueStore {
   /// 对话里你的消息中带图片的行（只有你的消息引用图片）；`?1` 是图片引用或它的开头 `CueFormat.imagePrefix`。
   static let userImages = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）或对话里你的消息引用这张图片，或有预览用着这份文件。
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、对话里你的消息或 Cue 页的对话引用这张图片，或有预览用着这份文件。
   func isImageReferenced(_ hash: String) throws -> Bool {
     try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
       UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userImages)
+      UNION ALL SELECT 1 FROM cueMessages WHERE instr(text, ?1) > 0
       UNION ALL SELECT 1 FROM previews WHERE hash = ?2
       """, [CueFormat.imageMarkup(id: hash), hash]) { _ in true } != nil
   }
@@ -632,7 +623,7 @@ extension CueStore {
     link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
   }
 
-  private static func idList(_ ids: [UUID]) -> String {
+  static func idList(_ ids: some Sequence<UUID>) -> String {
     "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 }
@@ -678,19 +669,28 @@ extension CueStore {
 extension CueStore {
   /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
   /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
-  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。
+  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
   @discardableResult
-  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
+  public func recordSend(
+    _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
+  ) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
       return record
     }
+  }
+
+  /// `deliveries`（会话消息的 `PiChatMessage.deliveryID`）里哪些是 Cue 说的：按发送记录认，送出它的请求清理了也认得出。
+  public func cueSentDeliveries(among deliveries: some Sequence<UUID>) throws -> Set<UUID> {
+    Set(try db.query(
+      "SELECT deliveryID FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND deliveryID IN (SELECT value FROM json_each(?))",
+      [Self.idList(deliveries)]) { $0.uuid(0) })
   }
 
   /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：
@@ -749,7 +749,8 @@ extension CueStore {
   }
 
   /// 用户亲手绑定、解绑是之后的一次交给：指向这个任务的开新会话请求不再认领它（`claimLaunchedCards` 只认最近一次），
-  /// 否则那个会话的记录一写（或同步过来）就把它抢回去。
+  /// 否则那个会话的记录一写（或同步过来）就把它抢回去；它们也就不再算"正在开会话"（`launchingLeaves` 按请求带着的卡认）。
+  /// 带着草稿的请求不必另管：绑定时草稿交出去（`handOut`），请求就指不到这个任务了。
   private func forgetLaunches(of task: UUID) throws {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }

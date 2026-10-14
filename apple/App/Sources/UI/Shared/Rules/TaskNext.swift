@@ -20,8 +20,8 @@ nonisolated enum TaskNext: Equatable, Sendable {
     /// 会话这时值得写出来：在跑、在等你、出了事、有你没看的回复。歇着（看过了、新会话、已结束）不写。
     static func wantsLook(_ shown: PiShown) -> Bool {
         switch shown.status {
-        case .delivery, .working, .asking, .failed, .restart, .unread: true
-        case .idle, .fresh, .ended, .unknown: false
+        case .delivery, .working, .asking, .cueAsking, .failed, .restart, .unread: true
+        case .idle, .resting, .fresh, .ended, .unknown: false
         }
     }
 }

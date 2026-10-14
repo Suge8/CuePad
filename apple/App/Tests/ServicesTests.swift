@@ -3,27 +3,28 @@ import struct CueStore.PiSession
 import CueStore
 @testable import CuePi
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
-        let services: AppServices = rig.services
-        services.settings.globalShortcut = "Control+Alt+KeyP"
-        services.applySavedShortcut()
-        let saved = Shortcut(keyCode: 35, modifiers: [.control, .option])
-        #expect(rig.hotkeys.active == [saved])
+        let defaults = rig.services.settings.defaults
+        defaults.set("Control+Alt+KeyP", forKey: "slot")
+        let hotkey = GlobalHotkey(label: "测试", key: "slot", defaultAccelerator: "Alt+Space", defaults: defaults, backend: rig.hotkeys) {}
+        try hotkey.registerSaved()
+        #expect(rig.hotkeys.active == [Shortcut(keyCode: 35, modifiers: [.control, .option])])
 
-        try services.setGlobalShortcut("Alt+KeyQ")
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        try hotkey.set("Alt+KeyQ")
+        #expect(defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option)])
 
         // 另一个组合已被占用：抛错，旧的继续生效，设置不变
         let taken = Shortcut(keyCode: 13, modifiers: .option)
         _ = try rig.hotkeys.register(taken) {}
-        #expect(throws: HotkeyError.occupied(taken)) { try services.setGlobalShortcut("Alt+KeyW") }
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
+        #expect(hotkey.accelerator == "Alt+KeyQ" && defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option), taken])
     }
 }
@@ -309,6 +310,27 @@ struct PiConnectTests {
         #expect(try String(contentsOf: files.bridgeExtension, encoding: .utf8) == PiExtensionBundle.source)
         #expect(exists(files.skill) && exists(files.link))
         #expect(!rig.services.piIntegration.needsConsent)
+    }
+}
+
+/// 查本机运行时的登录状态很慢（三家命令各最多 15 秒），只在启用、换运行时与大脑起不来时查。
+struct CueRuntimeScanTests {
+    @Test func 启动时Cue已在本机值班_不查运行时() async throws {
+        let scans = Mutex(0)
+        // 大脑一直在起：不走到"起不来"那条会查的路
+        let app = TestApp(cue: CueDependencies(
+            scan: { scans.withLock { $0 += 1 }; return [] }, launch: { _ in try? await Task.sleep(for: .seconds(2)); return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        try await app.services.store.updateCueProfile { [hostID = TestApp.hostID] in
+            $0.hostID = hostID
+            $0.enabledAt = .now
+        }
+        app.services.start()
+        try await eventually("开始值班") { app.services.cue.state != nil }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(scans.withLock { $0 } == 0)
+        #expect(app.services.cue.runtimes == nil)
+        app.services.cancelBackgroundWork()
     }
 }
 #endif

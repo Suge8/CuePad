@@ -1,0 +1,80 @@
+#if os(macOS)
+import SwiftUI
+
+/// "对 Cue 说"输入条的内容（`CueBar`）：上面一行头像、名字与此刻在做什么（有等你的写"等你 N"），下面是一直展开的输入框（可带图片）。
+/// 说出去就收起；草稿与 Cue 页同一份（`CueWatch.draft`），没说完收起了，在 Cue 页里接着写。
+struct CueBarView: View {
+    /// 调试画面里放在桌面图上拍时没有宿主。
+    let bar: CueBar?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CueStatusRow()
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .glass(in: .rect(cornerRadius: 22))
+            CueComposer(style: .bar(opens: bar?.opens ?? 0)) { bar?.hide() }
+        }
+        .frame(width: 560)
+    }
+}
+
+#endif
+
+import SwiftUI
+
+/// 一行 Cue 的现状（侧栏最上面、菜单栏面板、输入条）：头像、名字、此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄）。
+struct CueStatusRow<Trailing: View>: View {
+    var font = Typography.body.weight(.semibold)
+    @ViewBuilder var trailing: Trailing
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        HStack(spacing: 10) {
+            CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
+                CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            CueWaitingBadge(count: cue.digest.waiting)
+            trailing
+        }
+        .animation(Motion.quick, value: cue.digest)
+    }
+}
+
+/// Cue 此刻在做什么的那一句（`CuePresence.line`；没有时是 `fallback`）：起不来是失败色，其余次要灰。页头、状态行、Cue 页底部同用。
+struct CueStatusLine: View {
+    var fallback: String?
+    var font = Typography.meta
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        if let line = cue.presence.line(name: cue.name) ?? fallback {
+            Text(line).font(font).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
+                .transition(.opacity)
+        }
+    }
+}
+
+extension CueStatusRow where Trailing == EmptyView {
+    init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }
+}
+
+/// "等你 N"：赭黄的字（等你确认的颜色），没有在等的不画。Mac 侧栏、菜单栏面板、iPad 侧栏用它；iPhone 底栏是角标。
+struct CueWaitingBadge: View {
+    let count: Int
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if count > 0 {
+            Text("等你 \(count)").font(Typography.meta.weight(.semibold)).monospacedDigit().foregroundStyle(palette.attention)
+                .fixedSize()
+                .transition(.opacity)
+        }
+    }
+}

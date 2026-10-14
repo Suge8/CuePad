@@ -30,7 +30,7 @@ struct TaskHeading: View {
             }
             .textFieldStyle(.plain)
             .onAppear {
-                title = CueSummary(task.body).title
+                title = task.heading
                 let store = services.store, id = task.id
                 autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
             }
@@ -40,7 +40,7 @@ struct TaskHeading: View {
     /// 只换标题那一行：正文里若还有别的话（旧版本同步来的），一并写回，由 Store 拆成提示词，不在改标题时丢掉。
     private func save() {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title != CueSummary(task.body).title else { return }
+        guard title != task.heading else { return }
         autosave?.changed(CueLines.split(task.body).prompt.map { title + "\n" + $0 } ?? title)
     }
 }

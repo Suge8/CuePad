@@ -13,7 +13,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`，并设 `CUEPAD_DERIVED=/tmp/<名>`（同一产物目录的构建与测试会互相覆盖）。主检出只读：那里常有别人没提交的改动。
 - 发布只在干净检出运行 `xc.sh release`，对外发布只在用户明确要求时做（见 docs/release.md）。
 - 结束或操作 CuePad 只按自己启动的进程 PID：`killall`、`pkill -f`、按应用名 quit 会关掉用户正在用的正式版。
-- 本机构建只开隔离库（`CUEPAD_LIBRARY_DIR`，库、偏好都在里面）；要接入 Pi 时再同时给 `PI_CODING_AGENT_DIR` 与 `CUEPAD_BIN_DIR`。不读写真实资料库（位置见 `LibraryLocation`）、偏好域 `com.sugeh.cuepad`、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
+- 本机构建只开隔离库（`CUEPAD_LIBRARY_DIR`，库、偏好都在里面）；要接入 Pi 时再同时给 `PI_CODING_AGENT_DIR`、`CUEPAD_BIN_DIR` 与 `CUEPAD_PI_SOCKET_DIR`（不给连接目录，桥会连上用户正在跑的会话）。不读写真实资料库（位置见 `LibraryLocation`）、偏好域 `com.sugeh.cuepad`、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
 - 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（docs/verify.md）。
 - 跨会话、暂不做的待办在 GitHub Issues（`gh issue list`）；谁在做什么看 `git worktree list` 的分支名。

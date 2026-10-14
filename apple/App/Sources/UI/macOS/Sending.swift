@@ -10,25 +10,28 @@ import SwiftUI
 struct AgentTarget: Equatable {
     var session: String
     var mode: DeliveryMode = .send
+    /// 会话记录所在的 Mac（`CueStore.handOffPlan` 定下的）；nil 为本机。会话不在线时请那台 Mac 唤醒它。
+    var host: String?
 }
 
 /// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
-/// 发到哪只有一条规则（`Workspace.handOff`）：任务绑着的会话，没绑就开一个以任务命名的新会话。不碰界面提示：成败由调用方（`Workspace.send`）说。
+/// 发到哪只有一条规则（`CueStore.handOffPlan`，Mac 上经 `Workspace.handOff`）。不碰界面提示：成败由调用方（`Workspace.send`）说。
 @Observable
 final class SendState {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
     struct Busy {
         var text: String
         var session: String
+        var host: String?
         var card: UUID?
     }
 
-    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；本机桥上没有的会话（已结束的，或托管着、进程歇着的）：
-    /// 发送时由本机执行器在后台唤醒。
+    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；不在线的会话（已结束的，或托管着、进程歇着的）：
+    /// 发送时由它所在那台 Mac（`host`）的执行器在后台唤醒。
     enum Route {
         case local(CuePi.PiSession)
         case remote(PiSessionState)
-        case ended
+        case ended(host: String?)
     }
 
     var busy: Busy?
@@ -61,17 +64,18 @@ final class SendState {
         HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
     }
 
-    func route(of sessionID: String) -> Route {
+    /// `host`：会话记录所在的 Mac，nil 为本机。
+    func route(of sessionID: String, host: String? = nil) -> Route {
         if let live = liveSession(sessionID) { return .local(live) }
         if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
             return .remote(remote.state)
         }
-        return .ended
+        return .ended(host: host)
     }
 
-    /// 本机桥上没有这个会话：发送时先在后台唤醒它。
+    /// 会话不在线：发送时先在后台唤醒它。
     func isEnded(_ target: AgentTarget) -> Bool {
-        if case .ended = route(of: target.session) { true } else { false }
+        if case .ended = route(of: target.session, host: target.host) { true } else { false }
     }
 
     /// Pi 会话的显示名：本机在线的取桥上的，别的 Mac 上的与刚结束的取同步记录里的。
@@ -95,32 +99,26 @@ final class SendState {
     /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
         do {
-            switch route(of: target.session) {
+            switch route(of: target.session, host: target.host) {
             case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)
             case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
-            case .ended: try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
+            case .ended(let host): try await services.send(stored, toEnded: target.session, named: sessionName(target.session), on: host, card: card)
             }
             return true
         } catch SendError.piSessionBusy {
-            busy = Busy(text: stored, session: target.session, card: card)
+            busy = Busy(text: stored, session: target.session, host: target.host, card: card)
             return false
         }
     }
 }
 
 extension Workspace {
-    /// 把任务的草稿（提示词）发给 Agent：任务绑着会话就发进那个会话，没绑就在项目绑定的文件夹开一个以任务命名的新会话、绑上它
-    /// （没绑文件夹时就地弹选文件夹，取消就不开）。会话正忙时转为询问。送达后草稿就用掉了（Store 删掉它）。
+    /// 把任务的草稿（提示词）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定（与 Cue 的开工同一份规则）：绑着的会话经本机桥直接发，
+    /// 会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。
+    /// 送达后草稿就用掉了（Store 删掉它）。
     func handOff(_ prompt: Card) {
-        let text = Outgoing.text(of: prompt), id = prompt.id, store = services.store
-        attempt {
-            guard let parent = prompt.parentID, let task = try await store.card(parent) else { return }
-            if let session = task.piSessionID {
-                await self.send(text, to: AgentTarget(session: session), card: id)
-            } else {
-                try await self.startSession(for: task, prompt: id, text: text)
-            }
-        }
+        let text = Outgoing.text(of: prompt), id = prompt.id
+        attempt { try await self.handOff(text, prompt: id) }
     }
 
     /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定已有会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
@@ -135,14 +133,21 @@ extension Workspace {
         try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
     }
 
-    /// 在任务所在项目绑定的文件夹开新会话，会话以任务命名（`CueStore.requestLaunch`），话作为第一句；开好后任务绑上它。
-    private func startSession(for task: Card, prompt: UUID, text: String) async throws {
-        guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }
-        if try await services.store.directory(of: project) == nil {
+    private func handOff(_ text: String, prompt: UUID) async throws {
+        let plan = try await services.store.handOffPlan(prompt, host: services.hostID)
+        switch plan.destination {
+        case .session(let session, _, let host):
+            await send(text, to: AgentTarget(session: session, host: host), card: prompt)
+        case .launch(let project, let host):
+            // 会话名由带着的提示词定（`CueStore.requestLaunch`）
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name ?? "", on: host, card: prompt) {}
+        case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
+            try await handOff(text, prompt: prompt)
+        case .unfiled:
+            say("未分类的任务没有文件夹，开不了会话", isError: true)
         }
-        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt) {}
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
@@ -162,7 +167,7 @@ extension Workspace {
     func resolveBusySend(_ mode: DeliveryMode) {
         guard let pending = sendState.busy else { return }
         sendState.busy = nil
-        Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode), card: pending.card) }
+        Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode, host: pending.host), card: pending.card) }
     }
 }
 

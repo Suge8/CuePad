@@ -60,7 +60,10 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0))
+                HStack(spacing: 4) {
+                    if digest?.cueFollows == true { CueFollowMark() }
+                    PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0), cueFollows: digest?.cueFollows ?? false)
+                }
             }
         } trailing: {
             if let session {

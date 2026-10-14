@@ -25,7 +25,8 @@ struct NewSessionInput: View {
         ProjectFolders.launchPlaces(projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil)
     }
     private var chosen: ProjectFolders.LaunchPlace? {
-        places.first { $0.id == choice } ?? start.project.flatMap { project in places.first { $0.project.id == project } } ?? places.first
+        let places = places
+        return places.first { $0.id == choice } ?? start.place(among: places)
     }
     private var phase: LaunchProgress.Phase { progress?.phase ?? .idle }
     /// 发出且还没失败：输入框锁住，等它开好。
@@ -118,17 +119,11 @@ struct NewSessionInput: View {
 
     private func launch() {
         guard let place = chosen, let binding = place.binding, canStart else { return }
-        let token = UUID().uuidString
         let draft = draft
         sending = true
         workspace.attempt {
             defer { sending = false }
-            let opening = try draft.stored(in: services.store.files).nonEmpty
-            // 从提示词"新会话"发给 Agent：开好后它关联到这个会话（带着的那一条）
-            let request = try await services.launch(
-                PiLaunch(project: place.project.id, prompt: opening, token: token), title: place.project.name, on: binding.hostID,
-                card: start.card ?? draft.attachments.first?.card)
-            launched = .init(request: request.id, token: token)
+            launched = try await start.launch(in: place.project, binding: binding, draft: draft, services: services)
         }
     }
 }

@@ -5,26 +5,38 @@ import os
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
+  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。不是 Cue 写的、对会话说的话（`DeliveryMode.toSession`）落在 Cue 跟进的任务的叶子会话上时，
+  /// 是你亲自接手：同一个事务里任务的 `cueFollows` 归零（Cue 下次醒来从跟进集合的差异里看到，见 `cueChanges`）。
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
       let now = Date.stamp
+      if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
+        try takeOver(session: session, at: now)
+      }
       let request = DeliveryRequest(
         id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
         status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
-        resultReceivedAt: nil)
+        resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
       try insert(request)
       try registerImages(in: content)
       return request
     }
   }
 
+  /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。
+  private func takeOver(session: String, at now: Date) throws {
+    try db.run(
+      "UPDATE cards SET cueFollows = 0, modifiedAt = ?2 WHERE cueFollows = 1 AND parentID IS NULL AND id IN (\(Self.topTasks(ofSession: "?1")))",
+      [session, now])
+  }
+
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
-  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(answer.stored, to: target, on: host, mode: .answer)
+  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try requestDelivery(answer.stored, to: target, on: host, mode: .answer, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 改 `target` 会话的模型与思考强度：与发送共用投送请求与执行器，方式是 `config`。
@@ -34,37 +46,39 @@ extension CueStore {
 
   /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
   /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
-  public func requestEnd(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestControl(.end, of: target, on: host)
+  public func requestEnd(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try requestControl(.end, of: target, on: host, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 停止 `target` 会话正在跑的这一轮：方式是 `stop`；同样复用还在路上的那一条。
-  public func requestStop(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestControl(.stop, of: target, on: host)
+  public func requestStop(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try requestControl(.stop, of: target, on: host, cue: cue)
   }
 
   /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。
-  private func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String) throws -> DeliveryRequest {
+  private func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
     if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
       return open
     }
-    return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode)
+    return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
   /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
-  /// 它是任务或任务下的提示词时，会话以那个任务（叶子）的标题命名。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
+  /// 会话名按它定（`sessionName(forCard:)`）。`cue` 为真时请求标明来自 Cue（`DeliveryOrigin`）。
+  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false) throws -> DeliveryRequest {
     var launch = launch
-    launch.name = try card.flatMap(taskTitle(for:))
-    return try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+    launch.name = try card.flatMap(sessionName(forCard:))
+    return try requestDelivery(
+      launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
   }
 
-  /// 卡所在的任务的标题：任务是它自己，提示词是它挂着的任务；散放的灵感、没有标题的任务没有。
-  private func taskTitle(for card: UUID) throws -> String? {
+  /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：卡所在的任务的标题——任务是它自己，
+  /// 提示词是它挂着的任务；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
+  func sessionName(forCard card: UUID) throws -> String? {
     guard let card = try find(Card.self, card) else { return nil }
     let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
-    guard let title = task.map({ CueSummary($0.body).title }), !title.isEmpty else { return nil }
+    guard let title = task?.heading, !title.isEmpty else { return nil }
     return title
   }
 

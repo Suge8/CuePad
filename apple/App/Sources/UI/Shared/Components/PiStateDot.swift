@@ -7,11 +7,13 @@ extension PiShown {
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking: palette.attention
+        // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
+        case .cueAsking: palette.ink
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.live
         case .unread: palette.replied
         case .restart: palette.ink2
-        case .idle, .fresh, .unknown: palette.ink3
+        case .idle, .resting, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
@@ -20,13 +22,13 @@ extension PiShown {
     var isColored: Bool {
         switch status {
         case .asking, .failed, .working, .delivery, .unread: true
-        case .restart, .idle, .fresh, .ended, .unknown: false
+        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .unknown: false
         }
     }
 
-    /// 状态词的颜色：带色的状态与状态标同色，已结束是灰，其余次要墨色。
+    /// 状态词的颜色：带色的状态与状态标同色，等 Cue 回答是墨色，已结束是灰，其余次要墨色。
     func labelTint(_ palette: Palette) -> Color {
-        isColored ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
+        isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
     /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）铺一层很淡的状态色，其余是纸。
@@ -38,6 +40,8 @@ extension PiShown {
     var symbol: String {
         switch status {
         case .asking: "questionmark.circle.fill"
+        // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
+        case .cueAsking: "questionmark.bubble"
         // 三角：轮廓与等你确认的圆分开
         case .failed: "exclamationmark.triangle.fill"
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
@@ -48,6 +52,8 @@ extension PiShown {
         case .unread: "bell.fill"
         // 输入光标：轮到你打字
         case .idle: "character.cursor.ibeam"
+        // 歇着、轮不到你（Cue 跟进的）：圈里一道短横，不读成"该你打字了"
+        case .resting: "minus.circle"
         case .fresh: "sparkle"
         // 不用空心圈：待办任务的圆圈就是它
         case .ended: "circle.slash"

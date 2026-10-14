@@ -10,7 +10,7 @@ extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
         guard !tasks.isRunning else { return }
-        applySavedShortcut()
+        register(hotkey)
         if !location.isIsolated { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
         host.start()
@@ -35,6 +35,7 @@ extension AppServices {
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
+        startCue()
         // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
         if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
@@ -66,11 +67,12 @@ extension AppServices {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
-        let stopExecutor = executor.beginStop(), sync = sync
+        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
+                ("Cue", stopCue),
                 ("同步引擎", { await sync?.stop() }),
             ], within: limit)
             if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }
@@ -84,26 +86,27 @@ extension AppServices {
         await beginShutdown(within: limit)()
     }
 
-    // MARK: 全局快捷键
-
-    func applySavedShortcut() {
-        do {
-            guard let shortcut = Shortcut(accelerator: settings.globalShortcut) else {
-                throw HotkeyError.unsupportedAccelerator(settings.globalShortcut)
-            }
-            try hotkey.register(shortcut)
-        } catch {
-            reportIssue(.globalShortcutUnavailable("\(error)"))
+    /// Cue：本机能用的运行时、按设置值班、通知；点通知把主窗口叫到前面、经深链打开 Cue 页。
+    private func startCue() {
+        cue.notifier.onOpen = { [weak self] in
+            self?.setDeepLink(.cue)
+            self?.windowShell?.show()
+        }
+        follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }
+        follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) {
+            try await self.cue.followNotifications { [weak self] in (self?.cueViewers ?? 0) > 0 }
         }
     }
 
-    /// 注册新快捷键，成功后才写入设置；失败时旧快捷键与设置都不变，错误交给设置界面展示。
-    func setGlobalShortcut(_ accelerator: String) throws {
-        guard let shortcut = Shortcut(accelerator: accelerator), let normalized = shortcut.accelerator else {
-            throw HotkeyError.unsupportedAccelerator(accelerator)
+    // MARK: 全局快捷键
+
+    /// 启动时注册存着的快捷键；没注册上记成启动问题，设置里换一个。
+    func register(_ hotkey: GlobalHotkey) {
+        do {
+            try hotkey.registerSaved()
+        } catch {
+            reportIssue(.globalShortcutUnavailable("\(hotkey.label)（\(ShortcutText.display(hotkey.accelerator))）：\(error)"))
         }
-        try hotkey.register(shortcut)
-        settings.globalShortcut = normalized
     }
 
     // MARK: Pi

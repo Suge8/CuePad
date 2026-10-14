@@ -71,7 +71,7 @@ struct SendTargetTests {
         workspace.handOff(draft)
 
         try await eventually("rig.host.calls 里有在项目文件夹打开") { !rig.host.calls.isEmpty }
-        guard case .open(let directory, let token) = try #require(rig.host.calls.first) else {
+        guard case .open(let directory, let token, _, _, _) = try #require(rig.host.calls.first) else {
             Issue.record("没有开新会话")
             return
         }
@@ -196,6 +196,34 @@ struct SendTargetTests {
         _ = try await eventually(store, { try $0.deliveryRequests().count }) { $0 > 0 }
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
+    }
+
+    /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同一个叶子，Mac 上发给 Agent 与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
+    @Test func Mac发给Agent与Cue开工_交到同一个地方() async throws {
+        try await remoteSession("r", title: "atlas")
+        let (bound, boundDraft) = try await leaf(in: project, session: "r")
+        try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
+        workspace.handOff(boundDraft)
+        let mac = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
+        let cue = try await store.startLeaf(bound.id, host: TestApp.hostID, cue: true)
+        #expect(cue.target.ref == "r" && mac.target.ref == "r" && cue.hostID == mac.hostID)
+
+        // 绑着别的 Mac 上已结束的会话：都请那台 Mac 唤醒它
+        try await remoteSession("gone", title: "relic", state: .ended)
+        let (ended, endedDraft) = try await leaf(in: project, session: "gone")
+        workspace.handOff(endedDraft)
+        let macWake = try await eventually(store, { try $0.deliveryRequests().first { $0.target.ref == "gone" } }) { $0 != nil }!
+        let cueWake = try await store.startLeaf(ended.id, host: TestApp.hostID, cue: true)
+        #expect(macWake.hostID == "mac-b" && cueWake.hostID == "mac-b" && cueWake.target.ref == "gone")
+
+        let (fresh, freshDraft) = try await leaf(in: project)
+        let cueLaunch = try await store.startLeaf(fresh.id, host: TestApp.hostID, cue: true)
+        #expect(try await store.withdrawDelivery(cueLaunch.id))
+        workspace.handOff(freshDraft)
+        let macLaunch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }!
+        #expect(macLaunch.launch?.name == "修乱序" && cueLaunch.launch?.name == "修乱序")
+        #expect(macLaunch.launch?.project == cueLaunch.launch?.project && macLaunch.hostID == cueLaunch.hostID)
+        #expect(macLaunch.target.name == cueLaunch.target.name)
     }
 
     /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能绑、能交的在线会话，与发送走的路（已结束）是同一个判定。

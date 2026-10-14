@@ -43,11 +43,12 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
     let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
+    let followed = try cueFollowedSessions()
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
           state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
+          undelivered: undelivered[$0.sessionID] ?? 0, cueFollows: followed.contains($0.sessionID))
       },
       total: total)
   }

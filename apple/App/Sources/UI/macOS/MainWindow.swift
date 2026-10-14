@@ -169,6 +169,7 @@ private struct PageStack: View {
         case .unfiled: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
+        case .cue: CuePage()
         case .agent: AgentPage()
         case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
         default: EmptyView()  // 其余是 iOS 的页

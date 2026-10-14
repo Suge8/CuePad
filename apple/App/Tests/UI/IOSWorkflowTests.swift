@@ -63,6 +63,51 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: session) == modes)
     }
 
+    // MARK: 发给 Agent
+
+    /// 一条叶子任务与它的提示词，和带着提示词的发给 Agent 输入框草稿（`Navigation.handToAgent` 带进来的那样）。
+    private func prompt(in project: UUID?) async throws -> (prompt: Card, draft: ComposerDraft) {
+        let task = try await store.createTask("修乱序", in: project)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        return (prompt, ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: prompt), card: prompt.id, project: prompt.projectID)]))
+    }
+
+    /// 默认目标是新会话时点发送：未分类的提示词开不了会话，说一句、不写任何请求、不换成新会话输入框。
+    @Test func 发给Agent默认开新会话_未分类的开不了_不写请求() async throws {
+        let (prompt, draft) = try await prompt(in: nil)
+        let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
+
+        HandOffInput.startDefault(
+            draft, card: prompt.id, plan: try await store.handOffPlan(prompt.id, host: nil), workspace: workspace, navigation: navigation)
+
+        #expect(workspace.notice?.isError == true && workspace.notice?.text == "未分类的任务没有文件夹，开不了会话")
+        #expect(navigation.newSession == nil)
+        #expect(try await store.deliveryRequests().isEmpty)
+    }
+
+    /// 默认目标是新会话时点发送：新会话输入框默认的项目、哪台 Mac、会话名都是交到哪的决定（`CueStore.handOffPlan`）。
+    /// 项目绑在两台 Mac 上。
+    @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/table", for: project.id)
+        try await store.publishDirectoryBindings(host: "mac-z", hostName: "Zulu")
+        try await store.publishDirectoryBindings(host: "mac-a", hostName: "Alpha")
+        let (prompt, draft) = try await prompt(in: project.id)
+        let plan = try await store.handOffPlan(prompt.id, host: nil)
+        #expect(plan.destination == .launch(project: project.id, host: "mac-a") && plan.name == "修乱序")
+        let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
+
+        HandOffInput.startDefault(draft, card: prompt.id, plan: plan, workspace: workspace, navigation: navigation)
+
+        let start = try #require(navigation.newSession)
+        let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)
+        let place = try #require(start.place(among: places)), binding = try #require(place.binding)
+        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), services: app.services)
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.launch?.project == project.id && request.hostID == "mac-a")
+        #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == prompt.id)
+    }
+
     // MARK: Agent 页
 
     // MARK: 随手记

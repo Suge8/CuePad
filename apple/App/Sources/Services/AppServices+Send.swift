@@ -51,11 +51,14 @@ extension AppServices {
         try await requestMacDelivery(storedText, to: session, mode: mode, card: card)
     }
 
-    /// 发给已结束的会话（`name` 是它的会话名）：同样写一条指定本机的投送请求，执行器先用会话索引里的会话文件在后台把它恢复起来再送达。
-    /// 索引里没有这个会话（会话文件不在这台 Mac 上）时请求带原因失败，抛 `SendError.notDelivered`。
+    /// 发给已结束的会话（`name` 是它的会话名，`host` 是它所在的 Mac，nil 为本机）：写一条指定那台 Mac 的投送请求，
+    /// 那台的执行器先用会话索引里的会话文件在后台把它恢复起来再送达。本机的等到结果：索引里没有这个会话（会话文件不在这台 Mac 上）时
+    /// 请求带原因失败，抛 `SendError.notDelivered`；别的 Mac 的与 `send(_:toRemote:)` 一样立即上传、不等结果。
     /// 固定直接发送（`.send`）：会话已结束，没有正在跑的一轮，"马上说""等它做完再说"都不适用。
-    func send(_ storedText: String, toEnded sessionID: String, named name: String, card: UUID?) async throws {
-        try await deliver(storedText, to: SendTarget(kind: .piSession, name: name, ref: sessionID), mode: .send, card: card)
+    func send(_ storedText: String, toEnded sessionID: String, named name: String, on host: String? = nil, card: UUID?) async throws {
+        let target = SendTarget(kind: .piSession, name: name, ref: sessionID)
+        guard let host, host != hostID else { return try await deliver(storedText, to: target, mode: .send, card: card) }
+        _ = uploaded(try await store.requestDelivery(storedText, to: target, on: host, mode: .send, card: card))
     }
 
     private func deliver(_ storedText: String, to target: SendTarget, mode: DeliveryMode, card: UUID?) async throws {

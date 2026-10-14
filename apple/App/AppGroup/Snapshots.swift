@@ -27,6 +27,17 @@ nonisolated struct UnfiledSnapshot: Codable, Equatable, Sendable {
     var total: Int
 }
 
+/// Cue 的快照：主 App 写，小组件读（头像、"等你 N"、它最近一句）。
+nonisolated struct CueSnapshot: Codable, Equatable, Sendable {
+    var name: String
+    /// "等你 N"（App 里 `CueWaiting` 的同一个数）。
+    var waiting: Int
+    /// Cue 最近对你说的一句（纯文字）。
+    var lastSaid: String?
+    /// 头像的表情（`CueMood` 的原始值，图在小组件自己的资源里）。
+    var mood: String
+}
+
 /// 快照文件的读写：每种快照一个 JSON，原子替换，读的一方随时都能读到完整内容。
 nonisolated enum Snapshots {
     static func write(_ snapshot: ProjectsSnapshot, to directory: URL) throws {
@@ -35,6 +46,14 @@ nonisolated enum Snapshots {
 
     static func write(_ snapshot: UnfiledSnapshot, to directory: URL) throws {
         try write(snapshot, named: "unfiled.json", to: directory)
+    }
+
+    static func write(_ snapshot: CueSnapshot, to directory: URL) throws {
+        try write(snapshot, named: "cue.json", to: directory)
+    }
+
+    static func readCue(from directory: URL) -> CueSnapshot? {
+        read(named: "cue.json", from: directory)
     }
 
     static func readProjects(from directory: URL) -> ProjectsSnapshot? {

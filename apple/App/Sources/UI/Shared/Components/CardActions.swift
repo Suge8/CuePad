@@ -42,6 +42,10 @@ struct CardActions: View {
                 workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
             }
         case .move: moveMenu
+        case .cueFollow, .cueRelease:
+            Button(item == .cueFollow ? "交给 \(workspace.cue.name)" : "收回", systemImage: item.symbol) {
+                workspace.setCueFollows(id, item == .cueFollow)
+            }
         case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(Outgoing.text(of: card)) }
         case .trash: Button(item.title, systemImage: item.symbol, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
         case .select:
@@ -98,6 +102,8 @@ extension CardMenu.Item {
         case .trash: "删除"
         case .select: "选择"
         case .bindSession: "绑定会话"
+        case .cueFollow: "交给 Cue"
+        case .cueRelease: "收回"
         case .indent: "缩进"
         case .outdent: "反缩进"
         }
@@ -120,6 +126,8 @@ extension CardMenu.Item {
         case .trash: "trash"
         case .select: "checkmark.circle"
         case .bindSession: "link"
+        case .cueFollow: "person.wave.2"
+        case .cueRelease: "arrow.uturn.backward"
         case .indent: "increase.indent"
         case .outdent: "decrease.indent"
         }

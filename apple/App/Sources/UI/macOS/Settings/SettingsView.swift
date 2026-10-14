@@ -4,11 +4,13 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置窗口的内容：只放会主动去改的（外观、显示/隐藏的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Pi）。
+/// 设置窗口的内容：只放会主动去改的（外观、Cue、显示/隐藏与"对 Cue 说"的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Pi）。
 /// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
 /// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
+    /// "对 Cue 说"的快捷键（调试画面里没有）。
+    @Environment(CueBar.self) private var cueBar: CueBar?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -25,8 +27,12 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                 }
-                ShortcutRow()
+                ShortcutRow(title: "显示/隐藏", symbol: "keyboard", accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
+                if let cueBar {
+                    ShortcutRow(title: "对 Cue 说", symbol: "bubble.left", accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
+                }
             }
+            CueSettingsSection()
             Section {
                 SyncRow()
                 if !services.conflicts.isEmpty { ConflictsRow() }
@@ -49,22 +55,27 @@ struct SettingsView: View {
     }
 }
 
-/// 显示/隐藏 CuePad 的全局快捷键：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。悬停时键帽左边露出"更改"。
+/// 一个全局快捷键（显示/隐藏 CuePad、对 Cue 说）：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。
+/// 悬停时键帽左边露出"更改"。
 private struct ShortcutRow: View {
+    let title: String
+    let symbol: String
+    let accelerator: String
+    /// 注册新的组合键；失败时抛出，原来的照用。
+    let apply: (String) throws -> Void
     @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
     @State private var recording = false
     @State private var hovering = false
     @State private var monitor: Any?
     @State private var error: String?
 
     var body: some View {
-        SettingRow(title: "显示/隐藏", symbol: "keyboard", tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
+        SettingRow(title: title, symbol: symbol, tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
                         .opacity(hovering && !recording ? 1 : 0)
-                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(services.settings.globalShortcut))
+                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator))
                 }
                 .contentShape(.rect)
             }
@@ -107,7 +118,7 @@ private struct ShortcutRow: View {
             return
         }
         do {
-            try services.setGlobalShortcut(accelerator)
+            try apply(accelerator)
         } catch HotkeyError.occupied {
             error = "这个组合已被其他应用占用"
         } catch {

@@ -8,8 +8,14 @@
 | 接入 Pi | `PiIntegration` | 检测 Pi（≥ 0.84.4），读出、写入（`install()`，新装或修复）、移除（`uninstall()`）三样：扩展 `<Pi 目录>/extensions/cuepad-bridge.ts`、skill `<Pi 目录>/skills/cuepad/SKILL.md`（与扩展同在 Pi 目录下，不写用户自己维护的 `~/.agents/skills`；正文写着链接的绝对路径，教 Agent 用 `cuepad show` 把文件发到手机，其余看 `--help`）、命令行链接 `<链接目录>/cuepad`（指向 App 的 `Contents/Helpers/cuepad`）。每样各是 `missing`/`current`/`outdated`（CuePad 写的但不是现在要的样子：旧版、链接指向移走前的 App）/`foreign`（别人的同名文件）；扩展是 CuePad 写的就算已接入。任一样是 `foreign` 时三样都不写；写到一半失败把已写的还原；移除只删 CuePad 写的。首次写入前 App 要先征得用户同意，之后的修复由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
-| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回。进程一启动就脱离 App（新会话组，只继承列出的文件描述符，见"协议"一节的"托管"），自己管生死：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；这里不记进程，有哪些托管会话只看桥。空闲满时限由扩展自己退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退），退出后对接手的进程发 `reload`；协议号不同的托管会话没有终端能 /reload，让它退出，下次发话用新扩展恢复；`end(id)` 结束一个在线会话并等它退出（托管的给 hello 里的 pid 发 SIGTERM，终端里的走扩展的 `end` 命令）。让出、不兼容退出与结束都只发 SIGTERM，Pi 收到后优雅收尾（扩展发 `bye quit`、删 socket） |
+| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话（会话名、模型与思考强度作为启动参数一起生效；没连上就退出时报 Pi 在标准错误里的最后一句，如模型不存在），连上桥后返回。进程一启动就脱离 App（新会话组，只继承列出的文件描述符，见"协议"一节的"托管"），自己管生死：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；这里不记进程，有哪些托管会话只看桥。空闲满时限由扩展自己退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退），退出后对接手的进程发 `reload`；协议号不同的托管会话没有终端能 /reload，让它退出，下次发话用新扩展恢复；`end(id)` 结束一个在线会话并等它退出（托管的给 hello 里的 pid 发 SIGTERM，终端里的走扩展的 `end` 命令）。让出、不兼容退出与结束都只发 SIGTERM，Pi 收到后优雅收尾（扩展发 `bye quit`、删 socket） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
+
+## Cue 的大脑（`Brain/`）
+
+常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 空闲时开始一轮、正忙时插进当前这一轮；`abort`；`stop` 等进程连同子进程退出）与同形的事件 `CueBrainEvent`（规则在类型的头注释里）。系统提示整份替换，原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
+
+端到端测试 `RealBrainTests` 用真实运行时与用户自己的账号，要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude swift test --filter RealBrainTests`，模型用 `CUEPAD_BRAIN_MODEL_PI` 等换、强度用 `CUEPAD_BRAIN_EFFORT` 换；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着，不花钱，默认跑。
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录、命令行链接目录 `CUEPAD_BIN_DIR`）。
 

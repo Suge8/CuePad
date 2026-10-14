@@ -11,6 +11,7 @@ import SwiftUI
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
 struct BottomBar: View {
+    /// "等你 N"（`CueWaiting`）：Agent 那一格的角标。
     let waiting: Int
     let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
@@ -99,7 +100,7 @@ struct BottomBar: View {
         .accessibilityElement(children: .ignore)
         .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
         .accessibilityLabel(title)
-        .accessibilityValue(badge > 0 ? "\(badge) 个会话等你确认" : "")
+        .accessibilityValue(badge > 0 ? "等你 \(badge)" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
@@ -128,7 +129,7 @@ private struct TabPress: ButtonStyle {
     }
 }
 
-/// 角标：注意色的小胶囊（等你确认数）。比标签字（10）小一档、9 起步，跟随字号放大；上限 xLarge 加在调用处——
+/// 角标：注意色的小胶囊（"等你 N"，`CueWaiting`）。比标签字（10）小一档、9 起步，跟随字号放大；上限 xLarge 加在调用处——
 /// `@ScaledMetric` 读的是角标外面的字号，加在 body 里限不住它；再大就盖住图标。
 private struct Badge: View {
     let count: Int

@@ -14,13 +14,13 @@ final class AppSettings {
         case system, light, dark
     }
 
-    static let defaultGlobalShortcut = "Alt+Space"
     private static let draftDelay: Duration = .milliseconds(400)
 
     enum Key {
         static let theme = "theme"
-        static let globalShortcut = "globalShortcut"
         #if os(macOS)
+        static let globalShortcut = "globalShortcut"
+        static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
         static let piConnectDeclined = "piConnectDeclined"
         #endif
@@ -39,8 +39,6 @@ final class AppSettings {
     @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    /// W3C code 形式的加速键（如 `Alt+Space`）。
-    var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
     #if os(macOS)
     /// Mac 主窗口上次打开的项目（`Workspace.page` 的唯一事实源）；iOS 的当前项目从导航路径推出，不存偏好。
     var currentProject: UUID? {
@@ -144,7 +142,6 @@ final class AppSettings {
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-        globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piConnectDeclined = defaults.bool(forKey: Key.piConnectDeclined)

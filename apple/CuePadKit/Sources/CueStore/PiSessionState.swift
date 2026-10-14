@@ -68,16 +68,20 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、没能送达的话有几句（说话的方式里失败、还没重发或移除的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
   public var undelivered: Int
+  /// 绑着它的任务由 Cue 跟进（`cueFollowedSessions()`）：歇下时该看的是 Cue，不催你。
+  public var cueFollows: Bool
   public var id: UUID { state.id }
 
   public init(
-    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0,
+    cueFollows: Bool = false
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
     self.undelivered = undelivered
+    self.cueFollows = cueFollows
   }
 }
 

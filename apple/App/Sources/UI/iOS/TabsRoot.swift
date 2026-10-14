@@ -7,7 +7,7 @@ import SwiftUI
 /// 底部那一行不随滚动收小，进纸页、会话页时随页收起。
 struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var slide = TabSlide()
     /// 安全区底边离屏幕底边的距离（键盘弹出时是键盘高）：底部栏按屏幕底边摆，内容在安全区之上再让到栏顶。
@@ -17,14 +17,15 @@ struct TabsRoot: View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.tab) {
             Tab(value: Navigation.Tab.projects) { stack(.projects, $navigation.projectsPath) { RouteView(route: .shelf) } }
-            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .agent) } }
+            // Agent 标签的第一屏是 Cue，全部会话在它右上角进去的第二层
+            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .cue) } }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
         .environment(\.bottomBarReserve, BottomBar.reserve(above: safeBottom))
         // 底部那一行浮在上面、离屏幕底边固定距离（不随键盘升起，键盘出来时被盖住）；内容给它让出的高度在每一页上（`RouteView`）
         .overlay(alignment: .bottom) {
             if navigation.bottomPages == 0 {
-                BottomBar(waiting: services.liveSessions.waiting, select: select)
+                BottomBar(waiting: workspace.cue.digest.waiting, select: select)
                     .ignoresSafeArea(edges: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

@@ -271,7 +271,7 @@ extension CueStore {
 
   public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
 
-  private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
+  func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
       SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards

@@ -140,7 +140,7 @@ struct SessionPage: View {
     private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
-            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
+            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered), cueFollows: digest.cueFollows,
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
@@ -207,12 +207,13 @@ extension Workspace {
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
-    /// `card`：从这条灵感或任务开的，开好后它关联到新会话。
+    /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
     func startSession(
-        in project: UUID, prompt: String?, title: String, card: UUID? = nil, launched: @escaping () -> Void
+        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, launched: @escaping () -> Void
     ) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(PiLaunch(project: project, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
+        let request = try await services.launch(
+            PiLaunch(project: project, prompt: prompt, token: token), title: title, on: host ?? services.hostID, card: card)
         var reported = false
         for try await progress in services.store.observe({
             try LaunchProgress.read(request: request.id, token: token, from: $0)

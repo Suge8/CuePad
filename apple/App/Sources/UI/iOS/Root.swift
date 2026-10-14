@@ -58,7 +58,8 @@ struct IOSRoot: View {
         }
         // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
         .measuresStatusBar()
-        .overlay(alignment: .top) { NoticeBanner() }
+        // Cue 页在屏上时提示排在它的页头下面（`CuePage`），不浮在顶上
+        .overlay(alignment: .top) { if workspace.services.cueViewers == 0 { NoticeBanner() } }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
@@ -74,6 +75,7 @@ struct IOSRoot: View {
         .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
         .task { await workspace.observeAgentLinks() }
         .task { await workspace.observeFolderGuide() }
+        .task { await workspace.observeCue() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
@@ -81,6 +83,8 @@ struct IOSRoot: View {
         // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话或 Agent 列表时不弹；后台走系统推送
         .onChange(of: workspace.services.sessionAlert) { _, alert in
             guard let alert, navigation.showsAlert(about: alert.session) else { return }
+            // Cue 跟进的会话由 Cue 去看、只在例外时找你，不再另弹一条
+            guard workspace.services.liveSessions.items?.first(where: { $0.state.id == alert.session })?.cueFollows != true else { return }
             workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
@@ -137,6 +141,7 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .tasks: TasksScreen()
+        case .cue: CuePage().countsAsPiViewer()
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
