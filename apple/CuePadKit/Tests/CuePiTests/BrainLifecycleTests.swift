@@ -7,10 +7,11 @@ import Testing
 
 /// 大脑的生死，经公开入口 `startBrain()`，运行时是假脚本（不花钱、默认跑）。脚本把自己的 pid 写进 `$PID_FILE`，
 /// 用来确认进程真的没了。
+@MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct BrainLifecycleTests {
     /// 写一个假运行时，返回它的配置与记 pid 的文件。
-    private func fakeRuntime(_ runtime: CueRuntime, _ body: String) throws -> (CueBrainConfig, pid: URL) {
+    private func fakeRuntime(_ runtime: AgentKind, _ body: String) throws -> (CueBrainConfig, pid: URL) {
         let directory = try makeTempDirectory()
         let script = directory.appending(path: "fake-\(runtime.rawValue)")
         try "#!/bin/sh\necho $$ > \"$PID_FILE\"\n\(body)\n".write(to: script, atomically: true, encoding: .utf8)
@@ -30,27 +31,27 @@ struct BrainLifecycleTests {
     @Test func aRuntimeThatRejectsTheHandshakeIsNotLeftRunning() async throws {
         let (config, file) = try fakeRuntime(.codex, #"""
             read line
-            id=$(printf '%s' "$line" | sed -E 's/.*"id":"([^"]*)".*/\1/')
-            printf '{"jsonrpc":"2.0","id":"%s","error":{"code":-1,"message":"nope"}}\n' "$id"
+            id=$(printf '%s' "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
+            printf '{"id":%s,"error":{"code":-1,"message":"nope"}}\n' "$id"
             exec sleep 300
             """#)
-        await #expect(throws: CueBrainError.rejected("nope")) { _ = try await config.startBrain() }
+        await #expect(throws: CodexRPCError.server(code: -1, message: "nope")) { _ = try await config.startBrain() }
         #expect(kill(try pid(in: file), 0) != 0)
     }
 
     /// 运行时不理会输入关闭、也忽略 SIGTERM：stop() 在两个宽限期（各 5 秒）后结束整个进程组，报告退出。
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
-        let (config, file) = try fakeRuntime(.claude, "trap '' TERM\nexec sleep 300")
+        let (config, file) = try fakeRuntime(.claudeCode, "trap '' TERM\nexec sleep 300")
         let brain = try await config.startBrain()
         do {
             // 脚本跑起来写下 pid 之前停它，测不到"忽略 SIGTERM"
             try await eventually("假运行时写下 pid", timeout: .seconds(5)) { (try? pid(in: file)) != nil }
         } catch {
-            await brain.stop()
+            await brain.stop()()
             throw error
         }
         let begun = ContinuousClock.now
-        await brain.stop()
+        await brain.stop()()
         #expect(ContinuousClock.now - begun < .seconds(12))
         #expect(kill(try pid(in: file), 0) != 0)
         var last: CueBrainEvent?

@@ -53,7 +53,7 @@ final class CommandLineToolInstaller {
     init(
         helper: URL = Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"),
         linkDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin", directoryHint: .isDirectory),
-        shellPath: @escaping @Sendable () async -> String? = { await CommandLineToolInstaller.loginShellPath() }
+        shellPath: @escaping @Sendable () async -> String? = { await ExecutableLocator.loginShellPath() }
     ) {
         self.helper = helper
         self.linkDirectory = linkDirectory
@@ -107,19 +107,6 @@ final class CommandLineToolInstaller {
 
     private static func isCuePadHelper(_ path: String) -> Bool {
         path.hasSuffix(".app/Contents/Helpers/cuepad")
-    }
-
-    /// 用户登录 shell 的 PATH（agent 的 bash 看到的是它，而不是 GUI 应用自己那份很短的 PATH）。
-    /// 交互式启动才会读 .zshrc；5 秒没结果就放弃。
-    nonisolated static func loginShellPath() async -> String? {
-        let marker = "__CUEPAD_PATH__"
-        let process = Process()
-        process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
-        return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }
 #endif

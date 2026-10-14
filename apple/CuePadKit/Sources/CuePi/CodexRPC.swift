@@ -37,24 +37,20 @@ final class CodexRPC {
     /// 握手（`initialize`）至多等这么久：对端卡住时不让调用方一直等。
     static let handshakeTimeout: Duration = .seconds(30)
 
-    /// 起一个 `codex app-server --listen stdio://` 并完成握手；握手失败或超时时停掉这个进程再抛错。
-    static func launch(_ executable: URL, environment: [String: String], directory: URL? = nil) async throws -> CodexRPC {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["app-server", "--listen", "stdio://"]
-        process.environment = environment
-        if let directory { process.currentDirectoryURL = directory }
-        let stdin = Pipe(), stdout = Pipe()
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-        let (messages, continuation) = AsyncStream<Data>.makeStream()
-        process.terminationHandler = { _ in continuation.finish() }
-        try process.run()
-        Self.readLines(stdout.fileHandleForReading, into: continuation)
-        let rpc = CodexRPC(pid: process.processIdentifier, transport: .stdio(process, stdin.fileHandleForWriting), messages: messages)
+    /// 起一个 `codex app-server --listen stdio://`（`arguments` 接在后面，如 `-c` 覆盖配置）并完成握手；握手失败或超时时停掉这个进程再抛错。
+    static func launch(
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil
+    ) async throws -> CodexRPC {
+        let process = try LineProcess(
+            executable: executable, arguments: ["app-server", "--listen", "stdio://"] + arguments, directory: directory, environment: environment)
+        let rpc = CodexRPC(pid: process.pid, transport: .stdio(process), messages: process.lines)
         try await rpc.handshake()
         return rpc
+    }
+
+    /// 自己起的进程（控制 socket 为 nil）：等它退出、取退出原因，或不经主线程停掉它。
+    var process: LineProcess? {
+        if case .stdio(let process) = transport { process } else { nil }
     }
 
     /// 停掉对端：自己起的进程直接终止（不等它读到 EOF 收尾，用于它卡住时），控制 socket 断开。
@@ -119,9 +115,9 @@ final class CodexRPC {
         transport.close()
     }
 
-    /// 关掉并等到对端真的走了（自己起的进程已退出）。
+    /// 关掉并等到对端真的走了：自己起的进程关了输入还不走就 SIGTERM，再不走结束它的进程组（`LineProcess.stop`）。
     func shutdown() async {
-        close()
+        if case .stdio(let process) = transport { await process.stop() } else { close() }
         await reader?.value
     }
 
@@ -154,53 +150,28 @@ final class CodexRPC {
     // MARK: 传输
 
     private enum Transport {
-        case stdio(Process, FileHandle)
+        case stdio(LineProcess)
         case socket(WebSocket)
 
         func write(_ data: Data) {
             switch self {
-            case .stdio(_, let stdin):
-                let line = data + [0x0A]
-                CodexRPC.writer.async { try? stdin.write(contentsOf: line) }
-            case .socket(let socket):
-                socket.send(data)
+            case .stdio(let process): process.write(data)
+            case .socket(let socket): socket.send(data)
             }
         }
 
         func close() {
             switch self {
-            case .stdio(_, let stdin): CodexRPC.writer.async { try? stdin.close() }
+            case .stdio(let process): process.closeInput()
             case .socket(let socket): socket.close()
             }
         }
 
         func terminate() {
             switch self {
-            case .stdio(let process, _): if process.isRunning { process.terminate() }
+            case .stdio(let process): process.terminate()
             case .socket(let socket): socket.close()
             }
-        }
-    }
-
-    /// 写入排在一条串行队列上：大图片写进管道时不卡主线程，先后顺序不变。
-    private nonisolated static let writer = DispatchQueue(label: "cuepad.codex-rpc.write")
-
-    /// 专用线程读到 EOF，一行一条交出去。
-    private nonisolated static func readLines(_ handle: FileHandle, into continuation: AsyncStream<Data>.Continuation) {
-        Thread.detachNewThread {
-            var pending = Data()
-            var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-            while true {
-                let n = read(handle.fileDescriptor, &buffer, buffer.count)
-                if n <= 0 { break }
-                pending.append(contentsOf: buffer[0..<n])
-                while let newline = pending.firstIndex(of: 0x0A) {
-                    let line = pending[pending.startIndex..<newline]
-                    if !line.isEmpty { continuation.yield(Data(line)) }
-                    pending.removeSubrange(pending.startIndex...newline)
-                }
-            }
-            continuation.finish()
         }
     }
 

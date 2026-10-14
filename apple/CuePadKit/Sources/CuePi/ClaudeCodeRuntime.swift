@@ -49,9 +49,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
-        let gone = hosted.values.map(\.exited)
+        let processes = hosted.values.map(\.process)
         for session in hosted.values { session.close() }
-        return { for exit in gone { await exit.value } }
+        return { for process in processes { _ = await process.exited() } }
     }
 
     public func open(in directory: URL, launchToken: String) async throws -> PiSession.ID {
@@ -62,9 +62,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await open(in: directory, launchToken: launchToken)
-        if let name { try await bridge.configure(name: name, in: id) }
-        return id
+        try await configure(
+            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
@@ -108,21 +107,20 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func launch(sessionID: String, arguments: [String], in directory: URL, launchToken: String?) async throws -> PiSession.ID {
         let claude = try executable()
         // App 的环境里没有用户 shell 的 PATH：把找 Claude Code 的那组目录加在前面（它的 Bash 工具在这个 PATH 下找命令），原有的留在后面
-        let path = (([claude.deletingLastPathComponent()] + locator.searchDirectories).map(\.path) + [environment["PATH"]].compactMap { $0 })
-            .joined(separator: ":")
+        let path = [locator.path, environment["PATH"]].compactMap { $0 }.joined(separator: ":")
         let session = try ClaudeHostedSession(
             executable: claude, arguments: arguments, sessionID: sessionID, directory: directory,
             environment: environment.merging(["PATH": path]) { $1 }, bridge: bridge, idleLimit: idleLimit)
         hosted[sessionID] = session
         Task { [weak self] in
-            await session.exited.value
+            _ = await session.process.exited()
             if self?.hosted[sessionID] === session { self?.hosted[sessionID] = nil }
         }
         let cwd = URL(filePath: ClaudeCode.realPath(directory), directoryHint: .isDirectory)
         do {
             return try await session.connect(cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), launchToken: launchToken).id
         } catch PiBridgeError.sessionEnded {
-            throw ClaudeCodeError.exited(session.stderrText)
+            throw ClaudeCodeError.exited(session.process.stderrTail)
         } catch PiBridgeError.ackTimeout {
             session.close()
             throw AgentRuntimeError.launchTimedOut(.claudeCode)
@@ -134,7 +132,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     /// 一次钩子调用：托管进程自己的直接放行（按进程认：环境变量会被从 CuePad 托管的会话里开的终端继承）；其余交给它所在的终端会话（第一次见到就上桥）。
     private func received(_ call: AgentHookCall) {
         let envelope = call.envelope
-        guard !hosted.values.contains(where: { $0.process.processIdentifier == envelope.pid }), let input = ClaudeJSON.parse(envelope.input),
+        guard !hosted.values.contains(where: { $0.process.pid == envelope.pid }), let input = ClaudeJSON.parse(envelope.input),
               let event = input["hook_event_name"]?.string, let sessionID = input["session_id"]?.string else { return call.finish() }
         let id = PiSession.claudeID(sessionID: sessionID, pid: envelope.pid)
         if event == "SessionEnd" {
@@ -238,7 +236,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         } catch {
             return Self.log.notice("没能补上已在跑的 Claude Code 会话：\(String(describing: error))")
         }
-        let ours = Set(hosted.values.map(\.process.processIdentifier))
+        let ours = Set(hosted.values.map(\.process.pid))
         for entry in list where !ours.contains(entry.pid) && kill(entry.pid, 0) == 0 {
             let id = PiSession.claudeID(sessionID: entry.sessionID, pid: entry.pid)
             guard terminals[id] == nil else { continue }

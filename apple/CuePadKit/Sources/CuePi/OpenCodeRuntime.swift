@@ -474,7 +474,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         let (state, detail) = Self.state(of: tracked)
         let now = Date()
         let previous = bridge.session(id: id)?.state
-        if previous.map({ Self.phase($0) != Self.phase(state) }) ?? true { tracked.stateSince = now }
+        if previous.map({ $0.phase != state.phase }) ?? true { tracked.stateSince = now }
         switch state {
         case .settled, .error: tracked.busySince = nil
         default: if tracked.busySince == nil { tracked.busySince = now }
@@ -527,16 +527,6 @@ public final class OpenCodeRuntime: AgentRuntime {
         if tracked.children.values.contains(where: { $0.phase == .known(.running) }) { return (.delegating, nil) }
         if let failure = tracked.failure { return (.error, PiErrorSummary(failure).line) }
         return (.settled, nil)
-    }
-
-    /// 粗状态（状态起点只在它变的时候前进）：工作中、等你、出错、空闲。
-    private static func phase(_ state: PiWorkState) -> Int {
-        if state.isWorking { return 0 }
-        switch state {
-        case .waitingForUser: return 1
-        case .error: return 2
-        default: return 3
-        }
     }
 
     /// 强度是模型的 `variant`；没设（`default`）时，没有强度可选的模型是 `off`，有的不知道是哪一档。
@@ -692,19 +682,15 @@ public final class OpenCodeRuntime: AgentRuntime {
                   let target = try await catalog(tracked.directory, connection.client).models.first(where: { $0.key == key })
             else { throw PiBridgeError.rejected("unknown_model") }
             let variants = (target.variants ?? []).map(\.id)
-            let variant: String? = if let thinking { Self.clamp(thinking, to: target.thinkingLevels).flatMap { $0 == .off ? nil : $0.rawValue } }
+            // 模型没有强度档（没有 variant）时不带；关闭就是不带 variant
+            let level = thinking.flatMap { target.thinkingLevels.isEmpty ? nil : $0.clamped(to: target.thinkingLevels) }
+            let variant: String? = if thinking != nil { level == .off ? nil : level?.rawValue }
                 else { current?.variant.flatMap { variants.contains($0) ? $0 : nil } }
             let ref = OpenCodeModelRef(id: target.id, providerID: target.providerID, variant: variant)
             struct Switch: Encodable { var model: OpenCodeModelRef }
             try await connection.client.call("POST", "/api/session/\(sessionID)/model", body: Switch(model: ref))
         }
         // 桥上的名字与模型只随服务自己的事件（改名、选模型）更新，不在这里先写
-    }
-
-    /// 按模型支持的强度夹取：支持就用它，否则取最接近的一档（一样近取低的）。
-    private static func clamp(_ level: PiThinkingLevel, to levels: [PiThinkingLevel]) -> PiThinkingLevel? {
-        let rank = { (level: PiThinkingLevel) in PiThinkingLevel.allCases.firstIndex(of: level)! }
-        return levels.min { (abs(rank($0) - rank(level)), rank($0)) < (abs(rank($1) - rank(level)), rank($1)) }
     }
 
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
@@ -734,9 +720,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await open(in: directory, launchToken: launchToken)
-        if let name { try await bridge.configure(name: name, in: id) }
-        return id
+        try await configure(
+            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {

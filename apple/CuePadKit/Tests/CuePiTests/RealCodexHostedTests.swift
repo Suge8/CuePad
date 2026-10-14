@@ -34,12 +34,12 @@ struct RealCodexHostedTests {
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })
             try await rig.bridge.configure(model: other.key, in: id)
             #expect(rig.bridge.session(id: id)?.model?.key == other.key)
-            try await rig.bridge.configure(model: PiModelKey(provider: "openai", id: codexTestModel), thinking: .high, name: "看图", in: id)
+            try await rig.bridge.configure(model: PiModelKey(provider: CodexModel.provider, id: codexTestModel), thinking: .high, name: "看图", in: id)
             #expect(rig.bridge.session(id: id)?.model?.key.id == codexTestModel)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
             await #expect(throws: PiBridgeError.rejected("unknown_model")) {
-                try await rig.bridge.configure(model: PiModelKey(provider: "openai", id: "no-such-model"), in: id)
+                try await rig.bridge.configure(model: PiModelKey(provider: CodexModel.provider, id: "no-such-model"), in: id)
             }
 
             try await rig.runtime.end(id)

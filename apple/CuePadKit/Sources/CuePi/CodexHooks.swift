@@ -175,7 +175,7 @@ struct CodexHooks: AgentHookConfig {
         guard let codex = locator.candidates(AgentKind.codex.command).first else { throw CodexHooksError.codexNotFound }
         var environment = environment
         environment["CODEX_HOME"] = home.path
-        environment["PATH"] = locator.searchDirectories.map(\.path).joined(separator: ":")
+        environment["PATH"] = locator.path
         try await Self.run(codex, environment, body)
     }
 

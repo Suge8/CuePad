@@ -93,7 +93,11 @@ public final class PiBridge {
             _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
         }
 
+        /// 强度先在这里按目标模型夹好（`PiThinkingLevel.clamped`）：Pi 自己的夹法与之不同，界面按这一条显示。
         func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
+            let key = model ?? session?.model?.key
+            let levels = session?.availableModels.first { $0.key == key }?.thinkingLevels ?? []
+            let thinking = thinking?.clamped(to: levels)
             _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
         }
 

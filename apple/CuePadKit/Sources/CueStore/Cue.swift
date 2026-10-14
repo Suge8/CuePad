@@ -122,17 +122,13 @@ public struct CueMemory: Equatable, Sendable {
   public var summaries: [CueMemorySummary]
 }
 
-/// Cue 的大脑跑在哪种 Agent 里。
-public enum CueRuntime: String, Sendable, CaseIterable {
-  case pi, codex, claude
-}
-
 /// Cue 的设置（同步，只有一行）。
 public struct CueProfile: Equatable, Sendable {
   public var name: String
   /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
-  public var runtime: Open<CueRuntime>
+  /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
+  public var runtime: Open<AgentKind>
   public var model: String?
   /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。
   public var effort: Open<PiThinkingLevel>?
@@ -150,7 +146,7 @@ public struct CueProfile: Equatable, Sendable {
   public static var syncRecordName: String { recordID.uuidString.lowercased() }
 
   public init(
-    name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<CueRuntime> = .known(.pi), model: String? = nil,
+    name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
     effort: Open<PiThinkingLevel>? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name

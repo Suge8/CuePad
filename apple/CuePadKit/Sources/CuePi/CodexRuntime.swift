@@ -131,9 +131,8 @@ public final class CodexRuntime: AgentRuntime {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        let id = try await open(in: directory, launchToken: launchToken)
-        if let name { try await bridge.configure(name: name, in: id) }
-        return id
+        try await configure(
+            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
     }
 
     /// 接着一个已结束的会话：还在常驻服务里（终端开着它，或终端退出后它还挂着）就经控制 socket 接上，不另开一份；
@@ -170,7 +169,7 @@ public final class CodexRuntime: AgentRuntime {
         paths.environment.merging([
             "CODEX_HOME": paths.home(of: .codex).path,
             "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
-            "PATH": locator.searchDirectories.map(\.path).joined(separator: ":"),
+            "PATH": locator.path,
         ]) { $1 }
     }
 
@@ -310,10 +309,9 @@ public final class CodexRuntime: AgentRuntime {
         session.name = thread["name"] as? String
         if let preview = thread["preview"] as? String, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
         if let model = thread["model"] as? String {
-            let provider = thread["modelProvider"] as? String ?? "openai"
-            session.model = models?.first { $0.id == model }.map { $0.option(provider: provider) }
-                ?? PiModelOption(key: PiModelKey(provider: provider, id: model), name: model, thinkingLevels: [])
-            session.availableModels = (models ?? []).map { $0.option(provider: provider) }
+            session.model = models?.first { $0.id == model }?.option
+                ?? PiModelOption(key: PiModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
+            session.availableModels = (models ?? []).map(\.option)
         }
         session.thinking = (thread["reasoningEffort"] as? String).map(CodexModel.thinking)
     }
@@ -402,11 +400,7 @@ public final class CodexRuntime: AgentRuntime {
 
     /// 换到 `state`：粗状态（工作中、等你确认、出错、空闲）变了才换起点；离开空闲时开始计"连续处理"，回到空闲或出错时清掉。
     private static func move(_ session: inout PiSession, to state: PiWorkState, detail: String? = nil, at now: Date = .now) {
-        func phase(_ state: PiWorkState) -> Int { state.isWorking ? 0 : state == .waitingForUser ? 1 : state == .error ? 2 : 3 }
-        if phase(session.state) != phase(state) { session.stateSince = now }
-        if state.hasPendingWork { session.busySince = session.busySince ?? now } else { session.busySince = nil }
-        session.state = state
-        session.detail = detail
+        session.enter(state, detail: detail, at: now)
         if state != .waitingForUser { session.question = nil }
     }
 
@@ -653,6 +647,14 @@ public final class CodexRuntime: AgentRuntime {
                 change(id) { Self.move(&$0, to: .error, detail: "Codex 出错了") }
             default: break
             }
+        case "turn/completed" where (params["turn"] as? CodexRPC.Object)?["status"] as? String == "failed":
+            // 只有开出这个线程的连接（托管的进程）收得到；失败的一轮没有 Stop 钩子，状态停在这里
+            let text = CodexModel.failure(of: params["turn"] as? CodexRPC.Object)
+            session.turnRunning = false
+            change(id) { s in
+                Self.move(&s, to: .error, detail: PiErrorSummary(text).line)
+                s.errorMessage = text
+            }
         case "thread/closed":
             detach(id, reason: .closed(reason: "quit"))
         case "thread/tokenUsage/updated":
@@ -713,8 +715,7 @@ public final class CodexRuntime: AgentRuntime {
             try await configure(model: nil, thinking: nil, name: argument, in: id)
         case "model":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
-            let provider = bridge.session(id: id)?.model?.key.provider ?? "openai"
-            try await configure(model: PiModelKey(provider: provider, id: argument), thinking: nil, name: nil, in: id)
+            try await configure(model: PiModelKey(provider: CodexModel.provider, id: argument), thinking: nil, name: nil, in: id)
         case _ where name.hasPrefix("skill:"):
             guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
             var input: [CodexRPC.Object] = [["type": "skill", "name": skill.name, "path": skill.path]]
@@ -733,7 +734,7 @@ public final class CodexRuntime: AgentRuntime {
         try await call(session, "turn/interrupt", ["threadId": session.threadID, "turnId": turn])
     }
 
-    /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（取不超过它的最高一档，没有就取最低一档）。
+    /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
     fileprivate func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         guard model != nil || thinking != nil || name != nil else { throw PiBridgeError.rejected("bad_request") }
@@ -751,7 +752,7 @@ public final class CodexRuntime: AgentRuntime {
             if model != nil, entry == nil { throw PiBridgeError.rejected("unknown_model") }
             var settings: CodexRPC.Object = ["threadId": session.threadID]
             if let model { settings["model"] = model.id }
-            if let thinking { settings["effort"] = CodexModel.effort(entry.map { $0.clamp(thinking) } ?? thinking) }
+            if let thinking { settings["effort"] = CodexModel.effort(thinking.clamped(to: entry?.efforts ?? [])) }
             try await call(session, "thread/settings/update", settings)
             let read = try await rpc.call("thread/read", ["threadId": session.threadID])
             if let thread = read["thread"] as? CodexRPC.Object { change(id) { self.apply(thread, to: &$0) } }
@@ -800,23 +801,27 @@ private final class CodexLink: SessionLink {
 }
 
 /// `model/list` 里的一个模型：强度是 Codex 的 `ReasoningEffort`（`none` 即关闭；`ultra` 等 CuePad 没有的档丢掉）。
-private struct CodexModel {
+struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
 
-    func option(provider: String) -> PiModelOption {
-        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: efforts)
-    }
+    /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
+    static let provider = AgentKind.codex.modelProvider!
 
-    func clamp(_ level: PiThinkingLevel) -> PiThinkingLevel {
-        let order = PiThinkingLevel.allCases
-        let wanted = order.firstIndex(of: level)!
-        return efforts.last { order.firstIndex(of: $0)! <= wanted } ?? efforts.first ?? level
+    var option: PiModelOption {
+        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts)
     }
 
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
     static func effort(_ level: PiThinkingLevel) -> String { level == .off ? "none" : level.rawValue }
+
+    /// 失败的一轮（`turn/completed` 的 `status` 为 failed）的原因：`turn.error` 的说明，带上补充细节。
+    static func failure(of turn: CodexRPC.Object?) -> String {
+        let error = turn?["error"] as? CodexRPC.Object
+        let message = [error?["message"] as? String, error?["additionalDetails"] as? String].compactMap { $0 }.filter { !$0.isEmpty }
+        return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
+    }
 
     @MainActor static func list(_ rpc: CodexRPC) async throws -> [CodexModel] {
         let listed = try await rpc.call("model/list", [:])

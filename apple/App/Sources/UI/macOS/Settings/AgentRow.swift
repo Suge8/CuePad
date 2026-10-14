@@ -136,8 +136,4 @@ extension AgentKind {
     }
 }
 
-extension AgentStatus {
-    /// CuePad 的文件在（最新或待升级）：接入了。
-    var isConnected: Bool { files == .current || files == .outdated }
-}
 #endif

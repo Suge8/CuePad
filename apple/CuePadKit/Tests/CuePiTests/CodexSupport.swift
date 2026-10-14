@@ -7,13 +7,28 @@ import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（不在就跳过真 Codex 的测试）；凭据只把 ~/.codex/auth.json 复制进临时 CODEX_HOME，用完删掉。绝不碰真实的 ~/.codex。
+/// 本机装的 Codex（不在就跳过真 Codex 的测试）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
 let realCodexAvailable = realCodexURL != nil
 let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 let realCodexSignedIn = realCodexAvailable && FileManager.default.fileExists(atPath: realCodexAuth.path)
 /// 账号里最便宜的模型
 let codexTestModel = "gpt-6-luna"
+
+/// 把 ~/.codex/auth.json 复制到 `file`，副本永远不去刷新登录：refresh_token 换成假值、last_refresh 改成现在。
+/// 原样复制的话两份都会刷新，refresh token 只能用一次，副本先刷新就把用户的登录挤掉了。access token 过期时副本会失败，不碰用户那份。
+func copyCodexAuth(to file: URL) throws {
+    var auth = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realCodexAuth)) as? [String: Any])
+    if var tokens = auth["tokens"] as? [String: Any] {
+        tokens["refresh_token"] = "cuepad-test-no-refresh"
+        auth["tokens"] = tokens
+    }
+    let format = ISO8601DateFormatter()
+    format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    auth["last_refresh"] = format.string(from: .now)
+    try JSONSerialization.data(withJSONObject: auth).write(to: file, options: .atomic)
+    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+}
 
 /// 一张 64×64 的 sRGB 纯色 PNG（1×1 的图、设备色彩空间里的纯红，模型有时说成别的颜色）。
 func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
@@ -62,7 +77,7 @@ struct CodexHome {
 
     /// 能跑模型的配置：复制凭据、最便宜的模型、不检查更新、常驻服务不自动升级、工作目录受信任。
     func signIn(approvals: String = "never") throws {
-        try FileManager.default.copyItem(at: realCodexAuth, to: home.appending(path: "auth.json"))
+        try copyCodexAuth(to: home.appending(path: "auth.json"))
         let config = """
             model = "\(codexTestModel)"
             model_reasoning_effort = "low"

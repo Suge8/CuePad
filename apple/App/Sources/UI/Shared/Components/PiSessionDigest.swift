@@ -59,17 +59,6 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 }
 
-extension PiThinkingLevel {
-    /// 夹到 `supported` 里（与 Pi 的 clampThinkingLevel 同规则）：支持就是它，否则先往高找最近的一档，没有再往低找；
-    /// 不知道支持哪些时原样。
-    nonisolated func clamped(to supported: [PiThinkingLevel]) -> PiThinkingLevel {
-        guard !supported.isEmpty, !supported.contains(self) else { return self }
-        let all = Self.allCases
-        let index = all.firstIndex(of: self) ?? 0
-        return all[index...].first(where: supported.contains) ?? all[..<index].last(where: supported.contains) ?? supported[0]
-    }
-}
-
 /// 会话页回复框上方模型与思考强度的显示值（`SessionDigest.config`）。
 nonisolated struct PiConfigShown: Equatable {
     var model: PiModelOption?

@@ -2,11 +2,11 @@
 import CueStore
 import Foundation
 
-/// Cue 的大脑：CuePad 起的一个 Agent 运行时子进程（`CueRuntime`：Pi、Codex 或 Claude Code，用户已登录哪家用哪家）。
+/// Cue 的大脑：CuePad 起的一个 Agent 运行时子进程（Pi、Codex 或 Claude Code，用户已登录哪家用哪家；OpenCode 不能当大脑）。
 /// Cue 不写代码：系统提示整份由 CuePad 给，原生工具只有读文件类，外加 CuePad 的 MCP 服务；对话由 CuePad 自己记，
 /// 运行时不落会话（三家各用自己不落盘的方式，见各实现的头注释），也不改用户的配置文件，只用参数、环境变量与临时文件。
 public struct CueBrainConfig: Sendable {
-    public var runtime: CueRuntime
+    public var runtime: AgentKind
     /// 运行时的可执行文件（`pi`、`codex`、`claude`）
     public var executable: URL
     /// 运行时自己的模型写法（Pi 是 `提供方/模型`）；nil 用运行时的默认
@@ -22,7 +22,7 @@ public struct CueBrainConfig: Sendable {
     public var environment: [String: String]
 
     public init(
-        runtime: CueRuntime, executable: URL, model: String? = nil, effort: PiThinkingLevel? = nil, systemPrompt: String,
+        runtime: AgentKind, executable: URL, model: String? = nil, effort: PiThinkingLevel? = nil, systemPrompt: String,
         workingDirectory: URL, mcp: [String], environment: [String: String] = [:]
     ) {
         self.runtime = runtime
@@ -51,17 +51,18 @@ public enum CueBrainEvent: Sendable, Equatable {
     case exited(String?)
 }
 
-public protocol CueBrain: AnyObject, Sendable {
+@MainActor
+public protocol CueBrain: AnyObject {
     /// 只有一个订阅者：CuePad 里管 Cue 的那一处
     var events: AsyncStream<CueBrainEvent> { get }
-    /// 起进程并做完握手；之后就能 `send`
+    /// 起进程并做完握手；之后就能 `send`。起不来时已起的进程停掉再抛
     func start(_ config: CueBrainConfig) async throws
     /// 说一句话：空闲时开始一轮，正忙时插进当前这一轮
     func send(_ text: String) async throws
     /// 停下当前这一轮（空闲时什么都不做），进程留着、能接着说
     func abort() async throws
-    /// 结束进程并等它（连同它起的子进程）退出；返回时 `exited(nil)` 已发出
-    func stop() async
+    /// 结束进程：返回的等待在进程（连同它起的子进程）退出后结束，不需要主线程（App 退出时在主线程之外等）；随后发 `exited(nil)`
+    func stop() -> @concurrent @Sendable () async -> Void
 }
 
 public enum CueBrainError: Error, Equatable {
@@ -69,6 +70,8 @@ public enum CueBrainError: Error, Equatable {
     case notRunning
     /// 运行时拒绝了请求（原文）
     case rejected(String)
+    /// 这家 Agent 不能当大脑
+    case unsupported(AgentKind)
 }
 
 extension CueBrainError: LocalizedError {
@@ -76,17 +79,19 @@ extension CueBrainError: LocalizedError {
         switch self {
         case .notRunning: "Cue 没在运行"
         case .rejected(let message): "Cue 的运行时拒绝了请求：\(message)"
+        case .unsupported(let kind): "\(kind.name) 不能当 Cue 的大脑"
         }
     }
 }
 
 extension CueBrainConfig {
     /// 按 `runtime` 起对应的大脑。
-    public func startBrain() async throws -> any CueBrain {
+    @MainActor public func startBrain() async throws -> any CueBrain {
         let brain: any CueBrain = switch runtime {
         case .pi: PiBrain()
         case .codex: CodexBrain()
-        case .claude: ClaudeBrain()
+        case .claudeCode: ClaudeBrain()
+        case .opencode: throw CueBrainError.unsupported(runtime)
         }
         try await brain.start(self)
         return brain

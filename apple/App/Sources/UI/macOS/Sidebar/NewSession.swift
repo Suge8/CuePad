@@ -153,9 +153,9 @@ struct NewSessionForm: View {
 }
 
 extension AppServices {
-    /// 本机能开新会话的 Agent：装着、也接入了 CuePad 的，按 `AgentKind` 的顺序。
+    /// 本机能开新会话的 Agent（`AgentStatus.canLaunch`），按 `AgentKind` 的顺序。
     var launchableAgents: [AgentKind] {
-        AgentKind.allCases.filter { kind in agents.status(kind).map { $0.isAvailable && $0.isConnected } ?? false }
+        AgentKind.allCases.filter { agents.status($0)?.canLaunch == true }
     }
 
     /// 开新会话默认用哪个：上次用的还能用就是它，否则第一个能用的；一个都没接入时是 Pi（开不出来时如实报原因）。

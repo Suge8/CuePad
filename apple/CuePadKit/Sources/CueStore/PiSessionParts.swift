@@ -47,6 +47,14 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
 /// Pi 的思考强度（Pi 的 `ThinkingLevel`，含关闭）。
 public enum PiThinkingLevel: String, Sendable, CaseIterable, Codable {
   case off, minimal, low, medium, high, xhigh, max
+
+  /// 夹到 `supported` 里：支持就是它，否则取最近的一档，一样近取低的；不知道支持哪些（空）时原样。
+  /// 各家 Agent 与 Cue 的大脑都按这一条夹，界面显示的也是它。
+  public func clamped(to supported: [PiThinkingLevel]) -> PiThinkingLevel {
+    guard !supported.isEmpty, !supported.contains(self) else { return self }
+    let rank = { (level: PiThinkingLevel) in Self.allCases.firstIndex(of: level)! }
+    return supported.min { (abs(rank($0) - rank(self)), rank($0)) < (abs(rank($1) - rank(self)), rank($1)) }!
+  }
 }
 
 /// 一个模型的标识：提供方加模型 id（同一个 id 可以出自不同提供方）。

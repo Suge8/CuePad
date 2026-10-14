@@ -2,15 +2,14 @@
 import CueStore
 import CueTestSupport
 import Foundation
-import Synchronization
 import Testing
 @testable import CuePi
 
 /// 端到端：真实的 Pi / Codex / Claude Code 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
 /// 要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude` 开启列出的运行时；模型用 `CUEPAD_BRAIN_MODEL_PI` 等换，强度用 `CUEPAD_BRAIN_EFFORT` 换（缺省 off）。
 private let environment = ProcessInfo.processInfo.environment
-private let enabledRuntimes: [CueRuntime] = (environment["CUEPAD_BRAIN_TESTS"] ?? "").split(separator: ",").compactMap { CueRuntime(rawValue: String($0)) }
-private let cheapModels: [CueRuntime: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claude: "haiku"]
+private let enabledRuntimes: [AgentKind] = (environment["CUEPAD_BRAIN_TESTS"] ?? "").split(separator: ",").compactMap { AgentKind(rawValue: String($0)) }
+private let cheapModels: [AgentKind: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -21,21 +20,22 @@ private func executable(_ name: String) -> URL? {
     return directories.map { $0.appending(path: name) }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
 }
 
+@MainActor
 @Suite(.enabled(if: !enabledRuntimes.isEmpty, "要花钱：CUEPAD_BRAIN_TESTS=pi,codex,claude 开启"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
-    final class Rig: Sendable {
-        let runtime: CueRuntime
+    @MainActor
+    final class Rig {
+        let runtime: AgentKind
         let marker = "cue-\(UUID().uuidString.prefix(8).lowercased())"
         let directory: URL
         let echoLog: URL
         let sessions: URL
         let codename = "ZEBRA-\(Int.random(in: 1000...9999))"
         let brain: any CueBrain
-        private let received = Mutex<[CueBrainEvent]>([])
-        var events: [CueBrainEvent] { received.withLock { $0 } }
+        private(set) var events: [CueBrainEvent] = []
 
-        init(_ runtime: CueRuntime) async throws {
+        init(_ runtime: AgentKind) async throws {
             self.runtime = runtime
             let root = try makeTempDirectory().resolvingSymlinksInPath()
             directory = root.appending(path: marker)
@@ -43,7 +43,7 @@ struct RealBrainTests {
             echoLog = root.appending(path: "echo.log")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let config = CueBrainConfig(
-                runtime: runtime, executable: try #require(executable(runtime.rawValue)),
+                runtime: runtime, executable: try #require(executable(runtime.command)),
                 model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
@@ -52,7 +52,7 @@ struct RealBrainTests {
                 environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path])
             brain = try await config.startBrain()
             let events = brain.events
-            Task { [weak self] in for await event in events { self?.received.withLock { $0.append(event) } } }
+            Task { [weak self] in for await event in events { self?.events.append(event) } }
         }
 
         func count(_ event: CueBrainEvent) -> Int { events.filter { $0 == event }.count }
@@ -73,14 +73,14 @@ struct RealBrainTests {
     }
 
     /// 起一个大脑跑完测试体，不论成败都等它退出。
-    private func withRig(_ runtime: CueRuntime, _ body: (Rig) async throws -> Void) async throws {
+    private func withRig(_ runtime: AgentKind, _ body: (Rig) async throws -> Void) async throws {
         let rig = try await Rig(runtime)
-        do { try await body(rig) } catch { await rig.brain.stop(); throw error }
-        await rig.brain.stop()
+        do { try await body(rig) } catch { await rig.brain.stop()(); throw error }
+        await rig.brain.stop()()
     }
 
     /// 发一句话：这一轮开始、报上下文用量（带窗口）、回答、做完；回答出自我们给的系统提示。
-    @Test(arguments: enabledRuntimes) func aMessageGetsAReplyContextAndAFinishedTurn(_ runtime: CueRuntime) async throws {
+    @Test(arguments: enabledRuntimes) func aMessageGetsAReplyContextAndAFinishedTurn(_ runtime: AgentKind) async throws {
         try await withRig(runtime) { rig in
         try await rig.brain.send("What is your codename? Reply with only the codename.")
         try await rig.finished()
@@ -95,7 +95,7 @@ struct RealBrainTests {
 
     /// 一轮进行中再说的话并进这一轮，在下一次请求模型前就起作用，而不是等这一轮做完：一串前后相依的 MCP 调用中途叫停，
     /// 它停在半路、照新的话回答，没有另起一轮。
-    @Test(arguments: enabledRuntimes) func aMessageDuringATurnJoinsThatTurn(_ runtime: CueRuntime) async throws {
+    @Test(arguments: enabledRuntimes) func aMessageDuringATurnJoinsThatTurn(_ runtime: AgentKind) async throws {
         try await withRig(runtime) { rig in
         try await rig.brain.send("""
             Call the echo tool with the text "x". Then call it again with the exact text it returned, and keep doing that, \
@@ -113,7 +113,7 @@ struct RealBrainTests {
     }
 
     /// 让它写文件：写不出来（没有写工具，或被沙箱拒绝）。
-    @Test(arguments: enabledRuntimes) func itCannotWriteFiles(_ runtime: CueRuntime) async throws {
+    @Test(arguments: enabledRuntimes) func itCannotWriteFiles(_ runtime: AgentKind) async throws {
         try await withRig(runtime) { rig in
         try await rig.brain.send("Create a file named hack.txt in the current working directory containing the text x. Use any tool you have, try hard.")
         try await rig.finished()
@@ -124,7 +124,7 @@ struct RealBrainTests {
     }
 
     /// 停下这一轮后还能接着说；结束后进程连同它起的子进程（MCP 服务等）都退出，各家的历史里没有这次对话。
-    @Test(arguments: enabledRuntimes) func abortAndStopLeaveNoProcessesOrHistory(_ runtime: CueRuntime) async throws {
+    @Test(arguments: enabledRuntimes) func abortAndStopLeaveNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         let rig = try await Rig(runtime)
         try await rig.brain.send("Write the numbers from 1 to 400, one per line, in plain text. Do not use any tool.")
         try await rig.started()
@@ -138,7 +138,7 @@ struct RealBrainTests {
 
         let tree = try processTree(containing: rig.marker)
         #expect(tree.count >= 2)  // 运行时与 MCP 替身
-        await rig.brain.stop()
+        await rig.brain.stop()()
         try await eventually("报告退出") { rig.events.last == .exited(nil) }
         let survivors = tree.filter { kill($0, 0) == 0 }
         #expect(survivors == [], "没退出的进程：\(survivors)")
@@ -148,8 +148,10 @@ struct RealBrainTests {
             #expect(((try? FileManager.default.contentsOfDirectory(atPath: rig.sessions.path)) ?? []) == [])
         case .codex:
             #expect(try codexSessions(mentioning: rig.marker) == [])
-        case .claude:
+        case .claudeCode:
             #expect(try claudeTranscripts(for: rig.marker) == [])
+        case .opencode:
+            Issue.record("OpenCode 不能当大脑")
         }
     }
 

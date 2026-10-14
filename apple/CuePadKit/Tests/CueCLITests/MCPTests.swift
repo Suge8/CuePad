@@ -247,7 +247,8 @@ import Testing
     #expect(try await store.cueMessagesWaitingForYou().isEmpty)
   }
 
-  /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（Pi 以外只写 id 时提供方补成这家；Pi 要写 provider/id）。
+  /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（写法同给大脑的清单：Claude Code、Codex 只写 id，提供方补成这家；
+  /// Pi、OpenCode 要写 provider/id）。
   /// 那台 Mac 开不了这家时，失败是 Cue 跟进的事里的一条变化，写着"开工：原因"，Cue 下次醒来看得到。
   @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
@@ -264,7 +265,7 @@ import Testing
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
 
-    for bad in [["agent": "pi", "model": "gpt-5.1"], ["agent": "cursor"]] {
+    for bad in [["agent": "pi", "model": "gpt-5.1"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
       let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString].merging(bad) { $1 }])
       #expect(refused["isError"] as? Bool == true, "\(bad)")
     }

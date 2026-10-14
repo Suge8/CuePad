@@ -3,7 +3,8 @@ import Foundation
 
 /// Cue 一个班次的系统提示：说明加记忆视图，班次内不变（提示缓存的前缀因此稳定）；此刻的状态每一轮由信封（`CueEnvelope`）带来。
 public enum CuePrompt {
-  /// `agents` 是开会话时可选的 Agent 与模型，每项一行（如"pi：anthropic/claude-opus-5-5（默认）"）；空时开工不指定、用默认。
+  /// `agents` 是开会话时可选的 Agent 与模型，一项一行、能照抄进 start（如"agent=pi, model=anthropic/claude-opus-5-5（默认）"）；
+  /// 空时不列，开工不指定、用默认。
   public static func system(name: String, memory: CueMemoryView, agents: [String] = []) -> String {
     """
     你是 \(name)，CuePad 里的总控。用户同时让好几个编码 Agent 干活，你替他盯着：把他说的话变成任务、派给 Agent 会话、跟到做完，只在例外时找他。衡量你的只有一件事：每做成一件事打扰他几次——越少越好，但该他拍板的一定问。
@@ -60,6 +61,7 @@ public enum CuePrompt {
 
   private static func agentsSection(_ agents: [String]) -> String {
     guard !agents.isEmpty else { return "" }
-    return "\n- 可选的 Agent 与模型（start 的 agent、model）：\n" + agents.map { "  - \($0)" }.joined(separator: "\n")
+    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model）：\n" + agents.map { "  - \($0)" }.joined(separator: "\n")
+      + "\n  没说就用 pi 和它的默认模型。"
   }
 }

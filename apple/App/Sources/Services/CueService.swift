@@ -9,9 +9,9 @@ import os
 /// 管理器的外部依赖；`MacDependencies.cue` 给出，测试换成替身。
 struct CueDependencies {
     /// 查本机装了且登录了的运行时（生产是 `CueRuntimes.scan`，慢）
-    var scan: @Sendable () async -> [CueRuntime]
-    /// 起大脑前找可执行文件等（生产是 `CueRuntimes.launch`，不问登录）
-    var launch: @Sendable (CueRuntime) async -> CueLaunch?
+    var scan: @Sendable () async -> [AgentKind]
+    /// 起大脑前找可执行文件与可选的 Agent 和模型（生产是 `CueRuntimes.launch`，不问登录）
+    var launch: @Sendable (AgentKind, CueStore) async -> CueLaunch?
     /// App 里的 `cuepad` 命令行：Cue 的 MCP 服务
     var helper: URL
     var notifier: any CueNotifying
@@ -37,7 +37,7 @@ final class CueService {
     /// 值班时 Cue 此刻的样子（管理器说了算）；不在这台 Mac 值班为 nil，界面按库推（`CuePresence.derive`）。
     private(set) var state: CuePresence?
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
-    private(set) var runtimes: [CueRuntime]?
+    private(set) var runtimes: [AgentKind]?
 
     @ObservationIgnored private let store: CueStore
     @ObservationIgnored private let sync: (any SyncControlling)?
@@ -47,13 +47,13 @@ final class CueService {
     @ObservationIgnored private let dependencies: CueDependencies
     @ObservationIgnored private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
     /// 上次看到的设置里的运行时：变了就重新查本机的运行时
-    @ObservationIgnored private var lastRuntime: Open<CueRuntime>?
+    @ObservationIgnored private var lastRuntime: Open<AgentKind>?
     private static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     /// 换了就要新班次的设置。
     private struct Shift: Equatable {
         var name: String
-        var runtime: Open<CueRuntime>
+        var runtime: Open<AgentKind>
         var model: String?
         var effort: Open<PiThinkingLevel>?
     }
@@ -97,7 +97,7 @@ final class CueService {
     }
 
     @discardableResult
-    func refreshRuntimes() async -> [CueRuntime] {
+    func refreshRuntimes() async -> [AgentKind] {
         let found = await dependencies.scan()
         runtimes = found
         return found
@@ -138,7 +138,7 @@ final class CueService {
         await endDuty()
         let keeper = CueKeeper(
             CueKeeper.Setup(
-                store: store, profile: profile, launch: dependencies.launch,
+                store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing)
         ) { [weak self] in self?.state = $0 }

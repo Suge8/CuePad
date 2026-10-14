@@ -33,7 +33,7 @@ public struct CueTools: Sendable {
         "description": """
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
-          start{task,agent?,model?,effort?,fresh?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（Pi 以外可只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
+          start{task,agent?,model?,effort?,fresh?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
@@ -240,12 +240,15 @@ public struct CueTools: Sendable {
   /// `agent` 的取值。
   private static let agents = AgentKind.allCases.map(\.rawValue).joined(separator: " / ")
 
-  /// 开新会话的模型：provider/id；Pi 以外的几家可以只写 id，提供方补成这一家。
+  /// 模型：provider/id；模型在这家自己命名空间里的（`AgentKind.modelProvider`：Claude Code、Codex）只写 id，提供方补成这一家，
+  /// 与给大脑的 Agent 与模型清单同一种写法，照抄就行。
   private static func model(_ ref: String, of agent: AgentKind) throws -> PiModelKey {
     let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
     if parts.count == 2 { return PiModelKey(provider: parts[0], id: parts[1]) }
-    guard agent != .pi, parts.count == 1 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开（Pi 以外可以只写 id）") }
-    return PiModelKey(provider: agent.rawValue, id: parts[0])
+    guard parts.count == 1, let provider = agent.modelProvider else {
+      throw Failure("\(agent.name) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）")
+    }
+    return PiModelKey(provider: provider, id: parts[0])
   }
 
   private func say(_ args: Args) async throws -> Result {
