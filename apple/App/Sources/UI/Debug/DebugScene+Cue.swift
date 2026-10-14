@@ -4,16 +4,15 @@ import CueText
 import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：启用在演示 Mac 上，跟进圆桌的"乱序"（步骤在 Agent 会话里跑，
-/// 部署那一步发来一张截图、在等你收下）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
+/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚由 Cue 验收做完（对话里是它的结果）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；记忆有钉住的与其他，还有一条忘掉的。
-/// 上次离开 Cue 页记在两小时前，回到页里有"你不在时"。
-/// `-CuePadCuePresence <thinking|asleep|disabled>`：你的最后一句已交给 Cue 还没回（在想）、没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。
+/// `-CuePadCuePresence <thinking|tool|asleep|disabled>`：你的最后一句已交给 Cue、它在想（thinking）或在用工具（tool：看会话进展）、
+/// 没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。演示 Mac 不值班，此刻在做什么直接写进库（`CueStore.setCueState`）。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
         guard (try? await store.cueMessages(limit: 1).isEmpty) == true else { return }
         let presence = defaults.string(forKey: "CuePadCuePresence")
-        services.settings.cueSeenAt = .now.addingTimeInterval(-7_200)
         do {
             _ = try await store.updateCueProfile { profile in
                 profile.hostID = "demo-mac"
@@ -27,7 +26,6 @@ extension DebugScene {
             if let panel {
                 // 截图是 notes 会话做的（歇着、有新回复）：侧栏与会话列表里它只说"歇着"，带 Cue 的小头像
                 try await store.linkCard(panel.id, toSession: "notes")
-                try await store.setStatus(panel.id, .done)
             }
             await seedEvidence(store)
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
@@ -47,10 +45,10 @@ extension DebugScene {
             ] { _ = try await store.addCueMessage(.note, text: note) }
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
-            _ = try await store.addCueMessage(.cue, text: "README 的截图换好了，浅色深色各一张。", task: panel?.id)
+            if let panel { _ = try await store.finishTask(panel.id, evidence: "- 浅色深色各一张，都按你给的参考图\n- README 里的旧截图都换掉了") }
             _ = try await store.addCueMessage(
                 .cue, text: """
-                    预发部署好了，截图在这里。重连用例都过了：
+                    预发上验过了，截图在这里。重连用例都过了：
 
                     ```
                     $ swift test --filter Reconnect
@@ -61,15 +59,20 @@ extension DebugScene {
                     Executed 4 tests, with 0 failures
                     ```
 
-                    看着没问题就**收下**，我把这件事关掉。
-                    """, choices: ["收下", "再改改", "先别部署"], task: order?.id)
+                    要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
+                    """, ask: .push, task: order?.id)
             for (text, pinned) in [("部署前先在测试群说一声", true), ("回复要短，先说结论", true), ("圆桌的预发环境是 staging-2", false), ("周五不发版", false)] {
                 _ = try await store.noteCueLine(text, source: pinned ? .you : .cue, pinned: pinned)
             }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
             switch presence {
-            case "thinking": try await you("顺便看看登录回调那个超时")
+            case "thinking":
+                try await you("顺便看看登录回调那个超时")
+                try await store.setCueState(.thinking)
+            case "tool":
+                try await you("顺便看看登录回调那个超时")
+                try await store.setCueState(.tool, detail: "看进展")
             case "asleep":
                 // 两分钟前说的、一直没交出去
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
@@ -115,7 +118,7 @@ extension DebugScene {
     private static func seedEvidence(_ store: CueStore) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-staging.png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreview(fileAt: file, title: "预发上的发言顺序", sessionID: "deploy")
+        _ = try? await store.addPreviews(filesAt: [file], title: "预发上的发言顺序", sessionID: "deploy")
     }
 
     /// 一张像截图的演示图：浅底上一列名单。

@@ -97,6 +97,34 @@ struct CueHostTests {
         }
     }
 
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
+    /// （别的设备上说的话经主动拉取到达这台 Mac，那一段见 CueSync 的 `CueMessageArrivalTests`。）
+    @Test func 库正忙时你的话马上送进Cue() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let busy = Task {
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            var round = 0
+            while !Task.isCancelled {
+                round += 1
+                for index in 0..<10 {
+                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        defer { busy.cancel() }
+        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
+        let start = ContinuousClock.now
+        try await rig.say("库正忙时说的")
+        try await eventually("交给 Cue", timeout: .milliseconds(500)) {
+            try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
+        }
+        print("送进 Cue：\(ContinuousClock.now - start)")
+        busy.cancel()
+        await rig.stop()
+    }
+
     /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
@@ -131,6 +159,23 @@ struct CueHostTests {
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
         try await rig.message(.note, containing: "登录页那边歇下了")
+        await rig.stop()
+    }
+
+    /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处）：建任务时是"建任务 · 任务名"，
+    /// 这一轮说完回到歇着。
+    @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {
+        let rig = try await Rig()
+        let watch = Task {
+            var seen: [CueState] = []
+            do { for try await state in rig.store.observe({ try $0.cueState() }) { if let state { seen.append(state) } } } catch {}
+            return seen
+        }
+        try await rig.say("请建个任务并开工")
+        try await rig.message(.cue, containing: "办好了")
+        try await eventually("这一轮歇下") { try await rig.store.cueState()?.state == .known(.settled) }
+        watch.cancel()
+        #expect(await watch.value.contains { $0.state == .known(.tool) && $0.detail == "建任务 · 修好登录页" })
         await rig.stop()
     }
 
@@ -169,7 +214,7 @@ struct CueHostTests {
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.message(.note, containing: "登录页那边歇下了")
         try await rig.say("请对登录页说继续")
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
         #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)
 
@@ -181,18 +226,31 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 带选项问你；你回答后 Cue 被唤醒，回答写成 Cue 说的。"等你"推了通知。
-    @Test func 等你被回答_Cue被唤醒() async throws {
+    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多了一条你的、一直记着的规矩。"等你"推了通知。
+    @Test func 等你被回答_Cue被唤醒_以后都不用问记成规矩() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
-        let question = try await rig.message(.cue, containing: "先做哪个？")
-        #expect(question.choices == ["A", "B"])
-        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["先做哪个？\nA / B"] }
+        let question = try await rig.message(.cue, containing: "要推送吗？")
+        #expect(question.choices == ["允许一次", "以后推送都不用问", "拒绝"])
+        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要推送吗？\n允许一次 / 以后推送都不用问 / 拒绝"] }
         try await rig.message(.cue, containing: "办好了")
-        try await rig.store.answerCueMessage(question.id, answer: "B")
-        try await rig.message(.cue, containing: "知道了：B")
-        try await rig.store.answerCueMessage(question.id, answer: "A")  // 改了主意
-        try await rig.message(.cue, containing: "知道了：A")
+        try await Workspace(services: rig.services).endCueQuestion(question, .answered("以后推送都不用问"))
+        try await rig.message(.cue, containing: "知道了：以后推送都不用问")
+        let rules = try await rig.store.cueMemory().lines.filter(\.pinned)
+        #expect(rules.map(\.text) == ["以后推送都不用问"] && rules.allSatisfy { $0.source == .known(.you) })
+        await rig.stop()
+    }
+
+    /// 你在"等你"上关掉 Cue 的提问：它不再等你，也不为此叫醒 Cue；Cue 下次醒来（这里是你说了一句）在变化里看到你关掉了它。
+    @Test func 关掉提问_Cue下次醒来在变化里看到() async throws {
+        let rig = try await Rig()
+        try await rig.say("请问我一个问题")
+        let question = try await rig.message(.cue, containing: "要推送吗？")
+        try await rig.message(.cue, containing: "办好了")
+        try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
+        #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
+        try await rig.say("还在吗")
+        try await rig.message(.cue, containing: "看到你关掉了：要推送吗？；还在吗")
         await rig.stop()
     }
 
@@ -218,17 +276,17 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 会话交了结果，Cue 自己醒来收尾（task done）：顶层任务不直接完成，写一条请你收下的"等你"；这就是对你说过话了，
-    /// 最后那句回复不再写成灰色的一行（几乎是同一句）。
-    @Test func 自己醒来收尾请你收下_不再写动态() async throws {
+    /// 会话交了结果，Cue 自己醒来收尾（task done）：Cue 自己验收，顶层任务直接完成，不请你收下，给你写一条结果（不是"等你"）；
+    /// 这就是对你说过话了，最后那句回复不再写成灰色的一行（几乎是同一句）。
+    @Test func 自己醒来收尾_做完告诉你结果_不再写动态() async throws {
         let rig = try await Rig()
         try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 done
-        let asked = try await rig.message(.cue, containing: "收下吗？")
-        #expect(asked.choices == CueAcceptance.choices && asked.taskID != nil)
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
-        #expect(try await rig.store.card(asked.taskID!)?.status != .done)
-        #expect(try await rig.store.cueMessagesWaitingForYou().map(\.id) == [asked.id])
-        #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
+        let report = try await rig.message(.cue, containing: "做完了")
+        #expect(report.choices == nil && report.text.contains("登录测试全过"))
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("结果已告诉用户") }
+        #expect(try await rig.store.card(try #require(report.taskID))?.status == .done)
+        #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
+        #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= report.createdAt }.isEmpty)
         await rig.stop()
     }
 
@@ -246,10 +304,75 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        try await eventually("Cue 在想") { rig.services.cue.state == .thinking }
+        try await eventually("Cue 在想") { try await rig.store.cueState()?.state.isWorking == true }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))
+        await rig.stop()
+    }
+
+    /// 一件事分三步同时做、各开着会话：Cue 的信封里三步都在（不只当前那一步）；其中一步的会话做到一半断开（进程没了，
+    /// 重启、更新、崩溃都是这样），Cue 醒来看到的是它被打断了，不是歇着。
+    @Test func 并行的三步都在信封里_做到一半断开的显示被打断() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let project = try #require(try await store.projects().first)
+        let task = try await store.createTask("三步并行", in: project.id)
+        let titles = ["会话绑定多任务", "提示音和提示窗", "账号配额"]
+        var sessions: [FakeExtension] = []
+        for (index, title) in titles.enumerated() {
+            let step = try await store.createTask(title, under: task.id)
+            let file = rig.folder.appending(path: "s\(index).jsonl")
+            try Data("{}\n".utf8).write(to: file)
+            let session = try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path)
+            try await store.linkCard(step.id, toSession: session.sessionID)
+            sessions.append(session)
+        }
+        try await eventually("三个会话都记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 3 }
+        try await store.setCueFollows(task.id, true)
+
+        let joined = try await rig.message(.note, containing: "看板：")
+        for title in titles { #expect(joined.text.contains(title), "信封里有「\(title)」") }
+
+        sessions[1].crash()
+        let after = try await rig.message(.note, containing: "被打断")
+        let lines = after.text.split(separator: "\n")
+        #expect(lines.first { $0.contains("提示音和提示窗") }?.contains("被打断") == true)
+        #expect(lines.filter { $0.contains("被打断") }.count == 1)
+        for title in [titles[0], titles[2]] { #expect(lines.first { $0.contains(title) }?.contains("工作中") == true) }
+        await rig.stop()
+    }
+
+    /// 重启 CuePad 时托管的会话还在跑（它不随 App 退出）：启动对账不把它记为被打断，Cue 看到的仍是工作中。
+    /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，原样不动：仍是工作中，说明与子代理都在，不写成歇着或被打断。
+    @Test func 重启时还活着的托管会话不算被打断() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let project = try #require(try await store.projects().first)
+        let task = try await store.createTask("三步并行 托管着", in: project.id)
+        let running = try await store.createTask("托管着在跑", under: task.id), upgraded = try await store.createTask("升级前就在跑", under: task.id)
+        let file = rig.folder.appending(path: "h0.jsonl")
+        try Data("{}\n".utf8).write(to: file)
+        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, hosted: true, sessionFile: file.path)
+        try await store.linkCard(running.id, toSession: "h0")
+        // 升级前写的记录：在跑、托管的，本机没有它的进程
+        let helper = PiSubagentState(name: "helper", role: "工程师", phase: .known(.running))
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID)
+            .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
+        try await store.linkCard(upgraded.id, toSession: "h1")
+        try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
+        try await store.setCueFollows(task.id, true)
+        _ = try await rig.message(.note, containing: "看板：")
+
+        try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
+        let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
+        #expect(states["h0"]?.state == .known(.thinking))
+        #expect(states["h1"]?.state == .known(.tool) && states["h1"]?.detail == "bash · swift test" && states["h1"]?.subagents == [helper])
+        try await rig.say("念一下看板")
+        let board = try await rig.message(.cue, containing: "看板：")
+        let lines = board.text.split(separator: "\n")
+        for step in ["托管着在跑", "升级前就在跑"] { #expect(lines.first { $0.contains(step) }?.contains("工作中") == true, "\(step)") }
+        #expect(!board.text.contains("被打断") && !board.text.contains("歇着"))
         await rig.stop()
     }
 
@@ -400,14 +523,20 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
+        if let closed = text.firstMatch(of: /\[关掉提问\] 他没选就关掉了「(.+?)」/)?.1 {
+            return say("看到你关掉了：\(closed)；" + (text.split(separator: "\n").last.map(String.init) ?? ""))
+        }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
-        if text.contains("请问我一个问题") { return call("tell", ["text": "先做哪个？", "choices": ["A", "B"]]) }
+        if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
+        if text.contains("三步并行"), let board = text.firstMatch(of: /跟进中 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
+            return say("看板：\n" + board)
+        }
         if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {
             return say("看到了：\(failed)")
         }

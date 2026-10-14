@@ -57,11 +57,7 @@ struct ToolActivityLine: View {
             } else {
                 Text("用时 \(note.took)").fixedSize()
             }
-            if chevron {
-                Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .rotationEffect(.degrees(expanded ? 180 : 0))
-                    .accessibilityHidden(true)
-            }
+            if chevron { DisclosureChevron(open: expanded) }
         }
     }
 
@@ -76,16 +72,7 @@ struct ToolActivityLine: View {
     }
 
     private func row(_ item: PiChatMessage.Tools.Item) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: Self.symbol(item.kind))
-                .font(Typography.caption2).foregroundStyle(palette.ink3)
-                .frame(width: 13).accessibilityHidden(true)
-            Text(item.target).font(Typography.codeNote).foregroundStyle(palette.ink3)
-                .lineLimit(1).truncationMode(item.kind == .command ? .tail : .middle)
-            Spacer(minLength: 4)
-            status(item)
-        }
-        .accessibilityElement(children: .combine)
+        ToolRow(symbol: Self.symbol(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle) { status(item) }
     }
 
     @ViewBuilder private func status(_ item: PiChatMessage.Tools.Item) -> some View {
@@ -96,7 +83,7 @@ struct ToolActivityLine: View {
         }
     }
 
-    private static func symbol(_ kind: PiChatMessage.Tools.Kind) -> String {
+    static func symbol(_ kind: PiChatMessage.Tools.Kind) -> String {
         switch kind {
         case .edit: "pencil"
         case .command: "terminal"
@@ -104,5 +91,39 @@ struct ToolActivityLine: View {
         case .search: "magnifyingglass"
         case .other: "wrench.and.screwdriver"
         }
+    }
+}
+
+/// 就地展开的那一行末尾的箭头（工具清单、子代理汇总、Cue 的运行情况共用）：收着朝下，展开转过来朝上。
+struct DisclosureChevron: View {
+    let open: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+            .rotationEffect(.degrees(open ? 180 : 0))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 工具清单的一行（会话里回答注脚的清单、Cue 的运行情况共用）：图标、等宽小字的目标、右侧状态。
+struct ToolRow<Status: View>: View {
+    let symbol: String
+    let target: Text
+    let truncation: Text.TruncationMode
+    @ViewBuilder let status: Status
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(Typography.caption2).foregroundStyle(palette.ink3)
+                .frame(width: 13).accessibilityHidden(true)
+            target.font(Typography.codeNote).foregroundStyle(palette.ink3)
+                .lineLimit(1).truncationMode(truncation)
+            Spacer(minLength: 4)
+            status
+        }
+        .accessibilityElement(children: .combine)
     }
 }

@@ -277,7 +277,7 @@ public enum PiExtensionBundle {
     }
 }
 
-/// 写给 Agent 的技能：很短，只说 CuePad 是什么、命令在哪，其余让 Agent 看 `--help`（命令行唯一的文档）。
+/// 写给 Agent 的技能：CuePad 是什么、怎么把文件发到手机、做 HTML 页给手机看的约定（只写在这里），其余让 Agent 看 `--help`（命令行唯一的文档）。
 /// 正文写 App 里 `cuepad` 的绝对路径，不用先把命令装进 PATH；App 被移动后路径变了，它就成了旧版，启动时重写。
 /// Codex 默认在沙箱里跑命令，资料库在沙箱外，写入要申请。
 enum AgentSkill {
@@ -289,10 +289,19 @@ enum AgentSkill {
     static func text(for kind: AgentKind, cuepad: URL) -> String {
         let command = shellQuoted(cuepad.path)
         let lines = [
-            "description: 用户提到 CuePad，要记灵感、看或改任务，或要在手机上看、验收你做的东西（HTML、截图、PDF）时用",
+            "description: 要在手机上看或验收你做的东西（网页、截图、PDF、音视频、文稿），或用户提到 CuePad、灵感、任务时用：把文件发到用户手机上的 CuePad，读写其中的灵感与任务。CuePad 是用户记灵感、管任务、指挥 Agent 的 App。",
             "---",
-            "把文件发到用户手机上的 CuePad：\(command) show <文件>",
-            "其余用法（灵感、任务、搜索）看 \(command) --help。",
+            "CuePad 的手机端看得到这个会话，你发的文件在对话里是一张卡片。",
+            "",
+            "发到手机：`\(command) show <文件…> [--title 标题]`。一次给几个文件是同一张卡，点开后左右切换。",
+            "",
+            "做 HTML 页给手机看时：",
+            "- 手机顶栏已显示标题：页面里不写标题、页眉、导语和说明页脚，内容直接开始。",
+            "- 按手机宽度排版，跟随深浅色（`prefers-color-scheme`）。",
+            "- 能用原生控件（`button`、`input`、`select`、`details`）就不自绘。",
+            "- 单个文件、不联网：样式与脚本写进同一个 HTML，图片用 `data:` 地址内联。",
+            "",
+            "其余命令（灵感、任务、搜索）：`\(command) --help`。",
         ] + (kind == .codex ? ["资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。"] : [])
         return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)，升级时整文件覆盖 -->", ""]).joined(separator: "\n")
     }

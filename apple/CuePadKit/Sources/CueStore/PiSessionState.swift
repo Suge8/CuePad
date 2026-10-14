@@ -95,6 +95,7 @@ public struct PiSessionPage: Sendable, Equatable {
 /// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
 /// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
 /// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
+/// 每个会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上（`CueStore+SessionTasks`）。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -210,8 +211,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
+  /// 会话在等回答（弹了问题）。算不算"等你"还要看是不是由 Cue 跟进：见 `asksYou(cueFollows:)`。
   public var waitsForYou: Bool { state == .known(.waitingForUser) }
+
+  /// "等你"里会话那一半的唯一规则：在等回答，且不由 Cue 跟进（Cue 跟进的由 Cue 去答或转问你）。"等你 N"、Dock 角标、
+  /// "等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  public func asksYou(cueFollows: Bool) -> Bool { waitsForYou && !cueFollows }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }

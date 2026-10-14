@@ -110,12 +110,33 @@ final class CodexBrain: CueBrain {
         switch method {
         case "turn/started":
             if let id = params["turn"]?["id"]?.string { beginTurn(id) }
+        case "item/started":
+            guard turn != nil, let item = params["item"] else { return }
+            switch item["type"]?.string {
+            case "mcpToolCall":
+                let name = brainToolName(item["tool"]?.string ?? "?")
+                session.emit(.tool(id: item["id"]?.string ?? "", name: name, arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
+            case "commandExecution":
+                let command = jsonString(["command": item["command"]?.string ?? ""])
+                session.emit(.tool(id: item["id"]?.string ?? "", name: "bash", arguments: command))
+            default: break
+            }
         case "item/completed":
+            guard let item = params["item"] else { return }
+            let id = item["id"]?.string ?? "", failed = ["failed", "declined"].contains(item["status"]?.string)
+            switch item["type"]?.string {
+            case "mcpToolCall" where turn != nil:
+                let error = item["error"]?["message"]?.string
+                let result = error ?? brainText(item["result"]?["content"])
+                session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
+            case "commandExecution" where turn != nil:
+                session.emit(.toolDone(id: id, result: item["aggregatedOutput"]?.string ?? "", failed: failed))
             // 只认给你看的回答，过程中的说明（commentary）不算
-            guard let item = params["item"], item["type"]?.string == "agentMessage", item["phase"]?.string != "commentary",
-                  let text = item["text"]?.string else { return }
-            let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !reply.isEmpty { turn?.reply = reply }
+            case "agentMessage" where item["phase"]?.string != "commentary":
+                let reply = (item["text"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !reply.isEmpty { turn?.reply = reply }
+            default: break
+            }
         case "thread/tokenUsage/updated":
             guard let usage = params["tokenUsage"], let input = usage["last"]?["inputTokens"]?.int else { return }
             // inputTokens 已含缓存命中（cachedInputTokens 是其中一部分）

@@ -143,11 +143,11 @@ import Testing
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
     let mine = recorder(host: "mac-a")
     let other = recorder(host: "mac-b")
-    try await mine.update(sessionID: "s1", state: .thinking)
+    try await mine.update(sessionID: "s1", state: .settled, process: PiProcess(pid: 1, startedAt: 1))
     try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "上次的")))
     try await other.update(sessionID: "s2", state: .thinking)
 
-    try await mine.reset()
+    try await mine.reset { _ in false }
 
     let all = try await states()
     #expect(all["s1"]?.state == .known(.ended) && all["s1"]?.lastPrompt == "上次的")
@@ -155,17 +155,18 @@ import Testing
   }
 
   /// App 重开：重新接上的会话状态种类没变就沿用重开前的起点（看过的不又成"有新回复"，排序不乱）；变了从接上时算。
-  /// 进程随上次退出的托管会话原本出错的，仍是出错、原因留着。
+  /// 进程随上次退出了的托管会话原本出错的，仍是出错、原因留着。
   @Test func reconnectedSessionsKeepTheirStartAcrossARestartAndAHostedErrorStays() async throws {
     let before = clock.now
     let first = recorder()
     try await first.update(sessionID: "same", state: .settled, times: PiTimes(stateSince: before, busySince: nil))
     try await first.update(sessionID: "changed", state: .thinking, times: PiTimes(stateSince: before, busySince: before))
-    try await first.update(sessionID: "failed", state: .error, detail: "额度用完", times: PiTimes(stateSince: before, busySince: nil), hosted: true)
+    try await first.update(sessionID: "failed", state: .error, detail: "额度用完", times: PiTimes(stateSince: before, busySince: nil), hosted: true,
+      process: PiProcess(pid: 1, startedAt: 1))
     clock.advance(.seconds(60))
 
     let restarted = recorder()
-    try await restarted.reset()
+    try await restarted.reset { _ in false }
     try await restarted.update(sessionID: "same", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
     try await restarted.update(sessionID: "changed", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
 

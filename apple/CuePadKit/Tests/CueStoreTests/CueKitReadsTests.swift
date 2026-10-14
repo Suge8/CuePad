@@ -7,21 +7,17 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// 待交给大脑的：你说了没交的话、"等你"上没交的回答；交过之后改了的回答再交一次，交过的话不再交。
+  /// 待交给大脑的：你说了没交的话、"等你"上没交的回答；交过的不再交。
   @Test func whatIsLeftToDeliverToTheBrain() async throws {
     let said = try await store.addCueMessage(.you, text: "看看发布")
-    let asked = try await store.addCueMessage(.cue, text: "合并吗？", choices: ["合并", "先别"])
+    let asked = try await store.addCueMessage(.cue, text: "合并吗？", ask: .merge)
     try await store.addCueMessage(.cue, text: "开工了")
     #expect(try await store.cueMessagesToDeliver().map(\.id) == [said.id])
 
-    try await store.answerCueMessage(asked.id, answer: "合并")
+    try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
     #expect(try await store.cueMessagesToDeliver().map(\.id) == [said.id, asked.id])
     try await store.markCueMessagesDelivered([said.id, asked.id])
     #expect(try await store.cueMessagesToDeliver().isEmpty)
-
-    try await Task.sleep(for: .milliseconds(2))
-    try await store.answerCueMessage(asked.id, answer: "先别")
-    #expect(try await store.cueMessagesToDeliver().map(\.id) == [asked.id])
   }
 
   /// 跟进的会话：Cue 跟进的任务自己的会话与它的步骤的会话；你自己做的不算。
@@ -63,7 +59,7 @@ import Testing
     for (session, name) in [("s1", "a.html"), ("s2", "b.html")] {
       let file = fixture.directory.appending(path: name)
       try Data("<p>\(name)</p>".utf8).write(to: file)
-      _ = try await store.addPreview(fileAt: file, title: name, sessionID: session)
+      _ = try await store.addPreviews(filesAt: [file], title: name, sessionID: session)
     }
     let previews = try await store.previews(ofTasks: [top.id, other.id])
     #expect(previews[top.id]?.map(\.name) == ["a.html"] && previews[other.id]?.map(\.name) == ["b.html"])

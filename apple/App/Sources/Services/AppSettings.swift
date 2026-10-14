@@ -22,9 +22,9 @@ final class AppSettings {
         static let globalShortcut = "globalShortcut"
         static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
+        static let alerts = "alerts"
         #endif
-        static let replyTexts = "replyTexts"
-        static let replyNotes = "replyNotes"
+        static let replyDrafts = "replyDrafts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let agentProject = "agentProject"
@@ -44,6 +44,8 @@ final class AppSettings {
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
+    /// 通知两种提示（等你、做完了）各自的开关与提示音（`AlertPreferences`）。
+    var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
@@ -85,8 +87,8 @@ final class AppSettings {
         sessionSeen = seen
     }
 
-    /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注另存本机偏好、跨退出保留，
-    /// 带上的卡片与图片只留在这次运行。
+    /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注存进本机偏好、跨退出保留
+    /// （`SavedDraft`，一个会话一条），带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
         let slot = slot(session)
         var draft = slot.draft
@@ -124,14 +126,12 @@ final class AppSettings {
         }
     }
 
-    /// 把还没写的草稿文字与批注写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
+    /// 把还没写的草稿写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
     func flush() {
         guard let timer = draftTimer else { return }
         timer.cancel()
         draftTimer = nil
-        defaults.set(replyDrafts.compactMapValues { $0.draft.text.allSatisfy(\.isWhitespace) ? nil : $0.draft.text }
-            .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
-        defaults.set(try? JSONEncoder().encode(replyDrafts.compactMapValues { $0.notes.isEmpty ? nil : $0.notes }), forKey: Key.replyNotes)
+        defaults.set(try? JSONEncoder().encode(replyDrafts.compactMapValues(\.saved)), forKey: Key.replyDrafts)
     }
 
     /// 会话回复框草稿的预览（会话行据此写"有草稿"，`PiRowFacts`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
@@ -144,19 +144,14 @@ final class AppSettings {
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
-        replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
-            if let id = UUID(uuidString: entry.key) { drafts[id] = ReplyDraftSlot(ComposerDraft(text: entry.value)) }
-        }
-        let notes = defaults.data(forKey: Key.replyNotes).flatMap { try? JSONDecoder().decode([UUID: [ReplyNote]].self, from: $0) } ?? [:]
-        for (id, list) in notes {
-            if replyDrafts[id] == nil { replyDrafts[id] = ReplyDraftSlot() }
-            replyDrafts[id]?.notes = list
-        }
+        replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
+            .mapValues(ReplyDraftSlot.init)
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
             unreadSince = Date(timeIntervalSince1970: seconds)
@@ -185,8 +180,24 @@ final class AppSettings {
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。批注单独一格（`draft.notes` 恒为空）：读批注的对话不随打字重算。
 @Observable
 private final class ReplyDraftSlot {
-    var draft: ComposerDraft
+    var draft = ComposerDraft()
     var notes: [ReplyNote] = []
 
-    init(_ draft: ComposerDraft = ComposerDraft()) { self.draft = draft }
+    init() {}
+
+    init(_ saved: SavedDraft) {
+        draft.text = saved.text
+        notes = saved.notes
+    }
+
+    /// 存进偏好的那份；空草稿不存。
+    var saved: SavedDraft? {
+        draft.text.allSatisfy(\.isWhitespace) && notes.isEmpty ? nil : SavedDraft(text: draft.text, notes: notes)
+    }
+}
+
+/// 偏好里一个会话的草稿：跨退出保留的只有文字与批注。
+private struct SavedDraft: Codable {
+    var text: String
+    var notes: [ReplyNote]
 }

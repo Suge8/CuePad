@@ -29,9 +29,6 @@ extension View {
     /// 主按钮与空态、引导共用控件外形和按压。
     func prominentButton() -> some View { buttonStyle(ControlButtonStyle(kind: .primary)) }
 
-    /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。
-    func ownsBottomEdge() -> some View { modifier(BottomEdgeOwner()) }
-
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
     /// （说清旁边那个点是什么意思）。nil（未分类）没有菜单。
     func projectActions(_ project: Project?, radius: CGFloat, pi: PiShown?) -> some View {
@@ -55,46 +52,6 @@ private struct ProjectContextMenu: ViewModifier {
                 }
         } else {
             content
-        }
-    }
-}
-
-private struct BottomEdgeOwner: ViewModifier {
-    @Environment(Navigation.self) private var navigation
-
-    func body(content: Content) -> some View {
-        content.background { PageAppearance { navigation.bottomPages += $0 ? 1 : -1 } }
-    }
-}
-
-/// 页面在屏幕上（含推入、返回途中）的起止，跟 UIKit 的出现回调走：手势返回在手指开始拖时就收到"将消失"，
-/// 取消返回再收到"将出现"。SwiftUI 的导航路径要到松手才变，跟它走标签栏会晚出现。
-/// 每个探针控制器各记自己在不在屏上：导航栈带着现成的路径第一次建出来时（冷启动点通知）同一页会先后建出两个控制器，
-/// 新的先出现、旧的才消失；按页面共用一个"已计入"标记时，旧的消失把新的那一份也扣掉，底部栏就盖在回复框上。
-private struct PageAppearance: UIViewControllerRepresentable {
-    let changed: (Bool) -> Void
-
-    func makeUIViewController(context: Context) -> Probe { Probe() }
-    func updateUIViewController(_ probe: Probe, context: Context) { probe.changed = changed }
-
-    final class Probe: UIViewController {
-        var changed: (Bool) -> Void = { _ in }
-        private var shown = false
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            set(true)
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            set(false)
-        }
-
-        private func set(_ visible: Bool) {
-            guard visible != shown else { return }
-            shown = visible
-            changed(visible)
         }
     }
 }

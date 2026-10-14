@@ -8,9 +8,11 @@ import SystemConfiguration
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时清掉这台 Mac 上次没来得及结束的会话记录（别的 Mac 的不动）；托管的会话留着、歇着（见 `PiStateRecorder.exited`）。
+    /// 启动时认下这台 Mac 记录的会话（从此每个都挂在任务上，见 `CueStore.ownSessions`），再对账上次留下的会话记录（别的 Mac 的不动）：
+    /// 进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。先认再对账：上次还在跑的游离会话归位成进行中，不当历史归档。
     func resetPiState() async throws {
-        try await piStateRecorder.reset()
+        try await store.ownSessions(host: hostID)
+        try await piStateRecorder.reset { $0.isRunning }
     }
 
     /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给
@@ -33,7 +35,7 @@ extension AppServices {
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
                 } else {
-                    try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke, hosted: session.hosted)
+                    try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke)
                 }
             case .quota(let report): try await store.recordQuota(report, host: hostID)
             case .incompatible: break
@@ -58,7 +60,7 @@ extension AppServices {
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
-            commands: session.commands, agent: session.agent)
+            commands: session.commands, agent: session.agent, process: PiProcess.running(pid: session.pid))
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)

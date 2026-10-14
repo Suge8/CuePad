@@ -1,0 +1,102 @@
+#if os(macOS)
+import CueAgent
+import CueStore
+import CueTestSupport
+@testable import CuePi
+import Foundation
+import Testing
+@testable import CuePad
+
+/// 每个会话都属于一个任务叶子：不经任务开的会话（终端里的 Pi、只在会话文件里找到的历史），Mac 建同名任务挂上，看板与 Cue 都从任务看到它。
+struct SessionTaskTests {
+    let rig = TestApp()
+    var services: AppServices { rig.services }
+    var store: CueStore { services.store }
+
+    @Test func 终端里开的会话_看板出现同名任务_Cue看得到_名字跟着会话_没说话就退出时一起删() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
+        try await services.resetPiState()  // Mac 启动
+        var session = CuePi.PiSession(
+            id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
+            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version,
+            state: .settled, stateSince: .now)
+        session.name = "修登录"
+        try await bridge(.appeared(session))
+
+        let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
+        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.session?.sessionID == "s1")
+        let overview = try #require(await CueTools(store: store).call("task", ["action": "peek", "all": true]))
+        #expect(!overview.isError && overview.text.contains("圆桌：\n- 修登录（\(row.task.id.shortID)） · 用户自己 · 歇着"))
+
+        session.name = "修登录跳转"
+        try await bridge(.infoChanged(session))
+        #expect(try await store.card(row.task.id)?.title == "修登录跳转")
+
+        try await bridge(.ended(session, reason: .closed(reason: "quit")))
+        #expect(try await store.card(row.task.id) == nil)
+    }
+
+    @Test func 启动时只在会话文件里的历史会话_挂上已完成并归档的同名任务_不占看板() async throws {
+        let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: "old.jsonl")
+        try """
+            {"type":"session","version":3,"id":"old","timestamp":"2026-09-01T08:00:00.000Z","cwd":"/work/x"}
+            {"type":"message","id":"u1","parentId":null,"timestamp":"2026-09-01T08:00:01.000Z","message":{"role":"user","content":"整理发布脚本","timestamp":1}}
+
+            """.write(to: file, atomically: true, encoding: .utf8)
+        await services.consumePiHistory(AsyncStream { continuation in
+            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
+            continuation.yield(.backfillFinished(sessionFiles: [file]))
+            continuation.finish()
+        }, agent: .pi)
+
+        try await services.resetPiState()  // 升级后第一次启动：已有的游离会话归位
+
+        let task = try #require(try await store.archived().first)
+        #expect(task.title == "整理发布脚本" && task.status == .done && task.piSessionID == "old")
+        #expect(try await TaskBoard.read(from: store).order.isEmpty)
+    }
+
+    @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
+        try await services.resetPiState()  // Mac 启动
+        let leaf = try await store.createTask("修登录", in: project.id)
+        let workspace = Workspace(services: services)
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+
+        // 开新会话两次：Mac 开好的会话带着认领标识记下
+        var used: Set<String> = []
+        for session in ["s1", "s2"] {
+            workspace.startFresh(leaf.id)
+            let launch = try await eventually(store, { [used] in
+                try $0.deliveryRequests().compactMap(\.launch).first { !used.contains($0.token) }
+            }) { $0 != nil }
+            let token = try #require(launch).token
+            used.insert(token)
+            try await recorder.update(sessionID: session, state: .settled, title: "修登录", launchToken: token)
+            _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == session }
+        }
+        // 改绑到另一个会话
+        try await workspace.bind("s3", to: leaf.id)
+        try await recorder.update(sessionID: "s3", state: .settled, title: "修登录")
+        try await services.resetPiState()  // 再启动一次：启动时的归位也不给换下来的会话补任务
+
+        #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).map(\.id) == [leaf.id])
+        #expect(try await store.archived().isEmpty)
+        #expect(try await store.card(leaf.id)?.piSessionID == "s3")
+        for old in ["s1", "s2"] {
+            #expect(try await store.tasks(boundTo: old).map(\.task.id) == [leaf.id])
+        }
+    }
+
+    private func bridge(_ change: PiSessionChange) async throws {
+        try await services.consumePiChanges(AsyncStream { continuation in
+            continuation.yield(change)
+            continuation.finish()
+        })
+    }
+}
+#endif

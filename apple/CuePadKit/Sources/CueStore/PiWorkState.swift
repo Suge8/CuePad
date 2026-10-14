@@ -10,6 +10,10 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 会话已结束（用户在 CuePad 里结束它、终端里的 Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
   /// 一句话没说过的会话（没留下会话文件）不进历史，CuePad 后台托管的会话闲置退出也不算结束（见 `PiStateRecorder.exited`）。
   case ended
+  /// 做到一半被打断：手上还有活（在跑一轮、等你确认、子代理还在跑）时进程没了——崩溃、被杀、App 更新时让旧扩展的托管进程退出，
+  /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`reset`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
+  /// 发话照常（Mac 在后台把它恢复起来再送达）。不进历史，留在"现在"等人接着做。
+  case interrupted
   /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
   /// 它不是"已结束"，不进历史。
   case incompatible
@@ -28,7 +32,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var isWorking: Bool {
     switch self {
     case .thinking, .outputting, .tool, .delegating, .compacting: true
-    case .waitingForUser, .settled, .error, .ended, .incompatible: false
+    case .waitingForUser, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }
 
@@ -36,7 +40,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var isTurnRunning: Bool {
     switch self {
     case .thinking, .outputting, .tool, .waitingForUser, .compacting: true
-    case .delegating, .settled, .error, .ended, .incompatible: false
+    case .delegating, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }
 
@@ -64,6 +68,21 @@ public enum PiAlert: String, Sendable, CaseIterable {
     if state == .waitingForUser, previous.state != .waitingForUser { return .waitingForUser }
     if state == .settled, previous.state.isWorking { return .settled }
     return nil
+  }
+}
+
+extension PiAlert {
+  /// 这次转换要不要提示你：做完了照常；进入等回答只在会话真在等你时（`PiSessionState.asksYou`）。
+  public func reaches(_ state: PiSessionState, cueFollows: Bool) -> Bool { self != .waitingForUser || state.asksYou(cueFollows: cueFollows) }
+}
+
+extension PiSessionListItem {
+  /// 在等你（`PiSessionState.asksYou`）。
+  public var asksYou: Bool { state.asksYou(cueFollows: cueFollows) }
+
+  /// 相对上一次读到的版本，要提示你的转换（`PiSessionState.alert(since:)` 里只留 `PiAlert.reaches` 的）。
+  public func alert(since previous: PiSessionState?) -> PiAlert? {
+    state.alert(since: previous).flatMap { $0.reaches(state, cueFollows: cueFollows) ? $0 : nil }
   }
 }
 

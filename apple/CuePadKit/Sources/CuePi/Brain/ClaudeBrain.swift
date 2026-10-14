@@ -79,12 +79,22 @@ final class ClaudeBrain: CueBrain {
             session.emit(.turnStarted)
         case "assistant":
             // 子代理的消息带 parent_tool_use_id；用量为 0 的是 Claude Code 自己合成的（报错等），不是模型请求
-            guard event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null,
-                  let usage = event["message"]?["usage"] else { return }
+            guard event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
+            for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_use" {
+                let arguments = String(decoding: (block["input"] ?? [:]).data, as: UTF8.self)
+                session.emit(.tool(id: block["id"]?.string ?? "", name: brainToolName(block["name"]?.string ?? "?"), arguments: arguments))
+            }
+            guard let usage = event["message"]?["usage"] else { return }
             let used = Int(["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { usage[$0]?.number }.reduce(0, +))
             guard used > 0, used != turn?.used else { return }
             turn?.used = used
             session.emit(.context(used: used, window: nil))
+        case "user":
+            // 工具的结果回来了
+            guard turn != nil, event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
+            for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_result" {
+                session.emit(.toolDone(id: block["tool_use_id"]?.string ?? "", result: brainText(block["content"]), failed: block["is_error"]?.bool == true))
+            }
         case "result":
             finish(event)
         default:

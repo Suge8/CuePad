@@ -18,7 +18,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         /// 书架上排前后的档：0 等你确认（Cue 跟进的等的是 Cue，不算）或出错，1 正在干活，2 其余。
         var attention: Int {
             guard let session else { return 2 }
-            return (session.waitsForYou && !task.cueFollows) || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
+            return session.asksYou(cueFollows: task.cueFollows) || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
         }
 
         /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。

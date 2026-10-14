@@ -37,7 +37,8 @@ public struct CueTools: Sendable {
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成（还有下一步时会话留着）；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
+          done{task,evidence} 收尾：你按证据验收过就完成，不请用户收下。evidence 写两三条证据要点。步骤完成后还有下一步时会话留着；
+          顶层任务（步骤要都完成）完成时把标题与 evidence 作为结果告诉用户，不用再 tell。
           """,
         "inputSchema": schema(
           [
@@ -46,16 +47,24 @@ public struct CueTools: Sendable {
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "when": ["type": "string", "enum": ["now", "after", "answer"]], "value": string,
-            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "accepted": ["type": "boolean"], "fresh": ["type": "boolean"],
+            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "fresh": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],
       [
         "name": "tell",
-        "description": "对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他选时才 tell 带 choices。带 choices 就是在等用户选；urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。",
+        "description": """
+          对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他允许时才 tell 带 ask。
+          ask 是请他允许、等他选（"等你"），只有这几类：\(CuePrompt.asks)。选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），
+          text 写清要做什么、为什么、不做会怎样；他说过这类事以后不用问的，ask 会被拒，直接做。urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。
+          withdraw 写"等你"里你问的那条的 id：你已拿了主意或情况变了，撤回它（从"等你"里消失）；可同时带 text 说为什么，或换个问法再问。
+          """,
         "inputSchema": schema(
-          ["text": string, "choices": ["type": "array", "items": string], "urgent": ["type": "boolean"], "task": string],
-          required: ["text"]),
+          [
+            "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "urgent": ["type": "boolean"], "task": string,
+            "withdraw": string,
+          ],
+          required: []),
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
       ],
       [
@@ -77,6 +86,7 @@ public struct CueTools: Sendable {
   }
 
   private static var string: [String: Any] { ["type": "string"] }
+
 
   private static func schema(_ properties: [String: Any], required: [String]) -> [String: Any] {
     ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
@@ -127,21 +137,17 @@ public struct CueTools: Sendable {
     }
   }
 
-  /// 收尾：步骤直接完成；顶层任务由用户收——写一条验收的"等你"（`askToAccept`），他用话说了收下才带 accepted 直接完成。
+  /// 收尾：Cue 验收过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence。
   private func done(_ args: Args) async throws -> Result {
     let card = try await task(args.required("task"))
     _ = try await host()  // 停用后不能再收尾
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
-    guard card.parentID == nil, args.bool("accepted") != true else {
-      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
-      return .ok(
-        "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
-        ["task": id(card.id), "requests": ends.map { id($0.id) }])
-    }
-    let (message, asked) = try await store.askToAccept(card.id, evidence: try args.required("evidence"))
+    let evidence = card.parentID == nil ? try args.required("evidence") : args.string("evidence") ?? ""
+    let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
     return .ok(
-      (asked ? "已请他收下「\(card.heading)」" : "「\(card.heading)」已在等他收下") + "，这件事由他答了再算完成。（\(message.id.shortID)）",
-      ["task": id(card.id), "message": id(message.id), "waiting": true])
+      "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束")
+        + (report.map { "；结果已告诉用户（\($0.id.shortID)）。" } ?? "。"),
+      ["task": id(card.id), "requests": ends.map { id($0.id) }, "report": report.map { id($0.id) } ?? NSNull()])
   }
 
   private func add(_ args: Args) async throws -> Result {
@@ -288,10 +294,15 @@ public struct CueTools: Sendable {
       [
         "tasks": items.map { item -> [String: Any] in
           [
-            "id": id(item.task.id), "title": item.task.heading, "leaf": id(item.leaf.id),
+            "id": id(item.task.id), "title": item.task.heading,
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-            "session": item.session?.sessionID ?? NSNull(), "state": item.session?.state.rawValue ?? NSNull(),
-            "launching": item.launching, "sending": item.sending, "since": iso(item.since),
+            "leaves": item.leaves.map { leaf -> [String: Any] in
+              [
+                "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "session": leaf.session?.sessionID ?? NSNull(),
+                "state": leaf.session?.state.rawValue ?? NSNull(),
+                "launching": leaf.launching, "sending": leaf.sending, "since": iso(leaf.since),
+              ]
+            },
           ]
         }
       ])
@@ -322,9 +333,8 @@ public struct CueTools: Sendable {
         "tasks": items.map { item -> [String: Any] in
           [
             "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(),
-            "follows": item.task.cueFollows, "leaf": id(item.leaf.id),
+            "follows": item.task.cueFollows, "leaves": item.leaves.map { id($0.leaf.id) },
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-            "state": item.session?.state.rawValue ?? NSNull(), "since": iso(item.since),
           ]
         }
       ])
@@ -396,15 +406,35 @@ public struct CueTools: Sendable {
 
   // MARK: tell
 
+  /// 先撤回（若有 withdraw），再说（若有 text）；两样都没有是参数错。
   private func tell(_ args: Args) async throws -> Result {
-    let text = try args.required("text")
     let related = try await args.string("task").asyncMap(task)
-    let message = try await store.addCueMessage(
-      .cue, text: text, choices: args.strings("choices"), urgent: args.bool("urgent") ?? false, task: related?.id)
+    let withdrawn = try await args.string("withdraw").asyncMap(withdraw)
+    guard let text = args.string("text") else {
+      guard let withdrawn else { throw Failure("要给 text（说什么）或 withdraw（撤回哪条提问）") }
+      return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。", ["withdrawn": id(withdrawn.id)])
+    }
+    let ask = try args.string("ask").map { raw -> CueAsk in
+      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
+      return ask
+    }
+    let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)
     let waits = message.choices != nil
+    var structured: [String: Any] = ["message": id(message.id), "waiting": waits]
+    if let withdrawn { structured["withdrawn"] = id(withdrawn.id) }
     return .ok(
-      (waits ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）",
-      ["message": id(message.id), "waiting": waits])
+      (withdrawn == nil ? "" : "已撤回原来那条，") + (waits ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）", structured)
+  }
+
+  /// 撤回"等你"里的一条提问（id 或前缀）。
+  private func withdraw(_ ref: String) async throws -> CueMessage {
+    let key = ref.trimmingCharacters(in: .whitespaces).lowercased()
+    let hits = try await store.cueMessagesWaitingForYou().filter { id($0.id).hasPrefix(key) }
+    guard !key.isEmpty, hits.count == 1 else {
+      throw Failure(hits.isEmpty ? "等你里没有 \(ref)：他可能已经答了或关掉了，看信封里的等你与变化" : "前缀 \(ref) 对上了 \(hits.count) 条：多写几位")
+    }
+    try await store.endCueQuestion(hits[0].id, .withdrawn)
+    return hits[0]
   }
 
   // MARK: memory

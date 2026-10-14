@@ -65,7 +65,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    let syncNowHangs = Mutex(false)
+
+    func syncNow() async throws {
+        state.withLock { $0.syncNows += 1 }
+        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+    }
     func pullChanges() async throws {}
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
@@ -107,10 +113,13 @@ final class TestApp {
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
+    /// 自动更新器；默认没有（同隔离模式）。
+    private let updater: (any AppUpdater)?
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
         syncSource = source
         self.cue = cue
+        self.updater = updater
         services = makeServices()
     }
     #else
@@ -201,7 +210,7 @@ final class TestApp {
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
-            updater: nil,
+            updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,

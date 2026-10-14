@@ -202,7 +202,7 @@ struct CueRuntimeScanTests {
             $0.enabledAt = .now
         }
         app.services.start()
-        try await eventually("开始值班") { app.services.cue.state != nil }
+        try await eventually("开始值班") { app.services.cue.onDuty }
         try await Task.sleep(for: .milliseconds(500))
         #expect(scans.withLock { $0 } == 0)
         #expect(app.services.cue.runtimes == nil)

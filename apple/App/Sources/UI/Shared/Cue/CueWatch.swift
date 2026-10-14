@@ -13,29 +13,20 @@ final class CueWatch {
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
     var showsMemory = false
-    @ObservationIgnored private var deadline: Task<Void, Never>?
     #if os(macOS)
-    /// 这台 Mac 的管理器：在这台值班时样子以它为准。
-    @ObservationIgnored private var host: CueService?
+    /// Cue 页右侧开着"运行情况"（`CueRunPanel`）。
+    var showsRun = false
     #endif
+    @ObservationIgnored private var deadline: Task<Void, Never>?
 
-    var presence: CuePresence {
-        #if os(macOS)
-        if let state = host?.state { return state }
-        #endif
-        return CuePresence.derive(digest, overdue: overdue)
-    }
+    var presence: CuePresence { CuePresence.derive(digest, overdue: overdue) }
     var name: String { digest.name }
     /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。
     var canHear: Bool { presence != .disabled }
 
     func mood(composing: Bool = false) -> CueMood {
-        CueMood.of(presence, waiting: digest.waiting, composing: composing, justDone: digest.lastSaidDone)
+        CueMood.of(presence, waiting: digest.waiting.count, composing: composing, justDone: digest.lastSaidDone)
     }
-
-    #if os(macOS)
-    func attach(_ service: CueService) { host = service }
-    #endif
 
     /// 跟随资料库直到任务取消。
     func follow(_ store: CueStore) async throws {
@@ -56,15 +47,5 @@ final class CueWatch {
             guard (try? await Task.sleep(for: .seconds(left))) != nil else { return }
             self?.overdue = true
         }
-    }
-}
-
-extension AppSettings {
-    private static let cueSeenKey = "cueSeenAt"
-
-    /// 上次离开 Cue 页的时刻（本机）："你不在时"那张卡从它之后的变化算。
-    var cueSeenAt: Date? {
-        get { defaults.object(forKey: Self.cueSeenKey) as? Date }
-        set { defaults.set(newValue, forKey: Self.cueSeenKey) }
     }
 }

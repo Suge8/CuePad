@@ -16,43 +16,45 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case handoff
 }
 
-/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有回答（`answer`、`answeredAt`）与送达（`deliveredAt`）会变。
+/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变。
+/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueStore.endCueQuestion`，结束了不再变）。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>
   /// 正文（`CueFormat`）；你的消息可带图片引用。
   public var text: String
-  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。只用来显示，不用来认是哪种问题。
+  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk` 给出、Cue 不能自拟，
+  /// 所以你选的那一项就说明了是哪类事（`CueAsk.always`）。
   public var choices: [String]?
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
+  /// 你选的那一项；没选就结束的（你关掉、Cue 撤回）为 nil。
   public var answer: String?
+  /// 提问结束的时刻。
   public var answeredAt: Date?
-  /// 你的消息（或 Cue 的"等你"上你的回答）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答改过、晚于它时要再交一次。
+  /// 你的消息（或 Cue 的提问怎么结束的）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；结束晚于它时（别的设备同步来的另一个结局）要再交一次。
+  /// Cue 撤回的结束时同时写上：它自己撤的，不用再告诉它。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
-  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
+  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
-  /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，返工时作废（变回普通的话）。
-  public var isAcceptance: Bool = false
 }
 
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify",
-    "acceptance",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, isAcceptance,
+      notify ? Self.notifyFlag : nil,
     ]
   }
   init(row: Row) {
@@ -60,8 +62,24 @@ extension CueMessage: Record {
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil, isAcceptance: row.bool(12))
+      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil)
   }
+}
+
+extension CueMessage {
+  /// 待交给 Cue 的这一条（`CueStore.cueMessagesToDeliver`）要不要叫醒它：你的话与选了的回答要；你关掉的提问不用，随下一次醒来的信封交。
+  public var wakesCue: Bool { author == .known(.you) || answer != nil }
+}
+
+/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`）。答了的记下选的那一项，
+/// 关掉与撤回都没选（`answer` 为 nil），撤回的同时记送达。
+public enum CueQuestionEnd: Equatable, Sendable {
+  /// 你选了一项
+  case answered(String)
+  /// 你关掉了：不叫醒 Cue，它下次醒来在信封的变化里看到
+  case dismissed
+  /// Cue 撤回了（拿了主意或情况变了）
+  case withdrawn
 }
 
 /// 一条记忆是谁记的。
@@ -177,12 +195,62 @@ extension CueProfile: Record {
   }
 }
 
-/// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`，消息标着 `CueMessage.isAcceptance`），
-/// 你答 `accept` 就是收下（`CueStore.answerCueMessage` 完成任务）。选项只是显示的文字。
-public enum CueAcceptance {
-  public static let accept = "收下"
-  public static let revise = "再改改"
-  public static let choices = [accept, revise]
+/// Cue 此刻在做什么（同步，只有一行，只由它值班的那台 Mac 写）：与 Agent 会话同一套工作状态（`PiWorkState`）。
+/// 一轮里是思考（`thinking`）或调用工具（`tool`，`detail` 是"动作 · 目标"，同会话的工具说明），一轮之间歇着（`settled`），
+/// 大脑起不来是出错（`error`，`detail` 是原因）。别的设备与这台 Mac 的界面都只读它（`CuePresence`）。
+public struct CueState: Equatable, Sendable {
+  public var state: Open<PiWorkState>
+  public var detail: String?
+  public var modifiedAt: Date
+
+  public init(state: Open<PiWorkState>, detail: String? = nil, modifiedAt: Date = .now) {
+    self.state = state
+    self.detail = detail
+    self.modifiedAt = modifiedAt
+  }
+
+  static let recordID = DeterministicID.uuid("cue-state")
+}
+
+extension CueState: Record {
+  static let table = Table.cueState
+  static let columns = ["id", "state", "detail", "modifiedAt"]
+  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt] }
+  init(row: Row) { self.init(state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), modifiedAt: row.date(3)) }
+}
+
+/// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
+/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事的验收，Cue 按你的规矩与最佳实践自己定，做完告诉你。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认。
+public enum CueAsk: String, CaseIterable, Sendable {
+  case push, merge, release, delete, outside, budget, rule
+
+  /// 这类事的说法（"以后推送都不用问"；改规矩那一类只给 Cue 看）。
+  public var name: String {
+    switch self {
+    case .push: "推送"
+    case .merge: "合并到共享分支"
+    case .release: "发布或部署"
+    case .delete: "删除"
+    case .outside: "动项目以外的东西"
+    case .budget: "超出预算"
+    case .rule: "违反或改动用户的规矩，或他的规矩要你先问的事"
+    }
+  }
+
+  public static let once = "允许一次"
+  public static let deny = "拒绝"
+
+  /// 选了它，这类事以后就不再问：`CueStore.endCueQuestion` 记一条你的、一直记着的规矩（`rule(project:)`）。
+  /// 规矩那一类没有这一项：一律放行等于没有规矩。
+  public var always: String? { self == .rule ? nil : "以后\(name)都不用问" }
+
+  public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
+
+  /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
+  public func rule(project: String?) -> String? {
+    always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
+  }
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
