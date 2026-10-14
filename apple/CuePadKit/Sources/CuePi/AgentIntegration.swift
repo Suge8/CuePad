@@ -126,7 +126,7 @@ public struct AgentIntegration: Sendable {
     }
 
     /// Claude Code、Codex 的钩子配置（其余没有钩子）。
-    private func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
+    func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
         switch kind {
         case .claudeCode: HookFile.claudeCode(home: home(of: kind), skillDirectory: skillDirectory(of: kind))
         case .codex: CodexHooks(home: home(of: kind), skillDirectory: skillDirectory(of: kind), locate: locate, environment: paths.environment)
@@ -135,13 +135,13 @@ public struct AgentIntegration: Sendable {
     }
 
     /// 写进钩子配置的命令：App 里 `cuepad` 的绝对路径（App 被移动后它变了，钩子就成了旧版，启动时重写）。
-    private func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
+    func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
 
     private func skillDirectory(of kind: AgentKind) -> URL {
         home(of: kind).appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory)
     }
 
-    private func skillFile(_ kind: AgentKind) -> URL { skillDirectory(of: kind).appending(path: AgentSkill.fileName) }
+    func skillFile(_ kind: AgentKind) -> URL { skillDirectory(of: kind).appending(path: AgentSkill.fileName) }
     private var extensionFile: URL { pi.extensionsDirectory.appending(path: PiExtensionBundle.fileName) }
 
     /// CuePad 写给这家的文件：技能，Pi 的扩展，钩子配置（只改其中 CuePad 的条目）。界面据此说明会写哪里。
