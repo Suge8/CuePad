@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 模型的提供方：Pi 的提供方 id → 显示名与图标，全 App 只有这一张表。图标是 LobeHub 的单色标志转成的自定义符号
 /// （资源目录的 Providers 下，由 design/tools/provider-symbols.py 生成），与文字基线对齐、随字号缩放、能嵌进 `Text` 插值，
-/// 颜色跟着前景色走（界面一律用次要墨色，不用品牌色）。没见过的提供方（用户自定义的）用通用图标、名字首字母大写。
+/// 颜色跟着前景色走（界面里是次要墨色，系统菜单里随菜单文字的颜色，不用品牌色）。没见过的提供方（用户自定义的）用通用图标、名字首字母大写。
 nonisolated struct PiProvider: Equatable, Identifiable {
     /// Pi 的提供方 id（`PiModelKey.provider`）。
     let id: String
