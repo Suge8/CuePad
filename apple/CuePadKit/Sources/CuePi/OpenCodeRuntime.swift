@@ -13,6 +13,8 @@ import OSLog
 ///   记在父会话的 `subagents` 里。一个服务承载全部会话，会话的 `pid` 是服务进程；服务端不知道终端的 tty，所以跳不到终端。
 /// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，CuePad 退出后照常在，终端里的 OpenCode 也用它）；
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
+/// - 正在说的话（`PiDraft`）：顶层会话正文的增量按回答与段（`assistantMessageID`、`ordinal`）累积，换一段就重来，说完（`session.text.ended`）
+///   换成全文；转成工具调用、下一轮开始、这一轮停下或失败、断线重连（错过的增量不补）时清掉。终端里开的会话也一样（都在同一个服务里）；子代理的不要。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
@@ -90,6 +92,9 @@ public final class OpenCodeRuntime: AgentRuntime {
         var children: [String: PiSubagentState] = [:]
         var stateSince = Date()
         var busySince: Date?
+        /// 正在说的话，与它是哪条回答的第几段
+        var draft: Draft?
+        typealias Draft = (message: String, ordinal: Int, draft: PiDraft)
 
         var directory: String { info.location.directory }
     }
@@ -213,6 +218,10 @@ public final class OpenCodeRuntime: AgentRuntime {
             tracked.detail = nil
             tracked.toolNames = [:]
             tracked.compacting = false
+            if tracked.draft != nil {
+                tracked.draft = nil
+                bridge.setDraft(bridgeID(info.id, connection), nil)
+            }
             tracked.failure = !tracked.running && info.outcome == "failed" ? Self.unknownFailure : nil
             if tracked.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
                 tracked.online = true
@@ -316,7 +325,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
         if let parent = data.parentID ?? parents[sessionID] {
-            child(sessionID, of: parent, event)
+            if event.type != "session.text.delta" { child(sessionID, of: parent, event) }
             return
         }
         switch event.type {
@@ -344,6 +353,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.started":
+            draft(sessionID, connection) { $0 = nil }
             await change(sessionID, connection, active: true) {
                 $0.running = true
                 $0.activity = .thinking
@@ -361,8 +371,21 @@ public final class OpenCodeRuntime: AgentRuntime {
             await change(sessionID, connection) { $0.activity = .thinking; $0.detail = nil }
         case "session.text.started":
             await change(sessionID, connection) { $0.activity = .outputting; $0.detail = nil }
+        case "session.text.delta":
+            guard let message = data.assistantMessageID, let delta = data.delta else { return }
+            let ordinal = data.ordinal ?? 0
+            draft(sessionID, connection) { current in
+                let same = current.flatMap { $0.message == message && $0.ordinal == ordinal ? $0.draft : nil }
+                current = (message, ordinal, PiDraft(text: (same?.text ?? "") + delta, since: same?.since ?? .now))
+            }
+        case "session.text.ended":
+            guard let message = data.assistantMessageID, let text = data.text else { return }
+            draft(sessionID, connection) { current in
+                if let drafted = current, drafted.message == message, drafted.ordinal == (data.ordinal ?? 0) { current?.draft.text = text }
+            }
         case "session.tool.input.started":
             guard let id = data.id, let name = data.name else { return }
+            draft(sessionID, connection) { $0 = nil }
             await change(sessionID, connection) { $0.toolNames[id] = name }
         case "session.tool.called":
             guard let id = data.id else { return }
@@ -387,6 +410,7 @@ public final class OpenCodeRuntime: AgentRuntime {
             }
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
+            if event.type != "session.execution.succeeded" { draft(sessionID, connection) { $0 = nil } }
             await change(sessionID, connection) {
                 $0.running = false
                 $0.toolNames = [:]
@@ -415,6 +439,16 @@ public final class OpenCodeRuntime: AgentRuntime {
         sessions[sessionID] = tracked
         if tracked.online, catalogs[tracked.directory] == nil { _ = try? await catalog(tracked.directory, connection.client) }
         publish(sessionID)
+    }
+
+    /// 改一个顶层会话正在说的话，变了就交给桥（在线才有那一格，不在线的桥上不动）。
+    private func draft(_ sessionID: String, _ connection: Connection, _ body: (inout Tracked.Draft?) -> Void) {
+        guard var tracked = sessions[sessionID] else { return }
+        let before = tracked.draft?.draft
+        body(&tracked.draft)
+        sessions[sessionID] = tracked
+        let after = tracked.draft?.draft
+        if after != before { bridge.setDraft(bridgeID(sessionID, connection), after) }
     }
 
     /// 子会话的事件落到父会话的子代理名册上。

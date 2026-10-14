@@ -79,7 +79,7 @@ struct OpenCodeClient: Sendable {
         try JSONDecoder().decode(T.self, from: await call("GET", path, directory: directory))
     }
 
-    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（逐字的增量不要），
+    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（`isRelevant`），
     /// 解码在后台。服务不续传：断开期间的事件就丢了，重连后要重拉快照。连接断开或出错时流结束（抛错）。
     func events() -> AsyncThrowingStream<OpenCodeEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<OpenCodeEvent, any Error>.makeStream()
@@ -128,13 +128,19 @@ struct OpenCodeEvent: Decodable, Sendable {
         var resources: [String]?
         var requestID: String?
         var item: Item?
+        /// 正文的增量（`session.text.delta`）与说完的全文（`session.text.ended`）属于哪条回答的第几段
+        var assistantMessageID: String?
+        var ordinal: Int?
+        var delta: String?
+        var text: String?
 
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
 
-    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。
+    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。逐字增量只要正文的
+    /// （`session.text.delta`，正在说的话），思考、工具参数与压缩的不要。
     var isRelevant: Bool {
-        guard !type.hasSuffix(".delta") else { return false }
+        if type.hasSuffix(".delta") { return type == "session.text.delta" }
         return type == "server.connected" || type == "model.updated" || type == "command.updated"
             || type.hasPrefix("session.") || type.hasPrefix("permission.") || type.hasPrefix("form.")
     }
