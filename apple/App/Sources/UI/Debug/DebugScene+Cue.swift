@@ -84,7 +84,9 @@ extension DebugScene {
     }
 
     /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、等回答的、在跑的都有；各绑一件任务。看窄处名字优先、Agent 只留标志。
+    /// 停着的、等回答的、在跑的都有；各绑一件任务。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
+    /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
+    /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
         do { try await seedCueRows(services.store) } catch { print("cuerows: \(error)") }
     }
@@ -96,17 +98,18 @@ extension DebugScene {
             profile.enabledAt = .now
         }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?)] = [
-            ("cue-pi-long", "把 README 的截图换成 Swift 版并补上深色模式的那一张", .pi, .settled, nil),
-            ("cue-codex-short", "greet", .codex, .waitingForUser, "要覆盖 tests/test_greet.py 吗？"),
-            ("cue-codex-long", "为 greet 添加 --upper 参数并验证测试输出原文", .codex, .tool, "bash · python3 -m unittest"),
-            ("cue-claude-short", "faq", .claudeCode, .settled, nil),
-            ("cue-claude-long", "评估 README 是否需要加一节 FAQ 并跑一遍测试", .claudeCode, .waitingForUser, "加在「安装」后面吗？"),
+        let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, tokens: Int, model: Bool)] = [
+            ("cue-pi-long", "把 README 的截图换成 Swift 版并补上深色模式的那一张", .pi, .settled, nil, 100_000, true),
+            ("cue-codex-short", "greet", .codex, .waitingForUser, "要覆盖 tests/test_greet.py 吗？", 150_000, false),
+            ("cue-codex-long", "为 greet 添加 --upper 参数并验证测试输出原文", .codex, .tool, "bash · python3 -m unittest", 188_000, true),
+            ("cue-claude-short", "faq", .claudeCode, .settled, nil, 150_000, false),
+            ("cue-claude-long", "评估 README 是否需要加一节 FAQ 并跑一遍测试", .claudeCode, .waitingForUser, "加在「安装」后面吗？", 100_000, false),
         ]
         for row in rows {
             _ = try await recorder.update(
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, folder: "greet",
-                context: PiContextUsage(tokens: 60_000, window: 200_000), agent: row.agent)
+                modelState: row.model ? demoModels : nil,
+                context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
             let task = try await store.createTask(row.title, in: nil)
             try await store.linkCard(task.id, toSession: row.id)
