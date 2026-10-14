@@ -13,6 +13,8 @@ private let runtimes = [AgentKind.pi, .codex, .claudeCode].filter(RealAgents.run
 private let liveRuntimes = runtimes.filter { RealAgents.mode(of: $0) == .record }
 /// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
 private let cheapModels: [AgentKind: String] = [.pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
+/// 就地换到的模型：Pi 的上下文窗口与上面的不同，换没换看得出来（Codex 里两个窗口一样，Claude Code 报的是用过的模型里最大的窗口）
+private let otherModels: [AgentKind: String] = [.pi: "openai-codex/gpt-6-luna", .codex: "gpt-6-luna", .claudeCode: "sonnet"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -144,6 +146,27 @@ struct RealBrainTests {
         #expect(rig.count(.turnStarted) == 1)
         #expect(rig.echoed.first == "x" && rig.echoed.count < 8, "\(rig.echoed)")
         #expect(rig.replies.last?.contains("STOPPED") == true, "\(rig.replies)")
+        }
+    }
+
+    /// 就地换模型与强度：同一个进程接着说，前面的话还记得，下一轮用的是新模型（Pi 的上下文窗口跟着变）；
+    /// 运行时不认的模型抛错，在用的不变。
+    @Test(arguments: runtimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
+        AgentTape.use(runtime)
+        try await withRig(runtime) { rig in
+        try await rig.brain.send("Remember the word PAPAYA. Reply with only OK.")
+        try await rig.finished()
+        let before = try #require(rig.contexts.last?.window)
+
+        let unknown = runtime == .pi ? "openai-codex/no-such-model" : "no-such-model"
+        await #expect(throws: (any Error).self) { try await rig.brain.configure(model: unknown, effort: nil) }
+        try await rig.brain.configure(model: try #require(otherModels[runtime]), effort: .low)
+        try await rig.brain.send("What word did I ask you to remember? Reply with only the word.")
+        try await rig.finished(2)
+
+        #expect(rig.failures == [], "\(rig.events)")
+        #expect(rig.replies.last?.uppercased().contains("PAPAYA") == true, "\(rig.replies)")
+        if runtime == .pi { #expect(rig.contexts.last?.window != before, "\(rig.contexts)") }
         }
     }
 

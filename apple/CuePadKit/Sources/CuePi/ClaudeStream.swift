@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 到一个 `claude` 子进程的 stream-json 连接（`--input-format/--output-format stream-json`，与 Agent SDK 同一套线协议）：
@@ -72,6 +73,19 @@ final class ClaudeStream {
                 self?.requests.removeValue(forKey: requestID)?.resume(throwing: PiBridgeError.ackTimeout)
             }
         }
+    }
+
+    /// 换模型，下一次请求模型起生效；Claude Code 先向服务端核对，不认的模型回错误。
+    func setModel(_ id: String) async throws {
+        _ = try await request(["subtype": "set_model", "model": .string(id)])
+    }
+
+    /// 换思考强度（夹到 Claude Code 的档，`ClaudeCode.effort`），返回交出去的档。
+    @discardableResult
+    func setEffort(_ level: PiThinkingLevel) async throws -> String {
+        let effort = ClaudeCode.effort(level)
+        _ = try await request(["subtype": "apply_flag_settings", "settings": ["effortLevel": .string(effort)]])
+        return effort
     }
 
     /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
