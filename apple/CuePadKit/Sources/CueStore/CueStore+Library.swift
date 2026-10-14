@@ -234,7 +234,8 @@ extension CueStore {
     } else {
       lifted = try liftChildren(of: card, at: now)
       try db.run(
-        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, formerSessionIDs = NULL, modifiedAt = ? WHERE id = ?",
+        [now, id])
     }
     // 步骤增减：上级的草稿、会话与提升上来的下级按叶子的规则放回去
     if let parent = card.parentID { try settle(around: [parent]) }
@@ -717,7 +718,7 @@ extension CueStore {
     }
     try db.run(
       """
-      UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
+      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
         startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
         completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
       WHERE id IN (\(targets.map { _ in "?" }.joined(separator: ", ")))
@@ -762,10 +763,15 @@ extension CueStore {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }
 
-  /// 绑着这个会话的叶子任务（没删除、没归档，含完成了的），先绑的在前；步骤带着上级。
+  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；步骤带着上级。
+  /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
     try select(
-      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))",
+      Card.self,
+      where: """
+        (piSessionID = ?1 OR EXISTS (SELECT 1 FROM json_each(cards.formerSessionIDs) WHERE value = ?1))
+          AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))
+        """,
       [sessionID], orderBy: "startedAt, id"
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
