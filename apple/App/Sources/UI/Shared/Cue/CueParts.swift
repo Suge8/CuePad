@@ -361,7 +361,7 @@ struct CueWaitingDock: View {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "questionmark.circle.fill").foregroundStyle(palette.attention).accessibilityHidden(true)
+                    WaitingMark()
                     FoldedMarkdown(source: message.text).id(message.id)
                     Spacer(minLength: 0)
                     Button("关掉", systemImage: "xmark") { end(message, .dismissed) }

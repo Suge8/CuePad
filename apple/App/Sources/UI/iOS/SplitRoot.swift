@@ -75,19 +75,16 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你的时带赭黄点（"等你 N"，`CueWaiting`）。
+/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你的时带点（`WaitingDot`）。
 private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let waiting = workspace.cue.digest.waiting
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
             Label(workspace.cue.name, systemImage: "bubble.left.and.text.bubble.right")
-                .overlay(alignment: .topTrailing) {
-                    if waiting > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
-                }
+                .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
         }
         .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
     }

@@ -68,20 +68,20 @@ struct BottomBar: View {
             .overlay {
                 HStack(spacing: 0) {
                     tab(.projects, title: "灵感", symbol: "lightbulb")
-                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", badge: waiting)
+                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", waiting: waiting)
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isTabBar)
             }
     }
 
-    private func tab(_ tab: Navigation.Tab, title: String, symbol: String, badge: Int = 0) -> some View {
+    private func tab(_ tab: Navigation.Tab, title: String, symbol: String, waiting: Int = 0) -> some View {
         let selected = navigation.tab == tab
         return Button { select(tab) } label: {
             VStack(spacing: 2) {
                 Image(systemName: symbol).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                     .frame(height: Self.icon + 4)
-                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) } }
+                    .overlay(alignment: .topTrailing) { WaitingBadge(count: waiting).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) }
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
             .foregroundStyle(selected ? palette.signature : palette.ink)
@@ -100,7 +100,7 @@ struct BottomBar: View {
         .accessibilityElement(children: .ignore)
         .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
         .accessibilityLabel(title)
-        .accessibilityValue(badge > 0 ? "等你 \(badge)" : "")
+        .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
@@ -126,22 +126,6 @@ private struct TabPress: ButtonStyle {
         configuration.label.onChange(of: configuration.isPressed) { _, down in
             if down { pressed = tab } else if pressed == tab { pressed = nil }
         }
-    }
-}
-
-/// 角标：注意色的小胶囊（"等你 N"，`CueWaiting`）。比标签字（10）小一档、9 起步，跟随字号放大；上限 xLarge 加在调用处——
-/// `@ScaledMetric` 读的是角标外面的字号，加在 body 里限不住它；再大就盖住图标。
-private struct Badge: View {
-    let count: Int
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 9
-    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 16
-
-    var body: some View {
-        Text("\(count)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(.white)
-            .padding(.horizontal, 4).frame(minWidth: diameter, minHeight: diameter)
-            .background(palette.attention, in: .capsule)
-            .accessibilityHidden(true)
     }
 }
 #endif
