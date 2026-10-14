@@ -69,8 +69,6 @@ public enum CueBrainError: Error, Equatable {
     case notRunning
     /// 运行时拒绝了请求（原文）
     case rejected(String)
-    /// 启动期间进程退出（原因同 `CueBrainEvent.exited`）
-    case exited(String)
 }
 
 extension CueBrainError: LocalizedError {
@@ -78,7 +76,6 @@ extension CueBrainError: LocalizedError {
         switch self {
         case .notRunning: "Cue 没在运行"
         case .rejected(let message): "Cue 的运行时拒绝了请求：\(message)"
-        case .exited(let reason): "Cue 的运行时退出了：\(reason)"
         }
     }
 }

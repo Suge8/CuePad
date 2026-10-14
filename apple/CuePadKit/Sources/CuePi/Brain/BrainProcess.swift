@@ -113,8 +113,8 @@ final class BrainProcess: Sendable {
     }
 
     /// 读完标准输出（逐行交给 `handle`）后等进程退出，返回退出原因；是 `stop()` 让它退出的返回 nil。
-    func pump(_ handle: (Data) -> Void) async -> String? {
-        for await line in lines { handle(line) }
+    func pump(_ handle: (Data) async -> Void) async -> String? {
+        for await line in lines { await handle(line) }
         _ = await exited(within: nil)
         let (status, stopping, stderr) = shared.state.withLock { ($0.status ?? -1, $0.stopping, $0.stderr) }
         if stopping { return nil }
@@ -172,54 +172,4 @@ final class BrainProcess: Sendable {
     }
 }
 
-/// 等回应的请求：按 id 认领一行回应；进程退出时全部以 `notRunning` 失败。
-struct PendingReplies {
-    private var waiting: [String: CheckedContinuation<[String: Any], any Error>] = [:]
-    private var closed = false
-
-    mutating func add(_ id: String, _ continuation: CheckedContinuation<[String: Any], any Error>) {
-        if closed { continuation.resume(throwing: CueBrainError.notRunning) } else { waiting[id] = continuation }
-    }
-
-    /// 是在等的回应就交给等它的人，返回 true。
-    mutating func resolve(_ id: String, _ reply: sending [String: Any]) -> Bool {
-        guard let continuation = waiting.removeValue(forKey: id) else { return false }
-        continuation.resume(returning: reply)
-        return true
-    }
-
-    mutating func fail(_ id: String, _ error: any Error) {
-        waiting.removeValue(forKey: id)?.resume(throwing: error)
-    }
-
-    mutating func close() {
-        closed = true
-        for continuation in waiting.values { continuation.resume(throwing: CueBrainError.notRunning) }
-        waiting = [:]
-    }
-}
-
-/// 运行时的环境：CuePad 自己的环境加上配置给的；可执行文件所在目录放到 PATH 最前（`pi` 是 node 脚本，App 的环境里没有用户 shell 的 PATH，
-/// node 多半与它装在一起）。
-func brainEnvironment(_ config: CueBrainConfig, _ extra: [String: String] = [:]) -> [String: String] {
-    var environment = ProcessInfo.processInfo.environment.merging(config.environment) { _, new in new }.merging(extra) { _, new in new }
-    let path = environment["PATH"].map { ":" + $0 } ?? ""
-    environment["PATH"] = config.executable.deletingLastPathComponent().path + path
-    return environment
-}
-
-/// 一次大脑运行的临时目录（系统提示文件等），停下时删掉。
-func makeBrainDirectory() throws -> URL {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "cue-brain-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    return directory
-}
-
-func jsonObject(_ line: Data) -> [String: Any]? {
-    try? JSONSerialization.jsonObject(with: line) as? [String: Any]
-}
-
-func jsonString(_ object: Any) -> String {
-    String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.withoutEscapingSlashes])) ?? Data(), as: UTF8.self)
-}
 #endif
