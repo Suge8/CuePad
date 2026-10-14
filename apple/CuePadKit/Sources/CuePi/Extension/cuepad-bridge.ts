@@ -15,9 +15,12 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 28;
+const EXTENSION_VERSION = 29;
 const PROTOCOL_VERSION = 14;
 
+/** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
+ * 见 `reloadWhenIdle` */
+const OWN_FILE = __filename;
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
 /** 一行命令（含 base64 图片）的上限，超过就断开该客户端 */
@@ -200,8 +203,8 @@ function reason(error: unknown): string {
 
 type State =
 	| { kind: "idle" }
+	/** 工作中、没在调工具：正在出字也算（正在说的话另走 `draft`） */
 	| { kind: "thinking" }
-	| { kind: "outputting" }
 	| { kind: "tool"; tool: string; tools: string[]; detail?: string }
 	/** 自己这轮已经歇下，还有子代理在飞：仍在处理 */
 	| { kind: "delegating" }
@@ -214,7 +217,6 @@ type State =
 /** 事件只更新变量，对外状态只由 derive() 推导。 */
 class StateTracker {
 	active = false;
-	phase: "thinking" | "outputting" = "thinking";
 	tools = new Map<string, { name: string; detail?: string }>();
 	prompt: { kind: string; title?: string } | null = null;
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
@@ -234,7 +236,7 @@ class StateTracker {
 				const latest = running[running.length - 1];
 				return { kind: "tool", tool: latest.name, tools: running.map((t) => t.name), detail: latest.detail };
 			}
-			return { kind: this.phase };
+			return { kind: "thinking" };
 		}
 		if (this.inFlight > 0) return { kind: "delegating" };
 		return this.settled ?? { kind: "idle" };
@@ -246,7 +248,7 @@ type Phase = "working" | "waiting" | "error" | "idle";
 /** 粗状态：计时只在它变化时动，思考、工具、等子代理之间切换不算。 */
 function phaseOf(state: State): Phase {
 	switch (state.kind) {
-		case "thinking": case "outputting": case "tool": case "delegating": case "compacting": return "working";
+		case "thinking": case "tool": case "delegating": case "compacting": return "working";
 		case "waiting_user": return "waiting";
 		case "error": return "error";
 		default: return "idle";
@@ -415,12 +417,10 @@ export default function (pi: ExtensionAPI) {
 
 	/**
 	 * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
-	 * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、新一轮开始时清掉（`text: null`）。
-	 * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。
+	 * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、下一条助手消息开始时清掉（`text: null`）。
+	 * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。`since` 是这条开始出字的时刻。
 	 */
-	let draft: { text: string; since: number; message: number } | null = null;
-	/** 第几条助手消息（`message_start` 加一）：草稿属于哪一条，下一条开始出字时换成它自己的起点 */
-	let assistantMessages = 0;
+	let draft: { text: string; since: number } | null = null;
 	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
 	let draftClosed = false;
 	let draftSentAt = 0;
@@ -441,7 +441,7 @@ export default function (pi: ExtensionAPI) {
 			if (now && draftTimer) sendDraft();
 			return;
 		}
-		draft = { text, since: draft?.message === assistantMessages ? draft.since : Date.now(), message: assistantMessages };
+		draft = { text, since: draft?.since ?? Date.now() };
 		if (now) return sendDraft();
 		if (draftTimer) return;
 		const wait = draftSentAt + DRAFT_INTERVAL_MS - Date.now();
@@ -468,6 +468,7 @@ export default function (pi: ExtensionAPI) {
 			busySince = resume?.phase === next ? resume.busySince : next === "working" || next === "waiting" ? busySince ?? now : null;
 			phase = next;
 			scheduleIdleExit();
+			reloadWhenIdle();
 		}
 		if (clients.size === 0) return;
 		const message = { t: "state", state: { ...state, since, busySince } };
@@ -489,6 +490,39 @@ export default function (pi: ExtensionAPI) {
 		} else {
 			idleExit ??= setTimeout(() => process.kill(process.pid, "SIGTERM"), HOSTED_IDLE_SECONDS * 1000);
 		}
+	}
+
+	/**
+	 * 自己重新载入：磁盘上的本文件换成了别的版本（CuePad 升级时写临时文件再改名，所以盯所在目录，不盯文件本身；事件驱动，不轮询），
+	 * 就等到空闲（这一轮做完、没有等你回答的弹窗、子代理都歇下、不在压缩）经内部命令调 `ctx.reload()`：它清掉 Pi 的扩展缓存、
+	 * 从磁盘载入新版本，新实例以新协议重新连上 CuePad，用户不用自己 /reload；在跑的一轮不打断，歇下时（`commit` 里进入空闲）再重载。
+	 * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。
+	 */
+	let ownWatcher: fs.FSWatcher | undefined;
+	let newerOnDisk = false;
+	let ownReload: ReturnType<typeof setImmediate> | undefined;
+	function watchOwnFile() {
+		ownWatcher = fs.watch(path.dirname(OWN_FILE), (_event, name) => {
+			if (name !== null && name !== path.basename(OWN_FILE)) return;
+			let source: string;
+			try { source = fs.readFileSync(OWN_FILE, "utf8"); }
+			catch (error) {
+				newerOnDisk = false;
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") ctx.ui.notify(`CuePad 扩展升级检查失败：${reason(error)}`, "error");
+				return;
+			}
+			const version = Number(/const EXTENSION_VERSION = (\d+);/.exec(source)?.[1]);
+			newerOnDisk = Number.isInteger(version) && version !== EXTENSION_VERSION;
+			reloadWhenIdle();
+		});
+		ownWatcher.on("error", (error) => ctx.ui.notify(`CuePad 扩展文件监听失败：${reason(error)}`, "error"));
+	}
+	function canReload() {
+		return (phase === "idle" || phase === "error") && !asking && ctx.isIdle();
+	}
+	function reloadWhenIdle() {
+		if (!newerOnDisk || ownReload || !canReload()) return;
+		ownReload = runInternal("reload-if-idle");
 	}
 
 	/** 变了的项才发，而且只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
@@ -666,7 +700,7 @@ export default function (pi: ExtensionAPI) {
 
 	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。 */
 	function runInternal(action: string) {
-		setImmediate(() => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
+		return setImmediate(() => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
 	}
 
 	pi.registerCommand(INTERNAL_COMMAND, {
@@ -679,6 +713,13 @@ export default function (pi: ExtensionAPI) {
 					break;
 				}
 				case "new": await command.newSession(); break;
+				case "reload-if-idle":
+					ownReload = undefined;
+					// 派发前又开始了工作或弹窗：留到下次歇下，不打断
+					if (!newerOnDisk || !canReload()) break;
+					newerOnDisk = false;
+					await command.reload();
+					break;
 				case "reload": await command.reload(); break;
 				case "clone": {
 					const leaf = command.sessionManager.getLeafId();
@@ -942,6 +983,7 @@ export default function (pi: ExtensionAPI) {
 		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。都不作为会话出现
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
 		scheduleIdleExit();
+		watchOwnFile();
 		tty = readTTY();
 		loadedEntries = ctx.sessionManager.getEntries().length;
 		info = {
@@ -965,6 +1007,11 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", (event) => {
 		clearTimeout(idleExit);
 		idleExit = undefined;
+		ownWatcher?.close();
+		ownWatcher = undefined;
+		clearImmediate(ownReload);
+		ownReload = undefined;
+		newerOnDisk = false;
 		clearTimeout(draftTimer);
 		draftTimer = undefined;
 		launchToken = null;
@@ -980,8 +1027,9 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_info_changed", (event) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_start", (event) => {
 		if (event.message.role !== "assistant") return;
-		assistantMessages += 1;
 		draftClosed = false;
+		// 同一次运行里的下一条（排队的话接着开的一轮）：上一条已经说完落库，不再是此刻在说的
+		clearDraft();
 	});
 	pi.on("message_end", (event) => {
 		if (event.message.role === "assistant") {
@@ -1003,32 +1051,24 @@ export default function (pi: ExtensionAPI) {
 	pi.on("input", () => {
 		if (tracker.active) return;
 		tracker.active = true;
-		tracker.phase = "thinking";
 		commit();
 	});
 	pi.on("agent_start", () => {
 		tracker.active = true;
-		tracker.phase = "thinking";
 		tracker.settled = null;
 		tracker.outcome = { kind: "done", aborted: false };
 		commit();
 		clearDraft();
 	});
-	pi.on("turn_start", () => { tracker.phase = "thinking"; commit(); });
 	pi.on("message_update", (event) => {
 		const type = event.assistantMessageEvent.type;
 		if (type === "text_delta") growDraft(event.message);
-		if (type === "toolcall_start") {
-			draftClosed = true;
-			clearDraft();
-		}
-		const next = type === "text_delta" ? "outputting" : type === "thinking_delta" ? "thinking" : tracker.phase;
-		if (next === tracker.phase) return;
-		tracker.phase = next;
-		commit();
+		if (type !== "toolcall_start") return;
+		draftClosed = true;
+		clearDraft();
 	});
 	pi.on("tool_execution_start", (event) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); });
-	pi.on("tool_execution_end", (event) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
+	pi.on("tool_execution_end", (event) => { tracker.tools.delete(event.toolCallId); commit(); });
 	pi.on("ui_prompt_start", (event) => {
 		tracker.prompt = { kind: event.kind, title: event.title };
 		const question = asking ?? { id: null, kind: event.kind, text: event.title ?? "", options: [] };

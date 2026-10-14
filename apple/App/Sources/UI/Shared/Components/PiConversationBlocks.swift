@@ -70,12 +70,12 @@ struct DraftReply<Header: View>: View {
 }
 
 
-/// 会话里正在说的话上方那一行：占着说完后注脚（`ToolActivityLine`）的位置与外形，写这一轮此刻的进展（同 `LiveStatus` 那一行）。
+/// 会话里正在说的话上方那一行：占着说完后注脚（`ToolActivityLine`）的位置与外形，写"输出中"（`PiShown.speaking`）。
 struct DraftProgress: View {
     let session: PiSessionState
 
     var body: some View {
-        let shown = PiShown(session)
+        let shown = PiShown(session).speaking(true)
         HStack(spacing: 6) {
             PiStateDot(shown: shown, size: 6)
             Text(session.detail.flatMap(PiProgress.action) ?? shown.label).lineLimit(1).shimmering()

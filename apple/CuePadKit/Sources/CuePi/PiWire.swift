@@ -23,7 +23,6 @@ enum PiWire {
             switch kind {
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
-            case "outputting": (.outputting, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
             case "delegating": (.delegating, nil)  // 子代理在 `subagents` 里
             case "compacting": (.compacting, nil)

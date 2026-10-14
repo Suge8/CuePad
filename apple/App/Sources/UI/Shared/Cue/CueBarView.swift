@@ -46,7 +46,7 @@ struct CueStatusRow<Trailing: View>: View {
 }
 
 /// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
-/// 都没有时是 `fallback`。页头与状态行同用。
+/// 都没有时是 `fallback`。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
 struct CueStatusLine: View {
     var fallback: String?
     var font = Typography.meta
@@ -56,7 +56,7 @@ struct CueStatusLine: View {
     var body: some View {
         let cue = workspace.cue
         Group {
-            if let shown = cue.presence.shown {
+            if let shown {
                 PiShownLabel(shown: shown)
             } else if let line = cue.presence.line(name: cue.name) ?? fallback {
                 Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
@@ -64,6 +64,14 @@ struct CueStatusLine: View {
         }
         .font(font)
         .transition(.opacity)
+    }
+
+    private var shown: PiShown? {
+        #if os(macOS)
+        workspace.cue.presence.shown?.speaking(workspace.services.cue.keeper?.speech.draft != nil)
+        #else
+        workspace.cue.presence.shown
+        #endif
     }
 }
 

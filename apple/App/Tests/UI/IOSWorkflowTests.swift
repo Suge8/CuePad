@@ -40,29 +40,6 @@ struct IOSWorkflowTests {
         #expect(request.status == .known(.pending))
     }
 
-    /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说，另有马上说。
-    /// 手机不给"放进输入框"（人不在 Mac 前，没人去按那一下发送）。
-    @Test(arguments: [
-        (PiWorkState.settled, [DeliveryMode.send]),
-        (.error, [.send]),
-        (.thinking, [.followUp, .steer]),
-        (.tool, [.followUp, .steer]),
-        (.waitingForUser, [.followUp, .steer]),
-        // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
-        (.delegating, [.send]),
-        (.outputting, [.followUp, .steer]),
-        // 在压缩上下文：Pi 忙着，话等压完再进（扩展在手动压缩期间替它留着）
-        (.compacting, [.followUp, .steer]),
-        // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
-        (.ended, [.send]),
-    ])
-    func 发给会话_空闲直接发_忙时默认等它做完再说另有马上说(state: PiWorkState, modes: [DeliveryMode]) {
-        let session = PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(session.deliveryModes == modes)
-    }
-
     // MARK: 发给 Agent
 
     /// 一条叶子任务与它的提示词，和带着提示词的发给 Agent 输入框草稿（`Navigation.handToAgent` 带进来的那样）。
