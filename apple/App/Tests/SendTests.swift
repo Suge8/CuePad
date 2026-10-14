@@ -119,7 +119,7 @@ struct SendTests {
         derived.refresh(digest)
 
         #expect(digest.deliveries.isEmpty)
-        let entry = try #require(derived.items.compactMap { if case .entry(let entry) = $0 { entry } else { nil } }.first)
+        let entry = try #require(derived.items.first)
         #expect(entry.fromCue)
     }
 

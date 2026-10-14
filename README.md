@@ -21,7 +21,7 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 - **Send to agents.** A task's prompts go straight to a running agent session ([Pi](https://pi.dev), Claude Code, Codex or OpenCode; images where the session accepts them). Every send is logged with a snapshot and can be resent; you can always copy the text too.
 - **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
 - **Annotate replies (Mac).** Select any part of an agent's reply and leave a note; your notes go out with your next message as short quotes, so a long reply doesn't get sent back.
-- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (CuePad's skill teaches every agent to run `cuepad show <file>`.)
+- **Demos on your phone.** An agent can send you a page, screenshot, PDF, report, recording, video or Office document: each send is one card in the session on your phone, and tapping it opens a full-screen preview where you swipe between the files. (CuePad's skill teaches every agent to run `cuepad show <files…>`.)
 - **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.
 - **Selections and variables.** Send a whole prompt or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
 - **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.

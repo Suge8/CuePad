@@ -91,7 +91,8 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
-    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 在命令行里 `cuepad show` 了三个文件（对话里按创建时间排在你的话与回答之间）。
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 在命令行里 `cuepad show` 了两次——页面一张卡，截图与评审结论一起一张卡
+    /// （对话里按创建时间排在你的话与回答之间）。
     private static func seedPreviews(_ store: CueStore, now: Date) async {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -102,8 +103,8 @@ extension DebugScene {
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for (file, title) in [(page, "登录页 v2：可点的完整页面"), (shot, "手机上的登录页截图"), (report, "评审结论")] {
-            if let added = try? await store.addPreview(fileAt: file, title: title, sessionID: "notes") { created.append(added.preview.createdAt) }
+        for (files, title) in [([page], "登录页 v2：可点的完整页面"), ([shot, report], "截图与评审结论")] {
+            if let added = try? await store.addPreviews(filesAt: files, title: title, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
@@ -113,7 +114,7 @@ extension DebugScene {
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-                at: last.addingTimeInterval(2), tools: .init(commands: 3, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png"), .init(kind: .command, target: "cuepad show review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(commands: 2, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,

@@ -21,20 +21,32 @@ nonisolated enum PreviewFile {
     }
 }
 
+/// 点开的那一个文件，和与它同一批（同一张卡）的几个：快速查看里左右切换。
+struct PreviewOpening: Equatable {
+    let preview: PiPreview
+    let batch: [PiPreview]
+
+    init(preview: PiPreview, batch: [PiPreview]? = nil) {
+        self.preview = preview
+        self.batch = batch ?? [preview]
+    }
+}
+
 extension View {
-    /// 点预览卡后的全屏预览：网页与 Markdown 在 CuePad 自己的页里（网页只读、不联网），图片、PDF、文本交给系统的快速查看（缩放、翻页、分享都有）。
-    /// 一个对话只在这里挂一次，不在每张卡上各挂一个。
-    func previewPresenter(_ opened: Binding<PiPreview?>) -> some View { modifier(PreviewPresenter(opened: opened)) }
+    /// 点预览卡后的全屏预览：网页与 Markdown 在 CuePad 自己的页里（网页只读、不联网），其余交给系统的快速查看（缩放、播放、翻页、分享都有），
+    /// 同一批里交给快速查看的几个在里面左右切换。一个对话只在这里挂一次，不在每张卡上各挂一个。
+    func previewPresenter(_ opened: Binding<PreviewOpening?>) -> some View { modifier(PreviewPresenter(opened: opened)) }
 }
 
 private struct PreviewPresenter: ViewModifier {
-    @Binding var opened: PiPreview?
+    @Binding var opened: PreviewOpening?
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var quickLook: URL?
+    @State private var quickLookBatch: [URL] = []
 
     private var own: Binding<PiPreview?> {
-        Binding { opened.flatMap { $0.kind == .web || $0.kind == .markdown ? $0 : nil } } set: { opened = $0 }
+        Binding { opened.flatMap { $0.preview.opensInQuickLook ? nil : $0.preview } } set: { if $0 == nil { opened = nil } }
     }
 
     func body(content: Content) -> some View {
@@ -46,16 +58,17 @@ private struct PreviewPresenter: ViewModifier {
                     .background(palette.desk)
                     #endif
             }
-            .quickLookPreview($quickLook)
-            .onChange(of: opened) { _, preview in
-                guard let preview, own.wrappedValue == nil else { return }
-                quickLook = file(of: preview)
+            .quickLookPreview($quickLook, in: quickLookBatch)
+            .onChange(of: opened) { _, opening in
+                guard let opening, opening.preview.opensInQuickLook else { return }
+                quickLookBatch = opening.batch.filter(\.opensInQuickLook).compactMap(file(of:))
+                quickLook = file(of: opening.preview)
                 opened = nil
             }
     }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(hash: preview.hash, name: preview.name, original: $0) }
+        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(hash: preview.hash, name: preview.systemFileName, original: $0) }
     }
 }
 

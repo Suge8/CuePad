@@ -63,7 +63,7 @@ import Testing
     for (session, name) in [("s1", "a.html"), ("s2", "b.html")] {
       let file = fixture.directory.appending(path: name)
       try Data("<p>\(name)</p>".utf8).write(to: file)
-      _ = try await store.addPreview(fileAt: file, title: name, sessionID: session)
+      _ = try await store.addPreviews(filesAt: [file], title: name, sessionID: session)
     }
     let previews = try await store.previews(ofTasks: [top.id, other.id])
     #expect(previews[top.id]?.map(\.name) == ["a.html"] && previews[other.id]?.map(\.name) == ["b.html"])
