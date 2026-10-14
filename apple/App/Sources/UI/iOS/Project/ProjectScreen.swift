@@ -226,7 +226,7 @@ private struct FocusCard: View {
                         SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
                         let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
                         TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
-                            let line = TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
+                            let line = TaskLine(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
                             if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
                         }
                     }

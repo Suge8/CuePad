@@ -1,5 +1,6 @@
 import CueStore
 import CueSync
+import CueTestSupport
 import Foundation
 import SQLite3
 import SwiftUI
@@ -8,19 +9,20 @@ import Testing
 
 /// 发消息只有一条路（`Workspace.speak`），对 Cue 说与发给会话一样：按下发送输入框立刻空、只多一条记录（一个气泡），
 /// 之后到哪了只看记录与时间（`Speech`）：发送中 → 已送达；Mac 报失败或过了时限没回执是没能送达，可重发（撤回旧的、写同样的新的，文字不丢）；
-/// 写库失败时文字回到输入框。Cue 在不在睡觉也只看你最后一句的同一条规则。
+/// 写库失败时文字回到输入框。Cue 在不在睡觉只看它那台 Mac 的在线记录，不看你的话送没送到。
 @MainActor
 struct SpeakTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     var files: AttachmentFiles { app.services.store.files }
 
-    /// Cue 住在 mac-cue（不是这台：发给它要经同步）。
+    /// Cue 住在 mac-cue（不是这台：发给它要经同步），那台醒着（它的在线记录同步来了）。
     private func enableCue() async throws {
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-cue"
             profile.enabledAt = .now
         }
+        try await store.recordMacPresence(host: "mac-cue") { true }
     }
 
     private func session(host: String = "mac-b") async throws -> PiSessionState {
@@ -32,9 +34,15 @@ struct SpeakTests {
         try await store.cueMessages().filter { $0.author == .known(.you) }
     }
 
-    private func presence(at now: Date, reachable: Bool = true) async throws -> CuePresence {
-        let moment = Speech.Moment(now: now, reachableSince: reachable ? .distantPast : nil)
-        return CuePresence.derive(try await CueDigest.read(from: store, at: moment), at: moment)
+    /// Cue 在不在由库在读的那一刻推出（`CueDigest`），界面只补本机同步通不通。
+    private func presence(reachable: Bool = true) async throws -> CuePresence {
+        CuePresence.derive(try await CueDigest.read(from: store), at: Speech.Moment(now: .now, reachableSince: reachable ? .distantPast : nil))
+    }
+
+    /// 把你这句话的写下时刻挪到 `ago` 秒前：时限从真实的此刻起算，不等一分钟。
+    private func backdate(_ message: CueMessage, by ago: TimeInterval) throws {
+        try RawDB(app.services.location.databaseURL).exec(
+            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - ago) * 1000)) WHERE id = '\(message.id.uuidString.lowercased())'")
     }
 
     /// 让这张表的写入失败（磁盘满、库坏了一类的写库失败）。
@@ -63,16 +71,17 @@ struct SpeakTests {
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
-        #expect(try await presence(at: .now, reachable: true) == .sending)  // Cue 页头与气泡同一个"在路上"
+        #expect(try await presence() == .sending)  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
         #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }
 
-    /// 回执晚到但在时限内：一直是发送中，Cue 也是话在路上、不在睡觉；过了时限同步通着是 Mac 没有回应、Cue 在睡觉；
-    /// 本机同步不通时写同步的原因、不说 Cue 在睡觉（照它写下的状态）；超时后回执来了照样是已送达，Cue 照它写下的在做事。
-    @Test func 对Cue说_回执在时限内不报睡觉_超时才报_本机同步不通时不报() async throws {
+    /// 回执晚到但在时限内：一直是发送中，Cue 是话在路上；过了时限这句没能送达（同步通着是 Mac 迟迟没收下，不通写同步的原因），
+    /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉（照它写下的状态）；
+    /// 超时后回执来了照样是已送达，Cue 照它写下的在做事。
+    @Test func 对Cue说_话超时只说这句没送到_在睡觉只看那台Mac在不在线() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "顺便看看登录回调那个超时")
@@ -83,19 +92,26 @@ struct SpeakTests {
         let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
 
         #expect(said.trip(at: .always(at: inTime)) == .sending)
-        #expect(try await presence(at: inTime, reachable: true) == .sending)
+        try backdate(message, by: Speech.receiptLimit - 1)
+        #expect(try await presence() == .sending)
 
-        #expect(said.trip(at: .always(at: late)) == .failed(.noReply))
-        #expect(try await presence(at: late, reachable: true) == .asleep)
-        #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
-
+        #expect(said.trip(at: .always(at: late)) == .failed(.timedOut))
         #expect(said.trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
-        #expect(try await presence(at: late, reachable: false) == .idle)
+        try backdate(message, by: Speech.receiptLimit + 1)
+        #expect(try await presence() == .idle)
+        #expect(try await store.cueOnDuty())
 
+        try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
+        #expect(try await presence() == .asleep)
+        #expect(try await !store.cueOnDuty())  // 值班与"在睡觉"同一条
+        #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
+        #expect(try await presence(reachable: false) == .idle)
+
+        try await store.recordMacPresence(host: "mac-cue") { true }  // 醒来续上在线，收下你的话
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(at: .always(at: late)) == .delivered)
-        #expect(try await presence(at: late, reachable: true) == .working(.thinking, detail: nil))
+        #expect(try await presence() == .working(.thinking, detail: nil))
     }
 
     @Test func 对Cue说_没能送达后重发_撤回旧的写一条同样的_交出去的撤不回也不重发() async throws {
@@ -181,7 +197,7 @@ struct SpeakTests {
         #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
     }
 
-    /// Mac 报的失败写它的原因；没被领取、过了时限是 Mac 没有回应（领取了在执行的不算超时）；重发撤回旧的、写同样内容与方式的新的。
+    /// Mac 报的失败写它的原因；没被领取、过了时限是 Mac 迟迟没收下（领取了在执行的不算超时）；重发撤回旧的、写同样内容与方式的新的。
     @Test func 发给会话_Mac报失败或超时没领取是没能送达_领取了不算超时_重发撤回旧的() async throws {
         let target = try await session()
         let workspace = Workspace(services: app.services)
@@ -201,9 +217,9 @@ struct SpeakTests {
         #expect(retried[0].content == "改完再跑一遍" && retried[0].mode == .known(.send) && retried[0].isOpen)
         #expect(box.wrappedValue.text.isEmpty)
 
-        // Mac 一直没领取：过了时限是 Mac 没有回应，本机同步不通时写同步的原因
+        // Mac 一直没领取：过了时限是 Mac 迟迟没收下，本机同步不通时写同步的原因
         let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Said.request(retried[0]).trip(at: .always(at: late)) == .failed(.noReply))
+        #expect(Said.request(retried[0]).trip(at: .always(at: late)) == .failed(.timedOut))
         #expect(Said.request(retried[0]).trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         // 领取了在执行（如正在唤醒已结束的会话）：还是发送中
         var claimed = retried[0]

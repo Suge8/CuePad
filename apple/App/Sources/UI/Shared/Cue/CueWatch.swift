@@ -3,7 +3,8 @@ import Foundation
 import Observation
 
 /// 一个窗口里 Cue 的现状（`CueDigest` 与 `CuePresence`）和 Cue 页的输入草稿：侧栏、底栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
-/// 在不在、"等你 N"随此刻（`SpeechClock`）到点与同步通断重算，不另计时。
+/// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
+/// 此刻（`SpeechClock`）给，这里不另计时。
 @Observable
 final class CueWatch {
     private(set) var digest = CueDigest.empty
@@ -29,7 +30,7 @@ final class CueWatch {
 
     /// 跟随资料库与此刻直到任务取消。
     func follow(_ services: AppServices) async throws {
-        for try await (next, moment) in services.observeTimed({ store, moment in try CueDigest.read(from: store, at: moment) }) {
+        for try await (next, moment) in services.observeTimed({ store, _ in try CueDigest.read(from: store) }) {
             if next != digest { digest = next }
             if moment != self.moment { self.moment = moment }
         }

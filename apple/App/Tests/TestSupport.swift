@@ -112,7 +112,7 @@ final class TestApp {
 
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
-    /// 说的话到点翻状态用的钟（`SpeechClock`）；默认真实时间。
+    /// App 的钟（资料库、在线记录续期、说的话到点翻状态、主动拉取）；要推进时间的测试给 `ManualTiming` 的。
     private let timing: Timing
 
     #if os(macOS)
@@ -120,7 +120,6 @@ final class TestApp {
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
-
     init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
         self.timing = timing
@@ -152,6 +151,9 @@ final class TestApp {
         return services
     }
 
+    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
+    var databaseURL: URL { isolatedLocation.databaseURL }
+
     private var isolatedLocation: LibraryLocation {
         try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
     }
@@ -180,6 +182,7 @@ final class TestApp {
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
+            timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
@@ -187,7 +190,7 @@ final class TestApp {
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(
                 scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
-        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac, timing: timing)
+        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }

@@ -29,7 +29,7 @@ nonisolated extension PiSessionState {
             .map(\.session)
     }
 
-    /// 在处理中（思考、输出、运行工具、子代理）。
+    /// 在处理中（思考、运行工具、子代理、压缩）。
     var isWorking: Bool { state.isWorking }
 
     /// 说过话：对话里有过一轮（做完的或进行中的）。终端里刚开、还没说过话的会话没有，它停在空闲不是"该你了"。
@@ -126,7 +126,7 @@ nonisolated enum PiUnread {
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
-        /// 思考、输出、运行工具、等子代理、压缩上下文。
+        /// 思考、运行工具、等子代理、压缩上下文。
         case working(PiWorkState)
         case asking
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
@@ -153,6 +153,16 @@ nonisolated struct PiShown: Hashable, Sendable {
     var clock: PiClock?
     /// 值班的 Cue 的名字（用户起的）；Cue 不在值班为 nil。
     var cue: String?
+    /// 这台 Mac 上它此刻有正在说的话（会话的 `PiBridge.Slot.draft`、Cue 的 `CueKeeper.speech`）："思考中"说成"输出中"。
+    /// 输出中只是这层显示、不是同步的状态：只有读草稿的视图置位（会话页顶栏与正在说的话上方那一行、Mac 上 Cue 的状态那一句），
+    /// 会话列表与手机不读草稿，照常是思考中。
+    var speaking = false
+
+    func speaking(_ drafting: Bool) -> PiShown {
+        var shown = self
+        shown.speaking = drafting
+        return shown
+    }
 }
 
 nonisolated extension PiShown {
@@ -191,7 +201,7 @@ nonisolated extension PiShown {
 
     private static func status(of state: Open<PiWorkState>) -> Status {
         switch state.known {
-        case .thinking, .outputting, .tool, .delegating, .compacting: .working(state.known!)
+        case .thinking, .tool, .delegating, .compacting: .working(state.known!)
         case .waitingForUser: .asking
         case .error: .failed
         case .incompatible: .restart
@@ -209,11 +219,10 @@ nonisolated extension PiShown {
         case .delivery(.inTransit(let transit)): transit.label
         case .delivery(.delivered): "已送达"
         case .delivery(.failed): "没能送达"
-        case .working(.outputting): "输出中"
         case .working(.tool): "运行工具"
         case .working(.delegating): "子代理工作中"
         case .working(.compacting): "正在压缩上下文"
-        case .working: "思考中"
+        case .working: speaking ? "输出中" : "思考中"
         case .asking: "等你确认"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"

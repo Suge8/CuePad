@@ -151,9 +151,9 @@ struct PiConversation: View {
 
 #if os(macOS)
 /// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方一行是此刻的进展），
-/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。只有这个视图读草稿：出字时对话列表不重算。
-/// 草稿落库了（`PiDraft.landed`）就不再显示：它与对话在同一次更新里拿到同一份对话，换下是同一帧里的一减一加。会话文件先到时状态还是"输出中"，
-/// 这时也不冒出进展那一行（正文已经说完）；状态先到时草稿照常留着、等文件——两种先后都只换一次。进展那一行被草稿换下时直接拿掉，不与草稿叠着淡出。
+/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
+/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
@@ -168,7 +168,7 @@ struct SessionDraft: View {
                 DraftReply(text: draft.text) { DraftProgress(session: session) }
                 PiSubagentList(agents: session.subagents)
             }
-        } else if landed, session.state == .known(.outputting) {
+        } else if landed, session.state.known?.isTurnRunning == true {
             PiSubagentList(agents: session.subagents)
         } else if session.state.isWorking || !session.subagents.isEmpty {
             LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
@@ -287,7 +287,7 @@ struct PiSessionSubtitle: View {
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`SpeechBubble`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: workspace.cueOnDuty)
+        let shown = PiShown(session, cue: workspace.cueOnDuty).speaking(drafting)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {
@@ -314,6 +314,15 @@ struct PiSessionSubtitle: View {
     }
 
     private static let font = Typography.caption
+
+    /// 这台 Mac 上它此刻有正在说的话（手机上没有）
+    private var drafting: Bool {
+        #if os(macOS)
+        workspace.services.pi.slot(sessionID: session.sessionID)?.draft != nil
+        #else
+        false
+        #endif
+    }
 }
 
 

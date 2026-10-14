@@ -18,7 +18,7 @@ final class LiveSessions {
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
-    /// Cue 在值班（`CueStore.cueOnDuty`，与会话一起按此刻读）：会话的显示与"等你"的提示据此分等你还是等 Cue。
+    /// Cue 在值班（`CueStore.cueOnDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）：会话的显示与"等你"的提示据此分等你还是等 Cue。
     private(set) var cueOnDuty = false
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
     /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
@@ -40,7 +40,7 @@ final class LiveSessions {
             Page(
                 items: try store.piSessionPage(.current).items, total: try store.piSessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cueOnDuty: try store.cueOnDuty(at: moment))
+                cueOnDuty: try store.cueOnDuty())
         }
     }
 

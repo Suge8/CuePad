@@ -17,7 +17,7 @@ extension AppServices {
             }
         }
         follow(reporting: { .syncUnavailable("Dock 角标没能读出等你的数：\($0)") }) {
-            for try await (count, _) in self.observeTimed({ try CueWaiting.count(in: $0, at: $1) }) { await alerts.showBadge(count) }
+            for try await count in self.store.observe({ try CueWaiting.count(in: $0) }) { await alerts.showBadge(count) }
         }
     }
 }

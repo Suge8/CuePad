@@ -134,16 +134,18 @@ public enum CueEnvelope {
     return parts
   }
 
+  /// 近况只写此刻还开着的：在等的提问、正在做的动作、正在处理的话。做完的回复不写：歇下时已作为变化报过（带回复），
+  /// 每次醒来再列一遍只是重复；要看就 peek 那件事。
   private static func recent(_ session: PiSessionState) -> String? {
     if session.state == .known(.waitingForUser), let question = session.question { return question.text }
     if session.state.isWorking, let detail = session.detail { return detail }
-    return session.pendingPrompt.map { "在处理：\($0)" } ?? session.lastReply
+    return session.pendingPrompt.map { "在处理：\($0)" }
   }
 
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
-    case .thinking, .outputting, .tool, .delegating, .compacting: "工作中"
+    case .thinking, .tool, .delegating, .compacting: "工作中"
     case .waitingForUser: "等回答"
     case .settled: "歇着"
     case .error: "出错"

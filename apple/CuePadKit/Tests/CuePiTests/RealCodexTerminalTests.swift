@@ -8,7 +8,7 @@ import Testing
 /// 端到端：终端里开着的 Codex（真终端界面、真常驻服务、真模型）——CuePad 经钩子看到它，经常驻服务的控制接口对它说话、停止、改设置，
 /// 权限确认按人在不在分给终端或 CuePad。
 @MainActor
-@Suite(.enabled(if: realCodexSignedIn, RealAgents.skipped(.codex, needs: "本机装有并登录了 codex")), .timeLimit(.minutes(6)))
+@Suite(RealAgents.live(.codex, "断言的是伪终端里真终端界面的输出与按键、真常驻服务"), .serialized, .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
     @Test func aTerminalSessionIsSeenAndDrivenFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request") { rig in

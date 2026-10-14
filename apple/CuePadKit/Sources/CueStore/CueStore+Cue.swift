@@ -300,16 +300,19 @@ extension CueStore {
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
   public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
 
-  /// Cue 在值班（唯一规则，各端都读这里）：启用了、大脑没停在起不来（`CueProfile.onDuty`），它住的那台 Mac 也没被说的话那条规则
-  /// 判成没回应（`Speech.cueAsleep`）。不在值班时会话等的回答回到"等你"（`PiSessionState.asksYou`）。
-  public func cueOnDuty(at moment: Speech.Moment) throws -> Bool {
-    guard let profile = try cueProfile(), profile.onDuty(try cueState()) else { return false }
-    return !Speech.cueAsleep(said: try cueUnheardSince(), host: profile.hostID, at: moment)
+  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置、状态与它那台 Mac 的在线记录）。那台 Mac 的期限到了由订阅重读（`macOnline`），
+  /// "等你 N"、会话显示与手机推送标志到点自己变。
+  public func cueOnDuty() throws -> Bool {
+    guard let profile = try cueProfile(), let host = profile.activeHost else { return false }
+    return profile.onDuty(try cueState(), hostOnline: try macOnline(host))
   }
 
-  /// 你对 Cue 说了、还没交给它的话里最早那句的时刻（它住的那台 Mac 有没有回应只看它）；没有为 nil。
-  public func cueUnheardSince() throws -> Date? {
-    try db.first("SELECT MIN(createdAt) FROM cueMessages WHERE author = 'you' AND \(Self.toDeliver)") { $0.dateOrNil(0) } ?? nil
+  /// 你最近一句对 Cue 说的话：写下的时刻与交给它的时刻；你还没说过为 nil。到哪了由读的人按此刻推（`Speech.trip`，
+  /// App 的"此刻"只在 `SpeechClock` 一处到点刷新），这里只给记录。不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
+  public func cueLastYou() throws -> (said: Date, delivered: Date?)? {
+    try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
+      (said: $0.date(0), delivered: $0.dateOrNil(1))
+    }
   }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。

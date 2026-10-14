@@ -1,11 +1,12 @@
 import Foundation
 
 /// 说出去的一句话此刻到哪了：对 Cue 说的（你的 `CueMessage`）与发给会话的（说话、作答、命令等投送请求）同一条规则，
-/// 只由记录与此刻（`Moment`）推出、不另存。App 的气泡、会话行与计数、提示词、Cue 在不在、Cue 在不在值班，与 Cue 的说话工具都读这里。
+/// 只由记录与此刻（`Moment`）推出、不另存。App 的气泡、会话行与计数、各种进度、Cue 页的话在路上，与 Cue 的说话工具都读这里。
 /// - 发送中：记录在，接收方还没回执。
 /// - 已送达：请求成功；Cue 消息有 `deliveredAt`。
 /// - 没能送达：请求失败（原因读 `DeliveryRequest.failure`）；本机同步此刻不通（话出不去、回执也回不来）；或同步通着满 `receiptLimit`
-///   还没回执——Cue 消息没有 `deliveredAt`，请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话），这是 Mac 没有回应。
+///   还没回执——Cue 消息没有 `deliveredAt`，请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话）。超时只说这句话自己
+///   没送到，不推断那台 Mac 在不在（Mac 在不在线、Cue 在不在睡觉与值班只看那台的在线记录 `MacPresence`）。
 ///   时限从写下与本机同步恢复两者里晚的那一刻算：断网时写下的话，恢复后有一整个时限等它传出去、回执回来。
 ///   记录仍在，回执来了就是已送达；同步恢复了就回到发送中。到点翻状态由 App 一处刷新"此刻"（`SpeechClock`），不轮询。
 public enum Speech {
@@ -22,15 +23,15 @@ public enum Speech {
     case reported(String)
     /// 本机同步此刻不通：话还没离开这台设备，或回执回不来
     case offline
-    /// 同步通着过了时限没回执：接收方那台 Mac 没有回应（睡着了、没开 CuePad）
-    case noReply
+    /// 同步通着过了时限没回执：接收方那台 Mac 一直没收下这句
+    case timedOut
   }
 
   // MARK: 时限（说的话的各段等待只在这里定）
 
   /// 等回执的时限（会话与 Cue 共用）。一条话正常的往返：发出方立即上传（多数 1 秒内，偶尔约 10 秒，issue #2）、Mac 主动拉取
   /// （每 2 秒）、交给 Agent 或 Cue（0.2 秒内）、回执立即上传、发出方主动拉取（每 2 秒），几秒就回来；实测最慢的约 21 秒（2026-10-14
-  /// 手机对 Cue 说的话，当时值班的 Mac 没在拉）。取 60 秒：是最慢实测的约三倍，活着的 Mac 慢一点也不会被说成没有回应；
+  /// 手机对 Cue 说的话，当时值班的 Mac 没在拉）。取 60 秒：是最慢实测的约三倍，活着的 Mac 慢一点也不会被报成没能送达；
   /// 又只是手机为在等的话主动拉取时长（`SyncPoller.Cadence.phone`，2 分钟）的一半——报了没能送达之后手机还接着拉一分钟，
   /// 晚到的回执照样拉回来、气泡自己变成已送达。与连接测试的等待（`AppServices.ping`）一样长。
   public static let receiptLimit: TimeInterval = 60
@@ -106,16 +107,8 @@ public enum Speech {
     }
   }
 
-  /// Cue 住的那台 Mac 没有回应：你最近对它说的、还没交给它的一句（`said`）按这条规则没能送达，原因是同步通着却没回执（`Failure.noReply`）。
-  /// Cue 在不在（`CuePresence`）与值班（`CueStore.cueOnDuty`）都只读这一处。局限：只有你对 Cue 说了话才知道——
-  /// 你一直没对它说，它那台 Mac 关了也无从得知；不为此加心跳轮询（Mac 主动拉取已是每 2 秒一次，再加一份心跳记录只为这一点不值）。
-  public static func cueAsleep(said: Date?, host: String?, at moment: Moment) -> Bool {
-    guard let said else { return false }
-    return trip(said: said, delivered: nil, host: host, at: moment) == .failed(.noReply)
-  }
-
   private static func waiting(since said: Date, host: String?, at moment: Moment) -> Trip {
     guard let since = moment.reachableSince(host) else { return .failed(.offline) }
-    return moment.now >= max(said, since).addingTimeInterval(receiptLimit) ? .failed(.noReply) : .sending
+    return moment.now >= max(said, since).addingTimeInterval(receiptLimit) ? .failed(.timedOut) : .sending
   }
 }

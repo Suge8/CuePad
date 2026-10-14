@@ -296,9 +296,10 @@ extension DebugScene {
         } catch {}
     }
 
-    /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话。
+    /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
     private static func toDemoCue(_ store: isolated CueStore) throws -> [UUID] {
-        try store.cueProfile()?.hostID == "demo-mac" ? store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id) : []
+        guard try store.cueProfile()?.hostID == "demo-mac", try store.macOnline("demo-mac") else { return [] }
+        return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
     }
 
     /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——

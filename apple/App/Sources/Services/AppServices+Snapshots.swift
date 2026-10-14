@@ -64,6 +64,6 @@ extension CueStore {
                     UnfiledSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count),
-            cue: CueSnapshot(digest: try CueDigest.read(from: self, at: moment), at: moment))
+            cue: CueSnapshot(digest: try CueDigest.read(from: self), at: moment))
     }
 }

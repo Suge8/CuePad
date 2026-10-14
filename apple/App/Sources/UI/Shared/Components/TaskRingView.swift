@@ -24,7 +24,8 @@ struct TaskRingView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: size))
                     .foregroundStyle(TaskGlyph.tint(.done, palette))
-                    .transition(.opacity)
+                    // 对勾从圈里长出来：缩放加淡入，无回弹（ui.md 动效）；减弱动态效果时只淡入
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
             } else {
                 open
             }
@@ -39,7 +40,7 @@ struct TaskRingView: View {
             }
         }
         .animation(Motion.spatial(Motion.quick, reduceMotion: reduceMotion), value: ring)
-        .animation(Motion.quick, value: done)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: finished)
         .accessibilityHidden(true)
     }
 

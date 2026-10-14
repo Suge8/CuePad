@@ -66,14 +66,14 @@ struct ReceiptTests {
 
     private func cuePresence() async throws -> CuePresence {
         let moment = services.speech
-        return CuePresence.derive(try await CueDigest.read(from: store, at: moment), at: moment)
+        return CuePresence.derive(try await CueDigest.read(from: store), at: moment)
     }
 
     private func row(_ id: String) -> PiShown? {
         services.liveSessions.live.first { $0.state.sessionID == id }.map(Workspace(services: services).shown)
     }
 
-    /// 断网时说的话（对 Cue、对会话）当场是"同步不通"，等多久都不说 Mac 没有回应、不说 Cue 在睡觉。断网超过手机主动拉取的
+    /// 断网时说的话（对 Cue、对会话）当场是"同步不通"，等多久都不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
     /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；时限从恢复那一刻重新算。
     /// 传出与回执经同步走完一圈见 CueSync 的 DeviceFlowTests（断网写下的请求恢复后到 Mac、结果回到手机）。
     @Test(.timeLimit(.minutes(1)))
@@ -111,6 +111,7 @@ struct ReceiptTests {
         #expect(try await trips() == [.failed(.offline), .failed(.offline)])
         let (pulls, syncs) = (app.sync.pulls, app.sync.syncNows)
 
+        try await store.recordMacPresence(host: "mac-cue") { true }  // Cue 那台醒着（断网时没同步来，本机不说它在睡觉）
         try await setSync(.idle)
         try await eventually("恢复") { services.speech.reachableSince != nil }
         try await eventually("恢复时立即同步") { app.sync.syncNows > syncs }
@@ -136,30 +137,9 @@ struct ReceiptTests {
         #expect(services.liveSessions.undelivered["atlas"] == nil)
 
         try await advance(Speech.receiptLimit + 1)
-        try await eventually("会话行翻成没能送达") { row("atlas")?.undelivered == .noReply }
+        try await eventually("会话行翻成没能送达") { row("atlas")?.undelivered == .timedOut }
         #expect(services.liveSessions.undelivered["atlas"] == 1)
         #expect(row("atlas")?.label == "没能送达")
-        #expect(Said.request(try #require(try await store.deliveryRequest(request.id))).trip(at: services.speech) == .failed(.noReply))
-    }
-
-    /// Cue 值班时会话等的回答归 Cue；你对 Cue 说的话过了时限没回执，它那台 Mac 没有回应：那个回答回到等你，"等你"也算上它。
-    @Test(.timeLimit(.minutes(1)))
-    func Cue的Mac没有回应_它在等的回答回到等你() async throws {
-        try await enableCue()
-        try await store.setCueState(.settled)
-        _ = try await session("s1", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "继续？"))
-        try await start()
-
-        try await eventually("等 Cue 回答") { row("s1")?.label == "等 Cue 回答" }
-        #expect(services.liveSessions.cueOnDuty)
-        #expect(try await CueWaiting.count(in: store, at: services.speech) == 0)
-
-        _ = try await sayToCue(Workspace(services: services), "在吗")
-        try await advance(Speech.receiptLimit + 1)
-
-        try await eventually("回到等你确认") { row("s1")?.label == "等你确认" }
-        #expect(!services.liveSessions.cueOnDuty)
-        #expect(try await CueWaiting.count(in: store, at: services.speech) == 1)
-        #expect(try await cuePresence() == .asleep)
+        #expect(Said.request(try #require(try await store.deliveryRequest(request.id))).trip(at: services.speech) == .failed(.timedOut))
     }
 }

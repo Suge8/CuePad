@@ -7,9 +7,11 @@ import SwiftUI
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 验收过、做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的。
-/// `-CuePadCuePresence <thinking|tool|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
-/// 两分钟前说的一直没交出去（过了等回执的时限 `Speech.receiptLimit`，气泡没能送达可重发；Mac 没有回应时它在睡觉，隔离库在 Mac 上没有同步，写本机同步不通、不说在睡觉）、
-/// 没启用。演示 Mac 不值班，此刻在做什么直接写进库（`CueStore.setCueState`）。
+/// `-CuePadCuePresence <thinking|tool|sending|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
+/// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
+/// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
+/// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
+/// 没启用。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
@@ -20,6 +22,7 @@ extension DebugScene {
                 profile.hostID = "demo-mac"
                 profile.enabledAt = presence == "disabled" ? nil : .now
             }
+            if presence != "asleep" { try await store.recordMacPresence(host: "demo-mac") { true } }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
             let order = task("发言轮次"), importing = task("导入旧数据"), panel = task("README 截图")
@@ -74,6 +77,8 @@ extension DebugScene {
             case "tool":
                 try await you("顺便看看登录回调那个超时")
                 try await store.setCueState(.tool, detail: "看进展")
+            case "sending":
+                _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
             case "asleep":
                 // 两分钟前说的、一直没交出去（之前的对话挪得更早）
                 try await store.seedAgeCueMessages(by: 480)
@@ -100,6 +105,7 @@ extension DebugScene {
             profile.hostID = "demo-mac"
             profile.enabledAt = .now
         }
+        try await store.recordMacPresence(host: "demo-mac") { true }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let asked = "加在「安装」后面吗？"
         let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, question: PiQuestion?, tokens: Int, model: Bool)] = [
