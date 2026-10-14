@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pi 会话的工作状态。
+/// Pi 会话的工作状态。工作中不调工具就是思考：正在出字（"输出中"）不是同步的状态，只是 Mac 上读正在说的话（`PiDraft`）的显示。
 public enum PiWorkState: String, Sendable, CaseIterable {
-  case thinking, outputting, tool, waitingForUser, settled, error
+  case thinking, tool, waitingForUser, settled, error
   /// 自己这轮已经歇下，还有子代理在跑：仍在处理
   case delegating
   /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档，Pi 忙着，停止会中止压缩
@@ -10,23 +10,27 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 会话已结束（用户在 CuePad 里结束它、终端里的 Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
   /// 一句话没说过的会话（没留下会话文件）不进历史，CuePad 后台托管的会话闲置退出也不算结束（见 `PiStateRecorder.exited`）。
   case ended
-  /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
-  /// 它不是"已结束"，不进历史。
+  /// 做到一半被打断：手上还有活（在跑一轮、等你确认、子代理还在跑）时进程没了——崩溃、被杀、App 更新时让旧扩展的托管进程退出，
+  /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`reset`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
+  /// 发话照常（Mac 在后台把它恢复起来再送达）。不进历史，留在"现在"等人接着做。
+  case interrupted
+  /// 会话还在跑，但它加载的扩展协议与 Mac 上的 CuePad 不同：读不到状态、发不了命令。
+  /// 会自己重载的扩展等空闲后换上新版本；更早的要在终端里 /reload。不是"已结束"，不进历史。
   case incompatible
 
-  /// 正在干活（思考、输出、调用工具）。
+  /// 正在干活（思考、调用工具、等子代理、压缩）。
   public var isWorking: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .delegating, .compacting: true
-    case .waitingForUser, .settled, .error, .ended, .incompatible: false
+    case .thinking, .tool, .delegating, .compacting: true
+    case .waitingForUser, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }
 
   /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能马上说或等它做完再说。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
   public var isTurnRunning: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .waitingForUser, .compacting: true
-    case .delegating, .settled, .error, .ended, .incompatible: false
+    case .thinking, .tool, .waitingForUser, .compacting: true
+    case .delegating, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }
 
@@ -57,7 +61,17 @@ public enum PiAlert: String, Sendable, CaseIterable {
   }
 }
 
+extension PiAlert {
+  /// 这次转换要不要提示你：做完了照常；进入等回答只在会话真在等你时（`PiSessionState.asksYou`）。
+  public func reaches(_ state: PiSessionState, cueOnDuty: Bool) -> Bool { self != .waitingForUser || state.asksYou(cueOnDuty: cueOnDuty) }
+}
+
 extension PiSessionState {
+  /// 相对上一次读到的版本，要提示你的转换（`alert(since:)` 里只留 `PiAlert.reaches` 的）。
+  public func alert(since previous: PiSessionState?, cueOnDuty: Bool) -> PiAlert? {
+    alert(since: previous).flatMap { $0.reaches(self, cueOnDuty: cueOnDuty) ? $0 : nil }
+  }
+
   /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换。手机读到的是同步合并后的版本：状态没变而
   /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。
   public func alert(since previous: PiSessionState?) -> PiAlert? {

@@ -17,25 +17,26 @@ DEFINE SCHEMA
     );
 
     RECORD TYPE cards (
-        "___recordID"  REFERENCE QUERYABLE,
-        projectID      STRING,
-        body           ENCRYPTED STRING,
-        isPinned       INT64,
-        variableValues ENCRYPTED STRING,
-        sortKey        STRING,
-        deletedAt      INT64,
-        createdAt      INT64,
-        modifiedAt     INT64,
-        conflictOf     STRING,
-        parentID       STRING,
-        todoAt         INT64,
-        startedAt      INT64,
-        completedAt    INT64,
-        piSessionID    STRING,
-        archivedAt     INT64,
-        cueFollows     INT64,
-        isFavorite     INT64,
-        numbering      STRING,
+        "___recordID"    REFERENCE QUERYABLE,
+        projectID        STRING,
+        body             ENCRYPTED STRING,
+        isPinned         INT64,
+        variableValues   ENCRYPTED STRING,
+        sortKey          STRING,
+        deletedAt        INT64,
+        createdAt        INT64,
+        modifiedAt       INT64,
+        conflictOf       STRING,
+        parentID         STRING,
+        todoAt           INT64,
+        startedAt        INT64,
+        completedAt      INT64,
+        piSessionID      STRING,
+        archivedAt       INT64,
+        formerSessionIDs STRING,
+        cueFollows       INT64,
+        isFavorite       INT64,
+        numbering        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -188,6 +189,7 @@ DEFINE SCHEMA
         createdAt     INT64,
         modifiedAt    INT64,
         notify        STRING QUERYABLE,
+        acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -213,6 +215,15 @@ DEFINE SCHEMA
         model         ENCRYPTED STRING,
         effort        ENCRYPTED STRING,
         enabledAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueState (
+        "___recordID" REFERENCE QUERYABLE,
+        state         STRING,
+        detail        ENCRYPTED STRING,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

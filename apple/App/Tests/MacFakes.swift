@@ -35,6 +35,8 @@ final class RecordingHost: AgentRuntime {
     private(set) var extensions: [String: FakeExtension] = [:]
     /// 给了就让开新会话以这个原因失败（Pi 起来就退出时的样子）
     var openFailure: String?
+    /// 接下来的几次唤醒依次以这些错误失败（如会话起得慢、没及时连上桥），用完照常唤醒
+    var resumeFailures: [any Error] = []
     private let bridge: PiBridge
     private let socketDirectory: URL
 
@@ -48,6 +50,7 @@ final class RecordingHost: AgentRuntime {
 
     func resume(_ session: IndexedSession) async throws -> String {
         calls.append(.resume(sessionFile: session.path, directory: session.cwd))
+        if !resumeFailures.isEmpty { throw resumeFailures.removeFirst() }
         return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 
@@ -65,12 +68,16 @@ final class RecordingHost: AgentRuntime {
         return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮。
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的；
+    /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false, protocolVersion: Int = PiWire.protocolVersion
+        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false, protocolVersion: Int = PiWire.protocolVersion,
+        sessionFile: String? = nil
     ) async throws -> FakeExtension {
-        let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: .init(protocolVersion: protocolVersion, cwd: cwd))
+        var options = FakeExtension.Options(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted)
+        if let sessionFile { options.sessionFile = sessionFile }
+        let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
         try bridge.start()
         try ext.start()
@@ -100,12 +107,26 @@ extension FakeExtension {
     }
 }
 
+/// 更新器替身：检查一次就"找到更新、你点了安装"，像 Sparkle 一样在退出重启前问一次要不要推迟（`AppUpdater.postponeRelaunch`），
+/// 不推迟或推迟后被放行时记下装了几次。
+final class FakeUpdater: AppUpdater {
+    var automaticallyChecksForUpdates = true
+    var canCheckForUpdates = true
+    var postponeRelaunch: ((@escaping () -> Void) -> Bool)?
+    private(set) var installs = 0
+
+    func checkForUpdates() {
+        let install: () -> Void = { [weak self] in self?.installs += 1 }
+        if postponeRelaunch?(install) != true { install() }
+    }
+}
+
 /// 记下 Cue 推了哪些通知，不碰系统通知中心。
 final class RecordingCueNotifier: CueNotifying {
-    var onOpen: (() -> Void)?
+    var isWatchingCue = false
     private(set) var posted: [(title: String, body: String)] = []
 
-    func post(id: UUID, title: String, body: String) async { posted.append((title, body)) }
+    func post(title: String, body: String) async { posted.append((title, body)) }
 }
 
 final class RecordingWindow: ShellWindow {

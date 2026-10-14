@@ -234,7 +234,8 @@ extension CueStore {
     } else {
       lifted = try liftChildren(of: card, at: now)
       try db.run(
-        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, formerSessionIDs = NULL, modifiedAt = ? WHERE id = ?",
+        [now, id])
     }
     // 步骤增减：上级的草稿、会话与提升上来的下级按叶子的规则放回去
     if let parent = card.parentID { try settle(around: [parent]) }
@@ -347,12 +348,22 @@ extension CueStore {
   /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级；`.fold`、`.handed` 还原灵感与草稿原文）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
-    try write { try relocate(id, to: slot, after: previous, handing: true) }
+    try write { try handing(id, to: slot) ?? relocate(id, to: slot, after: previous) }
   }
 
-  /// `handing`：挂到绑了会话的叶子上时交给回复框（`.handed`）；撤销与下级归位是把卡放回原处，不交。
+  /// 灵感挂到绑了会话的叶子上：不留提示词，交出去（`.handed`）；别的情况为 nil，照常挪。
+  /// 只在用户挪卡时判断：撤销与下级归位（`relocate`）是把卡放回原处，不交。
+  private func handing(_ id: UUID, to slot: CardSlot) throws -> CardChange? {
+    guard case .under(let parent) = slot, let card = try link(of: id), !card.isTask, !card.isPinned,
+      try link(of: parent)?.isTask == true
+    else { return nil }
+    let home = try promptHome(parent)
+    guard card.parent != home, let session = try session(of: home) else { return nil }
+    return .handed(idea: try handOut(id), session: session)
+  }
+
   @discardableResult
-  private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?, handing: Bool = false) throws -> CardChange {
+  private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
       guard let current = try link(of: id) else { throw CueStoreError.notFound }
       let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
       let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
@@ -375,9 +386,6 @@ extension CueStore {
           destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
         } else {
           let home = try promptHome(parent)
-          if handing, current.parent != home, let session = try session(of: home) {
-            return .handed(idea: try handOut(id), session: session)
-          }
           if home != parent { previous = try db.first("SELECT id FROM cards WHERE parentID = ? AND id != ? ORDER BY sortKey DESC, id DESC LIMIT 1", [home, id]) { $0.uuid(0) } }
           absorbing = try Self.draft(of: home, in: db).flatMap { $0 == id ? nil : $0 }
           destination = CardLinks.Link(parent: home, project: target.project, isTask: false)
@@ -710,7 +718,7 @@ extension CueStore {
     }
     try db.run(
       """
-      UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
+      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
         startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
         completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
       WHERE id IN (\(targets.map { _ in "?" }.joined(separator: ", ")))
@@ -728,6 +736,7 @@ extension CueStore {
       guard try promptHome(task) == task else { throw CueStoreError.notALeaf }
       try forgetLaunches(of: task)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
+      try endUnusedSessions(of: task, cue: false)
       return try Self.draft(of: task, in: db).map { try handOut($0).body }
     }
   }
@@ -740,7 +749,7 @@ extension CueStore {
     return card
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常。
+  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常；会话没有别的叶子了，记录它的 Mac 给它另挂同名任务（`adoptSessions`）。
   public func unbindSession(from task: UUID) throws {
     try write {
       try forgetLaunches(of: task)
@@ -755,10 +764,15 @@ extension CueStore {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }
 
-  /// 绑着这个会话的叶子任务（没删除、没归档，含完成了的），先绑的在前；步骤带着上级。
+  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；步骤带着上级。
+  /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
     try select(
-      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))",
+      Card.self,
+      where: """
+        (piSessionID = ?1 OR EXISTS (SELECT 1 FROM json_each(cards.formerSessionIDs) WHERE value = ?1))
+          AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))
+        """,
       [sessionID], orderBy: "startedAt, id"
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
@@ -810,7 +824,7 @@ extension CueStore {
   }
 
   /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除，返回删掉的条数。
-  /// 同时让已结束的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，
+  /// 同时让已结束（与终端里被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，
   /// 如 `--no-session` 或没发过消息的——这也是已经留下的这类历史记录的清理，每次启动一次），补写有会话文件却没有记录的。在线的不动；
   /// 歇着的托管会话同样要有会话文件，由 `PiStateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。
   /// 一个会话文件只算一个会话：同一个文件还按文件名记过一条的（旧版本在文件头写好之前读到它，见 `PiHistoryUpdate.isSession`），
@@ -824,12 +838,11 @@ extension CueStore {
       let orphans = shared.flatMap { path, rows in rows.filter { $0.0 == URL(filePath: path).deletingPathExtension().lastPathComponent } }
       let stale = indexed.filter { !paths.contains($0.1) } + orphans
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
-      try db.run(
-        """
-        DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND COALESCE(agent, 'pi') = ?
-          AND sessionID NOT IN (SELECT id FROM piSessions)
-        """,
-        [host, PiWorkState.ended.rawValue, agent.rawValue])
+      try dropSessionRecords(
+        where: """
+          hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)
+          """,
+        [host, PiWorkState.ended.rawValue, PiWorkState.interrupted.rawValue, agent.rawValue])
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
       let unrecorded = try select(
         IndexedSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
@@ -893,6 +906,7 @@ extension CueStore {
     let since = max(existing.stateSince, session.lastActivityAt)
     guard existing.title != title || existing.folder != folder || existing.projectID != projectID || existing.stateSince != since
     else { return }
+    try followTitle(of: session.id, to: title)
     try db.run(
       "UPDATE piSessionStates SET title = ?, folder = ?, projectID = ?, stateSince = ?, modifiedAt = ? WHERE id = ?",
       [title, folder, projectID, since, now, id])

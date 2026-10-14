@@ -85,10 +85,10 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在送达后的提示。
-    func action(for target: AgentTarget) -> String {
-        let name = sessionName(target.session)
-        return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"
+    /// 交出后的提示：写出了、还没送达（到哪了看提示词），"已交给 Agent 会话「…」"，已结束的补一句它会先被唤醒，忙时的说法也写上。
+    func handed(_ target: AgentTarget) -> Dotted {
+        let note = isEnded(target) ? "唤醒后送达" : target.mode == .steer || target.mode == .followUp ? target.mode.label : nil
+        return Dotted("已交给 Agent 会话「\(sessionName(target.session))」", note)
     }
 
     /// 这个 Pi 会话此刻连着桥的那个进程；没有就是已结束。
@@ -96,25 +96,35 @@ final class SendState {
         services.pi.session(sessionID: sessionID)
     }
 
-    /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
-    func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
+    /// 发给 Agent 写到哪（存储格式正文，收不了图片的会话去掉图片）。直接发送而会话正忙时不写，记下这次发送（`busy`）等用户选马上说
+    /// 还是等它做完再说，返回 nil；做不到马上说的会话不问，直接等它做完再说。本机在线的看桥上的状态，别的 Mac 上的看同步记录；
+    /// 不在线的（已结束，或托管着、进程歇着）写给它所在的 Mac，由那台的执行器在后台唤醒后送达。
+    func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener)? {
         // 收不了图片的会话只发文字（`AgentCapabilities.images`）
         let stored = capabilities(of: target.session).contains(.images) ? stored : CueFormat.withoutImages(stored)
-        do {
-            switch route(of: target.session, host: target.host) {
-            case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)
-            case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
-            case .ended(let host): try await services.send(stored, toEnded: target.session, named: sessionName(target.session), on: host, card: card)
-            }
-            return true
-        } catch SendError.piSessionBusy {
-            // 会话正忙：做不到马上说的只剩等它做完再说，不问
-            guard capabilities(of: target.session).contains(.steer) else {
-                return try await send(stored, to: AgentTarget(session: target.session, mode: .followUp, host: target.host), card: card)
-            }
-            busy = Busy(text: stored, session: target.session, host: target.host, card: card)
-            return false
+        let route = route(of: target.session, host: target.host)
+        let busy = switch route {
+        case .local(let live): live.state.isTurnRunning
+        case .remote(let session): session.state.known?.isTurnRunning == true
+        case .ended: false
         }
+        if target.mode == .send, busy {
+            guard capabilities(of: target.session).contains(.steer) else {
+                return destination(of: stored, to: AgentTarget(session: target.session, mode: .followUp, host: target.host), card: card)
+            }
+            self.busy = Busy(text: stored, session: target.session, host: target.host, card: card)
+            return nil
+        }
+        let listener: Listener = switch route {
+        case .local(let live): .session(live.sendTarget, host: services.hostID, mode: target.mode, card: card)
+        case .remote(let session): .session(session, mode: target.mode, card: card)
+        // 会话已结束，没有正在跑的一轮："马上说""等它做完再说"都不适用
+        case .ended(let host):
+            .session(
+                SendTarget(kind: .piSession, name: sessionName(target.session), ref: target.session), host: host ?? services.hostID, mode: .send,
+                card: card)
+        }
+        return (stored, listener)
     }
 
     /// 这个会话从 CuePad 能做什么（`AgentCapabilities`）：本机在线的看桥上的，别的 Mac 上的看同步记录；已结束的发话时会被唤醒、不会正忙。
@@ -136,55 +146,56 @@ extension Workspace {
         attempt { try await self.handOff(text, prompt: id) }
     }
 
-    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定已有会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
+    /// 给叶子开一个新会话，不接着用绑着的或上一步的会话（"绑定会话"里的"开新会话"；与 Cue 开工带 fresh 同一条规则，
+    /// `CueStore.handOffPlan(fresh:)`）：写好的草稿作为第一句，没有就只开会话。
+    func startFresh(_ leaf: UUID) {
+        attempt {
+            let draft = try await self.services.store.draft(of: leaf)
+            try await self.handOff(draft.map(Outgoing.text(of:)), prompt: draft?.id ?? leaf, fresh: true)
+        }
+    }
+
+    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
     func bind(_ sessionID: String, to leaf: UUID) async throws {
         guard let draft = try await services.store.bindSession(sessionID, to: leaf) else { return }
         putInReplyBox(draft, of: sessionID)
         say("已绑定，写好的话放进了会话的回复框", link: .session(sessionID))
     }
 
-    /// 用会话名在会话所在的项目里新建一个任务，绑上。
-    func bindNewTask(to session: PiSessionState) async throws {
-        try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
-    }
-
-    private func handOff(_ text: String, prompt: UUID) async throws {
-        let plan = try await services.store.handOffPlan(prompt, host: services.hostID)
+    /// `text` 为 nil 只在开新会话时（没有草稿）。
+    private func handOff(_ text: String?, prompt: UUID, fresh: Bool = false) async throws {
+        let plan = try await services.store.handOffPlan(prompt, host: services.hostID, fresh: fresh)
         switch plan.destination {
         case .session(let session, _, let host):
-            await send(text, to: AgentTarget(session: session, host: host), card: prompt)
+            guard let text else { return }
+            send(text, to: AgentTarget(session: session, host: host), card: prompt)
         case .launch(let project, let host):
             // 会话名由带着的提示词定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
             let projectName = try await services.store.project(project)?.name
             let title = plan.name ?? projectName ?? CaptureCopy.unfiled
-            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: prompt, agent: services.defaultAgent) {}
+            _ = try await startSession(in: project, prompt: text?.nonEmpty, title: title, on: host, card: prompt, agent: services.defaultAgent) {}
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
-            try await handOff(text, prompt: prompt)
+            try await handOff(text, prompt: prompt, fresh: fresh)
         case .unfiled:
             say("未分类的任务没有文件夹，开不了会话", isError: true)
         }
     }
 
-    /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
+    /// 发给 Agent（存储格式正文）：经 `speak` 写出就提示，不等送达（到哪了看提示词与会话页）；会话正忙时转为询问马上说还是等它做完再说。
+    /// 返回是否已写出。
     @discardableResult
-    func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
-        let done = Dotted("已" + sendState.action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
-        do {
-            let sent = try await sendState.send(stored, to: target, card: card)
-            if sent { say(done) }
-            return sent
-        } catch {
-            fail(error)
-            return false
-        }
+    func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Bool {
+        guard let (content, listener) = sendState.destination(of: stored, to: target, card: card) else { return false }
+        speak(content, to: listener, saying: sendState.handed(target))
+        return true
     }
 
     func resolveBusySend(_ mode: DeliveryMode) {
         guard let pending = sendState.busy else { return }
         sendState.busy = nil
-        Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode, host: pending.host), card: pending.card) }
+        send(pending.text, to: AgentTarget(session: pending.session, mode: mode, host: pending.host), card: pending.card)
     }
 }
 

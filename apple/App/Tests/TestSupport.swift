@@ -4,6 +4,8 @@ import CueSync
 @_exported import CueTestSupport
 import Foundation
 import Synchronization
+import SwiftUI
+import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
@@ -64,7 +66,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    let syncNowHangs = Mutex(false)
+
+    func syncNow() async throws {
+        state.withLock { $0.syncNows += 1 }
+        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+    }
     func pullChanges() async throws {}
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
@@ -106,10 +114,13 @@ final class TestApp {
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
+    /// 自动更新器；默认没有（同隔离模式）。
+    private let updater: (any AppUpdater)?
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
         syncSource = source
         self.cue = cue
+        self.updater = updater
         services = makeServices()
     }
     #else
@@ -134,6 +145,9 @@ final class TestApp {
         services = makeServices()
         return services
     }
+
+    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
+    var databaseURL: URL { isolatedLocation.databaseURL }
 
     private var isolatedLocation: LibraryLocation {
         try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
@@ -164,7 +178,7 @@ final class TestApp {
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
-            updater: nil,
+            updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,
@@ -181,6 +195,17 @@ final class TestApp {
         try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
     }
     #endif
+}
+
+extension Workspace {
+    /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
+    func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
+        var box = draft
+        let files = services.store.files
+        let binding = Binding(get: { box }, set: { box = $0 })
+        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        return try #require(try await services.store.deliveryRequests().first)
+    }
 }
 
 extension CueStore {

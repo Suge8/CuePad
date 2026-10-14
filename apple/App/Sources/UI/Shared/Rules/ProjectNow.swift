@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（书架大卡与行、iPad 侧栏、Mac 侧栏共用这一处规则）。
+/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、Mac 侧栏共用这一处规则；iPhone 书架不带会话，只剩任务与介绍）。
 /// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
@@ -13,8 +13,6 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     let source: Source
     let text: String
-    /// Agent 的事是哪个会话（会话名）；项目行不写它，书架的 Agent 总览写不在项目里的那件时带上。
-    var session: String?
 
     /// 一条进行中的任务（`TaskBoard.leading` 按项目给出，最近开始的在前）。
     struct InProgress: Hashable, Sendable {
@@ -39,52 +37,63 @@ nonisolated struct ProjectNow: Hashable, Sendable {
             .compactMap { pair in tier(pair.shown).map { (tier: $0, item: pair.item, shown: pair.shown) } }
             .min { $0.tier < $1.tier }
         if let agent {
-            return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown), session: agent.item.state.title)
+            return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown))
         }
+        return pick(task: task, intro: intro)
+    }
+
+    /// 没有会话可说时：进行中的任务，再是介绍。
+    private static func pick(task: String?, intro: String?) -> ProjectNow? {
         if let task { return ProjectNow(source: .task, text: task) }
-        if let intro { return ProjectNow(source: .intro, text: intro) }
-        return nil
+        return intro.map { ProjectNow(source: .intro, text: $0) }
+    }
+
+    /// iPhone 书架的"此刻"：书架不带会话（会话在 Agent 标签），只有最近开始的进行中任务与介绍；
+    /// `listed` 是同一屏"正在推进"已列出的任务，任务那一档跳过它们、取下一条。
+    static func shelf(_ projects: [Project], tasks: [UUID: [InProgress]], listed: Set<UUID>) -> [UUID: ProjectNow] {
+        var result: [UUID: ProjectNow] = [:]
+        for project in projects {
+            result[project.id] = pick(task: tasks[project.id]?.first { !listed.contains($0.id) }?.title, intro: project.intro)
+        }
+        return result
     }
 
     /// 在线会话还没读到第一份（`LiveSessions.items` 为 nil）时：读到后一定有"此刻"的项目（有进行中任务或介绍）先留一行空白，
     /// 其余先不留；读到后空白原地淡入真的那句。不先写任务再被会话换掉（先错后对的闪变），名称也不挪位置。
     static func byProject(
-        _ projects: [Project], sessions: [PiSessionListItem]?, tasks: [UUID: [InProgress]], listed: Set<UUID> = [],
-        shown: (PiSessionListItem) -> PiShown
+        _ projects: [Project], sessions: [PiSessionListItem]?, tasks: [UUID: [InProgress]], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let known = byProject(projects, sessions: sessions ?? [], tasks: tasks, listed: listed, shown: shown)
+        let known = byProject(projects, sessions: sessions ?? [], tasks: tasks, shown: shown)
         return sessions == nil ? known.mapValues { _ in ProjectNow(source: .intro, text: "") } : known
     }
 
     /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
-    /// `listed` 是同一屏已列出的任务（书架的"正在推进"），任务那一档跳过它们、取下一条；没有这种清单的地方不传。
     static func byProject(
-        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], listed: Set<UUID> = [],
-        shown: (PiSessionListItem) -> PiShown
+        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let intros = Dictionary(uniqueKeysWithValues: projects.compactMap { project in project.intro.map { (project.id, $0) } })
-        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, listed: listed, shown: shown)
+        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, shown: shown)
     }
 
     static func byProject(
         _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], intros: [UUID: String],
-        listed: Set<UUID> = [], shown: (PiSessionListItem) -> PiShown
+        shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
-            let task = tasks[project]?.first { !listed.contains($0.id) }?.title
+            let task = tasks[project]?.first?.title
             result[project] = pick(byProject[project] ?? [], shown: shown, task: task, intro: intros[project])
         }
         return result
     }
 
     /// 会话进得了"此刻"的档，就是会话列表的档（`PiShown.rank`，Agent 页同一套）：等你确认 → 出错与没能送达 → 在跑与话在路上
-    /// → 需要 /reload → 有新回复；停着、已结束的不算。书架的 Agent 此刻（`AgentNow`）按同一档排。
+    /// → 需要 /reload → 有新回复；停着、已结束的不算。
     static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
-        case .idle, .resting, .fresh, .ended, .unknown: nil
+        case .idle, .resting, .fresh, .ended, .interrupted, .unknown: nil
         default: shown.rank
         }
     }

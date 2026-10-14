@@ -6,10 +6,11 @@ import Testing
 @testable import CuePi
 
 /// 端到端：真实的 Pi / Codex / Claude Code 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude` 开启列出的运行时；模型用 `CUEPAD_BRAIN_MODEL_PI` 等换，强度用 `CUEPAD_BRAIN_EFFORT` 换（缺省 off）。
+/// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 里除 opencode 外列出的几家）；模型、强度的换法也在那里。
 private let environment = ProcessInfo.processInfo.environment
-private let enabledRuntimes: [AgentKind] = (environment["CUEPAD_BRAIN_TESTS"] ?? "").split(separator: ",").compactMap { AgentKind(rawValue: String($0)) }
-private let cheapModels: [AgentKind: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
+private let enabledRuntimes = RealAgents.enabled.filter { $0 != .opencode }
+/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
+private let cheapModels: [AgentKind: String] = [.pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
@@ -21,7 +22,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.enabled(if: !enabledRuntimes.isEmpty, "要花钱：CUEPAD_BRAIN_TESTS=pi,codex,claude 开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !enabledRuntimes.isEmpty, "要花钱，默认不跑：开关见 RealAgents（CUEPAD_AGENT_TESTS）"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor
@@ -66,7 +67,20 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮开始", timeout: .seconds(60)) { self.count(.turnStarted) >= n }
         }
 
-        var replies: [String] { events.compactMap { if case .reply(let text) = $0 { text } else { nil } } }
+        /// 每轮的回答：做完时还留着的正在说的话
+        var replies: [String] {
+            var speaking: PiDraft?, replies: [String] = []
+            for event in events {
+                switch event {
+                case .speaking(let draft): speaking = draft
+                case .turnFinished:
+                    if let text = speaking?.text { replies.append(text) }
+                    speaking = nil
+                default: break
+                }
+            }
+            return replies
+        }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
         var contexts: [(used: Int, window: Int?)] { events.compactMap { if case .context(let used, let window) = $0 { (used, window) } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }
@@ -90,6 +104,18 @@ struct RealBrainTests {
         #expect(rig.replies.count == 1 && rig.replies[0].contains(rig.codename))
         let context = try #require(rig.contexts.last)
         #expect(context.used > 0 && (context.window ?? 0) > context.used)
+        }
+    }
+
+    /// 带一张图问颜色：图按这家原生的图片输入交给模型，它看得见（红色）。
+    @Test(arguments: enabledRuntimes) func anImageIsSeen(_ runtime: AgentKind) async throws {
+        try await withRig(runtime) { rig in
+        #expect(rig.brain.seesImages)
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)])
+        try await rig.finished()
+
+        #expect(rig.failures == [], "\(rig.events)")
+        #expect(rig.replies.last?.lowercased().contains("red") == true, "\(rig.replies)")
         }
     }
 
@@ -205,5 +231,9 @@ struct RealBrainTests {
             ((try? FileManager.default.contentsOfDirectory(atPath: root.appending(path: project).path)) ?? []).filter { $0.hasSuffix(".jsonl") }
         }
     }
+}
+
+private extension CueBrain {
+    func send(_ text: String) async throws { try await send(text, images: []) }
 }
 #endif

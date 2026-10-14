@@ -5,7 +5,7 @@ import SwiftUI
 /// 任务页（书架上的"任务"一行、iPad 侧栏进入）：列表顶上一行快速添加（↩ 即一条，落当前项目或未分类，可换），
 /// 跟着列表一起滚走——它是一张纸、不是玻璃，钉在顶栏下会把滚过去的列表切成上下两截；回到顶就能看到；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
-/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
+/// 点圆圈完成（完成的点了回到待办），点文字推入任务的纸页（`TaskPage`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -153,13 +153,13 @@ struct TaskLine: View {
             }
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, TaskSpeech.progress(prompts: prompts, subtasks: subtasks), project?.name, session.map { workspace.shown($0, delivery: delivery, cueFollows: task.cueFollows).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, TaskSpeech.progress(prompts: prompts, subtasks: subtasks), project?.name, session.map { workspace.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
             .accessibilityAction { tap() }
             .accessibilityActions {
-                Button("打开") { navigation.openTask(task.id) }
+                Button("打开") { navigation.push(.card(task.id)) }
                 if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
             }
             .confirmationDialog(
@@ -196,19 +196,16 @@ struct TaskLine: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(task.title.textGlyphs)
-                        .font(.body).strikethrough(done)
-                        .foregroundStyle(done ? palette.ink3 : palette.ink)
-                        .lineLimit(2)
-                    if task.cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 } }
-                }
+                Text(task.title.textGlyphs)
+                    .font(.body).strikethrough(done)
+                    .foregroundStyle(done ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
                 if hasDetail { detail }
             }
             .padding(.vertical, hasDetail ? 6 : 0)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
-            .onTapGesture { navigation.openTask(task.id) }
+            .onTapGesture { navigation.push(.card(task.id)) }
         }
     }
 
@@ -239,7 +236,7 @@ struct TaskLine: View {
             }
             if let session, !done {
                 Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-                    let shown = workspace.shown(session, delivery: delivery, cueFollows: task.cueFollows)
+                    let shown = workspace.shown(session, delivery: delivery)
                     // 放不下时先省掉用时，再换成短的状态词（"思考中"）；状态点后总有字，不留一颗看不懂的点
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 4) {

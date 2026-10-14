@@ -5,9 +5,9 @@ import Testing
 @testable import CuePi
 
 /// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
-/// 模型在 bash 里执行 `cuepad show`：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
+/// 模型在 bash 里一次 `cuepad show` 两个文件：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
+@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
 struct RealPreviewTests {
     private func sqlite(_ database: URL, _ query: String) throws -> String {
         let process = Process()
@@ -38,16 +38,19 @@ struct RealPreviewTests {
         let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })
         #expect(skill.source == .known(.skill) && skill.summary?.contains("CuePad") == true)
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
+        try Data("m4a".utf8).write(to: pi.cwd.appending(path: "beep.m4a"))
 
-        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html --title 登录页改好了 --json]] 给我看看")
+        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html beep.m4a --title 登录页改好了 --json]] 给我看看")
         _ = try await pi.waitForEvent("命令结束", { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
         _ = try await pi.waitForEvent("这一轮结束", { $0["type"] as? String == "agent_end" })
 
         let result = try bashResult(pi)
-        #expect(!result.isError)
-        let reply = try #require(try JSONSerialization.jsonObject(with: Data(result.text.utf8)) as? [String: Any])
-        #expect(reply["session"] as? String == session.sessionID && reply["title"] as? String == "登录页改好了" && reply["name"] as? String == "demo.html")
-        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT sessionID || '|' || title FROM previews") == "\(session.sessionID)|登录页改好了")
+        #expect(!result.isError, "\(result.text)")
+        let reply = try #require(try JSONSerialization.jsonObject(with: Data(result.text.utf8)) as? [[String: Any]])
+        #expect(reply.map { $0["name"] as? String } == ["demo.html", "beep.m4a"])
+        #expect(reply.allSatisfy { $0["session"] as? String == session.sessionID && $0["title"] as? String == "登录页改好了" })
+        // 一次发的两个是同一批：同一创建时间
+        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT count(DISTINCT createdAt) || '|' || count(*) FROM previews WHERE sessionID = '\(session.sessionID)'") == "1|2")
     }
 
     /// 不在 Pi 的 bash 里（没有 PI_SESSION_ID）时命令失败并说明，不猜是哪个会话。

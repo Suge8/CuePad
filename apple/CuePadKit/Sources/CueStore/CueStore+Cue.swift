@@ -5,42 +5,81 @@ import Foundation
 // MARK: 对话
 
 extension CueStore {
-  /// 写一条对话。正文不能为空；选项去掉空白的，一个都不剩时当没有。
+  /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"，选项是 `CueAsk.choices`）：
+  /// 你已说过这类事以后不用问（库里有它的规矩行，`CueAsk.rule`）就抛 `alreadyAllowed`、什么都不写。
   @discardableResult
   public func addCueMessage(
-    _ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil
+    _ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    let options = choices?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     return try write {
-      let now = Date.stamp
-      let message = CueMessage(
-        id: UUID(), author: .known(author), text: text, choices: options?.isEmpty == false ? options : nil, urgent: urgent, taskID: task,
-        answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, notify: false)
-      try insert(message)
-      try registerImages(in: text)
-      return message
+      if let ask, let allowed = try allowingLine(ask, task: task) { throw CueStoreError.alreadyAllowed(allowed) }
+      return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task)
     }
   }
 
-  /// 回答 Cue 的一条消息（"等你"的那种）。已答过的改成新的回答。回答照常交给 Cue（`toDeliver`）。
-  /// 对关联了任务的验收（选项是 `CueAcceptance.choices`）答 `accept` 就是收下：同一个事务里完成任务，同你点圆圈
-  /// （连同结束做完了的会话，请求算你发起的）；返回结束请求，调用方上传。
+  /// 写一条对话（在写事务内调用）。
+  func insertCueMessage(_ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+    let now = Date.stamp
+    let message = CueMessage(
+      id: UUID(), author: .known(author), text: text, choices: choices, urgent: urgent, taskID: task,
+      answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, notify: false)
+    try insert(message)
+    try registerImages(in: text)
+    return message
+  }
+
+  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。结局照常交给 Cue（`toDeliver`），撤回的不交。
+  /// 你选"以后……都不用问"（`CueAsk.always`）时，同一个事务里记一条你的、一直记着的规矩（`CueAsk.rule`，已有就不再记），
+  /// 返回它，调用方上传。
   @discardableResult
-  public func answerCueMessage(_ id: UUID, answer: String) throws -> [DeliveryRequest] {
+  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> CueMemoryLine? {
     try write {
-      let now = Date.stamp
-      try db.run("UPDATE cueMessages SET answer = ?, answeredAt = ?, modifiedAt = ? WHERE id = ?", [answer, now, now, id])
-      guard db.changes > 0, let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
-      guard answer == CueAcceptance.accept, message.author == .known(.cue), message.choices == CueAcceptance.choices,
-        let task = message.taskID, let card = try find(Card.self, task), card.status != nil, card.status != .done
-      else { return [] }
-      _ = try applyStatus(task, .done)
-      return try endFinishedSessions(of: task, cue: false)
+      guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
+        throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
+      }
+      guard case .answered(let answer) = end, let ask = CueAsk.allCases.first(where: { $0.always == answer }),
+        let message = try find(CueMessage.self, id), try allowingLine(ask, task: message.taskID) == nil,
+        let rule = ask.rule(project: try projectName(of: message.taskID))
+      else { return nil }
+      return try insertLine(rule, source: .you, pinned: true)
     }
   }
 
-  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与"等你"上还没交、或交过之后又改了的回答。
+  /// 允许这类事的规矩行（没忘掉、一直记着）的序号：只管任务所在项目的那条，或不分项目的那条。
+  private func allowingLine(_ ask: CueAsk, task: UUID?) throws -> Int? {
+    let rules = [ask.rule(project: nil), ask.rule(project: try projectName(of: task))].compactMap { $0 }
+    guard !rules.isEmpty,
+      let line = try select(
+        CueMemoryLine.self, where: "pinned = 1 AND deletedAt IS NULL AND text IN (SELECT value FROM json_each(?))",
+        [JSONColumn.encode(rules)], orderBy: Self.lineOrder, limit: 1
+      ).first
+    else { return nil }
+    return try index(of: line)
+  }
+
+  /// 任务所在项目的名字；没有任务或任务不在项目里为 nil。
+  private func projectName(of task: UUID?) throws -> String? {
+    try task.flatMap { try find(Card.self, $0) }?.projectID.flatMap { try find(Project.self, $0) }?.name
+  }
+
+  /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
+  static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
+
+  /// 结束提问只在这里写：结束的时刻与选的那一项；撤回同时记送达。只动 `predicate` 选中的还开着的提问，返回结束了几条。必须在写事务内调用。
+  func endQuestions(_ end: CueQuestionEnd, where predicate: String, _ bindings: [any SQLBindable]) throws -> Int {
+    let now = Date.stamp
+    let answer: String? = if case .answered(let option) = end { option } else { nil }
+    let delivered: Date? = end == .withdrawn ? now : nil
+    let values: [any SQLBindable] = [answer, now, delivered, now]
+    try db.run(
+      "UPDATE cueMessages SET answer = ?, answeredAt = ?, deliveredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)",
+      values + bindings)
+    return db.changes
+  }
+
+  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个结局的提问结局（撤回的结束时就记了送达）。
+  /// 哪些叫醒 Cue 见 `CueMessage.wakesCue`。
   private static let toDeliver = """
     ((author = 'you' AND deliveredAt IS NULL)
       OR (author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
@@ -58,6 +97,14 @@ extension CueStore {
       try db.run(
         "UPDATE cueMessages SET deliveredAt = ?1, modifiedAt = ?2 WHERE id IN (SELECT value FROM json_each(?3)) AND \(Self.toDeliver)",
         [time, Date.stamp, Self.idList(ids)])
+    }
+  }
+
+  /// 撤回你说的、还没交给 Cue 的一句（重发或移除没回执的话）；返回是否撤回了。已交出去的撤不回（Cue 已经读到）。
+  public func withdrawCueMessage(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
+      return db.changes > 0
     }
   }
 
@@ -84,13 +131,13 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
-  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：Cue 带选项问的、还没答，
+  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：还开着的提问（`openQuestion`），
   /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
     try select(
       CueMessage.self,
       where: """
-        author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL AND (taskID IS NULL OR EXISTS (
+        \(Self.openQuestion) AND (taskID IS NULL OR EXISTS (
           SELECT 1 FROM cards c LEFT JOIN projects p ON p.id = c.projectID
           WHERE c.id = cueMessages.taskID AND c.completedAt IS NULL AND c.archivedAt IS NULL AND c.deletedAt IS NULL AND p.deletedAt IS NULL))
         """,
@@ -112,13 +159,18 @@ extension CueStore {
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
     guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     return try write {
-      let now = Date.stamp
-      let line = CueMemoryLine(
-        id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now,
-        modifiedAt: now, deletedAt: nil)
-      try insert(line)
+      let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt)
       return (line, try index(of: line))
     }
+  }
+
+  /// 记一条（在写事务内调用，调用方先查过记得成）。
+  private func insertLine(_ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil) throws -> CueMemoryLine {
+    let now = Date.stamp
+    let line = CueMemoryLine(
+      id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now, modifiedAt: now, deletedAt: nil)
+    try insert(line)
+    return line
   }
 
   /// 第 `index` 条（按序号，含忘掉的）；没有为 nil。
@@ -238,6 +290,49 @@ extension CueStore {
         ON CONFLICT(id) DO UPDATE SET \(CueProfile.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", "))
         """, profile.bindings)
       return profile
+    }
+  }
+}
+
+// MARK: 此刻
+
+extension CueStore {
+  /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
+  public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
+
+  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置、状态与你的话交没交出去）。
+  public func cueOnDuty() throws -> Bool {
+    guard let profile = try cueProfile() else { return false }
+    return profile.onDuty(try cueState(), asleep: try cueAsleep())
+  }
+
+  /// 你最近一句对 Cue 说的话此刻到哪了（`Speech.trip`，与气泡同一条规则）；你还没说过为 nil。还在等回执时登记到点重读（`expire(at:)`），
+  /// 订阅它的（Cue 页的在路上与在睡觉、"等你 N"、会话显示）到时限自己更新，界面不另计时。
+  /// 库里没有本机同步通不通这个输入，按通着推（超时就是 `noReply`）；界面用 `Speech.Trip.reached` 补上。
+  public func cueSpeech() throws -> Speech.Trip? {
+    let latest = try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
+      (said: $0.date(0), delivered: $0.dateOrNil(1))
+    }
+    guard let latest else { return nil }
+    if let due = Speech.deadline(said: latest.said, delivered: latest.delivered), due > .now { expire(at: due) }
+    return Speech.trip(said: latest.said, delivered: latest.delivered, now: .now, reachable: true)
+  }
+
+  /// 它住的那台 Mac 没有回应：你最近一句过了 `Speech.receiptLimit` 还没交给它（库里没有那台 Mac 的心跳，你的话收没收下是唯一的在线信号）。
+  /// 取舍：本机同步不通时界面说同步的原因、不说它在睡觉（`Speech.Failure.offline`），值班这里仍按没回应算——
+  /// 那时它答不了会话，CuePad 也送不到它，在等它回答的会话算等你（"等你 N"、提示），宁可多叫你一次。
+  public func cueAsleep() throws -> Bool { try cueSpeech() == .failed(.noReply) }
+
+  /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
+  public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {
+    try write {
+      let next = CueState(state: .known(state), detail: detail, modifiedAt: Date.stamp)
+      if let current = try cueState(), current.state == next.state, current.detail == next.detail { return }
+      try db.run(
+        """
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt
+        """, next.bindings)
     }
   }
 }

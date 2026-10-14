@@ -11,7 +11,6 @@ struct MenuBarPad: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var capture = CaptureState()
-    @State private var sending = false
 
     private static let sessionLimit = 4
     private static let blockRadius: CGFloat = 22
@@ -26,14 +25,13 @@ struct MenuBarPad: View {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            }, followed: services.liveSessions.cueFollowed).prefix(Self.sessionLimit)
+            }, cueOnDuty: services.liveSessions.cueOnDuty).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0,
-                            cueFollows: services.liveSessions.cueFollowed.contains(session.sessionID)).equatable()
+                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
                             .contentShape(.rect)
                             .onTapGesture { open(.session(session.sessionID)) }
                             .accessibilityAddTraits(.isButton)
@@ -63,7 +61,7 @@ struct MenuBarPad: View {
             Button("交给 \(workspace.cue.name)", systemImage: "paperplane", action: handToCue)
                 .font(Typography.meta.weight(.semibold))
                 .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
-                .disabled(empty || sending)
+                .disabled(empty)
                 .help("把这次随手记直接说给 \(workspace.cue.name)")
         }
         .contentShape(.rect)
@@ -74,14 +72,8 @@ struct MenuBarPad: View {
 
     /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
     private func handToCue() {
-        let draft = capture.draft
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            try await workspace.sayToCue(draft)
-            capture = CaptureState()
-            workspace.say("已交给 \(workspace.cue.name)")
-        }
+        let files = services.store.files
+        _ = workspace.speak(to: .cue, from: $capture.draft, saying: "已交给 \(workspace.cue.name)") { try $0.stored(in: files) }
     }
 
     private struct Block: ViewModifier {

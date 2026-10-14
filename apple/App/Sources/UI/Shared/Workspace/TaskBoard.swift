@@ -15,12 +15,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var delivery: DeliveryRequest?
         var id: UUID { task.id }
 
-        /// 书架上排前后的档：0 等你确认（Cue 跟进的等的是 Cue，不算）或出错，1 正在干活，2 其余。
-        var attention: Int {
-            guard let session else { return 2 }
-            return (session.waitsForYou && !task.cueFollows) || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
-        }
-
         /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
         init(_ task: Card, projects: [UUID: Project], sessions: [String: PiSessionListItem]) {
             let item = task.piSessionID.flatMap { sessions[$0] }
@@ -82,23 +76,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             .prefix(doneLimit))
     }
 
-    /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。
+    /// 书架"正在推进"：列出的任务，加上放不下的还有几项（纸底写"还有 N 项"）。
     struct Active: Sendable, Equatable {
-        var rows: [Row]
+        var tasks: [Card]
         var more: Int
     }
 
-    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，步骤跟着上级），先看交给的 Agent 在怎样——
-    /// 等你确认、出错的在前，正在干活的其次，别的最后——同档最近开始的在前，再同的按原来的先后；取前 `limit` 条，其余数个数。
-    /// 排序要看每条任务的会话状态，所以会话对全部候选一次读出（进行中的任务不多），不是逐条读。
+    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，步骤跟着上级），最近开始的在前，
+    /// 同刻按原来的先后；取前 `limit` 条，其余数个数。书架不看会话，不读会话。
     static func active(limit: Int, from store: isolated CueStore) throws -> Active {
-        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let started = try store.startedTasks(topLevelOnly: true)
-        let sessions = try store.piSessions(sessionIDs: started.compactMap(\.piSessionID))
-        let rows = started.map { Row($0, projects: projects, sessions: sessions) }
-        // `startedTasks` 已按最近开始排好（同刻按原来的先后）：只按档排，同档保持这个顺序
-        let ordered = rows.enumerated().sorted { ($0.element.attention, $0.offset) < ($1.element.attention, $1.offset) }.map(\.element)
-        return Active(rows: Array(ordered.prefix(limit)), more: max(0, ordered.count - limit))
+        return Active(tasks: Array(started.prefix(limit)), more: max(0, started.count - limit))
     }
 
     /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。

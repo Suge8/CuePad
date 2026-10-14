@@ -46,9 +46,14 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
         #expect(try await delivery(of: first) == .sending)
+        // Mac 一直没领取：过了等回执的时限是"Mac 没有回应"，可以重发（issue #5）
+        let late = request.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
+        let timedOut = try await delivery(of: first, at: late)
+        #expect(timedOut.canSend)
+        #expect(try await failure(of: first, at: late) == .noReply)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
-        #expect(try await delivery(of: first) == .failed("会话在送达前关掉了"))
+        #expect(try await failure(of: first) == .reported("会话在送达前关掉了"))
         #expect(try await delivery(of: waiting) == .unsent)
         #expect(try await primary(neighbour) == waiting.id)
 
@@ -119,6 +124,49 @@ struct TaskFlowTests {
         #expect(try await ends().isEmpty)
         try await workspace.toggle(second.id)
         #expect(try await ends() == ["s1"])
+    }
+
+    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
+    /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
+    @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
+        let workspace = Workspace(services: rig.services)
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/tmp/roundtable", for: project.id)
+        let task = try await store.createTask("加语言参数", in: project.id)
+        let first = try await store.createTask("加 --lang", under: task.id)
+        let second = try await store.createTask("写 README", under: task.id)
+        let third = try await store.createTask("发版", under: task.id)
+        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        try await workspace.bind("s1", to: first.id)
+        let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
+
+        try await workspace.toggle(first.id)
+        #expect(try await requests(.end).isEmpty)
+
+        let draft = try await store.createCard(body: "照 --lang 的用法写 README", under: second.id)
+        workspace.handOff(draft)
+        let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
+        #expect(sent?.target.ref == "s1" && sent?.content == "照 --lang 的用法写 README")
+        #expect(try await requests(.start).isEmpty)
+
+        workspace.startFresh(third.id)
+        let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
+        #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
+        _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
+
+        // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
+        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request in
+            _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+            return .succeeded
+        }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+        await executor.stop()
+        try await workspace.toggle(second.id)
+        #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
+        try await workspace.toggle(third.id)
+        #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
     #endif
 
@@ -199,26 +247,21 @@ struct TaskFlowTests {
         #expect(board.done.first?.task.id == closed.id)  // 最近完成按完成时间排，不按项目分组
     }
 
-    @Test func 书架正在推进先列Agent要你处理与正在干活的_再按最近开始_只列顶层() async throws {
-        let recorder = PiStateRecorder(store: store, hostID: "mac")
-        try await recorder.update(sessionID: "s1", state: .tool, detail: "bash · pnpm test", title: "atlas")
-        try await recorder.update(sessionID: "s2", state: .waitingForUser, title: "deploy")
+    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
+    @Test func 书架正在推进按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
         try await store.setStatus(step.id, .inProgress)
-        let working = try await store.createTask("在干活", in: nil)
-        try await store.recordSend(working.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: working.id)
-        let asking = try await store.createTask("等你确认", in: nil)
-        try await store.recordSend(asking.body, to: SendTarget(kind: .piSession, name: "deploy", ref: "s2"), card: asking.id)
+        let middle = try await store.createTask("中间开始", in: nil)
+        try await store.setStatus(middle.id, .inProgress)
         let newest = try await store.createTask("最近开始", in: nil)
         try await store.setStatus(newest.id, .inProgress)
 
-        let active = try await TaskBoard.active(limit: 3, from: store)
+        let active = try await TaskBoard.active(limit: 2, from: store)
 
-        #expect(active.rows.map(\.task.id) == [asking.id, working.id, newest.id] && active.more == 1)
-        #expect(active.rows.first { $0.task.id == working.id }?.session?.state == .known(.tool))
-        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含步骤
+        #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
+        #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级
@@ -294,7 +337,11 @@ struct TaskFlowTests {
         try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store))
     }
 
-    private func delivery(of prompt: Card) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store))
+    private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), now: now, reaches: { _ in true })
+    }
+
+    private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {
+        if case .failed(_, let failure) = try await delivery(of: prompt, at: now) { failure } else { nil }
     }
 }

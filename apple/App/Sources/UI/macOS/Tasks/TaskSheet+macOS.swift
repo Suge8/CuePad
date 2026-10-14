@@ -6,8 +6,8 @@ import SwiftUI
 /// 任务浮窗："任务 → 步骤 → 会话"。点任务、步骤或它的草稿（项目页、任务面板、⌘K、归档）就在当前页上弹出，不换页。
 /// 左栏是这件事：标题、做到第几步、每个步骤一行（圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
 /// 右边是选中的那一步——没有步骤的任务就是它自己。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
-/// 开始就开一个以它命名的新会话；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
-/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（会话还绑着别的没做完的事时不结束）。
+/// 开始就交给会话（上一步的会话还开着就接着用它，否则开一个以它命名的新会话）；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
+/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（还有没做完的事绑着它、或下一步会接着用它时不结束，规则在 `CueStore.endUnusedSessions`）。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         /// 顶层任务。
@@ -95,7 +95,7 @@ private struct StepRow: View {
 
     var body: some View {
         let done = step.status == .done
-        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery, cueFollows: $0.cueFollows) }
+        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
         HStack(spacing: TaskRow.columnGap) {
             TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
             if selected {
@@ -133,7 +133,7 @@ private struct LeafDetail: View {
                 if let item { openSession(item.state.sessionID, primary: false) }
             } else if let item {
                 let state = workspace.withLiveState(item.state)
-                let shown = workspace.shown(state, delivery: item.delivery, cueFollows: item.cueFollows)
+                let shown = workspace.shown(state, delivery: item.delivery)
                 let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
@@ -177,6 +177,7 @@ private struct LeafDetail: View {
             case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
             case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
             case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")
+            case .interrupted: (mascot, title, note) = (.error, "Agent 被打断了", "在会话里说一句，它接着做")
             case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
             }
         }
@@ -209,7 +210,7 @@ private struct MascotFigure: View {
 }
 
 /// 还没开始的叶子任务的输入框：一块玻璃，里面是这件事的草稿（任务下的那条提示词，编辑器自动保存，⌘↩ 同"开始"）；
-/// 还没有草稿时是一行提示，点了新建一条接着写。左下"绑定已有会话"把它绑到本项目一个在跑的会话上（写好的话接进那个会话的回复框，不自动发）。
+/// 还没有草稿时是一行提示，点了新建一条接着写。左下"绑定会话"开新会话，或绑到本项目一个在跑的会话上（写好的话接进那个会话的回复框，不自动发）。
 private struct DraftComposer: View {
     let leaf: Card
     let draft: Card?
@@ -234,7 +235,7 @@ private struct DraftComposer: View {
             }
             HStack(spacing: 10) {
                 Menu { SessionBindItems(leaf: leaf) } label: {
-                    Text("绑定已有会话").font(Typography.meta).foregroundStyle(palette.ink3)
+                    Text("绑定会话").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 Spacer(minLength: 0)

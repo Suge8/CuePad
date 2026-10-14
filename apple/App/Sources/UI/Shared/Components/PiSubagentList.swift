@@ -41,9 +41,7 @@ struct PiSubagentList: View {
                     Dot().foregroundStyle(palette.failure)
                     Text(failure).foregroundStyle(palette.failure).monospacedDigit()
                 }
-                Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .rotationEffect(.degrees(expanded ? 180 : 0))
-                    .accessibilityHidden(true)
+                DisclosureChevron(open: expanded)
             }
             .font(Typography.secondary)
             .frame(minHeight: 32)

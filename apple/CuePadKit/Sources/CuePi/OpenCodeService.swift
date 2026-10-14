@@ -22,14 +22,7 @@ struct OpenCodeServiceInfo: Decodable, Equatable, Sendable {
     }
 
     /// 服务进程的启动时刻：会话在线的规则以它为界（见 `OpenCodeRuntime`）。进程已不在为 nil。
-    var startedAt: Date? {
-        var info = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.stride
-        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
-        guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
-        let start = info.kp_proc.p_un.__p_starttime
-        return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
-    }
+    var startedAt: Date? { PiProcess.running(pid: pid)?.startDate }
 }
 
 /// 服务接口的报错：`tag` 是它的错误类型（`SessionNotFoundError`、`CommandNotFoundError`……）。
@@ -86,7 +79,7 @@ struct OpenCodeClient: Sendable {
         try JSONDecoder().decode(T.self, from: await call("GET", path, directory: directory))
     }
 
-    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（逐字的增量不要），
+    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（`isRelevant`），
     /// 解码在后台。服务不续传：断开期间的事件就丢了，重连后要重拉快照。连接断开或出错时流结束（抛错）。
     func events() -> AsyncThrowingStream<OpenCodeEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<OpenCodeEvent, any Error>.makeStream()
@@ -135,15 +128,75 @@ struct OpenCodeEvent: Decodable, Sendable {
         var resources: [String]?
         var requestID: String?
         var item: Item?
+        /// 正文的增量（`session.text.delta`）与说完的全文（`session.text.ended`）属于哪条回答的第几段
+        var assistantMessageID: String?
+        var ordinal: Int?
+        var delta: String?
+        var text: String?
+        /// 这一步开始的时刻（ms，`session.step.started`），就是这条回答消息的建立时刻
+        var started: Double?
 
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
 
-    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。
+    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。逐字增量只要正文的
+    /// （`session.text.delta`，正在说的话），思考、工具参数与压缩的不要。
     var isRelevant: Bool {
-        guard !type.hasSuffix(".delta") else { return false }
+        if type.hasSuffix(".delta") { return type == "session.text.delta" }
         return type == "server.connected" || type == "model.updated" || type == "command.updated"
             || type.hasPrefix("session.") || type.hasPrefix("permission.") || type.hasPrefix("form.")
+    }
+}
+
+/// 事件流里各会话正在说的话（`PiDraft`，拼法见 `DraftParts`）：一条回答（`assistantMessageID`）的段号是 `ordinal`（与对话里这条回答的写法一致，
+/// 见 `OpenCodeHistory`），正文的增量（`session.text.delta`）追加，一段说完（`session.text.ended`）换成这段的全文；
+/// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
+/// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
+///
+/// `since` 取这一步开始（`session.step.started` 的 `started`）的时刻，不取第一个增量到的时刻：对话里这条回答的时刻是这条消息建立的时刻
+/// （`OpenCodeMessage.at`，与 `started` 是同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`PiDraft.landed`），
+/// 说完后草稿与对话里的回答会叠成两份。没看到这一步开始（中途连上）的回答不给草稿。
+struct OpenCodeDrafts {
+    private var entries: [String: DraftParts] = [:]
+    /// 每个会话最近开始的一步：哪条回答、它的时刻
+    private var steps: [String: (message: String, at: Date)] = [:]
+
+    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关为 nil。
+    mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
+        let data = event.data
+        guard let sessionID = data.sessionID else { return nil }
+        switch event.type {
+        case "session.step.started":
+            if let message = data.assistantMessageID, let started = data.started {
+                steps[sessionID] = (message, Date(timeIntervalSince1970: started / 1000))
+            }
+            return nil
+        case "session.text.delta":
+            guard let message = data.assistantMessageID, let delta = data.delta, var entry = entries[sessionID].flatMap({ $0.message == message ? $0 : nil })
+                ?? steps[sessionID].flatMap({ $0.message == message ? DraftParts(message: message, since: $0.at) : nil })
+            else { return nil }
+            entry.append(delta, to: data.ordinal ?? 0)
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.text.ended":
+            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text else { return nil }
+            entry.finish(data.ordinal ?? 0, with: text)
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
+             "session.deleted":
+            if event.type == "session.deleted" { steps[sessionID] = nil }
+            entries[sessionID] = nil
+            return (sessionID, nil)
+        default:
+            return nil
+        }
+    }
+
+    /// 全部清掉（断线重连），返回原先有草稿的会话。
+    mutating func reset() -> [String] {
+        defer { entries = [:]; steps = [:] }
+        return Array(entries.keys)
     }
 }
 

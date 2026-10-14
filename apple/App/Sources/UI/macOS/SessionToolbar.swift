@@ -3,9 +3,9 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 会话页的页头全在窗口工具栏上：居中的标题（会话名接状态，绑着任务时下面一行是这件事，左边是它的完成圈）与右上"⋯"里的会话操作
+/// 会话页的页头全在窗口工具栏上：居中的标题（会话名接状态，下面一行是它在做的事，左边是那件事的完成圈）与右上"⋯"里的会话操作
 /// （所在、完成任务、绑定到任务、解除绑定、重命名、跳到终端、结束会话）。内容区里不再另起一行页头。
-/// 工具栏项在主窗口里常驻（`SessionTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
+/// 工具栏项在主窗口里常驻（`PageTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
 /// 进出会话页、换会话时那要占点击回合的一半。会话页只把算好的值与动作交到这里；不是会话页时槽里是空的。
 @Observable
 final class SessionHeader {
@@ -13,8 +13,6 @@ final class SessionHeader {
         var session: PiSessionState
         var title: String
         var undelivered: String?
-        /// 由 Cue 跟进（`SessionDigest.cueFollows`）。
-        var cueFollows: Bool
         var ending: Bool
         /// "⋯"最上面写的所在。
         var place: Dotted?
@@ -56,11 +54,12 @@ extension Workspace {
 /// 工具栏居中的标题位（`.principal`，在详情区里居中，侧栏开合都与对话的阅读栏对齐）：一块玻璃，第一行会话名接状态（`PiSessionSubtitle`，只有着色的字、不画状态圆点：玻璃里唯一的圆是任务圈；只在在跑或要你注意时有；所在写在"⋯"菜单最上面）。
 /// 绑着任务时玻璃里是提醒事项那样的一条：左边是这件事的完成圈（点它完成；会话绑着的事都做完了才结束），会话名下面一行小字写"任务 · 步骤"，
 /// 点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
-/// 两行与一行同高（工具栏控件的高度），没绑任务时只有一行。
+/// 两行与一行同高（工具栏控件的高度）；会话的事都归档了或在回收站里时只有一行。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
 /// 玻璃只包住内容、在标题位里居中（最宽 `width`，名字再长就截断）。标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：
 /// 宽裕时是 `width`，窗口窄、侧栏收起时让到最窄 `minWidth`，不压到左上的侧栏钮、项目切换与右上的搜索、任务、"⋯"，玻璃里的名字随之截断。
-struct SessionTitleSlot: View {
+/// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则）。
+struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     /// 点标题弹出的说明（需要 /reload 时）开着。
@@ -74,6 +73,12 @@ struct SessionTitleSlot: View {
     var body: some View {
         if let state = workspace.shownSessionHeader {
             title(state)
+        } else if workspace.page == .cue {
+            CueTitle()
+                .frame(height: Spacing.toolbarControl)
+                .glass(in: .capsule)
+                .frame(maxWidth: .infinity)
+                .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
         }
     }
 
@@ -83,17 +88,13 @@ struct SessionTitleSlot: View {
             if let task { ring(task) }
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // 会话绑着的事里有一件由 Cue 跟进（`CueStore.cueFollowedSessions`），不只看标题里写的那一件
-                    if state.cueFollows {
-                        CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
-                    }
                     Text(state.title).font(task == nil ? Typography.toolbarTitle : Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
                         .lineLimit(1).layoutPriority(1)
                         .accessibilityAddTraits(.isHeader)
                     if state.ending {
                         Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
                     } else {
-                        PiSessionSubtitle(session: session, undelivered: state.undelivered, cueFollows: state.cueFollows)
+                        PiSessionSubtitle(session: session, undelivered: state.undelivered)
                     }
                 }
                 if let primary { path(primary, count: state.task?.tasks.count ?? 1) }
@@ -149,8 +150,9 @@ struct SessionTitleSlot: View {
     }
 }
 
-/// "⋯"里会话页的那几项：最上面写所在；绑着的每件没完成的事一项"完成"；"绑定到任务"再绑一件（本项目还没绑会话的叶子任务，
-/// 或用会话名新建一个任务绑上）；绑着时"解除绑定"；下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
+/// "⋯"里会话页的那几项：最上面写所在；绑着的每件没完成的事一项"完成"；"绑定到任务"再绑一件（本项目还没绑会话的叶子任务）；
+/// 属于好几件时"解除绑定"其中正在用它的一件（会话总要留一件事，见 `CueStore.adoptSessions`；以前用过它的不在这里解）；
+/// 下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
 struct SessionMenuItems: View {
     let state: SessionHeader.State
     @Environment(Workspace.self) private var workspace
@@ -163,18 +165,17 @@ struct SessionMenuItems: View {
             ForEach(open) { item in
                 Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", systemImage: "checkmark.circle") { workspace.completeTask(item.task.id) }
             }
-            Menu("绑定到任务", systemImage: "link") {
-                ForEach(link.bindable) { item in
-                    Button(Dotted(item.parent?.title, item.task.title).visible) { workspace.attempt { try await workspace.bind(session.sessionID, to: item.task.id) } }
+            if !link.bindable.isEmpty {
+                Menu("绑定到任务", systemImage: "link") {
+                    ForEach(link.bindable) { item in
+                        Button(Dotted(item.parent?.title, item.task.title).visible) { workspace.attempt { try await workspace.bind(session.sessionID, to: item.task.id) } }
+                    }
                 }
-                if !link.bindable.isEmpty { Divider() }
-                Button("新建任务并绑定", systemImage: "plus") { workspace.attempt { try await workspace.bindNewTask(to: session) } }
             }
-            if link.tasks.count == 1, let item = link.tasks.first {
-                Button("解除绑定", systemImage: "link.badge.minus") { unbind(item.task.id) }
-            } else if !link.tasks.isEmpty {
+            let using = link.tasks.filter { $0.task.piSessionID == session.sessionID }
+            if link.tasks.count > 1, !using.isEmpty {
                 Menu("解除绑定", systemImage: "link.badge.minus") {
-                    ForEach(link.tasks) { item in
+                    ForEach(using) { item in
                         Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
                     }
                 }
@@ -196,7 +197,7 @@ struct SessionMenuItems: View {
     /// 解除不改会话，也不改任务状态。
     private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }
 }
-/// 会话绑着的事（含做完了的，先绑的在前）与本项目还能绑的。
+/// 会话属于的事（正在用它的与以前用过它的，含做完了的，先开始的在前）与本项目还能绑的。
 nonisolated struct SessionTaskLink: Sendable, Equatable {
     var tasks: [LeafTask]
     var bindable: [LeafTask]

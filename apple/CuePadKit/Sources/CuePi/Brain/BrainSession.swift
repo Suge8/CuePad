@@ -51,6 +51,13 @@ final class BrainSession {
     }
 }
 
+/// 工具结果里的文字：字符串原样，内容块（`[{"type": "text", "text": …}]`，MCP 与 Pi 同形）只取文字块拼起来。
+func brainText(_ content: Any?) -> String {
+    if let text = content as? String { return text }
+    let blocks = content as? [[String: Any]] ?? []
+    return blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
+}
+
 func jsonString(_ object: Any) -> String {
     String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.withoutEscapingSlashes])) ?? Data(), as: UTF8.self)
 }

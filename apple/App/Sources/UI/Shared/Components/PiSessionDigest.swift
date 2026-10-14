@@ -15,8 +15,6 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var undelivered = 0
     /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
-    /// 由 Cue 跟进（会话列表同一条，`PiSessionListItem.cueFollows`）：顶栏带 Cue 的小头像，等回答写"等 Cue 回答"。
-    var cueFollows = false
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
     var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
@@ -54,8 +52,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
             undelivered: item?.undelivered ?? 0,
-            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
-            cueFollows: item?.cueFollows ?? false)
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
     }
 }
 
@@ -71,28 +68,38 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
-/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的会话状态标上（`PiStateDot`，同一状态与列表里一个样子：等你确认赭黄问号圆、
-/// 出错胭脂三角），正文中性；
-/// `prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
+/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态符号上（问题是 `WaitingMark`、出错是胭脂叹号），正文中性；
+/// 问题的正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
 /// 层级只有两层：对话里的（出错的原因）是纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是玻璃，
 /// 与回复框同属底部玻璃那一层。顶上只有系统玻璃（标题、圆钮），不在对话上另浮卡片。
 struct Callout<Accessory: View>: View {
-    let status: PiShown.Status
+    enum Kind { case question, failure }
+
+    let kind: Kind
     let text: String
-    var prominent = false
     var docked = false
     @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
 
+    init(_ kind: Kind, text: String, docked: Bool = false, @ViewBuilder accessory: () -> Accessory) {
+        self.kind = kind
+        self.text = text
+        self.docked = docked
+        self.accessory = accessory()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                PiStateDot(shown: PiShown(status: status), size: prominent ? 10 : 8)
+                switch kind {
+                case .question: WaitingMark()
+                case .failure: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityHidden(true)
+                }
                 Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            .font(prominent ? Typography.title : Typography.body)
+            .font(kind == .question ? Typography.title : Typography.body)
             accessory
         }
         .padding(16)
@@ -103,8 +110,8 @@ struct Callout<Accessory: View>: View {
 }
 
 extension Callout where Accessory == EmptyView {
-    init(status: PiShown.Status, text: String, prominent: Bool = false, docked: Bool = false) {
-        self.init(status: status, text: text, prominent: prominent, docked: docked) { EmptyView() }
+    init(_ kind: Kind, text: String, docked: Bool = false) {
+        self.init(kind, text: text, docked: docked) { EmptyView() }
     }
 }
 
@@ -161,7 +168,7 @@ struct QuestionCard: View {
     private var failure: String? { writeError ?? sent?.failure }
 
     var body: some View {
-        Callout(status: .asking, text: question.text, prominent: true, docked: true) {
+        Callout(.question, text: question.text, docked: true) {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {
@@ -297,8 +304,7 @@ struct DeliveryStatusLabel: View {
             case .known(.succeeded):
                 Label { Text(Dotted("已送达", request.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: { Image(systemName: "paperplane.fill") }
                     .foregroundStyle(palette.ink2)
-            // 同会话状态标的"没能送达"
-            case .known(.failed): Label("没能送达", systemImage: PiShown(status: .delivery(.failed)).symbol).foregroundStyle(palette.failure)
+            case .known(.failed): Label("没能送达", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
             }
         }

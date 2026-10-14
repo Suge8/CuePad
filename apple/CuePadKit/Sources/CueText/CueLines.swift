@@ -49,6 +49,37 @@ public enum CueLines {
     }
 }
 
+/// 名字（任务、步骤、会话名）多长：按显示宽度，汉字、假名、谚文、全角符号与表情算 2，其余算 1，不超过 `limit`（约 12 个汉字）。
+/// Cue 写的名字超了退回给它重写（不截断：截出来的半句话等于假装写成了）；机器生成的（会话名生成的任务名、按任务名起的会话名）用 `clipped`；
+/// 你手打的不限。
+public enum CueName {
+    public static let limit = 24
+
+    public static func width(_ text: String) -> Int {
+        text.reduce(0) { sum, character in sum + (character.unicodeScalars.contains(where: isWide) ? 2 : 1) }
+    }
+
+    /// 超过 `limit` 时截到放得下末尾的"…"为止。
+    public static func clipped(_ text: String) -> String {
+        guard width(text) > limit else { return text }
+        var kept = "", used = 1
+        for character in text {
+            used += width(String(character))
+            guard used <= limit else { break }
+            kept.append(character)
+        }
+        return kept.trimmingCharacters(in: .whitespaces) + "…"
+    }
+
+    private static func isWide(_ scalar: Unicode.Scalar) -> Bool {
+        if scalar.properties.isIdeographic || scalar.properties.isEmojiPresentation { return true }
+        switch scalar.value {
+        case 0x1100...0x115F, 0x2E80...0x303F, 0x3040...0x33FF, 0xAC00...0xD7A3, 0xFE30...0xFE4F, 0xFF00...0xFF60, 0xFFE0...0xFFE6: return true
+        default: return false
+        }
+    }
+}
+
 /// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：
 /// 标题 = 首个有文字的行（见 `CueLines.isTitleLine`）去掉开头的 `#`（Markdown 标题前缀）；
 /// 摘要 = 标题之后的第一段（跳过开头的空行，到下一个空行、分割线或只有图片的行为止），各行以空格连接，最多 `previewLimit` 字——

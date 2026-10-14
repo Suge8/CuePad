@@ -49,15 +49,15 @@ struct ReplyTests {
         }
 
         #expect(settings.replyDraft(for: session).text.count == 200)
-        #expect(defaults.writes["replyTexts"] == nil)
-        try await eventually("defaults.writes[\"replyTexts\"] != nil") { defaults.writes["replyTexts"] != nil }
+        #expect(defaults.writes["replyDrafts"] == nil)
+        try await eventually("defaults.writes[\"replyDrafts\"] != nil") { defaults.writes["replyDrafts"] != nil }
         await quietPeriod(.milliseconds(600))
-        #expect(defaults.writes["replyTexts"] == 1)
+        #expect(defaults.writes["replyDrafts"] == 1)
 
         settings.setReplyDraft(ComposerDraft(text: "没写完"), for: session)
         settings.flush()
         settings.flush()
-        #expect(defaults.writes["replyTexts"] == 2)
+        #expect(defaults.writes["replyDrafts"] == 2)
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).replyDraft(for: session).text == "没写完")
     }
 
@@ -78,7 +78,7 @@ struct ReplyTests {
         settings.setReplyDraft(draft, for: session.id)
         settings.flush()
 
-        let request = try await app.services.requestMacDelivery(self.settings(suite).replyDraft(for: session.id), to: session, mode: .send)
+        let request = try await Workspace(services: app.services).said(self.settings(suite).replyDraft(for: session.id), to: session, mode: .send)
 
         #expect(request.content == """
             对你回答的批注（「」里是原话摘录）：
@@ -99,9 +99,9 @@ struct ReplyTests {
         let app = TestApp()
         try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
         let live = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let queued = try await app.services.requestMacDelivery("改完再看看超时", to: live, mode: .followUp)
-        let arrived = try await app.services.requestMacDelivery("顺便跑一遍", to: live, mode: .followUp)
-        let now = try await app.services.requestMacDelivery("先停下这个", to: live, mode: .steer)
+        let queued = try await app.services.store.requestDelivery("改完再看看超时", to: live.target, on: live.hostID, mode: .followUp)
+        let arrived = try await app.services.store.requestDelivery("顺便跑一遍", to: live.target, on: live.hostID, mode: .followUp)
+        let now = try await app.services.store.requestDelivery("先停下这个", to: live.target, on: live.hostID, mode: .steer)
         let messages = [message(1, "顺便跑一遍", delivery: arrived.id)]
 
         #expect(PiChat.queued([queued, arrived, now], messages: messages).map(\.id) == [queued.id])
@@ -114,8 +114,8 @@ struct ReplyTests {
         let store = app.services.store
         try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
         let live = try #require(try await store.piSessionPage(.live).items.first?.state)
-        let first = try await app.services.requestMacDelivery("改完再看看超时", to: live, mode: .followUp)
-        let second = try await app.services.requestMacDelivery("顺便跑一遍", to: live, mode: .followUp)
+        let first = try await app.services.store.requestDelivery("改完再看看超时", to: live.target, on: live.hostID, mode: .followUp)
+        let second = try await app.services.store.requestDelivery("顺便跑一遍", to: live.target, on: live.hostID, mode: .followUp)
         #expect(first.isWithdrawable && second.isWithdrawable)
 
         #expect(try await store.promoteDelivery(first.id))
@@ -124,7 +124,7 @@ struct ReplyTests {
         #expect(try await store.deliveryRequest(second.id) == nil)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { _ in }) { _ in .succeeded }
-        let third = try await app.services.requestMacDelivery("再加一句", to: live, mode: .followUp)
+        let third = try await app.services.store.requestDelivery("再加一句", to: live.target, on: live.hostID, mode: .followUp)
         try await executor.start()
         for try await current in store.observe({ try $0.deliveryRequest(third.id) }) where current?.isOpen == false { break }
         await executor.stop()
@@ -147,8 +147,9 @@ struct ReplyTests {
         let draft = ComposerDraft(text: "按这张改", attachments: [Outbox(content: "登录页\n\n\(image)\n\n按钮改圆角", card: UUID())])
 
         #expect(!claude.composerKinds.contains(.images))
-        let toClaude = try await app.services.requestMacDelivery(draft.accepting(claude.composerKinds), to: claude, mode: .send)
-        let toPi = try await app.services.requestMacDelivery(draft.accepting(pi.composerKinds), to: pi, mode: .send)
+        let workspace = Workspace(services: app.services)
+        let toClaude = try await workspace.said(draft.accepting(claude.composerKinds), to: claude, mode: .send)
+        let toPi = try await workspace.said(draft.accepting(pi.composerKinds), to: pi, mode: .send)
 
         #expect(!toClaude.content.contains("cuepad://img"))
         #expect(toClaude.content.contains("按钮改圆角") && toClaude.content.contains("按这张改"))

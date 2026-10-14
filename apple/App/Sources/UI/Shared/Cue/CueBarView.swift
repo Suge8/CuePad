@@ -38,14 +38,15 @@ struct CueStatusRow<Trailing: View>: View {
                 CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
             }
             Spacer(minLength: 6)
-            CueWaitingBadge(count: cue.digest.waiting)
+            WaitingCount(count: cue.digest.waiting).font(Typography.meta)
             trailing
         }
         .animation(Motion.quick, value: cue.digest)
     }
 }
 
-/// Cue 此刻在做什么的那一句（`CuePresence.line`；没有时是 `fallback`）：起不来是失败色，其余次要灰。页头、状态行、Cue 页底部同用。
+/// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
+/// 都没有时是 `fallback`。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
 struct CueStatusLine: View {
     var fallback: String?
     var font = Typography.meta
@@ -54,27 +55,59 @@ struct CueStatusLine: View {
 
     var body: some View {
         let cue = workspace.cue
-        if let line = cue.presence.line(name: cue.name) ?? fallback {
-            Text(line).font(font).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
-                .transition(.opacity)
+        Group {
+            if let shown {
+                PiShownLabel(shown: shown)
+            } else if let line = cue.presence.line(name: cue.name) ?? fallback {
+                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
+            }
         }
+        .font(font)
+        .transition(.opacity)
+    }
+
+    private var shown: PiShown? {
+        #if os(macOS)
+        workspace.cue.presence.shown?.speaking(workspace.services.cue.keeper?.speech.draft != nil)
+        #else
+        workspace.cue.presence.shown
+        #endif
+    }
+}
+
+/// Cue 页的页头，一直在（Mac 窗口工具栏居中、手机顶栏、iPad 面板顶上；玻璃由放它的地方给）：头像，名字与此刻在做什么。
+/// 排法同会话页的顶栏：Mac 一行（名字接状态），手机两行；左边让头像贴着玻璃的圆头。输入框里有没说出去的话时头像露"在听"。
+struct CueTitle: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        HStack(spacing: 8) {
+            CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .row)
+                #if os(iOS)
+                .padding(.leading, 4)
+                #endif
+            #if os(macOS)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
+                CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)
+            }
+            .padding(.trailing, 14)
+            #else
+            VStack(alignment: .leading, spacing: 1) {
+                Text(cue.name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                CueStatusLine(font: .caption).lineLimit(1)
+            }
+            .padding(.trailing, 16)
+            #endif
+        }
+        .animation(Motion.quick, value: cue.presence)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }
-}
-
-/// "等你 N"：赭黄的字（等你确认的颜色），没有在等的不画。Mac 侧栏、菜单栏面板、iPad 侧栏用它；iPhone 底栏是角标。
-struct CueWaitingBadge: View {
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if count > 0 {
-            Text("等你 \(count)").font(Typography.meta.weight(.semibold)).monospacedDigit().foregroundStyle(palette.attention)
-                .fixedSize()
-                .transition(.opacity)
-        }
-    }
 }

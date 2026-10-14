@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
-/// 或 Agent 发到手机上看的一个文件（预览卡）。
+/// 或 Agent 一次发到手机上看的几个文件（一张预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     enum Role: Sendable { case user, pi, system, preview }
 
@@ -15,9 +15,9 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let meta: PiChat.RoundNote?
     /// Pi 回答：这一轮的工具活动，点开 `meta` 那一行就地展开成清单
     var tools: PiChatMessage.Tools?
-    /// 预览：要显示的预览记录
-    var preview: PiPreview?
-    /// 你的话这一格其实是 Cue 发进会话的（投送请求的 `origin` 是 cue）：气泡上标出 Cue。
+    /// 预览卡：一次发来的几个文件，按发的先后
+    var previews: [PiPreview] = []
+    /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
 
     var isUser: Bool { role == .user }
@@ -38,15 +38,16 @@ nonisolated enum PiChat {
     /// 对话按先后（消息已按 seq 升序）：你的话与 Pi 的回答各成一条，回答带这一轮的经过。认不出说话人的不显示。
     /// 对话只来自 Pi 的会话文件（唯一事实源），与终端里看到的一致。
     /// 预览卡不是会话文件里的内容（文件在 Agent 的命令行里发出，不留对话条），按创建时间插进对话：排在它创建之前最近的那条之后，
-    /// 一轮里发的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
+    /// 一轮里发的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。一批的创建时间相同（`CueStore.addPreviews`），是一张卡。
     /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
     static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = [], cueSent: Set<UUID> = []) -> [PiChatEntry] {
         var waiting = previews.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }[...]
         var entries: [PiChatEntry] = []
         func place(before time: Date?) {
             while let next = waiting.first, time.map({ next.createdAt < $0 }) ?? true {
-                entries.append(PiChatEntry(id: next.id, role: .preview, text: next.title, meta: nil, preview: next))
-                waiting.removeFirst()
+                let batch = Array(waiting.prefix { $0.createdAt == next.createdAt })
+                entries.append(PiChatEntry(id: next.id, role: .preview, text: next.title, meta: nil, previews: batch))
+                waiting.removeFirst(batch.count)
             }
         }
         for message in messages {
@@ -54,7 +55,7 @@ nonisolated enum PiChat {
             place(before: message.at)
             entries.append(PiChatEntry(
                 id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools,
-                fromCue: message.deliveryID.map(cueSent.contains) ?? false))
+                fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
         return entries

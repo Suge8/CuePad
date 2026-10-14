@@ -60,10 +60,7 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                HStack(spacing: 4) {
-                    if digest?.cueFollows == true { CueFollowMark() }
-                    PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0), cueFollows: digest?.cueFollows ?? false)
-                }
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0))
             }
         } trailing: {
             if let session {
@@ -91,7 +88,7 @@ struct SessionScreen: View {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(status: .failed, text: "没能结束：\(reason)", docked: true)
+                        Callout(.failure, text: "没能结束：\(reason)", docked: true)
                     }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {
@@ -115,7 +112,6 @@ struct SessionScreen: View {
                 .environment(\.composerInk, .solid)
             }
         }
-        .ownsBottomEdge()
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)

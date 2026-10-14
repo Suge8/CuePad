@@ -33,34 +33,11 @@ struct IOSWorkflowTests {
     @Test(arguments: [DeliveryMode.send, .steer, .followUp])
     func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac(mode: DeliveryMode) async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
-        let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
+        let request = try await Workspace(services: app.services).said(ComposerDraft(text: "正文"), to: target, mode: mode)
         #expect(request.hostID == "mac-b")
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
         #expect(request.mode == .known(mode))
         #expect(request.status == .known(.pending))
-    }
-
-    /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说，另有马上说。
-    /// 手机不给"放进输入框"（人不在 Mac 前，没人去按那一下发送）。
-    @Test(arguments: [
-        (PiWorkState.settled, [DeliveryMode.send]),
-        (.error, [.send]),
-        (.thinking, [.followUp, .steer]),
-        (.tool, [.followUp, .steer]),
-        (.waitingForUser, [.followUp, .steer]),
-        // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
-        (.delegating, [.send]),
-        (.outputting, [.followUp, .steer]),
-        // 在压缩上下文：Pi 忙着，话等压完再进（扩展在手动压缩期间替它留着）
-        (.compacting, [.followUp, .steer]),
-        // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
-        (.ended, [.send]),
-    ])
-    func 发给会话_空闲直接发_忙时默认等它做完再说另有马上说(state: PiWorkState, modes: [DeliveryMode]) {
-        let session = PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(session.deliveryModes == modes)
     }
 
     // MARK: 发给 Agent

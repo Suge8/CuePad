@@ -25,20 +25,18 @@ import Testing
     #expect(try await store.children(of: step.id).map(\.id) == [draft.id])
   }
 
-  @Test func 对叶子的会话说话_方式按会话此刻的状态定_开工时草稿等它做完再交() async throws {
+  /// 方式只按意图写，不看库里会话忙不忙（记录可能过时，忙不忙由 Mac 执行时定）：now 马上说（做不到的写等它做完）、after 等它做完。
+  @Test func 对叶子的会话说话_方式按意图定_开工时草稿等它做完再交() async throws {
     let leaf = try await store.createTask("修乱序", in: nil)
     await #expect(throws: CueStoreError.noSession("修乱序")) { try await store.sayToLeaf(leaf.id, text: "在吗", when: .now, host: "mac") }
     try await store.linkCard(leaf.id, toSession: "s1")
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     try await recorder.update(sessionID: "s1", state: .settled)
-    #expect(try await store.sayToLeaf(leaf.id, text: "在吗", when: .after, host: "mac").mode == .known(.send))
-    await #expect(throws: CueStoreError.alreadyStarted("修乱序")) { try await store.startLeaf(leaf.id, host: "mac") }
-
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    #expect(try await store.sayToLeaf(leaf.id, text: "停一下", when: .now, host: "mac").mode == .known(.steer))
+    #expect(try await store.sayToLeaf(leaf.id, text: "在吗", when: .now, host: "mac").mode == .known(.steer))
     #expect(try await store.sayToLeaf(leaf.id, text: "做完再看", when: .after, host: "mac").mode == .known(.followUp))
+    await #expect(throws: CueStoreError.alreadyStarted("修乱序")) { try await store.startLeaf(leaf.id, host: "mac") }
     _ = try await store.createCard(body: "跑测试", under: leaf.id)
-    let started = try #require(try await store.startLeaf(leaf.id, host: "mac"))
+    let started = try await store.startLeaf(leaf.id, host: "mac")
     #expect(started.mode == .known(.followUp) && started.content == "跑测试")
   }
 
@@ -51,27 +49,19 @@ import Testing
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
     let image = try store.files.store(pngData(width: 8, height: 8, shade: 0.5))
     _ = try await store.createCard(body: "看截图\n\(CueFormat.imageMarkup(id: image))", under: claude.id)
-    #expect(try await store.startLeaf(claude.id, host: "mac")?.content == "看截图")
+    #expect(try await store.startLeaf(claude.id, host: "mac").content == "看截图")
     try await recorder.update(sessionID: "claude-1", state: .thinking, agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopLeaf(claude.id, host: "mac") }
 
     let codex = try await store.createTask("改文案", in: nil)
     try await store.linkCard(codex.id, toSession: "codex-1")
     try await recorder.update(sessionID: "codex-1", state: .settled, agent: .codex)
-    #expect(try await store.completeTask(codex.id, requireStepsDone: true, cue: true).isEmpty)
+    #expect(try await store.finishTask(codex.id, evidence: ["文案改好了"]).ended.isEmpty)
     #expect(try await store.card(codex.id)?.status == .done)
-
-    // 你收下 Cue 请你验收的事：任务照样完成，结束不了的会话照样留着
-    let accepted = try await store.createTask("改样式", in: nil)
-    try await store.linkCard(accepted.id, toSession: "codex-2")
-    try await recorder.update(sessionID: "codex-2", state: .settled, agent: .codex)
-    let question = try await store.askToAccept(accepted.id, evidence: "- 样式对上了").message
-    #expect(try await store.answerCueMessage(question.id, answer: CueAcceptance.accept).isEmpty)
-    #expect(try await store.card(accepted.id)?.status == .done)
   }
 
   /// 一个会话绑好几个叶子、草稿接进回复框、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
-  @Test func 绑定_只绑叶子_改绑换掉原来的_解绑不改任务状态() async throws {
+  @Test func 绑定_只绑叶子_改绑后原来的会话留作用过的_解绑不改任务状态() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
     let second = try await store.createTask("改文案", in: project.id)
@@ -79,11 +69,13 @@ import Testing
     try await store.bindSession("s1", to: second.id)
     #expect(try await store.card(second.id)?.status == .inProgress)
 
-    // 一个叶子最多一个会话：改绑换掉原来的；解绑后会话照常、任务状态不变
+    // 一个叶子正在用的最多一个会话：改绑换上新的，原来的留作它以前用过的；解绑后会话照常、任务状态不变
     try await store.bindSession("s2", to: first.id)
-    #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [second.id])
+    #expect(try await store.card(first.id)?.piSessionID == "s2")
+    // 两次绑定常落在同一毫秒（开始时刻相同时按 id 排），只比是哪几件
+    #expect(Set(try await store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
     try await store.unbindSession(from: second.id)
-    #expect(try await store.tasks(boundTo: "s1").isEmpty)
+    #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [first.id])
     #expect(try await store.card(second.id)?.status == .inProgress)
 
     let step = try await store.createTask("复现", under: second.id)

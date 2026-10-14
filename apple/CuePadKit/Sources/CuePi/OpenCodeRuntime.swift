@@ -13,6 +13,7 @@ import OSLog
 ///   记在父会话的 `subagents` 里。一个服务承载全部会话，会话的 `pid` 是服务进程；服务端不知道终端的 tty，所以跳不到终端。
 /// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，CuePad 退出后照常在，终端里的 OpenCode 也用它）；
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
+/// - 正在说的话（`PiDraft`）：顶层会话的由 `OpenCodeDrafts` 从事件流累积，交给桥；终端里开的会话也一样（都在同一个服务里），子代理的不要。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
@@ -48,6 +49,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     private var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     private var ingestQueue: [String] = []
     private var ingesting: Task<Void, Never>?
+    /// 顶层会话正在说的话（桥上那一格的来源）
+    private var drafts = OpenCodeDrafts()
 
     /// 连着的一个服务进程。
     @MainActor private final class Connection {
@@ -158,6 +161,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         childTools = [:]
         ended = [:]
         catalogs = [:]
+        drafts = OpenCodeDrafts()
         listed = nil
         ingestQueue = []
     }
@@ -202,6 +206,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         } while cursor != nil
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
         guard self.connection === connection else { return }
+        for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
 
         let topLevel = all.filter { $0.parentID == nil }
         for info in topLevel {
@@ -316,9 +321,10 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
         if let parent = data.parentID ?? parents[sessionID] {
-            child(sessionID, of: parent, event)
+            if event.type != "session.text.delta" { child(sessionID, of: parent, event) }
             return
         }
+        if let (id, draft) = drafts.apply(event) { bridge.setDraft(bridgeID(id, connection), draft) }
         switch event.type {
         case "session.created":
             guard let location = data.location else { return }
@@ -359,8 +365,6 @@ public final class OpenCodeRuntime: AgentRuntime {
             }
         case "session.reasoning.started":
             await change(sessionID, connection) { $0.activity = .thinking; $0.detail = nil }
-        case "session.text.started":
-            await change(sessionID, connection) { $0.activity = .outputting; $0.detail = nil }
         case "session.tool.input.started":
             guard let id = data.id, let name = data.name else { return }
             await change(sessionID, connection) { $0.toolNames[id] = name }
@@ -678,9 +682,11 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         if model != nil || thinking != nil {
             let current = tracked.info.model
-            guard let key = model ?? current.map({ PiModelKey(provider: $0.providerID, id: $0.id) }),
-                  let target = try await catalog(tracked.directory, connection.client).models.first(where: { $0.key == key })
-            else { throw PiBridgeError.rejected("unknown_model") }
+            guard let key = model ?? current.map({ PiModelKey(provider: $0.providerID, id: $0.id) }) else { throw PiBridgeError.rejected("unknown_model") }
+            // 服务刚起时头一次取到的模型表是空的（实测 2.0.25：约 0.2 秒后才有），开会话紧接着配模型就会撞上：没找到先重取一次再说
+            var target = try await catalog(tracked.directory, connection.client).models.first { $0.key == key }
+            if target == nil { target = try await catalog(tracked.directory, connection.client, reload: true).models.first { $0.key == key } }
+            guard let target else { throw PiBridgeError.rejected("unknown_model") }
             let variants = (target.variants ?? []).map(\.id)
             // 模型没有强度档（没有 variant）时不带；关闭就是不带 variant
             let level = thinking.flatMap { target.thinkingLevels.isEmpty ? nil : $0.clamped(to: target.thinkingLevels) }
@@ -720,8 +726,15 @@ public final class OpenCodeRuntime: AgentRuntime {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        try await configure(
-            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
+        let id = try await open(in: directory, launchToken: launchToken)
+        let sessionID = bridge.session(id: id)?.sessionID
+        do {
+            return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
+        } catch {
+            // 配不上时结束只让它下线，会话还在服务里：开会话失败的不留，从服务里删掉
+            if let sessionID, let connection { _ = try? await connection.client.call("DELETE", "/api/session/\(sessionID)") }
+            throw error
+        }
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
@@ -772,29 +785,13 @@ public final class OpenCodeRuntime: AgentRuntime {
         return try await withCheckedThrowingContinuation { waiters[id] = $0 }
     }
 
-    /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。输出不接管道：常驻的服务进程继承它，
-    /// 管道就永远读不到结尾。
+    /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。服务自成一个会话（不在这条命令的进程组里，
+    /// 超时结束整组碰不到它），标准输入输出指到 /dev/null（不握着这边的管道）：实测 2.0.25。
     private func launchService() async throws {
         guard let executable = locator.candidates(AgentKind.opencode.command).first else { throw AgentRuntimeError.notInstalled(.opencode) }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["service", "start"]
-        process.environment = paths.environment
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let (exited, exit) = AsyncStream<Int32>.makeStream()
-        process.terminationHandler = {
-            exit.yield($0.terminationStatus)
-            exit.finish()
-        }
-        try process.run()
-        let watchdog = Task {
-            guard (try? await Task.sleep(for: Self.launchTimeout)) != nil else { return }
-            process.end()
-        }
-        defer { watchdog.cancel() }
-        for await status in exited where status != 0 {
-            Self.log.error("opencode service start 失败：退出码 \(status)")
+        let result = await runCapturing(executable, ["service", "start"], environment: paths.environment, timeout: Self.launchTimeout)
+        guard let result, result.status == 0 else {
+            Self.log.error("opencode service start 失败：\(result.map { "退出码 \($0.status)" } ?? "超时", privacy: .public)")
             throw AgentRuntimeError.launchTimedOut(.opencode)
         }
     }

@@ -9,10 +9,14 @@ public actor CueStore {
   /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
   public nonisolated let files: AttachmentFiles
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
+  /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
+  private var readExpiry: Date?
   private var syncSubscribers: [UUID: AsyncStream<PendingSync?>.Continuation] = [:]
   private let notificationName: String
   private let changeListener: ChangeListener
   private var lastDataVersion: Int64
+  /// 这个连接是哪台 Mac（`ownSessions`）：它写的会话记录由它挂到任务上；手机与命令行为 nil。
+  var sessionHost: String?
 
   public init(url: URL) throws {
     try FileManager.default.createDirectory(
@@ -72,6 +76,7 @@ public actor CueStore {
   /// 订阅：先产出一次当前值，之后每当 `read` 读到的表被提交的写事务改动就重读并产出。依赖的表由读取本身决定
   /// （每次读完按它实际读到的表更新，随数据走不同分支也对），调用处不另声明；这是订阅的唯一写法——
   /// 只要"变了就叫我"的也读一个会跟着变的值（计数、版本、列表），不单独订阅表。
+  /// 结果随时间变的（读里登记了 `expire(at:)`，如 Cue 那台 Mac 算不算在线）到点也重读，不轮询。
   /// 突发的多次写入会合并为一次重读。`read` 在 store 的隔离域内执行，可直接调用查询方法：
   /// `store.observe { try $0.cards(in: id) }`
   /// 订阅以表为粒度：别的行改动同一张表也会重读，但结果和上一次一样就不产出——比较只在读取的这一侧做一次，
@@ -85,10 +90,19 @@ public actor CueStore {
         // 第一次读之前什么都可能改动它：先订阅全部表，读完再收窄
         let token = await self.subscribe(signal)
         signal.yield()
+        var timer: Task<Void, Never>?
+        defer { timer?.cancel() }
         do {
           var last = initial
           for await _ in signals {
-            let next = try await self.run(read, token: token)
+            let (next, expiry) = try await self.run(read, token: token)
+            timer?.cancel()
+            timer = expiry.map { due in
+              Task {
+                guard (try? await Task.sleep(for: .seconds(max(0, due.timeIntervalSinceNow)))) != nil else { return }
+                signal.yield()
+              }
+            }
             if next == last { continue }
             last = next
             continuation.yield(next)
@@ -113,19 +127,28 @@ public actor CueStore {
   }
 
   /// 读一次，并把订阅收窄到这次实际读到的表。读与收窄在同一次 actor 执行里，其间没有写入能漏掉。
-  private func run<T>(_ read: (isolated CueStore) throws -> T, token: UUID) throws -> T {
+  /// 也带回结果随时间变的时刻（读里调过 `expire(at:)`）。
+  private func run<T>(_ read: (isolated CueStore) throws -> T, token: UUID) throws -> (T, Date?) {
+    readExpiry = nil
     let (value, reads) = try db.tracking { try read(self) }
     subscribers[token]?.tables = reads
-    return value
+    return (value, readExpiry)
   }
+
+  /// 正在读的结果到 `date` 会随时间变（不是因为库里写了什么）：`observe` 到点再读一次。不在订阅里读时无影响。
+  func expire(at date: Date) { readExpiry = min(readExpiry ?? date, date) }
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 
   // MARK: 内部：事务与通用行读写
 
-  /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
+  /// 一个写事务；提交前让会话都挂在任务上（`adoptSessions`），提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changes) = try db.transaction(body)
+    let (result, changes) = try db.transaction {
+      let result = try body()
+      try adoptSessions()
+      return result
+    }
     let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty { ChangeNotification.post(notificationName) }
     for (_, subscriber) in subscribers where !subscriber.tables.isDisjoint(with: tables) {

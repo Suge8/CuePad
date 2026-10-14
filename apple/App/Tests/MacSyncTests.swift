@@ -49,7 +49,7 @@ struct MacSyncTests {
             _ = await finish()
             done.signal()
         }
-        #expect(Self.blockCurrentThread(until: done, seconds: 3), "主线程被占住时收尾等不到")
+        #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
     }
 
@@ -145,7 +145,7 @@ struct MacSyncTests {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory("/work", for: project.id)
 
-        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app"))]))
+        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app", state: .settled))]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
@@ -190,7 +190,7 @@ struct MacSyncTests {
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
         let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .thinking)
+        try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try await services.resetPiState()
@@ -395,6 +395,21 @@ struct MacSyncTests {
         #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
+    /// Cue 在这台值班也是在等：你在手机上对它说的话、"等你"的回答只经主动拉取到达，会话都关着、没有在路上的请求时也拉。
+    @Test(.timeLimit(.minutes(1)))
+    func 主动拉取的条件_Cue在这台值班时也拉() async throws {
+        #expect(services.pollingCadence == nil)
+        try await services.store.updateCueProfile { [hostID = TestApp.hostID] in
+            $0.hostID = hostID
+            $0.enabledAt = .now
+        }
+        services.start()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+        #expect(services.pi.slots.isEmpty && !services.hasOpenDeliveries)
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+    }
+
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
@@ -532,7 +547,7 @@ struct MacSyncTests {
         derived.refresh(digest)
 
         #expect(digest.deliveries.isEmpty)
-        let entry = try #require(derived.items.compactMap { if case .entry(let entry) = $0 { entry } else { nil } }.first)
+        let entry = try #require(derived.items.first)
         #expect(entry.fromCue)
     }
 

@@ -17,10 +17,13 @@ struct PromptList: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
+    /// 推提示词发没发出去用的"此刻"：在等回执的那条到点时刷新（`Speech`）。
+    @State private var now = Date.now
 
     var body: some View {
         let prompts = detail?.prompts ?? []
         let primary = detail?.primaryPrompt(agents: agents)
+        let services = services
         VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
@@ -32,7 +35,8 @@ struct PromptList: View {
             }
             ForEach(prompts) { prompt in
                 PromptCard(
-                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents), primary: prompt.id == primary, open: { open(prompt) },
+                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents, now: now, reaches: { services.reaches($0) }),
+                    primary: prompt.id == primary, open: { open(prompt) },
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -62,6 +66,7 @@ struct PromptList: View {
             }
         }
         .animation(Motion.quick, value: prompts.map(\.id))
+        .refreshes($now, at: prompts.compactMap { PromptDelivery.deadline(of: $0.id, agents: agents) }.min())
     }
 
     /// 从本项目的灵感里挑一条挂上来；没有可挑的不出现。
@@ -94,6 +99,7 @@ struct PromptCard: View {
     let primary: Bool
     let open: () -> Void
     let hand: () -> Void
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -127,7 +133,7 @@ struct PromptCard: View {
 
     private func handButton(enabled: Bool) -> some View {
         let fresh = delivery == .unsent
-        return Button(action: hand) {
+        return Button(action: handOrResend) {
             Label(fresh ? "发给 Agent" : "重发", systemImage: primary ? "paperplane.fill" : "paperplane")
                 .font(TaskMetrics.caption.weight(primary ? .semibold : .medium))
                 .foregroundStyle(primary ? palette.signature : fresh ? palette.ink : palette.ink2)
@@ -140,6 +146,16 @@ struct PromptCard: View {
         .disabled(!enabled)
     }
 
+    /// 重发先撤回没送到的那条（撤不回——Mac 已领取——就不重发，提示原因），再打开发给 Agent。
+    private func handOrResend() {
+        guard case .failed(let request, _) = delivery else { return hand() }
+        let services = workspace.services, hand = hand
+        workspace.attempt {
+            try await services.withdraw(.request(request))
+            hand()
+        }
+    }
+
     @ViewBuilder private var status: some View {
         switch delivery {
         case .unsent:
@@ -150,8 +166,8 @@ struct PromptCard: View {
                 Text("发送中").foregroundStyle(palette.ink2)
             }
             .font(TaskMetrics.caption)
-        case .failed(let reason):
-            Text(reason).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
+        case .failed(_, let failure):
+            Text(failure.text(sync: workspace.services.syncStatus)).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
         }
     }
 }

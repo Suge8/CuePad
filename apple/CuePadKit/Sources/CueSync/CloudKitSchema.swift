@@ -11,11 +11,12 @@ import Foundation
 enum CloudKitSchema {
   /// 生产环境里部署过、已不再使用的字段（按记录类型）与记录类型。
   static let retiredFields: [String: [(name: String, declaration: String)]] = [
-    "cards": [("isFavorite", "INT64"), ("numbering", "STRING")],
+    "cards": [("cueFollows", "INT64"), ("isFavorite", "INT64"), ("numbering", "STRING")],
     "projects": [("goalCardID", "STRING"), ("sortKey", "STRING")],
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
     "piMessages": [("toolCount", "INT64")],
+    "cueMessages": [("acceptance", "INT64")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),

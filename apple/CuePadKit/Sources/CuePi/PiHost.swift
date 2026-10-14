@@ -16,7 +16,8 @@ import OSLog
 ///   Pi 收到后优雅收尾（扩展先发 bye）；
 /// - 让出：同一会话 id 在别处（自己的终端、herdr）也打开着时，托管的那个空闲就退、正在跑一轮就等做完再退；退出后让接手的进程
 ///   重新载入会话（`PiBridge.reload`），它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句；
-/// - 扩展协议号变了（App 更新后）的托管进程没有终端能 /reload：让它退出，下次发消息用新扩展恢复。
+/// - App 更新后扩展协议号变了的托管进程：扩展看到自己的文件换了新版本就在空闲时自己重新载入（见 README「版本」），在跑的一轮不打断；
+///   不会自己重新载入的旧扩展（`selfReloadingExtension` 之前）没有终端能 /reload，让它退出，下次发消息用新扩展恢复。
 @MainActor
 public final class PiHost {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-host")
@@ -158,6 +159,9 @@ public final class PiHost {
         return session
     }
 
+    /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入；更早的协议号不同时只能让它退出。
+    nonisolated static let selfReloadingExtension = 29
+
     /// 扩展读这个环境变量判断自己是被 CuePad 托管的，值是空闲多少秒后退出。
     static let hostedVariable = "CUEPAD_HOSTED"
 
@@ -273,13 +277,13 @@ public final class PiHost {
         }
     }
 
-    /// 按桥上此刻的会话决定哪些托管进程该退：协议号不同的（没有终端能 /reload，下次发消息用新扩展恢复）；
+    /// 按桥上此刻的会话决定哪些托管进程该退：协议号不同、又不会自己重新载入的（没有终端能 /reload，下次发消息用新扩展恢复）；
     /// 同一会话在别处也开着、自己又空闲的（正在跑一轮的等它做完、状态变化时再看）。
     private func settle() {
         let sessions = bridge.sessions
         for hosted in sessions where hosted.hosted && !stopping.contains(hosted.pid) {
             if hosted.state == .incompatible {
-                stop(hosted.pid)
+                if hosted.extensionVersion < Self.selfReloadingExtension { stop(hosted.pid) }
             } else if !hosted.state.hasPendingWork, sessions.contains(where: { $0.sessionID == hosted.sessionID && !$0.hosted }) {
                 stop(hosted.pid)
             }
