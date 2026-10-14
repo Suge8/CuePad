@@ -27,7 +27,7 @@ public enum CueActivity {
       case "follow": return line("换人跟进")
       default: return line("看任务")
       }
-    case "tell": return line(args["choices"] == nil ? "给你写话" : "问你")
+    case "tell": return line(args["ask"] == nil ? "给你写话" : "问你")
     case "memory":
       switch text("action") {
       case "recall": return line("回想", text("query"))

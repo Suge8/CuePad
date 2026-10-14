@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 35：撤掉 36（本机的会话进程表）。
-  static let undoSchema36 = "DROP TABLE piProcesses;"
+  /// 把新建的库退回结构 36：撤掉 37（验收标记下线）。
+  static let undoSchema37 = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
+  /// 退回结构 35：再撤掉 36（本机的会话进程表）。
+  static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
   static let undoSchema35 = undoSchema36 + "DROP TABLE cueState;"
   /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。
@@ -146,17 +148,17 @@ import Testing
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 32 的库升到 33：已有的消息原样都在（都不是验收），之后写的验收带着标记，答"收下"完成任务。
-  @Test func schema32LibraryUpgradesForAcceptance() async throws {
+  /// 结构 36 的库升到 37：验收标记下线，消息原样都在；还开着的旧验收仍在等你，答"收下"只交给 Cue，不改任务。
+  @Test func schema36LibraryUpgradesWithoutAcceptance() async throws {
     let task = try await store.createTask("发布", in: nil)
-    let said = try await store.addCueMessage(.cue, text: "开工了")
-    try RawDB(fixture.url).exec(Self.undoSchema33 + "PRAGMA user_version = 32;")
+    let asked = try await store.addCueMessage(.cue, text: "「发布」做好了，收下吗？", ask: .push, task: task.id)
+    try RawDB(fixture.url).exec(Self.undoSchema37 + "UPDATE cueMessages SET acceptance = 1, choices = '[\"收下\",\"再改改\"]'; PRAGMA user_version = 36;")
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.cueMessages().map { [$0.id: $0.isAcceptance] } == [[said.id: false]])
-    let asked = try await upgraded.askToAccept(task.id, evidence: "- 测试全过").message
-    try await upgraded.endCueQuestion(asked.id, .answered(CueAcceptance.accept))
-    #expect(try await upgraded.card(task.id)?.status == .done)
+    #expect(try await upgraded.cueMessagesWaitingForYou().map(\.id) == [asked.id])
+    try await upgraded.endCueQuestion(asked.id, .answered("收下"))
+    #expect(try await upgraded.card(task.id)?.status != .done)
+    #expect(try await upgraded.cueMessagesToDeliver().map(\.id) == [asked.id])
   }
 
   /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
