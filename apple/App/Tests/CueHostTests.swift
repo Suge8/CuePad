@@ -146,18 +146,28 @@ struct CueHostTests {
     }
 
     /// Cue 对开着的会话说话，这一轮做完后 Mac 才回报没送达（会话已关闭）：看板不变，这次失败也叫醒 Cue，信封里写着动作与原因。
+    /// 会话开在另一台 Mac 上：说话请求由那台执行，本机的执行器不碰它；这一轮做完后由替身当那台 Mac 写回失败，
+    /// 不经桥等回执（等回执有时限，机器忙时这一轮可能比它还长）。
     @Test func 说话没送达_Cue醒来看到原因() async throws {
         let rig = try await Rig()
-        try await rig.settleFollowedTask(titled: "修好登录页 说不出去")
+        let project = try #require(try await rig.store.projects().first)
+        let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
+        try await rig.store.setCueFollows(task.id, true)
+        try await rig.store.linkCard(task.id, toSession: "remote-1")
+        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
+        try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.message(.note, containing: "登录页那边歇下了")
-        let session = try #require(rig.app.host.extensions.values.first)
-        session.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true, "delivered": "immediate"] }  // 先不回
         try await rig.say("请对登录页说继续")
         try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
-        let send = try #require(session.commands.last { $0.json["t"] as? String == "send" }?.json["id"] as? String)
-        session.sendRaw(#"{"t":"ack","id":"\#(send)","ok":false,"error":"会话已关闭"}"#)
+        let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
+        #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)
+
+        let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed("会话已关闭") }
+        try await macB.start()
         let seen = try await rig.message(.note, containing: "看到了")
         #expect(seen.text.contains("说话") && seen.text.contains("会话已关闭"))
+        await macB.stop()
         await rig.stop()
     }
 
