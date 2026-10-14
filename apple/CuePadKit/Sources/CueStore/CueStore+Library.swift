@@ -747,7 +747,7 @@ extension CueStore {
     return card
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常。
+  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常；会话没有别的叶子了，记录它的 Mac 给它另挂同名任务（`adoptSessions`）。
   public func unbindSession(from task: UUID) throws {
     try write {
       try forgetLaunches(of: task)
@@ -831,11 +831,8 @@ extension CueStore {
       let orphans = shared.flatMap { path, rows in rows.filter { $0.0 == URL(filePath: path).deletingPathExtension().lastPathComponent } }
       let stale = indexed.filter { !paths.contains($0.1) } + orphans
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
-      try db.run(
-        """
-        DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND COALESCE(agent, 'pi') = ?
-          AND sessionID NOT IN (SELECT id FROM piSessions)
-        """,
+      try dropSessionRecords(
+        where: "hostID = ? AND state = ? AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)",
         [host, PiWorkState.ended.rawValue, agent.rawValue])
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
       let unrecorded = try select(
@@ -900,6 +897,7 @@ extension CueStore {
     let since = max(existing.stateSince, session.lastActivityAt)
     guard existing.title != title || existing.folder != folder || existing.projectID != projectID || existing.stateSince != since
     else { return }
+    try followTitle(of: session.id, to: title)
     try db.run(
       "UPDATE piSessionStates SET title = ?, folder = ?, projectID = ?, stateSince = ?, modifiedAt = ? WHERE id = ?",
       [title, folder, projectID, since, now, id])

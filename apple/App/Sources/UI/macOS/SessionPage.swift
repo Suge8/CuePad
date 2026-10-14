@@ -151,7 +151,7 @@ struct SessionPage: View {
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
-    /// 绑着的任务按会话与所在项目读（没绑时能绑的是本项目的任务）。
+    /// 绑着的任务按会话读，还能绑的按所在项目读。
     private struct TaskKey: Equatable {
         var session: String
         var project: UUID?
