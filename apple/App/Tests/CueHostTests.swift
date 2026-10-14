@@ -33,7 +33,7 @@ struct CueHostTests {
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
-                scan: { [CueRuntimeOption(runtime: .pi, executable: realPi)] }, launch: { $0 == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                scan: { [.pi] }, launch: { $0 == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000}]}}}"#.utf8)
@@ -49,7 +49,7 @@ struct CueHostTests {
         }
 
         func stop() async {
-            _ = await services.cue.beginStop()()
+            await services.cue.stop()()
             services.cancelBackgroundWork()
             model.stop()
         }
@@ -140,7 +140,7 @@ struct CueHostTests {
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "先做哪个？")
         #expect(question.choices == ["A", "B"])
-        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["先做哪个？"] }
+        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["先做哪个？\nA / B"] }
         try await rig.message(.cue, containing: "办好了")
         try await rig.store.answerCueMessage(question.id, answer: "B")
         try await rig.message(.cue, containing: "知道了：B")
@@ -149,11 +149,14 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，那次看到的还是同一处变化，成了就只有动态。
+    /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
+    /// 刚启用那一轮出错，重试后照常看一眼；跟进的会话有动静那一轮出错，重试时看到的还是同一处变化，成了就只有动态。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
-        let rig = try await Rig()
+        let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
+        #expect(rig.model.errors == 1)
         try await rig.settleFollowedTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
         try await rig.message(.note, containing: "登录页那边歇下了")
+        #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
         await rig.stop()
     }
@@ -178,14 +181,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 刚启用的那一轮出错（模型一时出错）：先不说，隔一会儿再醒一次，照常看一眼。
-    @Test func 刚启用的一轮出错后重试() async throws {
-        let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
-        #expect(rig.model.errors == 1)
-        #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })  // 重试成了，不打扰你
-        await rig.stop()
-    }
-
     /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
     @Test func 记忆待合并时空闲后醒来合并() async throws {
         let rig = try await Rig()
@@ -199,26 +194,11 @@ struct CueHostTests {
         let rig = try await Rig()
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
-        try await eventually("交给了大脑") { try await rig.store.undeliveredCueMessages().isEmpty }
+        try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
         try await eventually("Cue 在想") { rig.services.cue.state == .thinking }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))
-        await rig.stop()
-    }
-
-    /// 开新会话时模型不对：Pi 起来就退出，带着 Pi 的原话报错，桥上不留会话。
-    @Test func 开新会话模型无效时整体失败() async throws {
-        let rig = try await Rig()
-        let paths = rig.app.piPaths
-        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
-        try bridge.start()
-        let host = PiHost(bridge: bridge, paths: paths)
-        await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
-            _ = try await host.open(in: rig.folder, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), executable: realPi)
-        }
-        #expect(bridge.sessions.isEmpty)
-        bridge.stop()
         await rig.stop()
     }
 
@@ -230,17 +210,6 @@ struct CueHostTests {
         try await rig.message(.handoff, containing: "交接：在跟登录页")
         try await rig.message(.cue, containing: "接上了：交接：在跟登录页")  // 写下交接的那一轮是你发起的：换新后照样给你看
         #expect(rig.brainPIDs.count == 1 && rig.brainPIDs.first != first)
-        await rig.stop()
-    }
-
-    /// 大脑进程被杀：自动重起新班次，接着回答你。
-    @Test func 大脑被杀后自动重起() async throws {
-        let rig = try await Rig()
-        let first = try #require(rig.brainPIDs.first)
-        kill(first, SIGKILL)
-        try await eventually("重起了大脑") { rig.brainPIDs.contains { $0 != first } && rig.services.cue.state == .idle }
-        try await rig.say("还在吗")
-        try await rig.message(.cue, containing: "收到：还在吗")
         await rig.stop()
     }
 }

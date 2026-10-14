@@ -134,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         statusItem?.remove()
-        cueBar?.unregister()
+        cueBar?.hotkey.unregister()
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {

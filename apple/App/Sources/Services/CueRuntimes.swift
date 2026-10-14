@@ -3,12 +3,6 @@ import CuePi
 import CueStore
 import Foundation
 
-/// 本机能当 Cue 大脑的一种运行时：装了，也登录了。
-nonisolated struct CueRuntimeOption: Equatable, Sendable {
-    var runtime: CueRuntime
-    var executable: URL
-}
-
 /// 起一个大脑要的本机信息：只找可执行文件，不问登录（登录不了大脑会起不来或一轮出错，由管理器报出）。
 nonisolated struct CueLaunch: Equatable, Sendable {
     var executable: URL
@@ -30,7 +24,7 @@ nonisolated struct CueRuntimes: Sendable {
     var shellPath: @Sendable () async -> String? = { await PiIntegration.loginShellPath() }
 
     /// 装了且登录了的，按 `order`。
-    @concurrent func scan() async -> [CueRuntimeOption] {
+    @concurrent func scan() async -> [CueRuntime] {
         let directories = await searchDirectories()
         let path = directories.joined(separator: ":")
         let found = Dictionary(uniqueKeysWithValues: Self.order.map { ($0, Self.locate($0, in: directories)) })
@@ -42,8 +36,8 @@ nonisolated struct CueRuntimes: Sendable {
         async let claude = loggedIn(found[.claude] ?? nil, ["auth", "status"], path: path) { _, output in
             (try? JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])?["loggedIn"] as? Bool == true
         }
-        let ready: [CueRuntime: URL?] = await [.pi: pi, .codex: codex, .claude: claude]
-        return Self.order.compactMap { runtime in (ready[runtime] ?? nil).map { CueRuntimeOption(runtime: runtime, executable: $0) } }
+        let ready: [CueRuntime: Bool] = await [.pi: pi, .codex: codex, .claude: claude]
+        return Self.order.filter { ready[$0] == true }
     }
 
     /// 起 `runtime` 的大脑要的可执行文件、PATH 与可选模型；没装为 nil。
@@ -83,8 +77,8 @@ nonisolated struct CueRuntimes: Sendable {
 
     private func loggedIn(
         _ executable: URL?, _ arguments: [String], path: String, _ check: @Sendable (Int32, String) -> Bool
-    ) async -> URL? {
-        guard let executable else { return nil }
+    ) async -> Bool {
+        guard let executable else { return false }
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -92,8 +86,8 @@ nonisolated struct CueRuntimes: Sendable {
             .merging(["PATH": path, "PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": piAgentDirectory.path]) { $1 }
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: Self.timeout), check(result.status, result.output) else { return nil }
-        return executable
+        guard let result = await runCapturing(process, timeout: Self.timeout) else { return false }
+        return check(result.status, result.output)
     }
 }
 #endif

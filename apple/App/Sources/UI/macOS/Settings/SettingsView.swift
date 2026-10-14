@@ -37,10 +37,10 @@ struct SettingsView: View {
             ConflictsSection()
             Section {
                 LabeledContent("显示或隐藏 CuePad") {
-                    ShortcutRecorder(accelerator: services.settings.globalShortcut, apply: services.setGlobalShortcut)
+                    ShortcutRecorder(accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
                 }
                 if let cueBar {
-                    LabeledContent("对 Cue 说") { ShortcutRecorder(accelerator: cueBar.shortcut, apply: cueBar.setShortcut) }
+                    LabeledContent("对 Cue 说") { ShortcutRecorder(accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set) }
                 }
                 ForEach(ReplyShortcut.allCases, id: \.self) { key in
                     LabeledContent {
