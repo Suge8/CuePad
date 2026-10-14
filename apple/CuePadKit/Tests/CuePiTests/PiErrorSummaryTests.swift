@@ -1,6 +1,6 @@
 #if os(macOS)
+import CueStore
 import Testing
-@testable import CuePi
 
 /// Pi 上报的模型调用错误是一段原文（常见是"状态码 + 提供方 JSON"）。界面要一句人话，原文留着悬停看。
 /// 样本取自各提供方 SDK 经 Pi 格式化后的真实报错。
@@ -38,6 +38,9 @@ struct PiErrorSummaryTests {
          .server, 529, "模型服务繁忙或出错，稍后再试（529）", "Overloaded"),
         (#"500: {"error":{"message":"Internal Server Error","code":500}}"#,
          .server, 500, "模型服务繁忙或出错，稍后再试（500）", "Internal Server Error"),
+        // Claude Code 的格式（经小米网关）
+        ("API Error: 402 Insufficient account balance", .quota, 402, "额度用完", nil),
+        ("API Error: 400 Unsupported model claude-sonnet-5-5", .rejected, 400, "模型拒绝了请求（400）", nil),
         ("Connection error.", .network, nil, "网络连接中断", nil),
         ("getaddrinfo ENOTFOUND api.anthropic.com", .network, nil, "网络连接中断", nil),
         (#"418 {"type":"error","error":{"type":"teapot","message":"short and stout"}}"#,
@@ -57,6 +60,13 @@ struct PiErrorSummaryTests {
         #expect(PiErrorSummary(#"401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#).line
             == "认证失败，检查 API 密钥或重新登录（401）：invalid x-api-key")
         #expect(PiErrorSummary("fetch failed").line == "网络连接中断")
+    }
+
+    /// Claude Code 把错误也写成一条回答：会话的出错说明就是它归类后的那句时，对话里只显示一处。
+    @Test func aReplyThatIsTheErrorEchoesIt() {
+        let raw = "API Error: 402 Insufficient account balance"
+        #expect(PiErrorSummary.echoes(raw, line: PiErrorSummary(raw).line))
+        #expect(!PiErrorSummary.echoes("余额还剩多少？我来查一下。", line: PiErrorSummary(raw).line))
     }
 }
 #endif

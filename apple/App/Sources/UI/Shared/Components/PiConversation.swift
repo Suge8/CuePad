@@ -95,10 +95,10 @@ struct PiConversation: View {
     /// 排开最近 `window` 条要从第几段起。
     static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }
 
-    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
+    /// 对话末尾：处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
     @ViewBuilder private var ending: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
-        if session.state == .known(.error) {
+        if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
         }
     }
