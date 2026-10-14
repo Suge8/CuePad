@@ -33,7 +33,7 @@ struct ShelfScreen: View {
                     if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
                 }
                 .animation(Motion.quick, value: data == nil)
-                .refreshable { await services.refresh() }
+                .refreshable { await services.syncNow() }
                 .hidingSearch($searchHidden, searching: searching)
             }
         }
