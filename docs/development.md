@@ -62,7 +62,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 **复制。** `AppServices.copy` 一处，不写发送记录。Mac 上单条目同时放文字与 PNG 时图形应用只取其一，所以含图的正文写成按原顺序含图的 RTFD 并附纯文字兜底（`Clipboard.write`）；iOS 每段文字、每张图片各一个条目。
 
 **预览（Agent 发到手机上看的文件）。**
-- Agent 在命令行执行 `cuepad show <文件> [--title 标题]`：不在 Agent 里加别的东西。会话由环境变量 `PI_SESSION_ID` 认出，认不出就报错、不猜；预览挂在 Pi 会话的对话里，所以只有 Pi 的技能提它（Claude Code、Codex、OpenCode 的会话不在 CuePad 里，`CLAUDE_CODE_SESSION_ID`、`CODEX_THREAD_ID` 认得出会话也没处显示）。
+- Agent 在命令行执行 `cuepad show <文件> [--title 标题]`：不在 Agent 里加别的东西。会话由各家给每条命令带的环境变量认出（`PI_SESSION_ID`、`CLAUDE_CODE_SESSION_ID`、`CODEX_THREAD_ID`、`OPENCODE_SESSION_ID`），认不出就报错、不猜；预览挂在那个会话的对话里。
 - 预览不是会话文件里的内容：对话仍只来自会话文件，预览卡按创建时间插进对话（`PiChat.entries`）。
 - HTML 只读渲染、不联网也读不到别的文件，所以必须是单个文件；`addPreview` 列出页面引用的外部地址，让 Agent 改成单文件再发。否决的方案：在 Mac 上替它内联——样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
 

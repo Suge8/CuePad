@@ -98,7 +98,7 @@ struct AgentIntegrationTests {
         let skill = try String(contentsOf: skillFile(kind), encoding: .utf8)
         #expect(skill.hasPrefix("---\nname: cuepad\ndescription: "))
         #expect(skill.contains("\(cuepad.path) --help"))
-        #expect(skill.contains("\(cuepad.path) show <文件>") == (kind == .pi))
+        #expect(skill.contains("\(cuepad.path) show <文件>"))
         #expect(skill.contains("沙箱") == (kind == .codex))
         #expect(FileManager.default.fileExists(atPath: extensionFile.path) == (kind == .pi))
         #expect(await integration().status(of: kind).files == .current)

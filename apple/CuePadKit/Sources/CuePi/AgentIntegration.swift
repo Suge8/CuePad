@@ -287,7 +287,7 @@ public enum PiExtensionBundle {
 
 /// 写给 Agent 的技能：很短，只说 CuePad 是什么、命令在哪，其余让 Agent 看 `--help`（命令行唯一的文档）。
 /// 正文写 App 里 `cuepad` 的绝对路径，不用先把命令装进 PATH；App 被移动后路径变了，它就成了旧版，启动时重写。
-/// 手机预览（`show`）挂在 Pi 会话的对话里，只有 Pi 的技能提它；Codex 默认在沙箱里跑命令，资料库在沙箱外，写入要申请。
+/// Codex 默认在沙箱里跑命令，资料库在沙箱外，写入要申请。
 enum AgentSkill {
     static let name = "cuepad"
     static let fileName = "SKILL.md"
@@ -296,19 +296,12 @@ enum AgentSkill {
 
     static func text(for kind: AgentKind, cuepad: URL) -> String {
         let command = shellQuoted(cuepad.path)
-        let lines: [String] = switch kind {
-        case .pi: [
+        let lines = [
             "description: 用户提到 CuePad，要记灵感、看或改任务，或要在手机上看、验收你做的东西（HTML、截图、PDF）时用",
             "---",
             "把文件发到用户手机上的 CuePad：\(command) show <文件>",
             "其余用法（灵感、任务、搜索）看 \(command) --help。",
-        ]
-        case .claudeCode, .codex, .opencode: [
-            "description: 用户提到 CuePad，或要把想法记成灵感、看或改用户在 CuePad 里的任务时用",
-            "---",
-            "CuePad 是用户记灵感、管任务的地方。用法（灵感、任务、搜索）看 \(command) --help。",
-        ] + (kind == .codex ? ["资料库在沙箱外：写入的命令（add、done、move 等）申请在沙箱外运行。"] : [])
-        }
+        ] + (kind == .codex ? ["资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。"] : [])
         return (["---", "name: \(name)"] + lines + ["\(ownershipMarker)，升级时整文件覆盖 -->", ""]).joined(separator: "\n")
     }
 
