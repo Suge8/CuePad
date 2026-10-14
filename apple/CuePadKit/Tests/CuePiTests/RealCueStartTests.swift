@@ -6,9 +6,17 @@ import Testing
 @testable import CuePi
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走小米网关，OpenCode 用免费模型。
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走 DeepSeek，OpenCode 用免费模型。
 /// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 列出的几家）。
-private let enabledAgents = RealAgents.enabled
+/// 开了、本机也装着（测试台要的都在）的几家
+private let enabledAgents = RealAgents.enabled.filter {
+    switch $0 {
+    case .pi: realPiAvailable
+    case .codex: realCodexAvailable
+    case .claudeCode: realClaudeAvailable
+    case .opencode: realOpenCodeURL != nil
+    }
+}
 
 @MainActor
 @Suite(.enabled(if: !enabledAgents.isEmpty, "要花钱，默认不跑：开关见 RealAgents（CUEPAD_AGENT_TESTS）"), .serialized, .timeLimit(.minutes(6)))
@@ -78,7 +86,7 @@ struct RealCueStartTests {
         case .claudeCode:
             try await ClaudeTestbed.run { testbed in
                 try testbed.runtime.start()
-                try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro"))
+                try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel))
             }
         case .opencode:
             let sandbox = try await OpenCodeSandbox()

@@ -9,7 +9,8 @@ import Testing
 /// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 里除 opencode 外列出的几家）；模型、强度的换法也在那里。
 private let environment = ProcessInfo.processInfo.environment
 private let enabledRuntimes = RealAgents.enabled.filter { $0 != .opencode }
-private let cheapModels: [AgentKind: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
+/// Pi 用 openai-codex 的模型：Claude 只走官方 Claude Code，不经 Pi 用 Claude 订阅
+private let cheapModels: [AgentKind: String] = [.pi: "openai-codex/gpt-5.6-luna", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取

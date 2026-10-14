@@ -10,7 +10,7 @@ import Testing
 ///
 /// - pi：真 Pi 的托管、终端、斜杠命令、压缩、补写对话、预览、firecode（`realPiAvailable`），大脑与开工的 Pi 那一份；
 /// - codex：真 Codex 的托管、终端与钩子判定（`realCodexAvailable`，登录复制进临时目录且不刷新，见 `copyCodexAuth`）；
-/// - claude：真 Claude Code 的托管与终端（`realClaudeAvailable`，走小米网关）；
+/// - claude：真 Claude Code 的托管与终端（`realClaudeAvailable`，走 DeepSeek 的 Anthropic 兼容接口）；
 /// - opencode：真 OpenCode（`realOpenCodeURL`，免费模型）。
 ///
 /// 大脑（`RealBrainTests`，OpenCode 不能当大脑）与开工（`RealCueStartTests`）也按这个列表逐家跑；大脑用本机用户自己的登录，

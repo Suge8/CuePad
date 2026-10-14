@@ -7,19 +7,24 @@ import Testing
 @testable import CuePi
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
-/// 模型走小米的 Anthropic 兼容网关（`mimo-v2.5`），密钥运行时从 ~/.pi/agent/auth.json 读、只放进子进程环境，不落盘。
+/// 模型走 DeepSeek 的 Anthropic 兼容接口（缺省 `deepseek-flash`，能看图；另有 `deepseek-v4-pro`；强度 low/high/max），
+/// 密钥运行时从 ~/.pi/agent/auth.json 读、只放进子进程环境，不落盘。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 private let claudeKey: String? = {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
-    return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["xiaomi"]?["key"]?.string
+    return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["deepseek"]?["key"]?.string
 }()
-/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有小米密钥
+/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有 DeepSeek 密钥
 let realClaudeAvailable = RealAgents.on(.claudeCode) && claudeURL != nil && claudeKey != nil
 
-/// 32×32 纯红 PNG
-let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==")!
+/// 测试台的缺省模型与另一个能换过去的模型
+let claudeTestModel = "deepseek-flash"
+let claudeOtherModel = "deepseek-v4-pro"
+
+/// 256×256 纯红 PNG（32×32 的经 Claude Code 给 deepseek-flash 看，常被认成别的颜色）
+let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQkAAAjAwPUvrX8reHAJBmsK3pIAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAJMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAyAASTAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADADHAllMDvLkz2XNAAAAAElFTkSuQmCC")!
 
 @MainActor
 final class ClaudeTestbed {
@@ -61,8 +66,9 @@ final class ClaudeTestbed {
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "ANTHROPIC_BASE_URL": "https://api.xiaomimimo.com/anthropic", "ANTHROPIC_AUTH_TOKEN": claudeKey ?? "", "ANTHROPIC_API_KEY": "",
-            "ANTHROPIC_MODEL": "mimo-v2.5", "DISABLE_AUTOUPDATER": "1",
+            "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN": claudeKey ?? "", "ANTHROPIC_API_KEY": "",
+            // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
+            "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         store = try Fixture().store

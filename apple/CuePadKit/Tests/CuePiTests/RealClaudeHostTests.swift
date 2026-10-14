@@ -8,7 +8,7 @@ import Testing
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
 /// 斜杠命令、结束、接着已结束的会话、空闲退出。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
-@Suite(.enabled(if: realClaudeAvailable, RealAgents.skipped(.claudeCode, needs: "claude 与小米密钥")), .serialized, .timeLimit(.minutes(8)))
+@Suite(.enabled(if: realClaudeAvailable, RealAgents.skipped(.claudeCode, needs: "claude 与 DeepSeek 密钥")), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
     /// 新会话带着发起方的认领标识上桥；发的话带图，会话文件里认得出是哪条投送请求、图存进了附件目录。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
@@ -17,20 +17,20 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1")
             let session = try #require(testbed.bridge.session(id: id))
             #expect(session.hosted && session.launchToken == "token-1" && session.agent == .claudeCode)
-            #expect(session.availableModels.contains { $0.key.id == "mimo-v2.5" })
+            #expect(session.availableModels.contains { $0.key.id == claudeTestModel })
             #expect(session.commands.contains { $0.name == "compact" })
 
             let delivery = UUID().uuidString
             let image = PiImage(mimeType: "image/png", data: redPNG)
-            let delivered = try await testbed.bridge.send(PiMessage(text: "图片是什么颜色？只答颜色词", images: [image], deliveryID: delivery), to: id)
+            let delivered = try await testbed.bridge.send(PiMessage(text: "不用工具，直接看图：它是红色还是蓝色？只答颜色词", images: [image], deliveryID: delivery), to: id)
             #expect(delivered == .immediate)
             try await testbed.waitForTurn(id)
 
             let transcript = try testbed.transcript(session.sessionFile)
             let said = try #require(transcript.messages.first { $0.role == .known(.user) })
             #expect(said.deliveryID == UUID(uuidString: delivery))
-            #expect(said.text.hasPrefix("图片是什么颜色？只答颜色词\n![](cuepad://img/"))
-            #expect(transcript.recap.lastReply?.contains("红") == true)
+            #expect(said.text.hasPrefix("不用工具，直接看图：它是红色还是蓝色？只答颜色词\n![](cuepad://img/"))
+            #expect(transcript.recap.lastReply?.contains("红") == true, "\(String(describing: transcript.recap.lastReply))")
             #expect(testbed.bridge.sessions.filter { $0.sessionID == session.sessionID }.count == 1)
         }
     }
@@ -66,8 +66,7 @@ struct RealClaudeHostTests {
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
-            // 测试网关上除了缺省的 mimo-v2.5，还能用的另一个模型
-            let pro = PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro")
+            let pro = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
             try await testbed.bridge.configure(model: pro, thinking: .low, name: "托管改名", in: id)
             await #expect(throws: PiBridgeError.rejected("unknown_model")) {
@@ -82,7 +81,7 @@ struct RealClaudeHostTests {
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id)
             let answered = try #require(lastAnswer(in: file))
-            #expect(answered.model == "mimo-v2.5-pro")
+            #expect(answered.model == claudeOtherModel)
             #expect(answered.effort == "low")
             #expect(try testbed.transcript(file).history.name == "命令改名")
         }
