@@ -40,6 +40,8 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
         var socketMode: mode_t = 0o600
+        /// CuePad 在后台托管的进程（hello 里带 `hosted`）
+        var hosted = false
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
                                      "TMUX_PANE": "%3", "TMUX": "/private/tmp/tmux-501/default,123,0"]
     }
@@ -160,6 +162,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         msg["context"] = Self.contextJSON(options.context)
         msg["commands"] = options.commands.map(\.json)
         msg["tty"] = options.tty ?? NSNull()
+        if options.hosted { msg["hosted"] = true }
         return msg
     }
 

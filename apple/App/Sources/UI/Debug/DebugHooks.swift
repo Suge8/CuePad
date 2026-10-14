@@ -133,6 +133,15 @@ enum DebugHooks {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
     }
 
+    /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
+    static var updater: (any AppUpdater)? {
+        #if DEBUG
+        DebugScene.scene == "updatewait" ? DebugScene.DemoUpdater() : nil
+        #else
+        nil
+        #endif
+    }
+
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
     static func placesOffscreen(_ window: NSWindow) -> Bool {
         #if DEBUG

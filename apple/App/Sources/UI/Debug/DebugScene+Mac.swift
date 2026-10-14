@@ -53,6 +53,16 @@ extension DebugScene {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
+        case "updatewait":
+            // 更新在等后台会话做完再装：托管的会话由 socket 目录里的假扩展连上来（隔离的 CUEPAD_PI_SOCKET_DIR），连上后检查一次
+            await connectAgents(workspace.services)
+            let pi = workspace.services.pi
+            let busy = { pi.sessions.contains { $0.hosted && $0.state.hasPendingWork } }
+            if !busy() { for await _ in pi.changes() where busy() { break } }
+            workspace.services.updates.checkForUpdates()
+            NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            mainWindow?.animationBehavior = .none
+            mainWindow?.orderOut(nil)
         case "settings":
             // 拍真的设置窗口（连同标题栏）：主窗口不带淡出地收起，截图脚本取到的就是它
             if defaults.bool(forKey: "CuePadDemo") {
@@ -97,6 +107,19 @@ extension DebugScene {
 
     /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。
     /// 配置目录建出来就算装着（没有命令时按目录认）。
+    /// 演示用的更新器（`-CuePadScene updatewait`）：检查就当找到了更新、你点了安装，像 Sparkle 一样先问要不要推迟重启；装的那一刻只打一个点
+    /// （`update-installed`），不真装。
+    final class DemoUpdater: AppUpdater {
+        var automaticallyChecksForUpdates = true
+        var canCheckForUpdates = true
+        var postponeRelaunch: ((@escaping () -> Void) -> Bool)?
+
+        func checkForUpdates() {
+            let install: () -> Void = { print("update-installed"); DebugHooks.mark("update-installed") }
+            if postponeRelaunch?(install) != true { install() }
+        }
+    }
+
     private static func connectAgents(_ services: AppServices) async {
         for kind in AgentKind.allCases {
             let skill = URL(filePath: (services.agents.skillPath(kind) as NSString).expandingTildeInPath)

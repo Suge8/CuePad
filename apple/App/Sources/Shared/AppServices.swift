@@ -320,7 +320,7 @@ final class AppServices {
         runtimes = mac.runtimes(store)
         agents = AgentIntegrations(mac.agents, isEnabled: !location.isIsolated || mac.paths.pi.isExplicit)
         commandLineTool = mac.commandLineTool
-        updates = UpdateService(updater: mac.updater)
+        updates = UpdateService(updater: mac.updater, bridge: mac.pi)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
             store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
