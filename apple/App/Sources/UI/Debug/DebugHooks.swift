@@ -145,16 +145,16 @@ extension View {
         self
         #endif
     }
+    #endif
 
-    /// 项目页任务纸点"还有 N 条"的那条路交给测量脚本（`IOSInteractionBench` 的"展开任务"）。
-    func debugExposesTaskFold(_ toggle: @escaping () -> Void) -> some View {
+    /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
+    func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onAppear { DebugScene.toggleTaskFold = toggle }
+        onChange(of: active, initial: true) { if active { DebugScene.toggleTaskFold = toggle } }
         #else
         self
         #endif
     }
-    #endif
 
     /// 性能打点：这一页出现时（见 `DebugHooks.mark`）。
     func perfMark(_ event: String) -> some View {

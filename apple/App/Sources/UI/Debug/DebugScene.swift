@@ -47,6 +47,8 @@ enum DebugScene {
     }
     /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
     static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
+    /// 项目页任务纸点"还有 N 条"的那条路（`debugExposesTaskFold`，看得见的那一页上的纸）。
+    static var toggleTaskFold: () -> Void = {}
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {

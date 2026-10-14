@@ -132,8 +132,6 @@ extension DebugScene {
 
     /// 底部栏换标签的那条路（`debugExposesTabSelect`）。
     static var selectTab: (Navigation.Tab) -> Void = { _ in }
-    /// 项目页任务纸点"还有 N 条"的那条路（`debugExposesTaskFold`）。
-    static var toggleTaskFold: () -> Void = {}
 }
 #endif
 

@@ -38,7 +38,7 @@ private struct PaperSurface: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
-            .background(LinearGradient(colors: [palette.paperLit, palette.paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)), in: shape)
+            .background(palette.paperFill, in: shape)
             .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
             // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，
             // 卡片一变宽（侧栏开合、拉窗口）整面墙每张都要重画，大库里开合侧栏的第一帧因此卡上百毫秒
@@ -49,6 +49,11 @@ private struct PaperSurface: ViewModifier {
 }
 
 extension Palette {
+    /// 纸面的底：从上沿极轻地亮到纸色。纸上要盖住一块再淡开时（Mac 任务纸展开的新行）用同一份，盖的那块与纸分不出来。
+    var paperFill: LinearGradient {
+        LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
+    }
+
     /// 纸面的描边色。
     func paperEdge(lifted: Bool = false) -> Color { dark ? Color.white.opacity(lifted ? 0.14 : 0.07) : hair }
 }
