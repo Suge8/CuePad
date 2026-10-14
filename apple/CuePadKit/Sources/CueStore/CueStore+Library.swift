@@ -312,6 +312,7 @@ extension CueStore {
   }
 
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
+  /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write { _ = try applyStatus(id, status) }

@@ -22,8 +22,8 @@ final class AppSettings {
         static let globalShortcut = "globalShortcut"
         #if os(macOS)
         static let currentProject = "currentProject"
+        static let piConnectDeclined = "piConnectDeclined"
         #endif
-        static let piExtensionDeclined = "piExtensionDeclined"
         static let replyTexts = "replyTexts"
         static let replyNotes = "replyNotes"
         static let sessionSeen = "sessionSeen"
@@ -46,10 +46,10 @@ final class AppSettings {
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
-    #endif
 
-    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
-    var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
+    /// 用户拒绝过接入 Pi，或在设置里移除过：之后不再询问、不修复（`PiIntegrationManager`）。存储属性：询问卡片据此在点"不用了"的同一刻收起。
+    var piConnectDeclined: Bool { didSet { defaults.set(piConnectDeclined, forKey: Key.piConnectDeclined) } }
+    #endif
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
     static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
@@ -140,17 +140,15 @@ final class AppSettings {
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
-        #if !DEBUG
-        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
-        #endif
+        DebugHooks.dropLaunchArguments(from: defaults)
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        piConnectDeclined = defaults.bool(forKey: Key.piConnectDeclined)
         #endif
-        piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
@@ -185,11 +183,6 @@ final class AppSettings {
     private static let leavingForeground = NSApplication.willResignActiveNotification
     private static let terminating = NSApplication.willTerminateNotification
     #endif
-
-    private static func isTrue(_ value: Any) -> Bool {
-        if let flag = value as? Bool { return flag }
-        return ["yes", "true", "1"].contains(String(describing: value).lowercased())
-    }
 }
 
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。批注单独一格（`draft.notes` 恒为空）：读批注的对话不随打字重算。

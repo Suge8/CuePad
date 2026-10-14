@@ -28,10 +28,11 @@ struct HistoryRulesTests {
             try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
             let paths = PiPaths(
                 agentDirectory: directory.appending(path: "agent"),
-                socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory))
+                socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory),
+                binDirectory: directory.appending(path: "home/.local/bin"))
             let installer = PiIntegration(
                 paths: paths, locator: PiExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
-                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
+                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"), shellPath: { nil })
             try await installer.install()
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
@@ -44,9 +45,6 @@ struct HistoryRulesTests {
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: paths, installer: installer, terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, wakeNotifications: NotificationCenter(),
-                commandLineTool: CommandLineToolInstaller(
-                    helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                    linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
                 updater: nil, host: host, locatePi: { realPi }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
@@ -56,7 +54,8 @@ struct HistoryRulesTests {
 
         func shutdown() {
             services.cancelBackgroundWork()
-            host.closeAll()
+            // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
+            for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
             bridge.stop()
         }
 

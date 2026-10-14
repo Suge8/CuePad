@@ -70,7 +70,6 @@ struct MainWindow: View {
 /// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct WindowPanels: View {
     @Bindable var workspace: Workspace
-    @Environment(AppServices.self) private var services
     @State private var searchScope = SearchScope.cards
     /// ⌘K 面板启动后空闲时（`Prewarm` 同一时机）就挂上，之后一直挂着（`keptPanel`）。
     @State private var mountsPalette = false
@@ -93,11 +92,6 @@ private struct WindowPanels: View {
                 "Agent 正在工作", isPresented: busy,
                 message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
                 buttons: [DeliveryMode.steer, .followUp].map { mode in DialogButton(title: mode.label) { workspace.resolveBusySend(mode) } }
-            )
-            .dialog(
-                "把 cuepad 命令行装进 PATH？", isPresented: $workspace.offersCommandLineTool,
-                message: "装好后 agent 可以在 bash 里直接用 cuepad 读写你的灵感和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。",
-                buttons: [DialogButton(title: "安装") { workspace.attempt { try await services.commandLineTool.install() } }]
             )
     }
 

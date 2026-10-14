@@ -42,7 +42,6 @@ final class RecordingHost: PiHosting {
     }
 
     func start() {}
-    func closeAll() -> @concurrent @Sendable () async -> Void { {} }
 
     func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> String {
         calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))

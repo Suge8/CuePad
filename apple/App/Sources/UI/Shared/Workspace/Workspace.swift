@@ -63,8 +63,6 @@ final class Workspace {
     var searching = false
     /// 右上角的任务面板开着（`TasksPanel`）。
     var showsTasks = false
-    /// 首次启动问要不要把 cuepad 命令行装进 PATH（`AppDelegate` 置起，主窗口弹出）。
-    var offersCommandLineTool = false
     #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。

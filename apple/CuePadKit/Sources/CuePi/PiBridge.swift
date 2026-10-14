@@ -285,6 +285,7 @@ public final class PiBridge {
                 terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
+            session.hosted = hello.hosted
             appear(session, on: link)
         case .state(let wire):
             guard var session = link.session else { throw HandlingError.messageBeforeHello }

@@ -39,7 +39,17 @@ cuepad task add Write release notes
 cuepad task done <id>
 ```
 
-Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. Install it from CuePad's Settings (it links to `~/.local/bin/cuepad`); `cuepad --help` and `cuepad <command> --help` are the full reference.
+Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. It's linked into your PATH when you connect Pi (below); `cuepad --help` and `cuepad <command> --help` are the full reference.
+
+## Connecting Pi (Mac)
+
+The first time CuePad finds Pi on your Mac, it asks once whether to connect. Connecting writes three files:
+
+- `~/.pi/agent/extensions/cuepad-bridge.ts`: lets CuePad see your Pi sessions and send prompts into them
+- `~/.pi/agent/skills/cuepad/SKILL.md`: tells the agent how to send files to your phone
+- `~/.local/bin/cuepad`: a link to the `cuepad` command line inside the app
+
+CuePad keeps them current when the app updates or moves. To remove them, turn off **接入 Pi** (Connect Pi) in Settings; files with the same names that CuePad didn't write are left alone. Before deleting the app, turn it off in Settings or delete those three paths yourself (if you set `PI_CODING_AGENT_DIR`, the first two are under that directory instead of `~/.pi/agent`).
 
 ## Download
 
@@ -56,7 +66,7 @@ apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
 cd apple/CuePadKit && swift test
 ```
 
-Architecture, commands and conventions: [docs/development.md](docs/development.md).
+Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).
 
 ## Contributing
 

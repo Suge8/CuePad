@@ -39,7 +39,17 @@ cuepad task add 写发布说明
 cuepad task done <id>
 ```
 
-在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。在 CuePad 设置里安装（链接到 `~/.local/bin/cuepad`）；完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
+在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。接入 Pi 时会把它链接进 PATH（见下文）；完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
+
+## 接入 Pi（Mac）
+
+CuePad 第一次在你的 Mac 上发现 Pi 时，会问一次要不要接入。接入会写三个文件：
+
+- `~/.pi/agent/extensions/cuepad-bridge.ts`：让 CuePad 看到 Pi 会话、把提示词发进会话
+- `~/.pi/agent/skills/cuepad/SKILL.md`：告诉 Agent 怎么把文件发到你的手机上
+- `~/.local/bin/cuepad`：指向 App 里 `cuepad` 命令行的链接
+
+App 更新或移动位置后，CuePad 会自动把它们更新好。要移除，在设置里关掉「接入 Pi」；不是 CuePad 写的同名文件不会动。删除 App 之前，先在设置里关掉，或自己删掉这三个路径（设置过 `PI_CODING_AGENT_DIR` 的话，前两个在那个目录下，而不是 `~/.pi/agent`）。
 
 ## 下载
 
@@ -56,7 +66,7 @@ apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
 cd apple/CuePadKit && swift test
 ```
 
-架构、命令与约定见 [docs/development.md](docs/development.md)。
+命令与开发约定见 [AGENTS.md](AGENTS.md) 与 [docs/](docs/)。
 
 ## 参与贡献
 

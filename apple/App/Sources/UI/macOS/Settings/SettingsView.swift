@@ -4,7 +4,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置窗口的内容：只放会主动去改的（外观、显示/隐藏的快捷键、自动检查更新）与几样连接各一行状态（iCloud、Pi、命令行）。
+/// 设置窗口的内容：只放会主动去改的（外观、显示/隐藏的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Pi）。
 /// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
 /// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
@@ -33,7 +33,6 @@ struct SettingsView: View {
             }
             Section {
                 PiRow()
-                CommandLineToolRow()
             }
             Section {
                 if let report = services.diagnostics.latest { CrashRow(report: report) }
@@ -130,69 +129,105 @@ enum ShortcutText {
     }
 }
 
-/// CuePad 与 Pi 的连接（扩展与技能一起装）。平时由侧栏问一次、之后静默升级（`PiIntegrationManager`），
-/// 所以这一行多数时候只写"已连接"；没连上时右边是"连接"或"升级"，Pi 没装或太旧时状态后面给安装方法。
+/// 接入 Pi：扩展、技能与 `cuepad` 命令行链接三样一起写、一起删（`PiIntegrationManager`）。平时由侧栏问一次、之后静默修复，
+/// 所以这一行多数时候只写"已接入"；右边的开关打开即接入、关掉即移除。哪样缺了、旧了，状态写它、后面给"修复"；Pi 没装或太旧给安装方法；
+/// 链接目录不在 shell 的 PATH 里（含读不出来）也要明说：终端里直接敲 cuepad 会找不到（Pi 里不受影响），后面给"复制命令"。
 private struct PiRow: View {
     @Environment(AppServices.self) private var services
     @State private var working = false
     @State private var outcome: (text: String, failed: Bool)?
     @State private var showsGuide = false
+    @State private var copied = false
+
+    private var manager: PiIntegrationManager { services.piIntegration }
+    private var linkDirectory: String {
+        (manager.installer.location(of: .commandLink).deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath
+    }
+    private var pathExport: String { "export PATH=\"\(linkDirectory.replacing(/^~/, with: "$HOME")):$PATH\"" }
 
     var body: some View {
-        let status = services.piIntegration.status
+        let status = manager.status
         let (tone, line) = describe(status)
         SettingRow(
             title: "Pi", symbol: "puzzlepiece.extension", tone: tone, busy: working || status == nil, status: line,
-            help: "连上后 CuePad 能看到 Pi 会话的实时状态、把提示词（含图片）发进会话，Agent 也能把页面和截图发到手机上看"
+            help: "接入会写三样东西：扩展让 CuePad 看到 Agent 会话的实时状态、把提示词（含图片）发进会话；技能让 Agent 知道怎么把页面和截图发到手机上看；cuepad 命令行让 Agent 读写你的灵感和任务。关掉只删这三样。"
         ) {
-            if let action = action(status) {
-                Button(action, action: install).settingButton(primary: true).disabled(working)
-            }
+            Toggle("接入 Pi", isOn: Binding(get: { status?.isConnected == true }, set: { apply($0) }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .disabled(working || !manager.canToggle)
         } fix: {
-            if let installation = status?.pi, !installation.isSupported {
-                Button(installation == .notFound ? "安装方法" : "升级方法") { showsGuide = true }
-                    .settingFix()
-                    .popover(isPresented: $showsGuide, arrowEdge: .bottom) {
-                        PiSetupGuide(installation: installation).padding(16).frame(width: 360).settingPopoverBackground()
-                    }
+            fix(status)
+        }
+        .task(id: status?.isConnected) { if status?.isConnected == true { await manager.checkShellPath() } }
+    }
+
+    @ViewBuilder private func fix(_ status: PiIntegrationStatus?) -> some View {
+        if working || outcome?.failed == true {
+            EmptyView()
+        } else if let installation = status?.pi, !installation.isSupported {
+            Button(installation == .notFound ? "安装方法" : "升级方法") { showsGuide = true }
+                .settingFix()
+                .popover(isPresented: $showsGuide, arrowEdge: .bottom) {
+                    PiSetupGuide(installation: installation).padding(16).frame(width: 360).settingPopoverBackground()
+                }
+        } else if manager.canRepair {
+            Button("修复") { apply(true) }.settingFix()
+        } else if status?.isCurrent == true, manager.linkDirectoryInShellPath == .some(.some(false)) {
+            Button(copied ? "已复制" : "复制命令") {
+                Clipboard.copy(pathExport)
+                copied = true
             }
+            .settingFix()
+            .help("把这一行加进 shell 配置：\(pathExport)")
         }
     }
 
     private func describe(_ status: PiIntegrationStatus?) -> (StatusTone, Dotted) {
-        if working { return (.calm, "正在连接…") }
+        if working { return (.calm, "正在写入…") }
         if let outcome, outcome.failed { return (.failure, Dotted(outcome.text)) }
         guard let status else { return (.calm, "检测中…") }
+        guard manager.isEnabled else { return (.calm, "隔离运行时，要同时指定 PI_CODING_AGENT_DIR 与 CUEPAD_BIN_DIR 才能接入") }
+        if !status.blocked.isEmpty {
+            let files = status.blocked.map { (manager.installer.location(of: $0).path as NSString).abbreviatingWithTildeInPath }
+            return (.failure, Dotted("\(files.joined(separator: "、")) 已经是别的文件，没有覆盖；确认不需要后删掉再接入"))
+        }
         switch status.pi {
         case .notFound: return (.notice, "没有找到 pi 命令")
-        case .found(_, let version) where !status.pi.isSupported: return (.notice, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
+        case .found(_, let version) where !status.pi.isSupported: return (.notice, Dotted("\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新"))
         case .found(_, let version):
-            return switch status.file {
-            case .current: (.calm, Dotted("已连接", "\(version)", outcome?.text))
-            case .outdated: (.notice, "需要升级")
-            case .missing: (.calm, "未连接")
-            case .foreign: (.failure, "Pi 目录里有同名的其他文件，没有改动")
+            guard status.isConnected else { return (.calm, "未接入") }
+            if let item = PiConnectItem.allCases.first(where: { status[$0] != .current }) { return (.notice, Dotted(Self.problem(item, status[item]))) }
+            return switch manager.linkDirectoryInShellPath {
+            case .some(.some(false)): (.notice, Dotted("\(linkDirectory) 不在 PATH 里"))
+            case .some(nil): (.notice, Dotted("没能读取 shell 的 PATH，请确认 \(linkDirectory) 在其中"))
+            default: (.calm, Dotted("已接入", "\(version)", outcome?.text))
             }
         }
     }
 
-    private func action(_ status: PiIntegrationStatus?) -> String? {
-        guard status?.pi.isSupported == true else { return nil }
-        return switch status?.file {
-        case .missing: "连接"
-        case .outdated: "升级"
-        default: nil
+    private static func problem(_ item: PiConnectItem, _ state: PiItemState) -> String {
+        let name = switch item {
+        case .bridgeExtension: "扩展"
+        case .skill: "技能"
+        case .commandLink: "命令行链接"
         }
+        if state == .missing { return "\(name)缺失" }
+        return item == .commandLink ? "命令行链接指向的 CuePad 已不在这个位置" : "\(name)是旧版"
     }
 
-    private func install() {
+    private func apply(_ connect: Bool) {
         working = true
         outcome = nil
         Task {
             defer { working = false }
             do {
-                try await services.piIntegration.install()
-                outcome = ("已在运行的会话 /reload 后生效", false)
+                if connect {
+                    try await manager.connect()
+                    outcome = ("已在运行的会话 /reload 后生效", false)
+                } else {
+                    try await manager.disconnect()
+                }
             } catch {
                 outcome = (error.localizedDescription, true)
             }

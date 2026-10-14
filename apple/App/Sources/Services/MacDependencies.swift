@@ -14,7 +14,6 @@ struct MacDependencies {
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
-    var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。
     var updater: SparkleUpdater?
     /// 后台托管 Pi（给已结束的会话发消息、开新会话）。
@@ -24,15 +23,11 @@ struct MacDependencies {
     /// 复制的去处。
     var pasteboard: NSPasteboard
 
-    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好，命令行的链接也建在隔离目录里，
-    /// 不去改指向正式版的 ~/.local/bin/cuepad。
+    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     static func live(location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
-        let commandLineTool = location.isIsolated
-            ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
-            : CommandLineToolInstaller()
-        let installer = PiIntegration(paths: paths, cuepad: commandLineTool.helper)
+        let installer = PiIntegration(paths: paths, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"))
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),
@@ -41,7 +36,6 @@ struct MacDependencies {
             terminal: PiTerminalJumper(),
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
-            commandLineTool: commandLineTool,
             updater: location.isIsolated ? nil : SparkleUpdater(),
             host: PiHost(bridge: pi, paths: paths),
             locatePi: {

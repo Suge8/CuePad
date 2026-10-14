@@ -113,7 +113,9 @@ struct PiHistoryPersistenceTests {
     }
 }
 
-struct PiExtensionConsentTests {
+/// 接入 Pi：扩展、技能与 cuepad 命令行链接三样一起写、一起删（全在 TestApp 的临时目录里，不碰真实 ~/.pi 与 ~/.local/bin）。
+/// 测试走的是设置开关与侧栏询问卡调用的同一组接口（`PiIntegrationManager`）。
+struct PiConnectTests {
     private func rigWithPi(version: String) throws -> TestApp {
         let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")
@@ -122,6 +124,134 @@ struct PiExtensionConsentTests {
         try "#!/bin/sh\necho \(version)\n".write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         return rig
+    }
+
+    private struct Files {
+        let bridgeExtension, skill, link: URL
+        init(_ rig: TestApp) {
+            bridgeExtension = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+            skill = rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md")
+            link = rig.piPaths.binDirectory.appending(path: "cuepad")
+        }
+        var all: [URL] { [bridgeExtension, skill, link] }
+    }
+
+    /// 不跟随链接：失效的链接也算在。
+    private func exists(_ file: URL) -> Bool { (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil }
+
+    /// 测试宿主就是这次构建出的 CuePad.app，里面真的带着 cuepad。
+    private var realHelper: URL { Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad") }
+
+    private func runHelp(_ rig: TestApp, via link: URL) throws -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = link
+        process.arguments = ["--help"]
+        process.environment = ["CUEPAD_LIBRARY_DIR": rig.directory.appending(path: "cli-library").path]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self))
+    }
+
+    @Test func 接入后三样都在且cuepad可执行_移除后三样都没了() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        rig.helper = realHelper
+        let services = rig.relaunch()
+        let manager = services.piIntegration, files = Files(rig)
+
+        try await manager.connect()
+
+        #expect(try String(contentsOf: files.bridgeExtension, encoding: .utf8) == PiExtensionBundle.source)
+        #expect(try String(contentsOf: files.skill, encoding: .utf8).contains("\(files.link.path) show <文件>"))
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: files.link.path) == realHelper.path)
+        let help = try runHelp(rig, via: files.link)
+        #expect(help.status == 0 && help.output.contains("cuepad"))
+        #expect(manager.status?.isCurrent == true)
+
+        try await manager.disconnect()
+
+        for file in files.all { #expect(!exists(file), "\(file.path) 应已删除") }
+        #expect(!exists(files.skill.deletingLastPathComponent()))  // 技能目录是 CuePad 建的，空了一起删
+        try await rig.relaunch().piIntegration.refresh()  // 移除算拒绝过：再启动也不问、不补
+        #expect(!rig.services.piIntegration.needsConsent)
+        for file in files.all { #expect(!exists(file)) }
+    }
+
+    @Test func 别人的同名文件不动_接入整体拒绝_移除只删自己的() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        let manager = rig.services.piIntegration, files = Files(rig)
+        let mine = "我自己的东西\n"
+        // 别的 App 包里同样位置的 cuepad（包在、标识不是 CuePad），与已不存在的、不叫 CuePad.app 的包
+        let other = rig.directory.appending(path: "Other.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: other.appending(path: "Contents/Helpers"), withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": "com.example.other"], format: .xml, options: 0)
+            .write(to: other.appending(path: "Contents/Info.plist"))
+        let occupants: [(URL, () throws -> Void)] = [
+            (files.bridgeExtension, { try mine.write(to: files.bridgeExtension, atomically: true, encoding: .utf8) }),
+            (files.bridgeExtension, { try Data([0xff, 0xfe, 0x00]).write(to: files.bridgeExtension) }),  // 不是 UTF-8 文本
+            (files.skill, { try mine.write(to: files.skill, atomically: true, encoding: .utf8) }),
+            (files.skill, { try Data([0xff, 0xfe, 0x00]).write(to: files.skill) }),
+            (files.link, { try mine.write(to: files.link, atomically: true, encoding: .utf8) }),
+            (files.link, { try FileManager.default.createSymbolicLink(atPath: files.link.path, withDestinationPath: other.path + "/Contents/Helpers/cuepad") }),
+            (files.link, { try FileManager.default.createSymbolicLink(atPath: files.link.path, withDestinationPath: "/Volumes/Gone/Other.app/Contents/Helpers/cuepad") }),
+        ]
+        for (occupied, occupy) in occupants {
+            for file in files.all where exists(file) { try FileManager.default.removeItem(at: file) }
+            try FileManager.default.createDirectory(at: occupied.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try occupy()
+            let before = try FileManager.default.attributesOfItem(atPath: occupied.path)[.modificationDate] as? Date
+            let target = try? FileManager.default.destinationOfSymbolicLink(atPath: occupied.path)
+
+            await #expect(throws: PiInstallError.occupied([occupied])) { try await manager.connect() }
+            try await manager.disconnect()  // 什么都没接入：移除也不能碰它
+
+            #expect(try FileManager.default.attributesOfItem(atPath: occupied.path)[.modificationDate] as? Date == before)
+            #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: occupied.path)) == target)
+            for file in files.all where file != occupied { #expect(!exists(file), "被占用时 \(file.lastPathComponent) 不该写") }
+        }
+
+        for file in files.all where exists(file) { try FileManager.default.removeItem(at: file) }
+        try await manager.connect()
+        try FileManager.default.removeItem(at: files.skill)
+        try mine.write(to: files.skill, atomically: true, encoding: .utf8)  // 接入后用户换成了自己的同名技能
+
+        try await manager.disconnect()
+
+        #expect(try String(contentsOf: files.skill, encoding: .utf8) == mine)
+        #expect(!exists(files.bridgeExtension) && !exists(files.link))
+    }
+
+    @Test func App移动后启动时静默把链接改指新位置() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        let files = Files(rig)
+        rig.helper = rig.directory.appending(path: "Old/CuePad.app/Contents/Helpers/cuepad")
+        try await rig.relaunch().piIntegration.connect()
+        let skill = try String(contentsOf: files.skill, encoding: .utf8)
+
+        rig.helper = realHelper  // App 移动到了测试宿主所在的位置
+        try await rig.relaunch().piIntegration.refresh()
+
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: files.link.path) == realHelper.path)
+        #expect(try String(contentsOf: files.skill, encoding: .utf8) == skill)
+        #expect(try runHelp(rig, via: files.link).status == 0)
+        #expect(rig.services.piIntegration.status?.isCurrent == true)
+        #expect(!rig.services.piIntegration.needsConsent)
+    }
+
+    /// 接入后 Pi 卸了（或降级到不支持的版本）：设置里仍能关掉开关，三样照样删干净。
+    @Test func Pi不可用后仍能移除() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        try await rig.services.piIntegration.connect()
+        try FileManager.default.removeItem(at: rig.directory.appending(path: "bin/pi"))
+
+        let manager = rig.relaunch().piIntegration
+        try await manager.refresh()
+        #expect(manager.status?.pi == .notFound)
+        #expect(manager.canToggle)
+
+        try await manager.disconnect()
+        for file in Files(rig).all { #expect(!exists(file)) }
     }
 
     /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。
@@ -143,27 +273,19 @@ struct PiExtensionConsentTests {
         func set() { value = true }
     }
 
-    @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
+    @Test func 首次询问_拒绝后不再问也什么都不写() async throws {
         let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piIntegration
+        try await rig.services.piIntegration.refresh()
+        #expect(rig.services.piIntegration.needsConsent)
 
-        try await manager.refresh()
-        #expect(manager.needsConsent)
+        rig.services.piIntegration.decline()
+        try await rig.relaunch().piIntegration.refresh()
 
-        manager.decline()
-        try await manager.refresh()
-        #expect(!manager.needsConsent)
-        #expect(manager.status?.file == .missing)  // 拒绝过首次安装：维持不装
-
-        #expect(!FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.path))  // 拒绝：扩展与 skill 都不装
-
-        try await manager.install()
-        #expect(manager.status?.file == .current)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts").path))
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
+        #expect(!rig.services.piIntegration.needsConsent)
+        for file in Files(rig).all { #expect(!exists(file)) }
     }
 
-    @Test func Pi_版本过低或不存在时不征求同意() async throws {
+    @Test func Pi_版本过低或不存在时不询问() async throws {
         let tooOld = try rigWithPi(version: "0.80.0")
         try await tooOld.services.piIntegration.refresh()
         #expect(!tooOld.services.piIntegration.needsConsent)
@@ -173,20 +295,20 @@ struct PiExtensionConsentTests {
         #expect(!absent.services.piIntegration.needsConsent)
     }
 
-    /// 同意只在首次安装时问一次：已装的是我们的旧版扩展时，启动检查就静默升级到随包版本，不再询问。
-    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
+    /// 已接入（扩展是 CuePad 写的）就不再询问：旧版扩展、旧版技能、当初没装的命令行链接，启动检查时一起补成最新。
+    @Test func 已装旧版扩展时启动检查静默补齐三样() async throws {
         let rig = try rigWithPi(version: "0.90.0")
-        let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        let files = Files(rig)
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
         let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
-        try old.write(to: installed, atomically: true, encoding: .utf8)
+        try old.write(to: files.bridgeExtension, atomically: true, encoding: .utf8)
 
         try await rig.services.piIntegration.refresh()
 
-        #expect(rig.services.piIntegration.status?.file == .current)
-        #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
+        #expect(rig.services.piIntegration.status?.isCurrent == true)
+        #expect(try String(contentsOf: files.bridgeExtension, encoding: .utf8) == PiExtensionBundle.source)
+        #expect(exists(files.skill) && exists(files.link))
         #expect(!rig.services.piIntegration.needsConsent)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))  // 旧版用户升级时补上 skill
     }
 }
 #endif

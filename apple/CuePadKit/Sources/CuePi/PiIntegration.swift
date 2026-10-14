@@ -41,7 +41,7 @@ public enum PiExtensionBundle {
 }
 
 /// 随包分发的 skill（`Extension/cuepad-skill.md`，装到 `<skills>/cuepad/SKILL.md`）：告诉 Agent 怎么把文件发到手机、其余用法看 `--help`。
-/// 正文里写着 App 里 `cuepad` 的绝对路径（装的时候代入），所以不用先装 PATH 链接就能用；App 被移动后路径变了，它就成了旧版，启动时与扩展一起重写。
+/// 正文里写 `cuepad` 链接的绝对路径（装的时候代入）：不依赖 PATH；App 的位置只在链接里，App 移动后只修链接，skill 不变。
 public enum PiSkillBundle {
     static let directoryName = "cuepad"
     static let fileName = "SKILL.md"
@@ -75,27 +75,43 @@ public enum PiInstallation: Sendable, Equatable {
     }
 }
 
-/// 扩展与 skill 合起来的状态（唯一的一份）：任一个是别人的同名文件就是 `foreign`；没装扩展就是 `missing`（要先征得同意）；
-/// 两样都是最新的才是 `current`；其余（旧版、缺 skill、App 移动后路径变了）是 `outdated`，升级时一起写。
-public enum PiIntegrationFile: Sendable, Equatable {
+/// 接入 Pi 写下的三样东西，一起写、一起删。
+public enum PiConnectItem: Sendable, CaseIterable {
+    /// `<Pi 目录>/extensions/cuepad-bridge.ts`
+    case bridgeExtension
+    /// `<Pi 目录>/skills/cuepad/SKILL.md`
+    case skill
+    /// `<链接目录>/cuepad`，指向 App 里的命令行工具
+    case commandLink
+}
+
+public enum PiItemState: Sendable, Equatable {
     case missing
     case current
-    /// 是 CuePad 写的但内容与随包版本不同（含更新、更旧、同版本不同内容）
-    case outdated(installed: Int)
-    /// 同名文件不是 CuePad 写的
+    /// 是 CuePad 写的，但不是这个 App 现在要写的样子：旧版扩展或 skill、指向别处（App 移动过）的链接
+    case outdated
+    /// 位置上是别人的文件或链接
     case foreign
 }
 
+/// 接入状态（唯一的一份，全部从磁盘读出）。是否接入以扩展为准：扩展是 CuePad 写的就算已接入，其余两样缺了或旧了是待修复。
 public struct PiIntegrationStatus: Sendable, Equatable {
     public var pi: PiInstallation
-    public var file: PiIntegrationFile
+    public var items: [PiConnectItem: PiItemState]
+
+    public subscript(item: PiConnectItem) -> PiItemState { items[item] ?? .missing }
+    public var isConnected: Bool { [.current, .outdated].contains(self[.bridgeExtension]) }
+    public var isCurrent: Bool { PiConnectItem.allCases.allSatisfy { self[$0] == .current } }
+    /// 被别人的东西占着的位置：有一个就三样都不写
+    public var blocked: [PiConnectItem] { PiConnectItem.allCases.filter { self[$0] == .foreign } }
 }
 
 public enum PiInstallError: Error, Equatable {
     case piNotFound
     case piTooOld(found: PiVersion)
-    case foreignFile
-    /// skill 没写上，把扩展还原也失败了：扩展已是新版而 skill 缺失或旧（原因是两个错误），下次检查会当作旧版重试
+    /// 这些位置上是别人的东西，没有覆盖
+    case occupied([URL])
+    /// 写到一半失败，已写的也没能还原（原因是写入与还原的错误）；下次检查会当作待修复重试
     case halfInstalled(reason: String)
 }
 
@@ -104,8 +120,9 @@ extension PiInstallError: LocalizedError {
         switch self {
         case .piNotFound: "没有找到 pi 命令"
         case .piTooOld(let found): "Pi \(found) 太旧，需要 \(PiVersion.minimumSupported) 或更新"
-        case .foreignFile: "Pi 的扩展或技能目录里已有同名的其他文件，没有覆盖"
-        case .halfInstalled(let reason): "扩展装上了，技能没写上，扩展也没能还原：\(reason)。下次启动会再试一次"
+        case .occupied(let files):
+            "\(files.map { ($0.path as NSString).abbreviatingWithTildeInPath }.joined(separator: "、")) 已经是别的文件，没有覆盖；确认不需要后删掉再接入"
+        case .halfInstalled(let reason): "接入写到一半失败，也没能还原：\(reason)。下次启动会再试一次"
         }
     }
 }
@@ -128,68 +145,163 @@ public struct PiExecutableLocator: Sendable {
     }
 }
 
-/// CuePad 与 Pi 的集成：检测 Pi，安装与升级扩展和 skill（一起写、一起升级）。`status()` 没有任何副作用；写入只发生在 `install()`，
-/// 调用方要先征得用户同意（拒绝时两样都不装）。
+/// 接入 Pi：检测 Pi，写入与移除扩展、skill 与命令行链接（三样一起）。`status()` 没有任何副作用；写入只在 `install()`，
+/// 调用方要先征得用户同意；`uninstall()` 只删 CuePad 写的，别人的同名文件不动。
 public struct PiIntegration: Sendable {
     private let paths: PiPaths
     private let locator: PiExecutableLocator
-    /// App 里的命令行工具（`Contents/Helpers/cuepad`），skill 里写它的绝对路径
-    private let cuepad: URL
+    /// App 里的命令行工具（`Contents/Helpers/cuepad`），链接指向它
+    private let helper: URL
+    private let shellPath: @Sendable () async -> String?
 
-    public init(paths: PiPaths = PiPaths(), locator: PiExecutableLocator = .standard, cuepad: URL) {
+    public init(
+        paths: PiPaths = PiPaths(), locator: PiExecutableLocator = .standard, helper: URL,
+        shellPath: @escaping @Sendable () async -> String? = { await PiIntegration.loginShellPath() }
+    ) {
         self.paths = paths
         self.locator = locator
-        self.cuepad = cuepad
+        self.helper = helper
+        self.shellPath = shellPath
     }
 
-    private var installedFile: URL { paths.extensionsDirectory.appending(path: PiExtensionBundle.fileName) }
-    private var skillFile: URL {
-        paths.skillsDirectory.appending(path: PiSkillBundle.directoryName, directoryHint: .isDirectory).appending(path: PiSkillBundle.fileName)
+    public func location(of item: PiConnectItem) -> URL {
+        switch item {
+        case .bridgeExtension: paths.extensionsDirectory.appending(path: PiExtensionBundle.fileName)
+        case .skill:
+            paths.skillsDirectory.appending(path: PiSkillBundle.directoryName, directoryHint: .isDirectory).appending(path: PiSkillBundle.fileName)
+        case .commandLink: paths.binDirectory.appending(path: "cuepad")
+        }
     }
 
     @concurrent public func status() async -> PiIntegrationStatus {
-        PiIntegrationStatus(pi: await detectPi(), file: currentFile())
+        PiIntegrationStatus(pi: await detectPi(), items: currentItems())
     }
 
-    /// 写入（新装或升级）。Pi 不存在/过旧、或同名文件不是我们写的时拒绝，且什么都不写。
+    /// 接入（新装或修复）。Pi 不存在/过旧、或任一位置是别人的东西时拒绝，且什么都不写；写到一半失败时把已写的还原。
     @concurrent public func install() async throws {
         switch await detectPi() {
         case .notFound: throw PiInstallError.piNotFound
         case .found(_, let version) where version < .minimumSupported: throw PiInstallError.piTooOld(found: version)
         case .found: break
         }
-        if currentFile() == .foreign { throw PiInstallError.foreignFile }
-        // 两个文件各自原子写入，合起来靠顺序与还原：先把两个目录都建好（建不出来就什么都没写），再写扩展，
-        // skill 写不进去时把扩展还原成原来的样子（没有就删掉），不留半升级的状态。
-        try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: skillFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let previous = try? Data(contentsOf: installedFile)
-        try Data(PiExtensionBundle.source.utf8).write(to: installedFile, options: .atomic)
+        let blocked = PiConnectItem.allCases.filter { currentItems()[$0] == .foreign }
+        guard blocked.isEmpty else { throw PiInstallError.occupied(blocked.map(location(of:))) }
+        let files = FileManager.default
+        for item in PiConnectItem.allCases {
+            try files.createDirectory(at: location(of: item).deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
+        var restores: [() throws -> Void] = []
         do {
-            try Data(PiSkillBundle.text(cuepad: cuepad).utf8).write(to: skillFile, options: .atomic)
+            restores.append(try replace(.bridgeExtension, with: Data(PiExtensionBundle.source.utf8)))
+            restores.append(try replace(.skill, with: Data(PiSkillBundle.text(cuepad: location(of: .commandLink)).utf8)))
+            restores.append(try relink())
         } catch {
-            do {
-                if let previous { try previous.write(to: installedFile, options: .atomic) } else { try FileManager.default.removeItem(at: installedFile) }
-            } catch let restoreError {
-                throw PiInstallError.halfInstalled(reason: "\(error.localizedDescription)；\(restoreError.localizedDescription)")
+            var failures: [String] = []
+            for restore in restores.reversed() {
+                do { try restore() } catch { failures.append(error.localizedDescription) }
             }
+            guard failures.isEmpty else { throw PiInstallError.halfInstalled(reason: ([error.localizedDescription] + failures).joined(separator: "；")) }
             throw error
         }
     }
 
-    private func currentFile() -> PiIntegrationFile {
-        let installed = read(installedFile)
-        let skill = read(skillFile)
-        let extensionIsForeign = installed.map { $0 != PiExtensionBundle.source && !$0.hasPrefix(PiExtensionBundle.ownershipMarker) } ?? false
-        let skillIsForeign = skill.map { !$0.contains(PiSkillBundle.ownershipMarker) } ?? false
-        if extensionIsForeign || skillIsForeign { return .foreign }
-        guard let installed else { return .missing }
-        if installed == PiExtensionBundle.source, skill == PiSkillBundle.text(cuepad: cuepad) { return .current }
-        return .outdated(installed: PiExtensionBundle.declaredVersion(in: installed) ?? 0)
+    /// 移除 CuePad 写的那几样（含 skill 留下的空目录）；别人的东西原样保留。
+    @concurrent public func uninstall() async throws {
+        let files = FileManager.default
+        for (item, state) in currentItems() where state == .current || state == .outdated {
+            try files.removeItem(at: location(of: item))
+        }
+        let skillDirectory = location(of: .skill).deletingLastPathComponent()
+        if (try? files.contentsOfDirectory(atPath: skillDirectory.path))?.isEmpty == true {
+            try files.removeItem(at: skillDirectory)
+        }
     }
 
+    /// 用户 shell 的 PATH 里是否有链接所在目录；读不出来为 nil。不在时终端里直接敲 `cuepad` 找不到（Pi 里的 skill 用的是绝对路径，不受影响）。
+    @concurrent public func linkDirectoryInShellPath() async -> Bool? {
+        let directory = paths.binDirectory.standardizedFileURL.path
+        return await shellPath().map { path in
+            path.split(separator: ":").contains { URL(filePath: String($0)).standardizedFileURL.path == directory }
+        }
+    }
+
+    /// 原子写入一个文件，返回把它还原成原样（原来没有就删掉）的动作。
+    private func replace(_ item: PiConnectItem, with data: Data) throws -> () throws -> Void {
+        let file = location(of: item)
+        let previous = try? Data(contentsOf: file)
+        try data.write(to: file, options: .atomic)
+        return {
+            if let previous { try previous.write(to: file, options: .atomic) } else { try FileManager.default.removeItem(at: file) }
+        }
+    }
+
+    /// 把链接指向这个 App 的命令行工具（原来是 CuePad 指向别处的链接就换掉），返回还原的动作。
+    private func relink() throws -> () throws -> Void {
+        let link = location(of: .commandLink), files = FileManager.default
+        let previous = try? files.destinationOfSymbolicLink(atPath: link.path)
+        if previous != nil { try files.removeItem(at: link) }
+        try files.createSymbolicLink(atPath: link.path, withDestinationPath: helper.path)
+        return {
+            try files.removeItem(at: link)
+            if let previous { try files.createSymbolicLink(atPath: link.path, withDestinationPath: previous) }
+        }
+    }
+
+    private func currentItems() -> [PiConnectItem: PiItemState] {
+        [.bridgeExtension: extensionState(), .skill: skillState(), .commandLink: linkState()]
+    }
+
+    private func extensionState() -> PiItemState {
+        let file = location(of: .bridgeExtension)
+        guard exists(file) else { return .missing }
+        guard let text = read(file) else { return .foreign }
+        if text == PiExtensionBundle.source { return .current }
+        return text.hasPrefix(PiExtensionBundle.ownershipMarker) ? .outdated : .foreign
+    }
+
+    private func skillState() -> PiItemState {
+        let file = location(of: .skill)
+        guard exists(file) else { return .missing }
+        guard let text = read(file), text.contains(PiSkillBundle.ownershipMarker) else { return .foreign }
+        return text == PiSkillBundle.text(cuepad: location(of: .commandLink)) ? .current : .outdated
+    }
+
+    /// 链接是 CuePad 的：指向的 App 包是 CuePad（看包标识）；App 已被移走、指向的地方不存在时，只认名叫 CuePad.app 的包。
+    private func linkState() -> PiItemState {
+        let link = location(of: .commandLink)
+        guard exists(link) else { return .missing }
+        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: link.path) else { return .foreign }
+        if target == helper.path { return .current }
+        let suffix = "Contents/Helpers/cuepad"
+        guard target.hasSuffix("/" + suffix) else { return .foreign }
+        let app = URL(filePath: String(target.dropLast(suffix.count)), directoryHint: .isDirectory)
+        if let identifier = Bundle(url: app)?.bundleIdentifier { return identifier == Self.appBundleIdentifier ? .outdated : .foreign }
+        return !exists(app) && app.lastPathComponent == "CuePad.app" ? .outdated : .foreign
+    }
+
+    static let appBundleIdentifier = "com.sugeh.cuepad"
+
+    /// 不跟随符号链接：失效的链接也算在。
+    private func exists(_ file: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil
+    }
+
+    /// 读不出来或不是 UTF-8 文本为 nil（调用方已确认它在：那就不是 CuePad 写的）。
     private func read(_ file: URL) -> String? {
         (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// 用户登录 shell 的 PATH（agent 的 bash 看到的是它，而不是 GUI 应用自己那份很短的 PATH）。
+    /// 交互式启动才会读 .zshrc；5 秒没结果就放弃。
+    @concurrent public static func loginShellPath() async -> String? {
+        let marker = "__CUEPAD_PATH__"
+        let process = Process()
+        process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+        process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
+        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
+        return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 
     private func detectPi() async -> PiInstallation {

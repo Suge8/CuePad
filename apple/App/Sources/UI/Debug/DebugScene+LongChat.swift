@@ -189,7 +189,10 @@ import QuartzCore
 /// 长对话里滚轮与触控板滚动的开销（`-CuePadBench chatscroll`，配 session 画面打开 marathon）：先往上翻几趟把对话排开、量过高度，
 /// 再各量三组手势（慢速触控板 600px/s、快速触控板 2400px/s、鼠标滚轮），每组下上下上共四趟，一组一行 `CHATSCROLL {json}`，量完退出。
 /// 指标：主线程每圈 CPU（≥0.2ms 的圈）的 p50/p90/p99（毫秒；144Hz 一帧 6.9ms）、超 6.9ms 与 16ms 的圈数、总 CPU、进程指令数（百万，前后对比以它为准）、
-/// `movedPx`（为 0 说明没滚动起来，数字作废）；前台时还有 display link 掉帧。
+/// `movedPx`（为 0 说明没滚动起来，数字作废）、`events` 与 `delivered`（应投与实际投出的事件数，不等时这一组的工作量和别组不同，数字作废）；前台时还有 display link 掉帧。
+/// 别人在编译时 CPU 时间会被拖歪，指令数基本不动；热身时排开多少条随时机略变，要排除它就把初始排开的条数固定成同一个值再比（同值下三遍指令数相差不到 1%）。
+/// 跑法：`-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`，
+/// 用 `open -g -n -a <app> --stdout <文件> --env … --args …` 后台启动（直接执行二进制会把应用调到前台抢焦点）；Time Profiler 按这次启动的 PID `--attach`。
 /// 默认不碰真实指针、不把窗口调到前台、不向系统发事件，配 `-CuePadOffscreen YES` 在屏幕外跑：直接挪滚动视图的裁剪区原点（不经 AppKit 的滚轮事件与动画，
 /// 那条路靠 display link，屏幕外不走），补发 `willStartLiveScroll` 与 `didEndLiveScroll` 两个通知（滚动区据此知道"用户在滚"）。屏幕外量不到：滚轮事件与动画那一段、
 /// 指针在窗口里时每帧重设光标的成本（自定义指针的机器上很贵）、合成与掉帧。
@@ -197,6 +200,7 @@ import QuartzCore
 /// - `-CuePadScrollDriver process`：滚轮事件在进程内直接交给对话的滚动视图（`scrollWheel(with:)`），经 AppKit 的滚轮与动画，不碰指针；
 /// - `-CuePadScrollDriver hid`：经窗口服务器发真实滚轮事件（本窗口不在指针下的最上层时一个事件也不发，量不了就报错退出）。
 /// `-CuePadScrollPointer in|out` 在热身之后把指针移到对话区中央（in）或窗口外的屏幕角落（out），量完放回；hid 要配 in。
+/// 定预算以 hid 加 in 为准：旧新各跑三遍、交替，同口径比指令数、p90/p99、超 6.9ms 与 16ms 的圈数、掉帧。
 enum ChatScrollBench {
     private static let turns = TurnLog()
 
