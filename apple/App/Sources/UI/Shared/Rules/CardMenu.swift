@@ -34,11 +34,12 @@ nonisolated enum CardMenu {
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
     /// `bindsSession`：这是 Mac 上的叶子任务（没有步骤），没做完时多一项"绑定会话"。
+    /// 没做完的任务：完成与归档一组，绑定会话一组（Mac 的叶子），删除最后；没有绑定会话时不留空组。
     static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false) -> [[Item]] {
         switch card.status {
         case nil: [[handsToAgent(card) ? .handToAgent : .attachToTask, .makeTask, .move, .archive], (selectable ? [.select] : []) + [.trash]]
         case .done: [[.reopen, .archive], [.trash]]
-        case .todo, .inProgress: [[.complete] + (bindsSession ? [.bindSession] : []) + [.archive], [.trash]]
+        case .todo, .inProgress: [[.complete, .archive], bindsSession ? [.bindSession] : [], [.trash]].filter { !$0.isEmpty }
         }
     }
 

@@ -14,22 +14,22 @@ final class AppSettings {
         case system, light, dark
     }
 
-    static let defaultGlobalShortcut = "Alt+Space"
     private static let draftDelay: Duration = .milliseconds(400)
 
     enum Key {
         static let theme = "theme"
-        static let globalShortcut = "globalShortcut"
         #if os(macOS)
+        static let globalShortcut = "globalShortcut"
+        static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
+        static let alerts = "alerts"
         #endif
-        static let piExtensionDeclined = "piExtensionDeclined"
-        static let replyTexts = "replyTexts"
-        static let replyNotes = "replyNotes"
+        static let replyDrafts = "replyDrafts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let agentProject = "agentProject"
         static let holdSendLearned = "holdSendLearned"
+        static let lastAgent = "lastAgent"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -39,23 +39,23 @@ final class AppSettings {
     @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    /// W3C code 形式的加速键（如 `Alt+Space`）。
-    var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
     #if os(macOS)
     /// Mac 主窗口上次打开的项目（`Workspace.page` 的唯一事实源）；iOS 的当前项目从导航路径推出，不存偏好。
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
+    /// 通知两种提示（等你、做完了）各自的开关与提示音（`AlertPreferences`）。
+    var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
-
-    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
-    var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
     static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
 
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
+
+    /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
+    var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
 
     /// iOS Agent 页上次选的项目筛选；nil 是全部。存储属性：选的那一刻页面就跟着变。
     var agentProject: UUID? { didSet { defaults.set(agentProject?.uuidString, forKey: Key.agentProject) } }
@@ -87,8 +87,8 @@ final class AppSettings {
         sessionSeen = seen
     }
 
-    /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注另存本机偏好、跨退出保留，
-    /// 带上的卡片与图片只留在这次运行。
+    /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注存进本机偏好、跨退出保留
+    /// （`SavedDraft`，一个会话一条），带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
         let slot = slot(session)
         var draft = slot.draft
@@ -126,42 +126,32 @@ final class AppSettings {
         }
     }
 
-    /// 把还没写的草稿文字与批注写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
+    /// 把还没写的草稿写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
     func flush() {
         guard let timer = draftTimer else { return }
         timer.cancel()
         draftTimer = nil
-        defaults.set(replyDrafts.compactMapValues { $0.draft.text.allSatisfy(\.isWhitespace) ? nil : $0.draft.text }
-            .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
-        defaults.set(try? JSONEncoder().encode(replyDrafts.compactMapValues { $0.notes.isEmpty ? nil : $0.notes }), forKey: Key.replyNotes)
+        defaults.set(try? JSONEncoder().encode(replyDrafts.compactMapValues(\.saved)), forKey: Key.replyDrafts)
     }
 
     /// 会话回复框草稿的预览（会话行据此写"有草稿"，`PiRowFacts`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
-        #if !DEBUG
-        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
-        #endif
+        DebugHooks.dropLaunchArguments(from: defaults)
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-        globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
-        piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
+        lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
-        replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
-            if let id = UUID(uuidString: entry.key) { drafts[id] = ReplyDraftSlot(ComposerDraft(text: entry.value)) }
-        }
-        let notes = defaults.data(forKey: Key.replyNotes).flatMap { try? JSONDecoder().decode([UUID: [ReplyNote]].self, from: $0) } ?? [:]
-        for (id, list) in notes {
-            if replyDrafts[id] == nil { replyDrafts[id] = ReplyDraftSlot() }
-            replyDrafts[id]?.notes = list
-        }
+        replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
+            .mapValues(ReplyDraftSlot.init)
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
             unreadSince = Date(timeIntervalSince1970: seconds)
@@ -185,18 +175,29 @@ final class AppSettings {
     private static let leavingForeground = NSApplication.willResignActiveNotification
     private static let terminating = NSApplication.willTerminateNotification
     #endif
-
-    private static func isTrue(_ value: Any) -> Bool {
-        if let flag = value as? Bool { return flag }
-        return ["yes", "true", "1"].contains(String(describing: value).lowercased())
-    }
 }
 
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。批注单独一格（`draft.notes` 恒为空）：读批注的对话不随打字重算。
 @Observable
 private final class ReplyDraftSlot {
-    var draft: ComposerDraft
+    var draft = ComposerDraft()
     var notes: [ReplyNote] = []
 
-    init(_ draft: ComposerDraft = ComposerDraft()) { self.draft = draft }
+    init() {}
+
+    init(_ saved: SavedDraft) {
+        draft.text = saved.text
+        notes = saved.notes
+    }
+
+    /// 存进偏好的那份；空草稿不存。
+    var saved: SavedDraft? {
+        draft.text.allSatisfy(\.isWhitespace) && notes.isEmpty ? nil : SavedDraft(text: draft.text, notes: notes)
+    }
+}
+
+/// 偏好里一个会话的草稿：跨退出保留的只有文字与批注。
+private struct SavedDraft: Codable {
+    var text: String
+    var notes: [ReplyNote]
 }

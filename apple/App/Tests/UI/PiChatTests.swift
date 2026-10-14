@@ -16,17 +16,13 @@ struct PiChatTests {
             tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
-    func preview(_ title: String, at second: TimeInterval = 0) -> PiPreview {
-        PiPreview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
-    }
-
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {
         let app = TestApp()
         let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")
         try await recorder.update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let sent = try await app.services.requestMacDelivery("把断言也改了", to: session, mode: .send)
-        let waiting = try await app.services.requestMacDelivery("再跑一遍", to: session, mode: .send)
+        let sent = try await app.services.store.requestDelivery("把断言也改了", to: session.target, on: session.hostID, mode: .send)
+        let waiting = try await app.services.store.requestDelivery("再跑一遍", to: session.target, on: session.hostID, mode: .send)
         let answer = try await app.services.store.requestAnswer(
             PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
 
@@ -41,8 +37,8 @@ struct PiChatTests {
         let app = TestApp()
         try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let said = try await app.services.requestMacDelivery("先说一句", to: session, mode: .send)
-        let command = try await app.services.requestMacDelivery("/compact", to: session, mode: .command)
+        let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
+        let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
         #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
@@ -69,7 +65,7 @@ struct PiChatTests {
         #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
 
         app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
-        #expect(app.services.settings.shown(try await item()).status != .delivery(.failed))
+        #expect(Workspace(services: app.services).shown(try await item()).status != .delivery(.failed))
         #expect(try await item().undelivered == 1)
     }
 

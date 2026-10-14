@@ -91,6 +91,7 @@ public struct PiSessionPage: Sendable, Equatable {
 /// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
 /// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
 /// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
+/// 每个会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上（`CueStore+SessionTasks`）。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -131,6 +132,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）与此刻能用的斜杠命令（已结束的会话清空）。旧版本写的记录没有。
   public var context: PiContextUsage?
   public var commands: [PiSlashCommand]
+  /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
+  public var agent: Open<AgentKind>
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
@@ -139,7 +142,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = [], context: PiContextUsage? = nil,
-    commands: [PiSlashCommand] = []
+    commands: [PiSlashCommand] = [], agent: Open<AgentKind> = .known(.pi)
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -166,6 +169,37 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.models = models
     self.context = context
     self.commands = commands
+    self.agent = agent
+  }
+
+  /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted) } ?? [] }
+
+  // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
+
+  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时让你选等它做完再说（默认，不打断）或马上说（次级，只给做得到的会话，
+  /// 见 `AgentCapabilities.steer`）——要不要打断是你的意图，记录推不出来；没在跑时直接发送（执行时撞上会话刚开始一轮也按等它做完再说送达）。
+  /// 已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
+  public var deliveryModes: [DeliveryMode] {
+    guard state.known?.isTurnRunning == true else { return [.send] }
+    return capabilities.contains(.steer) ? [.followUp, .steer] : [.followUp]
+  }
+
+  /// 能结束：做得到，在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
+  public var canEnd: Bool {
+    capabilities.contains(.end) && state != .known(.ended) && state != .known(.incompatible)
+  }
+
+  /// 能停止这一轮：做得到，且指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
+  /// 等子代理时这一轮已经歇下，都没有可停的。
+  public var canStop: Bool {
+    capabilities.contains(.abort) && state.known?.isTurnRunning == true && state != .known(.waitingForUser)
+  }
+
+  /// 等你确认、且能从 CuePad 作答的问题（问题本身可答，这个会话也做得到）；其余只能在 Agent 那边答。
+  public var answerableQuestion: PiQuestion? {
+    guard state == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
+    return question
   }
 
   /// 记录上的摘要（对话的投影）。
@@ -174,8 +208,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
-  public var waitsForYou: Bool { state == .known(.waitingForUser) }
+  /// 等的是 Cue：在等回答，Cue 在值班（`CueProfile.onDuty`），这个问题 CuePad 也答得了（`answerableQuestion`）——Cue 去答或转问你。
+  public func waitsForCue(cueOnDuty: Bool) -> Bool { cueOnDuty && answerableQuestion != nil }
+
+  /// "等你"里会话那一半的唯一规则：在等回答，且等的不是 Cue（`waitsForCue`）。"等你 N"、Dock 角标、
+  /// "等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  public func asksYou(cueOnDuty: Bool) -> Bool { state == .known(.waitingForUser) && !waitsForCue(cueOnDuty: cueOnDuty) }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
@@ -188,13 +226,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "models", "context", "commands",
+    "model", "thinking", "models", "context", "commands", "agent",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, JSONColumn.encodeList(models), context.map(JSONColumn.encode),
-     JSONColumn.encodeList(commands)]
+     JSONColumn.encodeList(commands), agent.rawValue]
   }
   init(row: Row) {
     self.init(
@@ -210,6 +248,7 @@ extension PiSessionState: Record {
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       models: JSONColumn.decodeList(PiModelOption.self, from: row.textOrNil(22)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(23)),
-      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)))
+      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)),
+      agent: row.textOrNil(25).map(Open.init(rawValue:)) ?? .known(.pi))
   }
 }

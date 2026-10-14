@@ -20,7 +20,8 @@ enum Typography {
     static let caption = Font.system(size: 12)
     static let caption2 = Font.system(size: 11)
     /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大一号；标题与代码同属这一列。
-    static let reading = Font.system(size: 15)
+    static let readingSize: CGFloat = 15
+    static let reading = Font.system(size: readingSize)
     static let readingHeading = Font.system(size: 18, weight: .semibold)
     static let code = Font.system(size: 13).monospaced()
     /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。

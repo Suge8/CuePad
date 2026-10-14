@@ -74,7 +74,7 @@ import Testing
   @Test func erasingLocalDataAfterASwitchClearsSyncedTablesOnly() async throws {
     _ = try await populateAndPush()
     let image = try store.files.store(pngData(width: 4, height: 4))
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: Date()), host: "mac-a")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: Date()), host: "mac-a")
     await rig.coordinator.handle(.accountChange(.switched))
 
     try await rig.coordinator.resolve(.eraseLocal)

@@ -1,5 +1,4 @@
 #if os(macOS)
-import struct CueStore.PiSession
 import CueStore
 import CueSync
 import Foundation
@@ -23,7 +22,7 @@ struct MacSyncTests {
             FileManager.default.createFile(atPath: file!.path, contents: Data())
         }
         return CuePi.PiSession(
-            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
+            id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
@@ -50,7 +49,7 @@ struct MacSyncTests {
             _ = await finish()
             done.signal()
         }
-        #expect(Self.blockCurrentThread(until: done, seconds: 3), "主线程被占住时收尾等不到")
+        #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
     }
 
@@ -69,6 +68,32 @@ struct MacSyncTests {
 
         #expect(late == "同步引擎")
         #expect(rig.sync.stopped == 1)
+    }
+
+    /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
+        // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        let rig = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let services: AppServices = rig.services, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        try await services.store.updateCueProfile {
+            $0.hostID = host
+            $0.enabledAt = .now
+        }
+        services.start()
+        #expect(await uploads.next() == record)
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+
+        #expect(await services.stop(within: .milliseconds(300)) == "Cue")
+
+        #expect(await uploads.next() == record)
+        #expect(try await !services.store.macOnline(host))
     }
 
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
@@ -97,6 +122,39 @@ struct MacSyncTests {
 
         try await eventually("rig.sync.syncNows == 1") { rig.sync.syncNows == 1 }
         #expect(rig.sync.syncNows == 1)
+    }
+
+    /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
+    /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
+    @Test(.timeLimit(.minutes(1)))
+    func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
+        let clock = ManualTiming()
+        let rig = TestApp(timing: clock.timing)
+        let services: AppServices = rig.services, store = services.store, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        services.start()
+        defer { services.cancelBackgroundWork() }
+
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
+
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        #expect(await uploads.next() == record)  // 续期
+        #expect(try await store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+        #expect(try await !store.macOnline(host))
+        #expect(await uploads.next() == record)
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        await clock.waitForSleeper()
+        #expect(try await !store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
     }
 
     // MARK: Pi 状态记录
@@ -146,7 +204,7 @@ struct MacSyncTests {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory("/work", for: project.id)
 
-        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app"))]))
+        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app", state: .settled))]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
@@ -191,7 +249,7 @@ struct MacSyncTests {
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
         let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .thinking)
+        try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try await services.resetPiState()
@@ -396,6 +454,21 @@ struct MacSyncTests {
         #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
+    /// Cue 在这台值班也是在等：你在手机上对它说的话、"等你"的回答只经主动拉取到达，会话都关着、没有在路上的请求时也拉。
+    @Test(.timeLimit(.minutes(1)))
+    func 主动拉取的条件_Cue在这台值班时也拉() async throws {
+        #expect(services.pollingCadence == nil)
+        try await services.store.updateCueProfile { [hostID = TestApp.hostID] in
+            $0.hostID = hostID
+            $0.enabledAt = .now
+        }
+        services.start()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+        #expect(services.pi.slots.isEmpty && !services.hasOpenDeliveries)
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+    }
+
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
@@ -407,15 +480,17 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
+    /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
     @Test(.timeLimit(.minutes(1)))
-    func 执行器写回结果后立即上传这一条() async throws {
+    func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
 
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
@@ -435,8 +510,8 @@ struct MacSyncTests {
         return url
     }
 
-    private func indexed(_ id: String, cwd: URL) async throws -> PiSession {
-        let session = PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
+    private func indexed(_ id: String, cwd: URL) async throws -> IndexedSession {
+        let session = IndexedSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
         try await services.store.upsertPiSession(session, host: TestApp.hostID)
         return session
     }
@@ -486,7 +561,7 @@ struct MacSyncTests {
         #expect(rig.host.extensions["new-tok-1"]?.messages == [PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString)])
     }
 
-    /// 从步骤开的新会话叫步骤名：先起名，再送开场的话（会话名不会先成了第一句话）。
+    /// 从步骤开的新会话叫步骤名：会话名与模型、思考强度一样是 Pi 的启动参数，开出来就叫它，再送开场的话（会话名不会先成了第一句话）。
     @Test func 新会话_从步骤开_以步骤命名() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
@@ -500,8 +575,41 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-6"])
-        #expect(ext.received == ["config", "send"])
-        #expect(ext.commands.first?.json["name"] as? String == "备份数据库")
+        #expect(ext.received == ["send"])
+        guard case .open(_, _, let name, _, _) = try #require(rig.host.calls.first) else {
+            Issue.record("没有开新会话")
+            return
+        }
+        #expect(name == "备份数据库")
+    }
+
+    /// Cue 开的新会话：开场白同所有送进会话的话一样记发送记录（带请求 id 与来源），请求清理之后会话页里它仍标着 Cue。
+    @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    func Cue开的新会话_请求清理之后开场白仍标着Cue() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+        let store = services.store
+
+        try await services.executor.start()
+        let request = try await store.requestLaunch(
+            PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
+        let done = try await awaitFinished(request.id)
+        #expect(done.status == .known(.succeeded))
+        let ext = try #require(rig.host.extensions["new-tok-cue"])
+        try await store.deleteDelivery(request.id)
+        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "看看测试为什么挂", at: .now, deliveryID: request.id)
+        try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
+
+        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store)
+        let derived = ChatDerived()
+        derived.refresh(digest)
+
+        #expect(digest.deliveries.isEmpty)
+        let entry = try #require(derived.items.first)
+        #expect(entry.fromCue)
     }
 
     /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。

@@ -43,6 +43,12 @@ struct ProjectNowTests {
         #expect(now([seen], task: nil, intro: nil) == nil)
     }
 
+    /// 会话没有回答（模型拒绝、中途被停）：最后那句可能是 Cue 发进去的，近况不写它，只写状态（会话名已经说了是什么事）。
+    @Test func 没有回答时不写最后那句() {
+        let silent = item("notes", .settled)
+        #expect(now([silent])?.text == shown(silent).presence)
+    }
+
 }
 
 /// 没送到的话在"此刻"与会话行是同一个判定（`AppSettings.shown`）：你看过那个会话之前写没送到的原因，
@@ -73,7 +79,7 @@ struct ProjectNowSeenTests {
             let current = try await store.piSessionPage(.current).items
             return ProjectNow.byProject(
                 [project.id], sessions: current, tasks: [project.id: tasks], intros: [project.id: "三家报价"],
-                shown: app.services.settings.shown)[project.id]?.text
+                shown: Workspace(services: app.services).shown)[project.id]?.text
         }
         func state(_ id: String) async throws -> PiSessionState {
             try #require(try await store.piSessionPage(PiSessionQuery(limit: 10)).items.first { $0.state.sessionID == id }?.state)
@@ -91,12 +97,13 @@ struct ProjectNowSeenTests {
 }
 
 #if os(iOS)
-/// 书架读到的数据里，"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
+/// 侧栏的"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍；
+/// iPhone 书架不写会话（会话在 Agent 标签），同一个项目写介绍。
 struct ProjectNowShelfTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    @Test func 发给已结束会话的话_在项目的此刻里() async throws {
+    @Test func 发给已结束会话的话_在侧栏的此刻里_书架只写介绍() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.updateProject(project.id) { $0.intro = "多 Agent 调度本月可上线" }
         let recorder = PiStateRecorder(store: store, hostID: "mac")
@@ -108,7 +115,9 @@ struct ProjectNowShelfTests {
         let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
-        #expect(shelf.now(projects: projects, sessions: sessions, shown: app.services.settings.shown)[project.id]?.text == "正在唤醒 Agent")
+        let workspace = Workspace(services: app.services)
+        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: shelf.leading) { workspace.shown($0) }[project.id]?.text == "正在唤醒 Agent")
+        #expect(shelf.now(projects: projects)[project.id]?.text == "多 Agent 调度本月可上线")
     }
 
     @Test func 改一条普通灵感不改变书架读到的数据_进回收站才变() async throws {

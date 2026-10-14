@@ -5,26 +5,44 @@ import os
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
+  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
+  ) throws -> DeliveryRequest {
+    try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
+  }
+
+  /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
+  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。
+  private func insertDelivery(
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    return try write {
-      let now = Date.stamp
-      let request = DeliveryRequest(
-        id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
-        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
-        resultReceivedAt: nil)
-      try insert(request)
-      try registerImages(in: content)
-      return request
+    let now = Date.stamp
+    let request = DeliveryRequest(
+      id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
+      status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+      resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
+    try insert(request)
+    try registerImages(in: content)
+    if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
+      try endUnusedSessions(of: leaf, cue: cue)
     }
+    return request
+  }
+
+  /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。
+  private func leaf(holding card: UUID) throws -> UUID? {
+    guard let found = try link(of: card) else { return nil }
+    if found.isTask { return try promptHome(card) }
+    guard let parent = found.parent, try link(of: parent)?.isTask == true else { return nil }
+    return try promptHome(parent)
   }
 
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
-  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(answer.stored, to: target, on: host, mode: .answer)
+  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try requestDelivery(answer.stored, to: target, on: host, mode: .answer, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 改 `target` 会话的模型与思考强度：与发送共用投送请求与执行器，方式是 `config`。
@@ -34,38 +52,40 @@ extension CueStore {
 
   /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
   /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
-  public func requestEnd(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestControl(.end, of: target, on: host)
+  public func requestEnd(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try write { try requestControl(.end, of: target, on: host, cue: cue) }
   }
 
   /// 请 `host` 那台 Mac 停止 `target` 会话正在跑的这一轮：方式是 `stop`；同样复用还在路上的那一条。
-  public func requestStop(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestControl(.stop, of: target, on: host)
+  public func requestStop(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+    try write { try requestControl(.stop, of: target, on: host, cue: cue) }
   }
 
-  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。
-  private func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String) throws -> DeliveryRequest {
+  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
+  func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
     if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
       return open
     }
-    return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode)
+    return try insertDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
   /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
-  /// 它是任务或任务下的提示词时，会话以那个任务（叶子）的标题命名。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
+  /// 会话名按它定（`sessionName(forCard:)`）。`cue` 为真时请求标明来自 Cue（`DeliveryOrigin`）。
+  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false) throws -> DeliveryRequest {
     var launch = launch
-    launch.name = try card.flatMap(taskTitle(for:))
-    return try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+    launch.name = try card.flatMap(sessionName(forCard:))
+    return try requestDelivery(
+      launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
   }
 
-  /// 卡所在的任务的标题：任务是它自己，提示词是它挂着的任务；散放的灵感、没有标题的任务没有。
-  private func taskTitle(for card: UUID) throws -> String? {
+  /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：卡所在的任务的标题——任务是它自己，
+  /// 提示词是它挂着的任务——超长的截断（`CueName.clipped`）；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
+  func sessionName(forCard card: UUID) throws -> String? {
     guard let card = try find(Card.self, card) else { return nil }
     let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
-    guard let title = task.map({ CueSummary($0.body).title }), !title.isEmpty else { return nil }
-    return title
+    guard let title = task?.heading, !title.isEmpty else { return nil }
+    return CueName.clipped(title)
   }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
@@ -75,7 +95,7 @@ extension CueStore {
   func claimLaunchedCards() throws {
     try db.run(
       """
-      UPDATE cards SET piSessionID = s.sessionID, modifiedAt = ?1,
+      UPDATE cards SET \(Self.keepingFormerSession("s.sessionID")), piSessionID = s.sessionID, modifiedAt = ?1,
         startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
         completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
       FROM deliveryRequests r JOIN piSessionStates s
@@ -103,6 +123,16 @@ extension CueStore {
   }
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
+
+  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+  public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {
+    for try await current in observe({ try $0.deliveryRequest(request) }) {
+      guard let current else { throw CueStoreError.notFound }
+      if !current.isOpen { return current }
+    }
+    throw CancellationError()
+  }
 
   /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
   public func deliveryRequests(toSession sessionID: String) throws -> [DeliveryRequest] {
@@ -208,10 +238,13 @@ extension CueStore {
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 留着的算"还剩"：清理一轮轮排下去，认领后的那一轮就带走它。
-  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），只在完成早于 `undeliveredCutoff` 时清理。
+  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
+  /// 两者都只在完成早于 `undeliveredCutoff` 时清理。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
-    let undelivered = "status = 'failed' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND completedAt >= ?"
+    let undelivered = """
+      status = 'failed' AND (mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?
+      """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
@@ -232,7 +265,8 @@ extension CueStore {
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
-/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，不等同步引擎的调度）。
+/// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，不等同步引擎的调度）：发起的设备据领取知道 Mac 接手了，
+///   执行得久的（唤醒已结束的会话）不会被它报成超时没送到。领取的那次不等上传完就开始执行。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
@@ -240,7 +274,7 @@ public actor DeliveryExecutor {
   private let retention: Duration
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
-  private let onFinished: @Sendable (DeliveryRequest.ID) async -> Void
+  private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
   private var watcher: Task<Void, Never>?
@@ -251,7 +285,7 @@ public actor DeliveryExecutor {
   public init(
     store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
-    onFinished: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
+    onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -260,7 +294,7 @@ public actor DeliveryExecutor {
     self.retention = retention
     self.timing = timing
     self.onIssue = onIssue
-    self.onFinished = onFinished
+    self.onWritten = onWritten
     self.handler = handler
   }
 
@@ -312,6 +346,7 @@ public actor DeliveryExecutor {
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
+        Task { [onWritten] in await onWritten(request.id) }
         return request
       }
     }
@@ -324,7 +359,7 @@ public actor DeliveryExecutor {
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
     if await reporting({ try await store.finishDelivery(request.id, outcome, at: timing.now()) }) != nil {
-      await onFinished(request.id)
+      await onWritten(request.id)
     }
     scheduleCleanup()
   }
@@ -342,7 +377,7 @@ public actor DeliveryExecutor {
     CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
-  /// 没能送达的话最多留多久（与对话的保留期一样是 7 天）。
+  /// 没能送达的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
   private static let undeliveredRetention: TimeInterval = 7 * 86_400
 
   private func scheduleCleanup() {

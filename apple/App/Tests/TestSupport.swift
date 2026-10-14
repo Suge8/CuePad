@@ -4,6 +4,8 @@ import CueSync
 @_exported import CueTestSupport
 import Foundation
 import Synchronization
+import SwiftUI
+import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
@@ -64,7 +66,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    let syncNowHangs = Mutex(false)
+
+    func syncNow() async throws {
+        state.withLock { $0.syncNows += 1 }
+        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+    }
     func pullChanges() async throws {}
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
@@ -103,10 +111,27 @@ final class TestApp {
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
 
+    #if os(macOS)
+    /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
+    private let cue: CueDependencies?
+    /// 自动更新器；默认没有（同隔离模式）。
+    private let updater: (any AppUpdater)?
+    /// 资料库与在线记录续期的时钟；要推进时间的测试给 `ManualTiming` 的。
+    private let timing: Timing
+
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
+        syncSource = source
+        self.cue = cue
+        self.updater = updater
+        self.timing = timing
+        services = makeServices()
+    }
+    #else
     init(sync source: AppServices.SyncSource? = nil) {
         syncSource = source
         services = makeServices()
     }
+    #endif
 
     isolated deinit {
         #if os(macOS)
@@ -124,33 +149,45 @@ final class TestApp {
         return services
     }
 
+    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
+    var databaseURL: URL { isolatedLocation.databaseURL }
+
     private var isolatedLocation: LibraryLocation {
         try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
     }
 
     #if os(macOS)
     var piPaths: PiPaths {
-        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory)
+        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory, binDirectory: directory.appending(path: "home/.local/bin"))
+    }
+    /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
+    lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
+
+    /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
+    var agentHomes: [String: String] {
+        ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path]
     }
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: pi,
             hotkeys: hotkeys,
-            paths: piPaths,
-            installer: PiIntegration(
-                paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
-                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
+            paths: AgentPaths(pi: piPaths, environment: agentHomes),
+            agents: AgentIntegration(
+                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+                cuepad: helper),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
-            commandLineTool: CommandLineToolInstaller(
-                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: nil,
-            host: host,
-            locatePi: { Self.piExecutable },
-            pasteboard: pasteboard)
+            timing: timing,
+            commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
+            updater: updater,
+            hooks: AgentHookServer(path: piPaths.hookSocket),
+            runtimes: { [host] _ in [.pi: host] },
+            pasteboard: pasteboard,
+            cue: cue ?? CueDependencies(
+                scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
@@ -162,6 +199,17 @@ final class TestApp {
         try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
     }
     #endif
+}
+
+extension Workspace {
+    /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
+    func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
+        var box = draft
+        let files = services.store.files
+        let binding = Binding(get: { box }, set: { box = $0 })
+        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        return try #require(try await services.store.deliveryRequests().first)
+    }
 }
 
 extension CueStore {

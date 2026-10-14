@@ -1,11 +1,12 @@
 import CueStore
 import Foundation
 
-/// 会话行状态词后面的读数（全 App 的会话行同一份，`PiSessionRow`）：一个此刻的短词（`Note`）、子代理、上下文用了多少、会话自己的模型。
+/// 会话行状态词后面的读数（全 App 的会话行同一份，`PiSessionRow`）：一个此刻的短词（`Note`）、子代理、快满的上下文、会话自己的模型。
 /// 只写看得见的状态，不写会话在说什么——那在会话页里。已结束的会话没有读数（历史里只看名字与所在）。
 nonisolated struct PiRowFacts: Equatable {
     var note: Note?
     var subagents: PiSubagentSummary?
+    /// 上下文用到七成（`PiContextMeter.tightFraction`）起才有：余量足或刚压缩完不知道用量时，行上不写。
     var context: PiContextMeter?
     var model: Model?
 
@@ -46,7 +47,7 @@ nonisolated struct PiRowFacts: Equatable {
             else { nil }
         guard session.state != .known(.ended) else { return }
         subagents = PiSubagentSummary(session.subagents)
-        context = session.context.flatMap(PiContextMeter.init)
+        context = session.context.flatMap(PiContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
         model = session.model.map { Model(provider: PiProvider(id: $0.key.provider), name: PiModelName.short($0)) }
     }
 }

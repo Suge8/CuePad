@@ -8,7 +8,7 @@ import CueStore
 /// 端到端：会话的对话从 Pi 的会话文件读出——一轮一条 Pi 消息（只取最后的回答，工具只成摘要），你的消息带着
 /// CuePad 送进去时的投送请求 id；会话记录上的摘要是对话的投影。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"), .timeLimit(.minutes(2)))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(2)))
 struct RealTranscriptTests {
     private func rig() async throws -> (PiProcess, PiBridge, URL) {
         let pi = try await PiProcess(modelInAgentDirectory: true)

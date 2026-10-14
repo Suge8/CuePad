@@ -11,6 +11,7 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
+  case cueMessages, cueLines, cueProfile, cueState, cueSummaries, macPresence
 }
 
 extension Table {
@@ -18,7 +19,11 @@ extension Table {
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
     .accountQuotas,
+    .cueMessages, .cueLines, .cueProfile, .cueState, .macPresence,
   ]
+
+  /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
+  package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
   /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
@@ -27,7 +32,7 @@ extension Table {
     case .cards: Card.columns
     case .sendRecords: SendRecord.columns
     case .attachments: Attachment.columns
-    case .piSessions: PiSession.columns
+    case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
@@ -35,6 +40,12 @@ extension Table {
     case .piMessages: PiChatMessage.columns
     case .previews: PiPreview.columns
     case .accountQuotas: AccountQuota.columns
+    case .cueMessages: CueMessage.columns
+    case .cueLines: CueMemoryLine.columns
+    case .cueProfile: CueProfile.columns
+    case .cueState: CueState.columns
+    case .macPresence: MacPresence.columns
+    case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     }
   }
 }
@@ -95,8 +106,11 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
+  /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
+  /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
+  public internal(set) var formerSessionIDs: [String] = []
 
-  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在顶层任务下（`CueStore.promptHome`），不算一级。
+  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
@@ -198,6 +212,9 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
+  /// 送出它的投送请求（消息的 `PiChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
+  public var deliveryID: UUID?
+  public var origin: Open<DeliveryOrigin>?
 }
 
 /// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
@@ -212,31 +229,33 @@ public struct Attachment: Identifiable, Equatable, Sendable {
 
 /// 一个会话索引的写入：索引、检查点（nil：保留已存的）与同一次读会话文件得到的对话（见 `CueStore.upsertPiSessions`）。
 public struct PiSessionUpsert: Sendable {
-  public var session: PiSession
+  public var session: IndexedSession
   public var checkpoint: Data?
   public var transcript: PiTranscript?
 
-  public init(session: PiSession, checkpoint: Data?, transcript: PiTranscript?) {
+  public init(session: IndexedSession, checkpoint: Data?, transcript: PiTranscript?) {
     self.session = session
     self.checkpoint = checkpoint
     self.transcript = transcript
   }
 }
 
-/// 仅本机：Pi 会话历史索引的元数据。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
-public struct PiSession: Identifiable, Equatable, Sendable {
+/// 仅本机：Agent 会话历史索引的一条（会话文件路径与工作目录，OpenCode 的是它数据库里的会话）。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
+public struct IndexedSession: Identifiable, Equatable, Sendable {
   public let id: String
   public var path: String
   public var cwd: String
   public var title: String
   public var lastActivityAt: Date
+  public var agent: AgentKind
 
-  public init(id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date) {
+  public init(id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date, agent: AgentKind = .pi) {
     self.id = id
     self.path = path
     self.cwd = cwd
     self.title = title
     self.lastActivityAt = lastActivityAt
+    self.agent = agent
   }
 }
 
@@ -354,10 +373,45 @@ public enum CueStoreError: Error, Equatable {
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
   case previewUnreadable(String)
-  /// 预览的文件超过 `PiPreview.maxBytes`。
-  case previewTooLarge(limit: Int)
+  /// 预览的文件超过 `PiPreview.maxBytes`（参数是它的路径）。
+  case previewTooLarge(String, limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
+  case readOnlyLibrary
+  // 以下除 memoryLineTooLong 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它）。
+  /// 叶子还没有会话（参数是叶子标题）。
+  case noSession(String)
+  /// 叶子已有会话、没有草稿可交，开工无事可做（参数是叶子标题）。
+  case alreadyStarted(String)
+  /// 叶子没有草稿，开工没有第一句可交（参数是叶子标题）。
+  case draftNeeded(String)
+  /// 叶子还没绑会话，它的话正送进上一步的会话（参数是叶子标题）。
+  case sending(String)
+  /// 叶子绑着会话，不留草稿：话在会话里说（参数是叶子标题）。
+  case leafHasSession(String)
+  /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
+  case stepsRemaining(Int)
+  /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
+  case launching(String)
+  /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
+  case noFolder(String)
+  /// 会话此刻没有能从 CuePad 作答的提问。
+  case nothingToAnswer
+  case cannotStop(String)
+  case cannotChangeModel(String)
+  /// 答案不在可选的里面（参数是可选的答案）。
+  case invalidAnswer([String])
+  /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
+  case memoryLineTooLong(Int)
+  /// 摘要的区间不是记忆里对齐的 2 的幂区间。
+  case invalidSummaryRange
+  /// Cue 没启用（没有 `cueProfile`、停用了或没选住在哪台 Mac）。
+  case cueNotEnabled
+  /// 这条提问已经结束了（答了、关掉了或撤回了）。
+  case questionEnded
+  /// 你已说过这类事以后不用问（参数是那条规矩在记忆里的序号）。
+  case alreadyAllowed(Int)
 }
 
 extension CueStoreError: LocalizedError {
@@ -379,8 +433,29 @@ extension CueStoreError: LocalizedError {
     case .notALeaf: "有步骤的任务不直接绑会话，绑到它的某个步骤上"
     case .notATask: "这是灵感，先「设为任务」再改状态"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
-    case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
+    case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .readOnlyLibrary: "资料库是只读的，写不进去"
+    case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
+    case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
+    case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
+    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
+    case .draftNeeded(let title): "「\(title)」还没有草稿：先用 edit 写草稿再 start，草稿会作为第一句"
+    case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
+    case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
+    case .noFolder(let project):
+      project.isEmpty
+        ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
+        : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
+    case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Agent 那边答）：用 say 说话"
+    case .cannotChangeModel(let title): "「\(title)」的会话换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
+    case .cannotStop(let title): "「\(title)」的会话现在停不了：没在跑一轮、在等你回答，或它在终端里开、不能从 CuePad 停止"
+    case .invalidAnswer(let options): "答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
+    case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
+    case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
+    case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
+    case .questionEnded: "这条提问已经结束了"
+    case .alreadyAllowed(let line): "用户说过这类事以后不用问（记忆 #\(line)）：直接做，做完告诉他"
     }
   }
 }
@@ -404,12 +479,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt,
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -418,7 +493,8 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。
@@ -429,14 +505,17 @@ extension Card: Record {
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "deliveryID", "origin"]
+  var bindings: [any SQLBindable] {
+    [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, deliveryID, origin?.rawValue]
+  }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
-      sentAt: row.date(6), modifiedAt: row.date(7))
+      sentAt: row.date(6), modifiedAt: row.date(7),
+      deliveryID: row.uuidOrNil(8), origin: row.textOrNil(9).map(Open.init(rawValue:)))
   }
 }
 
@@ -449,14 +528,14 @@ extension Attachment: Record {
   }
 }
 
-extension PiSession: Record {
+extension IndexedSession: Record {
   static let table = Table.piSessions
-  static let columns = ["id", "path", "cwd", "title", "lastActivityAt"]
-  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt] }
+  static let columns = ["id", "path", "cwd", "title", "lastActivityAt", "agent"]
+  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt, agent.rawValue] }
   init(row: Row) {
     self.init(
       id: row.text(0), path: row.text(1), cwd: row.text(2), title: row.text(3),
-      lastActivityAt: row.date(4))
+      lastActivityAt: row.date(4), agent: row.textOrNil(5).flatMap(AgentKind.init(rawValue:)) ?? .pi)
   }
 }
 

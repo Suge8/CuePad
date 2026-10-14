@@ -142,8 +142,8 @@ extension CueStore {
       let pushed = max(recorded ?? row.modifiedAt, row.modifiedAt)
       if pushed == row.modifiedAt { try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt) }
       // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
-      if row.table == .piSessionStates, let sent = row.fields["notify"], sent != .null {
-        try db.run("UPDATE piSessionStates SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
+      if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
+        try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
       }
       return try readSyncRow(row.table, row.id).map { $0.modifiedAt > pushed } ?? false
     }
@@ -316,8 +316,8 @@ extension CueStore {
 
   private func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
     var remote = remote
-    // 通知标志只由写会话状态的那台 Mac 置位、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
-    if remote.table == .piSessionStates { remote.fields["notify"] = .null }
+    // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
+    if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
     let table = remote.table
     let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
     // 本机交出去、结果还没落账的版本回来了（自己的回声）：服务器收下了它，记账；本机的行不动
@@ -381,7 +381,7 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
-    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID"] { fields[column] = .null }
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))

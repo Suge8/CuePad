@@ -7,8 +7,8 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  private func session(_ id: String = "s1", title: String = "first") -> PiSession {
-    PiSession(id: id, path: "/tmp/\(id).jsonl", cwd: "/work/a", title: title, lastActivityAt: Date())
+  private func session(_ id: String = "s1", title: String = "first") -> IndexedSession {
+    IndexedSession(id: id, path: "/tmp/\(id).jsonl", cwd: "/work/a", title: title, lastActivityAt: Date())
   }
 
   /// 含 0 字节、接近 1MB：不能被当成文本截断。

@@ -1,6 +1,5 @@
 #if os(macOS)
 import CuePi
-import struct CueStore.PiSession
 import CueStore
 import Foundation
 import os
@@ -86,12 +85,13 @@ actor PiHistoryPersistence {
         for update in updates {
             let history = update.history
             let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            let session = PiSession(
+            let session = IndexedSession(
                 id: update.sessionID,
                 path: update.file.path,
                 cwd: history.cwd ?? "",
                 title: history.displayName,
-                lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
+                lastActivityAt: history.lastActivity ?? modified ?? .distantPast,
+                agent: update.agent)
             batch.append(PiSessionUpsert(
                 session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: try await transcript(of: update)))
         }
@@ -107,7 +107,7 @@ actor PiHistoryPersistence {
     private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
         func hasStoredMessages() async throws -> Bool { try await !storage.piMessages(of: update.sessionID).isEmpty }
-        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, from: nil, files: storage.files).transcript }
+        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, agent: update.agent, from: nil, files: storage.files).transcript }
         // 范围内的增量读：本机还没有它的对话就补齐
         if update.includesTranscript, incremental, try await !hasStoredMessages() { return try wholeFile() }
         // 范围外的从头读：本机存着它的对话就重写
@@ -126,8 +126,8 @@ actor PiHistoryPersistence {
         } while (try? await timing.sleep(.seconds(86_400))) != nil
     }
 
-    /// 回填完成：只留下此刻的会话文件。
-    func retain(_ files: [URL]) async throws {
+    /// 一个 Agent 的回填完成：它的索引只留下此刻的会话文件（别家的不动）。
+    func retain(_ files: [URL], of agent: AgentKind) async throws {
         if let backfillStarted {
             Self.log.notice(
                 "回填完成：\(files.count) 个会话文件，其中 \(self.outdated) 个检查点格式已过期、从头重读，用时 \(ContinuousClock.now - backfillStarted, privacy: .public)")
@@ -136,7 +136,7 @@ actor PiHistoryPersistence {
         }
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
-        let removed = try await storage.retainPiSessions(paths: paths, host: host)
+        let removed = try await storage.retainPiSessions(paths: paths, agent: agent, host: host)
         idsByPath = idsByPath?.filter { paths.contains($0.key) }
         if removed > 0 {
             Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")

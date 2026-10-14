@@ -91,7 +91,8 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
-    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 在命令行里 `cuepad show` 了三个文件（对话里按创建时间排在你的话与回答之间）。
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 先截了手机宽度的图，再在命令行里 `cuepad show` 了两次——
+    /// 页面一张卡，截图与评审结论一起一张卡（对话里按创建时间排在你的话与回答之间）；工具清单只有截图那条，发卡片的命令不列（`PiToolLog`）。
     private static func seedPreviews(_ store: CueStore, now: Date) async {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -102,8 +103,8 @@ extension DebugScene {
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for (file, title) in [(page, "登录页 v2：可点的完整页面"), (shot, "手机上的登录页截图"), (report, "评审结论")] {
-            if let added = try? await store.addPreview(fileAt: file, title: title, sessionID: "notes") { created.append(added.preview.createdAt) }
+        for (files, title) in [([page], "登录页 v2：可点的完整页面"), ([shot, report], "截图与评审结论")] {
+            if let added = try? await store.addPreviews(filesAt: files, title: title, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
@@ -113,7 +114,7 @@ extension DebugScene {
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-                at: last.addingTimeInterval(2), tools: .init(commands: 3, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png"), .init(kind: .command, target: "cuepad show review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(commands: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
@@ -266,7 +267,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
-                        _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+                        _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
                     }
                     return .succeeded
                 }
@@ -280,25 +281,66 @@ extension DebugScene {
         } catch {}
     }
 
+    /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——
+    /// 发出一句（发送中，演示 Mac 接手，见 `runDemoMac`）→ 思考中 → 做完（有新回复）→ 等你确认 → 出错，再从发出一句开始。
+    /// 会话换状态就换位置（按要你注意的先后排）：配 iOS 的 projectagent 与 `-CuePadProject CuePad`，列表只剩这个项目的几张卡，它不会出屏。
+    static func cycleIfAsked(_ services: AppServices) async {
+        guard defaults.bool(forKey: "CuePadCycle") else { return }
+        let store = services.store
+        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(store) } }
+        let query = PiSessionQuery(id: PiSessionState.recordID(sessionID: "scratch"))
+        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        func set(_ state: PiWorkState, _ detail: String, question: PiQuestion? = nil) async {
+            guard let session = try? await store.piSessionPage(query).items.first?.state else { return }
+            await replay(session, as: state, detail: detail, question: question, recorder: recorder)
+        }
+        // 说过话的会话做完一轮才是"有新回复"（刚开的还是新会话）
+        try? await store.writePiTranscript(PiTranscript(
+            sessionID: "scratch", messages: [], recap: PiRecap(lastPrompt: "先跑一遍测试", lastReply: "全部通过。")))
+        while !Task.isCancelled {
+            guard let session = try? await store.piSessionPage(query).items.first?.state,
+                  (try? await store.requestDelivery("再跑一遍测试", to: session.target, on: session.hostID, mode: .send)) != nil else { return }
+            // 等演示 Mac 走完这一轮：干过活、又歇下
+            var worked = false
+            do {
+                for try await state in store.observe({ try $0.piSessionPage(query).items.first?.state.state }) {
+                    if state?.isWorking == true { worked = true } else if worked, state == .known(.settled) { break }
+                }
+            } catch { return }
+            // 每个状态停留的时长是演示节奏，不是在等别的事
+            try? await Task.sleep(for: .seconds(2.5))
+            await set(.waitingForUser, "要提交吗？", question: PiQuestion(promptID: "cycle", kind: .confirm, text: "要提交吗？"))
+            try? await Task.sleep(for: .seconds(3))
+            await set(.error, "模型拒绝了请求（400）")
+            try? await Task.sleep(for: .seconds(3))
+        }
+    }
+
     /// 会话状态晚于送达结果同步过来：先进入思考，过一会儿做完。
     private static func playRound(for request: UUID, store: CueStore, host: String) async {
         guard let ref = try? await store.deliveryRequest(request)?.target.ref,
               let session = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: ref))).items.first?.state
         else { return }
         let recorder = PiStateRecorder(store: store, hostID: host)
-        func set(_ state: PiWorkState) async {
-            _ = try? await recorder.update(
-                sessionID: ref, state: state, title: session.title, folder: session.folder, projectID: session.projectID)
-        }
         try? await Task.sleep(for: .seconds(0.8))
-        await set(.thinking)
+        await replay(session, as: .thinking, recorder: recorder)
         try? await Task.sleep(for: .seconds(2.5))
-        await set(.settled)
+        await replay(session, as: .settled, recorder: recorder)
+    }
+
+    /// 演示会话换一个状态：名字、所在、模型与上下文照旧（记录器每次整份写入，不带上就被清掉）。
+    private static func replay(
+        _ session: PiSessionState, as state: PiWorkState, detail: String? = nil, question: PiQuestion? = nil, recorder: PiStateRecorder
+    ) async {
+        _ = try? await recorder.update(
+            sessionID: session.sessionID, state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID,
+            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, models: session.models),
+            context: session.context)
     }
 
     /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
     /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
-    private static let demoModels: PiModelState = {
+    static let demoModels: PiModelState = {
         func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
             PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
         }
@@ -340,7 +382,11 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示用的 Mac 端状态：各种状态的 Pi 会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
+    /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
+    /// homepage 是 Codex（能作答、换模型，没有斜杠命令），billing 是 OpenCode，历史里的 weekly 是 Claude Code。
+    private static let demoAgents: [String: AgentKind] = ["cuepad": .claudeCode, "homepage": .codex, "billing": .opencode, "weekly": .claudeCode]
+
+    /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
@@ -390,14 +436,16 @@ extension DebugScene {
             try? await recorder.end(sessionID: id)
         }
         for (id, name, recap) in history {
-            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
+            _ = try? await recorder.update(
+                sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project), agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands)
+                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
@@ -437,20 +485,19 @@ extension DebugScene {
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
         if defaults.bool(forKey: "CuePadCommand"), let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("/compact", to: atlas, mode: .command)
+            _ = try? await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
         }
         await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try? await services.requestMacDelivery(
-                "先把迁移脚本在测试库上跑一遍，报错长这样" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay, mode: .send)
-            _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
+            _ = try? await services.store.requestDelivery("先把迁移脚本在测试库上跑一遍，报错长这样" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
+            _ = try? await services.store.requestDelivery("顺便备份一下线上数据库", to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
             _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
             try? await mini.end(sessionID: "quote")
             if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
-                _ = try? await services.requestMacDelivery("把报价单备份到网盘", to: quote, mode: .send)
+                _ = try? await services.store.requestDelivery("把报价单备份到网盘", to: quote.target, on: quote.hostID, mode: .send)
             }
             relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
                 request.content.contains("备份") ? .failed("那台 Mac 上的 Pi 已经退出，没能送进去") : .succeeded
@@ -458,11 +505,11 @@ extension DebugScene {
             try? await relayExecutor?.start()
         }
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("改完再看看登录回调那个超时", to: atlas, mode: .followUp)
+            _ = try? await services.store.requestDelivery("改完再看看登录回调那个超时", to: atlas.target, on: atlas.hostID, mode: .followUp)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
-            _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
+            _ = try? await services.store.requestDelivery("标题再短一点", to: landing.target, on: landing.hostID, mode: .send)
         }
         if let notes = states.first(where: { $0.sessionID == "notes" }) {
             // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）
@@ -473,7 +520,7 @@ extension DebugScene {
             ]), for: notes.id)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
-            _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)
+            _ = try? await services.store.requestDelivery("超时后先重试一次，还失败再报错", to: cuepad.target, on: cuepad.hostID, mode: .steer)
         }
     }
 }

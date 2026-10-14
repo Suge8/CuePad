@@ -24,6 +24,11 @@ struct SendTests {
         return ext
     }
 
+    /// 等唯一的那条请求有结果。
+    func settled() async throws -> DeliveryRequest {
+        try await eventually(services.store, { try $0.deliveryRequests().first }) { $0?.isOpen == false }!
+    }
+
     // MARK: 路由
 
     @Test func 复制_文字与图片按原顺序放进剪贴板_不是发送不记发送记录() async throws {
@@ -40,9 +45,9 @@ struct SendTests {
         let ext = try await connectedSession()
         let body = try await bodyWithImage()
 
-        try await services.send(body, to: ext.id, mode: .send, card: nil)
+        #expect(Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID)))
 
-        let request = try #require(try await services.store.deliveryRequests().first)
+        let request = try await settled()
         #expect(ext.messages == [
             PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
         ])
@@ -52,24 +57,39 @@ struct SendTests {
         #expect(record.targetRef == "sess-1")
     }
 
-    @Test func Pi会话忙时_未指定马上说还是等它做完再说则报错_指定后按方式发送() async throws {
+    @Test func Pi会话忙时_直接发送先问马上说还是等它做完再说_不写请求_选了按方式发送() async throws {
         let ext = try await connectedSession(busy: true)
+        let workspace = Workspace(services: services)
 
-        await #expect(throws: SendError.piSessionBusy) {
-            try await services.send("hi", to: ext.id, mode: .send, card: nil)
-        }
-        #expect(ext.commands.isEmpty)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(!workspace.send("hi", to: AgentTarget(session: ext.sessionID)))
+        #expect(workspace.sendState.busy?.text == "hi")
+        #expect(try await services.store.deliveryRequests().isEmpty)
 
-        try await services.send("hi", to: ext.id, mode: .steer, card: nil)
-        let request = try #require(try await services.store.deliveryRequests().first)
+        workspace.resolveBusySend(.steer)
+        let request = try await settled()
+        #expect(request.mode == .known(.steer))
         #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
     }
 
-    @Test func 未知Pi会话报错且不写记录() async throws {
-        await #expect(throws: PiBridgeError.unknownSession("nope")) {
-            try await services.send("hi", to: "nope", mode: .send, card: nil)
-        }
+    /// 回复框看到会话歇着、写了直接发送，Mac 执行时会话已经开始了一轮（库里的记录过时）：不报错，按等它做完再说送达
+    /// （桥缺省就是等它做完再说），会话页那句是已送达。
+    @Test func 直接发送时会话刚忙起来_按等它做完再说送达() async throws {
+        let ext = try await connectedSession(busy: true)
+        let session = try #require(services.pi.session(sessionID: ext.sessionID))
+        _ = await Workspace(services: services).speak("hi", to: .session(session.sendTarget, host: TestApp.hostID, mode: .send, card: nil)).value
+
+        let request = try await settled()
+        #expect(Said.request(request).trip(now: .now, reachable: true) == .delivered)
+        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: nil, deliveryID: request.id.uuidString)])
+    }
+
+    /// 桥上没有、记录里也不在线的会话当作已结束：写给本机，由执行器去唤醒；这台 Mac 上没有它的会话文件就带原因没能送达，不记发送。
+    @Test func 不在这台Mac上的会话_没能送达带原因且不记发送() async throws {
+        try await services.executor.start()
+
+        #expect(Workspace(services: services).send("hi", to: AgentTarget(session: "nope")))
+
+        #expect(try await settled().failure != nil)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -82,10 +102,10 @@ struct SendTests {
         let ext = try await connectedSession()
         let workspace = Workspace(services: services)
 
-        #expect(await workspace.send("hi", to: AgentTarget(session: ext.sessionID, mode: .steer)))
+        #expect(workspace.send("hi", to: AgentTarget(session: ext.sessionID, mode: .steer)))
 
-        // 发出即有请求（"你发过去的"列表立刻有这一行）
-        let request = try #require(try await services.store.deliveryRequests().first)
+        // 写出就返回，不等送达
+        let request = try #require(try await eventually(services.store, { try $0.deliveryRequests().first }) { $0 != nil })
         #expect(request.hostID == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(request.mode == .known(.steer))
@@ -99,13 +119,38 @@ struct SendTests {
         #expect(record.targetRef == "sess-1")
     }
 
+    /// Cue 发进会话的话（投送请求 origin 是 cue）送达、请求清理之后，会话页里那条消息仍标着 Cue：认的是发送记录，不是请求。
+    @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    func Cue发进会话的话_请求清理之后会话页仍标着Cue() async throws {
+        let ext = try await connectedSession()
+        let store = services.store
+        let request = try await store.requestDelivery(
+            "跑一遍测试", to: SendTarget(kind: .piSession, name: "work", ref: ext.sessionID), on: TestApp.hostID, cue: true)
+        for try await status in store.observe({ try $0.deliveryRequest(request.id)?.status }) {
+            if status == .known(.succeeded) { break }
+        }
+        try await store.deleteDelivery(request.id)
+        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "跑一遍测试", at: .now, deliveryID: request.id)
+        try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
+
+        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store)
+        let derived = ChatDerived()
+        derived.refresh(digest)
+
+        #expect(digest.deliveries.isEmpty)
+        let entry = try #require(derived.items.first)
+        #expect(entry.fromCue)
+    }
+
     // MARK: 记录
 
     @Test func 记录带内容快照与关联的卡片() async throws {
         let ext = try await connectedSession()
         let task = try await services.store.createTask("do it", in: nil)
 
-        try await services.send("snapshot text", to: ext.id, mode: .send, card: task.id)
+        #expect(Workspace(services: services).send("snapshot text", to: AgentTarget(session: ext.sessionID), card: task.id))
+        _ = try await settled()
 
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.content == "snapshot text")

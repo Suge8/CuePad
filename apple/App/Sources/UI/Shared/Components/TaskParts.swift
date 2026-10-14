@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 
-// 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
+// 任务页（手机推入的纸页、Mac 盖在当前页上的浮窗）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
 // 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；步骤是次要的一组（`SubtaskList`）。
 
 
@@ -30,7 +30,7 @@ struct TaskHeading: View {
             }
             .textFieldStyle(.plain)
             .onAppear {
-                title = CueSummary(task.body).title
+                title = task.heading
                 let store = services.store, id = task.id
                 autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
             }
@@ -40,7 +40,7 @@ struct TaskHeading: View {
     /// 只换标题那一行：正文里若还有别的话（旧版本同步来的），一并写回，由 Store 拆成提示词，不在改标题时丢掉。
     private func save() {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title != CueSummary(task.body).title else { return }
+        guard title != task.heading else { return }
         autosave?.changed(CueLines.split(task.body).prompt.map { title + "\n" + $0 } ?? title)
     }
 }
@@ -51,7 +51,6 @@ struct TaskHeading: View {
 struct SubtaskList: View {
     let detail: TaskDetail?
     let open: (Card) -> Void
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -67,62 +66,35 @@ struct SubtaskList: View {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                 }
             }
-            ForEach(subtasks) { row($0) }
+            ForEach(subtasks) { StepLine(step: $0, open: open) }
         }
         .font(TaskMetrics.font)
         .animation(Motion.quick, value: subtasks.map(\.id))
     }
+}
 
-    private func row(_ child: Card) -> some View {
+/// 步骤一行：完成圈（`TaskCheckButton`）与标题，点标题打开。
+private struct StepLine: View {
+    let step: Card
+    let open: (Card) -> Void
+    @Environment(\.palette) private var palette
+    @State private var check = TaskCheck()
+
+    var body: some View {
+        let done = check.done(step)
         HStack(spacing: 8) {
-            Button {
-                workspace.attempt { try await workspace.toggle(child.id) }
-            } label: {
-                TaskRingView(status: child.status, ring: .plain, done: child.status == .done, size: TaskMetrics.icon * 0.72)
-                    .frame(width: TaskMetrics.icon, height: TaskMetrics.rowHeight).contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(TaskSpeech.toggle(done: child.status == .done))
-            Button { open(child) } label: {
-                Text(child.title)
-                    .strikethrough(child.status == .done)
-                    .foregroundStyle(child.status == .done ? palette.ink3 : palette.ink)
+            TaskCheckButton(
+                task: step, size: TaskMetrics.icon * 0.72, target: CGSize(width: TaskMetrics.icon, height: TaskMetrics.rowHeight), check: $check)
+            Button { open(step) } label: {
+                Text(step.title)
+                    .strikethrough(done, color: palette.ink3)
+                    .foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
         }
-        .sensoryFeedback(.success, trigger: child.status) { $1 == .done }
-    }
-}
-
-
-/// 任务页标题左边的完成圈：点它完成（完成的回到待办）；还有没完成的步骤时先问一句，确认后一起完成。
-struct TaskRingButton: View {
-    let task: Card
-    let prompts: Int
-    let subtasks: TaskProgress?
-    var size: CGFloat = TaskMetrics.titleRing
-    @Environment(Workspace.self) private var workspace
-    @State private var confirming = false
-
-    var body: some View {
-        Button {
-            if task.status != .done, TaskCopy.hasOpen(subtasks) { confirming = true } else { toggle() }
-        } label: {
-            TaskRingView(status: task.status, ring: TaskRing(subtasks), done: task.status == .done, size: size)
-                .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.success, trigger: task.status) { $1 == .done }
-        .accessibilityLabel(TaskSpeech.toggle(done: task.status == .done))
-        .accessibilityValue([TaskSpeech.value(task.status), TaskSpeech.progress(prompts: prompts, subtasks: subtasks)].compactMap { $0 }.joined(separator: "，"))
-        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirming, buttons: [DialogButton(title: "全部完成") { toggle() }])
-    }
-
-    private func toggle() {
-        let task = task
-        workspace.attempt { try await workspace.toggle(task.id) }
+        .animation(Motion.quick, value: done)
     }
 }

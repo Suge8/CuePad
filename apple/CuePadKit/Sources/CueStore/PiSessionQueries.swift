@@ -103,6 +103,14 @@ extension CueStore {
       orderBy: "stateSince DESC, id", limit: limit)
   }
 
+  /// `host` 那台 Mac 上每家 Agent 最近有动静的那个会话记录里的模型（没记下模型的不算）：Cue 开工时可选的模型。
+  public func latestModels(on host: String) throws -> [AgentKind: PiModelKey] {
+    let rows = try db.query(
+      "SELECT agent, model, max(stateSince) FROM piSessionStates WHERE hostID = ? AND model IS NOT NULL GROUP BY agent", [host]
+    ) { (Open<AgentKind>(rawValue: $0.textOrNil(0) ?? AgentKind.pi.rawValue).known, JSONColumn.decode(PiModelOption.self, from: $0.textOrNil(1))) }
+    return Dictionary(rows.compactMap { agent, model in agent.flatMap { agent in model.map { (agent, $0.key) } } }) { first, _ in first }
+  }
+
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] {

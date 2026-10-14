@@ -1,3 +1,4 @@
+import CueAgent
 import CueStore
 import Foundation
 
@@ -23,6 +24,13 @@ enum CLI {
     var hint = "cuepad --help"
     var json = arguments.contains("--json")
     do {
+      // 隐藏入口：Cue 的工具（MCP，stdio），由 Cue 的大脑启动，不在任何帮助里
+      if arguments == ["mcp"] {
+        try await CueMCPServer(store: try openStore(environment: environment)).serve(FileHandle.standardInput.bytes.lines) { line in
+          FileHandle.standardOutput.write(Data((line + "\n").utf8))
+        }
+        return CLIResult(code: 0, out: "", err: "")
+      }
       switch try route(arguments) {
       case .help(let text):
         return CLIResult(code: 0, out: text + "\n", err: "")

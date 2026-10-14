@@ -1,4 +1,5 @@
 import CueStore
+import CueSync
 import CueText
 import SwiftUI
 
@@ -20,6 +21,8 @@ struct UserBubble<Menu: View>: View {
     let stored: String
     var trip = BubbleTrip.arrived
     var highlighted = false
+    /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
+    var fromCue = false
     @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
@@ -29,6 +32,7 @@ struct UserBubble<Menu: View>: View {
         let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
         TrailingFraction(fraction: Self.widthFraction) {
             VStack(alignment: .trailing, spacing: 6) {
+                if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
                         text: Dotted(text), highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
@@ -47,8 +51,8 @@ struct UserBubble<Menu: View>: View {
 
 extension UserBubble where Menu == EmptyView {
     /// 没有长按菜单的气泡（近况里的上一句）。
-    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false) {
-        self.init(stored: stored, trip: trip, highlighted: highlighted) { EmptyView() }
+    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false, fromCue: Bool = false) {
+        self.init(stored: stored, trip: trip, highlighted: highlighted, fromCue: fromCue) { EmptyView() }
     }
 }
 
@@ -181,52 +185,104 @@ struct MessageActions: View {
 }
 
 
-/// 你发出、还没进对话的话：你的气泡，下面送达情况；没能送达时写原因，可以重发或移除。
-struct OutgoingBubble: View {
-    let request: DeliveryRequest
-    let session: PiSessionState
+/// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。
+/// 发送中整颗变淡、下面转圈；已送达下面写"已送达"（`showsDelivered` 时）；没能送达写原因，给"重发"与"移除"（长按菜单里也有）。
+/// 等回执到点翻成没能送达靠一个可取消的睡眠任务（`refreshes`），不轮询；超时后回执来了，记录一变就是已送达。
+struct SpeechBubble<Menu: View>: View {
+    let said: Said
+    /// 重发时撤回了旧的却写不进新的：原文放回这个去处的输入框。
+    let box: Binding<ComposerDraft>
+    /// 已送达写不写：会话页每句都写（进了对话就不在这里），Cue 页只写你最后一句（旧的不写，免得满屏）。
+    var showsDelivered = true
+    /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.transit`）；nil 是"发送中"。
+    var transit: String?
+    var fromCue = false
+    /// 长按菜单（会话页的消息菜单）；给的是此刻到哪了。
+    @ViewBuilder var menu: (Speech.Trip) -> Menu
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-
-    private var failed: Bool { request.status == .known(.failed) }
+    @State private var now = Date.now
 
     var body: some View {
+        let trip = said.trip(now: now, reachable: services.reaches(said.host))
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(stored: request.content, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived) {
-                MessageActions(text: request.content, kind: .outgoing(failed: failed), session: session, resend: retry, remove: remove)
-            }
-            HStack(spacing: 10) {
-                if failed {
-                    if let reason = request.failure { Text(reason).font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2) }
-                    // 送不到 Mac 时也露出来（停用），看得出能重发
-                    Button("重发", systemImage: "arrow.clockwise", action: retry)
-                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
-                        .padding(.horizontal, 10).frame(minHeight: 28)
-                        .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
-                        .frame(minHeight: 44).contentShape(.rect)
-                        .buttonStyle(.plain)
-                        .disabled(!workspace.services.reachesPiHost)
-                } else {
-                    DeliveryStatusLabel(request: request, session: session).font(Typography.caption)
-                }
-            }
+            UserBubble(stored: said.content, trip: trip.bubble, fromCue: fromCue) { menu(trip) }
+            status(trip).font(Typography.caption)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .refreshes($now, at: said.deadline)
         .transition(.entry)
     }
 
-    /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
-    private func retry() {
-        let old = request, session = session
-        workspace.attempt {
-            _ = try await workspace.services.requestMacDelivery(
-                old.content, to: session, mode: old.mode.known ?? .followUp, card: old.cardID)
-            try await workspace.services.store.deleteDelivery(old.id)
+    @ViewBuilder private func status(_ trip: Speech.Trip) -> some View {
+        switch trip {
+        case .sending:
+            HStack(spacing: 6) { Spinner(.mini); Text(transit ?? "发送中") }.foregroundStyle(palette.ink2)
+        case .delivered:
+            if showsDelivered {
+                Label { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: {
+                    Image(systemName: "paperplane.fill")
+                }
+                .foregroundStyle(palette.ink2)
+            }
+        case .failed(let failure):
+            HStack(spacing: 10) {
+                Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure).lineLimit(2)
+                Button("移除", role: .destructive, action: remove)
+                    .foregroundStyle(palette.ink2).buttonStyle(.plain)
+                    .frame(minHeight: 44).contentShape(.rect)
+                // 送不到 Mac 时也露出来（停用），看得出能重发
+                Button("重发", systemImage: "arrow.clockwise", action: resend)
+                    .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
+                    .padding(.horizontal, 10).frame(minHeight: 28)
+                    .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
+                    .frame(minHeight: 44).contentShape(.rect)
+                    .buttonStyle(.plain)
+                    .disabled(!services.reachesPiHost)
+            }
         }
     }
 
-    private func remove() {
-        let id = request.id
-        workspace.perform { try await $0.deleteDelivery(id) }
+    private func resend() { workspace.resend(said, restoringInto: box) }
+    private func remove() { workspace.remove(said) }
+}
+
+extension SpeechBubble where Menu == EmptyView {
+    init(said: Said, box: Binding<ComposerDraft>, showsDelivered: Bool = true) {
+        self.init(said: said, box: box, showsDelivered: showsDelivered) { _ in EmptyView() }
+    }
+}
+
+extension Speech.Trip {
+    var bubble: BubbleTrip {
+        switch self {
+        case .sending: .inTransit
+        case .delivered: .arrived
+        case .failed: .failed
+        }
+    }
+}
+
+extension Speech.Failure {
+    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 一直没收下（只说这句话，不猜 Mac 在不在）。
+    func text(sync: SyncStatus) -> String {
+        switch self {
+        case .reported(let reason): reason
+        case .offline: "\(SyncSummary(sync).title)，发不到 Mac"
+        case .timedOut: "Mac 迟迟没收下这句"
+        }
+    }
+}
+
+extension View {
+    /// 到 `deadline` 时把 `now` 刷成此刻（可取消的睡眠任务，不轮询）：由记录与时间推出的状态（`Speech`）到点自己翻。
+    func refreshes(_ now: Binding<Date>, at deadline: Date?) -> some View {
+        task(id: deadline) {
+            guard let deadline else { return }
+            let left = deadline.timeIntervalSinceNow
+            if left > 0 { guard (try? await Task.sleep(for: .seconds(left))) != nil else { return } }
+            now.wrappedValue = .now
+        }
     }
 }

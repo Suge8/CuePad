@@ -4,8 +4,8 @@ import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏进入）：列表顶上一行快速添加（↩ 即一条，落当前项目或未分类，可换），
 /// 跟着列表一起滚走——它是一张纸、不是玻璃，钉在顶栏下会把滚过去的列表切成上下两截；回到顶就能看到；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
-/// 步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
-/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
+/// 步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤；轻扫见 `CardMenu.swipes`），顶层写所在项目，行尾一格"下一步"（同 Mac 的任务行，`TaskNext`）。
+/// 点圆圈完成（完成的点了回到待办），点文字推入任务的纸页（`TaskPage`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -52,10 +52,9 @@ struct TasksScreen: View {
             VStack(alignment: .leading, spacing: 6) {
                 header(title, count: count)
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
-                    let info = board.rows[row.id]
                     TaskLine(
-                        task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
-                        prompts: board.prompts[row.id]?.count ?? 0, subtasks: board.subtasks[row.id])
+                        task: row.task, project: row.depth == 0 ? board.rows[row.id]?.project : nil,
+                        subtasks: board.subtasks[row.id], draft: board.drafts[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -100,7 +99,7 @@ struct TasksScreen: View {
             }
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { TaskLine(task: $0.task, project: $0.project, session: $0.session, delivery: $0.delivery).id($0.id) }
+                    ForEach(rows) { TaskLine(task: $0.task, project: $0.project).id($0.id) }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -109,38 +108,32 @@ struct TasksScreen: View {
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点文字在浮窗里打开。点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；
-/// 这段时间里再点一下就撤销。还有没完成的步骤时先问一句，确认后连步骤一起完成。已完成的任务点一下立即回到待办。
+/// 一条任务：完成圈（`TaskCheckButton`：点了立即显示完成、停留片刻再移出，这段时间里再点一下撤销）、标题（点了推入任务页），
+/// 标题下一行写所在项目与步骤进度，右边是那一格"下一步"（`TaskNextChip`：Agent 要你看的、正在做的，或"开始"），与 Mac 的任务行同一个判断。
 struct TaskLine: View {
     let task: Card
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
-    /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
-    var session: PiSessionState?
-    var delivery: DeliveryRequest?
-    /// 提示词条数与步骤进度：元信息一行与完成圈由它们推出。
-    var prompts = 0
+    /// 步骤进度：元信息一行与完成圈由它推出。
     var subtasks: TaskProgress?
-    @State private var confirmsSubtasks = false
+    /// 写好了还没交出去的草稿（行尾的"开始"）。
+    var draft: Card?
+    @State private var check = TaskCheck()
     /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
     @State private var width: CGFloat = 0
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
+    @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
-    private enum Phase { case idle, pending, committed }
-    /// pending：已显示完成、还没写入；committed：已写入，等列表把它移走。
-    @State private var phase = Phase.idle
 
     /// 长按提起的那块纸的圆角：与列表那张纸同一个圆角。
     private static let liftRadius: CGFloat = 16
-    /// 完成后停留多久再移出：够看清对勾、来得及反悔。
-    private static let linger: Duration = .milliseconds(900)
-
-    private var done: Bool { task.status == .done || phase != .idle }
 
     var body: some View {
-        line
+        let next = workspace.next(for: task, agent: agents.items[task.id], draft: draft)
+        let done = check.done(task)
+        line(next: next, done: done)
             // 长按提起的是一张纸：预览是同一行垫一块纸色圆角底、与原来的行同宽。不给行本身垫底——行放在纸上，
             // 纸面上沿有一层提亮，同色的底在那里会显出一块块的方框
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -148,139 +141,63 @@ struct TaskLine: View {
             .contentShape(.contextMenuPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
             .contextMenu { CardActions(card: task) } preview: {
                 // 预览是另起的一层，不继承外面的环境：调色板要带进去，否则深色下圈与字按浅色的墨画，几乎看不见
-                line.frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
+                line(next: next, done: done).frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
                     .environment(\.palette, palette)
             }
-            // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
+            // 读屏把一行当一个元素："任务内容，步骤，项目，下一步"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, TaskSpeech.progress(prompts: prompts, subtasks: subtasks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
-            .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
+            .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), project?.name, next?.speech].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityValue(TaskSpeech.value(done ? .done : task.status))
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint(hint)
-            .accessibilityAction { tap() }
+            .accessibilityHint(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: done))
+            .accessibilityAction { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false) }
             .accessibilityActions {
-                Button("打开") { navigation.openTask(task.id) }
-                if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
+                Button("打开") { navigation.push(.card(task.id)) }
+                switch next {
+                case .start(let draft): Button("开始") { navigation.handToAgent(draft) }
+                case .agent(_, let session): Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) }
+                case nil: EmptyView()
+                }
             }
-            .confirmationDialog(
-                TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, titleVisibility: .visible
-            ) {
-                Button("全部完成") { phase = .pending }
-            }
-            .animation(.easeOut(duration: 0.12), value: done)
-            .task(id: phase) {
-                guard phase == .pending else { return }
-                try? await Task.sleep(for: Self.linger)
-                guard !Task.isCancelled else { return }
-                commit()
-            }
-            // 移出前就离开了页面：照样写入，不丢这次勾选
-            .onDisappear { if phase == .pending { commit() } }
-            // 完成状态以 Store 为准：写入落地或别处恢复为未完成时，这一行回到普通状态
-            .onChange(of: task.completedAt) { phase = .idle }
     }
 
-    private var hint: String {
-        if phase == .pending { return "撤销完成" }
-        return TaskSpeech.toggle(done: done)
-    }
-
-    private var line: some View {
-        // 圈对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
+    private func line(next: TaskNext?, done: Bool) -> some View {
+        // 圈与右边那一格都对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
         HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Button(action: tap) {
-                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: 20)
-                    .frame(width: 44, height: 44)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
+            TaskCheckButton(
+                task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 20,
+                target: CGSize(width: 44, height: 44), check: $check)
             VStack(alignment: .leading, spacing: 3) {
                 Text(task.title.textGlyphs)
-                    .font(.body).strikethrough(done)
+                    .font(.body).strikethrough(done, color: palette.ink3)
                     .foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(2)
-                if hasDetail { detail }
+                if hasMeta(done: done) { meta(done: done) }
             }
-            .padding(.vertical, hasDetail ? 6 : 0)
+            .padding(.vertical, hasMeta(done: done) ? 6 : 0)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
-            .onTapGesture { navigation.openTask(task.id) }
+            .onTapGesture { navigation.push(.card(task.id)) }
+            if let next, !done { TaskNextChip(next: next).padding(.leading, 6).transition(.opacity) }
         }
+        .animation(.easeOut(duration: 0.12), value: done)
     }
 
-    private var counts: Dotted? { done ? nil : TaskCopy.counts(prompts: prompts, subtasks: subtasks) }
-    private var showsPlace: Bool { project != nil || (!done && session != nil) }
-    private var hasDetail: Bool { counts != nil || showsPlace }
+    private func hasMeta(done: Bool) -> Bool { project != nil || (!done && subtasks != nil) }
 
-    /// 标题下最多两行：进度（提示词与步骤），再是所在项目与交给的会话此刻的状态。
-    private var detail: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }
-            if showsPlace { place }
-        }
-        .font(.caption)
-        .lineLimit(1)
-    }
-
-    /// 所在项目与会话状态：项目名照写不截，放不下时会话状态先省掉用时、再换短的状态词。
-    private var place: some View {
-        HStack(spacing: 10) {
+    /// 标题下一行：所在项目与步骤进度（做完了不写进度）。
+    private func meta(done: Bool) -> some View {
+        HStack(spacing: 6) {
             if let project {
                 HStack(spacing: 4) {
                     ProjectGlyph(project: project, size: 10)
                     Text(project.name)
                 }
-                .foregroundStyle(palette.ink3)
-                .layoutPriority(1)
             }
-            if let session, !done {
-                Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-                    let shown = services.settings.shown(session, delivery: delivery)
-                    // 放不下时先省掉用时，再换成短的状态词（"思考中"）；状态点后总有字，不留一颗看不懂的点
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 4) {
-                            PiStateDot(shown: shown, size: 6)
-                            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                            Dot().foregroundStyle(palette.ink3)
-                            PiElapsed(shown: shown, font: .caption)
-                        }
-                        HStack(spacing: 4) {
-                            PiStateDot(shown: shown, size: 6)
-                            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                        }
-                        HStack(spacing: 4) {
-                            PiStateDot(shown: shown, size: 6)
-                            Text(shown.label).foregroundStyle(shown.labelTint(palette))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("看 Agent 的近况")
-            }
+            if project != nil, !done, subtasks != nil { Dot() }
+            if !done, let subtasks { Text(TaskCopy.progress(subtasks)).monospacedDigit() }
         }
-    }
-
-    private func tap() {
-        switch (task.status == .done, phase) {
-        case (true, _): workspace.attempt { try await workspace.toggle(task.id) }
-        case (false, .idle): if TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { phase = .pending }
-        case (false, .pending): phase = .idle
-        case (false, .committed): break
-        }
-    }
-
-    /// 写入失败时这一行恢复为未完成，错误照常提示。
-    private func commit() {
-        phase = .committed
-        Task {
-            do {
-                try await workspace.toggle(task.id)
-            } catch {
-                phase = .idle
-                workspace.fail(error)
-            }
-        }
+        .font(.caption).foregroundStyle(palette.ink3).lineLimit(1)
     }
 }
 

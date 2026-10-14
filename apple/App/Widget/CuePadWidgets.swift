@@ -6,6 +6,7 @@ import WidgetKit
 struct CuePadWidgets: WidgetBundle {
     var body: some Widget {
         UnfiledWidget()
+        CueWidget()
     }
 }
 
@@ -34,6 +35,42 @@ struct UnfiledProvider: TimelineProvider {
         let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
         let snapshot = directory.flatMap(Snapshots.readUnfiled(from:)) ?? Self.empty
         return UnfiledEntry(date: .now, snapshot: snapshot)
+    }
+}
+
+struct CueEntry: TimelineEntry {
+    let date: Date
+    let snapshot: CueSnapshot
+}
+
+/// Cue 的小组件：快照由主 App 在 Cue 的对话、等你的数变化时写，同样不自己定时刷新。
+struct CueProvider: TimelineProvider {
+    private static let empty = CueSnapshot(name: "Cue", waiting: 0, lastSaid: nil, mood: "sleeping")
+
+    func placeholder(in context: Context) -> CueEntry { CueEntry(date: .now, snapshot: Self.empty) }
+
+    func getSnapshot(in context: Context, completion: @escaping (CueEntry) -> Void) { completion(current()) }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<CueEntry>) -> Void) {
+        completion(Timeline(entries: [current()], policy: .never))
+    }
+
+    private func current() -> CueEntry {
+        let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
+        return CueEntry(date: .now, snapshot: directory.flatMap(Snapshots.readCue(from:)) ?? Self.empty)
+    }
+}
+
+struct CueWidget: Widget {
+    static let kind = "CuePadCue"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: Self.kind, provider: CueProvider()) { entry in
+            WidgetViews.cue(entry)
+        }
+        .configurationDisplayName("Cue")
+        .description("等你的几件事和它最近说的一句，点一下和它说话。")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 

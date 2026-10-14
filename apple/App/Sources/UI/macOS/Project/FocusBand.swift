@@ -5,17 +5,16 @@ import SwiftUI
 /// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进，同任务面板）；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、
 /// 各自开合（规则见 `TaskFold`）。按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
-/// 每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了还没开始；要 Agent 做什么在任务浮窗里写。
+/// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了的"开始"；要 Agent 做什么在任务浮窗里写。
 /// 会话的全部列表在侧栏，这里不另开一栏。
 /// 项目还没绑文件夹时，任务下面接一行绑定引导（`ProjectFolderGuide`，有同名建议、正在绑时才出现，见 `FolderGuide.shows`）。
-/// 纸与下面的资料、卡片墙同宽；任务限在阅读宽度（`readingWidth`）：行尾的"下一步"跟着这一栏，不在大窗口里甩到一千点开外。
+/// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度、"下一步"贴着纸的右边成一列，与任务面板的行同一个样子。
 struct FocusBand: View {
     let data: ProjectPageData
     let guide: FolderGuide?
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
     @Environment(Workspace.self) private var workspace
-    @Environment(\.cardAgents) private var cardAgents
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @State private var fold = DebugHooks.preset.taskFold
@@ -24,21 +23,27 @@ struct FocusBand: View {
     /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建。
     private static let lazyFrom = 20
-    private static let readingWidth: CGFloat = 720
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "任务", systemImage: "checklist")
-            taskRows
-            if let project = data.project, !workspace.hasFolder(project.id), guide?.shows(project.id, in: .inset) == true {
-                ProjectFolderGuide(project: project, guide: guide, style: .inset).padding(.top, 8)
+        // 段标题在纸外，与下面的"资料""最近"同一个样子：一页三段，眼睛只学一次
+        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("任务").font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                if data.taskCounts.open > 0 { Text("\(data.taskCounts.open)").font(Typography.sectionCount).foregroundStyle(palette.ink3) }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 6) {
+                taskRows
+                if let project = data.project, !workspace.hasFolder(project.id), guide?.shows(project.id, in: .inset) == true {
+                    ProjectFolderGuide(project: project, guide: guide, style: .inset).padding(.top, 8)
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .paper(radius: 18)
         }
         .debugExposesTaskFold(active: active) { toggle(\.showsAll) }
-        .frame(maxWidth: Self.readingWidth, alignment: .leading)
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .paper(radius: 18)
     }
 
     @ViewBuilder private var taskRows: some View {
@@ -52,10 +57,7 @@ struct FocusBand: View {
                 tree: data.tasks, roots: shown,
                 lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
             ) { row in
-                let agent = cardAgents.items[row.id]
-                TaskRow(
-                    task: row.task, session: agent?.state, delivery: agent?.delivery,
-                    subtasks: data.subtasks[row.id], hasDraft: data.prompts[row.id] != nil)
+                TaskRow(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
             }
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {

@@ -166,6 +166,9 @@ final class SQLite {
   /// 最近一条语句改动的行数。
   var changes: Int { Int(sqlite3_changes(handle)) }
 
+  /// 进行中的事务到此为止改动过的行。
+  var pendingChanges: Changes { changeLog.changes }
+
   /// 提交后返回本事务改动过的行；回滚则丢弃。
   func transaction<T>(_ body: () throws -> T) throws -> (result: T, changes: Changes) {
     try exec("BEGIN IMMEDIATE")
@@ -215,8 +218,9 @@ final class SQLite {
     return (value, tracked ?? [])
   }
 
-  private func error(_ sql: String) -> SQLiteError {
-    SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
+  private func error(_ sql: String) -> any Error {
+    if sqlite3_errcode(handle) & 0xff == SQLITE_READONLY { return CueStoreError.readOnlyLibrary }
+    return SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
   }
 }
 

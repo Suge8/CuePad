@@ -150,14 +150,10 @@ public struct LivePiTerminalSystem: PiTerminalSystem {
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/env")
-        process.arguments = [executable] + arguments
         let extra = "/opt/homebrew/bin:/usr/local/bin"
-        process.environment = ProcessInfo.processInfo.environment.merging(
+        let environment = ProcessInfo.processInfo.environment.merging(
             ["PATH": (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin") + ":" + extra]) { _, new in new }
-        process.standardError = FileHandle.nullDevice
-        return await runCapturing(process) ?? (-1, "")
+        return await runCapturing(URL(filePath: "/usr/bin/env"), [executable] + arguments, environment: environment) ?? (-1, "")
     }
 
     public func appleScript(_ source: String) async throws -> String {

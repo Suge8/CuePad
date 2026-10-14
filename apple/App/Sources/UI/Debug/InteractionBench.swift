@@ -17,7 +17,7 @@ enum InteractionBench {
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
     /// 会话页单独给 90ms（人对 100ms 内的回应感知为即时）：它的第一帧必须带标题与最新的对话，晚一帧出内容的空白闪动比慢一点更差，
-    /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 docs/development.md「页面与首次使用（Mac）」）。
+    /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 `SessionPage`）。
     private static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
@@ -44,9 +44,11 @@ enum InteractionBench {
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
               let view = window.contentView
         else { return }
-        // 前台才有玻璃等实际合成，后台量的数字偏乐观
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        // 前台才有玻璃等实际合成，后台量的数字偏乐观；给了 CUEPAD_SHOT_READY 时留在后台（不抢用户的前台，指令数仍可前后对比）
+        if !DebugHooks.staysInBackground {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
         try? await Task.sleep(for: .seconds(1))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)

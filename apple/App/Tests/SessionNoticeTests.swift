@@ -14,40 +14,40 @@ struct SessionNoticeTests {
     private func recorder() -> PiStateRecorder { PiStateRecorder(store: store, hostID: "mac") }
 
     /// 前台提示读的版本：`LiveSessions` 里在线的（`startSessionAlerts` 同一条路）。
-    private func live() async throws -> [PiSessionState] {
+    private func live() async throws -> [PiSessionListItem] {
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
-        return app.services.liveSessions.live.map(\.state)
+        return app.services.liveSessions.live
     }
 
     @Test func 第一次读到只记基线_之后的转换才提示_同一版本不重复() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
-        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)
+        #expect(tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast).isEmpty)
 
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try await live()
-        let alerts = tracker.alerts(for: settled, since: .distantPast)
+        let alerts = tracker.alerts(for: settled, cueOnDuty: false, since: .distantPast)
         #expect(alerts.map(\.kind) == [.settled] && alerts.first?.title == "homepage")
         #expect(alerts.first?.session == settled.first?.id)
-        #expect(tracker.alerts(for: settled, since: .distantPast).isEmpty)
+        #expect(tracker.alerts(for: settled, cueOnDuty: false, since: .distantPast).isEmpty)
     }
 
     @Test func 等你确认带问题首行_做完了不带() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
-        _ = tracker.alerts(for: try await live(), since: .distantPast)
+        _ = tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast)
 
         let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
-        let waiting = try #require(tracker.alerts(for: try await live(), since: .distantPast).first)
+        let waiting = try #require(tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast).first)
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你 · 要覆盖 feed.xml 吗？")
 
         try await recorder.update(sessionID: "s1", state: .thinking)
-        _ = tracker.alerts(for: try await live(), since: .distantPast)
+        _ = tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast)
         try await recorder.update(sessionID: "s1", state: .settled)
-        let settled = try #require(tracker.alerts(for: try await live(), since: .distantPast).first)
+        let settled = try #require(tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast).first)
         #expect(settled.kind == .settled && settled.text.visible == "homepage · 完成了")
     }
 
@@ -57,16 +57,16 @@ struct SessionNoticeTests {
         var tracker = SessionAlertTracker()
         let start = Date(timeIntervalSinceNow: -600)
         try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: PiTimes(stateSince: start, busySince: start))
-        _ = tracker.alerts(for: try await live(), since: .distantPast)
+        _ = tracker.alerts(for: try await live(), cueOnDuty: false, since: .distantPast)
 
         let away = start.addingTimeInterval(60), active = start.addingTimeInterval(120)
         try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: away, busySince: nil))
-        #expect(tracker.alerts(for: try await live(), since: active).isEmpty)
+        #expect(tracker.alerts(for: try await live(), cueOnDuty: false, since: active).isEmpty)
 
         try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
-        _ = tracker.alerts(for: try await live(), since: active)
+        _ = tracker.alerts(for: try await live(), cueOnDuty: false, since: active)
         try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
-        #expect(tracker.alerts(for: try await live(), since: active).map(\.kind) == [.settled])
+        #expect(tracker.alerts(for: try await live(), cueOnDuty: false, since: active).map(\.kind) == [.settled])
     }
 
     // MARK: 正看着
@@ -78,22 +78,27 @@ struct SessionNoticeTests {
     }
 
     /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
+    /// Agent 标签的根就是会话列表；Cue 标签与 iPad 右侧面板是 Cue 页，不是会话列表。
     @Test func 正看着Agent列表或那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let tabs = navigation(.tabs)
+        #expect(tabs.showsAlert(about: session))  // Cue 标签
         tabs.tab = .agent
         #expect(!tabs.showsAlert(about: session))
         tabs.agentPath = [.session(UUID())]  // 列表上推了别的会话
         #expect(tabs.showsAlert(about: session))
         tabs.agentPath = [.session(session)]
         #expect(!tabs.showsAlert(about: session))
+        tabs.tab = .cue
+        tabs.cuePath = [.session(session)]  // Cue 页里点进了这个会话
+        #expect(!tabs.showsAlert(about: session))
         tabs.tab = .projects
         #expect(tabs.showsAlert(about: session))
 
         let split = navigation(.split)
         #expect(split.showsAlert(about: session))
-        split.agentPanel = true  // iPad 右侧的 Agent 面板开着
-        #expect(!split.showsAlert(about: session))
+        split.agentPanel = true  // iPad 右侧的面板开着：那是 Cue 页
+        #expect(split.showsAlert(about: session))
         split.agentPanel = false
         split.splitRoot = .agent
         #expect(!split.showsAlert(about: session))

@@ -22,6 +22,9 @@ public struct PiAnswer: Sendable, Equatable, StoredJSON {
     self.value = value
   }
 
+  /// 作答请求的正文（App 的回复框作答经发消息的那条路写出）。
+  public var stored: String { JSONColumn.encode(self) }
+
   private enum CodingKeys: String, CodingKey { case promptID, option, confirmed, text }
 
   public init(from decoder: any Decoder) throws {
@@ -86,13 +89,24 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
-  /// 会话名（Pi 的 `/name`）：从任务开的会话叫那个叶子的标题，由 `CueStore.requestLaunch` 按带着的卡定；nil 是 Pi 的默认名（第一句话）。
+  /// 用哪个 Agent 开；旧版本写的没有，是 Pi
+  public var agent: AgentKind?
+  /// 会话名：从任务开的会话叫那个叶子的标题，由 `CueStore.requestLaunch` 按带着的卡定（`CueStore.sessionName(forCard:)`），调用方不传；
+  /// nil 是 Agent 的默认名（第一句话）。模型与思考强度可选（nil 用 Agent 的默认）。三者作为启动参数一起生效。
+  /// 强度是更新版本的新值时整条读不出，按不认识的请求失败。
   public internal(set) var name: String?
+  public var model: PiModelKey?
+  public var thinking: PiThinkingLevel?
 
-  public init(project: UUID, prompt: String?, token: String) {
+  public init(
+    project: UUID, prompt: String?, token: String, agent: AgentKind = .pi, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
+  ) {
     self.project = project
     self.prompt = prompt
     self.token = token
+    self.model = model
+    self.thinking = thinking
+    self.agent = agent
   }
 }
 

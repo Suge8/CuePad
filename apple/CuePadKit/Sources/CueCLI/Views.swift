@@ -17,9 +17,6 @@ private func iso(_ date: Date?) -> any Sendable {
   nullable(date?.ISO8601Format(.init(includingFractionalSeconds: true)))
 }
 
-/// 文本输出里的短 id：命令的 `<卡片>`、`<任务>` 参数都接受唯一前缀。
-private func short(_ id: UUID) -> String { String(id.uuidString.lowercased().prefix(8)) }
-
 private func minutes(_ date: Date) -> String {
   date.formatted(
     .verbatim(
@@ -48,7 +45,7 @@ struct ProjectView {
   }
 
   var line: String {
-    "\(short(project.id))  \(project.isPinned ? "★ " : "")\(project.name)  \(cardCount) 条灵感"
+    "\(project.id.shortID)  \(project.isPinned ? "★ " : "")\(project.name)  \(cardCount) 条灵感"
       + (directory.map { "  \($0)" } ?? "")
   }
 }
@@ -69,8 +66,8 @@ struct CardView {
   }
 
   var line: String {
-    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(short(card.id))  \(project ?? "未分类")  \(card.isPinned ? "★ " : "")\(title(card.body))"
-      + (card.parentID.map { "  ↳ \(short($0))" } ?? "")
+    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(card.id.shortID)  \(project ?? "未分类")  \(card.isPinned ? "★ " : "")\(title(card.body))"
+      + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "")
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。

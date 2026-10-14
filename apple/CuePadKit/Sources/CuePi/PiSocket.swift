@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 import Synchronization
@@ -65,7 +66,7 @@ final class PiSocketConnection: Sendable {
     private let closed = Mutex(false)
 
     /// 连接到本机 socket：本地 connect 是微秒级；对端进程被冻结时也由内核 backlog 接住，不会阻塞。
-    init(path: String) throws {
+    convenience init(path: String) throws {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw ConnectError.socket(errno) }
         var one: Int32 = 1
@@ -80,7 +81,13 @@ final class PiSocketConnection: Sendable {
         }
         guard rc == 0 else { let e = errno; Darwin.close(fd); throw ConnectError.connect(e) }
 
-        // 对端必须是当前用户的进程
+        try self.init(peer: fd)
+    }
+
+    /// 接管一个已连上的描述符（connect 得到的，或监听端 accept 得到的）。对端必须是当前用户的进程，否则关掉它并抛错。
+    init(peer fd: Int32) throws {
+        var one: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
         var euid: uid_t = 0, egid: gid_t = 0
         guard getpeereid(fd, &euid, &egid) == 0, euid == getuid() else { Darwin.close(fd); throw ConnectError.peerNotOwner }
 
@@ -105,8 +112,10 @@ final class PiSocketConnection: Sendable {
         source.resume()
     }
 
-    func write(_ data: Data) {
+    /// `thenClose`：写完（排在之前的写入之后）再关连接。
+    func write(_ data: Data, thenClose: Bool = false) {
         writeQueue.async { [self] in
+            defer { if thenClose { source.cancel() } }
             closed.withLock {
                 guard !$0 else { return }
                 data.withUnsafeBytes { raw in
@@ -152,6 +161,23 @@ private final class LineReader: @unchecked Sendable {
 
 /// 进程退出通知（kqueue `NOTE_EXIT`，非子进程也可用）。连接的 EOF 在进程退出过程中就会到达，
 /// 此时进程可能还没被父进程回收（`kill(pid, 0)` 仍成功），所以强杀后的残留清理由它触发，而不是轮询。
+extension PiProcess {
+    /// 此刻用这个 pid 的进程（带启动时刻）；没有为 nil。
+    public static func running(pid: Int32) -> PiProcess? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        return PiProcess(pid: pid, startedAt: Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec))
+    }
+
+    /// 还是那一个进程在跑（pid 被复用的不算）。
+    public var isRunning: Bool { Self.running(pid: pid) == self }
+
+    var startDate: Date { Date(timeIntervalSince1970: TimeInterval(startedAt) / 1_000_000) }
+}
+
 final class ProcessExitWatcher {
     private let source: DispatchSourceProcess
 

@@ -6,12 +6,14 @@ extension PiShown {
     /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking: palette.attention
+        case .asking: Waiting.tint(dark: palette.dark)
+        // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
+        case .cueAsking: palette.ink
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.live
         case .unread: palette.replied
         case .restart: palette.ink2
-        case .idle, .fresh, .unknown: palette.ink3
+        case .idle, .resting, .fresh, .interrupted, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
@@ -20,13 +22,13 @@ extension PiShown {
     var isColored: Bool {
         switch status {
         case .asking, .failed, .working, .delivery, .unread: true
-        case .restart, .idle, .fresh, .ended, .unknown: false
+        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
     }
 
-    /// 状态词的颜色：带色的状态与状态标同色，已结束是灰，其余次要墨色。
+    /// 状态词的颜色：带色的状态与状态标同色，等 Cue 回答是墨色，已结束是灰，其余次要墨色。
     func labelTint(_ palette: Palette) -> Color {
-        isColored ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
+        isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
     /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）铺一层很淡的状态色，其余是纸。
@@ -37,7 +39,9 @@ extension PiShown {
     /// 这里是减弱动态效果与菜单里的样子。每种轮廓各不相同（缩到 10 点也认得出），要你看的三种是实心，其余是线条。
     var symbol: String {
         switch status {
-        case .asking: "questionmark.circle.fill"
+        case .asking: Waiting.symbol
+        // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
+        case .cueAsking: "questionmark.bubble"
         // 三角：轮廓与等你确认的圆分开
         case .failed: "exclamationmark.triangle.fill"
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
@@ -48,9 +52,13 @@ extension PiShown {
         case .unread: "bell.fill"
         // 输入光标：轮到你打字
         case .idle: "character.cursor.ibeam"
+        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已有出错以外的四种（等你确认、要重载、未知、已结束），缩小后分不开
+        case .resting: "ellipsis"
         case .fresh: "sparkle"
         // 不用空心圈：待办任务的圆圈就是它
         case .ended: "circle.slash"
+        // 断了电：做到一半停下
+        case .interrupted: "bolt.slash"
         case .unknown: "questionmark.circle"
         }
     }
@@ -59,7 +67,7 @@ extension PiShown {
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：
 /// 颜色 + 不带外框的整体图形——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂三角、没能送达胭脂折回箭头、
 /// 在跑晴蓝心电线（一截实色沿波形走）、话在路上晴蓝三层上箭头（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
-/// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
+/// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、箭头、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
 /// 两个都是 SF Symbols 时由系统原地替换。减弱动态效果时循环动效换成同一状态的静止符号，没有波纹与摇铃。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。

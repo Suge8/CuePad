@@ -1,6 +1,6 @@
 #if os(macOS)
-import struct CueStore.PiSession  // 与 CuePi.PiSession 同名
 import CuePi
+import CueStore
 import Foundation
 import OSLog
 import SQLite3
@@ -52,7 +52,7 @@ struct PiHistoryFailureTests {
         }
         #expect(message.contains(broken.path))
 
-        await services.consumePiHistory(events(for: [broken, healthy]))
+        await services.consumePiHistory(events(for: [broken, healthy]), agent: .pi)
 
         #expect(services.startupIssues.count == 2, "broken 不再写回，healthy 仍尝试写入（并同样失败）")
         guard case .piHistoryUnavailable(let second)? = services.startupIssues.last else { return }
@@ -69,7 +69,7 @@ struct PiHistoryFailureTests {
             CREATE TRIGGER rejectBad BEFORE INSERT ON piSessions WHEN NEW.id = 'bad' BEGIN SELECT RAISE(ABORT, 'boom'); END;
             """, nil, nil, nil) == SQLITE_OK else { throw BreakFailed() }
 
-        await services.consumePiHistory(events(for: [bad, good]))
+        await services.consumePiHistory(events(for: [bad, good]), agent: .pi)
 
         #expect(try await services.store.piSessions().map(\.id) == ["good"])
         #expect(services.startupIssues.count == 1)
@@ -81,7 +81,7 @@ struct PiHistoryFailureTests {
         let file = try sessionFile("s")
         try breakPiSessionTable()
 
-        await services.consumePiHistory(events(for: [file, file]))
+        await services.consumePiHistory(events(for: [file, file]), agent: .pi)
 
         #expect(services.startupIssues.count == 1)
     }
@@ -90,14 +90,14 @@ struct PiHistoryFailureTests {
         let file = try sessionFile("stale")
         let garbage = Data("not a checkpoint".utf8)
         try await services.store.upsertPiSession(
-            PiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
+            IndexedSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
         await services.consumePiHistory(AsyncStream { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
-        })
+        }, agent: .pi)
 
         #expect(services.startupIssues.isEmpty)
         #expect(try await services.store.piCheckpoint(of: "stale") != garbage)

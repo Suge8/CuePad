@@ -1,12 +1,11 @@
 import CueStore
-import CueText
 import Foundation
 #if os(iOS)
 import WidgetKit
 #endif
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
-/// 只写内容真正变了的那份；小组件只显示收件箱，所以只有收件箱变了才刷新它（刷新次数有系统预算）。
+/// 只写内容真正变了的那份；小组件显示收件箱与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
 extension AppServices {
     /// 项目或卡片变化时重读快照，直到任务取消。
     func startSnapshots() {
@@ -29,6 +28,10 @@ extension AppServices {
             try Snapshots.write(snapshots.unfiled, to: directory)
             reloadWidgets()
         }
+        if snapshots.cue != publishedSnapshots?.cue {
+            try Snapshots.write(snapshots.cue, to: directory)
+            reloadWidgets()
+        }
         publishedSnapshots = snapshots
     }
 
@@ -43,6 +46,7 @@ extension AppServices {
 nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var unfiled: UnfiledSnapshot
+    var cue: CueSnapshot
 }
 
 extension CueStore {
@@ -57,8 +61,9 @@ extension CueStore {
             }),
             unfiled: UnfiledSnapshot(
                 cards: latest.map {
-                    UnfiledSnapshot.Card(id: $0.id, title: CueSummary($0.body).title, modifiedAt: $0.modifiedAt)
+                    UnfiledSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
-                total: cards.count))
+                total: cards.count),
+            cue: CueSnapshot(digest: try CueDigest.read(from: self)))
     }
 }

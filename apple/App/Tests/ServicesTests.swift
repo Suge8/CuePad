@@ -1,29 +1,29 @@
 #if os(macOS)
-import struct CueStore.PiSession
 import CueStore
 @testable import CuePi
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
-        let services: AppServices = rig.services
-        services.settings.globalShortcut = "Control+Alt+KeyP"
-        services.applySavedShortcut()
-        let saved = Shortcut(keyCode: 35, modifiers: [.control, .option])
-        #expect(rig.hotkeys.active == [saved])
+        let defaults = rig.services.settings.defaults
+        defaults.set("Control+Alt+KeyP", forKey: "slot")
+        let hotkey = GlobalHotkey(label: "测试", key: "slot", defaultAccelerator: "Alt+Space", defaults: defaults, backend: rig.hotkeys) {}
+        try hotkey.registerSaved()
+        #expect(rig.hotkeys.active == [Shortcut(keyCode: 35, modifiers: [.control, .option])])
 
-        try services.setGlobalShortcut("Alt+KeyQ")
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        try hotkey.set("Alt+KeyQ")
+        #expect(defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option)])
 
         // 另一个组合已被占用：抛错，旧的继续生效，设置不变
         let taken = Shortcut(keyCode: 13, modifiers: .option)
         _ = try rig.hotkeys.register(taken) {}
-        #expect(throws: HotkeyError.occupied(taken)) { try services.setGlobalShortcut("Alt+KeyW") }
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
+        #expect(hotkey.accelerator == "Alt+KeyQ" && defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option), taken])
     }
 }
@@ -72,7 +72,7 @@ struct PiHistoryPersistenceTests {
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events)
+        await rig.services.consumePiHistory(events, agent: .pi)
 
         let rows = try await rig.services.store.piSessions()
         #expect(rows.map(\.id) == ["sess-1"])
@@ -99,7 +99,7 @@ struct PiHistoryPersistenceTests {
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        try await rig.services.store.upsertPiSession(PiSession(
+        try await rig.services.store.upsertPiSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))
@@ -107,86 +107,102 @@ struct PiHistoryPersistenceTests {
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events)
+        await rig.services.consumePiHistory(events, agent: .pi)
 
         #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
     }
 }
 
-struct PiExtensionConsentTests {
-    private func rigWithPi(version: String) throws -> TestApp {
+struct AgentUpgradeTests {
+    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
+    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let script = bin.appending(path: "pi")
-        try "#!/bin/sh\necho \(version)\n".write(to: script, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\necho 0.90.0\n".write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return rig
-    }
-
-    /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。
-    @Test func 拒绝后询问的变化能被界面观察到() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piIntegration
-        try await manager.refresh()
-        let changed = Flag()
-        withObservationTracking { _ = manager.needsConsent } onChange: { changed.set() }
-
-        manager.decline()
-
-        #expect(changed.value)
-        #expect(!manager.needsConsent)
-    }
-
-    nonisolated private final class Flag: @unchecked Sendable {
-        private(set) var value = false
-        func set() { value = true }
-    }
-
-    @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piIntegration
-
-        try await manager.refresh()
-        #expect(manager.needsConsent)
-
-        manager.decline()
-        try await manager.refresh()
-        #expect(!manager.needsConsent)
-        #expect(manager.status?.file == .missing)  // 拒绝过首次安装：维持不装
-
-        #expect(!FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.path))  // 拒绝：扩展与 skill 都不装
-
-        try await manager.install()
-        #expect(manager.status?.file == .current)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts").path))
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
-    }
-
-    @Test func Pi_版本过低或不存在时不征求同意() async throws {
-        let tooOld = try rigWithPi(version: "0.80.0")
-        try await tooOld.services.piIntegration.refresh()
-        #expect(!tooOld.services.piIntegration.needsConsent)
-
-        let absent = TestApp()
-        try await absent.services.piIntegration.refresh()
-        #expect(!absent.services.piIntegration.needsConsent)
-    }
-
-    /// 同意只在首次安装时问一次：已装的是我们的旧版扩展时，启动检查就静默升级到随包版本，不再询问。
-    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
         let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
         let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
         try old.write(to: installed, atomically: true, encoding: .utf8)
 
-        try await rig.services.piIntegration.refresh()
+        try await rig.services.agents.refresh()
 
-        #expect(rig.services.piIntegration.status?.file == .current)
+        #expect(rig.services.agents.status(.pi)?.files == .current)
         #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(!rig.services.piIntegration.needsConsent)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))  // 旧版用户升级时补上 skill
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
+    }
+
+    /// 没装过的不碰：检测完什么都不写，等用户自己接入。
+    @Test func 没接入过的Agent启动检查不写任何文件() async throws {
+        let rig = TestApp()
+        try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)
+
+        try await rig.services.agents.refresh()
+
+        #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
+        #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
+    }
+}
+
+/// 查本机运行时的登录状态很慢（三家命令各最多 15 秒），只在启用、换运行时与大脑起不来时查。
+struct CueRuntimeScanTests {
+    @Test func 启动时Cue已在本机值班_不查运行时() async throws {
+        let scans = Mutex(0)
+        // 大脑一直在起：不走到"起不来"那条会查的路
+        let app = TestApp(cue: CueDependencies(
+            scan: { scans.withLock { $0 += 1 }; return [] }, launch: { _, _ in try? await Task.sleep(for: .seconds(2)); return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        try await app.services.store.updateCueProfile { [hostID = TestApp.hostID] in
+            $0.hostID = hostID
+            $0.enabledAt = .now
+        }
+        app.services.start()
+        try await eventually("开始值班") { app.services.cue.onDuty }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(scans.withLock { $0 } == 0)
+        #expect(app.services.cue.runtimes == nil)
+        app.services.cancelBackgroundWork()
+    }
+}
+
+/// 启用只是"住到这台、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了才换成第一家能用的，
+/// 模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
+struct CueEnableTests {
+    @Test func 全新设置启用后强度是低() async throws {
+        let app = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        try await app.services.cue.enable()
+        #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
+    }
+
+    @Test func 启用不动你选的Agent与模型() async throws {
+        let available = Mutex<[AgentKind]>([.pi])
+        let app = TestApp(cue: CueDependencies(
+            scan: { available.withLock { $0 } }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let cue = app.services.cue, store = app.services.store
+        func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
+
+        try await cue.update {
+            $0.runtime = .known(.pi)
+            $0.model = "fake/m"
+            $0.effort = .known(.high)
+        }
+        try await cue.enable()
+        var now = try await profile()
+        #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
+
+        try await cue.disable()
+        try await cue.enable()
+        now = try await profile()
+        #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
+
+        try await cue.update { $0.runtime = .known(.claudeCode) }
+        available.withLock { $0 = [.codex, .pi] }
+        try await cue.enable()
+        now = try await profile()
+        #expect(now.runtime == .known(.codex) && now.model == nil && now.effort == .known(.high))
     }
 }
 #endif

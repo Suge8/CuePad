@@ -1,25 +1,33 @@
 import CueStore
 import SwiftUI
+#if os(macOS)
+import CuePi
+#endif
 
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
 /// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
 /// Pi 在处理时末尾一行流光的进展（当前动作；计时在顶上一行），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
+/// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
-    /// 对话里的每一格（`ChatDerived` 按对话数据推好的）。
-    let items: [ChatItem]
+    /// 对话里的每一条（`ChatDerived` 按对话数据推好的）。
+    let items: [PiChatEntry]
     /// 发出还没进对话的话要对着已有的消息认。
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
     /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
     var showEarlier: () -> Void = {}
-    @Environment(\.palette) private var palette
+    #if os(macOS)
+    /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
+    var slot: PiBridge.Slot?
+    #endif
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
-    @State private var opened: PiPreview?
+    @Environment(Workspace.self) private var workspace
+    @State private var opened: PreviewOpening?
     /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
     @State private var sizes: [Int: CGSize] = [:]
     @State private var onScreen: Set<Int> = []
@@ -43,7 +51,7 @@ struct PiConversation: View {
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
             ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -58,8 +66,24 @@ struct PiConversation: View {
         .previewPresenter($opened)
         .task(id: items.count) {
             guard let title = DebugHooks.preset.openPreview else { return }
-            opened = items.flatMap { item -> [PiPreview] in if case .previews(let group) = item { group.compactMap(\.preview) } else { [] } }
-                .first { $0.title == title }
+            opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews) } }
+                .first { $0.preview.title == title }
+        }
+    }
+
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
+    private func outgoing(_ request: DeliveryRequest) -> some View {
+        let session = session, said = Said.request(request)
+        let busy = session.isWorking || session.state == .known(.waitingForUser)
+        return SpeechBubble(
+            said: said, box: services.settings.replyDraftBinding(for: session.id),
+            transit: session.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy), fromCue: request.isFromCue
+        ) { trip in
+            let failed = if case .failed = trip { true } else { false }
+            MessageActions(
+                text: request.content, kind: .outgoing(failed: failed), session: session,
+                resend: { workspace.resend(said, restoringInto: services.settings.replyDraftBinding(for: session.id)) },
+                remove: { workspace.remove(said) })
         }
     }
 
@@ -68,14 +92,14 @@ struct PiConversation: View {
     /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
     /// 宽度变了（拖窗口、转屏），量过的高按宽度反比估（字一行排得越宽越矮），排成真的时再换成实测：
     /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
-    @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int, notes: [ReplyNote]) -> some View {
+    @ViewBuilder private func segment(_ index: Int, of all: [PiChatEntry], last: Int, notes: [ReplyNote]) -> some View {
         let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
         if let size = sizes[index], width > 0, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
             !items.contains(where: { $0.id == highlight })
         {
             Color.clear.frame(height: (size.height * size.width / width).rounded())
         } else {
-            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, opened: $opened)
+            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                 .equatable()
                 .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
                     sizes[index] = $0
@@ -95,35 +119,93 @@ struct PiConversation: View {
     /// 排开最近 `window` 条要从第几段起。
     static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }
 
-    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
+    /// 回答原位换下正在说的话（Mac 上本机在线的会话），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        slot != nil
+        #else
+        false
+        #endif
+    }
+
+    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因。
     @ViewBuilder private var ending: some View {
-        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
-        if session.state == .known(.error) {
-            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+        #if os(macOS)
+        if let slot {
+            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
+        } else {
+            liveStatus
         }
+        #else
+        liveStatus
+        #endif
+        if session.state == .known(.error) {
+            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
+        }
+    }
+
+    @ViewBuilder private var liveStatus: some View {
+        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session).transition(.entry) }
     }
 }
 
 
+#if os(macOS)
+/// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方一行是此刻的进展），
+/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
+/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
+struct SessionDraft: View {
+    let slot: PiBridge.Slot
+    let session: PiSessionState
+    /// 对话里最近一条 Agent 回答的时刻
+    let newestReply: Date?
+
+    var body: some View {
+        let draft = slot.draft
+        let landed = draft?.landed(newestReply: newestReply) ?? false
+        if let draft, !landed {
+            VStack(alignment: .leading, spacing: 8) {
+                DraftReply(text: draft.text) { DraftProgress(session: session) }
+                PiSubagentList(agents: session.subagents)
+            }
+        } else if landed, session.state.known?.isTurnRunning == true {
+            PiSubagentList(agents: session.subagents)
+        } else if session.state.isWorking || !session.subagents.isEmpty {
+            LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
+    }
+}
+
+extension PiDraft {
+    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
+    func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
+}
+#endif
+
+
 /// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
-    let items: [ChatItem]
+    let items: [PiChatEntry]
     let session: PiSessionState
     let highlight: UUID?
     let notes: [ReplyNote]
-    @Binding var opened: PiPreview?
+    let swapsInPlace: Bool
+    @Binding var opened: PreviewOpening?
     @Environment(\.palette) private var palette
 
-    init(items: [ChatItem], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], opened: Binding<PiPreview?>) {
+    init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
         self.items = items
         self.session = session
+        self.swapsInPlace = swapsInPlace
         self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
         self.notes = notes.filter { note in items.contains { $0.id == note.entry } }
         _opened = opened
     }
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes
+        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes && lhs.swapsInPlace == rhs.swapsInPlace
             && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
@@ -135,29 +217,23 @@ private struct ChatSegment: View, Equatable {
         }
     }
 
-    @ViewBuilder private func row(_ item: ChatItem) -> some View {
-        switch item {
-        case .previews(let group): PreviewGroup(previews: group.compactMap(\.preview)) { opened = $0 }
-        case .entry(let entry): row(entry)
-        }
-    }
-
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, highlighted: entry.id == highlight) {
+            UserBubble(stored: entry.text, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
                 MessageActions(text: entry.text, kind: .mine, session: session)
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
-            ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id })
+            ReplyBlock(
+                text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
-            if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }
+            PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
     }
 }
@@ -180,7 +256,7 @@ struct EarlierRow: View {
 
 extension PiConversation {
     /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
-    static func window(reaching id: UUID, in items: [ChatItem]) -> Int? {
+    static func window(reaching id: UUID, in items: [PiChatEntry]) -> Int? {
         items.firstIndex { $0.id == id }.map { items.count - $0 }
     }
 
@@ -200,26 +276,26 @@ extension PiConversation {
 
 /// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
 /// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
-/// 歇着（该你了、新会话、有新回复）什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 不是 Pi 的会话最前面写是哪家 Agent（`AgentMark`），歇着时也写。
+/// 歇着（该你了、新会话、有新回复）的 Pi 会话什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session)
-        let speaks = shown.isLive || shown.needsYou || shown.status == .restart || shown.status == .ended
-        if speaks || undelivered != nil {
+        let shown = PiShown(session, cue: workspace.cueOnDuty).speaking(drafting)
+        let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
+        let mark = session.agentMark
+        if speaks || undelivered != nil || mark != nil {
             HStack(spacing: 4) {
-                if speaks {
-                    #if os(iOS)
-                    PiStateDot(shown: shown, size: 6)
-                    #endif
-                    Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
-                        .contentTransition(.opacity)
-                        .animation(Motion.quick, value: shown)
+                if mark != nil {
+                    AgentMark(session: session, font: Self.font)
+                    if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
                 }
+                if speaks { PiShownLabel(shown: shown) }
                 if let undelivered {
                     if speaks { Dot().foregroundStyle(palette.failure) }
                     Text(undelivered).foregroundStyle(palette.failure)
@@ -237,45 +313,50 @@ struct PiSessionSubtitle: View {
     }
 
     private static let font = Typography.caption
+
+    /// 这台 Mac 上它此刻有正在说的话（手机上没有）
+    private var drafting: Bool {
+        #if os(macOS)
+        workspace.services.pi.slot(sessionID: session.sessionID)?.draft != nil
+        #else
+        false
+        #endif
+    }
+}
+
+
+/// 顶栏里的状态（会话页与 Cue 页同一个样子）：着色的状态词，手机上前面加状态标（Mac 的标题玻璃里不画圆）。
+struct PiShownLabel: View {
+    let shown: PiShown
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 4) {
+            #if os(iOS)
+            PiStateDot(shown: shown, size: 6)
+            #endif
+            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+                .contentTransition(.opacity)
+                .animation(Motion.quick, value: shown)
+        }
+    }
 }
 
 
 /// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
-/// 只能在 Mac 上答的写明原文与去处。
+/// 只能在 Agent 那边答的（问题本身答不了，或这个会话做不到，`PiSessionState.answerableQuestion`）写明原文与去处。
 struct PiQuestionDock: View {
     let session: PiSessionState
     var deliveries: [DeliveryRequest] = []
-    @Environment(\.palette) private var palette
 
     var body: some View {
         if session.state == .known(.waitingForUser) {
-            if let question = session.question, question.isAnswerable {
+            if let question = session.answerableQuestion {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: session.question?.displayText ?? session.detail ?? "", prominent: true, docked: true)
+                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
-        }
-    }
-}
-
-
-/// 对话里的一格：一条（你的话、回答、系统行），或连着的几张预览收成的一组（同一处连着发的文件放在一张纸上）。
-nonisolated enum ChatItem: Identifiable, Equatable {
-    case entry(PiChatEntry)
-    case previews([PiChatEntry])
-
-    var id: UUID {
-        switch self {
-        case .entry(let entry): entry.id
-        case .previews(let group): group[0].id
-        }
-    }
-
-    static func of(_ entries: [PiChatEntry]) -> [ChatItem] {
-        entries.reduce(into: []) { items, entry in
-            guard entry.role == .preview else { return items.append(.entry(entry)) }
-            if case .previews(let group) = items.last { items[items.count - 1] = .previews(group + [entry]) } else { items.append(.previews([entry])) }
         }
     }
 }

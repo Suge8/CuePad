@@ -10,16 +10,17 @@ struct AgentDayTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
     var settings: AppSettings { app.services.settings }
+    var workspace: Workspace { Workspace(services: app.services) }
 
     private func item(_ sessionID: String) async throws -> PiSessionListItem {
         try #require(try await store.piSessionPage(PiSessionQuery(limit: .max)).items.first { $0.state.sessionID == sessionID })
     }
 
-    private func label(_ sessionID: String) async throws -> String { settings.shown(try await item(sessionID)).label }
+    private func label(_ sessionID: String) async throws -> String { workspace.shown(try await item(sessionID)).label }
 
     /// 行上状态词后面的短词（"有草稿""没能改名"……）。
     private func note(_ item: PiSessionListItem) -> PiRowFacts.Note? {
-        settings.facts(item.state, shown: settings.shown(item), end: nil, rename: item.rename).note
+        settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename).note
     }
 
     @discardableResult
@@ -43,7 +44,7 @@ struct AgentDayTests {
 
         try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [], recap: PiRecap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
-        #expect(settings.shown(done).label == "有新回复")
+        #expect(workspace.shown(done).label == "有新回复")
         settings.markSeen(done.state, at: .now.addingTimeInterval(1))
         #expect(try await label("atlas") == "该你了")
         #expect(!app.relaunch().settings.isUnread(done.state))  // 看过记在本机偏好，退出再回来还算看过
@@ -61,7 +62,7 @@ struct AgentDayTests {
         #expect(try await label("atlas") == "思考中")
         try await recorder.update(sessionID: "gamma", state: .tool, title: "gamma")
         try await say("改完再看看登录回调", to: "gamma", mode: .followUp)
-        let queued = settings.shown(try await item("gamma"))
+        let queued = workspace.shown(try await item("gamma"))
         #expect(queued.label == "运行工具")
         #expect(queued.note == "你的话排队中")
     }
