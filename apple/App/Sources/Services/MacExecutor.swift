@@ -11,14 +11,14 @@ final class MacExecutor {
     private let runtimes: [AgentKind: any AgentRuntime]
     private let hostID: String
     private let recorder: PiStateRecorder
-    private let uploadResult: @Sendable (UUID) async -> Void
+    private let upload: @Sendable (UUID) async -> Void
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
-        uploadResult: @escaping @Sendable (UUID) async -> Void,
+        upload: @escaping @Sendable (UUID) async -> Void,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -27,7 +27,7 @@ final class MacExecutor {
         self.runtimes = runtimes
         self.hostID = hostID
         self.recorder = recorder
-        self.uploadResult = uploadResult
+        self.upload = upload
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
@@ -38,7 +38,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
             Task { @MainActor in reportIssue(message) }
-        }, onFinished: uploadResult) { [weak self] request in
+        }, onWritten: upload) { [weak self] request in
             guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
             return await self.run(request)
         }
@@ -56,7 +56,7 @@ final class MacExecutor {
     /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
-            try await perform(request)
+            try await performRetrying(request)
             return .succeeded
         } catch SendError.unrecorded(let reason) {
             // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
@@ -64,6 +64,28 @@ final class MacExecutor {
             return .succeeded
         } catch {
             return .failed(error.localizedDescription)
+        }
+    }
+
+    /// 暂时性错误（`isTransient`）隔 `Speech.retryDelay` 重试一次，再失败才写失败。开新会话不重试：起得慢的那个之后还会连上，
+    /// 再开一个就是两个会话。
+    private func performRetrying(_ request: DeliveryRequest) async throws {
+        do {
+            try await perform(request)
+        } catch where request.mode != .known(.start) && Self.isTransient(error) {
+            try await Task.sleep(for: Speech.retryDelay)
+            try await perform(request)
+        }
+    }
+
+    /// 暂时性错误：会话正在起、还没连上桥，话还没交出去，过一会儿再试不会说两遍。唤醒超时的几种都已让起到一半的进程退出，
+    /// 重试不会多出一份。没等到确认（`ackTimeout`）、等确认时断开（`sessionEnded`）不算：话可能已经收下了，重试会说两遍。
+    static func isTransient(_ error: any Error) -> Bool {
+        switch error {
+        case PiBridgeError.unknownSession: true  // 会话刚唤醒，桥还没发现它的 socket
+        case PiHostError.notConnected: true  // 唤醒已结束的 Pi 会话，它没及时连上桥
+        case AgentRuntimeError.launchTimedOut: true  // 唤醒其余几家的会话，它没及时起来
+        default: false
         }
     }
 
@@ -81,7 +103,7 @@ final class MacExecutor {
         case .answer: try await answer(request)
         case .config: try await configure(request)
         case .command: try await runCommand(request)
-        case .send: try await deliver(request, whenBusy: nil)
+        case .send: try await deliver(request, whenBusy: nil)  // 桥缺省按等它做完再说入队：写请求时看到的"歇着"可能已过时
         case .steer: try await deliver(request, whenBusy: .steer)
         case .followUp: try await deliver(request, whenBusy: .followUp)
         }
@@ -89,12 +111,11 @@ final class MacExecutor {
 
     // MARK: 发给 Agent 会话
 
-    /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时报错。
+    /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时按等它做完再说。
     /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
     private func deliver(_ request: DeliveryRequest, whenBusy: PiQueueMode?) async throws {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-        if whenBusy == nil, session.state.isTurnRunning { throw SendError.piSessionBusy }
         let content = SendContent(stored: request.content)
         try await pi.send(
             PiMessage(text: content.plainText, images: try content.piImages(from: store.files), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)

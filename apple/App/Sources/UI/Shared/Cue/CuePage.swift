@@ -55,7 +55,7 @@ struct CuePage: View {
     private var page: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                chat.fadesUnderBars().frame(maxHeight: .infinity)
+                chat.modifier(BelowHeader()).frame(maxHeight: .infinity)
                 bottom
                     .padding(.horizontal, Self.inset).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
@@ -73,6 +73,7 @@ struct CuePage: View {
     #else
     @ViewBuilder private var page: some View {
         let body = chat
+            .modifier(BelowHeader())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -123,7 +124,8 @@ struct CuePage: View {
         return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
+                let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             .animation(Motion.quick, value: cue.presence.progress)
@@ -131,10 +133,12 @@ struct CuePage: View {
         .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef]) -> some View {
+    /// `lastYou`：你最后一句，只在它下面写"已送达"。
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?) -> some View {
         switch row {
         case .you(let message):
-            UserBubble(stored: message.text).padding(.top, 14)
+            SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
+                .padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
                 CueSays(message: message, fadesIn: !swapsInPlace)
@@ -220,6 +224,24 @@ private struct CueEnding: View {
         let presence = workspace.cue.presence
         if let shown = presence.shown, let progress = presence.progress {
             LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
+    }
+}
+
+/// 对话从页头下面开始，不滚到它后面（Mac 是窗口工具栏，手机是名牌与它下面的提示）：名牌是一颗小胶囊、提示是一整条，
+/// 气泡滚过去时两层字叠在一起读不清，也看不出提示后面还有没有话（别的沉浸式页照 `fadesUnderBars`）。
+/// 上安全区里含页头与 safeAreaBar 里的提示：那一段全透，下沿往下 `Bars.contentGap` 淡回，滚出去的字不是一刀切断。
+private struct BelowHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        content.mask {
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: proxy.safeAreaInsets.top)
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Bars.contentGap)
+                    Rectangle()
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 }

@@ -26,6 +26,7 @@ struct PiConversation: View {
     #endif
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @State private var opened: PreviewOpening?
     /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
     @State private var sizes: [Int: CGSize] = [:]
@@ -50,7 +51,7 @@ struct PiConversation: View {
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
             ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -67,6 +68,22 @@ struct PiConversation: View {
             guard let title = DebugHooks.preset.openPreview else { return }
             opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews) } }
                 .first { $0.preview.title == title }
+        }
+    }
+
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
+    private func outgoing(_ request: DeliveryRequest) -> some View {
+        let session = session, said = Said.request(request)
+        let busy = session.isWorking || session.state == .known(.waitingForUser)
+        return SpeechBubble(
+            said: said, box: services.settings.replyDraftBinding(for: session.id),
+            transit: session.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy), fromCue: request.isFromCue
+        ) { trip in
+            let failed = if case .failed = trip { true } else { false }
+            MessageActions(
+                text: request.content, kind: .outgoing(failed: failed), session: session,
+                resend: { workspace.resend(said, restoringInto: services.settings.replyDraftBinding(for: session.id)) },
+                remove: { workspace.remove(said) })
         }
     }
 
