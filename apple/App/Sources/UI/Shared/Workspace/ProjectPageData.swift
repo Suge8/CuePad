@@ -16,8 +16,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var taskCounts: TaskCounts
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
-    /// 任务下的提示词：任务列表在每条任务下直接列出。
-    var prompts: [UUID: [Card]]
+    /// 叶子的草稿：行尾的"开始"交出的就是它。
+    var drafts: [UUID: Card]
 
     /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
     var lastTarget: [UUID: String] {
@@ -42,7 +42,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             done: TaskBoard.recentlyDone(all),
             taskCounts: try store.taskCounts(in: project),
             subtasks: try store.subtaskProgress(in: project),
-            prompts: try store.prompts(in: project))
+            drafts: try store.drafts(in: project))
     }
 }
 
