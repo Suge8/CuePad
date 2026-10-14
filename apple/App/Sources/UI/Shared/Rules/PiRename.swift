@@ -12,23 +12,26 @@ nonisolated enum PiRename {
     }
 
     /// 此刻显示的会话名：最近一条改名（`request`）还在路上时是新名；送到了而会话记录在那之后还没写过
-    /// （Pi 改了名、Mac 还没同步过来）也是新名；之后、以及没改成时以会话记录为准。
-    static func title(of session: PiSessionState, request: DeliveryRequest?) -> String {
+    /// （Pi 改了名、Mac 还没同步过来）也是新名；之后、以及没改成时以会话记录为准。到哪了按 `Speech`。
+    static func title(of session: PiSessionState, request: DeliveryRequest?, at moment: Speech.Moment) -> String {
         guard let request, let name = request.config?.name else { return session.title }
-        switch request.status.known {
-        case .pending, .executing: return name
-        case .succeeded: return session.modifiedAt > (request.completedAt ?? request.createdAt) ? session.title : name
-        case .failed, nil: return session.title
+        switch Speech.trip(request, at: moment) {
+        case .sending: return name
+        case .delivered: return session.modifiedAt > (request.completedAt ?? request.createdAt) ? session.title : name
+        case .failed: return session.title
         }
     }
 
     /// 改名还在路上（行上写"正在改名"）。
-    static func isPending(_ request: DeliveryRequest?) -> Bool { request?.isRename == true && request?.isOpen == true }
+    static func isPending(_ request: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
+        guard let request, request.isRename else { return false }
+        return Speech.trip(request, at: moment) == .sending
+    }
 
     /// 没改成（行上写"没能改名"），留到本机看过这个会话（`seen`）为止（同没能送达的话，`PiDelivery.phase`）。
-    static func failed(_ request: DeliveryRequest?, seen: Date?) -> Bool {
-        guard let request, request.isRename, request.failure != nil else { return false }
-        return (seen ?? .distantPast) <= (request.completedAt ?? request.modifiedAt)
+    static func failed(_ request: DeliveryRequest?, seen: Date?, at moment: Speech.Moment) -> Bool {
+        guard let request, request.isRename, let failedAt = Speech.failedAt(request, at: moment) else { return false }
+        return (seen ?? .distantPast) <= failedAt
     }
 }
 

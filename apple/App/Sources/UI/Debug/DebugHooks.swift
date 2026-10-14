@@ -24,6 +24,8 @@ enum DebugHooks {
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
         var demoMac = false
+        /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、又没装同步替身时（替身自己报通断，`-CuePadSync`）。
+        var alwaysReachable = false
         /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
         var quotaDetail: String?
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
@@ -70,6 +72,15 @@ enum DebugHooks {
         DebugScene.syncSource
         #else
         .iCloud
+        #endif
+    }
+
+    /// 不请求通知权限：演示与脚本截图、录屏（`-CuePadDemo` 或给了 `CUEPAD_SHOT_READY`）里系统弹窗会盖住画面，没人去点。
+    static var asksNotificationPermission: Bool {
+        #if DEBUG
+        !DebugScene.defaults.bool(forKey: "CuePadDemo") && ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] == nil
+        #else
+        true
         #endif
     }
 

@@ -57,6 +57,10 @@ final class AppServices {
     /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
     #endif
+    /// 说的话到哪了的"此刻"与同步通着的起点，整个 App 一份（`start()` 开始跟着库）。
+    let speechClock: SpeechClock
+    /// App 的钟：资料库里随时间变的读（`CueStore.timing`）、说的话到点翻状态（`SpeechClock`）与主动拉取的节奏（`SyncPoller`）共用一个。
+    @ObservationIgnored let timing: Timing
     /// 此刻有事的 Pi 会话，整个 App 一份（`start()` 开始跟随）：界面与服务都从这里取，不各自订阅。
     let liveSessions = LiveSessions()
     /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
@@ -71,8 +75,8 @@ final class AppServices {
     @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话（`openDeliveries`）。
-    /// 只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
+    /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话
+    /// （`startSpeechClock` 跟着资料库更新），只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
@@ -154,16 +158,6 @@ final class AppServices {
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
         Task { await upload(said.id, deleted: true) }
-    }
-
-    /// 到 `host` 那台 Mac 的同步此刻通不通（`Speech` 判断超时原因的输入）：本机就是那台 Mac 时不经同步，算通。
-    func reaches(_ host: String?) -> Bool {
-        #if os(macOS)
-        if host == nil || host == hostID { return true }
-        #endif
-        // 演示 Mac 就在本机库里接手，不经同步
-        if DebugHooks.preset.demoMac { return true }
-        return syncStatus.reachesMac
     }
 
     /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
@@ -316,7 +310,10 @@ final class AppServices {
         settings = AppSettings(defaults: defaults)
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
-        (self.sync, syncStatus) = Self.makeSync(sync, store: store, location: location)
+        let (engine, status) = Self.makeSync(sync, store: store, location: location)
+        (self.sync, syncStatus) = (engine, status)
+        speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
+        timing = mac.timing
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
@@ -336,13 +333,18 @@ final class AppServices {
             store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else
-    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {
-        let store = try Self.openLibrary(at: location)
+    init(
+        location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general, timing: Timing = .system
+    ) throws {
+        let store = try Self.openLibrary(at: location, timing: timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
-        (self.sync, syncStatus) = Self.makeSync(sync, store: store, location: location)
+        let (engine, status) = Self.makeSync(sync, store: store, location: location)
+        (self.sync, syncStatus) = (engine, status)
+        speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        self.timing = timing
         self.pasteboard = pasteboard
     }
     #endif
@@ -357,6 +359,7 @@ final class AppServices {
     func syncFailedToStart(_ error: any Error) {
         let reason = "同步没能启动：\(error.localizedDescription)"
         syncStatus = .unavailable(reason)
+        speechClock.setReachable(false)
         reportIssue(.syncUnavailable(reason))
     }
 
@@ -364,8 +367,13 @@ final class AppServices {
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
 
+    /// 同步从不通变通时立即同步一次（`syncNow`）：断网时没传上去的记录（交回了引擎）当场传出、在等的回执当场拉回，
+    /// 不等引擎自己的调度；主动拉取也随之重开一个窗口（`pollingCondition`）。
     func setSyncState(_ state: SyncState) {
+        let recovered = state.status.reachesMac && speech.reachableSince == nil
         syncStatus = state.status
+        speechClock.setReachable(state.status.reachesMac)
+        if recovered { Task { await syncNow() } }
         syncIssues = state.issues
         alertSubscription = state.alerts
     }

@@ -25,6 +25,7 @@ import Testing
     var afterAccepting: (@Sendable () throws -> Void)?
 
     func goOffline() { offline = true }
+    func goOnline() { offline = false }
     func onAccept(_ action: @escaping @Sendable () throws -> Void) { afterAccepting = action }
     func reject(with error: CKError) { rejection = error }
 
@@ -101,6 +102,8 @@ import Testing
     #expect(try await phone.reconcileDelta().deletes.isEmpty)
   }
 
+  /// 离线时上传失败：记录仍待推送（交回引擎，网络恢复后自动上传），同步状态是连不上 iCloud（说的话据此报同步不通、不报 Mac 迟迟没收下）；
+  /// 下一次上传成功就回到空闲。
   @Test func whenOfflineTheRequestStaysPendingForTheEngineToRetry() async throws {
     let server = Server()
     await server.goOffline()
@@ -111,6 +114,12 @@ import Testing
     }
 
     #expect(try await phone.reconcileDelta().saves == [phone.id(made.id)])
+    #expect(await phone.coordinator.status == .offline)
+
+    await server.goOnline()
+    _ = try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server)
+    #expect(await phone.coordinator.status == .idle)
+    #expect(try await phone.reconcileDelta().saves.isEmpty)
   }
 
   /// 服务器逐条拒绝（限流等瞬时失败）不是整个请求失败：不能当成传好了，要告诉调用方交回引擎重试。

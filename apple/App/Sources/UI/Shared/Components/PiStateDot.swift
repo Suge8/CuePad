@@ -93,7 +93,8 @@ struct PiStateDot: View {
         guard !reduceMotion else { return .symbol }
         switch shown.status {
         case .working: return .heartbeat
-        case .delivery(let phase) where phase != .failed: return .climb
+        case .delivery(.failed): return .symbol
+        case .delivery: return .climb
         default: return .symbol
         }
     }

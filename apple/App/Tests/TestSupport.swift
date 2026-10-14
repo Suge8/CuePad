@@ -35,6 +35,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         var started = 0
         var stopped = 0
         var syncNows = 0
+        var pulls = 0
         var resolutions: [String] = []
     }
 
@@ -48,6 +49,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     var started: Int { state.withLock { $0.started } }
     var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
+    var pulls: Int { state.withLock { $0.pulls } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 
     var stateUpdates: AsyncStream<SyncState> { updates }
@@ -73,7 +75,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.syncNows += 1 }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func pullChanges() async throws {}
+    func pullChanges() async throws { state.withLock { $0.pulls += 1 } }
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
@@ -110,25 +112,25 @@ final class TestApp {
 
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
+    /// App 的钟（资料库、在线记录续期、说的话到点翻状态、主动拉取）；要推进时间的测试给 `ManualTiming` 的。
+    private let timing: Timing
 
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
-    /// 资料库与在线记录续期的时钟；要推进时间的测试给 `ManualTiming` 的。
-    private let timing: Timing
-
     init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         self.cue = cue
         self.updater = updater
-        self.timing = timing
         services = makeServices()
     }
     #else
-    init(sync source: AppServices.SyncSource? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         services = makeServices()
     }
     #endif
@@ -196,7 +198,7 @@ final class TestApp {
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
+        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard, timing: timing)
     }
     #endif
 }

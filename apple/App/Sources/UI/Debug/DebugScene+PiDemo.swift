@@ -255,13 +255,27 @@ extension DebugScene {
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
-    /// 录"发出 → 返回列表 → 状态流转"用。
-    static func runDemoMac(_ store: CueStore) async {
-        let host = "demo-mac"
+    /// 录"发出 → 返回列表 → 状态流转"用。Cue 住在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达）。
+    /// 同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
+    static func runDemoMac(_ services: AppServices) async {
+        let store = services.store, host = "demo-mac"
+        func reachable() async {
+            for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
+        }
+        Task {
+            // 每次变化都重读此刻还没交出去的：攒下的旧变化不再各等一遍
+            for try await waiting in store.observe({ try toDemoCue($0) }) where !waiting.isEmpty {
+                guard try await !toDemoCue(store).isEmpty else { continue }
+                await reachable()
+                try await Task.sleep(for: .seconds(1.5))
+                try await store.markCueMessagesDelivered(toDemoCue(store))
+            }
+        }
         do {
             for try await pending in store.observe({ store in
                 try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
             }) where !pending.isEmpty {
+                await reachable()
                 try await Task.sleep(for: .seconds(1.2))
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
@@ -276,9 +290,16 @@ extension DebugScene {
                     try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
                 }) where !open { break }
                 await executor.stop()
-                for id in pending { await playRound(for: id, store: store, host: host) }
+                // 各自演一轮，不挡住下一批话的接手
+                for id in pending { Task { await playRound(for: id, store: store, host: host) } }
             }
         } catch {}
+    }
+
+    /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
+    private static func toDemoCue(_ store: isolated CueStore) throws -> [UUID] {
+        guard try store.cueProfile()?.hostID == "demo-mac", try store.macOnline("demo-mac") else { return [] }
+        return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
     }
 
     /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——
@@ -287,7 +308,7 @@ extension DebugScene {
     static func cycleIfAsked(_ services: AppServices) async {
         guard defaults.bool(forKey: "CuePadCycle") else { return }
         let store = services.store
-        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(store) } }
+        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(services) } }
         let query = PiSessionQuery(id: PiSessionState.recordID(sessionID: "scratch"))
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         func set(_ state: PiWorkState, _ detail: String, question: PiQuestion? = nil) async {

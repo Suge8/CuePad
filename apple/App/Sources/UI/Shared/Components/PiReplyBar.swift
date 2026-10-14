@@ -108,7 +108,7 @@ struct PiReplyBar: View {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if form == .open || focused, let failure = config?.failure {
-                        Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
+                        Text("没换成：\(failure.text(sync: services.syncStatus))").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
                             .padding(.horizontal, 18).padding(.top, 12)
                     }
                 },
@@ -127,7 +127,7 @@ struct PiReplyBar: View {
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
         HStack(spacing: 6) {
             if case .running = progress { Spinner(.mini) }
-            Text(progress.text).lineLimit(2)
+            Text(progress.text(sync: services.syncStatus)).lineLimit(2)
         }
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
         .padding(.horizontal, 18)

@@ -11,38 +11,42 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var messages: [PiChatMessage] = []
     /// 这个会话里 Agent 发到手机上看的文件（对话里按 `.preview` 消息的位置显示，见 `PiChat.entries`）。
     var previews: [PiPreview] = []
-    /// 没能送达的话有几句（会话列表查询带出的同一个数，`PiSessionListItem.undelivered`）。
-    var undelivered = 0
     /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
 
-    /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
-    var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
-
-    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
-    var title: String? {
-        session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries)) }
+    /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。
+    func fetchingTranscript(at moment: Speech.Moment) -> Bool {
+        deliveries.contains { $0.mode == .known(.transcript) && Speech.trip($0, at: moment) == .sending }
     }
 
-    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
+    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
+    func title(at moment: Speech.Moment) -> String? {
+        session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries), at: moment) }
+    }
+
+    /// 此刻没能送达的话有几句（`Speech.undelivered`，会话行同一个数）。
+    func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(deliveries, at: moment) }
+
+    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因（到哪了按 `Speech`）。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
-    var config: PiConfigShown {
+    func config(at moment: Speech.Moment) -> PiConfigShown {
         let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, context: session?.context, pending: false, failure: nil)
         // 只看换模型、思考强度的请求：改名同走配置请求，但与这两样无关
         guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil } == true }),
               let wanted = request.config else { return current }
-        if request.isOpen {
+        switch Speech.trip(request, at: moment) {
+        case .sending:
             let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
+        case .delivered: return current
+        case .failed(let failure):
+            return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
         }
-        guard let failure = request.failure else { return current }
-        return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
     }
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
-        let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
-        let session = item?.state
+        let session = try store.piSessionPage(PiSessionQuery(id: id)).items.first?.state
         let ref = session?.sessionID ?? sessionID
         let messages = try ref.map { try store.piMessages(of: $0) } ?? []
         return SessionDigest(
@@ -51,7 +55,6 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
-            undelivered: item?.undelivered ?? 0,
             cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
     }
 }
@@ -64,8 +67,8 @@ nonisolated struct PiConfigShown: Equatable {
     var context: PiContextUsage?
     /// 换的请求还在路上。
     var pending: Bool
-    /// 最近一次没换成的原因。
-    var failure: String?
+    /// 最近一次没换成的原因（`Speech`：Mac 报的，或超时、本机同步不通）。
+    var failure: Speech.Failure?
 }
 
 /// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态图形上（`PiStateGlyph`，与状态标同一个样子：问题是赭黄问号圆、出错是胭脂圆叹号），正文中性；
@@ -157,11 +160,13 @@ struct QuestionCard: View {
 
     @Environment(AppServices.self) private var services
 
-    private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
-    private var failed: Bool { sent?.failure != nil }
+    /// 答的那条到哪了（`Speech`）；还没写成是 nil。
+    private var sent: Speech.Trip? {
+        requestID.flatMap { id in deliveries.first { $0.id == id } }.map { Speech.trip($0, at: services.speech) }
+    }
     /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
-    private var answering: Bool { tapped != nil && writeError == nil && !failed }
-    private var failure: String? { writeError ?? sent?.failure }
+    private var answering: Bool { tapped != nil && writeError == nil && sent?.failure == nil }
+    private var failure: String? { writeError ?? sent?.failure?.text(sync: services.syncStatus) }
 
     var body: some View {
         Callout(.asking, text: question.text, docked: true) {
@@ -170,7 +175,7 @@ struct QuestionCard: View {
             if !services.reachesPiHost {
                 Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
                     .font(Typography.meta).foregroundStyle(palette.ink3)
-            } else if answering, sent?.status == .known(.succeeded) {
+            } else if answering, sent == .delivered {
                 Text("已答，等 Mac 上的 Agent 继续").font(Typography.meta).foregroundStyle(palette.ink3)
             } else if let failure {
                 Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
@@ -279,35 +284,6 @@ private struct AnswerButton: View {
             .modifier(PressFeedback(pressed: configuration.isPressed))
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
             .opacity(enabled ? 1 : 0.45)
-    }
-}
-
-/// 请求的送达情况，说法同会话行（`PiDelivery.transit`）：发送中、排队中、送达中、正在唤醒、已送达（往返多久）、没能送达。
-struct DeliveryStatusLabel: View {
-    let request: DeliveryRequest
-    /// 发给哪个会话；开新会话的请求没有。
-    var session: PiSessionState?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Group {
-            switch request.status {
-            case .known(.pending), .known(.executing):
-                // 发给已结束的会话：Mac 先在后台把它唤醒再送达
-                let busy = session.map { $0.isWorking || $0.state == .known(.waitingForUser) } ?? false
-                let text = session?.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy)
-                HStack(spacing: 6) { Spinner(.mini); Text(text) }.foregroundStyle(palette.ink2)
-            case .known(.succeeded):
-                Label { Text(Dotted("已送达", request.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: { Image(systemName: "paperplane.fill") }
-                    .foregroundStyle(palette.ink2)
-            case .known(.failed): Label { Text("没能送达") } icon: { PiStateGlyph(status: .delivery(.failed)) }.foregroundStyle(palette.failure)
-            case .unknown: Label { Text("未知状态") } icon: { PiStateGlyph(status: .unknown) }.foregroundStyle(palette.ink2)
-            }
-        }
-        .font(Typography.meta.weight(.medium))
-        .id(request.status)
-        .transition(.opacity)
-        .animation(Motion.quick, value: request.status)
     }
 }
 

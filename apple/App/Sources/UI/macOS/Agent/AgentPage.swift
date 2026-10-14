@@ -128,10 +128,10 @@ struct AgentPage: View {
         LazyVStack(spacing: 8) { rows() }
     }
 
-    private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
+    private func row(_ item: PiSessionListItem, filtered: Bool, end: Speech.Trip?) -> some View {
         let session = item.state
-        let endable = session.canEnd && end?.isOpen != true
-        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
+        let endable = session.canEnd && end != .sending
+        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 MarkUnreadButton(session: session)

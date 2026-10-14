@@ -13,7 +13,7 @@ struct HandOffTargetsTests {
     }
 
     private func live() async throws -> [PiSessionListItem] {
-        try await LiveSessions.Page.read(from: store).items.filter { $0.state.state != .known(.ended) }
+        try await LiveSessions.Page.read(from: store, at: .always()).items.filter { $0.state.state != .known(.ended) }
     }
 
     @Test func 所有Mac上在线的会话都能交给_已结束的不算() async throws {
@@ -21,7 +21,7 @@ struct HandOffTargetsTests {
         try await record("there", host: "mac-b")
         try await record("gone", host: "mac-b", state: .ended)
 
-        let ids = HandOffTargets.sessions(try await live(), project: nil).map(\.state.sessionID)
+        let ids = HandOffTargets.sessions(try await live(), project: nil, at: .always()).map(\.state.sessionID)
 
         #expect(Set(ids) == ["here", "there"])
     }
@@ -32,7 +32,7 @@ struct HandOffTargetsTests {
         try await record("asking-other", host: "mac-b", state: .waitingForUser)
         try await record("idle-mine", host: "mac-a", project: project.id)
 
-        let ids = HandOffTargets.sessions(try await live(), project: project.id).map(\.state.sessionID)
+        let ids = HandOffTargets.sessions(try await live(), project: project.id, at: .always()).map(\.state.sessionID)
 
         #expect(ids == ["idle-mine", "asking-other", "idle-other"])
     }
