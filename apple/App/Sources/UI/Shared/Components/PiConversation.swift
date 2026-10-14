@@ -99,7 +99,7 @@ struct PiConversation: View {
     @ViewBuilder private var ending: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
         if session.state == .known(.error) {
-            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+            Callout(status: .failed, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 }
@@ -262,7 +262,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: session.question?.displayText ?? session.detail ?? "", prominent: true, docked: true)
+                Callout(status: .asking, text: session.question?.displayText ?? session.detail ?? "", prominent: true, docked: true)
             }
         }
     }

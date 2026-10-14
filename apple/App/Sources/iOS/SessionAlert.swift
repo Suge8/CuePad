@@ -24,7 +24,8 @@ struct SessionAlert: Equatable, Identifiable {
         return Dotted(content.title, content.body)
     }
 
-    var symbol: String { kind == .waitingForUser ? "questionmark.bubble.fill" : "checkmark.circle.fill" }
+    /// 与会话状态标同一个图形（`PiShown.symbol`）：等你确认是问号圆，做完了是有新回复的铃铛。
+    var symbol: String { PiShown(status: kind == .waitingForUser ? .asking : .unread).symbol }
 }
 
 /// 把读到的在线会话变成要提示的转换：与上一次读到的版本比（`PiSessionState.alert(since:)`，Mac 置位推送标志同一条规则）。

@@ -2,7 +2,7 @@
 
 ## LobeHub Icons
 
-模型提供方的图标（`apple/App/Sources/Assets.xcassets/Providers`，由 `design/tools/provider-symbols.py` 生成）取自 [LobeHub Icons](https://github.com/lobehub/lobe-icons)（npm `@lobehub/icons-static-svg`）。各标志的商标归其所有者。
+品牌标志（模型的提供方、接入的 Agent、订阅账号；`apple/App/Sources/Assets.xcassets/Brands`，由 `design/tools/brand-symbols.py` 生成）取自 [LobeHub Icons](https://github.com/lobehub/lobe-icons)（npm `@lobehub/icons-static-svg`）。各标志的商标归其所有者。
 
 ```
 MIT License

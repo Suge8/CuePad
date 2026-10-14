@@ -91,7 +91,7 @@ struct SessionScreen: View {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
+                        Callout(status: .failed, text: "没能结束：\(reason)", docked: true)
                     }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {

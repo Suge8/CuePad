@@ -359,7 +359,8 @@ struct CueWaitingDock: View {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "questionmark.circle.fill").foregroundStyle(palette.attention).accessibilityHidden(true)
+                    // 等你回答与会话的"等你确认"同义：同一个状态标
+                    PiStateDot(shown: PiShown(status: .asking), size: 8)
                     FoldedMarkdown(source: message.text).id(message.id)
                 }
                 // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
@@ -441,8 +442,8 @@ struct CueAwayCard: View {
         CueTaskButton(task: item.id) {
             HStack(spacing: 8) {
                 if failed {
-                    // 出错同会话状态标的图形（`PiShown.symbol`）
-                    Image(systemName: PiShown(status: .failed).symbol).foregroundStyle(palette.failure).font(.system(size: 14))
+                    // 出错同会话状态标
+                    PiStateDot(shown: PiShown(status: .failed), size: 8)
                 } else {
                     TaskRingView(status: .done, ring: .plain, done: true, size: 14)
                 }

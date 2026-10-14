@@ -28,7 +28,7 @@ struct AgentRow: View {
     var body: some View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
-        SettingRow(title: kind.name, icon: kind.icon, tone: tone, busy: working, status: line, help: help) {
+        SettingRow(title: kind.name, icon: kind.mark.image, tone: tone, busy: working, status: line, help: help) {
             Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)

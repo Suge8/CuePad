@@ -296,12 +296,21 @@ extension DebugScene {
         await set(.settled)
     }
 
-    /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
-    /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
+    private static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
+        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+    }
+
+    /// 演示会话的模型配置，按哪家 Agent：Pi 与 OpenCode 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，
+    /// 菜单里是通用图标）；Claude Code、Codex 的模型在它们自己的命名空间里（提供方是 `AgentKind.modelProvider`）。
+    static func demoModels(for agent: AgentKind?) -> PiModelState {
+        guard let provider = agent?.modelProvider else { return demoModels }
+        let models = agent == .codex
+            ? [model(provider, "gpt-5.5-codex", "GPT-5.5 Codex", [.low, .medium, .high, .xhigh]), model(provider, "gpt-5.5-mini", "", [.low, .medium])]
+            : [model(provider, "opus", "Opus", [.low, .medium, .high, .max]), model(provider, "sonnet", "Sonnet", [.low, .medium, .high])]
+        return PiModelState(model: models[0], thinking: .known(.medium), models: models)
+    }
+
     private static let demoModels: PiModelState = {
-        func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
-            PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
-        }
         let opus = model("anthropic", "claude-opus-5-5-20260901", "Claude Opus 5.5", [.low, .medium, .high, .max])
         return PiModelState(model: opus, thinking: .known(.medium), models: [
             opus,
@@ -402,7 +411,7 @@ extension DebugScene {
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],

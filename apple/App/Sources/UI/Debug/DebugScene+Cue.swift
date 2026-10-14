@@ -103,7 +103,7 @@ extension DebugScene {
         for row in rows {
             _ = try await recorder.update(
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, folder: "greet",
-                context: PiContextUsage(tokens: 60_000, window: 200_000), agent: row.agent)
+                modelState: demoModels(for: row.agent), context: PiContextUsage(tokens: 60_000, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
             let task = try await store.createTask(row.title, in: nil)
             _ = try await store.setCueFollows(task.id, true)

@@ -1,27 +1,29 @@
 import CueStore
 import SwiftUI
 
-/// 模型的提供方：Pi 的提供方 id → 显示名与图标，全 App 只有这一张表。图标是 LobeHub 的单色标志转成的自定义符号
-/// （资源目录的 Providers 下，由 design/tools/provider-symbols.py 生成），与文字基线对齐、随字号缩放、能嵌进 `Text` 插值，
-/// 颜色跟着前景色走（界面里是次要墨色，系统菜单里随菜单文字的颜色，不用品牌色）。没见过的提供方（用户自定义的）用通用图标、名字首字母大写。
+/// 模型的提供方：Pi 的提供方 id（Claude Code、Codex 上报的是 `AgentKind.modelProvider`）→ 显示名与标志（`BrandMark`），
+/// 全 App 只有这一张表。模型显示做模型的那家；有订阅额度的另有账号（产品名与产品标志：Claude、Codex）。
+/// 没见过的提供方（用户自定义的）用通用图标、名字首字母大写。
 nonisolated struct PiProvider: Equatable, Identifiable {
     /// Pi 的提供方 id（`PiModelKey.provider`）。
     let id: String
     let name: String
+    /// 做模型的那家的标志。
+    let mark: BrandMark
     /// 订阅账号的产品名（Claude、Codex）：额度按账号显示时用它（`QuotaMeter`）；不是订阅登录的提供方为提供方名。
     let account: String
-    /// 资源目录里的符号名；nil 是没见过的提供方。
-    private let symbol: String?
+    /// 订阅账号的产品标志（额度的仪表）；不是订阅登录的提供方为做模型的那家。
+    let accountMark: BrandMark
 
     init(id: String) {
         self.id = id
-        if let known = Self.known[id.lowercased()] {
-            (name, symbol) = (known.name, "provider-" + known.icon)
-            account = known.account ?? known.name
-        } else {
-            (name, symbol) = (id.prefix(1).uppercased() + id.dropFirst(), nil)
-            account = name
+        guard let known = Self.known[id.lowercased()] else {
+            (name, mark) = (id.prefix(1).uppercased() + id.dropFirst(), .unknown)
+            (account, accountMark) = (name, mark)
+            return
         }
+        (name, mark) = (known.name, known.mark)
+        (account, accountMark) = known.account ?? (name, mark)
     }
 
     /// `provider/model` 写法（子代理名册）里的提供方；没写提供方时为 nil。
@@ -31,38 +33,32 @@ nonisolated struct PiProvider: Equatable, Identifiable {
     }
 
     /// 嵌进文字用：`Text("\(provider.image) opus-5-5")`。
-    var image: Image { symbol.map { Image($0) } ?? Self.unknown }
+    var image: Image { mark.image }
 
-    /// 通用图标：没见过的提供方，以及还不知道是哪个模型时。
-    static var unknown: Image { Image(systemName: generic) }
+    /// 还不知道是哪个模型时。
+    static var unknown: Image { BrandMark.unknown.image }
 
-    #if os(macOS)
-    /// AppKit 菜单项用的同一个图标。
-    var nsImage: NSImage? {
-        symbol.flatMap { NSImage(symbolName: $0, bundle: .main, variableValue: 0) }
-            ?? NSImage(systemSymbolName: Self.generic, accessibilityDescription: nil)
-    }
-    #endif
+    private static let claude = (name: "Claude", mark: BrandMark.claude)
+    private static let codex = (name: "Codex", mark: BrandMark.codex)
 
-    private static let generic = "cpu"
-
-    /// 提供方 id → 显示名与图标（`provider-<图标>`），有订阅额度的另有账号的产品名。同一家的几个入口共用一个图标。
-    private static let known: [String: (name: String, icon: String, account: String?)] = [
-        "anthropic": ("Anthropic", "anthropic", "Claude"),
-        "openai": ("OpenAI", "openai", nil),
-        "openai-codex": ("OpenAI Codex", "openai", "Codex"),
-        // Codex 会话上报的模型（`AgentKind.modelProvider`）
-        "codex": ("Codex", "openai", "Codex"),
-        "google": ("Google", "gemini", nil),
-        "google-vertex": ("Google Vertex", "gemini", nil),
-        "xai": ("xAI", "xai", nil),
-        "deepseek": ("DeepSeek", "deepseek", nil),
-        "kimi-coding": ("Kimi", "kimi", nil),
-        "moonshotai": ("Moonshot AI", "kimi", nil),
-        "moonshotai-cn": ("Moonshot AI", "kimi", nil),
-        "xiaomi": ("Xiaomi MiMo", "mimo", nil),
-        "xiaomi-token-plan-cn": ("Xiaomi MiMo", "mimo", nil),
-        "openrouter": ("OpenRouter", "openrouter", nil),
+    /// 提供方 id → 显示名与做模型那家的标志，有订阅额度的另有账号。同一家的几个入口共用一个标志。
+    private static let known: [String: (name: String, mark: BrandMark, account: (name: String, mark: BrandMark)?)] = [
+        "anthropic": ("Anthropic", .anthropic, claude),
+        "openai": ("OpenAI", .openai, nil),
+        "openai-codex": ("OpenAI Codex", .openai, codex),
+        // Claude Code、Codex 会话上报的模型（`AgentKind.modelProvider`）
+        "claude": ("Anthropic", .anthropic, claude),
+        "codex": ("OpenAI", .openai, codex),
+        "google": ("Google", .gemini, nil),
+        "google-vertex": ("Google Vertex", .gemini, nil),
+        "xai": ("xAI", .xai, nil),
+        "deepseek": ("DeepSeek", .deepseek, nil),
+        "kimi-coding": ("Kimi", .kimi, nil),
+        "moonshotai": ("Moonshot AI", .kimi, nil),
+        "moonshotai-cn": ("Moonshot AI", .kimi, nil),
+        "xiaomi": ("Xiaomi MiMo", .mimo, nil),
+        "xiaomi-token-plan-cn": ("Xiaomi MiMo", .mimo, nil),
+        "openrouter": ("OpenRouter", .openrouter, nil),
     ]
 }
 
