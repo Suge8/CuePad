@@ -100,6 +100,14 @@ extension CueStore {
     }
   }
 
+  /// 撤回你说的、还没交给 Cue 的一句（重发或移除没回执的话）；返回是否撤回了。已交出去的撤不回（Cue 已经读到）。
+  public func withdrawCueMessage(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
+      return db.changes > 0
+    }
+  }
+
   /// 交出去的这些没被 Cue 读完（大脑在那一轮中途退出）：清掉送达，下一个大脑重新交。
   public func unmarkCueMessagesDelivered(_ ids: [UUID]) throws {
     guard !ids.isEmpty else { return }
@@ -298,20 +306,22 @@ extension CueStore {
     return profile.onDuty(try cueState(), asleep: try cueAsleep())
   }
 
-  /// 它住的那台 Mac 不在线：你最近一句超过 `CueProfile.undeliveredGrace` 还没交给它。还没到时登记到点重读（`expire(at:)`），
-  /// 订阅它的（Cue 页的"在睡觉"、"等你 N"、会话显示）到点自己更新。
-  public func cueAsleep() throws -> Bool {
+  /// 你最近一句对 Cue 说的话此刻到哪了（`Speech.trip`，与气泡同一条规则）；你还没说过为 nil。还在等回执时登记到点重读（`expire(at:)`），
+  /// 订阅它的（Cue 页的在路上与在睡觉、"等你 N"、会话显示）到时限自己更新，界面不另计时。
+  /// 库里没有本机同步通不通这个输入，按通着推（超时就是 `noReply`）；界面用 `Speech.Trip.reached` 补上。
+  public func cueSpeech() throws -> Speech.Trip? {
     let latest = try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
-      $0.dateOrNil(1) == nil ? $0.date(0) : nil
+      (said: $0.date(0), delivered: $0.dateOrNil(1))
     }
-    guard let said = latest ?? nil else { return false }
-    let due = said.addingTimeInterval(CueProfile.undeliveredGrace)
-    guard due <= .now else {
-      expire(at: due)
-      return false
-    }
-    return true
+    guard let latest else { return nil }
+    if let due = Speech.deadline(said: latest.said, delivered: latest.delivered), due > .now { expire(at: due) }
+    return Speech.trip(said: latest.said, delivered: latest.delivered, now: .now, reachable: true)
   }
+
+  /// 它住的那台 Mac 没有回应：你最近一句过了 `Speech.receiptLimit` 还没交给它（库里没有那台 Mac 的心跳，你的话收没收下是唯一的在线信号）。
+  /// 取舍：本机同步不通时界面说同步的原因、不说它在睡觉（`Speech.Failure.offline`），值班这里仍按没回应算——
+  /// 那时它答不了会话，CuePad 也送不到它，在等它回答的会话算等你（"等你 N"、提示），宁可多叫你一次。
+  public func cueAsleep() throws -> Bool { try cueSpeech() == .failed(.noReply) }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
   public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {

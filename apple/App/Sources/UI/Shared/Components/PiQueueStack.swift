@@ -107,6 +107,6 @@ struct PiQueueStack: View {
     }
 
     private func withdraw(_ request: DeliveryRequest) {
-        workspace.attempt { try await workspace.services.withdraw(request) }
+        workspace.attempt { try await workspace.services.withdraw(.request(request)) }
     }
 }

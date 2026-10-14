@@ -53,7 +53,8 @@ nonisolated struct CueTiming: Sendable {
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
 /// 5. 有会话的事有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
-///    其中有会话在等回答（如"允许使用 Bash？"）就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
+///    其中有会话在等回答（如"允许使用 Bash？"），或 Cue 说的话没送到而它还不知道（`CueChange.Kind.undelivered`），
+///    就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
 /// 6. 空闲巡视：没有在做的事（`CueBoardItem.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -94,6 +95,8 @@ final class CueKeeper {
         /// Cue 自己的目录：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL
         var timing: CueTiming
+        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，不等引擎自己排，见 `Speech`）
+        var upload: @Sendable ([UUID]) async -> Void = { _ in }
     }
 
     /// 值班的生命周期。
@@ -429,11 +432,23 @@ final class CueKeeper {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
+                await markTold(finished.round)
                 await advanceBaseline(from: finished.mark)
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
             await broke(reason.map { "大脑退出了（\($0)）" } ?? "大脑退出了")
+        }
+    }
+
+    /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——
+    /// 工具写出了结果、这一轮却断了（大脑被杀、重起），Cue 没看到，下一轮照样报。
+    private func markTold(_ round: CueRound) async {
+        let told = round.calls.filter(\.failed).flatMap { CueTools.undeliveredRequests(in: $0.result ?? "") }
+        do {
+            try await setup.store.markCueTold(told)
+        } catch {
+            Self.log.error("Cue 记下已知道的失败没写成，下一轮会再报一次：\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -488,7 +503,7 @@ final class CueKeeper {
                         $0.turn?.delivered += ids
                         $0.turn?.round.sent.append(said)
                     }
-                    try await store.markCueMessagesDelivered(ids)
+                    try await markDelivered(ids)
                 } else {
                     _ = try await wakeUp(.message, said: said, images: images, delivering: ids)
                 }
@@ -542,7 +557,7 @@ final class CueKeeper {
                 if latest > current.latest { (current.last, current.latest) = (now, latest) }
                 window = current
                 let settled = min(current.last + timing.quiet.seconds, current.first + timing.quietLimit.seconds)
-                let blocked = changes.contains { $0.kind == .waitingForUser }
+                let blocked = changes.contains { $0.kind == .waitingForUser || $0.kind == .undelivered }
                 let ready = blocked ? now : max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
                 if now >= ready {
                     window = nil
@@ -624,8 +639,16 @@ final class CueKeeper {
                 author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark)
         }
         save()
-        try await store.markCueMessagesDelivered(delivering)
+        try await markDelivered(delivering)
         return true
+    }
+
+    /// 记下送达并立即上传（不等上传完就接着对账）。
+    private func markDelivered(_ ids: [UUID]) async throws {
+        try await setup.store.markCueMessagesDelivered(ids)
+        guard !ids.isEmpty else { return }
+        let upload = setup.upload
+        Task { await upload(ids) }
     }
 
     /// 你的消息里的图，按发给会话的同一个转换取出、交给大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。

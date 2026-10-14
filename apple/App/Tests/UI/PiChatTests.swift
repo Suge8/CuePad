@@ -21,8 +21,8 @@ struct PiChatTests {
         let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")
         try await recorder.update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let sent = try await app.services.requestMacDelivery("把断言也改了", to: session, mode: .send)
-        let waiting = try await app.services.requestMacDelivery("再跑一遍", to: session, mode: .send)
+        let sent = try await app.services.store.requestDelivery("把断言也改了", to: session.target, on: session.hostID, mode: .send)
+        let waiting = try await app.services.store.requestDelivery("再跑一遍", to: session.target, on: session.hostID, mode: .send)
         let answer = try await app.services.store.requestAnswer(
             PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
 
@@ -37,8 +37,8 @@ struct PiChatTests {
         let app = TestApp()
         try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let said = try await app.services.requestMacDelivery("先说一句", to: session, mode: .send)
-        let command = try await app.services.requestMacDelivery("/compact", to: session, mode: .command)
+        let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
+        let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
         #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }

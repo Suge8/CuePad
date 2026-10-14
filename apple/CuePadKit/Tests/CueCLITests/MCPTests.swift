@@ -341,7 +341,8 @@ import Testing
   /// 分步做一件事（常规的"完成 → 开工下一步"）：上一步收尾时下一步还没开工，会话留着；下一步开工接着用它——草稿作为下一句发进去，不开新会话；
   /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板与 peek 写"发送中"、不能再开工或说话；
   /// 下一步还没有草稿时开工报错，不先绑上。最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
-  @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
+  /// 草稿发进已有会话是说话：工具等结果至多 `Speech.cueWait`，这里没有 Mac 执行，到点如实说还没送达。
+  @Test(.timeLimit(.minutes(2))) func stepsOfATaskContinueInTheSameSession() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
@@ -373,9 +374,11 @@ import Testing
     #expect(try await store.deliveryRequests().isEmpty)
 
     _ = try await store.createCard(body: "照调研结论改 release.sh", under: second.id)
-    _ = try await server.call("task", ["action": "start", "task": second.id.uuidString])
+    let continued = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": second.id.uuidString]])
+    #expect(continued["isError"] as? Bool == false)
+    #expect(((continued["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("已发出，还没送达") == true)
     let sent = try await store.deliveryRequests()
-    #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
+    #expect(sent.map(\.mode) == [.known(.followUp)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
     #expect(sent.first?.content == "照调研结论改 release.sh")
     // 送到前：还没绑上，看板写发送中，不能再开工或说话
     #expect(try await store.card(second.id)?.piSessionID == nil)
@@ -525,11 +528,15 @@ import Testing
     try await recorder.update(sessionID: "c1", state: .error, title: "改文案", agent: .claudeCode)
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
+    // 这台 Mac 一收到就办成：说话、作答的工具等得到结果，马上返回
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", retention: .seconds(600), onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+    try await executor.start()
+    defer { Task { await executor.stop() } }
 
     _ = try await server.call(
       "task", ["action": "say", "task": pi.id.uuidString, "text": "用 luna 重试", "model": "openai/gpt-6-luna", "effort": "high"])
     let requests = try await store.deliveryRequests(toSession: "s1")  // 执行器按这个先后执行
-    #expect(requests.map(\.mode) == [.known(.config), .known(.send)] && requests.allSatisfy(\.isFromCue))
+    #expect(requests.map(\.mode) == [.known(.config), .known(.steer)] && requests.allSatisfy(\.isFromCue))
     #expect(requests.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
     #expect(requests.last?.content == "用 luna 重试")
 

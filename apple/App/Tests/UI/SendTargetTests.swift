@@ -130,9 +130,8 @@ struct SendTargetTests {
         #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "提示词", deliveryID: request.id.uuidString)])
-        // 提示在送达结果落库后才出（比扩展收到话晚一步）
-        try await eventually("workspace.notice != nil") { workspace.notice != nil }
-        #expect(workspace.notice?.text.visible == "已唤醒 Agent 会话「alpha」并发送")
+        // 交出就提示，不等送达
+        #expect(workspace.notice?.text == Dotted("已交给 Agent 会话「alpha」", "唤醒后送达"))
         _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }
         #expect(try await store.card(task.id)?.piSessionID == "a")
     }
@@ -146,9 +145,10 @@ struct SendTargetTests {
 
         workspace.handOff(draft)
 
-        try await eventually("workspace.notice != nil") { workspace.notice != nil }
-        let request = try #require(try await store.deliveryRequests().first)
-        #expect(request.status == .known(.failed) && workspace.notice?.isError == true)
+        let request = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0?.isOpen == false })
+        #expect(request.status == .known(.failed))
+        let delivery = PromptDelivery(draft.id, agents: try await AgentLinks.read(from: store), now: .now, reaches: { _ in true })
+        #expect(delivery == .failed(request, .reported(try #require(request.failure))) && delivery.canSend)
         #expect(rig.host.calls.isEmpty)
         #expect(try await store.card(draft.id) != nil)
     }

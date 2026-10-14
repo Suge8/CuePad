@@ -127,10 +127,10 @@ struct SessionTaskTests {
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
-        // 你在手机上对 Cue 说了一句，快 30 秒了它还没收下：到点"等你"自己从 1 变 2
+        // 你在手机上对 Cue 说了一句，快到时限（`Speech.receiptLimit`）了它还没收下：到点"等你"自己从 1 变 2
         let said = try await store.addCueMessage(.you, text: "看看登录回调")
         try RawDB(rig.databaseURL).exec(
-            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - CueProfile.undeliveredGrace + 0.3) * 1000)) WHERE id = '\(said.id.uuidString.lowercased())'")
+            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - Speech.receiptLimit + 0.3) * 1000)) WHERE id = '\(said.id.uuidString.lowercased())'")
         var counts: [Int] = []
         for try await count in store.observe({ try CueWaiting.count(in: $0) }) {
             counts.append(count)

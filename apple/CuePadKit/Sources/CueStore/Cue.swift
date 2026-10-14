@@ -166,12 +166,9 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 在线（`asleep` 见 `CueStore.cueAsleep`），大脑也没停在起不来（`state` 不是出错）。
+  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 有回应（`asleep` 见 `CueStore.cueAsleep`），大脑也没停在起不来（`state` 不是出错）。
   /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
   public func onDuty(_ state: CueState?, asleep: Bool) -> Bool { activeHost != nil && !asleep && state?.state != .known(.error) }
-
-  /// 你的话多久没交给 Cue 就算它住的那台 Mac 不在线（关机或睡着）：库里没有那台 Mac 的心跳，你交给它的话收没收下是唯一的在线信号。
-  public static let undeliveredGrace: TimeInterval = 30
 
   public static let defaultName = "Cue"
   /// 只有一行：任何设备上都是这个 id。

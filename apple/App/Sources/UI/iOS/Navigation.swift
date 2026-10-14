@@ -78,7 +78,11 @@ final class Navigation {
 
     /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent）。
     var floating: Bool { capturing || newSession != nil || outbox != nil }
-    var outbox: Outbox?
+    var outbox: Outbox? {
+        didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
+    }
+    /// 发给 Agent 输入框的草稿（换了一条提示词就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
+    var handOffDraft = ComposerDraft()
     var projectForm: ProjectForm?
     var newSession: NewSession?
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
