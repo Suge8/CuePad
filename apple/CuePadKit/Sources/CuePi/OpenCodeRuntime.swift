@@ -720,8 +720,15 @@ public final class OpenCodeRuntime: AgentRuntime {
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        try await configure(
-            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
+        let id = try await open(in: directory, launchToken: launchToken)
+        let sessionID = bridge.session(id: id)?.sessionID
+        do {
+            return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
+        } catch {
+            // 配不上时结束只让它下线，会话还在服务里：开会话失败的不留，从服务里删掉
+            if let sessionID, let connection { _ = try? await connection.client.call("DELETE", "/api/session/\(sessionID)") }
+            throw error
+        }
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {

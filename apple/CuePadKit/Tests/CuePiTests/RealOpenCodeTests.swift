@@ -184,6 +184,20 @@ struct RealOpenCodeTests {
     }
 
     /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
+    /// 开会话时模型配不上：开会话整体失败，这个会话不留在桥上，也不留在 OpenCode 的后台服务里。
+    @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+                _ = try await runtime.open(
+                    in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: "opencode", id: "no-such-model"), thinking: nil)
+            }
+            #expect(session(bridge) == nil)
+            let listed = try await sandbox.api("GET", "/api/session")["data"] as? [Any]
+            #expect(listed?.isEmpty == true, "服务里还留着：\(String(describing: listed))")
+            #expect(try await store.piSessions().isEmpty)
+        }
+    }
+
     @Test func cuePadStartsTheServiceAndHostsSessionsFromOpenToResume() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             #expect(sandbox.service == nil)
