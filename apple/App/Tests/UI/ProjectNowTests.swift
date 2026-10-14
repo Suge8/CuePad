@@ -115,8 +115,8 @@ struct ProjectNowShelfTests {
         let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
-        let shown = Workspace(services: app.services).shown
-        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: shelf.leading, shown: shown)[project.id]?.text == "正在唤醒 Agent")
+        let workspace = Workspace(services: app.services)
+        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: shelf.leading) { workspace.shown($0) }[project.id]?.text == "正在唤醒 Agent")
         #expect(shelf.now(projects: projects)[project.id]?.text == "多 Agent 调度本月可上线")
     }
 
