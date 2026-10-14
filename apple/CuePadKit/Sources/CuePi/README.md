@@ -21,7 +21,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 | --- | --- | --- | --- |
 | 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`，事件表在 `HookFile.claudeCode`：要人作答的权限确认、AskUserQuestion 的 PreToolUse、MCP 表单 Elicitation 挡住等 CuePad，其余当场放行）；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`） | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
 | 终端会话的说话 | 它的收件箱 socket，只收文字；插话不打断在跑的工具 | 常驻服务的控制 socket（`turn/steer`、`thread/queue/add`），能带图 | `POST /prompt`（steer / queue），能带图 |
-| 远程作答 | 权限：阻塞的 PermissionRequest 钩子，终端里同时弹出，哪边先答算哪边。提问（AskUserQuestion 的 PreToolUse 钩子）与 MCP 要你填的表单（Elicitation 钩子，只有一个字段时能答）：挂住时终端不弹，所以与 Codex 的权限一样按人在不在分 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式的提问：终端会话的只能在终端里答，托管会话的经 `item/tool/requestUserInput`、只有一个问题时能从 CuePad 答 | 权限与单个问题的表单 |
+| 远程作答 | 权限：阻塞的 PermissionRequest 钩子，终端里同时弹出，哪边先答算哪边。提问（AskUserQuestion 的 PreToolUse 钩子）与 MCP 要你填的表单（Elicitation 钩子，只有一个字段时能答）：挂住时终端不弹，所以与 Codex 的权限一样按人在不在分 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式的提问：终端会话的只能在终端里答，托管会话（在 CuePad 里用斜杠命令 `/plan [话]` 进 Plan 模式、`/default` 回默认模式）的经 `item/tool/requestUserInput`、只有一个问题时能从 CuePad 答 | 权限与单个问题的表单 |
 | 后台托管 | `claude --input-format stream-json --output-format stream-json`，全部能力；会话开在终端里时拒绝接着（两边会各写各的） | `codex app-server --listen stdio://`；线程被常驻服务持有时改走控制 socket | 在它的服务里开会话，服务没开时 `opencode service start` |
 | 终端会话做不到 | 图片、停止、换模型与强度、斜杠命令 | 结束会话、上下文余量 | 跳到终端（服务不知道终端） |
 | 认出 CuePad 发的话 | 消息的 uuid 就是投送请求 id | `clientUserMessageId` = `cuepad-<投送请求 id>` | 消息的 `metadata` |

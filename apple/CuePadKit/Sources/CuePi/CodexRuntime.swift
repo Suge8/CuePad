@@ -18,8 +18,9 @@ import OSLog
 ///   常驻服务的控制 socket 在哪由 `codex app-server daemon version` 告诉（服务在跑时才有），不自己拼路径。
 /// - 权限确认经 `PermissionRequest` 钩子：Codex 先问钩子、钩子没给决定才在终端里弹框。终端会话按人在不在分（`PresenceGate`）；
 ///   托管的会话没有终端，总是挂住。在终端里按 Esc 停下这一轮会收回挂住的调用。
-/// - Plan 模式的提问（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；托管会话的经
-///   `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
+/// - Plan 模式：托管会话用 `/plan [话]` 进、`/default` 回默认模式（`thread/settings/update` 的 `collaborationMode`，同终端界面的 /plan），
+///   终端会话在终端里切。Plan 模式的提问（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
+///   托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
@@ -315,7 +316,8 @@ public final class CodexRuntime: AgentRuntime {
                     let listed = try await rpc.call("skills/list", ["cwds": [.string(cwd.path)]])
                     let entries = (listed["data"]?.array?.first?["skills"]?.array ?? []).filter { $0["enabled"]?.bool != false }
                     session.skills = entries.compactMap { entry in entry["name"]?.string.flatMap { name in entry["path"]?.string.map { (name, $0) } } }
-                    let commands = Self.builtinCommands + entries.compactMap { entry -> PiSlashCommand? in
+                    let modes = hosted[session.pid] == nil ? [] : Self.modeCommands
+                    let commands = Self.builtinCommands + modes + entries.compactMap { entry -> PiSlashCommand? in
                         guard let name = entry["name"]?.string else { return nil }
                         return PiSlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { ToolDetail.clip($0) }, source: .known(.skill))
                     }
@@ -335,6 +337,12 @@ public final class CodexRuntime: AgentRuntime {
         PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin)),
         PiSlashCommand(name: "name", summary: "给会话改名", source: .known(.builtin), hint: "<名字>"),
         PiSlashCommand(name: "model", summary: "换模型", source: .known(.builtin), hint: "<模型>"),
+    ]
+
+    /// 托管会话切协作模式（终端会话的模式归终端界面管）
+    private static let modeCommands = [
+        PiSlashCommand(name: "plan", summary: "进 Plan 模式：先问清楚、出计划，不动手", source: .known(.builtin), hint: "[话]"),
+        PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin)),
     ]
 
     /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。
@@ -647,6 +655,13 @@ public final class CodexRuntime: AgentRuntime {
         case "model":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
             try await configure(model: PiModelKey(provider: CodexModel.provider, id: argument), thinking: nil, name: nil, in: id)
+        case "plan", "default":
+            guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
+            try await collaborate(name == "plan" ? "plan" : "default", in: session)
+            if !argument.isEmpty {
+                _ = try await deliver(
+                    [["type": "text", "text": .string(argument), "text_elements": []]], clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
+            }
         case _ where name.hasPrefix("skill:"):
             guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
             var input: [JSONValue] = [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]]
@@ -655,6 +670,17 @@ public final class CodexRuntime: AgentRuntime {
         default:
             throw PiBridgeError.rejected("unknown_command")
         }
+    }
+
+    /// 之后的轮次用的协作模式（实验接口）：模型与强度照会话此刻的，说明用这个模式内置的。
+    private func collaborate(_ mode: String, in session: Tracked) async throws {
+        let current = bridge.session(id: session.id)
+        guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: 不知道这个会话用的模型") }
+        var settings: [String: JSONValue] = ["model": .string(model), "developer_instructions": .null]
+        if case .known(let level)? = current?.thinking { settings["reasoning_effort"] = .string(CodexModel.effort(level)) }
+        try await call(session, "thread/settings/update", [
+            "threadId": .string(session.threadID), "collaborationMode": ["mode": .string(mode), "settings": .object(settings)],
+        ])
     }
 
     fileprivate func abort(_ id: PiSession.ID) async throws {
