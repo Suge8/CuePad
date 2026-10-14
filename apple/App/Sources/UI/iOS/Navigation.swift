@@ -5,22 +5,18 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签（灵感 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
+/// iOS 的导航状态：标签（Cue / Agent / 灵感）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。当前项目只从路径推出（`currentProject`）。
 @Observable
 final class Navigation {
-    enum Tab: Hashable {
-        case projects, agent
+    /// 底部从左到右的顺序就是声明的顺序；打开 App 先到 Cue。
+    enum Tab: Hashable, CaseIterable {
+        case cue, agent, projects
     }
 
     /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
     enum Layout {
         case tabs, split
-    }
-
-    /// 要发给 Agent 的一条提示词（存储格式，变量已填）：浮起发给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
-    struct OpenTask: Identifiable {
-        let id: UUID
     }
 
     /// 新建（`project` 为 nil）或编辑项目的表单；书架、侧栏与项目页的入口都经这里，在根视图弹出。
@@ -71,28 +67,24 @@ final class Navigation {
     }
 
     var layout: Layout = .tabs
-    var tab: Tab = .projects
-    var projectsPath: [Route] = []
+    var tab: Tab = .cue
+    var cuePath: [Route] = []
     var agentPath: [Route] = []
+    var projectsPath: [Route] = []
     /// 随手记里正在写的这一条：输入框收起后仍留着（见 `endCapture`）；没换过落点时落在正在看的项目（`currentProject`）。
     var capture = CaptureState()
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
 
-    /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent；任务浮窗开着时发给 Agent 由浮窗自己浮起）。
-    var floating: Bool { capturing || newSession != nil || (task == nil && outbox != nil) }
+    /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent）。
+    var floating: Bool { capturing || newSession != nil || outbox != nil }
     var outbox: Outbox? {
         didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
     }
     /// 发给 Agent 输入框的草稿（换了一条提示词就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
-    /// 浮起的任务（`TaskSheet`）。
-    var task: OpenTask?
     var projectForm: ProjectForm?
     var newSession: NewSession?
-    /// 屏幕上独占底部的页（卡片纸页、Pi 会话页，推入途中起、返回开始止）的个数：iPhone 此时隐藏标签栏，
-    /// 编辑工具栏与回复框不和标签栏叠在一起。计数而不是开关：从一页切到另一页时两边的出现与消失先后不定。
-    var bottomPages = 0
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []
@@ -120,12 +112,33 @@ final class Navigation {
         return nil
     }
 
+    /// 标签栏布局：此刻这个标签推入的页。
+    private var path: [Route] {
+        get {
+            switch tab {
+            case .cue: cuePath
+            case .agent: agentPath
+            case .projects: projectsPath
+            }
+        }
+        set {
+            switch tab {
+            case .cue: cuePath = newValue
+            case .agent: agentPath = newValue
+            case .projects: projectsPath = newValue
+            }
+        }
+    }
+
+    /// 屏上最上面的是独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部）：iPhone 收起底部栏。只从路径推出，
+    /// 不按页面出现、消失计数——那种计数在页面没走完消失回调就被拆掉时（浮窗收起的同时推入一页）会漏扣，底部栏就再也回不来。
+    var ownsBottom: Bool { layout == .tabs && path.last?.ownsBottom == true }
+
     /// 在当前位置推入一页。
     func push(_ route: Route) {
-        switch (layout, tab) {
-        case (.split, _): splitPath.append(route)
-        case (.tabs, .projects): projectsPath.append(route)
-        case (.tabs, .agent): agentPath.append(route)
+        switch layout {
+        case .split: splitPath.append(route)
+        case .tabs: path.append(route)
         }
     }
 
@@ -144,13 +157,7 @@ final class Navigation {
             default: (outbox?.project, nil)
             }
         outbox = nil
-        task = nil
         newSession = NewSession(project: project, draft: draft, card: card, name: plan?.name, host: host)
-    }
-
-    /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。
-    func openTask(_ id: UUID) {
-        task = OpenTask(id: id)
     }
 
     /// 分栏：侧栏选中一页，清掉其上推入的页。
@@ -206,7 +213,7 @@ final class Navigation {
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.projectsPath, \.agentPath, \.splitPath] {
+        for path in [\Navigation.cuePath, \.agentPath, \.projectsPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
         if splitRoot == gone { select(.shelf) }
@@ -232,12 +239,14 @@ final class Navigation {
         if let tap { show(.session(tap.sessionState)) }
     }
 
-    /// 去一页（通知、小组件、侧栏共用）：会话的近况在 Agent 标签里（iPad 推入详情栏），其余在灵感标签里（iPad 选中侧栏）。
+    /// 去一页（通知、小组件、侧栏共用）：Cue 是 Cue 标签的根，会话的近况在 Agent 标签里（iPad 推入详情栏），其余在灵感标签里（iPad 选中侧栏）。
     /// 在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
         switch (route, layout) {
-        // Cue 是 Agent 标签的根
         case (.cue, .tabs):
+            tab = .cue
+            cuePath = []
+        case (.agent, .tabs):
             tab = .agent
             agentPath = []
         case (.session, .tabs):
@@ -255,7 +264,7 @@ final class Navigation {
     /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
     func isViewing(session id: UUID) -> Bool {
         let top = switch layout {
-        case .tabs: (tab == .agent ? agentPath : projectsPath).last
+        case .tabs: path.last
         case .split: splitPath.last
         }
         return top == .session(id)
@@ -264,7 +273,7 @@ final class Navigation {
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
     func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
-        case .tabs: tab == .agent && agentPath.last == .agent
+        case .tabs: tab == .agent && agentPath.isEmpty
         case .split: splitRoot == .agent && splitPath.isEmpty
         }
         return !onAgentList && !isViewing(session: session)
@@ -282,7 +291,6 @@ final class Navigation {
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
     func openSession(_ id: UUID, sessionID: String? = nil, draft: Outbox? = nil, store: CueStore) {
         outbox = nil
-        task = nil
         if let draft {
             var reply = settings.replyDraft(for: id)
             reply.attachments = [draft]
@@ -326,7 +334,7 @@ final class Navigation {
 extension Route {
     var isCard: Bool { if case .card = self { true } else { false } }
 
-    /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `ownsBottomEdge`）。
+    /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `Navigation.ownsBottom`）。
     var ownsBottom: Bool {
         switch self {
         case .card, .session: true

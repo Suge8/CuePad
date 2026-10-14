@@ -95,7 +95,7 @@ import Testing
     #expect(changes.map(\.kind) == [.left] && changes.first?.taskID == task.id && changes.first?.detail == "删了")
   }
 
-  /// 用户收下之后 Cue 把整件事完成：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上的会话请它结束——
+  /// Cue 收尾整件事：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上的会话请它结束——
   /// 只结束绑着的事都做完了的：一个会话还绑着别的没做完的事就留着，那件事完成（你点圆圈也一样）时才结束。
   @Test func aTaskWithStepsCompletesOnlyWhenEveryStepIsDone() async throws {
     let task = try await store.createTask("发布", in: nil)
@@ -108,10 +108,10 @@ import Testing
     }
     try await store.bindSession("s1", to: other.id)
     try await store.setStatus(steps[0].id, .done)
-    await #expect(throws: CueStoreError.stepsRemaining(1)) { try await store.completeTask(task.id, requireStepsDone: true) }
+    await #expect(throws: CueStoreError.stepsRemaining(1)) { try await store.finishTask(task.id, evidence: "- 脚本改好了") }
 
     try await store.setStatus(steps[1].id, .done)
-    let ends = try await store.completeTask(task.id, requireStepsDone: true)
+    let ends = try await store.finishTask(task.id, evidence: "- 检查都过了").ended
     #expect(try await store.card(task.id)?.status == .done)
     #expect(ends.compactMap(\.target.ref) == ["s2"] && ends.allSatisfy { $0.mode == .known(.end) })
     #expect(try await store.toggleDone(other.id).ended.compactMap(\.target.ref) == ["s1"])
@@ -135,14 +135,14 @@ import Testing
       try await store.createTask("删了的", in: nil), try await store.createTask("项目进回收站的", in: project.id),
       try await store.createTask("还在做的", in: nil),
     ]
-    for task in tasks { try await store.addCueMessage(.cue, text: "收下「\(task.body)」？", choices: ["收下", "再改"], task: task.id) }
-    try await store.addCueMessage(.cue, text: "要不要升级 Node？", choices: ["要", "不要"])
+    for task in tasks { try await store.addCueMessage(.cue, text: "推送「\(task.body)」？", ask: .push, task: task.id) }
+    try await store.addCueMessage(.cue, text: "要删掉旧分支吗？", ask: .delete)
     #expect(try await store.cueMessagesWaitingForYou().count == 6)
 
     try await store.setStatus(tasks[0].id, .done)
     try await store.archive(tasks[1].id)
     try await store.trashCard(tasks[2].id)
     try await store.trashProject(project.id)
-    #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["收下「还在做的」？", "要不要升级 Node？"])
+    #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["推送「还在做的」？", "要删掉旧分支吗？"])
   }
 }

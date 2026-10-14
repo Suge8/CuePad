@@ -147,16 +147,29 @@ extension AppServices {
         polling = nil
     }
 
-
-    /// 立即拉取并推送。失败（多半是离线）只记日志：引擎自己会重试，状态变化会经 `syncStatus` 反映。
+    /// 立即拉取并推送，最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，不跟着同步引擎的队列一直转
+    /// （手动拉取排在引擎正在做的事后面，十几秒到几分钟都可能）。没做完的在后台接着做，拉到的照常经资料库出现在界面上。
+    /// 失败（多半是离线）只记日志：引擎自己会重试，状态变化会经 `syncStatus` 反映。
     func syncNow() async {
         guard let sync else { return }
-        do {
-            try await sync.syncNow()
-        } catch {
-            Self.log.notice("立即同步失败：\(String(describing: error), privacy: .public)")
+        let (settled, settle) = AsyncStream<Void>.makeStream()
+        Task {
+            do {
+                try await sync.syncNow()
+            } catch {
+                Self.log.notice("立即同步失败：\(String(describing: error), privacy: .public)")
+            }
+            settle.finish()
         }
+        let deadline = Task {
+            try? await Task.sleep(for: Self.syncWaitLimit)
+            settle.finish()
+        }
+        for await _ in settled {}
+        deadline.cancel()
     }
+
+    static let syncWaitLimit = Duration.seconds(5)
 
     /// 处理 `syncStatus == .needsDecision`：用户选择后引擎重新开始。
     func resolveSync(_ resolution: SyncResolution) async throws {

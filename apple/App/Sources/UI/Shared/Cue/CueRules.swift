@@ -97,8 +97,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// 它住（或停用前住）的那台 Mac 与它的名字：绑过文件夹的 Mac 才知道名字（没启用时说去哪台启用）。
     var hostID: String?
     var hostName: String?
-    /// "等你 N"（`CueWaiting.count`）。
-    var waiting: Int
+    /// "等你 N"：Cue 问你的与会话问你的各几条（`CueWaiting`）。
+    var waiting: CueWaiting
     /// Cue 最近对你说的那条的摘要行（第一行纯文字，Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
@@ -114,8 +114,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil,
-        state: nil)
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: CueWaiting(asked: 0, sessions: 0), lastSaid: nil,
+        lastSaidDone: false, pendingYou: nil, state: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -129,7 +129,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
-            waiting: try CueWaiting.count(in: store),
+            waiting: try CueWaiting.read(in: store),
             lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             pendingYou: spoke ? nil : lastYou.map { Pending(at: recent[$0].createdAt, deliveredAt: recent[$0].deliveredAt) },
@@ -142,17 +142,20 @@ nonisolated struct CueDigest: Equatable, Sendable {
 nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按写快照这一刻由库推出的状态定（小组件里没有到点翻状态的计时，同步状态也不在这里，按通着算）。
     init(digest: CueDigest) {
-        let mood = CueMood.of(CuePresence.derive(digest, now: .now, relay: nil), waiting: digest.waiting, justDone: digest.lastSaidDone)
-        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
+        let mood = CueMood.of(CuePresence.derive(digest, now: .now, relay: nil), waiting: digest.waiting.count, justDone: digest.lastSaidDone)
+        self.init(name: digest.name, waiting: digest.waiting.count, lastSaid: digest.lastSaid, mood: mood.rawValue)
     }
 }
 
 /// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上不由 Cue 跟进的会话里在等你回答的
-/// （Cue 跟进的会话等回答由 Cue 去答或转问你，不重复算）。
-nonisolated enum CueWaiting {
-    static func count(in store: isolated CueStore) throws -> Int {
-        let asked = try store.cueMessagesWaitingForYou().count
-        let sessions = try store.piSessionPage(.live).items.count(where: \.asksYou)
-        return asked + sessions
+/// （Cue 跟进的会话等回答由 Cue 去答或转问你，不重复算）。两部分各自留着：iPhone 上 Cue 与 Agent 两个标签各挂自己那一份。
+nonisolated struct CueWaiting: Equatable, Sendable {
+    var asked: Int
+    var sessions: Int
+
+    var count: Int { asked + sessions }
+
+    static func read(in store: isolated CueStore) throws -> CueWaiting {
+        CueWaiting(asked: try store.cueMessagesWaitingForYou().count, sessions: try store.piSessionPage(.live).items.count(where: \.asksYou))
     }
 }

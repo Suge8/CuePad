@@ -19,8 +19,6 @@ nonisolated private struct EditorData: Sendable, Equatable {
 /// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
-    /// 还没读到卡时先按哪种外框排（任务浮窗里是任务），读到后以卡为准。
-    var expectsTask = false
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
@@ -42,7 +40,6 @@ struct CardEditorScreen: View {
 
     var body: some View {
         frame
-            .ownsBottomEdge()
             // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
             .background {
                 Button("主动作", action: primary).keyboardShortcut(.return, modifiers: .command)
@@ -76,11 +73,9 @@ struct CardEditorScreen: View {
     }
 
     private var wide: Bool { sizeClass == .regular }
-    private var isTask: Bool { data?.card.isTask ?? expectsTask }
-
     @ViewBuilder private var frame: some View {
-        if isTask {
-            if let data { TaskPage(card: data.card) } else { palette.paper }
+        if let data, data.card.isTask {
+            TaskPage(card: data.card)
         } else {
             editor
                 // 贴着正文右下一颗主按钮（灵感挂到任务、提示词发给 Agent），写字时让给键盘上方的工具栏

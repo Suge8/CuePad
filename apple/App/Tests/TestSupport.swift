@@ -66,7 +66,13 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    let syncNowHangs = Mutex(false)
+
+    func syncNow() async throws {
+        state.withLock { $0.syncNows += 1 }
+        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+    }
     func pullChanges() async throws {}
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。

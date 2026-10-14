@@ -38,14 +38,15 @@ extension DebugScene {
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-        case "cue", "cuememory":
-            // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"
+        case "cue", "cuememory", "cuerun":
+            // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+            if scene == "cuerun" { workspace.cue.showsRun = true }
         case "cuerows":
             await connectAgents(workspace.services)
             await seedCueRows(workspace.services)
@@ -108,10 +109,10 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadSampleCue`：Cue 带选项来问（算进"等你"），走 `CueService.followNotifications` 同一个出口。
+    /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"），走 `CueService.followNotifications` 同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         try? await Task.sleep(for: delay)
-        guard let message = try? await services.store.addCueMessage(.cue, text: "要先修登录页吗？", choices: ["先修", "再等等"]),
+        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: .push),
               let alerts = services.alerts else { return }
         let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices)
         guard !alerts.isWatchingCue else { return }

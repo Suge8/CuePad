@@ -4,6 +4,7 @@ import CuePi
 import CueStore
 import CueText
 import Foundation
+import Observation
 import os
 
 /// 管理器的时间规则；测试缩短它们。
@@ -64,10 +65,14 @@ nonisolated struct CueTiming: Sendable {
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
+/// 运行情况（每一轮的经过 `rounds`、此刻的上下文 `context`）只给 Cue 页看，在跑的一轮就是 `Turn.round`，做完收进最近的几轮。
+@Observable
 final class CueKeeper {
     /// 上下文用到这么多 token 就请 Cue 换新。
     nonisolated static let renewAt = 60_000
     nonisolated static let patrolsPerDay = 3
+    /// 运行情况里留最近这么多轮
+    nonisolated static let roundsKept = 50
 
     struct Setup {
         var store: CueStore
@@ -105,7 +110,8 @@ final class CueKeeper {
         let brain: any CueBrain
         let startedAt = Date.now
         var turn: Turn?
-        var contextUsed: Int?
+        /// 最近一次模型请求的上下文用量与窗口（token）
+        var context: (used: Int, window: Int?)?
         /// 这个班次里请过合并的块（同一块只请一次）
         var mergesTried: Set<[Int]> = []
         /// 起好之前连续失败的次数：一轮做完清零
@@ -130,18 +136,14 @@ final class CueKeeper {
     private struct Turn {
         /// 回复写成谁的
         var author: CueAuthor
-        /// 醒来（或插话开出这一轮）的时刻：Cue 在这之后用 tell 说过话，自己醒来的这一轮最后就不再写 note
-        var startedAt = Date.now
+        /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的这一轮最后就不再写 note）、在用的工具、报的错都在这里
+        var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: (wake: CueWake, extra: String?)?
         /// 这一轮里交出去的你的消息、回答与关掉的提问：大脑中途退出时清掉送达
         var delivered: [UUID] = []
         /// 醒来时的基线候选：这一轮做完且没出错才前移到它
         var baseline: (since: Date, followed: [UUID])?
-        /// 这一轮报的错（原文）
-        var failure: String?
-        /// 正在用的工具（`CueActivity.detail`）；nil 是在想
-        var tool: String?
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（晚于 `latest`）。
@@ -182,6 +184,9 @@ final class CueKeeper {
     private var setback: Setback?
     private var window: (first: Date, last: Date, latest: Date)?
     private var timer: Task<Void, Never>?
+    /// 做完的几轮，旧的在前，至多 `roundsKept`
+    private var history: [CueRound] = []
+    @ObservationIgnored private var roundCount = 0
 
     init(_ setup: Setup) {
         self.setup = setup
@@ -189,13 +194,35 @@ final class CueKeeper {
         progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
     }
 
+    /// 最近的几轮，旧的在前，在跑的一轮在最后。
+    var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
+    /// 此刻班次的上下文用量与窗口；没在值班或这个班次还没请求过模型为 nil。
+    var context: (used: Int, window: Int?)? { shift?.context }
+    /// 此刻班次从什么时候起。
+    var shiftStartedAt: Date? { shift?.startedAt }
+
     /// Cue 此刻在做什么：一轮里在想或在用工具，起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
     private var work: (state: PiWorkState, detail: String?) {
         switch phase {
-        case .starting, .restarting: (.settled, nil)
-        case .running(let shift): shift.turn.map { $0.tool == nil ? (.thinking, nil) : (.tool, $0.tool) } ?? (.settled, nil)
-        case .stuck(let reason): (.error, reason)
+        case .starting, .restarting: return (.settled, nil)
+        case .stuck(let reason): return (.error, reason)
+        case .running(let shift):
+            guard let round = shift.turn?.round else { return (.settled, nil) }
+            return round.running.map { (.tool, CueActivity.detail(tool: $0.name, arguments: $0.arguments)) } ?? (.thinking, nil)
         }
+    }
+
+    private func beginRound(_ wake: CueWake, sent: [String], at date: Date = .now) -> CueRound {
+        roundCount += 1
+        return CueRound(id: roundCount, wake: wake, startedAt: date, sent: sent)
+    }
+
+    private func archive(_ round: CueRound) {
+        var round = round
+        round.finishedAt = .now
+        round.context = shift?.context?.used
+        history.append(round)
+        if history.count > Self.roundsKept { history.removeFirst(history.count - Self.roundsKept) }
     }
 
     private func publish() async {
@@ -301,6 +328,10 @@ final class CueKeeper {
         switch phase {
         case .starting(let before): failures = before + 1
         case .running(let shift):
+            if var round = shift.turn?.round {
+                round.failure = round.failure ?? reason
+                archive(round)
+            }
             await shift.brain.stop()()
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
@@ -329,20 +360,24 @@ final class CueKeeper {
         if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
         switch event {
         case .turnStarted:
-            if turn == nil { updateShift { $0.turn = Turn(author: .cue) } }  // 没有醒来就开始的一轮只能是插进来的你的话开的
+            // 没有醒来就开始的一轮只能是插进来的你的话开的
+            if turn == nil {
+                let round = beginRound(.message, sent: [])
+                updateShift { $0.turn = Turn(author: .cue, round: round) }
+            }
         case .reply(let text):
             lastFailure = nil
             let author = turn?.author ?? .note
-            if author == .note, await hasTold(since: turn?.startedAt ?? lastTurnEnd) { return }  // 已经对你说过了，动态那一行只是复述
+            if author == .note, await hasTold(since: turn?.round.startedAt ?? lastTurnEnd) { return }  // 已经对你说过了，动态那一行只是复述
             await say(author, text)
-        case .context(let used, _):
-            updateShift { $0.contextUsed = used }
-        case .tool(let name, let arguments):
-            updateShift { $0.turn?.tool = CueActivity.detail(tool: name, arguments: arguments) }
-        case .toolDone:
-            updateShift { $0.turn?.tool = nil }
+        case .context(let used, let window):
+            updateShift { $0.context = (used, window ?? $0.context?.window) }
+        case .tool(let id, let name, let arguments):
+            updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, startedAt: .now)) }
+        case .toolDone(let id, let result, let failed):
+            updateShift { $0.turn?.round.finish(id, result: result, failed: failed) }
         case .failed(let raw):
-            updateShift { $0.turn?.failure = raw }
+            updateShift { $0.turn?.round.failure = raw }
             let summary = PiErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
@@ -352,13 +387,14 @@ final class CueKeeper {
             await say(.cue, "这一轮出错了：\(line)")
         case .turnFinished:
             guard let finished = turn else { return }
+            archive(finished.round)
             updateShift {
                 $0.turn = nil
                 $0.failures = 0
             }
             lastTurnEnd = .now
             lastTurnAuthor = finished.author
-            if let failure = finished.failure {
+            if let failure = finished.round.failure {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
@@ -419,6 +455,7 @@ final class CueKeeper {
                     updateShift {
                         $0.turn?.author = .cue
                         $0.turn?.delivered += ids
+                        $0.turn?.round.sent.append(said)
                     }
                     try await markDelivered(ids)
                 } else {
@@ -535,22 +572,25 @@ final class CueKeeper {
         let dismissed = try await store.cueMessagesToDeliver().filter { !$0.wakesCue }
         let delivering = delivering + dismissed.map(\.id)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.contextUsed, renewAt: Self.renewAt, since: progress.since, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.context?.used, renewAt: Self.renewAt, since: progress.since, projects: try await store.cueProjects(),
             changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
         var parts = [envelope]
-        if let used = shift.contextUsed, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
+        if let used = shift.context?.used, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
+        let sent = parts.joined(separator: "\n")
         do {
-            try await shift.brain.send(parts.joined(separator: "\n"))
+            try await shift.brain.send(sent)
         } catch {
             await broke("发不进去：\(error.localizedDescription)")  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
+        let round = beginRound(wake, sent: [sent], at: now)
         updateShift {
             $0.turn = Turn(
-                author: author, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, baseline: (now, board.map(\.task.id)))
+                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering,
+                baseline: (now, board.map(\.task.id)))
         }
         save()
         try await markDelivered(delivering)

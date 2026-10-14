@@ -3,8 +3,8 @@ import CueStore
 import SwiftUI
 
 /// iPhone 首页：项目书架。顶上一排：左"⋯"（未分类、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
-/// iPad 分栏里这些都在侧栏，顶上不放。从上往下回答"现在该干什么"：有 Agent 等你确认时最上面一张"等你"（点它去 Agent）；
-/// 然后是一屏的重点"正在推进"：进行中的任务排在一张纸上（点开是任务浮窗），标题右边是全部任务的计数、点它进任务页；
+/// iPad 分栏里这些都在侧栏，顶上不放。这一页只管写灵感、看任务，Agent 的事都在 Agent 标签（这里不写会话在做什么）：
+/// 最上面是"正在推进"：进行中的任务排在一张纸上（点开推入任务页），标题右边是全部任务的计数、点它进任务页；
 /// 没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行。
 /// 宽屏（iPad）放得下时，上面这几样与置顶项目并排两栏。
 struct ShelfScreen: View {
@@ -63,21 +63,17 @@ struct ShelfScreen: View {
         let entries = catalog.shelfEntries
         let pinned = entries.filter(\.project.isPinned)
         let recent = entries.filter { !$0.project.isPinned }
-        // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
-        // 在线会话读到前"此刻"先留空白（`ProjectNow.byProject`），Agent 那一张等读到再出
-        let sessions = services.liveSessions.items
-        let now = data.now(projects: catalog.projects, sessions: sessions, shown: workspace.shown)
-        let agent = sessions.flatMap { AgentNow.of($0, shown: workspace.shown) }
+        let now = data.now(projects: catalog.projects)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if entries.isEmpty && catalog.unfiledCount == 0 {
-                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog) }
                 EmptyShelf { navigation.projectForm = .init() }
-            } else if wide, !pinned.isEmpty, hasLead(data, catalog, agent) {
+            } else if wide, !pinned.isEmpty, hasLead(data, catalog) {
                 // 宽屏两栏：左边现在要干的，右边置顶项目；放不下两栏时上下排
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
                             ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
@@ -86,12 +82,12 @@ struct ShelfScreen: View {
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: Self.sectionGap) {
-                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog) }
                         pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
-                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog) }
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                     pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -116,30 +112,28 @@ struct ShelfScreen: View {
         .padding(.bottom, 24)
         // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
         .animation(Motion.snappy, value: data.active.map(\.id))
-        .animation(Motion.snappy, value: agent == nil)
         // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
     }
 
     private static let readableWidth: CGFloat = 1080
-    /// 两级节奏：现在要干的几样（Agent 此刻、正在推进、未分类）之间紧一些，与置顶、最近这些段之间松一些。
+    /// 两级节奏：现在要干的几样（正在推进、未分类）之间紧一些，与置顶、最近这些段之间松一些。
     private static let leadGap: CGFloat = 16
     private static let sectionGap: CGFloat = 28
     /// 两栏各至少这么宽才并排（左栏放得下正在推进的一行任务，右栏放得下一张置顶大卡）。
     private static let twoColumnWidth: CGFloat = 640
     private static let pinnedMinWidth: CGFloat = 220
 
-    private func hasLead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> Bool {
-        agent != nil || !data.active.isEmpty || catalog.shelfTasks != nil || catalog.unfiledCount > 0
+    private func hasLead(_ data: ShelfData, _ catalog: ProjectCatalog) -> Bool {
+        !data.active.isEmpty || catalog.shelfTasks != nil || catalog.unfiledCount > 0
     }
 
-    /// 现在要干的：Agent 此刻、正在推进（没有时是任务入口）、未分类。
+    /// 现在要干的：正在推进（没有时是任务入口）、未分类。
     @ViewBuilder
-    private func lead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> some View {
+    private func lead(_ data: ShelfData, _ catalog: ProjectCatalog) -> some View {
         let tasksLine = data.active.isEmpty ? catalog.shelfTasks : nil
         let unfiled = catalog.unfiledCount
-        if let agent { AgentNowCard(now: agent).transition(Motion.item) }
         if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: catalog.shelfTasks).transition(Motion.item) }
         if unfiled > 0 || tasksLine != nil {
             VStack(spacing: 0) {
@@ -417,7 +411,7 @@ private struct ShelfRow: View {
     }
 }
 
-/// 正在推进：一屏的重点。进行中的任务排在一张纸上，每行是标题、所在项目、发给 Agent 的会话此刻在做什么，点开是任务浮窗；
+/// 正在推进：一屏的重点。进行中的任务排在一张纸上，每行是标题与所在项目，点开推入任务页；
 /// 标题右边是全部任务的计数，点它进任务页——单独一行"任务 · N 进行中"会与下面这几行重复报进行中，所以并进标题。
 private struct ActiveTasks: View {
     let rows: [TaskBoard.Row]
@@ -489,29 +483,32 @@ private struct ActiveTasks: View {
     }
 }
 
-/// 正在推进的一行：进行中圆圈（全 App 同一个 `TaskRingView`）、标题，下面是所在项目与会话状态。
+/// 正在推进的一行：进行中圆圈（全 App 同一个 `TaskRingView`）、标题，下面是所在项目。
 private struct ActiveTaskRow: View {
     let row: TaskBoard.Row
     let divided: Bool
     @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .headline) private var scaledRing: CGFloat = 20
 
     /// 圆圈随字号放大，到辅助字号封顶：再大只会把标题往右挤。
     private var ring: CGFloat { min(scaledRing, 28) }
-    private var stacked: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
-        Button { navigation.openTask(row.id) } label: {
+        Button { navigation.push(.card(row.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 TaskRingView(status: .inProgress, ring: .plain, done: false, size: ring)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
-                        .lineLimit(stacked ? 4 : 2).multilineTextAlignment(.leading)
-                    meta
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 2).multilineTextAlignment(.leading)
+                    if let project = row.project {
+                        HStack(spacing: 4) {
+                            ProjectGlyph(project: project, size: 11)
+                            Text(project.name)
+                        }
+                        .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -527,203 +524,6 @@ private struct ActiveTaskRow: View {
         .contextMenu { CardActions(card: row.task) }
         .accessibilityElement(children: .combine)
         .accessibilityHint("打开任务")
-    }
-
-    /// 项目与会话状态平时排成一行：这一行先说"哪个项目"，放不下时先省计时、再截状态词，项目名最后才让；
-    /// 辅助字号下上下排、可换行，不撑出纸外。
-    @ViewBuilder private var meta: some View {
-        if stacked {
-            VStack(alignment: .leading, spacing: 4) {
-                project
-                if let session = row.session {
-                    let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
-                    VStack(alignment: .leading, spacing: 2) {
-                        presence(shown)
-                        PiElapsed(shown: shown, font: .footnote)
-                    }
-                }
-            }
-            .font(.footnote).lineLimit(2)
-        } else {
-            ViewThatFits(in: .horizontal) {
-                line(timed: true)
-                line(timed: false)
-            }
-            .font(.footnote).lineLimit(1)
-        }
-    }
-
-    private func line(timed: Bool) -> some View {
-        HStack(spacing: 6) {
-            project.fixedSize()
-            if let session = row.session {
-                let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
-                if row.project != nil { Dot().foregroundStyle(palette.ink3) }
-                HStack(spacing: 4) {
-                    presence(shown)
-                    if timed {
-                        Dot().foregroundStyle(palette.ink3)
-                        PiElapsed(shown: shown, font: .footnote).fixedSize()
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private var project: some View {
-        if let project = row.project {
-            HStack(spacing: 4) {
-                ProjectGlyph(project: project, size: 11)
-                Text(project.name)
-            }
-            .foregroundStyle(palette.ink3)
-        }
-    }
-
-    private func presence(_ shown: PiShown) -> some View {
-        HStack(spacing: 4) {
-            PiStateDot(shown: shown, size: 6)
-            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-        }
-    }
-}
-
-/// 书架顶上的"Agent 此刻"一条（规则 `AgentNow`）：左边是按要紧先后叠放的几个会话头像（首字加状态标，多的写"+N"），
-/// 右边一句人话说最要紧的事、次行带过其余的；会话再多也是这两行，高度不变，变的只是字（原地淡入淡出、数字滚动）与头像的进出。
-/// 要你动手时整条垫一层那个状态的淡色（等你确认赭黄、出错胭脂），否则中性。点它去 Agent 页；长按快速看前几个、点一个直接进它的对话。
-private struct AgentNowCard: View {
-    let now: AgentNow
-    @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    private static let radius: CGFloat = 20
-
-    var body: some View {
-        Button(action: open) {
-            HStack(spacing: 14) {
-                AgentFaces(faces: now.faces, more: now.more, ground: ground)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(now.headline).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1)
-                        .contentTransition(.numericText())
-                    // 次行总留着：没有可补的也不让整条变矮
-                    Text(now.detail ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
-                        .id(now.detail).transition(.opacity)
-                }
-                .animation(Motion.quick, value: now.headline)
-                .animation(Motion.quick, value: now.detail)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(now.needsYou ? now.lead.tint(palette).opacity(Self.tint(palette)) : .clear,
-                        in: .rect(cornerRadius: Self.radius, style: .continuous))
-            .animation(Motion.quick, value: now.needsYou)
-            .paper(radius: Self.radius)
-            .contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
-        }
-        .buttonStyle(PressStyle(.card))
-        .contextMenu {
-            ForEach(now.faces) { item in
-                let shown = workspace.shown(item)
-                Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
-                    Label { Text(item.state.title); Text(shown.label) } icon: { Image(systemName: shown.symbol) }
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([now.headline, now.detail?.spoken].compactMap(\.self).joined(separator: "，"))
-        .accessibilityHint("去 Agent 页；长按看前几个")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func open() {
-        if navigation.layout == .split { navigation.select(.agent) } else { navigation.tab = .agent }
-    }
-
-    private static func tint(_ palette: Palette) -> Double { palette.dark ? 0.14 : 0.1 }
-
-    /// 这一条的底色（纸，要你动手时叠一层那个状态的淡色）：头像之间、状态标周围的那圈隔开的描边用它，看起来像镂空。
-    private var ground: Color { now.needsYou ? palette.paper.mix(with: now.lead.tint(palette), by: Self.tint(palette)) : palette.paper }
-}
-
-/// 叠放的会话头像：认得出是谁——归了项目的是项目图标在项目色的淡底上，没归项目的是文件夹名的首字母在由文件夹名推出的固定颜色上
-/// （会话名的首字常是汉字，说明不了是谁）；右下角外沿挂着它的状态标（`PiStateDot`，约头像的四成，"在干活"的心电线与"要重载"分得清；
-/// 心电线与箭头交给 Core Animation，静止时不占 CPU）——同一种状态只挂在最前面那个上：一排一样的标不多说什么，只把视线从主句上拉走。
-/// 前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
-private struct AgentFaces: View {
-    let faces: [PiSessionListItem]
-    let more: Int
-    /// 这一条的底色：隔开头像的描边用它。
-    let ground: Color
-    @Environment(AppServices.self) private var services
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 32
-
-    /// 比例都按头像直径算：图标与首字母占 0.44；状态标的点 0.22（符号按它放大到约 0.4），中心落在右下角的外沿上；相邻两个叠 0.16。
-    private var badge: CGFloat { size * 0.22 }
-    private var overlap: CGFloat { size * 0.16 }
-
-    /// 没归项目的会话按文件夹名取一个固定的颜色：不用黄（近赭黄）与灰（像停用）。
-    private static let folderTints = ["#D9774B", "#5E9E5A", "#3F8FB8", "#3AA088", "#A260C4", "#D0607D"]
-
-    var body: some View {
-        // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
-        let shown = faces.map { workspace.shown($0) }
-        HStack(spacing: -overlap) {
-            ForEach(Array(faces.enumerated()), id: \.element.id) { index, item in
-                let badged = !shown[..<index].contains { $0.symbol == shown[index].symbol }
-                face(item, shown: badged ? shown[index] : nil).zIndex(Double(faces.count - index)).transition(.scale(scale: 0.6).combined(with: .opacity))
-            }
-            if more > 0 {
-                // 多出来的个数紧跟在叠放的头像后面，不再垫一个圆：会被前一个头像压住半边
-                Text("+\(more)").font(Typography.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink3)
-                    .contentTransition(.numericText())
-                    .padding(.leading, overlap + badge)
-                    .transition(.opacity)
-            }
-        }
-        .animation(Motion.snappy, value: faces.map(\.id))
-        .animation(Motion.snappy, value: more)
-        .accessibilityHidden(true)
-    }
-
-    private func face(_ item: PiSessionListItem, shown: PiShown?) -> some View {
-        let tint = item.project.map { Palette.projectTint($0.color) } ?? Self.tint(folder: item.state.folder ?? item.state.title)
-        return mark(item)
-            .foregroundStyle(tint)
-            .brightness(palette.dark ? 0.12 : 0)
-            .frame(width: size, height: size)
-            // 实心的底：压在下面的头像不从上面的透出来
-            .background(ground.mix(with: tint, by: palette.dark ? 0.3 : 0.16), in: .circle)
-            .background(ground, in: .circle.inset(by: -2.5))
-            .overlay(alignment: .bottomTrailing) {
-                if let shown {
-                    PiStateDot(shown: shown, size: badge)
-                        .padding(1.5)
-                        .background(ground, in: .circle)
-                        .offset(x: size * 0.14, y: size * 0.14)
-                }
-            }
-    }
-
-    @ViewBuilder private func mark(_ item: PiSessionListItem) -> some View {
-        if let project = item.project {
-            Image(systemName: ProjectGlyph.symbol(project.icon)).font(.system(size: size * 0.44, weight: .semibold))
-        } else {
-            Text((item.state.folder ?? item.state.title).first.map { String($0).uppercased() } ?? "·")
-                .font(.system(size: size * 0.46, weight: .semibold, design: .rounded))
-        }
-    }
-
-    /// 同一个名字总是同一个颜色（不用 `hashValue`：每次启动都变）。
-    private static func tint(folder: String) -> Color {
-        let sum = folder.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
-        return Palette.projectTint(folderTints[sum % folderTints.count])
     }
 }
 #endif

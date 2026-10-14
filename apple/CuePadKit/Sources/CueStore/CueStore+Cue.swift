@@ -5,39 +5,62 @@ import Foundation
 // MARK: 对话
 
 extension CueStore {
-  /// 写一条对话。正文不能为空；选项去掉空白的，一个都不剩时当没有。
+  /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"，选项是 `CueAsk.choices`）：
+  /// 你已说过这类事以后不用问（库里有它的规矩行，`CueAsk.rule`）就抛 `alreadyAllowed`、什么都不写。
   @discardableResult
   public func addCueMessage(
-    _ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil
+    _ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    let options = choices?.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     return try write {
-      let now = Date.stamp
-      let message = CueMessage(
-        id: UUID(), author: .known(author), text: text, choices: options?.isEmpty == false ? options : nil, urgent: urgent, taskID: task,
-        answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, notify: false)
-      try insert(message)
-      try registerImages(in: text)
-      return message
+      if let ask, let allowed = try allowingLine(ask, task: task) { throw CueStoreError.alreadyAllowed(allowed) }
+      return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task)
     }
   }
 
+  /// 写一条对话（在写事务内调用）。
+  func insertCueMessage(_ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+    let now = Date.stamp
+    let message = CueMessage(
+      id: UUID(), author: .known(author), text: text, choices: choices, urgent: urgent, taskID: task,
+      answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, notify: false)
+    try insert(message)
+    try registerImages(in: text)
+    return message
+  }
+
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。结局照常交给 Cue（`toDeliver`），撤回的不交。
-  /// 对关联了任务的验收（`CueMessage.isAcceptance`）答 `accept` 就是收下：同一个事务里完成任务，同你点圆圈
-  /// （连同结束做完了的会话，请求算你发起的）；返回结束请求，调用方上传。
+  /// 你选"以后……都不用问"（`CueAsk.always`）时，同一个事务里记一条你的、一直记着的规矩（`CueAsk.rule`，已有就不再记），
+  /// 返回它，调用方上传。
   @discardableResult
-  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> [DeliveryRequest] {
+  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> CueMemoryLine? {
     try write {
       guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
         throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
       }
-      guard end == .answered(CueAcceptance.accept), let message = try find(CueMessage.self, id), message.isAcceptance,
-        let task = message.taskID, let card = try find(Card.self, task), card.status != nil, card.status != .done
-      else { return [] }
-      _ = try applyStatus(task, .done)
-      return try endFinishedSessions(of: task, cue: false)
+      guard case .answered(let answer) = end, let ask = CueAsk.allCases.first(where: { $0.always == answer }),
+        let message = try find(CueMessage.self, id), try allowingLine(ask, task: message.taskID) == nil,
+        let rule = ask.rule(project: try projectName(of: message.taskID))
+      else { return nil }
+      return try insertLine(rule, source: .you, pinned: true)
     }
+  }
+
+  /// 允许这类事的规矩行（没忘掉、一直记着）的序号：只管任务所在项目的那条，或不分项目的那条。
+  private func allowingLine(_ ask: CueAsk, task: UUID?) throws -> Int? {
+    let rules = [ask.rule(project: nil), ask.rule(project: try projectName(of: task))].compactMap { $0 }
+    guard !rules.isEmpty,
+      let line = try select(
+        CueMemoryLine.self, where: "pinned = 1 AND deletedAt IS NULL AND text IN (SELECT value FROM json_each(?))",
+        [JSONColumn.encode(rules)], orderBy: Self.lineOrder, limit: 1
+      ).first
+    else { return nil }
+    return try index(of: line)
+  }
+
+  /// 任务所在项目的名字；没有任务或任务不在项目里为 nil。
+  private func projectName(of task: UUID?) throws -> String? {
+    try task.flatMap { try find(Card.self, $0) }?.projectID.flatMap { try find(Project.self, $0) }?.name
   }
 
   /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
@@ -136,13 +159,18 @@ extension CueStore {
     guard !text.isEmpty else { throw CueStoreError.blankTaskContent }
     guard CueMemoryLine.fits(text) else { throw CueStoreError.memoryLineTooLong(CueMemoryLine.maxBytes) }
     return try write {
-      let now = Date.stamp
-      let line = CueMemoryLine(
-        id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now,
-        modifiedAt: now, deletedAt: nil)
-      try insert(line)
+      let line = try insertLine(text, source: source, pinned: pinned, remindAt: remindAt)
       return (line, try index(of: line))
     }
+  }
+
+  /// 记一条（在写事务内调用，调用方先查过记得成）。
+  private func insertLine(_ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil) throws -> CueMemoryLine {
+    let now = Date.stamp
+    let line = CueMemoryLine(
+      id: UUID(), text: text, pinned: pinned, source: .known(source), remindAt: remindAt, createdAt: now, modifiedAt: now, deletedAt: nil)
+    try insert(line)
+    return line
   }
 
   /// 第 `index` 条（按序号，含忘掉的）；没有为 nil。

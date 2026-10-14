@@ -58,16 +58,8 @@ import Testing
     let codex = try await store.createTask("改文案", in: nil)
     try await store.linkCard(codex.id, toSession: "codex-1")
     try await recorder.update(sessionID: "codex-1", state: .settled, agent: .codex)
-    #expect(try await store.completeTask(codex.id, requireStepsDone: true, cue: true).isEmpty)
+    #expect(try await store.finishTask(codex.id, evidence: "- 文案改好了").ended.isEmpty)
     #expect(try await store.card(codex.id)?.status == .done)
-
-    // 你收下 Cue 请你验收的事：任务照样完成，结束不了的会话照样留着
-    let accepted = try await store.createTask("改样式", in: nil)
-    try await store.linkCard(accepted.id, toSession: "codex-2")
-    try await recorder.update(sessionID: "codex-2", state: .settled, agent: .codex)
-    let question = try await store.askToAccept(accepted.id, evidence: "- 样式对上了").message
-    #expect(try await store.endCueQuestion(question.id, .answered(CueAcceptance.accept)).isEmpty)
-    #expect(try await store.card(accepted.id)?.status == .done)
   }
 
   /// 一个会话绑好几个叶子、草稿接进回复框、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
