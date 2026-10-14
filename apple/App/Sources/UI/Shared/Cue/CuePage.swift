@@ -7,7 +7,8 @@ import CuePi
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`），末尾是它此刻在做什么（`CueEnding`）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 连着的动态折成一行灰字（`CueNotes`），它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
@@ -23,11 +24,10 @@ struct CuePage: View {
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
-    @State private var window = Self.firstWindow
     @State private var opened: PreviewOpening?
 
-    /// 最初排开最近几格，往上翻快到头时再排开一段（同 `SessionChat`）。
-    private static let firstWindow = 40
+    /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
+    private static let paging = ChatPaging(first: 40, step: 40)
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
@@ -120,17 +120,21 @@ struct CuePage: View {
     private var chat: some View {
         let thread = thread
         let rows = thread?.rows ?? []
-        let first = max(0, rows.count - window)
-        return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
+        return ChatColumn(
+            followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
+            marks: thread?.marks ?? [], count: rows.count, position: { id in rows.firstIndex { $0.id == id } }, paging: Self.paging
+        ) { window, showEarlier in
+            let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
                 let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
                 ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
+            // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
+            .scrollTargetLayout()
             .animation(Motion.quick, value: cue.presence.progress)
         }
-        .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
     /// `lastYou`：你最后一句，只在它下面写"已送达"。
@@ -146,6 +150,8 @@ struct CuePage: View {
             }
         case .notes(let notes):
             CueNotes(notes: notes)
+        case .renewed(let handoff):
+            CueRenewal(handoff: handoff, name: cue.name)
         }
     }
 
@@ -156,12 +162,6 @@ struct CuePage: View {
         #else
         false
         #endif
-    }
-
-    private func showEarlier() {
-        guard window < (thread?.rows.count ?? 0) else { return }
-        follow.willPrepend()
-        window += Self.firstWindow
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -193,6 +193,17 @@ struct CuePage: View {
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.presence == .disabled)
+    }
+}
+
+/// Cue 从这里起换了新上下文：与会话页的压缩同一条分隔（`ContextBoundary`），点开是换新时写下的交接备忘；从刻度滑条跳过来时描一圈。
+private struct CueRenewal: View {
+    let handoff: CueMessage
+    let name: String
+    @Environment(\.chatHighlight) private var highlight
+
+    var body: some View {
+        ContextBoundary(title: "从这里起 \(name) 换了新上下文", time: handoff.createdAt, memo: handoff.text, highlighted: highlight == handoff.id)
     }
 }
 
