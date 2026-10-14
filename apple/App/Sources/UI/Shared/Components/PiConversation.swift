@@ -228,15 +228,30 @@ private struct ChatSegment: View, Equatable {
         case .pi:
             ReplyBlock(
                 text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
-        case .system:
-            // 会话文件里的系统记录（压缩）：上下文从这里起换了，与 Cue 换新同一条分隔
+        case .notice(let notice) where notice.changesContext:
+            // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
             ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
+        case .notice(let notice):
+            RoundEndNote(notice: notice)
         case .preview:
             PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
     }
 }
 
+
+/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行小字，不是分隔（上下文没换），刻度滑条上也没有它。
+private struct RoundEndNote: View {
+    let notice: PiNotice
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Label(notice.rawValue, systemImage: notice == .declined ? "hand.raised" : "stop.circle")
+            .font(Typography.meta).foregroundStyle(palette.ink3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.entry)
+    }
+}
 
 /// 排开的最上面一行：还有更早的对话。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {

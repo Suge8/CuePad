@@ -524,14 +524,14 @@ extension PiHistoryCheckpoint {
     mutating func interrupted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
         guard let current = round else { return }
         if reply != nil { settleReply(into: &transcript) }
-        transcript.add(self, entry, role: .system, text: current.declined ? "已拒绝" : "已停止")
+        transcript.add(self, entry, role: .system, text: (current.declined ? PiNotice.declined : .stopped).rawValue)
         round = nil
         recap.pendingPrompt = nil
     }
 
     /// 压缩上下文：一行系统行，不动问答。
     mutating func compacted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
-        transcript.add(self, entry, role: .system, text: "已压缩上下文")
+        transcript.add(self, entry, role: .system, text: PiNotice.compacted.rawValue)
     }
 
     /// 最后说的那段归给前一句：成一条消息（带到此为止的工具活动），问与答一起更新。
