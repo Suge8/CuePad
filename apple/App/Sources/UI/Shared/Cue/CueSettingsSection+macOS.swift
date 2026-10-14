@@ -65,7 +65,7 @@ struct CueSettingsSection: View {
         let here = profile.hostID == services.hostID
         Picker("用哪个 Agent", selection: Binding(get: { profile.runtime.known ?? .pi }, set: { runtime in update { $0.runtime = .known(runtime) } })) {
             ForEach(CueRuntime.allCases, id: \.self) { runtime in
-                Text(runtime.label).tag(runtime).selectionDisabled(here && !services.cue.runtimes.contains(runtime))
+                Text(runtime.label).tag(runtime).selectionDisabled(here && services.cue.runtimes?.contains(runtime) == false)
             }
         }
         LabeledContent("模型") {
