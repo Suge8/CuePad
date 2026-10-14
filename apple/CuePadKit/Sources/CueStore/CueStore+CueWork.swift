@@ -252,36 +252,59 @@ extension CueStore {
   }
 
   /// 完成一件事（连同它还没做完的步骤）并结束它交给的会话（写结束请求），返回结束请求。会话的去留只在这里定（界面点完成走
-  /// `toggleDone`，同一条路）：一个会话可以绑好几件事，它绑着的事（`tasks(boundTo:)`）都做完了才结束；已结束的、记录还没到的不动。
-  /// 结束请求写给会话所在的那台 Mac。`requireStepsDone` 为真时还有没完成的步骤就抛 `stepsRemaining`、什么都不改
-  /// （Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
+  /// `toggleDone`，你收下走 `answerCueMessage`，同一条路）：一个会话可以绑好几件事，它绑着的事（`tasks(boundTo:)`）都做完了才结束；
+  /// 已结束的、结束不了的（`PiSessionState.canEnd`）、记录还没到的不动。结束请求写给会话所在的那台 Mac。`requireStepsDone` 为真时还有没完成的步骤就抛 `stepsRemaining`、
+  /// 什么都不改（Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
   @discardableResult
   public func completeTask(_ task: UUID, requireStepsDone: Bool = false, cue: Bool = false) throws -> [DeliveryRequest] {
+    try write {
+      if requireStepsDone { try checkStepsDone(task) }
+      _ = try applyStatus(task, .done)
+      return try endFinishedSessions(of: task, cue: cue)
+    }
+  }
+
+  /// 还有没完成的步骤就抛 `stepsRemaining`。
+  private func checkStepsDone(_ task: UUID) throws {
     guard let link = try link(of: task), let card = try find(Card.self, task) else { throw CueStoreError.notFound }
     guard link.isTask else { throw CueStoreError.notATask }
-    if requireStepsDone {
-      let remaining = try leaves(of: card).filter { $0.id != task && $0.completedAt == nil }.count
-      guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
+    let remaining = try leaves(of: card).filter { $0.id != task && $0.completedAt == nil }.count
+    guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
+  }
+
+  /// Cue 收尾一件顶层任务：不直接完成，写一条"等你"请你收下（选项 `CueAcceptance.choices`、关联任务、正文是标题加证据要点）。
+  /// 这件事已有没答的验收就不再写，返回那一条，`asked` 为假。步骤没做完抛 `stepsRemaining`。
+  public func askToAccept(_ task: UUID, evidence: String) throws -> (message: CueMessage, asked: Bool) {
+    try write {
+      try checkStepsDone(task)
+      guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
+      let pending = try select(
+        CueMessage.self, where: "author = 'cue' AND taskID = ? AND answeredAt IS NULL AND choices = ?",
+        [task, JSONColumn.encode(CueAcceptance.choices)], orderBy: "createdAt, rowid")
+      if let pending = pending.last { return (pending, false) }
+      let now = Date.stamp
+      let message = CueMessage(
+        id: UUID(), author: .known(.cue), text: "「\(card.heading)」做好了，收下吗？\n\(evidence)", choices: CueAcceptance.choices, urgent: false,
+        taskID: task, answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now)
+      try insert(message)
+      return (message, true)
     }
-    try write { _ = try applyStatus(task, .done) }
-    return try endFinishedSessions(of: task, cue: cue)
   }
 
   /// 点任务的圆圈：待办与进行中都变完成（同 `completeTask`，连同结束做完了的会话），完成的回到待办。下一个状态按库里此刻的值决定，
   /// 读与改在一个事务里——界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
   public func toggleDone(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
-    let status = try write {
+    try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      return try applyStatus(id, current == .done ? .todo : .done)
+      let status = try applyStatus(id, current == .done ? .todo : .done)
+      return (status, status == .done ? try endFinishedSessions(of: id, cue: false) : [])
     }
-    guard status == .done else { return (status, []) }
-    return (status, try endFinishedSessions(of: id, cue: false))
   }
 
   /// 刚完成的 `task`（与它的步骤）绑着的会话里，绑着的事都做完了、能结束的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类
-  /// 做不到的留着），请它所在的 Mac 结束。
-  private func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+  /// 做不到的留着），请它所在的 Mac 结束。必须在写事务内调用。
+  func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
     let sessions = try db.query(
       "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [task]
     ) { $0.text(0) }
@@ -289,7 +312,7 @@ extension CueStore {
       guard try tasks(boundTo: sessionID).allSatisfy({ $0.task.status == .done }),
         let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
       else { return nil }
-      return try requestEnd(of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
+      return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }
   }
 

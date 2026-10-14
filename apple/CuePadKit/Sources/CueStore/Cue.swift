@@ -175,6 +175,13 @@ extension CueProfile: Record {
   }
 }
 
+/// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`），你答 `accept` 就是收下（`CueStore.answerCueMessage` 完成任务）。
+public enum CueAcceptance {
+  public static let accept = "收下"
+  public static let revise = "再改改"
+  public static let choices = [accept, revise]
+}
+
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
 /// 正文是那条消息的文字（去掉图片，至多 `bodyLimit` 字），"等你"再附上选项。
 public enum CueAlert {
