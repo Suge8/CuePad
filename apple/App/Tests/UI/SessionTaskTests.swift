@@ -1,6 +1,7 @@
 #if os(macOS)
 import CueAgent
 import CueStore
+import CueTestSupport
 @testable import CuePi
 import Foundation
 import Testing
@@ -56,6 +57,39 @@ struct SessionTaskTests {
         let task = try #require(try await store.archived().first)
         #expect(task.title == "整理发布脚本" && task.status == .done && task.piSessionID == "old")
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
+    }
+
+    @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
+        try await services.resetPiState()  // Mac 启动
+        let leaf = try await store.createTask("修登录", in: project.id)
+        let workspace = Workspace(services: services)
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+
+        // 开新会话两次：Mac 开好的会话带着认领标识记下
+        var used: Set<String> = []
+        for session in ["s1", "s2"] {
+            workspace.startFresh(leaf.id)
+            let launch = try await eventually(store, { [used] in
+                try $0.deliveryRequests().compactMap(\.launch).first { !used.contains($0.token) }
+            }) { $0 != nil }
+            let token = try #require(launch).token
+            used.insert(token)
+            try await recorder.update(sessionID: session, state: .settled, title: "修登录", launchToken: token)
+            _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == session }
+        }
+        // 改绑到另一个会话
+        try await workspace.bind("s3", to: leaf.id)
+        try await recorder.update(sessionID: "s3", state: .settled, title: "修登录")
+        try await services.resetPiState()  // 再启动一次：启动时的归位也不给换下来的会话补任务
+
+        #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).map(\.id) == [leaf.id])
+        #expect(try await store.archived().isEmpty)
+        #expect(try await store.card(leaf.id)?.piSessionID == "s3")
+        for old in ["s1", "s2"] {
+            #expect(try await store.tasks(boundTo: old).map(\.task.id) == [leaf.id])
+        }
     }
 
     private func bridge(_ change: PiSessionChange) async throws {

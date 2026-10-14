@@ -150,7 +150,8 @@ struct SessionTitleSlot: View {
 }
 
 /// "⋯"里会话页的那几项：最上面写所在；绑着的每件没完成的事一项"完成"；"绑定到任务"再绑一件（本项目还没绑会话的叶子任务）；
-/// 绑着好几件时"解除绑定"其中一件（会话总要留一件事，见 `CueStore.adoptSessions`）；下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
+/// 属于好几件时"解除绑定"其中正在用它的一件（会话总要留一件事，见 `CueStore.adoptSessions`；以前用过它的不在这里解）；
+/// 下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
 struct SessionMenuItems: View {
     let state: SessionHeader.State
     @Environment(Workspace.self) private var workspace
@@ -170,9 +171,10 @@ struct SessionMenuItems: View {
                     }
                 }
             }
-            if link.tasks.count > 1 {
+            let using = link.tasks.filter { $0.task.piSessionID == session.sessionID }
+            if link.tasks.count > 1, !using.isEmpty {
                 Menu("解除绑定", systemImage: "link.badge.minus") {
-                    ForEach(link.tasks) { item in
+                    ForEach(using) { item in
                         Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
                     }
                 }
@@ -194,7 +196,7 @@ struct SessionMenuItems: View {
     /// 解除不改会话，也不改任务状态。
     private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }
 }
-/// 会话绑着的事（含做完了的，先绑的在前）与本项目还能绑的。
+/// 会话属于的事（正在用它的与以前用过它的，含做完了的，先开始的在前）与本项目还能绑的。
 nonisolated struct SessionTaskLink: Sendable, Equatable {
     var tasks: [LeafTask]
     var bindable: [LeafTask]

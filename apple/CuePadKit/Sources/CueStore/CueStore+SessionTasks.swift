@@ -3,8 +3,10 @@ import Foundation
 /// 每个会话都属于一个任务叶子：任务树是会话的唯一归处，看板、Cue 与项目页都从任务看到会话，没有"游离的会话"。
 /// 从任务开的会话由认领绑上（`claimLaunchedCards`）；不经任务开的（终端里、"新会话"、别家 Agent、只在会话文件里找到的历史），
 /// 由写它记录的那台 Mac 在同一个写事务里建一个同名任务挂上：归到会话所在文件夹的项目（没有就未分类），排在项目顶层最后；
-/// 会话还在就是进行中，已经结束的（历史）直接完成并归档，不占看板。会话丢了最后一个叶子（改绑、解绑、改回灵感、永久删除）时同样补建。
-/// 在回收站、已归档的任务仍算它的归处。
+/// 会话还在就是进行中，已经结束的（历史）直接完成并归档，不占看板。
+/// 叶子换会话（开新会话、改绑、Cue 换新会话）时，换下来的会话留在这个叶子下，作为它以前用过的（`Card.formerSessionIDs`，
+/// 写在换会话的同一条语句里，`keepingFormerSession`），不另长任务。会话只有在你亲手解绑、改回灵感、永久删除后没了归处，才补建。
+/// 正在用它、用过它的任务都是它的归处，在回收站、已归档的也算。
 ///
 /// 自动建的任务 id 由会话算出（`sessionTaskID`）：它的标题跟着会话改名，直到你改过它；会话没说过话就退出、记录删掉时它一起删掉。
 /// 只有会话记录的那台 Mac 建，手机与命令行不建：同一个游离会话不会在两台设备上各建一个。
@@ -27,7 +29,13 @@ extension CueStore {
     }
     let orphans = try select(
       PiSessionState.self,
-      where: "hostID = ? \(scope.sql) AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = piSessionStates.sessionID AND c.todoAt IS NOT NULL)",
+      where: """
+        hostID = ? \(scope.sql)
+          AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = piSessionStates.sessionID AND c.todoAt IS NOT NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
+            WHERE c.formerSessionIDs IS NOT NULL AND c.todoAt IS NOT NULL AND f.value = piSessionStates.sessionID)
+        """,
       [host] + scope.rows, orderBy: "createdAt, id")
     guard !orphans.isEmpty else { return }
     let live = Set(try db.query("SELECT id FROM projects WHERE deletedAt IS NULL") { $0.uuid(0) })
@@ -47,6 +55,20 @@ extension CueStore {
           archivedAt: ended ? at : nil))
       }
     }
+  }
+
+  /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
+  /// 换上的（以前用过又换回来的）从里面拿掉，正在用的不在里面。只记任务的：灵感交给别的会话不算用过。
+  static func keepingFormerSession(_ new: String) -> String {
+    """
+    formerSessionIDs = CASE WHEN cards.todoAt IS NULL THEN cards.formerSessionIDs ELSE (
+      SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE json_group_array(sid) END FROM (
+        SELECT f.value AS sid FROM json_each(COALESCE(cards.formerSessionIDs, '[]')) f WHERE f.value <> \(new)
+        UNION ALL
+        SELECT cards.piSessionID WHERE cards.piSessionID <> \(new)
+          AND NOT EXISTS (SELECT 1 FROM json_each(COALESCE(cards.formerSessionIDs, '[]')) f WHERE f.value = cards.piSessionID)))
+    END
+    """
   }
 
   /// 为会话自动建的任务的 id。
