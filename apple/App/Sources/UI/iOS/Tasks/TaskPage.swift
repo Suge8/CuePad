@@ -17,7 +17,7 @@ struct TaskPage: View {
             VStack(alignment: .leading, spacing: 20) {
                 // 完成圈的点按区比图形大，往左伸进页边距，图形仍与下面的内容对齐
                 HStack(alignment: .top, spacing: 4) {
-                    TaskRingButton(task: card, prompts: detail?.prompts.count ?? 0, subtasks: detail?.progress).offset(y: -8)
+                    GoalCheck(task: card, subtasks: detail?.progress).offset(y: -8)
                     TaskHeading(task: card).padding(.top, 2)
                 }
                 .padding(.leading, -8)

@@ -14,6 +14,7 @@ import OSLog
 /// - 托管：服务没开时 `opencode service start` 把它拉起（常驻的后台进程，终端里的 OpenCode 也用它）；CuePad 拉起的那个在停止接入
 ///   （App 退出、关掉开关）时由 CuePad `opencode service stop`，本来就在跑的不动。
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
+/// - 正在说的话（`PiDraft`）：顶层会话的由 `OpenCodeDrafts` 从事件流累积，交给桥；终端里开的会话也一样（都在同一个服务里），子代理的不要。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
@@ -50,6 +51,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     private var ingesting: Task<Void, Never>?
     /// CuePad 拉起的服务（它的 `opencode` 与环境），停止接入时由 CuePad 停掉；本来就在跑的为 nil
     private var startedService: (executable: URL, environment: [String: String])?
+    /// 顶层会话正在说的话（桥上那一格的来源）
+    private var drafts = OpenCodeDrafts()
 
     /// 连着的一个服务进程。
     @MainActor private final class Connection {
@@ -165,6 +168,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         childTools = [:]
         ended = [:]
         catalogs = [:]
+        drafts = OpenCodeDrafts()
         listed = nil
         ingestQueue = []
     }
@@ -209,6 +213,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         } while cursor != nil
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
         guard self.connection === connection else { return }
+        for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
 
         let topLevel = all.filter { $0.parentID == nil }
         for info in topLevel {
@@ -330,9 +335,10 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
         if let parent = data.parentID ?? parents[sessionID] {
-            child(sessionID, of: parent, event)
+            if event.type != "session.text.delta" { child(sessionID, of: parent, event) }
             return
         }
+        if let (id, draft) = drafts.apply(event) { bridge.setDraft(bridgeID(id, connection), draft) }
         switch event.type {
         case "session.created":
             guard let location = data.location else { return }
@@ -367,8 +373,6 @@ public final class OpenCodeRuntime: AgentRuntime {
             }
         case "session.reasoning.started":
             await change(sessionID, connection) { $0.facts.work(.thinking) }
-        case "session.text.started":
-            await change(sessionID, connection) { $0.facts.work(.outputting) }
         case "session.tool.input.started":
             guard let id = data.id, let name = data.name else { return }
             await change(sessionID, connection) { $0.toolNames[id] = name }

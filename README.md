@@ -56,7 +56,7 @@ Requires Xcode 27. Local builds are ad-hoc signed, so no developer account is ne
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
-cd apple/CuePadKit && swift test
+apple/scripts/xc.sh test kit     # shared package tests
 ```
 
 Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).

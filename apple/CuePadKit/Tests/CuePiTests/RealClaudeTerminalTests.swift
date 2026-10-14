@@ -6,9 +6,9 @@ import Testing
 @testable import CuePi
 
 /// 端到端：终端里的 Claude Code（真 `claude`，tmux 里跑）接进 CuePad——经钩子出现在桥上、经收件箱收到 CuePad 发的话、
-/// 等你确认时从 CuePad 作答、改名、结束；接入（装钩子）与关掉接入（删钩子）只动 settings.json 里 CuePad 的条目。
+/// 等你确认时从 CuePad 作答、改名、结束。
 @MainActor
-@Suite(.enabled(if: realClaudeAvailable && tmuxURL != nil, RealAgents.skipped(.claudeCode, needs: "claude、tmux 与 Claude 订阅令牌")), .serialized, .timeLimit(.minutes(8)))
+@Suite(RealAgents.live(.claudeCode, "断言的是 tmux 里真终端界面的输出与按键"), .enabled(if: tmuxURL != nil, "要 tmux"), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeTerminalTests {
     /// 用户自己的 settings.json：别的设置、自己的一个 Stop 钩子
     nonisolated static let userSettings = """
@@ -42,9 +42,10 @@ struct RealClaudeTerminalTests {
             #expect(!session.hosted && session.terminal.tmuxPane != nil && session.terminal.tty != nil)
 
             let delivery = UUID().uuidString
+            let start = Date()
             let delivered = try await testbed.bridge.send(PiMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
             #expect(delivered == .immediate)
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: start)
             let said = try testbed.transcript(session.sessionFile).messages.filter { $0.role == .known(.user) }
             #expect(said.map(\.text) == ["只回复 PONG"])
             #expect(said.first?.deliveryID == UUID(uuidString: delivery))
@@ -72,30 +73,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
-    /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
-    @Test(arguments: [
-        nil, Self.userSettings, "{}", "{ }\n", "{\n  \"hooks\": {}\n}\n", #"{"hooks":{"Stop":[]},"theme":"dark"}"#,
-        "{\n  \"hooks\": {\n    \"Stop\": [\n    ]\n  }\n}\n",
-    ])
-    func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {
-        try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in
-            let file = testbed.config.appending(path: "settings.json")
-            let moved = AgentIntegration(
-                paths: testbed.paths, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
-                cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"))
-
-            try await testbed.integration.install(.claudeCode)
-            #expect(await testbed.integration.status(of: .claudeCode).files == .current)
-            try await moved.install(.claudeCode)
-            #expect(await moved.status(of: .claudeCode).files == .current)
-            try await moved.uninstall(.claudeCode)
-
-            #expect((try? String(contentsOf: file, encoding: .utf8)) == settings)
-            #expect(await moved.status(of: .claudeCode).files == .missing)
-        }
-    }
-
     /// 权限确认与 AskUserQuestion 都弹在终端里，同时出现在 CuePad；从 CuePad 答了，终端里的这一问随之收起，工具照答案执行。
     @Test func cuePadAnswersThePermissionPromptAndTheQuestionOfATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
@@ -104,27 +81,30 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "allowed.txt")
 
+            let asked = Date()
             try await terminal.type("用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE")
             let permission = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(permission.kind == .known(.confirm) && permission.text.hasPrefix("允许 Claude Code 使用 Bash？"))
             try await testbed.bridge.answer(.confirmed(true), to: try #require(permission.promptID), in: session.id)
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: asked)
             #expect(FileManager.default.fileExists(atPath: touched.path))
             #expect(testbed.bridge.session(id: session.id)?.question == nil)
 
+            let chose = Date()
             try await terminal.type("用 AskUserQuestion 工具问我喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我选的选项词")
             let question = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(question.kind == .known(.select) && question.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(question.promptID), in: session.id)
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: chose)
             #expect(await terminal.screen.contains("→ 咖啡"))
 
             // 终端里每道选择题都能自己填：从 CuePad 写一个不在选项里的
+            let typed = Date()
             try await terminal.type("再用 AskUserQuestion 工具问我一次喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我给的回答")
             let again = try await testbed.waitForQuestion(session.id, on: terminal)
             #expect(again.allowsOther)
             try await testbed.bridge.answer(.text("果汁"), to: try #require(again.promptID), in: session.id)
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: typed)
             #expect(await terminal.screen.contains("→ 果汁"))
         }
     }
@@ -147,8 +127,9 @@ struct RealClaudeTerminalTests {
                 try await testbed.bridge.answer(.option("咖啡"), to: try #require(held.promptID), in: session.id)
             }
             try await eventually("终端里问", timeout: .seconds(30)) { await terminal.screen.contains("2. 咖啡") }
+            let chose = Date()
             try await terminal.keys("Enter")
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: chose)
 
             try await terminal.type(prompt)
             try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
@@ -170,10 +151,11 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let prompt = "调用 mcp__cue__pick 工具（不要用别的工具），然后原样回复它返回的文字"
 
+            let asked = Date()
             let form = try await testbed.ask(prompt, on: terminal, in: session.id)
             #expect(form.kind == .known(.select) && form.options == ["茶", "咖啡"])
             try await testbed.bridge.answer(.option("咖啡"), to: try #require(form.promptID), in: session.id)
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: asked)
             #expect(await terminal.screen.contains(#""drink":"咖啡""#))
 
             testbed.presence.isPresent = true
@@ -181,11 +163,12 @@ struct RealClaudeTerminalTests {
             try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
             #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
             try await eventually("终端里弹表单", timeout: .seconds(30)) { await terminal.screen.contains("饮料") }
+            let cancelled = Date()
             try await terminal.keys("Escape")  // 在终端里取消这个表单
             try await eventually("CuePad 上收起", timeout: .seconds(60)) { testbed.bridge.session(id: session.id)?.question == nil }
 
             testbed.presence.isPresent = false
-            try await testbed.waitForTurn(session.id)
+            try await testbed.waitForTurn(session.id, since: cancelled)
             let permission = try await testbed.ask("调用 mcp__cue__echo 工具（不要用别的工具），参数 text 为 hi", on: terminal, in: session.id)
             #expect(permission.text.hasPrefix("允许 Claude Code 使用 cue - echo (MCP)？"), "\(permission.text)")
             try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
@@ -258,6 +241,25 @@ struct RealClaudeTerminalTests {
         }
     }
 
+    /// 用户在终端里打开了 CuePad 正托管着的会话：托管的进程让出（空闲就退），桥上换成终端里的那个。
+    @Test func aHostedSessionYieldsWhenTheUserOpensItInTheTerminal() async throws {
+        try await ClaudeTestbed.run { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.waitForTurn(id, since: start)
+            let log = ChangeLog(testbed.bridge)
+
+            let terminal = try await testbed.terminal(["--resume", sessionID])
+
+            let opened = try await testbed.waitForSession(pid: terminal.pid)
+            #expect(opened.sessionID == sessionID && !opened.hosted)
+            try await eventually("托管的让出", timeout: .seconds(60)) { log.ended.map(\.0.id) == [id] }
+        }
+    }
+
     /// CuePad 启动前就开着的会话（还没触发过钩子，钩子也没装）：启动时补上桥，照样能收到 CuePad 发的话；它开着时不能在后台再接着它。
     @Test func aSessionAlreadyRunningBeforeCuePadStartsIsDiscoveredAndCannotBeResumedElsewhere() async throws {
         try await ClaudeTestbed.run(installHooks: false) { testbed in
@@ -277,6 +279,36 @@ struct RealClaudeTerminalTests {
             let indexed = IndexedSession(
                 id: session.sessionID, path: session.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)
             await #expect(throws: AgentRuntimeError.openElsewhere) { try await testbed.runtime.resume(indexed) }
+        }
+    }
+}
+
+/// 接入（装钩子）与关掉接入（删钩子）只动 settings.json 里 CuePad 的条目：不起 Claude Code，只要它的测试台（录像带是空的）。
+@MainActor
+@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
+struct ClaudeSettingsTests {
+    /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
+    /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
+    @Test(arguments: [
+        nil, RealClaudeTerminalTests.userSettings, "{}", "{ }\n", "{\n  \"hooks\": {}\n}\n", #"{"hooks":{"Stop":[]},"theme":"dark"}"#,
+        "{\n  \"hooks\": {\n    \"Stop\": [\n    ]\n  }\n}\n",
+    ])
+    func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {
+        AgentTape.variant(settings.map { "\($0.count)" } ?? "none")
+        try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in
+            let file = testbed.config.appending(path: "settings.json")
+            let moved = AgentIntegration(
+                paths: testbed.paths, locate: { AgentTape.locator("claude") },
+                cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"))
+
+            try await testbed.integration.install(.claudeCode)
+            #expect(await testbed.integration.status(of: .claudeCode).files == .current)
+            try await moved.install(.claudeCode)
+            #expect(await moved.status(of: .claudeCode).files == .current)
+            try await moved.uninstall(.claudeCode)
+
+            #expect((try? String(contentsOf: file, encoding: .utf8)) == settings)
+            #expect(await moved.status(of: .claudeCode).files == .missing)
         }
     }
 }

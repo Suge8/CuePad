@@ -4,9 +4,9 @@ import CueStore
 import SwiftUI
 
 /// Cue 页右侧的"运行情况"（给开发者看，默认关着，从"⋯"里打开，`CueWatch.showsRun`）：上面是上下文——用了多少、换新线在哪、还差多远、
-/// 本班次几点起、上次几点换新（点开看交接备忘）；下面是最近几轮，新的在上：每轮一行为什么醒、几点、用时、调了几次工具，
+/// 本班次几点起、上次几点换新（交接备忘在对话里那条换新的分隔上看）；下面是最近几轮，新的在上：每轮一行为什么醒、几点、用时、调了几次工具，
 /// 点开是交给大脑的话与工具清单（清单的行与会话里回答注脚的清单同一个 `ToolRow`），清单的一条再点开是参数与结果的全文。
-/// 只读值班的管理器（`CueKeeper.rounds`、`context`）与库里的交接备忘；Cue 不在这台 Mac 值班时没有这一栏。
+/// 只读值班的管理器（`CueKeeper.rounds`、`context`）与库里最近一份交接备忘的时刻；Cue 不在这台 Mac 值班时没有这一栏。
 struct CueRunPanel: View {
     let keeper: CueKeeper
     let handoff: CueMessage?
@@ -63,7 +63,6 @@ private struct CueContextCard: View {
     let shiftStartedAt: Date?
     let handoff: CueMessage?
     @Environment(\.palette) private var palette
-    @State private var showsHandoff = false
 
     private let renewAt = CueKeeper.renewAt
 
@@ -80,7 +79,7 @@ private struct CueContextCard: View {
             Text(distance).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
             VStack(alignment: .leading, spacing: 6) {
                 fact("本班次", shiftStartedAt.map { "\(CueRunFormat.clock($0)) 起" } ?? "没在跑")
-                handoffLine
+                fact("上次换新", handoff.map { Dotted(CueRunFormat.clock($0.createdAt), $0.createdAt.formatted(.relative(presentation: .named))).visible } ?? "还没换过")
             }
         }
         .padding(14)
@@ -102,29 +101,6 @@ private struct CueContextCard: View {
             Text(value).foregroundStyle(palette.ink2)
         }
         .font(Typography.meta.monospacedDigit())
-    }
-
-    @ViewBuilder private var handoffLine: some View {
-        if let handoff {
-            VStack(alignment: .leading, spacing: 6) {
-                Button { withAnimation(Motion.quick) { showsHandoff.toggle() } } label: {
-                    HStack(spacing: 8) {
-                        Text("上次换新").foregroundStyle(palette.ink3).frame(width: 56, alignment: .leading)
-                        Text(Dotted(CueRunFormat.clock(handoff.createdAt), handoff.createdAt.formatted(.relative(presentation: .named))))
-                            .foregroundStyle(palette.ink2)
-                        Spacer(minLength: 0)
-                        DisclosureChevron(open: showsHandoff)
-                    }
-                    .font(Typography.meta.monospacedDigit())
-                    .frame(minHeight: 20).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(showsHandoff ? "收起交接备忘" : "看交接备忘")
-                if showsHandoff { TraceText(text: handoff.text).transition(.opacity) }
-            }
-        } else {
-            fact("上次换新", "还没换过")
-        }
     }
 }
 
@@ -338,10 +314,11 @@ private enum CueRunFormat {
         switch wake {
         case .enabled: "刚启用"
         case .message: "你发来消息"
-        case .sessionActivity: "跟进的事有动静"
+        case .sessionActivity: "会话有动静"
         case .idle: "空闲巡视"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
         case .renewed: "换新后接着做"
+        case .settingsChanged: "换班次前写交接"
         }
     }
 
@@ -353,6 +330,7 @@ private enum CueRunFormat {
         case .idle: "eye"
         case .reminder: "alarm"
         case .renewed: "arrow.triangle.2.circlepath"
+        case .settingsChanged: "arrow.left.arrow.right"
         }
     }
 

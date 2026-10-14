@@ -9,21 +9,26 @@ import Foundation
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
-/// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
-/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
+/// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
+/// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
+/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
+/// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明（commentary）说完、停下与失败的一轮它已清掉，留下的只有给你看的回答。
 @MainActor
 final class CodexBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var rpc: CodexRPC?
     private var thread: String?
-    /// 交给 `turn/start` 的强度（已夹到模型支持的档位）
-    private var effort: String?
+    /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度
+    private var models: [CodexModel] = []
+    /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
+    private var model: CodexModel?
+    private var level: PiThinkingLevel?
+    var seesImages: Bool { model?.seesImages == true }
     /// 进行中的一轮
     private var turn: Turn?
     private struct Turn {
         let id: String
-        var reply: String?
     }
 
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
@@ -37,6 +42,10 @@ final class CodexBrain: CueBrain {
                 environment: BrainSession.environment(config), directory: config.workingDirectory)
             self.rpc = rpc
             rpc.onNotification = { [weak self] in self?.notification($0, $1) }
+            rpc.onDraft = { [weak self] thread, draft in
+                guard let self, thread == self.thread else { return }
+                session.emit(.speaking(draft))
+            }
             let process = rpc.process
             rpc.onClose = { [weak self] in
                 Task { self?.session.exited(await process?.exited()) }
@@ -63,27 +72,36 @@ final class CodexBrain: CueBrain {
         if let model = config.model { params["model"] = .string(model) }
         let started = try await rpc.call("thread/start", .object(params))
         thread = started["thread"]?["id"]?.string
-        if let level = config.effort, let model = started["model"]?.string {
-            let models = try await rpc.call("model/list", ["includeHidden": true, "limit": 500])["data"]?.array ?? []
-            let supported = (models.first { $0["id"]?.string == model }?["supportedReasoningEfforts"]?.array ?? [])
-                .compactMap { $0["reasoningEffort"]?.string.flatMap { CodexModel.thinking($0).known } }
-            effort = CodexModel.effort(level.clamped(to: supported))
-        }
+        models = try await CodexModel.list(rpc, hidden: true)
+        model = models.first { $0.id == started["model"]?.string }
+        level = config.effort
     }
 
-    func send(_ text: String) async throws {
+    func configure(model id: String?, effort: PiThinkingLevel?) async throws {
+        guard thread != nil else { throw CueBrainError.notRunning }
+        if let id {
+            guard let found = models.first(where: { $0.id == id }) else { throw CueBrainError.rejected("Codex 没有模型 \(id)") }
+            model = found
+        }
+        if let effort { level = effort }
+    }
+
+    func send(_ text: String, images: [PiImage]) async throws {
         guard let rpc, let thread else { throw CueBrainError.notRunning }
-        let input: JSONValue = [["type": "text", "text": .string(text), "text_elements": []]]
+        let input = CodexRPC.input(text: text, images: images)
         if let active = turn?.id {
             do {
-                try await rpc.call("turn/steer", ["threadId": .string(thread), "input": input, "expectedTurnId": .string(active)])
+                try await rpc.call("turn/steer", ["threadId": .string(thread), "input": .array(input), "expectedTurnId": .string(active)])
                 return
             } catch CodexRPCError.server {
                 // 这一轮刚好结束：下面开新的一轮
             }
         }
-        var params: [String: JSONValue] = ["threadId": .string(thread), "input": input]
-        if let effort { params["effort"] = .string(effort) }
+        var params: [String: JSONValue] = ["threadId": .string(thread), "input": .array(input)]
+        if let model {
+            params["model"] = .string(model.id)
+            if let level { params["effort"] = .string(CodexModel.effort(level.clamped(to: model.efforts))) }
+        }
         let started = try await rpc.call("turn/start", .object(params))
         if let id = started["turn"]?["id"]?.string { beginTurn(id) }
     }
@@ -131,10 +149,6 @@ final class CodexBrain: CueBrain {
                 session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
             case "commandExecution" where turn != nil:
                 session.emit(.toolDone(id: id, result: item["aggregatedOutput"]?.string ?? "", failed: failed))
-            // 只认给你看的回答，过程中的说明（commentary）不算
-            case "agentMessage" where item["phase"]?.string != "commentary":
-                let reply = (item["text"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !reply.isEmpty { turn?.reply = reply }
             default: break
             }
         case "thread/tokenUsage/updated":
@@ -143,11 +157,8 @@ final class CodexBrain: CueBrain {
             session.emit(.context(used: input, window: usage["modelContextWindow"]?.int))
         case "turn/completed":
             let completed = params["turn"]
-            let finished = turn
             turn = nil
-            let status = completed?["status"]?.string
-            if status != "interrupted", let reply = finished?.reply { session.emit(.reply(reply)) }
-            if status == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
+            if completed?["status"]?.string == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
             session.emit(.turnFinished)
         default:
             break

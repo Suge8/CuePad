@@ -126,8 +126,22 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 36：撤掉 37（验收标记下线）。
-  static let undoSchema37 = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
+  /// 把新建的库退回结构 40：撤掉 41（每台 Mac 的在线记录）。
+  static let undoSchema41 = "DROP TABLE macPresence;"
+  /// 退回结构 39：再撤掉 40（请求上记 Cue 已知道没送到，本机列）。
+  static let undoSchema40 = undoSchema41 + "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
+  /// 退回结构 38：再撤掉 39（卡片上的跟进标记下线；盖序号的触发器去掉它后重建，退回时留着新的也照样能升级）。
+  static let undoSchema39 = undoSchema40 + "ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;"
+  /// 退回结构 37：再撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
+  static let undoSchema38 = undoSchema39 + """
+    DROP TRIGGER piSessionStates_writeSeq_insert; DROP TRIGGER piSessionStates_writeSeq_update;
+    DROP TRIGGER cards_writeSeq_insert; DROP TRIGGER cards_writeSeq_update;
+    DROP TRIGGER deliveryRequests_writeSeq_insert; DROP TRIGGER deliveryRequests_writeSeq_update; DROP TRIGGER piMessages_writeSeq_insert;
+    ALTER TABLE piSessionStates DROP COLUMN writeSeq; ALTER TABLE cards DROP COLUMN writeSeq;
+    ALTER TABLE deliveryRequests DROP COLUMN writeSeq; ALTER TABLE piMessages DROP COLUMN writeSeq; DROP TABLE writeCounter;
+    """
+  /// 退回结构 36：再撤掉 37（验收标记下线）。
+  static let undoSchema37 = undoSchema38 + "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 35：再撤掉 36（本机的会话进程表）。
   static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
@@ -138,7 +152,6 @@ import Testing
   static let undoSchema33 = undoSchema34 + "ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。
   static let undoSchema32 = undoSchema33 + """
-    DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
     DROP INDEX sendRecords_deliveryID; ALTER TABLE sendRecords DROP COLUMN deliveryID; ALTER TABLE sendRecords DROP COLUMN origin;
@@ -175,16 +188,15 @@ import Testing
     #expect(messages[answered.id]?.answer == "允许一次")
   }
 
-  /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
+  /// 结构 31 的库升到 32 起：卡片与投送请求原样都在（请求来自你），Cue 的对话可写。
   @Test func schema31LibraryUpgradesForCue() async throws {
     let task = try await store.createTask("发布", in: nil)
     try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "s", ref: "s1"), on: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema32 + "PRAGMA user_version = 31;")
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.card(task.id)?.cueFollows == false)
+    #expect(try await upgraded.card(task.id)?.heading == "发布")
     #expect(try await upgraded.deliveryRequests().map(\.origin) == [nil])
-    #expect(try await upgraded.setCueFollows(task.id, true).cueFollows)
     #expect(try await upgraded.addCueMessage(.cue, text: "开工了").author == .known(.cue))
   }
 

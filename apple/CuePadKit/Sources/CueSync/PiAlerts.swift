@@ -77,12 +77,19 @@ public enum CueAlertRoute {
   }
 }
 
-/// 从通知取回的 Cue 消息与设置记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。
+/// 从通知取回的 Cue 消息、设置与关联任务的记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。
 public enum CueAlertText {
-  public static func content(message: CKRecord, profile: CKRecord?) -> (title: String, body: String)? {
+  /// "等你"要写关联任务的标题：先取回消息，再按它取这张卡（没有关联任务、不是"等你"时为 nil）。
+  public static func task(of message: CKRecord) -> CKRecord.ID? {
+    guard message.encryptedValues["choices"] != nil, let task = message["taskID"] as? String else { return nil }
+    return CKRecord.ID(recordName: task, zoneID: message.recordID.zoneID)
+  }
+
+  public static func content(message: CKRecord, profile: CKRecord?, task: CKRecord?) -> (title: String, body: String)? {
     guard let text = message.encryptedValues["text"] as? String else { return nil }
     let choices = (message.encryptedValues["choices"] as? String).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
-    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, choices: choices)
+    let heading = (task?.encryptedValues["body"] as? String).map { CueSummary($0).title }
+    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, choices: choices, task: heading)
   }
 }
 

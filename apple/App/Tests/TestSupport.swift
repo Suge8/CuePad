@@ -4,6 +4,8 @@ import CueSync
 @_exported import CueTestSupport
 import Foundation
 import Synchronization
+import SwiftUI
+import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
@@ -115,11 +117,14 @@ final class TestApp {
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
+    /// 资料库与在线记录续期的时钟；要推进时间的测试给 `ManualTiming` 的。
+    private let timing: Timing
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
         self.cue = cue
         self.updater = updater
+        self.timing = timing
         services = makeServices()
     }
     #else
@@ -144,6 +149,9 @@ final class TestApp {
         services = makeServices()
         return services
     }
+
+    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
+    var databaseURL: URL { isolatedLocation.databaseURL }
 
     private var isolatedLocation: LibraryLocation {
         try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
@@ -209,6 +217,7 @@ final class TestApp {
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
+            timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
@@ -227,6 +236,17 @@ final class TestApp {
         try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
     }
     #endif
+}
+
+extension Workspace {
+    /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
+    func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
+        var box = draft
+        let files = services.store.files
+        let binding = Binding(get: { box }, set: { box = $0 })
+        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        return try #require(try await services.store.deliveryRequests().first)
+    }
 }
 
 extension CueStore {

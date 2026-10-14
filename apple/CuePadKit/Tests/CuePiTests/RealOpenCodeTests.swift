@@ -6,11 +6,10 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 本机装的 OpenCode（`brew install opencode`）；没装就跳过。
-/// 真 OpenCode 的用例开了（`RealAgents`）时，本机装的 OpenCode
-let realOpenCodeURL = RealAgents.on(.opencode) ? ExecutableLocator.standard.candidates("opencode").first : nil
+/// 本机装的 OpenCode（`brew install opencode`）
+let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
 /// 测试用的免费模型：缺省 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id）
-private let freeModel = PiModelKey(provider: "opencode", id: ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"] ?? "big-pickle")
+let openCodeTestModel = PiModelKey(provider: "opencode", id: ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"] ?? "big-pickle")
 
 /// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
 /// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。
@@ -37,7 +36,7 @@ final class OpenCodeSandbox {
         for directory in [work, config, root.appending(path: "home")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        let settings: [String: Any] = ["model": "\(freeModel.provider)/\(freeModel.id)"]
+        let settings: [String: Any] = ["model": "\(openCodeTestModel.provider)/\(openCodeTestModel.id)"]
         try JSONSerialization.data(withJSONObject: settings).write(to: config.appending(path: "opencode.json"))
         try await run(["service", "set", "port", String(try Self.freePort())])
         try await run(["service", "start"])
@@ -144,7 +143,7 @@ final class OpenCodeSandbox {
 /// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(.enabled(if: realOpenCodeURL != nil, RealAgents.skipped(.opencode, needs: "opencode")), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.live(.opencode, "录不出录像带：要 OpenCode v2，它的免费模型拒绝自行构建的 v2，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     private func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
@@ -181,7 +180,7 @@ struct RealOpenCodeTests {
             try await eventually("终端里的会话上了桥、歇下", timeout: .seconds(60)) { session(bridge)?.state == .settled }
             let live = try #require(session(bridge))
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
-            #expect(live.model?.key == freeModel && live.context?.window != nil)
+            #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
             try await eventually("对话进了资料库", timeout: .seconds(60)) {
                 try await replies(store, live.sessionID).last?.contains("PONG") == true
@@ -208,7 +207,7 @@ struct RealOpenCodeTests {
                 try await bridge.configure(model: PiModelKey(provider: "opencode", id: "no-such-model"), in: live.id)
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
-            try await bridge.configure(model: freeModel, in: live.id)
+            try await bridge.configure(model: openCodeTestModel, in: live.id)
 
             // 用户给这个会话定了规矩：跑命令要先问
             try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])

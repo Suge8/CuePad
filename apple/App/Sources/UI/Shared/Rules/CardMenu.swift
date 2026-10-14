@@ -8,8 +8,6 @@ import CueStore
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
         case attachToTask, handToAgent, makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash
-        /// 交给 Cue 跟进、收回自己做：只在没做完的顶层任务上（`Card.cueFollows`）。
-        case cueFollow, cueRelease
         /// 开始批量选择（Mac 项目页上散放的灵感）。
         case select
         /// 给没做完的叶子任务绑定、改绑、解除 Agent 会话（Mac 的右键；会话列表在 Mac 上）。
@@ -36,18 +34,13 @@ nonisolated enum CardMenu {
 
     /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
     /// `bindsSession`：这是 Mac 上的叶子任务（没有步骤），没做完时多一项"绑定会话"。
-    /// 没做完的任务：完成与归档一组，"谁来做"（绑定会话、交给 Cue 或收回）一组，删除最后；没有"谁来做"的项时不留空组。
+    /// 没做完的任务：完成与归档一组，绑定会话一组（Mac 的叶子），删除最后；没有绑定会话时不留空组。
     static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false) -> [[Item]] {
         switch card.status {
         case nil: [[handsToAgent(card) ? .handToAgent : .attachToTask, .makeTask, .move, .archive], (selectable ? [.select] : []) + [.trash]]
         case .done: [[.reopen, .archive], [.trash]]
-        case .todo, .inProgress: [[.complete, .archive], (bindsSession ? [.bindSession] : []) + cueItem(card), [.trash]].filter { !$0.isEmpty }
+        case .todo, .inProgress: [[.complete, .archive], bindsSession ? [.bindSession] : [], [.trash]].filter { !$0.isEmpty }
         }
-    }
-
-    static func cueItem(_ card: Card) -> [Item] {
-        guard card.parentID == nil, card.isTask, card.status != .done else { return [] }
-        return [card.cueFollows ? .cueRelease : .cueFollow]
     }
 
     /// 任务页与纸页的"⋯"。提示词已经挂在任务下，不再"挂到任务"；发给 Agent 在页面上（提示词卡与提示词的纸页），不在这里。
@@ -57,6 +50,6 @@ nonisolated enum CardMenu {
             let attach: [Item] = handsToAgent(card) ? [] : [.attachToTask]
             return [attach + [.makeTask, card.isPinned ? .unresource : .resource, .move, .copy], [.archive], [.trash]]
         }
-        return [cueItem(card) + (card.parentID == nil ? [.move] : []) + [.copy], [.makeIdea, .archive], [.trash]]
+        return [(card.parentID == nil ? [.move] : []) + [.copy], [.makeIdea, .archive], [.trash]]
     }
 }

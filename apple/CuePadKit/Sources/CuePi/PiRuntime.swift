@@ -115,9 +115,9 @@ public final class PiRuntime: AgentRuntime {
             process.end()
             throw error
         }
-        // 协议号不同而报了 hosted 的，桥会让它退出（只请一次）
+        // 刚起的就读到不同的扩展：装着的扩展与 App 不配套，它不会自己重新载入，让它退出
         guard session.hosted, session.state != .incompatible else {
-            if !session.hosted { process.end() }
+            process.end()
             throw PiHostError.extensionMismatch
         }
         return session

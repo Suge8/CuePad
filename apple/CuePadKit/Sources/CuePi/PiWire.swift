@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 13
+    static let protocolVersion = 14
 
     struct State: Decodable {
         var kind: String
@@ -23,7 +23,6 @@ enum PiWire {
             switch kind {
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
-            case "outputting": (.outputting, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
             case "delegating": (.delegating, nil)  // 子代理在 `subagents` 里
             case "compacting": (.compacting, nil)
@@ -190,6 +189,17 @@ enum PiWire {
     struct Bye: Decodable { var reason: String; var undelivered: [String]? }
     struct StateMessage: Decodable { var state: State }
 
+    /// 正在说的话：到目前为止的全文与开始出字的时刻（毫秒）；`text` 为 null 是清掉。
+    struct Draft: Decodable {
+        var text: String?
+        var since: Double?
+
+        var draft: PiDraft? {
+            guard let text, let since else { return nil }
+            return PiDraft(text: text, since: Date(timeIntervalSince1970: since / 1000))
+        }
+    }
+
     enum Message {
         case hello(Hello)
         case otherProtocol(OtherProtocolHello)
@@ -197,6 +207,8 @@ enum PiWire {
         case info(Info)
         case ack(Ack)
         case bye(Bye)
+        /// 正在说的话（`PiDraft`），nil 是清掉
+        case draft(PiDraft?)
         /// 订阅额度的一次观测（属于账号，不属于会话）
         case quota(QuotaReport)
     }
@@ -214,6 +226,7 @@ enum PiWire {
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
         case "bye": return .bye(try decoder.decode(Bye.self, from: line))
+        case "draft": return .draft(try decoder.decode(Draft.self, from: line).draft)
         case "quota":
             let seconds = JSONDecoder()
             seconds.dateDecodingStrategy = .secondsSince1970  // 重置时刻是 Unix 秒

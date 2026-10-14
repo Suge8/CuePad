@@ -3,14 +3,8 @@ import SwiftUI
 
 
 
-/// 模型菜单怎么写：按提供方（`PiProvider`）分组，每个模型下面写它支持的思考强度；胶囊上的短名见 `PiModelName`。
+/// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带用量；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
-    /// 模型菜单里每个模型下面那一行：它支持的思考强度。
-    static func levels(_ model: PiModelOption) -> Dotted {
-        let labels = model.thinkingLevels.map(\.label)
-        return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
-    }
-
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时 14% · 本周 8%"（`QuotaMeter.menuTitle`），否则是提供方名。
     static func title(_ provider: PiProvider, quotas: [AccountQuota], at now: Date) -> String {
         quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name

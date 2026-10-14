@@ -33,8 +33,8 @@ DEFINE SCHEMA
         completedAt      INT64,
         piSessionID      STRING,
         archivedAt       INT64,
-        cueFollows       INT64,
         formerSessionIDs STRING,
+        cueFollows       INT64,
         isFavorite       INT64,
         numbering        STRING,
         GRANT WRITE TO "_creator",
@@ -224,6 +224,15 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         state         STRING,
         detail        ENCRYPTED STRING,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE macPresence (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        onlineUntil   INT64,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

@@ -736,6 +736,7 @@ extension CueStore {
       guard try promptHome(task) == task else { throw CueStoreError.notALeaf }
       try forgetLaunches(of: task)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
+      try endUnusedSessions(of: task, cue: false)
       return try Self.draft(of: task, in: db).map { try handOut($0).body }
     }
   }

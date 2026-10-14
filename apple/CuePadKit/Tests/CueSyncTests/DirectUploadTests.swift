@@ -195,7 +195,7 @@ import Testing
     #expect(try await phone.reconcileDelta().saves.isEmpty)
   }
 
-  /// 手机的请求经服务器到 Mac，Mac 领取、写回结果后立即上传：带着拉到的版本标签，被服务器收下，手机下一次拉到的就是结果。
+  /// 手机的请求经服务器到 Mac，Mac 领取与写回结果后各立即上传一次：带着拉到的版本标签，被服务器收下，手机下一次拉到的就是结果。
   @Test(.timeLimit(.minutes(1)))
   func theResultWrittenBackOnTheMacIsAcceptedOnItsDirectUpload() async throws {
     let server = Server()
@@ -204,12 +204,13 @@ import Testing
     await mac.coordinator.handle(.fetched(modifications: [try #require(await server.record(phone.id(made.id)))], deletions: []))
     let (uploads, uploaded) = AsyncStream.makeStream(of: Bool.self)
     let mac = mac
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", onIssue: { Issue.record("\($0)") }, onFinished: { id in
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", onIssue: { Issue.record("\($0)") }, onWritten: { id in
       uploaded.yield((try? await mac.coordinator.sendNow(mac.recordID(id), deleted: false, via: server)) == .received)
     }) { _ in .succeeded }
     try await executor.start()
 
     var results = uploads.makeAsyncIterator()
+    #expect(await results.next() == true)  // 领取与结果各一次，先后不定（领取那次在后台任务里传）
     #expect(await results.next() == true)
     #expect(await server.row(phone.id(made.id))?.fields["status"] == .text("succeeded"))
     await executor.stop()

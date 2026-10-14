@@ -4,28 +4,23 @@ import CueStore
 import SwiftUI
 
 extension PiConfigControls {
-    /// 弹出选择菜单（点模型胶囊与键盘共用）：模型按提供方分组（标题与每项带提供方图标；有订阅额度的分组标题写各窗口的用量，`PiModelLabel.title`）、当前打勾；思考强度是当前模型支持的档。
+    /// 弹出选择菜单（点模型胶囊与键盘共用）：模型按调用方给的分组（组名与每项可带提供方图标；没给组名的写提供方与它的额度用量，`PiModelLabel.title`）、当前打勾；思考强度是可选的档。
     func open(_ pick: PiConfigPick) {
         guard let anchor = anchors[pick]?.view else { return }
         switch pick {
         case .model:
-            let now = Date.now
-            let sections = PiModelLabel.groups(session.models).map { group in
-                let image = group.provider.nsImage
-                return ChoiceMenu.Section(
-                    title: PiModelLabel.title(group.provider, quotas: services.accountQuotas.items, at: now), image: image,
-                    choices: group.models.map { model in
-                        ChoiceMenu.Choice(
-                            // 原生菜单项没有单独的读屏文字，分段直接写逗号
-                            title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model).spoken,
-                            image: image, checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
+            let now = Date.now, quotas = services.accountQuotas.items
+            let sections = groups.map { group in
+                ChoiceMenu.Section(
+                    title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.provider?.nsImage,
+                    choices: group.items.map { item in
+                        ChoiceMenu.Choice(title: item.name, image: item.provider?.nsImage, checked: item.checked, choose: item.choose)
                     })
             }
             ChoiceMenu.popUp(sections, below: anchor)
         case .thinking:
-            let levels = shown.model?.thinkingLevels ?? []
             ChoiceMenu.popUp([ChoiceMenu.Section(title: "思考强度", choices: levels.map { level in
-                ChoiceMenu.Choice(title: level.label, subtitle: nil, checked: shown.thinking == level) { configure(PiConfig(thinking: level)) }
+                ChoiceMenu.Choice(title: level.label, checked: shown.thinking == level) { chooseThinking(level) }
             })], below: anchor)
         }
     }

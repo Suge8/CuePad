@@ -6,9 +6,9 @@ import Testing
 @testable import CuePi
 
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
-/// 斜杠命令、结束、接着已结束的会话、空闲退出。托管进程自己也跑装好的钩子，桥上不多出一个会话。
+/// 斜杠命令、结束、接着已结束的会话、空闲退出（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
-@Suite(.enabled(if: realClaudeAvailable, RealAgents.skipped(.claudeCode, needs: "claude 与 Claude 订阅令牌")), .serialized, .timeLimit(.minutes(8)))
+@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.serialWhenRecording(.claudeCode), RealAgents.timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
     /// CuePad 起的 `claude` 是外壳、真 claude 是它的子进程：托管进程的钩子仍认得是它自己的，桥上不多出一个终端会话。
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
@@ -39,9 +39,10 @@ struct RealClaudeHostTests {
 
             let delivery = UUID().uuidString
             let image = PiImage(mimeType: "image/png", data: redPNG)
+            let start = Date()
             let delivered = try await testbed.bridge.send(PiMessage(text: "不用工具，直接看图：它是红色还是蓝色？只答颜色词", images: [image], deliveryID: delivery), to: id)
             #expect(delivered == .immediate)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: start)
 
             let transcript = try testbed.transcript(session.sessionFile)
             let said = try #require(transcript.messages.first { $0.role == .known(.user) })
@@ -59,11 +60,12 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let touched = testbed.work.appending(path: "hosted.txt")
 
+            let asked = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE"), to: id)
             let permission = try await testbed.waitForQuestion(id)
             #expect(permission.kind == .known(.confirm))
             try await testbed.bridge.answer(.confirmed(true), to: try #require(permission.promptID), in: id)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: asked)
             #expect(FileManager.default.fileExists(atPath: touched.path))
 
             _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 python3 -c 'import time; time.sleep(120)'（不要放到后台），然后只回复 SLEPT"), to: id)
@@ -83,8 +85,9 @@ struct RealClaudeHostTests {
             try await eventually("又停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
             #expect(try #require(testbed.bridge.session(id: id)?.context?.tokens) >= used)
 
+            let after = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: after)
             #expect(try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).recap.lastReply?.contains("AFTER") == true)
         }
     }
@@ -95,8 +98,9 @@ struct RealClaudeHostTests {
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
+            let first = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: first)
             #expect(testbed.bridge.session(id: id)?.model?.key.id == claudeTestModel, "\(String(describing: testbed.bridge.session(id: id)?.model))")
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
@@ -110,8 +114,9 @@ struct RealClaudeHostTests {
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
+            let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: start)
             let answered = try #require(lastAnswer(in: file))
             #expect(answered.model?.contains(claudeOtherModel) == true, "\(String(describing: answered.model))")
             #expect(answered.effort == "low")
@@ -135,8 +140,9 @@ struct RealClaudeHostTests {
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let first = try #require(testbed.bridge.session(id: id))
+            let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
-            try await testbed.waitForTurn(id)
+            try await testbed.waitForTurn(id, since: start)
             let log = ChangeLog(testbed.bridge)
 
             try await testbed.bridge.end(id)
@@ -148,35 +154,19 @@ struct RealClaudeHostTests {
                 id: first.sessionID, path: first.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)
             let resumed = try await testbed.runtime.resume(indexed)
             #expect(testbed.bridge.session(id: resumed)?.sessionID == first.sessionID)
+            let asked = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
-            try await testbed.waitForTurn(resumed)
+            try await testbed.waitForTurn(resumed, since: asked)
             // 接着的会话仍叫它的第一句，不是接着说的这句
             #expect(testbed.bridge.session(id: resumed)?.firstMessage == "记住暗号 BANANA42，只回复 OK")
             #expect(try testbed.transcript(first.sessionFile).recap.lastReply?.contains("BANANA42") == true)
         }
     }
 
-    /// 用户在终端里打开了 CuePad 正托管着的会话：托管的进程让出（空闲就退），桥上换成终端里的那个。
-    @Test func aHostedSessionYieldsWhenTheUserOpensItInTheTerminal() async throws {
-        try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
-            _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
-            try await testbed.waitForTurn(id)
-            let log = ChangeLog(testbed.bridge)
-
-            let terminal = try await testbed.terminal(["--resume", sessionID])
-
-            let opened = try await testbed.waitForSession(pid: terminal.pid)
-            #expect(opened.sessionID == sessionID && !opened.hosted)
-            try await eventually("托管的让出", timeout: .seconds(60)) { log.ended.map(\.0.id) == [id] }
-        }
-    }
-
     /// 托管的会话空闲满时限就退出（不算结束：之后发话再接着它）。
     @Test func anIdleHostedSessionExits() async throws {
-        try await ClaudeTestbed.run(idleLimit: .seconds(2)) { testbed in
+        // 空闲计时在 CuePad 这边：回放时不必真等 2 秒
+        try await ClaudeTestbed.run(idleLimit: AgentTape.active.mode == .replay ? .milliseconds(50) : .seconds(2)) { testbed in
             try testbed.runtime.start()
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)

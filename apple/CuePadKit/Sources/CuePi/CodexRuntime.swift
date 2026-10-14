@@ -11,6 +11,8 @@ import OSLog
 ///   `HostMark` 认回（`codex` 可能是外壳，钩子的父进程是外壳起的子进程，不按进程号认）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置后才卸载并报 `SessionEnd`），
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
+/// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好（回答项说完换成全文）交给桥；
+///   终端里的会话不订阅，也就没有。
 /// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/steer`（马上说，
 ///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
@@ -168,6 +170,7 @@ public final class CodexRuntime: AgentRuntime {
             guard let self, let rpc, method == "item/tool/requestUserInput" else { return false }
             return self.userInput(params, id: id, on: rpc)
         }
+        rpc.onDraft = { [weak self] thread, draft in self?.bridge.setDraft("\(thread).\(pid)", draft) }
         rpc.onClose = { [weak self] in self?.processGone(pid) }
     }
 
@@ -608,9 +611,7 @@ public final class CodexRuntime: AgentRuntime {
 
     fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws -> PiDelivery {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        var input: [JSONValue] = message.text.isEmpty ? [] : [["type": "text", "text": .string(message.text), "text_elements": []]]
-        input += message.images.map { ["type": "image", "url": .string("data:\($0.mimeType);base64,\($0.data.base64EncodedString())")] }
-        return try await deliver(input, clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
+        return try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
     }
 
     /// 马上说：插进在跑的这一轮；刚好歇下（没有这一轮了）就排进队列。等它做完再说、空闲时都进队列，空闲时再让队列里的这一条开始：
@@ -659,13 +660,12 @@ public final class CodexRuntime: AgentRuntime {
             guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
             try await collaborate(name == "plan" ? "plan" : "default", in: session)
             if !argument.isEmpty {
-                _ = try await deliver(
-                    [["type": "text", "text": .string(argument), "text_elements": []]], clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
+                _ = try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
             }
         case _ where name.hasPrefix("skill:"):
             guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
             var input: [JSONValue] = [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]]
-            if !argument.isEmpty { input.append(["type": "text", "text": .string(argument), "text_elements": []]) }
+            input += CodexRPC.input(text: argument, images: [])
             _ = try await deliver(input, clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
         default:
             throw PiBridgeError.rejected("unknown_command")
@@ -759,13 +759,14 @@ struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
-    let images: Bool
+    /// 能看图（`inputModalities` 里有 image）
+    let seesImages: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
 
     var option: PiModelOption {
-        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: images)
+        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages)
     }
 
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
@@ -777,14 +778,15 @@ struct CodexModel {
         return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
     }
 
-    @MainActor static func list(_ rpc: CodexRPC) async throws -> [CodexModel] {
-        let listed = try await rpc.call("model/list", [:])
+    /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。
+    @MainActor static func list(_ rpc: CodexRPC, hidden: Bool = false) async throws -> [CodexModel] {
+        let listed = try await rpc.call("model/list", hidden ? ["includeHidden": true, "limit": 500] : [:])
         return (listed["data"]?.array ?? []).compactMap { entry in
-            guard entry["hidden"]?.bool != true, let id = entry["id"]?.string else { return nil }
+            guard hidden || entry["hidden"]?.bool != true, let id = entry["id"]?.string else { return nil }
             let efforts = (entry["supportedReasoningEfforts"]?.array ?? []).compactMap { $0["reasoningEffort"]?.string }
             // 没写 inputModalities 的按协议缺省（文字与图片）
-            let images = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
-            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, images: images)
+            let seesImages = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
+            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, seesImages: seesImages)
         }
     }
 }

@@ -4,10 +4,11 @@ import CueStore
 import SwiftUI
 
 /// 任务浮窗："任务 → 步骤 → 会话"。点任务、步骤或它的草稿（项目页、任务面板、⌘K、归档）就在当前页上弹出，不换页。
-/// 左栏是这件事：标题、做到第几步、每个步骤一行（圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
-/// 右边是选中的那一步——没有步骤的任务就是它自己。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
+/// 没有步骤的任务一栏到底（与手机任务页同一个顺序）：完成圈与标题、所在项目，这件事此刻的样子，末尾一行添加步骤——不为一件事摆一个空着的左栏。
+/// 有步骤时分两栏：左栏是这件事（标题、做到第几步、每个步骤一行：圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
+/// 右边是选中的那一步。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
 /// 开始就交给会话（上一步的会话还开着就接着用它，否则开一个以它命名的新会话）；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
-/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（会话还绑着别的没做完的事、或这件事还有下一步时不结束：下一步"开始"就接着用它，规则在 `CueStore`）。
+/// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（还有没做完的事绑着它、或下一步会接着用它时不结束，规则在 `CueStore.endUnusedSessions`）。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         /// 顶层任务。
@@ -24,24 +25,19 @@ struct TaskSheet: View {
     @State private var data: SheetData?
 
     private static let size = CGSize(width: 860, height: 560)
+    private static let single = CGSize(width: 600, height: 540)
     private static let sidebarWidth: CGFloat = 280
 
     var body: some View {
+        let size = data?.steps.isEmpty == true ? Self.single : Self.size
         // ZStack 而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始
         ZStack(alignment: .topTrailing) {
             if let data {
-                let leaf = data.selected(workspace.openTask?.step)
-                HStack(spacing: 0) {
-                    sidebar(data, selected: leaf.id).frame(width: Self.sidebarWidth)
-                    LeafDetail(leaf: leaf, draft: data.drafts[leaf.id])
-                        .id(leaf.id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(36)
-                }
+                if data.steps.isEmpty { single(data) } else { split(data) }
                 closeButton.padding(12)
             }
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(width: size.width, height: size.height)
         .background(palette.desk)
         // 浮窗挂在页面之外：步骤的状态点、叶子去会话的入口读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
@@ -50,16 +46,51 @@ struct TaskSheet: View {
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
     }
 
+    /// 没有步骤：一栏到底。
+    private func single(_ data: SheetData) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            heading(data)
+            if let project = data.project {
+                HStack(spacing: 5) {
+                    ProjectGlyph(project: project, size: 11)
+                    Text(project.name).lineLimit(1)
+                }
+                .font(Typography.meta).foregroundStyle(palette.ink3)
+                .padding(.leading, TaskMetrics.chipTarget + 6).padding(.top, 2)
+            }
+            LeafDetail(leaf: data.goal, draft: data.drafts[data.goal.id])
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle().fill(palette.hair).frame(height: 1).padding(.horizontal, -32)
+            NewTaskField(project: data.goal.projectID, parent: data.goal.id).padding(.top, 10)
+        }
+        .padding(.horizontal, 32).padding(.top, 28).padding(.bottom, 18)
+    }
+
+    private func split(_ data: SheetData) -> some View {
+        let leaf = data.selected(workspace.openTask?.step)
+        return HStack(spacing: 0) {
+            sidebar(data, selected: leaf.id).frame(width: Self.sidebarWidth)
+            LeafDetail(leaf: leaf, draft: data.drafts[leaf.id])
+                .id(leaf.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(36)
+        }
+    }
+
+    /// 完成圈与标题（换成另一条任务时重建：标题的草稿只属于那一条）。
+    private func heading(_ data: SheetData) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            GoalCheck(task: data.goal, subtasks: data.progress).padding(.top, 1)
+            TaskHeading(task: data.goal).id(data.goal.id).padding(.trailing, 28)
+        }
+    }
+
     private func sidebar(_ data: SheetData, selected: UUID) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .top, spacing: 4) {
-                    TaskRingButton(task: data.goal, prompts: 0, subtasks: data.progress, size: 18).padding(.top, 1)
-                    // 换成另一条任务时重建：标题的草稿只属于那一条
-                    TaskHeading(task: data.goal).id(data.goal.id)
-                }
+                heading(data)
                 if let progress = data.progress {
-                    Text("\(progress.done)/\(progress.total) 步").font(Typography.meta).foregroundStyle(palette.ink3).monospacedDigit()
+                    Text(TaskCopy.progress(progress)).font(Typography.meta).foregroundStyle(palette.ink3).monospacedDigit()
                         .padding(.leading, TaskMetrics.chipTarget + 4)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -92,20 +123,24 @@ private struct StepRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
     @State private var hovering = false
+    @State private var check = TaskCheck()
 
     var body: some View {
-        let done = step.status == .done
-        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery, cueFollows: $0.cueFollows) }
+        let done = check.done(step)
+        // 步骤的草稿在右边写，这里只看会话那一格
+        let next = workspace.next(for: step, agent: agents.items[step.id], draft: nil)
         HStack(spacing: TaskRow.columnGap) {
-            TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
+            TaskCheckButton(
+                task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskRow.ringColumn, height: 14), check: $check)
             if selected {
                 TaskHeading(task: step, font: Typography.body).id(step.id)
             } else {
-                Text(step.title).font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
+                Text(step.title).font(Typography.body).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if let shown, TaskNext.wantsLook(shown) { PiStateDot(shown: shown, size: 6) }
+            if case .agent(let shown, _) = next { PiStateDot(shown: shown, size: 6) }
         }
+        .animation(Motion.quick, value: done)
         .padding(.horizontal, TaskRow.inset).frame(minHeight: 32)
         .background(selected ? palette.paperLit.opacity(0.8) : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
@@ -133,8 +168,8 @@ private struct LeafDetail: View {
                 if let item { openSession(item.state.sessionID, primary: false) }
             } else if let item {
                 let state = workspace.withLiveState(item.state)
-                let shown = workspace.shown(state, delivery: item.delivery, cueFollows: item.cueFollows)
-                let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
+                let shown = workspace.shown(state, delivery: item.delivery)
+                let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
             } else {
@@ -165,23 +200,6 @@ private struct LeafDetail: View {
         }
         .buttonStyle(PressStyle())
     }
-
-    /// 会话此刻怎样对应哪张图、哪句话（状态只经 `PiShown` 判定）。
-    private struct Look {
-        var mascot: Mascot, floats = false, title: String, note: String?
-
-        init(_ shown: PiShown, line: String?) {
-            switch shown.status {
-            case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
-            case .asking: (mascot, title, note) = (.error, "Agent 在等你\(shown.waitWord)", line)
-            case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
-            case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
-            case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")
-            case .interrupted: (mascot, title, note) = (.error, "Agent 被打断了", "在会话里说一句，它接着做")
-            case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
-            }
-        }
-    }
 }
 
 /// 吉祥物：透明底的图，脚下一圈淡阴影；Agent 在做时轻轻上下浮动（Core Animation，`LoopLayer.float`；减弱动态效果时不动）。
@@ -190,7 +208,7 @@ private struct MascotFigure: View {
     let floats: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let side: CGFloat = 150
+    private static let side: CGFloat = 120
 
     var body: some View {
         Group {
@@ -303,7 +321,7 @@ nonisolated private struct SheetData: Sendable, Equatable {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         let steps = try store.children(of: id).filter(\.isTask)
         let leaves = Set([id] + steps.map(\.id))
-        let drafts = try store.prompts(in: goal.projectID).filter { leaves.contains($0.key) }.compactMapValues(\.first)
+        let drafts = try store.drafts(in: goal.projectID).filter { leaves.contains($0.key) }
         return SheetData(goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps, drafts: drafts)
     }
 }

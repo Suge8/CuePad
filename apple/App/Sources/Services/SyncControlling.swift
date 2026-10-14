@@ -20,7 +20,7 @@ nonisolated protocol SyncControlling: Sendable {
 
 extension CloudSync: SyncControlling {}
 
-extension SyncControlling {
+nonisolated extension SyncControlling {
     /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒），也不排在引擎正在做的事后面（`CloudSync.sendNow`）。
     /// 失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
     func upload(_ record: UUID, deleted: Bool = false) async {

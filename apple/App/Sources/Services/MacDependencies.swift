@@ -12,8 +12,10 @@ struct MacDependencies {
     var agents: AgentIntegration
     var terminal: PiTerminalJumper
     var hostID: String
-    /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
+    /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
+    /// 资料库里随时间变的读与在线记录续期用的时钟（`CueStore.timing`）；测试换成手动推进的。
+    var timing: Timing = .system
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。

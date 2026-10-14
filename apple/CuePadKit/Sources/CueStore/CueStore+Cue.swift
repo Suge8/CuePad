@@ -100,6 +100,14 @@ extension CueStore {
     }
   }
 
+  /// 撤回你说的、还没交给 Cue 的一句（重发或移除没回执的话）；返回是否撤回了。已交出去的撤不回（Cue 已经读到）。
+  public func withdrawCueMessage(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
+      return db.changes > 0
+    }
+  }
+
   /// 交出去的这些没被 Cue 读完（大脑在那一轮中途退出）：清掉送达，下一个大脑重新交。
   public func unmarkCueMessagesDelivered(_ ids: [UUID]) throws {
     guard !ids.isEmpty else { return }
@@ -121,6 +129,16 @@ extension CueStore {
   /// 最近的 `limit` 条对话，从早到晚。
   public func cueMessages(limit: Int = 200) throws -> [CueMessage] {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
+  }
+
+  /// 新上下文从哪接上（唯一规则）：最近一份交接备忘与它之后的对话（你的话、Cue 的话、动态），从早到晚，只取最近的 `limit` 条；
+  /// 没写过交接就从头算。界面在交接处画"换了新上下文"的分隔，说的是分隔以下都在 Cue 眼前：新班次第一次醒来把这些交给大脑（`CueKeeper`），这句话才一直成立。
+  public func cueResume(limit: Int) throws -> CueResume {
+    let handoff = try select(CueMessage.self, where: "author = 'handoff'", orderBy: "createdAt DESC, rowid DESC", limit: 1).first
+    let after = try select(
+      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
+      orderBy: "createdAt DESC, rowid DESC", limit: limit + 1)
+    return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
   }
 
   /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：还开着的提问（`openQuestion`），
@@ -269,12 +287,14 @@ extension CueStore {
   /// Cue 的设置；从没设过为 nil。
   public func cueProfile() throws -> CueProfile? { try find(CueProfile.self, CueProfile.recordID) }
 
-  /// 改设置（没有就从默认值建一行）；返回改后的。
+  /// 改设置（没有就从默认值建一行）；返回改后的。读、改、写在同一个事务里，`edit` 可按读到的最新值决定改不改；什么都没改就不写。
   @discardableResult
   public func updateCueProfile(_ edit: @Sendable (inout CueProfile) -> Void) throws -> CueProfile {
     try write {
-      var profile = try cueProfile() ?? CueProfile()
+      let stored = try cueProfile()
+      var profile = stored ?? CueProfile()
       edit(&profile)
+      if let stored, profile == stored { return stored }
       profile.modifiedAt = Date.stamp
       try db.run(
         """
@@ -291,6 +311,25 @@ extension CueStore {
 extension CueStore {
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
   public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
+
+  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置、状态与它那台 Mac 的在线记录）。那台 Mac 的期限到了由订阅重读（`macOnline`），
+  /// "等你 N"、会话显示与手机推送标志到点自己变。
+  public func cueOnDuty() throws -> Bool {
+    guard let profile = try cueProfile(), let host = profile.activeHost else { return false }
+    return profile.onDuty(try cueState(), hostOnline: try macOnline(host))
+  }
+
+  /// 你最近一句对 Cue 说的话此刻到哪了（`Speech.trip`，与气泡同一条规则）；你还没说过为 nil。还在等回执时登记到点重读（`expire(at:)`），
+  /// 订阅它的（Cue 页的话在路上）到时限自己更新，界面不另计时。只说这句话自己的状态，不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
+  public func cueSpeech() throws -> Speech.Trip? {
+    let latest = try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
+      (said: $0.date(0), delivered: $0.dateOrNil(1))
+    }
+    guard let latest else { return nil }
+    let now = timing.now()
+    if let due = Speech.deadline(said: latest.said, delivered: latest.delivered), due > now { expire(at: due) }
+    return Speech.trip(said: latest.said, delivered: latest.delivered, now: now, reachable: true)
+  }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
   public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {

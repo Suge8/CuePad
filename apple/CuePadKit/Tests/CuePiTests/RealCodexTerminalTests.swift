@@ -8,7 +8,7 @@ import Testing
 /// 端到端：终端里开着的 Codex（真终端界面、真常驻服务、真模型）——CuePad 经钩子看到它，经常驻服务的控制接口对它说话、停止、改设置，
 /// 权限确认按人在不在分给终端或 CuePad。
 @MainActor
-@Suite(.enabled(if: realCodexSignedIn, RealAgents.skipped(.codex, needs: "本机装有并登录了 codex")), .timeLimit(.minutes(6)))
+@Suite(RealAgents.live(.codex, "断言的是伪终端里真终端界面的输出与按键、真常驻服务"), .serialized, .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
     @Test func aTerminalSessionIsSeenAndDrivenFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request") { rig in
@@ -41,12 +41,12 @@ struct RealCodexTerminalTests {
             }
 
             // 停止这一轮
-            let replies = rig.replies(session).count
             _ = try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             try await rig.bridge.abort(id)
             try await eventually("停下了", timeout: .seconds(20)) { rig.bridge.session(id: id)?.state == .settled }
-            #expect(rig.replies(session).count == replies)
+            // 停下时还没说出那句回答（这一轮说过的过程说明照对话规则算它的回答）
+            #expect(rig.replies(session).last?.uppercased().contains("LATE") != true, "\(rig.replies(session))")
 
             // 改名、换强度、压缩
             try await rig.bridge.configure(thinking: .medium, name: "终端里的会话", in: id)

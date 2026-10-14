@@ -6,7 +6,7 @@ import SwiftUI
 /// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。默认交到哪与 Mac 的发给 Agent、
 /// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑而上一步的会话
 /// 还开着就接着用它，否则是新会话；选"新会话…"就不接着用（同 Cue 的 fresh）。
-/// 发出即收起，提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
+/// 发出即收起，提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `SessionConfigControls`）。
 /// 选中会话做不到的（图片、斜杠命令、换模型，`AgentCapabilities`）不露出。
 struct HandOffInput: View {
     let outbox: Outbox
@@ -14,11 +14,9 @@ struct HandOffInput: View {
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @State private var draft = ComposerDraft()
     @State private var configs: [UUID: PiConfigShown]?
     @State private var choice: UUID?
     @State private var planned: Planned?
-    @State private var sending = false
     @FocusState private var focused: Bool
 
     /// 交到哪的规则读出的：决定本身（不是从提示词来的为 nil）、决定交给的会话的会话行（默认目标；没有为 nil，即新会话），
@@ -40,13 +38,23 @@ struct HandOffInput: View {
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
-    private var canSend: Bool { services.reachesPiHost && !sending && planned != nil }
+    private var canSend: Bool { services.reachesPiHost && planned != nil }
+    private var draft: ComposerDraft { navigation.handOffDraft }
+
+    /// 草稿在 `Navigation.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
+    private var box: Binding<ComposerDraft> {
+        let navigation = navigation, outbox = outbox
+        return Binding(get: { navigation.handOffDraft }) { draft in
+            navigation.handOffDraft = draft
+            if navigation.outbox == nil, !draft.isEmpty(accepting: [.images, .cards]) { navigation.outbox = outbox }
+        }
+    }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
     private var config: PiConfigShown? { chosen.flatMap { configs?[$0.state.id] } }
 
     var body: some View {
         Composer(
-            draft: $draft, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
+            draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card,
             commands: chosen?.state.usableCommands ?? [],
             header: {
@@ -62,7 +70,7 @@ struct HandOffInput: View {
             },
             tools: {
                 if let session = chosen?.state, let config, session.capabilities.contains(.model), !session.models.isEmpty {
-                    PiConfigControls(session: session, shown: config)
+                    SessionConfigControls(session: session, shown: config)
                 }
             },
             send: {
@@ -70,11 +78,7 @@ struct HandOffInput: View {
                     .buttonStyle(.plain).disabled(!canSend)
                     .accessibilityLabel(chosen.map { "交给 \($0.state.title)" } ?? "开新会话交给它")
             })
-        .floatingInputLocked(sending)
-        .onAppear {
-            draft.attachments = [outbox]
-            focused = true
-        }
+        .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
             let plan = try store.handOffPlan(card, host: nil)
@@ -124,20 +128,17 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, workspace: workspace, navigation: navigation)
         }
-        let sent = draft.accepting(session.composerKinds), mode = session.deliveryModes[0]
-        let line = PiSlash.line(of: sent, in: session.usableCommands)
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            if let line {
-                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outbox.card)
-            } else {
-                _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
-            }
-            focused = false
-            navigation.outbox = nil
-            workspace.say("已交给 \(session.title)")
+        let kinds = session.composerKinds, mode = session.deliveryModes[0], files = services.store.files
+        let saying: Dotted = "已交给 \(session.title)"
+        let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: session.usableCommands) {
+            workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
+        } else {
+            workspace.speak(to: .session(session, mode: mode, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }
         }
+        // 图片存不进图片库时什么都没发：浮框留着、草稿原样，只看到报错
+        guard written != nil else { return }
+        focused = false
+        navigation.outbox = nil
     }
 
     /// 默认目标是新会话时点发送，按交到哪的决定：未分类的开不了会话，说一句（与 Mac 上发给 Agent 同一句）、什么都不开；

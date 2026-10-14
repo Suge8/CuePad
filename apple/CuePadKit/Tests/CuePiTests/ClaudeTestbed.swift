@@ -7,18 +7,16 @@ import Testing
 @testable import CuePi
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
-/// 模型走本机用户自己的 Claude 订阅（`haiku`，省额度）：OAuth 令牌约 1 小时过期、由 Pi 自动刷新，所以每搭一次测试台现从
-/// ~/.pi/agent/auth.json 的 `anthropic.access` 读，只放进子进程环境（`CLAUDE_CODE_OAUTH_TOKEN`），不落盘。
+/// 模型走本机用户自己的 Claude 订阅（`haiku`，省额度）：OAuth 令牌约 1 小时过期、由 Pi 自动刷新，所以录制与直连时现从
+/// ~/.pi/agent/auth.json 的 `anthropic.access` 读，只放进子进程环境（`CLAUDE_CODE_OAUTH_TOKEN`），不落盘，也不进录像带。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 /// 此刻的订阅令牌（现读：Pi 会换新的）
-private var claudeToken: String? {
+var claudeToken: String? {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
     return (try? Data(contentsOf: auth)).flatMap(JSONValue.parse)?["anthropic"]?["access"]?.string
 }
-/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有订阅令牌
-let realClaudeAvailable = RealAgents.on(.claudeCode) && claudeURL != nil && claudeToken != nil
 /// 测试用的模型与换模型时换到的另一个
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
@@ -40,11 +38,13 @@ final class ClaudeTestbed {
     /// 人在不在这台 Mac 前：默认不在（提问交给 CuePad）
     let presence: TestPresence
     let files: AttachmentFiles
-    private var terminals: [ClaudeTerminal] = []
     private let store: CueStore
+    /// 桥上从测试台起来以后的全部变化
+    let log: ChangeLog
+    private var terminals: [ClaudeTerminal] = []
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) }, cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
@@ -63,12 +63,13 @@ final class ClaudeTestbed {
         let seed: JSONValue = ["hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
+        AgentTape.current?.watch(config.appending(path: "projects"), work)
         environment = [
             "CLAUDE_CONFIG_DIR": config.path, "HOME": root.appending(path: "home").path,
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "CLAUDE_CODE_OAUTH_TOKEN": claudeToken ?? "", "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : claudeToken ?? "", "ANTHROPIC_API_KEY": "",
             // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
@@ -76,17 +77,19 @@ final class ClaudeTestbed {
         store = try Fixture().store
         files = store.files
         bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
+        log = ChangeLog(bridge)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
         let presence = TestPresence()
         self.presence = presence
-        var bin = claudeURL!.deletingLastPathComponent()
+        var bin = AgentTape.executable("claude").deletingLastPathComponent()
         if wrapped {
+            let real = bin.appending(path: "claude")
             bin = root.appending(path: "wrapper", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
             let script = bin.appending(path: "claude")
-            try "#!/bin/sh\n'\(claudeURL!.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try "#!/bin/sh\n'\(real.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         }
         runtime = ClaudeCodeRuntime(
@@ -95,7 +98,7 @@ final class ClaudeTestbed {
         if installHooks { try await integration.install(.claudeCode) }
     }
 
-    /// 搭好测试台跑 `body`，不论成败都收拾干净（停掉起的进程、删掉临时目录）。
+    /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
         installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false,
         _ body: (ClaudeTestbed) async throws -> Void
@@ -125,17 +128,21 @@ final class ClaudeTestbed {
         return session(pid: pid)!
     }
 
-    /// 等这个会话这一轮做完（进过工作、又歇下）。
-    func waitForTurn(_ id: PiSession.ID, timeout: Duration = .seconds(180)) async throws {
-        var worked = false
-        do {
-            try await eventually("这一轮做完", timeout: timeout) {
-                let state = bridge.session(id: id)?.state
-                if state?.isWorking == true || state == .waitingForUser { worked = true }
-                return worked && state == .settled
+    /// 等这个会话在 `start` 之后做完一轮（进过工作、又歇下）：发话之前取 `start`。看变化记录，不看此刻的状态——
+    /// 回放时一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。
+    func waitForTurn(_ id: PiSession.ID, since start: Date, timeout: Duration = .seconds(180)) async throws {
+        func done() -> Bool {
+            var worked = false
+            for case .stateChanged(let session, _) in log.changes where session.id == id {
+                if session.state.isWorking || session.state == .waitingForUser { worked = true }
+                if worked && session.state == .settled && session.stateSince > start { return true }
             }
+            return false
+        }
+        do {
+            try await eventually("这一轮做完", timeout: timeout) { done() }
         } catch {
-            throw Stuck(description: "等不到这一轮做完（进过工作：\(worked)）；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))")
+            throw Stuck(description: "等不到这一轮做完；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))")
         }
     }
 
@@ -184,11 +191,11 @@ final class ClaudeTestbed {
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
+        guard AgentTape.current?.mode != .replay else { return }
         for pid in pids {
             try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
             #expect(!FileManager.default.fileExists(atPath: "/tmp/cc-socks/\(pid).sock"), "Claude Code \(pid) 的收件箱 socket 留下了")
         }
-        try? FileManager.default.removeItem(at: root)
     }
 }
 

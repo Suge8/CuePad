@@ -131,7 +131,7 @@ struct AgentPage: View {
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let session = item.state
         let endable = session.canEnd && end?.isOpen != true
-        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, cueFollows: item.cueFollows, style: .page).equatable()
+        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 MarkUnreadButton(session: session)

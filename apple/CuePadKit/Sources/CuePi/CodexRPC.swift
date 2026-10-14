@@ -4,7 +4,8 @@ import Foundation
 
 /// 一条到 Codex app-server 的 JSON-RPC 连接（app-server 协议：没有 `jsonrpc` 字段的 JSON-RPC 2.0）。两种传输：
 /// CuePad 自己起的 `codex app-server --listen stdio://`（一行一条 JSON），与常驻服务的控制 socket（unix socket 上的 WebSocket，一帧一条）。
-/// 回应按 id 配给请求（`PendingReplies`，至多等 `AgentTimeouts.reply`）；通知交给 `onNotification`。服务端请求（审批、提问）只发给订阅了线程的
+/// 回应按 id 配给请求（`PendingReplies`，至多等 `AgentTimeouts.reply`）；通知交给 `onNotification`，其中回答的逐字增量
+/// （`item/agentMessage/delta`）在这里累积成正在说的话交给 `onDraft`，回答项说完时换成它的全文。服务端请求（审批、提问）只发给订阅了线程的
 /// 连接：交给 `onRequest`，它不接（返回 false）的回错误，不让对方干等。
 @MainActor
 final class CodexRPC {
@@ -17,6 +18,14 @@ final class CodexRPC {
     var onNotification: ((String, JSONValue) -> Void)?
     /// 服务端请求（方法、请求 id、参数）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）：随增量更新，这一项说完（`item/completed`）时换成它带的全文
+    /// （不发增量时也照样有）；过程中的说明（`phase` 为 commentary）说完、
+    /// 下一项开始（转成工具调用、思考等）、下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。
+    /// 说明说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
+    /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
+    var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
+    /// 每个线程正在说的那一项（`DraftParts` 的 `message` 是项 id，整项一段）
+    private var drafts: [String: DraftParts] = [:]
     /// 连接断了（进程退出、常驻服务退出）；只调一次
     var onClose: (() -> Void)?
 
@@ -32,6 +41,12 @@ final class CodexRPC {
     var isClosed: Bool { replies.isClosed }
 
     // MARK: 建立
+
+    /// 一条用户输入（`UserInput`）：文字在前（空文字不带）、图片以 data URL 在后。
+    static func input(text: String, images: [PiImage]) -> [JSONValue] {
+        let text: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text), "text_elements": []]]
+        return text + images.map { ["type": "image", "url": .string("data:\($0.mimeType);base64,\($0.data.base64EncodedString())")] }
+    }
 
     /// 起一个 `codex app-server --listen stdio://`（`arguments` 接在后面，如 `-c` 覆盖配置）并完成握手；握手失败或超时时停掉这个进程再抛错。
     static func launch(
@@ -123,10 +138,50 @@ final class CodexRPC {
                 send(["id": id, "error": ["code": -32000, "message": .string("CuePad 不处理 \(method)")]])
             }
         } else if let method {
-            onNotification?(method, message["params"] ?? .object([:]))
+            let params = message["params"] ?? .object([:])
+            guard !drafted(method, params) else { return }
+            onNotification?(method, params)
         } else if let id = message["id"]?.int {
             replies.resolve(id, with: .success(message))
         }
+    }
+
+    /// 改正在说的话；增量本身到此为止（不再交给 `onNotification`），返回 true。
+    private func drafted(_ method: String, _ params: JSONValue) -> Bool {
+        guard let thread = params["threadId"]?.string else { return false }
+        switch method {
+        case "item/agentMessage/delta":
+            guard let item = params["itemId"]?.string, let delta = params["delta"]?.string else { return true }
+            update(thread, item: item) { $0.append(delta, to: 0) }
+            return true
+        case "item/started", "turn/started":
+            clearDraft(thread)
+        case "item/completed":
+            guard let item = params["item"], item["type"]?.string == "agentMessage" else { break }
+            if item["phase"]?.string == "commentary" {
+                clearDraft(thread)
+            } else if let id = item["id"]?.string, let text = item["text"]?.string {
+                update(thread, item: id) { $0.finish(0, with: text) }
+            }
+        case "turn/completed" where params["turn"]?["status"]?.string != "completed":
+            clearDraft(thread)
+        default:
+            break
+        }
+        return false
+    }
+
+    /// 改一个线程正在说的那一项（换了项就重新开始）。
+    private func update(_ thread: String, item: String, _ edit: (inout DraftParts) -> Void) {
+        var parts = drafts[thread].flatMap { $0.message == item ? $0 : nil } ?? DraftParts(message: item)
+        edit(&parts)
+        drafts[thread] = parts
+        onDraft?(thread, parts.draft)
+    }
+
+    private func clearDraft(_ thread: String) {
+        drafts[thread] = nil
+        onDraft?(thread, nil)
     }
 
     private func closed() {

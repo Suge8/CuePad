@@ -5,8 +5,7 @@ import os
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
-  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。不是 Cue 写的、对会话说的话（`DeliveryMode.toSession`）落在 Cue 跟进的任务的叶子会话上时，
-  /// 是你亲自接手：同一个事务里任务的 `cueFollows` 归零（Cue 下次醒来从跟进集合的差异里看到，见 `cueChanges`）。
+  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。
   @discardableResult
   public func requestDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
@@ -14,29 +13,31 @@ extension CueStore {
     try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
   }
 
-  /// `requestDelivery` 的事务内部分：必须在写事务内调用。
+  /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
+  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。
   private func insertDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     let now = Date.stamp
-    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
-      try takeOver(session: session, at: now)
-    }
     let request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
       status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
     try registerImages(in: content)
+    if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
+      try endUnusedSessions(of: leaf, cue: cue)
+    }
     return request
   }
 
-  /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。
-  private func takeOver(session: String, at now: Date) throws {
-    try db.run(
-      "UPDATE cards SET cueFollows = 0, modifiedAt = ?2 WHERE cueFollows = 1 AND parentID IS NULL AND id IN (\(Self.topTasks(ofSession: "?1")))",
-      [session, now])
+  /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。
+  private func leaf(holding card: UUID) throws -> UUID? {
+    guard let found = try link(of: card) else { return nil }
+    if found.isTask { return try promptHome(card) }
+    guard let parent = found.parent, try link(of: parent)?.isTask == true else { return nil }
+    return try promptHome(parent)
   }
 
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
@@ -79,12 +80,12 @@ extension CueStore {
   }
 
   /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：卡所在的任务的标题——任务是它自己，
-  /// 提示词是它挂着的任务；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
+  /// 提示词是它挂着的任务——超长的截断（`CueName.clipped`）；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
   func sessionName(forCard card: UUID) throws -> String? {
     guard let card = try find(Card.self, card) else { return nil }
     let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
     guard let title = task?.heading, !title.isEmpty else { return nil }
-    return title
+    return CueName.clipped(title)
   }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
@@ -122,6 +123,16 @@ extension CueStore {
   }
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
+
+  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+  public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {
+    for try await current in observe({ try $0.deliveryRequest(request) }) {
+      guard let current else { throw CueStoreError.notFound }
+      if !current.isOpen { return current }
+    }
+    throw CancellationError()
+  }
 
   /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
   public func deliveryRequests(toSession sessionID: String) throws -> [DeliveryRequest] {
@@ -254,7 +265,8 @@ extension CueStore {
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
-/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，不等同步引擎的调度）。
+/// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，不等同步引擎的调度）：发起的设备据领取知道 Mac 接手了，
+///   执行得久的（唤醒已结束的会话）不会被它报成超时没送到。领取的那次不等上传完就开始执行。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
@@ -262,7 +274,7 @@ public actor DeliveryExecutor {
   private let retention: Duration
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
-  private let onFinished: @Sendable (DeliveryRequest.ID) async -> Void
+  private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
   private var watcher: Task<Void, Never>?
@@ -273,7 +285,7 @@ public actor DeliveryExecutor {
   public init(
     store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
-    onFinished: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
+    onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -282,7 +294,7 @@ public actor DeliveryExecutor {
     self.retention = retention
     self.timing = timing
     self.onIssue = onIssue
-    self.onFinished = onFinished
+    self.onWritten = onWritten
     self.handler = handler
   }
 
@@ -334,6 +346,7 @@ public actor DeliveryExecutor {
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
+        Task { [onWritten] in await onWritten(request.id) }
         return request
       }
     }
@@ -346,7 +359,7 @@ public actor DeliveryExecutor {
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
     if await reporting({ try await store.finishDelivery(request.id, outcome, at: timing.now()) }) != nil {
-      await onFinished(request.id)
+      await onWritten(request.id)
     }
     scheduleCleanup()
   }

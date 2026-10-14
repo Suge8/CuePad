@@ -7,7 +7,7 @@ import Testing
 
 /// 端到端：CuePad 在后台托管 Codex（`codex app-server`，真模型，账号里最便宜的），状态来自真钩子，对话来自真会话文件。
 @MainActor
-@Suite(.enabled(if: realCodexSignedIn, RealAgents.skipped(.codex, needs: "本机装有并登录了 codex")), .timeLimit(.minutes(4)), .serialized)
+@Suite(RealAgents.taped(.codex), .agentTape(.codex), RealAgents.timeLimit(.minutes(4)), RealAgents.serialWhenRecording(.codex))
 struct RealCodexHostedTests {
     /// 开一个新会话、发一句带图的话：会话出现在桥上（后台托管、带着认领标识），做完一轮后歇下；会话文件里你的话带着这次投送的 id 与图片，
     /// 回答是一条 Codex 消息；换模型、强度与改名生效。结束后下线；再接着这个已结束的会话说，它在后台恢复、接着回答。
@@ -22,14 +22,16 @@ struct RealCodexHostedTests {
             let image = PiImage(mimeType: "image/png", data: try solidPNG(red: 1, green: 0, blue: 0))
             let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString)
             #expect(try await rig.bridge.send(message, to: id) == .immediate)
-            try await eventually("这一轮做完", timeout: .seconds(120)) { log.states.contains(.thinking) && rig.bridge.session(id: id)?.state == .settled }
+            // 上下文余量（`thread/tokenUsage/updated`）与歇下（Stop 钩子）走两条通道，先后不定：一起等
+            try await eventually("这一轮做完、报了上下文余量", timeout: .seconds(120)) {
+                log.states.contains(.thinking) && rig.bridge.session(id: id).map { $0.state == .settled && $0.context?.window ?? 0 > 0 } == true
+            }
 
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
             #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://img/"))
             #expect(rig.replies(session).last?.lowercased().contains("red") == true, "\(rig.replies(session))")
-            #expect(session.context?.window ?? 0 > 0)
 
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })
             try await rig.bridge.configure(model: other.key, in: id)
@@ -135,7 +137,8 @@ struct RealCodexHostedTests {
             #expect(files.count == 2)
             let history = HistoryEventLog(PiHistoryIndexer(agent: .codex, paths: rig.codex.paths, files: scratchFiles) { _ in nil }!)
             try await eventually("回填完") { history.finishedBackfill }
-            #expect(history.updates.map(\.checkpoint.sessionID) == [main])
+            // 主会话文件在这一轮歇下后可能还在写，会多一次更新：只看更新了哪些会话
+            #expect(Set(history.updates.map(\.checkpoint.sessionID)) == [main])
             let indexed = history.events.compactMap { if case .backfillFinished(let files) = $0 { files } else { nil } }.first
             #expect(indexed?.map(\.lastPathComponent).allSatisfy { $0.contains(main) } == true && indexed?.count == 1)
         }

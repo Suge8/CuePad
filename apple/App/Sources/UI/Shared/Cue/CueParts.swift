@@ -132,7 +132,7 @@ struct CuePreviewThumb: View {
         #endif
     }
 
-    private static let side: CGFloat = 64
+    private static let side: CGFloat = 44
 }
 
 /// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字，点开看全。
@@ -176,6 +176,8 @@ struct CueNotes: View {
 /// 关掉或撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
+    /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
+    var fadesIn = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -186,12 +188,13 @@ struct CueSays: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.entry)
+        .transition(fadesIn ? .entry : .identity)
     }
 }
 
-/// "等你"：固定在输入框上方，最早的那一条。问题（Markdown，同对话里的渲染；长了限高、点"展开"看全）与右上角的关掉、关联任务发来看的文件
-/// （缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮、其余选项、关联的任务；还有别的在等时写一句。
+/// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
+/// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务发来看的文件
+/// （小缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮与其余选项，末行是关联的任务、还有几条在等、原话的开关；右上角关掉。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：选了或关掉后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
@@ -201,14 +204,24 @@ struct CueWaitingDock: View {
     @Environment(\.palette) private var palette
     /// 正在结束的那条（写成后它从 `waiting` 里消失，写不成就清掉）。
     @State private var ending: UUID?
+    /// 展开了原话的那条：换下一条时自动收起。
+    @State private var reading: UUID?
+
+    #if os(macOS)
+    private static let originalHeight: CGFloat = 240
+    #else
+    private static let originalHeight: CGFloat = 160
+    #endif
 
     var body: some View {
         if let message = waiting.first {
             let ref = message.taskID.flatMap { tasks[$0] }
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     WaitingMark()
-                    FoldedMarkdown(source: message.text).id(message.id)
+                    Text((message.ask ?? .rule).question(task: ref?.task.heading))
+                        .font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button("关掉", systemImage: "xmark") { end(message, .dismissed) }
                         .labelStyle(.iconOnly).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink3)
@@ -217,10 +230,11 @@ struct CueWaitingDock: View {
                         .disabled(ending == message.id)
                         .help("不选，关掉这条")
                 }
+                if reading == message.id { original(message.text).transition(.opacity) }
                 // 关联任务发来看的文件就是证据：在手机上看完图再决定允不允许
                 if let previews = ref?.previews, !previews.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }
+                        HStack(spacing: 6) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }
                     }
                 }
                 choices(message)
@@ -229,14 +243,41 @@ struct CueWaitingDock: View {
                     Spacer(minLength: 0)
                     let others = waiting.count - 1
                     if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
+                    originalToggle(message)
                 }
             }
-            .padding(16)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous))
+            .animation(Motion.quick, value: reading)
             .id(message.id)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
+    }
+
+    /// Cue 的原话：放得下就整段，放不下在 `originalHeight` 里滚。
+    private func original(_ text: String) -> some View {
+        let body = MarkdownText(source: text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
+            .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+        return ViewThatFits(in: .vertical) {
+            body
+            ScrollView { body }
+        }
+        .frame(maxHeight: Self.originalHeight)
+    }
+
+    private func originalToggle(_ message: CueMessage) -> some View {
+        let open = reading == message.id
+        return Button { reading = open ? nil : message.id } label: {
+            HStack(spacing: 4) {
+                Text("原话")
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
+            }
+            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            .frame(minHeight: 24).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
     }
 
     private func choices(_ message: CueMessage) -> some View {
@@ -250,7 +291,7 @@ struct CueWaitingDock: View {
     @ViewBuilder private func buttons(_ message: CueMessage, _ options: [String]) -> some View {
         ForEach(Array(options.enumerated()), id: \.offset) { index, option in
             Button(option) { end(message, .answered(option)) }
-                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary))
+                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
                 .lineLimit(2)
                 .disabled(ending == message.id)
         }
@@ -262,52 +303,5 @@ struct CueWaitingDock: View {
             defer { ending = nil }
             try await workspace.endCueQuestion(message, end)
         }
-    }
-}
-
-/// 限高的 Markdown（"等你"的问题）：超过 `foldedHeight` 时只露上面一截、底边渐隐，下面一个"展开"；展开后最高 `expandedHeight`，再长在里面滚。
-struct FoldedMarkdown: View {
-    let source: String
-    @Environment(\.palette) private var palette
-    @State private var expanded = false
-    @State private var height: CGFloat = 0
-
-    #if os(macOS)
-    private static let foldedHeight: CGFloat = 120
-    #else
-    private static let foldedHeight: CGFloat = 88
-    #endif
-    private static let expandedHeight: CGFloat = 360
-
-    private var folds: Bool { height > Self.foldedHeight + 24 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Group {
-                if expanded && height > Self.expandedHeight {
-                    ScrollView { text }.frame(height: Self.expandedHeight)
-                } else {
-                    text.frame(maxHeight: folds && !expanded ? Self.foldedHeight : nil, alignment: .top).clipped()
-                        .mask {
-                            LinearGradient(stops: [.init(color: .black, location: 0.7), .init(color: folds && !expanded ? .clear : .black, location: 1)],
-                                startPoint: .top, endPoint: .bottom)
-                        }
-                }
-            }
-            if folds {
-                Button(expanded ? "收起" : "展开") { withAnimation(Motion.quick) { expanded.toggle() } }
-                    .font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-                    .buttonStyle(.plain)
-                    .frame(minHeight: 24).contentShape(.rect)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var text: some View {
-        MarkdownText(source: source).equatable()
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
     }
 }

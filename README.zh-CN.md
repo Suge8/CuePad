@@ -56,7 +56,7 @@ Mac 版见 [GitHub Releases](https://github.com/Suge8/CuePad/releases/latest)（
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
-cd apple/CuePadKit && swift test
+apple/scripts/xc.sh test kit     # 共用包的测试
 ```
 
 命令与开发约定见 [AGENTS.md](AGENTS.md) 与 [docs/](docs/)。

@@ -7,13 +7,14 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 每个会话都属于一个任务叶子：不经任务开的会话（终端里的 Pi、只在会话文件里找到的历史），Mac 建同名任务挂上，看板与 Cue 都从任务看到它。
+/// 活着的会话都属于一个任务叶子：不经任务开的会话（终端里的 Pi），Mac 建同名任务挂上，看板与 Cue 都从任务看到它；
+/// 只在会话文件里找到的历史会话不补。Cue 值班时管这些会话：CuePad 答得了的提问等 Cue，不算等你。
 struct SessionTaskTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    @Test func 终端里开的会话_看板出现同名任务_Cue看得到_名字跟着会话_没说话就退出时一起删() async throws {
+    @Test func 终端里开的会话_看板出现同名任务_Cue看得到_名字跟着会话且太长截断_没说话就退出时一起删() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await services.resetPiState()  // Mac 启动
@@ -25,13 +26,14 @@ struct SessionTaskTests {
         try await bridge(.appeared(session))
 
         let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
-        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.session?.sessionID == "s1")
-        let overview = try #require(await CueTools(store: store).call("task", ["action": "peek", "all": true]))
-        #expect(!overview.isError && overview.text.contains("圆桌：\n- 修登录（\(row.task.id.shortID)） · 用户自己 · 歇着"))
+        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.task.piSessionID == "s1")
+        let overview = try #require(await CueTools(store: store).call("task", ["action": "peek"]))
+        #expect(!overview.isError && overview.text.contains("在做 1 件：\n圆桌：\n- 修登录（\(row.task.id.shortID)） · 歇着"))
 
-        session.name = "修登录跳转"
+        // 终端会话的名字常是第一句话：任务名截到 24 宽（汉字算 2）加"…"
+        session.name = "修登录跳转并把回调改走统一网关再补上测试"
         try await bridge(.infoChanged(session))
-        #expect(try await store.card(row.task.id)?.title == "修登录跳转")
+        #expect(try await store.card(row.task.id)?.title == "修登录跳转并把回调改走…")
 
         try await bridge(.ended(session, reason: .closed(reason: "quit")))
         #expect(try await store.card(row.task.id) == nil)
@@ -57,7 +59,7 @@ struct SessionTaskTests {
         #expect(link.path(below: "登录页改版")?.visible == "Pi 验收")
     }
 
-    @Test func 启动时只在会话文件里的历史会话_挂上已完成并归档的同名任务_不占看板() async throws {
+    @Test func 启动时只在会话文件里的历史会话_不补任务_留在历史里() async throws {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appending(path: "old.jsonl")
@@ -74,9 +76,101 @@ struct SessionTaskTests {
 
         try await services.resetPiState()  // 升级后第一次启动：已有的游离会话归位
 
-        let task = try #require(try await store.archived().first)
-        #expect(task.title == "整理发布脚本" && task.status == .done && task.piSessionID == "old")
+        #expect(try await store.piSessions(sessionIDs: ["old"])["old"]?.state.state == .known(.ended))
+        #expect(try await store.archived().isEmpty)
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
+    }
+
+    /// 会话里谁说的按来源认（会话页的气泡与 Cue 的 peek 同一条）：Cue 发进去的是"你"，在 CuePad 里发的与终端里打的都是"他"。
+    /// 他发起的那一轮还在跑时，Cue 要"马上说"也只排到这一轮做完再发；Cue 自己发起的那一轮里照常马上说。
+    @Test func 会话消息按来源标注_他那一轮没完时Cue不插嘴() async throws {
+        try await store.updateCueProfile {
+            $0.hostID = "mac-b"
+            $0.enabledAt = .now
+        }
+        let task = try await store.createTask("修登录", in: nil)
+        try await store.linkCard(task.id, toSession: "s1")
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
+        let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
+        let byCue = UUID(), byPad = UUID(), byCueLater = UUID()
+        try await store.recordSend("先跑测试", to: target, delivery: byCue, origin: .known(.cue))
+        try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
+        func said(_ seq: Int64, _ text: String, _ delivery: UUID?) -> PiChatMessage {
+            PiChatMessage(sessionID: "s1", entryID: "u\(seq)", seq: seq, role: .user, text: text, at: .now, deliveryID: delivery)
+        }
+        let reply = PiChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad), said(4, "顺便看下注册页", nil)],
+            recap: PiRecap()))
+        try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
+
+        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
+        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter(\.isUser).map(\.fromCue) == [true, false, false])
+        let cue = CueTools(store: store)
+        let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
+        #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
+
+        let waited = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动", "when": "now"]))
+        #expect(!waited.isError && waited.structured["mode"] as? String == DeliveryMode.followUp.rawValue)
+
+        // Cue 自己说的那句开的一轮：照常马上说
+        try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
+        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
+        let steered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的", "when": "now"]))
+        #expect(!steered.isError && steered.structured["mode"] as? String == DeliveryMode.steer.rawValue)
+    }
+
+    /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
+    /// Cue 停用后，答得了的那个也回到"等你确认"。
+    /// 它住的那台 Mac 不在线（在线记录过了期限没续：崩溃、断电、断网）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
+    /// 到期自己变，不用等库里再写什么；那台 Mac 续上在线，又归 Cue。
+    @Test(.timeLimit(.minutes(1)))
+    func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let services: AppServices = app.services, store = services.store
+        try await store.updateCueProfile {
+            $0.hostID = "mac-b"
+            $0.enabledAt = .now
+        }
+        try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        let questions = [("s1", PiQuestion(promptID: "p", kind: .confirm, text: "继续？")), ("s2", PiQuestion(promptID: nil, kind: .confirm, text: "在终端里确认"))]
+        for (session, question) in questions {
+            try await recorder.update(sessionID: session, state: .thinking, title: session)
+            try await recorder.update(sessionID: session, state: .waitingForUser, question: question)
+        }
+        let workspace = Workspace(services: services)
+        func shown() async throws -> [String: String] {
+            services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+            return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
+        }
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])
+        #expect(try await CueWaiting.count(in: store) == 1)
+        let states = try await store.piSessions(sessionIDs: ["s1", "s2"])
+        #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
+        #expect(states["s2"]?.state.notify == .known(.waitingForUser))
+
+        // mac-b 之后再没续期：期限（`MacPresence.lifetime`）一到"等你"自己从 1 变 2
+        var counts = store.observe({ try CueWaiting.count(in: $0) }).makeAsyncIterator()
+        #expect(try await counts.next() == 1)
+        await clock.waitForSleeper()
+        clock.advance(.seconds(MacPresence.lifetime))
+        #expect(try await counts.next() == 2)
+        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
+        try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
+        try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
+        #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .known(.waitingForUser))
+
+        // mac-b 续上在线：又在值班
+        try await store.recordMacPresence(host: "mac-b") { true }
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
+        #expect(try await CueWaiting.count(in: store) == 1)
+
+        try await store.updateCueProfile { $0.enabledAt = nil }
+        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认", "s3": "等你确认"])
+        #expect(try await CueWaiting.count(in: store) == 3)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {
