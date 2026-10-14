@@ -6,7 +6,8 @@ import SwiftUI
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
 /// 连着的动态折成一行灰字（`CueNotes`），它在做事时末尾一行进展（`LiveLine`，同会话页）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 跟进的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
+/// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
     /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
     var inPanel = false
@@ -49,13 +50,21 @@ struct CuePage: View {
 
     #if os(macOS)
     private var page: some View {
-        VStack(spacing: 0) {
-            chat.fadesUnderBars().frame(maxHeight: .infinity)
-            bottom
-                .padding(.horizontal, Self.inset).padding(.bottom, 16)
-                .frame(maxWidth: Self.readingWidth)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                chat.fadesUnderBars().frame(maxHeight: .infinity)
+                bottom
+                    .padding(.horizontal, Self.inset).padding(.bottom, 16)
+                    .frame(maxWidth: Self.readingWidth)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if cue.showsRun, let keeper = services.cue.keeper {
+                CueRunPanel(keeper: keeper, handoff: thread?.lastHandoff)
+                    .padding([.trailing, .bottom], 12)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(Motion.panel, value: cue.showsRun)
         .background(palette.desk)
     }
     #else

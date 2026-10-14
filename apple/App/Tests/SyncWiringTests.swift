@@ -59,9 +59,8 @@ struct SyncWiringTests {
     @Test(.timeLimit(.minutes(1)))
     func 同步一直不返回时_下拉刷新到时限就停_主线程照常响应() async throws {
         app.sync.syncNowHangs.withLock { $0 = true }
-        defer { app.sync.release.continuation.finish() }
         let began = ContinuousClock.now
-        let refresh = Task { await services.refresh() }
+        let refresh = Task { await services.syncNow() }
 
         var worstDelay = Duration.zero
         while began.duration(to: .now) < .seconds(3) {
@@ -72,7 +71,7 @@ struct SyncWiringTests {
         await refresh.value
 
         #expect(app.sync.syncNows == 1)
-        #expect(began.duration(to: .now) < AppServices.refreshLimit + .seconds(1))
+        #expect(began.duration(to: .now) < AppServices.syncWaitLimit + .seconds(1))
         #expect(worstDelay < .milliseconds(200))
     }
 
