@@ -265,6 +265,22 @@ struct ConversationRuleTests {
         #expect(try PiHistory.index(file: claude, agent: .claudeCode, from: nil, files: scratchFiles).messages.map(\.text) == ["建个文件", "已拒绝"])
     }
 
+    /// 回答上的"用时"是你那句话到它说完：OpenCode 的一步从开始出字（`time.created`）到说完（`time.completed`）也算在里面。
+    @Test func theAnswerIsTimedFromYourMessageToWhenItWasDone() throws {
+        let json = """
+            [{"id":"u1","type":"user","text":"跑一下","time":{"created":1000000}},
+             {"id":"a1","type":"assistant","finish":"stop","content":[{"type":"text","text":"跑完了"}],"time":{"created":1000400,"completed":1006000}}]
+            """
+        var checkpoint = PiHistoryCheckpoint()
+        var transcript = PiHistory.Transcript(fallbackID: "s", files: scratchFiles)
+        for (seq, message) in try JSONDecoder().decode([OpenCodeMessage].self, from: Data(json.utf8)).enumerated() {
+            try OpenCodeHistory.ingest(message, seq: Int64(seq), &checkpoint, &transcript)
+        }
+        let answer = try #require(transcript.messages.last)
+        let started = try #require(answer.roundStartedAt)
+        #expect(answer.text == "跑完了" && answer.at.timeIntervalSince(started) == 6)
+    }
+
     @Test func aSteeredMessageInTheSameTurnGetsItsOwnAnswer() throws {
         let file = try codexFile([
             ["type": "task_started"], user("u1", "跑 sleep 20，跑完回 LONG-DONE"), agent("m1", "先跑命令。", "commentary"),
