@@ -113,6 +113,7 @@ struct PiConversation: View {
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
     static let firstWindow = 4, segment = 5
+    static let paging = ChatPaging(first: firstWindow, step: segment)
 
     static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
 
@@ -193,7 +194,6 @@ private struct ChatSegment: View, Equatable {
     let notes: [ReplyNote]
     let swapsInPlace: Bool
     @Binding var opened: PreviewOpening?
-    @Environment(\.palette) private var palette
 
     init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
         self.items = items
@@ -229,9 +229,8 @@ private struct ChatSegment: View, Equatable {
             ReplyBlock(
                 text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .system:
-            // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
-            Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity).padding(.vertical, 4)
+            // 会话文件里的系统记录（压缩）：上下文从这里起换了，与 Cue 换新同一条分隔
+            ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
         case .preview:
             PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
@@ -255,11 +254,6 @@ struct EarlierRow: View {
 
 
 extension PiConversation {
-    /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
-    static func window(reaching id: UUID, in items: [PiChatEntry]) -> Int? {
-        items.firstIndex { $0.id == id }.map { items.count - $0 }
-    }
-
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
     struct FollowKey: Equatable {
         var messages: Int

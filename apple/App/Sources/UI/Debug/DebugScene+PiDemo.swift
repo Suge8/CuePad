@@ -344,21 +344,36 @@ extension DebugScene {
 
     /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里是通用图标）；
     /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
-    /// Claude Code、Codex 的模型在它们自己的命名空间里（提供方是 `AgentKind.modelProvider`）。
+    /// Codex 与 Claude Code 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）
+    /// 与 Claude Code 的 `initialize`（Claude 系），提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
     static func demoModels(for agent: AgentKind?) -> PiModelState {
-        if agent == .opencode {
-            let models = [
+        func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
+            PiModelState(model: models[current], thinking: .known(thinking), models: models)
+        }
+        let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+        switch agent {
+        case .opencode:
+            return listed([
                 model("openrouter", "anthropic/claude-sonnet-5", "Claude Sonnet 5", [.low, .medium, .high]),
                 model("openrouter", "google/gemini-3-pro", "Gemini 3 Pro", [.low, .high]),
                 model("openrouter", "qwen/qwen3-coder", "Qwen3 Coder", [.off]),
-            ]
-            return PiModelState(model: models[0], thinking: .known(.medium), models: models)
+            ], current: 0, thinking: .medium)
+        case .codex:
+            let provider = AgentKind.codex.modelProvider ?? ""
+            return listed([
+                model(provider, "gpt-6.1-sol", "GPT-6.1-Sol", levels), model(provider, "gpt-6-astra", "GPT-6-Astra", levels),
+                model(provider, "gpt-6-sol", "GPT-6-Sol", levels), model(provider, "gpt-6-luna", "GPT-6-Luna", levels),
+                model(provider, "gpt-5.6-terra", "GPT-5.6-Terra", levels),
+            ], current: 0, thinking: .medium)
+        case .claudeCode:
+            let provider = AgentKind.claudeCode.modelProvider ?? ""
+            return listed([
+                model(provider, "default", "Default (recommended)", levels), model(provider, "opus", "Opus", levels),
+                model(provider, "fable", "Fable", levels), model(provider, "sonnet", "Sonnet", levels), model(provider, "haiku", "Haiku", levels),
+            ], current: 1, thinking: .high)
+        case .pi, nil:
+            return demoModels
         }
-        guard let provider = agent?.modelProvider else { return demoModels }
-        let models = agent == .codex
-            ? [model(provider, "gpt-5.5-codex", "GPT-5.5 Codex", [.low, .medium, .high, .xhigh]), model(provider, "gpt-5.5-mini", "", [.low, .medium])]
-            : [model(provider, "opus", "Opus", [.low, .medium, .high, .max]), model(provider, "sonnet", "Sonnet", [.low, .medium, .high])]
-        return PiModelState(model: models[0], thinking: .known(.medium), models: models)
     }
 
     static let demoModels: PiModelState = {
@@ -408,8 +423,9 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
-        // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
-        guard (try? await store.piSessionPage(.live).items.isEmpty) == true, let projects = try? await store.projects() else { return }
+        // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
+        // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
+        guard (try? await store.piSessionPage(.live).items.contains { $0.state.hostID == "demo-mac" }) == false, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [

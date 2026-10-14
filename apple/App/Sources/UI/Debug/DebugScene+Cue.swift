@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 验收过、做完了（结果带证据与截图）。
-/// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
+/// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的。
 /// `-CuePadCuePresence <thinking|tool|sending|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
@@ -21,6 +21,8 @@ extension DebugScene {
             _ = try await store.updateCueProfile { profile in
                 profile.hostID = "demo-mac"
                 profile.enabledAt = presence == "disabled" ? nil : .now
+                // 演示会话的模型之一（Cue 页输入框的模型胶囊有名字、菜单里有打勾的）
+                profile.model = "anthropic/claude-opus-5-5-20260901"
             }
             if presence != "asleep" { try await store.recordMacPresence(host: "demo-mac") { true } }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
@@ -39,6 +41,7 @@ extension DebugScene {
                 let message = try await store.addCueMessage(.you, text: text)
                 try await store.markCueMessagesDelivered([message.id])
             }
+            if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
             try await you("圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发")
             _ = try await store.addCueMessage(.cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id)
             for note in [
@@ -46,6 +49,18 @@ extension DebugScene {
                 "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试",
                 "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说",
             ] { _ = try await store.addCueMessage(.note, text: note) }
+            // 上下文到了换新线：写下交接，从这里起换了新上下文（对话里一条分隔，点开是这份备忘）
+            _ = try await store.addCueMessage(.handoff, text: """
+                **在做**
+                - 圆桌「5 人以上乱序」：已复现，原因是重连拿到新的加入时间；atlas 正在改成按首次加入时间排序，测试在跑。
+                - CuePad「导入旧数据」：会话出错（prompt 太长），等他回来再定怎么拆。
+
+                **下一步**
+                - atlas 测试过了就派「补 3 个重连用例」，然后部署到预发、截图给他验收。
+
+                **和他之间没了结的**
+                - 推送到 origin/main 要先问他（会触发正式环境部署）。
+                """)
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 验收过、做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
@@ -88,6 +103,20 @@ extension DebugScene {
             }
         } catch {
             fatalError("Cue 演示数据没写成：\(error)")
+        }
+    }
+
+    /// `-CuePadLongChat YES`：演示对话前面多 36 轮更早的来回，中间换过两次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
+    private static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
+        let asks = ["今天先看哪件？", "把计费那个会话的进展说一下", "圆桌的预发什么时候能好？", "帮我记一下：周五不发版", "README 截图换完了吗？", "重连用例加了几个？"]
+        let replies = ["先看圆桌：乱序会影响所有 5 人以上的房间。", "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", "测试在跑，大概二十分钟后能部署到预发。",
+                       "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
+        for round in 0..<36 {
+            if round == 12 || round == 26 {
+                _ = try await store.addCueMessage(.handoff, text: "**在做**\n- 圆桌乱序：在改排序，测试在跑。\n\n**下一步**\n- 测试过了派重连用例，再部署预发。")
+            }
+            try await you("第 \(round + 1) 句：" + asks[round % asks.count])
+            _ = try await store.addCueMessage(.cue, text: replies[round % replies.count])
         }
     }
 

@@ -10,7 +10,7 @@ import Foundation
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
-/// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
+/// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
 /// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明（commentary）说完、停下与失败的一轮它已清掉，留下的只有给你看的回答。
 @MainActor
@@ -19,9 +19,12 @@ final class CodexBrain: CueBrain {
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var rpc: CodexRPC?
     private var thread: String?
-    /// 交给 `turn/start` 的强度（已夹到模型支持的档位）
-    private var effort: String?
-    private(set) var seesImages = false
+    /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度
+    private var models: [CodexModel] = []
+    /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
+    private var model: CodexModel?
+    private var level: PiThinkingLevel?
+    var seesImages: Bool { model?.seesImages == true }
     /// 进行中的一轮
     private var turn: Turn?
     private struct Turn {
@@ -66,9 +69,18 @@ final class CodexBrain: CueBrain {
         if let model = config.model { params["model"] = model }
         let started = try await rpc.call("thread/start", params)
         thread = (started["thread"] as? [String: Any])?["id"] as? String
-        let model = try await CodexModel.list(rpc, hidden: true).first { $0.id == started["model"] as? String }
-        seesImages = model?.seesImages == true
-        if let level = config.effort, let model { effort = CodexModel.effort(level.clamped(to: model.efforts)) }
+        models = try await CodexModel.list(rpc, hidden: true)
+        model = models.first { $0.id == started["model"] as? String }
+        level = config.effort
+    }
+
+    func configure(model id: String?, effort: PiThinkingLevel?) async throws {
+        guard thread != nil else { throw CueBrainError.notRunning }
+        if let id {
+            guard let found = models.first(where: { $0.id == id }) else { throw CueBrainError.rejected("Codex 没有模型 \(id)") }
+            model = found
+        }
+        if let effort { level = effort }
     }
 
     func send(_ text: String, images: [PiImage]) async throws {
@@ -83,7 +95,10 @@ final class CodexBrain: CueBrain {
             }
         }
         var params: [String: Any] = ["threadId": thread, "input": input]
-        if let effort { params["effort"] = effort }
+        if let model {
+            params["model"] = model.id
+            if let level { params["effort"] = CodexModel.effort(level.clamped(to: model.efforts)) }
+        }
         let started = try await rpc.call("turn/start", params)
         if let id = (started["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
     }

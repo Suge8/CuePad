@@ -8,7 +8,8 @@ import Foundation
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 工具只有 `read,grep,find,ls` 与 `mcp__cuepad__*`：清单里有 `mcp__` 开头的项时，其余 MCP 服务的工具都不给；
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
-/// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；
+/// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
+///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
@@ -57,9 +58,7 @@ final class PiBrain: CueBrain {
                 ended(await process.exited())
             }
             let state = try await command(["type": "get_state"])
-            let model = (state["data"] as? [String: Any])?["model"] as? [String: Any]
-            window = model?["contextWindow"] as? Int
-            seesImages = (model?["input"] as? [String])?.contains("image") == true
+            adopt((state["data"] as? [String: Any])?["model"])
         } catch {
             await session.abandon(stop())
             throw error
@@ -69,6 +68,22 @@ final class PiBrain: CueBrain {
     func send(_ text: String, images: [PiImage]) async throws {
         let images = images.map { ["type": "image", "data": $0.data.base64EncodedString(), "mimeType": $0.mimeType] }
         _ = try await command(["type": "prompt", "message": text, "images": images, "streamingBehavior": "steer"])
+    }
+
+    func configure(model: String?, effort: PiThinkingLevel?) async throws {
+        if let model {
+            let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { throw CueBrainError.rejected("Pi 的模型要写成 提供方/模型：\(model)") }
+            adopt(try await command(["type": "set_model", "provider": parts[0], "modelId": parts[1]])["data"])
+        }
+        if let effort { _ = try await command(["type": "set_thinking_level", "level": effort.rawValue]) }
+    }
+
+    /// 在用的模型（Pi 的 Model 对象）：上下文窗口与能不能看图。
+    private func adopt(_ model: Any?) {
+        let model = model as? [String: Any]
+        window = model?["contextWindow"] as? Int
+        seesImages = (model?["input"] as? [String])?.contains("image") == true
     }
 
     func abort() async throws {
