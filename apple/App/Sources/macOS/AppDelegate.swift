@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let services: AppServices
         do {
             services = try AppServices(
-                location: location, defaults: location.makeDefaults(), sync: .iCloud,
+                location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource,
                 mac: .live(location: location))
         } catch {
             showLibraryFailure(LibraryFailure(error, location: location))

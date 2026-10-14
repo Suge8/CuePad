@@ -31,7 +31,7 @@ struct SyncRow: View {
                 Button("立即同步") {
                     working = true
                     Task {
-                        await services.syncNow()
+                        await services.refresh()
                         working = false
                     }
                 }

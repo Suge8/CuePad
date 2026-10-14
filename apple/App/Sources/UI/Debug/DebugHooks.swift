@@ -53,6 +53,15 @@ enum DebugHooks {
         #endif
     }()
 
+    /// 同步引擎从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
+    static var syncSource: AppServices.SyncSource {
+        #if DEBUG
+        DebugScene.syncSource
+        #else
+        .iCloud
+        #endif
+    }
+
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 Debug 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
     static var launchArgumentOverrides: [String: Any] {
