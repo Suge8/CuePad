@@ -139,8 +139,10 @@ extension Workspace {
         case .session(let session, _, let host):
             await send(text, to: AgentTarget(session: session, host: host), card: prompt)
         case .launch(let project, let host):
-            // 会话名由带着的提示词定（`CueStore.requestLaunch`）
-            _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name ?? "", on: host, card: prompt) {}
+            // 会话名由带着的提示词定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
+            let projectName = try await services.store.project(project)?.name
+            let title = plan.name ?? projectName ?? CaptureCopy.unfiled
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: prompt) {}
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)

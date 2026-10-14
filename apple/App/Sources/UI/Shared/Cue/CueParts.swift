@@ -441,7 +441,8 @@ struct CueAwayCard: View {
         CueTaskButton(task: item.id) {
             HStack(spacing: 8) {
                 if failed {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).font(.system(size: 14))
+                    // 出错同会话状态标的图形（`PiShown.symbol`）
+                    Image(systemName: PiShown(status: .failed).symbol).foregroundStyle(palette.failure).font(.system(size: 14))
                 } else {
                     TaskRingView(status: .done, ring: .plain, done: true, size: 14)
                 }
