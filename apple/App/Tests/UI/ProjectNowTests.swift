@@ -43,6 +43,12 @@ struct ProjectNowTests {
         #expect(now([seen], task: nil, intro: nil) == nil)
     }
 
+    /// 会话没有回答（模型拒绝、中途被停）：最后那句可能是 Cue 发进去的，近况不写它，只写状态（会话名已经说了是什么事）。
+    @Test func 没有回答时不写最后那句() {
+        let silent = item("notes", .settled)
+        #expect(now([silent])?.text == shown(silent).presence)
+    }
+
 }
 
 /// 没送到的话在"此刻"与会话行是同一个判定（`AppSettings.shown`）：你看过那个会话之前写没送到的原因，
