@@ -37,6 +37,21 @@ struct AgentDayTests {
         await executor.stop()
     }
 
+    /// 在等你时按它问的是什么说：要你填一段文字是"等你回答"，是或否、从选项里选是"等你确认"。
+    @Test func 文字题等你回答_确认与选择题等你确认() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let questions: [(String, PiQuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
+        for (id, kind) in questions {
+            try await recorder.update(
+                sessionID: id, state: .waitingForUser, title: id,
+                question: PiQuestion(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
+        }
+
+        #expect(try await label("words") == "等你回答")
+        #expect(try await label("yesno") == "等你确认")
+        #expect(try await label("pick") == "等你确认")
+    }
+
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话_排队() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")

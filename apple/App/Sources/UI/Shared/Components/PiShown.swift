@@ -132,6 +132,8 @@ nonisolated struct PiShown: Hashable, Sendable {
     var clock: PiClock?
     /// 跟进它的 Cue 的名字（用户起的）；不由 Cue 跟进为 nil。
     var cue: String?
+    /// 在等你时问的是要你填一段文字（`PiQuestionKind.text`）："等你回答"；是或否、选一个是"等你确认"。
+    var asksForWords = false
 }
 
 nonisolated extension PiShown {
@@ -155,6 +157,7 @@ nonisolated extension PiShown {
         case nil:
             self.init(status: asked, clock: own, cue: cue)
         }
+        asksForWords = session.question?.kind == .known(.text)
     }
 
     /// 只有 Pi 报的状态（子代理、样板）：空闲按看过处理。
@@ -186,7 +189,7 @@ nonisolated extension PiShown {
         case .working(.delegating): "子代理工作中"
         case .working(.compacting): "正在压缩上下文"
         case .working: "思考中"
-        case .asking: "等你确认"
+        case .asking: "等你\(waitWord)"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
         case .restart: "在线，需要 /reload"
@@ -212,7 +215,7 @@ nonisolated extension PiShown {
         case .delivery: "正在发给 Agent"
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
-        case .asking: "Agent 等你确认"
+        case .asking: "Agent 等你\(waitWord)"
         case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
@@ -224,6 +227,9 @@ nonisolated extension PiShown {
         case .unknown: "Agent 状态未知"
         }
     }
+
+    /// 在等你做的事："回答"（填文字）或"确认"（是否、选择）。
+    var waitWord: String { asksForWords ? "回答" : "确认" }
 
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }

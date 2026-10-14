@@ -51,7 +51,7 @@ nonisolated struct AgentNow: Equatable, Sendable {
     private static func headline(_ item: PiSessionListItem, _ shown: PiShown) -> String {
         let name = item.state.title
         return switch shown.status {
-        case .asking: "\(name) 在等你确认"
+        case .asking: "\(name) 在等你\(shown.waitWord)"
         case .cueAsking: "\(name) 在等 \(shown.cue ?? "") 回答"
         case .failed: "\(name) 出错了"
         case .delivery(.failed): "没能送到 \(name)"
@@ -67,7 +67,7 @@ nonisolated struct AgentNow: Equatable, Sendable {
     /// 好几个时主句的说法（"3 个 Agent 在干活"）。
     private static func verb(tier: Int) -> String {
         switch tier {
-        case 0: "在等你确认"
+        case 0: "在等你"
         case 1: "出错了"
         case 2: "在干活"
         case 3: "要重载"
