@@ -76,6 +76,17 @@ import Testing
     let board = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
     #expect(board.compactMap { $0["title"] as? String } == ["重写发布脚本"])
 
+    // 没有草稿不开工（开新会话也一样，fresh 也一样）：先 edit 写草稿，什么请求都不写
+    let blankID = try await server.call("task", ["action": "add", "title": "空着", "project": "演示"])["task"] as? String
+    let blank = try #require(blankID.flatMap(UUID.init(uuidString:)))
+    for arguments: [String: Any] in [["action": "start", "task": blank.uuidString], ["action": "start", "task": blank.uuidString, "fresh": true]] {
+      let refused = try await server.request("tools/call", ["name": "task", "arguments": arguments])
+      #expect(refused["isError"] as? Bool == true)
+      #expect(((refused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("edit") == true)
+    }
+    #expect(try await store.deliveryRequests().isEmpty)
+    _ = try await store.trashCard(blank)
+
     _ = try await server.call("task", ["action": "start", "task": String(task.uuidString.prefix(6)), "model": "anthropic/claude-x", "effort": "high"])
     let launch = try #require(try await store.deliveryRequests().first)
     let step = try #require(try await store.children(of: task).first)
@@ -262,6 +273,7 @@ import Testing
     }
     let task = try await store.createTask("修好登录页", in: project.id)
     try await store.setCueFollows(task.id, true)
+    _ = try await store.createCard(body: "登录页白屏，查一下", under: task.id)
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
 
@@ -514,7 +526,8 @@ import Testing
     #expect(answered.map(\.mode) == [.known(.config), .known(.answer)] && answered.allSatisfy(\.isFromCue))
     #expect(answered.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-sol"), thinking: .low))
 
-    // 照提示 fresh 开新会话：绑着会话的叶子也开新的
+    // 照提示 fresh 开新会话：绑着会话的叶子也开新的（同样要先写草稿）
+    _ = try await store.createCard(body: "换 opus 接着改", under: claude.id)
     _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
     let launch = try #require(try await store.deliveryRequests().first)
     #expect(launch.mode == .known(.start) && launch.launch?.agent == .claudeCode && launch.launch?.model == PiModelKey(provider: "claude", id: "opus"))

@@ -163,9 +163,9 @@ extension CueStore {
   }
 
   /// Cue 开工：把叶子（没有步骤的任务）的草稿交到 `handOffPlan` 定下的地方（与界面的"开始"同一条规则，含接着用上一步的会话与 `fresh`）。
-  /// 交给已有会话时会话正忙就等它做完再说；开新会话时草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
+  /// 开工要有草稿：交给已有会话时会话正忙就等它做完再说，开新会话时草稿作为第一句；送达后草稿用掉（`PromptConsumption`）。
   /// 接着用上一步的会话时，话送到才绑上（同界面、同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
-  /// 已有会话却没有草稿抛 `alreadyStarted`，接着用上一步的会话却没有草稿抛 `draftNeeded`（不先绑上），
+  /// 绑着会话却没有草稿抛 `alreadyStarted`，其余没有草稿抛 `draftNeeded`（什么都不写），
   /// 正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
   /// `agent` 缺省是 Pi，给了就只接着用这一家的会话；`agent`、`model` 与 `thinking` 只用于开新会话。
   public func startLeaf(
@@ -182,20 +182,21 @@ extension CueStore {
   ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
     let card = try requireLeaf(plan.leaf)
-    let draft = try draft(of: plan.leaf)
-    let content = draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
+    guard let draft = try draft(of: plan.leaf) else {
+      if case .session = plan.destination, card.piSessionID != nil { throw CueStoreError.alreadyStarted(card.heading) }
+      throw CueStoreError.draftNeeded(card.heading)
+    }
+    let content = CueFormat.readable(CueVariables.fill(draft.body, values: draft.variableValues))
     switch plan.destination {
     case .session(let sessionID, _, _):
-      let continuing = card.piSessionID == nil
-      guard let draft else { throw continuing ? CueStoreError.draftNeeded(card.heading) : CueStoreError.alreadyStarted(card.heading) }
-      if continuing, try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
+      if card.piSessionID == nil, try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
       return try say(content, to: try sessionTarget(sessionID, name: card.heading), when: .after, card: draft.id, host: host, cue: cue)
     case .launch(let project, let host):
-      guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(try requireLeaf(plan.leaf).heading) }
+      guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
       let launch = PiLaunch(
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
         agent: agent ?? .pi, model: model, thinking: thinking)
-      return try requestLaunch(launch, title: plan.name ?? "", on: host, card: draft?.id ?? plan.leaf, cue: cue)
+      return try requestLaunch(launch, title: plan.name ?? "", on: host, card: draft.id, cue: cue)
     case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
     case .unfiled: throw CueStoreError.noFolder("")
     }
