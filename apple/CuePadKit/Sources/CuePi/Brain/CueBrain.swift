@@ -45,10 +45,11 @@ public enum CueBrainEvent: Sendable, Equatable {
     case reply(String)
     /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）与上下文窗口
     case context(used: Int, window: Int?)
-    /// 开始调一个工具：名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
-    case tool(name: String, arguments: String)
-    /// 工具做完了，回到想
-    case toolDone
+    /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
+    /// Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
+    case tool(id: String, name: String, arguments: String)
+    /// 这次调用做完了：结果里的文字（几段拼起来；命令是它的输出）与成败
+    case toolDone(id: String, result: String, failed: Bool)
     case turnFinished
     /// 这一轮出错（提供方报错、额度、认证……），原文
     case failed(String)
