@@ -20,5 +20,17 @@ struct ChildProcessTests {
         #expect(await call.value == nil)
         #expect(ContinuousClock.now - started < .seconds(10))
     }
+
+    /// 子进程（与它再起的进程）按默认处置收信号：本进程忽略或屏蔽了的信号不带过去，
+    /// 否则 Claude Code 收到结束信号不走、只能 SIGKILL，收件箱 socket 就留在 /tmp/cc-socks。
+    @Test(.timeLimit(.minutes(1))) func aChildEndsOnSIGTERMEvenIfThisProcessIgnoresIt() async throws {
+        let previous = signal(SIGTERM, SIG_IGN)
+        let child = try ChildProcess(URL(filePath: "/bin/sleep"), ["30"], placement: .group)
+        signal(SIGTERM, previous)
+
+        kill(child.pid, SIGTERM)
+        #expect(await child.exited(within: .seconds(5)))
+        child.end()
+    }
 }
 #endif

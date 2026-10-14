@@ -123,12 +123,18 @@ public final class ChildProcess: Sendable {
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        let flags = switch placement {
-        case .inline: POSIX_SPAWN_CLOEXEC_DEFAULT
-        case .group: POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP
-        case .detached: POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSID
+        // 信号处置与屏蔽恢复默认：忽略的信号会跨 exec 继承（测试进程、App 都可能忽略着 SIGTERM），子进程就收不到结束信号
+        var signals = sigset_t()
+        sigfillset(&signals)
+        posix_spawnattr_setsigdefault(&attributes, &signals)
+        sigemptyset(&signals)
+        posix_spawnattr_setsigmask(&attributes, &signals)
+        let placed: Int32 = switch placement {
+        case .inline: 0
+        case .group: POSIX_SPAWN_SETPGROUP
+        case .detached: POSIX_SPAWN_SETSID
         }
-        posix_spawnattr_setflags(&attributes, Int16(flags))
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | placed))
         if placement == .group { posix_spawnattr_setpgroup(&attributes, 0) }
         let argv = ([executable.path] + arguments).map { strdup($0) } + [nil]
         let envp = (environment ?? ProcessInfo.processInfo.environment).map { strdup("\($0.key)=\($0.value)") } + [nil]

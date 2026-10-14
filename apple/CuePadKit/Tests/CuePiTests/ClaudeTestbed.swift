@@ -32,6 +32,8 @@ final class ClaudeTestbed {
     let bridge: PiBridge
     let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
+    /// 人在不在这台 Mac 前：默认不在（提问交给 CuePad）
+    let presence: TestPresence
     let files: AttachmentFiles
     private var terminals: [ClaudeTerminal] = []
     private let store: CueStore
@@ -70,8 +72,11 @@ final class ClaudeTestbed {
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
+        let presence = TestPresence()
+        self.presence = presence
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) })
+            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
+            presence: presence)
         if installHooks { try await integration.install(.claudeCode) }
     }
 
@@ -148,11 +153,17 @@ final class ClaudeTestbed {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
     }
 
+    /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
     func stop() async {
+        let pids = Set(terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid))
         for terminal in terminals { terminal.stop() }
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
+        for pid in pids {
+            try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
+            #expect(!FileManager.default.fileExists(atPath: "/tmp/cc-socks/\(pid).sock"), "Claude Code \(pid) 的收件箱 socket 留下了")
+        }
         try? FileManager.default.removeItem(at: root)
     }
 }

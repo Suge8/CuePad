@@ -103,6 +103,66 @@ struct RealClaudeTerminalTests {
         }
     }
 
+    /// 提问按人在不在分：人不在时挂住等 CuePad 答（终端里不弹）；挂着时人回来了就放行，终端里问、CuePad 只显示；
+    /// 人在时直接在终端里问，CuePad 上只显示、不能答。
+    @Test func aQuestionGoesToTheTerminalWhenTheUserIsAtTheMac() async throws {
+        try await ClaudeTestbed.run() { testbed in
+            try testbed.runtime.start()
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            let prompt = "用 AskUserQuestion 工具问我喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我选的选项词"
+
+            try await terminal.type(prompt)
+            let held = try await testbed.waitForQuestion(session.id, on: terminal)
+            #expect(await !terminal.screen.contains("2. 咖啡"))
+            testbed.presence.isPresent = true
+            try await eventually("CuePad 上只显示") { testbed.bridge.session(id: session.id)?.question.map { $0.promptID == nil } == true }
+            await #expect(throws: PiBridgeError.rejected("no_prompt")) {
+                try await testbed.bridge.answer(.option("咖啡"), to: try #require(held.promptID), in: session.id)
+            }
+            try await eventually("终端里问", timeout: .seconds(30)) { await terminal.screen.contains("2. 咖啡") }
+            try await terminal.keys("Enter")
+            try await testbed.waitForTurn(session.id)
+
+            try await terminal.type(prompt)
+            try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
+            #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
+            try await eventually("终端里问", timeout: .seconds(30)) { await terminal.screen.contains("2. 咖啡") }
+        }
+    }
+
+    /// MCP 服务要你填的只有一个字段的表单（Elicitation）：人不在时从 CuePad 答，答案交给 MCP 服务；
+    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是拒绝）它就收起。
+    @Test func cuePadAnswersAnMCPFormWhileTheUserIsAway() async throws {
+        try await ClaudeTestbed.run() { testbed in
+            try testbed.runtime.start()
+            let config = testbed.root.appending(path: "mcp.json")
+            let server = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
+            let node = try #require(ExecutableLocator.standard.candidates("node").first)
+            try (["mcpServers": ["cue": ["command": .string(node.path), "args": [.string(server.path)]]]] as JSONValue).data.write(to: config)
+            let terminal = try await testbed.terminal(["--mcp-config", config.path, "--allowedTools", "mcp__cue__pick"])
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            let prompt = "调用 mcp__cue__pick 工具（不要用别的工具），然后原样回复它返回的文字"
+
+            let form = try await testbed.ask(prompt, on: terminal, in: session.id)
+            #expect(form.kind == .known(.select) && form.options == ["茶", "咖啡"])
+            try await testbed.bridge.answer(.option("咖啡"), to: try #require(form.promptID), in: session.id)
+            try await testbed.waitForTurn(session.id)
+            #expect(await terminal.screen.contains(#""drink":"咖啡""#))
+
+            testbed.presence.isPresent = true
+            try await terminal.type(prompt)
+            try await eventually("又在问", timeout: .seconds(180)) { testbed.bridge.session(id: session.id)?.question != nil }
+            #expect(testbed.bridge.session(id: session.id)?.question?.promptID == nil)
+            try await eventually("终端里弹表单", timeout: .seconds(30)) { await terminal.screen.contains("饮料") }
+            try await terminal.keys("Down")  // 到 Accept 那一行，再右移到 Decline：终端里拒绝
+            try await eventually("选到按钮") { await terminal.screen.contains("❯ Accept") }
+            try await terminal.keys("Right")
+            try await terminal.keys("Enter")
+            try await eventually("CuePad 上收起", timeout: .seconds(60)) { testbed.bridge.session(id: session.id)?.question == nil }
+        }
+    }
+
     /// 在终端里先答了：CuePad 上的这一问随之消失，之后再从 CuePad 答是"已经答过了"。
     @Test func answeringInTheTerminalFirstWithdrawsTheQuestionFromCuePad() async throws {
         try await ClaudeTestbed.run() { testbed in

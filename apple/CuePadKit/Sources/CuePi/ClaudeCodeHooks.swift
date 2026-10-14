@@ -9,15 +9,15 @@ import Foundation
 struct ClaudeCodeHooks: AgentHookConfig {
     let home: URL
 
-    /// 上报状态的事件同步跑（保持先后），CuePad 当场放行；权限确认（也覆盖 AskUserQuestion）挡住等 CuePad 答复，
-    /// 终端里同时照常弹出，哪边先答算哪边。
+    /// 上报状态的事件同步跑（保持先后），CuePad 当场放行；权限确认挡住等 CuePad 答复，终端里同时照常弹出，哪边先答算哪边；
+    /// 提问（AskUserQuestion 的 PreToolUse）与 MCP 要你填的表单（Elicitation）人不在时挡住等 CuePad 答。
     static let events = [
         "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
-        "Stop", "StopFailure", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "PostModelSwitch",
+        "Stop", "StopFailure", "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "PostModelSwitch", "Elicitation", "ElicitationResult",
     ]
 
-    /// 放行的事件 CuePad 收到就回，CuePad 卡住时也不让 Claude Code 等太久；权限确认要等人答，给足一天
-    private static func timeout(_ event: String) -> Int { event == "PermissionRequest" ? 86_400 : 10 }
+    /// 放行的事件 CuePad 收到就回，CuePad 卡住时也不让 Claude Code 等太久；可能要等人答的给足一天
+    private static func timeout(_ event: String) -> Int { ["PermissionRequest", "PreToolUse", "Elicitation"].contains(event) ? 86_400 : 10 }
 
     var settings: URL { home.appending(path: "settings.json") }
 
