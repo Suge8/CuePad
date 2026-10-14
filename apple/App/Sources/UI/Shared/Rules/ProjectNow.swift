@@ -82,7 +82,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     /// → 需要 /reload → 有新回复；停着、已结束的不算。
     static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
-        case .idle, .resting, .fresh, .ended, .unknown: nil
+        case .idle, .resting, .fresh, .ended, .interrupted, .unknown: nil
         default: shown.rank
         }
     }

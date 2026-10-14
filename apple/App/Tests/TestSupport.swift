@@ -64,7 +64,14 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+    /// 为 true 时 `syncNow()` 一直不返回（像网络没有回音），直到 `release` 结束。
+    let syncNowHangs = Mutex(false)
+    let release = AsyncStream<Void>.makeStream()
+
+    func syncNow() async throws {
+        state.withLock { $0.syncNows += 1 }
+        if syncNowHangs.withLock({ $0 }) { for await _ in release.stream {} }
+    }
     func pullChanges() async throws {}
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。

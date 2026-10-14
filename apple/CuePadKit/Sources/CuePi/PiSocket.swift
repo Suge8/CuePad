@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 import Synchronization
@@ -160,6 +161,23 @@ private final class LineReader: @unchecked Sendable {
 
 /// 进程退出通知（kqueue `NOTE_EXIT`，非子进程也可用）。连接的 EOF 在进程退出过程中就会到达，
 /// 此时进程可能还没被父进程回收（`kill(pid, 0)` 仍成功），所以强杀后的残留清理由它触发，而不是轮询。
+extension PiProcess {
+    /// 此刻用这个 pid 的进程（带启动时刻）；没有为 nil。
+    public static func running(pid: Int32) -> PiProcess? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        return PiProcess(pid: pid, startedAt: Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec))
+    }
+
+    /// 还是那一个进程在跑（pid 被复用的不算）。
+    public var isRunning: Bool { Self.running(pid: pid) == self }
+
+    var startDate: Date { Date(timeIntervalSince1970: TimeInterval(startedAt) / 1_000_000) }
+}
+
 final class ProcessExitWatcher {
     private let source: DispatchSourceProcess
 
