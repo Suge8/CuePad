@@ -14,7 +14,7 @@ nonisolated struct CueLaunch: Equatable, Sendable {
 
 /// 查本机的 Pi、Codex、Claude Code 能不能当大脑：按 `ExecutableLocator.resolved` 找可执行文件，`scan()` 再用各家自己的命令问登录了没有
 /// （Pi 是 `--list-models` 有没有可用模型，Codex 是 `login status` 的退出码，Claude Code 是 `auth status` 的 `loggedIn`）。
-/// 状态命令慢（每条最多等 `timeout`），只在启用、换运行时与大脑起不来时跑；每个班次开始只用 `launch(_:store:)`。只读，不改任何一家的配置。
+/// 状态命令慢（每条最多等 `timeout`），只在启用时跑；每个班次开始只用 `launch(_:store:)`。只读，不改任何一家的配置。
 nonisolated struct CueRuntimes: Sendable {
     private static let timeout: Duration = .seconds(15)
 
