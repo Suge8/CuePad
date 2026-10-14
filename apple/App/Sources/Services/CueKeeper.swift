@@ -134,6 +134,8 @@ final class CueKeeper {
         var selfStarted: (wake: CueWake, extra: String?)?
         /// 这一轮里交出去的你的消息、回答与关掉的提问：大脑中途退出时清掉送达
         var delivered: [UUID] = []
+        /// 这一轮中途插进了你的话（`delivered` 不算数：随信封记下送达的还有你关掉的提问，那不是在等回答）
+        var youSpoke = false
         /// 醒来时的基线候选：这一轮做完且没出错才前移到它
         var baseline: (since: Date, followed: [UUID])?
         /// 这一轮报的错（原文）
@@ -143,7 +145,7 @@ final class CueKeeper {
         /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
         var answersYou: Bool {
             guard let wake = selfStarted?.wake else { return true }
-            return !delivered.isEmpty || (wake != .enabled && author == .cue)
+            return youSpoke || (wake != .enabled && author == .cue)
         }
     }
 
@@ -411,6 +413,7 @@ final class CueKeeper {
                     }
                     updateShift {
                         $0.turn?.author = .cue
+                        $0.turn?.youSpoke = true
                         $0.turn?.delivered += ids
                     }
                     try await store.markCueMessagesDelivered(ids)

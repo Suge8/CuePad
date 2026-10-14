@@ -60,8 +60,9 @@ struct CueHostTests {
             model.stop()
         }
 
-        /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下。
-        func settleFollowedTask(titled title: String) async throws {
+        /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下；
+        /// `beforeSettling` 在会话歇下（叫醒 Cue）之前做。
+        func settleFollowedTask(titled title: String, beforeSettling: () async throws -> Void = {}) async throws {
             try await say("请建个任务并开工")
             try await message(.cue, containing: "办好了")
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
@@ -70,6 +71,7 @@ struct CueHostTests {
             // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
             try await store.linkCard(task.id, toSession: session.sessionID)
             try await store.updateCard(task.id) { $0.body = title }
+            try await beforeSettling()
             session.setState(["kind": "thinking"])
             session.setState(["kind": "idle"])
         }
@@ -306,6 +308,22 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 你关掉了 Cue 的提问，之后 Cue 自己醒来收尾、请你收下：信封里带着"你关掉了"（随信封记下送达），这一轮仍是 Cue 自己醒来的，
+    /// 问过你就不再写最后那句。
+    @Test func 关掉提问后自己醒来_问过你就不再多写() async throws {
+        let rig = try await Rig()
+        try await rig.say("请问我一个问题")
+        let question = try await rig.message(.cue, containing: "先做哪个？")
+        try await rig.message(.cue, containing: "办好了")
+        try await rig.settleFollowedTask(titled: "修好登录页 请收一下") {
+            try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
+        }
+        let asked = try await rig.message(.cue, containing: "收下吗？")
+        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
+        #expect(try await rig.store.cueMessages().filter { $0.createdAt >= asked.createdAt && $0.id != asked.id }.isEmpty)
+        await rig.stop()
+    }
+
     /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
     @Test func 记忆待合并时空闲后醒来合并() async throws {
         let rig = try await Rig()
@@ -496,7 +514,7 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if let closed = text.firstMatch(of: /\[关掉提问\] 他没选就关掉了「(.+?)」/)?.1 {
+        if !text.contains("醒来：跟进的会话有动静"), let closed = text.firstMatch(of: /\[关掉提问\] 他没选就关掉了「(.+?)」/)?.1 {
             return say("看到你关掉了：\(closed)；" + (text.split(separator: "\n").last.map(String.init) ?? ""))
         }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
