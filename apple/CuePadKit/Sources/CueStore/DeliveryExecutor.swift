@@ -266,7 +266,7 @@ extension CueStore {
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
 /// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，不等同步引擎的调度）：发起的设备据领取知道 Mac 接手了，
-///   执行得久的（唤醒已结束的会话）不会被它当成 Mac 没有回应。领取的那次不等上传完就开始执行。
+///   执行得久的（唤醒已结束的会话）不会被它报成超时没送到。领取的那次不等上传完就开始执行。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String

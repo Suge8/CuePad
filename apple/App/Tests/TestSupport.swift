@@ -116,11 +116,14 @@ final class TestApp {
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
+    /// 资料库与在线记录续期的时钟；要推进时间的测试给 `ManualTiming` 的。
+    private let timing: Timing
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
         self.cue = cue
         self.updater = updater
+        self.timing = timing
         services = makeServices()
     }
     #else
@@ -177,6 +180,7 @@ final class TestApp {
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
+            timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),

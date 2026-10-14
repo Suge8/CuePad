@@ -36,6 +36,7 @@ import Testing
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")
+    try await store.recordMacPresence(host: "mac") { true }
     return (card, hash)
   }
 

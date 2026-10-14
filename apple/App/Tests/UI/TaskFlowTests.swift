@@ -45,11 +45,11 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
         #expect(try await delivery(of: first) == .sending)
-        // Mac 一直没领取：过了等回执的时限是"Mac 没有回应"，可以重发（issue #5）
+        // Mac 一直没领取：过了等回执的时限是"Mac 迟迟没收下"，可以重发（issue #5）
         let late = request.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
         let timedOut = try await delivery(of: first, at: late)
         #expect(timedOut.canSend)
-        #expect(try await failure(of: first, at: late) == .noReply)
+        #expect(try await failure(of: first, at: late) == .timedOut)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         #expect(try await failure(of: first) == .reported("会话在送达前关掉了"))
