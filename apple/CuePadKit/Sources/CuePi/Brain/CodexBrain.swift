@@ -9,6 +9,7 @@ import Foundation
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
+/// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
 @MainActor
@@ -19,6 +20,7 @@ final class CodexBrain: CueBrain {
     private var thread: String?
     /// 交给 `turn/start` 的强度（已夹到模型支持的档位）
     private var effort: String?
+    private(set) var seesImages = false
     /// 进行中的一轮
     private var turn: Turn?
     private struct Turn {
@@ -60,17 +62,14 @@ final class CodexBrain: CueBrain {
         if let model = config.model { params["model"] = model }
         let started = try await rpc.call("thread/start", params)
         thread = (started["thread"] as? [String: Any])?["id"] as? String
-        if let level = config.effort, let model = started["model"] as? String {
-            let models = try await rpc.call("model/list", ["includeHidden": true, "limit": 500])["data"] as? [[String: Any]] ?? []
-            let supported = (models.first { $0["id"] as? String == model }?["supportedReasoningEfforts"] as? [[String: Any]] ?? [])
-                .compactMap { ($0["reasoningEffort"] as? String).flatMap { CodexModel.thinking($0).known } }
-            effort = CodexModel.effort(level.clamped(to: supported))
-        }
+        let model = try await CodexModel.list(rpc, hidden: true).first { $0.id == started["model"] as? String }
+        seesImages = model?.seesImages == true
+        if let level = config.effort, let model { effort = CodexModel.effort(level.clamped(to: model.efforts)) }
     }
 
-    func send(_ text: String) async throws {
+    func send(_ text: String, images: [PiImage]) async throws {
         guard let rpc, let thread else { throw CueBrainError.notRunning }
-        let input: [[String: Any]] = [["type": "text", "text": text, "text_elements": [] as [Any]]]
+        let input = CodexRPC.input(text: text, images: images)
         if let active = turn?.id {
             do {
                 try await rpc.call("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])

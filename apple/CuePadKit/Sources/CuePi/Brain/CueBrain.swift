@@ -57,8 +57,10 @@ public protocol CueBrain: AnyObject {
     var events: AsyncStream<CueBrainEvent> { get }
     /// 起进程并做完握手；之后就能 `send`。起不来时已起的进程停掉再抛
     func start(_ config: CueBrainConfig) async throws
-    /// 说一句话：空闲时开始一轮，正忙时插进当前这一轮
-    func send(_ text: String) async throws
+    /// 模型能看图（起好之后才算数）；看不了时别交图，交了各家也只是丢掉或报错
+    var seesImages: Bool { get }
+    /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮
+    func send(_ text: String, images: [PiImage]) async throws
     /// 停下当前这一轮（空闲时什么都不做），进程留着、能接着说
     func abort() async throws
     /// 结束进程：返回的等待在进程（连同它起的子进程）退出后结束，不需要主线程（App 退出时在主线程之外等）；随后发 `exited(nil)`

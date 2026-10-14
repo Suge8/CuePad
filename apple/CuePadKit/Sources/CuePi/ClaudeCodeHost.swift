@@ -255,12 +255,8 @@ final class ClaudeHostedSession: SessionLink {
         }
         let mode = message.whenBusy ?? .followUp
         let delivered: PiDelivery = busy ? .queued(mode) : .immediate
-        var content: [ClaudeJSON] = message.text.isEmpty ? [] : [["type": "text", "text": .string(message.text)]]
-        for image in message.images {
-            content.append(["type": "image", "source": ["type": "base64", "media_type": .string(image.mimeType), "data": .string(image.data.base64EncodedString())]])
-        }
         try write([
-            "type": "user", "message": ["role": "user", "content": .array(content)], "parent_tool_use_id": .null, "session_id": "",
+            "type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: message.text, images: message.images)], "parent_tool_use_id": .null, "session_id": "",
             "uuid": .string(message.deliveryID ?? UUID().uuidString), "priority": priority(mode),
         ])
         // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则

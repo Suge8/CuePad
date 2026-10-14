@@ -17,6 +17,8 @@ final class ClaudeBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
     private var stream: ClaudeStream?
+    /// Claude 的模型都能看图
+    let seesImages = true
     private var turn: Turn?
     private struct Turn {
         var used: Int?
@@ -51,9 +53,9 @@ final class ClaudeBrain: CueBrain {
         }
     }
 
-    func send(_ text: String) async throws {
+    func send(_ text: String, images: [PiImage]) async throws {
         guard let stream else { throw CueBrainError.notRunning }
-        try stream.write(["type": "user", "message": ["role": "user", "content": .string(text)], "parent_tool_use_id": .null])
+        try stream.write(["type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: text, images: images)], "parent_tool_use_id": .null])
     }
 
     func abort() async throws {
