@@ -7,6 +7,8 @@ struct CuePadApp: App {
     @UIApplicationDelegateAdaptor(IOSAppDelegate.self) private var delegate
     @State private var launch = Launch.make()
 
+    init() { LiteralText.install() }
+
     var body: some Scene {
         WindowGroup {
             switch launch {

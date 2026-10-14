@@ -60,6 +60,8 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
+    /// 由 Cue 跟进（`PiSessionListItem.cueFollows`）：名字前带 Cue 的小头像，歇下时只说"歇着"，不催你。
+    var cueFollows = false
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -88,7 +90,7 @@ struct PiSessionRow: View {
     }
 
     var body: some View {
-        let shown = services.settings.shown(session, delivery: delivery)
+        let shown = services.settings.shown(session, delivery: delivery, cueFollows: cueFollows)
         let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
         let draft = services.settings.draftPreview(for: session.id)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
@@ -103,6 +105,8 @@ struct PiSessionRow: View {
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     let name = Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    // 头像的中线对着名字的字身：基线落在头像下缘往上约三成处
+                    if cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + $0.height * 0.3 } }
                     if style.full, !placeLeads, let place {
                         NameAndPlace {
                             name
@@ -194,7 +198,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.style.full == b.style.full && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.cueFollows == b.cueFollows && a.style.full == b.style.full && a.style.dot == b.style.dot
     }
 }
 

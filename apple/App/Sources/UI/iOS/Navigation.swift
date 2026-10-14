@@ -187,6 +187,8 @@ final class Navigation {
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
+        case .cue:
+            show(.cue)
         }
     }
 
@@ -199,6 +201,10 @@ final class Navigation {
     /// 在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
         switch (route, layout) {
+        // Cue 是 Agent 标签的根
+        case (.cue, .tabs):
+            tab = .agent
+            agentPath = []
         case (.session, .tabs):
             tab = .agent
             agentPath = [route]
@@ -208,6 +214,14 @@ final class Navigation {
         case (_, .tabs):
             tab = .projects
             projectsPath = [route]
+        }
+    }
+
+    /// Cue 页此刻是看着的那一页（iPhone 的 Agent 标签根、iPad 侧栏选着它）。
+    var showsCuePage: Bool {
+        switch layout {
+        case .tabs: tab == .agent && agentPath.isEmpty
+        case .split: splitRoot == .cue && splitPath.isEmpty
         }
     }
 
@@ -223,8 +237,8 @@ final class Navigation {
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
     func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
-        case .tabs: tab == .agent && agentPath.isEmpty
-        case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
+        case .tabs: tab == .agent && agentPath.last == .agent
+        case .split: splitRoot == .agent && splitPath.isEmpty
         }
         return !onAgentList && !isViewing(session: session)
     }

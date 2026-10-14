@@ -145,7 +145,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public static let defaultName = "Cue"
   /// 只有一行：任何设备上都是这个 id。
-  static let recordID = DeterministicID.uuid("cue-profile")
+  public static let recordID = DeterministicID.uuid("cue-profile")
   /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。
   package static var syncRecordName: String { recordID.uuidString.lowercased() }
 

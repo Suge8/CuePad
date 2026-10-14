@@ -43,13 +43,27 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
     let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
+    let followed = try cueFollowedSessions(states.map(\.sessionID))
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
           state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
+          undelivered: undelivered[$0.sessionID] ?? 0, cueFollows: followed.contains($0.sessionID))
       },
       total: total)
+  }
+
+  /// 这些会话（Pi 的会话 id）里由 Cue 跟进的：绑着它的任务（叶子）所在的顶层任务 `cueFollows`。
+  public func cueFollowedSessions(_ sessionIDs: [String]) throws -> Set<String> {
+    guard !sessionIDs.isEmpty else { return [] }
+    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
+    return Set(try db.query(
+      """
+      WITH RECURSIVE up(session, id, parentID) AS (
+        SELECT piSessionID, id, parentID FROM cards WHERE piSessionID IN (\(refs)) AND todoAt IS NOT NULL AND deletedAt IS NULL
+        UNION SELECT up.session, c.id, c.parentID FROM cards c JOIN up ON c.id = up.parentID WHERE c.deletedAt IS NULL)
+      SELECT DISTINCT up.session FROM up JOIN cards t ON t.id = up.id WHERE up.parentID IS NULL AND t.cueFollows = 1
+      """, sessionIDs) { $0.text(0) })
   }
 
   /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。

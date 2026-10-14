@@ -216,6 +216,9 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
+  /// 送出它的投送请求（消息的 `PiChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
+  public var deliveryID: UUID?
+  public var origin: Open<DeliveryOrigin>?
 }
 
 /// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
@@ -477,14 +480,17 @@ extension Card: Record {
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "deliveryID", "origin"]
+  var bindings: [any SQLBindable] {
+    [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, deliveryID, origin?.rawValue]
+  }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
-      sentAt: row.date(6), modifiedAt: row.date(7))
+      sentAt: row.date(6), modifiedAt: row.date(7),
+      deliveryID: row.uuidOrNil(8), origin: row.textOrNil(9).map(Open.init(rawValue:)))
   }
 }
 

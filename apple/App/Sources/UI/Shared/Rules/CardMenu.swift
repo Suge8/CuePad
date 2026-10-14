@@ -8,6 +8,8 @@ import CueStore
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
         case attachToTask, handToAgent, makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash
+        /// 交给 Cue 跟进、收回自己做：只在没做完的顶层任务上（`Card.cueFollows`）。
+        case cueFollow, cueRelease
         /// 开始批量选择（Mac 项目页上散放的灵感）。
         case select
         /// 只在轻扫里：任务在大纲里缩进、反缩进。
@@ -35,8 +37,13 @@ nonisolated enum CardMenu {
         switch card.status {
         case nil: [[handsToAgent(card) ? .handToAgent : .attachToTask, .makeTask, .move, .archive], (selectable ? [.select] : []) + [.trash]]
         case .done: [[.reopen, .archive], [.trash]]
-        case .todo, .inProgress: [[.complete, .archive], [.trash]]
+        case .todo, .inProgress: [[.complete] + cueItem(card) + [.archive], [.trash]]
         }
+    }
+
+    static func cueItem(_ card: Card) -> [Item] {
+        guard card.parentID == nil, card.isTask, card.status != .done else { return [] }
+        return [card.cueFollows ? .cueRelease : .cueFollow]
     }
 
     /// 任务页与纸页的"⋯"。提示词已经挂在任务下，不再"挂到任务"；发给 Agent 在页面上（提示词卡与提示词的纸页），不在这里。
@@ -46,6 +53,6 @@ nonisolated enum CardMenu {
             let attach: [Item] = handsToAgent(card) ? [] : [.attachToTask]
             return [attach + [.makeTask, card.isPinned ? .unresource : .resource, .move, .copy], [.archive], [.trash]]
         }
-        return [(card.parentID == nil ? [.move] : []) + [.copy], [.makeIdea, .archive], [.trash]]
+        return [cueItem(card) + (card.parentID == nil ? [.move] : []) + [.copy], [.makeIdea, .archive], [.trash]]
     }
 }

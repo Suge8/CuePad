@@ -101,10 +101,14 @@ enum Schema {
     },
     // 29：对话里你的消息改用正文格式（文字加图片引用），去掉 Pi 附给模型的图片说明；会话文件的检查点作废，下次启动从头读一遍，已存的消息跟着更新、补出图片
     "UPDATE piSessions SET checkpoint = NULL;",
-    // 30：总控 Agent Cue：任务由谁跟进、请求来自谁，Cue 的对话、记忆、设置与记忆摘要缓存
+    // 30：总控 Agent Cue：任务由谁跟进、请求来自谁（发送记录也记下送出它的请求与来源：请求清理后对话仍认得出 Cue 说的话），
+    // Cue 的对话、记忆、设置与记忆摘要缓存
     Upgrade(stringLiteral: """
       ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE deliveryRequests ADD COLUMN origin TEXT;
+      ALTER TABLE sendRecords ADD COLUMN deliveryID TEXT;
+      ALTER TABLE sendRecords ADD COLUMN origin TEXT;
+      CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
       \(cue)
       """),
   ]
@@ -180,10 +184,11 @@ enum Schema {
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
       targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
-      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deliveryID TEXT, origin TEXT
     ) STRICT;
     CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
     CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
+    CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
 
     CREATE TABLE attachments (
       id TEXT PRIMARY KEY NOT NULL, hash TEXT NOT NULL, byteCount INTEGER NOT NULL, format TEXT NOT NULL,

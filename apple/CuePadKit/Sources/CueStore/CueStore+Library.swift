@@ -662,19 +662,28 @@ extension CueStore {
 extension CueStore {
   /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
   /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
-  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。
+  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
   @discardableResult
-  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
+  public func recordSend(
+    _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
+  ) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, deliveryID: delivery, origin: origin)
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
       return record
     }
+  }
+
+  /// `deliveries`（会话消息的 `PiChatMessage.deliveryID`）里哪些是 Cue 说的：按发送记录认，送出它的请求清理了也认得出。
+  public func cueSentDeliveries(among deliveries: some Sequence<UUID>) throws -> Set<UUID> {
+    Set(try db.query(
+      "SELECT deliveryID FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND deliveryID IN (SELECT value FROM json_each(?))",
+      [Self.idList(deliveries)]) { $0.uuid(0) })
   }
 
   /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：

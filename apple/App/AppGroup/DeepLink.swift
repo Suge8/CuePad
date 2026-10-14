@@ -1,6 +1,6 @@
 import Foundation
 
-/// 小组件、分享扩展打开主 App 的链接：`cuepad://capture[?project=<id>]`、`cuepad://project/<id>`、`cuepad://card/<id>`。
+/// 小组件、分享扩展打开主 App 的链接：`cuepad://capture[?project=<id>]`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`。
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 
@@ -8,6 +8,8 @@ nonisolated enum DeepLink: Equatable, Sendable {
     case capture(project: UUID?)
     case project(UUID)
     case card(UUID)
+    /// 打开 Cue 页。
+    case cue
 
     init?(url: URL) {
         guard url.scheme == Self.scheme, let host = url.host() else { return nil }
@@ -18,6 +20,8 @@ nonisolated enum DeepLink: Equatable, Sendable {
             guard let value else { self = .capture(project: nil); return }
             guard let id = UUID(uuidString: value) else { return nil }
             self = .capture(project: id)
+        case ("cue", 0):
+            self = .cue
         case ("project", 1):
             guard let id = UUID(uuidString: parts[0]) else { return nil }
             self = .project(id)
@@ -35,6 +39,7 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case .capture(let project?): URL(string: "cuepad://capture?project=\(project.uuidString.lowercased())")!
         case .project(let id): URL(string: "cuepad://project/\(id.uuidString.lowercased())")!
         case .card(let id): URL(string: "cuepad://card/\(id.uuidString.lowercased())")!
+        case .cue: URL(string: "cuepad://cue")!
         }
     }
 }

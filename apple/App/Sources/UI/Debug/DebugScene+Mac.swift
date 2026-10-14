@@ -24,11 +24,27 @@ extension DebugScene {
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             if let task = tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
         case "agent":
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
             workspace.show(.agent)
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+        case "cue", "cuememory":
+            // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
+            workspace.show(.cue)
+            if scene == "cuememory" { workspace.cue.showsMemory = true }
+        case "menubar", "cuebar", "settings":
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor":
@@ -43,7 +59,10 @@ extension DebugScene {
             workspace.attaching = card
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
             if let id = sessionToOpen {
                 workspace.show(.session(id))
                 if defaults.bool(forKey: "CuePadStream") { Task { await stream(id, store: workspace.services.store) } }
@@ -109,13 +128,16 @@ final class DebugWindow: NSWindow {
     }
 }
 
-/// `menubar` 画面：截图只截主窗口，所以把菜单栏面板放在桌面图上拍；`settings` 同理放设置窗口的内容。
+/// `menubar` 画面：截图只截主窗口，所以把菜单栏面板放在桌面图上拍（`cuebar` 是"对 Cue 说"的输入条）；`settings` 同理放设置窗口的内容。
 struct DebugMenuBarStage: View {
+    /// `cuebar` 画面：放"对 Cue 说"的输入条。
+    var cueBar = false
+
     var body: some View {
         ZStack(alignment: .top) {
             LinearGradient(colors: [Color(hex: 0xC98F5A), Color(hex: 0x3E5566)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
-            MenuBarPad().padding(.top, 40)
+            if cueBar { CueBarView(bar: nil).padding(.top, 120) } else { MenuBarPad().padding(.top, 40) }
         }
     }
 }

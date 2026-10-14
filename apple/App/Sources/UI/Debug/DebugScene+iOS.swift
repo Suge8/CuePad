@@ -4,7 +4,7 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面（`-CuePadScene`）：cue（Agent 标签的第一屏；iPad 侧栏的 Cue，侧栏展开）、cuememory（再打开"Cue 记得什么"）、cuesessions（从 Cue 页右上角进去的全部会话）、project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
@@ -63,6 +63,16 @@ extension DebugScene {
                     navigation.outbox = outbox
                 }
             }
+        case "cue", "cuememory", "cuesessions":
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            if split {
+                navigation.select(scene == "cuesessions" ? .agent : .cue)
+                navigation.sidebar = .all
+            } else {
+                navigation.tab = .agent
+                if scene == "cuesessions" { navigation.agentPath = [.agent] }
+            }
+            if scene == "cuememory" { workspace.cue.showsMemory = true }
         case "tasks":
             navigation.show(.tasks)
         case "task":
@@ -74,6 +84,7 @@ extension DebugScene {
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 navigation.open(alert: PiAlertTap(kind: .settled, sessionState: session.id))  // 点锁屏通知进来：只带记录 id、没有首帧

@@ -18,13 +18,14 @@ extension CueStore {
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
     let undelivered = try undeliveredCounts(to: ids)
+    let followed = try cueFollowedSessions(ids)
     return Dictionary(
       states.map {
         (
           $0.sessionID,
           PiSessionListItem(
             state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-            undelivered: undelivered[$0.sessionID] ?? 0)
+            undelivered: undelivered[$0.sessionID] ?? 0, cueFollows: followed.contains($0.sessionID))
         )
       }, uniquingKeysWith: { first, _ in first })
   }

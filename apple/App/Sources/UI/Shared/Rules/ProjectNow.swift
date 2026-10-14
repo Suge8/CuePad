@@ -84,7 +84,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     /// → 需要 /reload → 有新回复；停着、已结束的不算。书架的 Agent 此刻（`AgentNow`）按同一档排。
     static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
-        case .idle, .fresh, .ended, .unknown: nil
+        case .idle, .resting, .fresh, .ended, .unknown: nil
         default: shown.rank
         }
     }
