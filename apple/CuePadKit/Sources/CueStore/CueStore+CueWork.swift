@@ -327,7 +327,7 @@ extension CueStore {
   }
 
   /// Cue 收尾一件事：验收由 Cue 按证据自己定，不请你收下。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
-  /// 结束做完了的会话（`endFinishedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
+  /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。返回这条结果（步骤为 nil）与结束请求。
   @discardableResult
   public func finishTask(_ task: UUID, evidence: String) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
@@ -335,7 +335,7 @@ extension CueStore {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       _ = try applyStatus(task, .done)
-      let ended = try endFinishedSessions(of: task, cue: true)
+      let ended = try endUnusedSessions(of: task, cue: true)
       guard card.parentID == nil else { return (nil, ended) }
       return (try insertCueMessage(.cue, text: "「\(card.heading)」做完了。\n\(evidence)", task: task), ended)
     }
@@ -356,32 +356,45 @@ extension CueStore {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
       let status = try applyStatus(id, current == .done ? .todo : .done)
-      return (status, status == .done ? try endFinishedSessions(of: id, cue: false) : [])
+      return (status, status == .done ? try endUnusedSessions(of: id, cue: false) : [])
     }
   }
 
-  /// 会话的去留只在这里定（你点完成 `toggleDone` 与 Cue 收尾 `finishTask` 都走这里）。刚完成的 `task` 所在的那件事里绑着的会话，
-  /// 不会再有叶子接着用它时就请它所在的 Mac 结束——做完一步就收尾，不留着歇：
-  /// 1. 没有没做完的叶子正绑着它（下一步没开工、或换了别的会话，都不算接着用；以前用过它的叶子也不算）；
-  /// 2. 没有话正送进去（下一步接着用上一步的会话时，话送到才绑上，见 `handOffPlan`）；
-  /// 3. 做得到（`PiSessionState.canEnd`：终端里开的 Codex 会话这类结束不了的留着）；已结束的、记录还没到的不动。
-  /// 必须在写事务内调用。
-  func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+  /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 收尾 `finishTask`），或叶子换去别的会话的那一刻
+  /// （开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
+  /// 1. 有没做完、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
+  /// 2. 这件事的下一步（排在最前的没做完的步骤）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
+  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成。做不到的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类）留着；
+  ///    已结束的、记录还没到的不动。
+  /// `task` 是这件事里的任意一个任务。返回结束请求。必须在写事务内调用。
+  @discardableResult
+  func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+    guard let top = try find(Card.self, try topTask(of: task)) else { return [] }
     let sessions = try db.query(
-      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [try topTask(of: task)]
+      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [top.id]
     ) { $0.text(0) }
+    guard !sessions.isEmpty else { return [] }
+    let open = try leaves(of: top).filter { $0.completedAt == nil }
+    let launching = try launchingLeaves(open.map(\.id))
+    var used = Set(open.filter { !launching.contains($0.id) }.compactMap(\.piSessionID))
+    if let next = open.first, next.id != top.id, next.piSessionID == nil, !launching.contains(next.id), try sendingLeaves([next.id]).isEmpty,
+      let continued = try continuableSession(for: next.id, agent: nil)
+    {
+      used.insert(continued.sessionID)
+    }
     return try sessions.compactMap { sessionID in
-      guard try db.first(Self.stillInUse, [sessionID], { _ in true }) == nil,
+      guard !used.contains(sessionID), try db.first(Self.usedElsewhere, [sessionID, top.id], { _ in true }) == nil,
         let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }
   }
 
-  /// 会话（参数）还有叶子在用：没做完的叶子绑着它，或有话正送进去。
-  private static let stillInUse = """
+  /// 会话（?1）在这件事（以 ?2 为根）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
+  private static let usedElsewhere = """
     SELECT 1 WHERE EXISTS (
-        SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL)
+        SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
+          AND id NOT IN (\(subtree(from: "SELECT ?2"))))
       OR EXISTS (
         SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(toSessionModes)) AND status IN ('pending', 'executing'))
     """
