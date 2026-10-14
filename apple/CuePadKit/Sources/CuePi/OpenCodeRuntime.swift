@@ -365,8 +365,6 @@ public final class OpenCodeRuntime: AgentRuntime {
             }
         case "session.reasoning.started":
             await change(sessionID, connection) { $0.activity = .thinking; $0.detail = nil }
-        case "session.text.started":
-            await change(sessionID, connection) { $0.activity = .outputting; $0.detail = nil }
         case "session.tool.input.started":
             guard let id = data.id, let name = data.name else { return }
             await change(sessionID, connection) { $0.toolNames[id] = name }

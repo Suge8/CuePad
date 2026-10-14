@@ -35,7 +35,7 @@ import Testing
     let firstWrite = try #require(try await states()["s1"]).modifiedAt
 
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")
-    try await recorder.update(sessionID: "s1", state: .outputting)
+    try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "edit")
     #expect(try await states()["s1"]?.state == .known(.thinking))  // 最短间隔内不写
     #expect(try await states()["s1"]?.modifiedAt == firstWrite)

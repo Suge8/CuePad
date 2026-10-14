@@ -268,9 +268,11 @@ struct RealHostTests {
         #expect(recap(of: next.sessions.first { $0.pid == opened.pid })?.lastReply?.contains("跑到一半") == true)
     }
 
-    /// App 更新后扩展协议号变了：还在跑旧扩展的托管进程没有终端能 /reload，CuePad 让它退出；下次发消息用新扩展恢复，话送达。
-    /// 上一版 App 托管的进程在跑旧协议的扩展（App 更新了）：新 App 一看到就让它退出，下次发话用新扩展恢复。
-    @Test func anIncompatibleHostedProcessIsToldToExitAndTheNextMessageResumesIt() async throws {
+    /// App 更新后扩展协议号变了，上一版 App 托管的进程还在跑旧扩展。会自己重新载入的（`PiHost.selfReloadingExtension` 起）：
+    /// 新 App 装上新扩展后它空闲时自己换上、以新协议重新连上，同一个进程接着收话。更早的没有终端能 /reload：CuePad 让它退出，
+    /// 下次发话用新扩展恢复。两种都是话送达、有回答。
+    @Test(arguments: [true, false])
+    func anOldHostedProcessComesBackOnTheNewExtension(reloadsItself: Bool) async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
@@ -278,21 +280,32 @@ struct RealHostTests {
         let (file, sessionID) = try await endedSession(pi, bridge)
         let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         let current = try String(contentsOf: installed, encoding: .utf8)
-        try OldExtension.otherProtocol.rewrite(current).write(to: installed, atomically: true, encoding: .utf8)
+        let old = OldExtension.otherProtocol.rewrite(current)
+        try (reloadsItself ? old : OldExtension.withoutSelfReload(old)).write(to: installed, atomically: true, encoding: .utf8)
         let left = try await PiProcess(alongside: pi, sessionFile: file, env: [PiHost.hostedVariable: "120"])
         defer { left.stop() }
         try await eventually("旧扩展的托管进程在桥上") { bridge.sessions.contains { $0.sessionID == sessionID && $0.state == .incompatible && $0.hosted } }
-        try current.write(to: installed, atomically: true, encoding: .utf8)  // 新 App 装好了新扩展
 
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
+        let newer = PiExtensionBundle.version + 1
+        try current.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(newer);")
+            .write(to: installed, atomically: true, encoding: .utf8)  // 新 App 装好了新扩展
 
-        try await eventually("旧扩展的托管进程退出了") { !bridge.sessions.contains { $0.sessionID == sessionID } }
-        await left.waitUntilExit()
-        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
-        #expect(resumed.sessionID == sessionID && resumed.state != .incompatible)
-        _ = try await bridge.send(PiMessage(text: "换上新扩展之后"), to: resumed.id)
+        let target: PiSession
+        if reloadsItself {
+            try await eventually("同一个进程换上新扩展、重新连上") {
+                bridge.sessions.contains { $0.pid == left.pid && $0.extensionVersion == newer && $0.state == .settled }
+            }
+            target = try #require(bridge.sessions.first { $0.pid == left.pid })
+        } else {
+            try await eventually("旧扩展的托管进程退出了") { !bridge.sessions.contains { $0.sessionID == sessionID } }
+            await left.waitUntilExit()
+            target = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        }
+        #expect(target.sessionID == sessionID && target.state != .incompatible)
+        _ = try await bridge.send(PiMessage(text: "换上新扩展之后"), to: target.id)
         try await eventually("话送达、有回答") { replies(in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
     }
 
@@ -331,6 +344,12 @@ struct RealHostTests {
             case .otherProtocol: source.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;")
             case .oldHostedValue: source.replacing(/const IS_HOSTED = .*;/, with: "const IS_HOSTED = process.env[HOSTED_ENV] === \"1\";")
             }
+        }
+
+        /// 还不会自己重新载入的扩展：版本在 `PiHost.selfReloadingExtension` 之前，也不盯自己的文件。
+        static func withoutSelfReload(_ source: String) -> String {
+            source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = \(PiHost.selfReloadingExtension - 1);")
+                .replacing("\t\twatchOwnFile();\n", with: "")
         }
     }
 }
