@@ -7,7 +7,7 @@ import Testing
 /// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
 /// 模型在 bash 里执行 `cuepad show`：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
 struct RealPreviewTests {
     private func sqlite(_ database: URL, _ query: String) throws -> String {
         let process = Process()
@@ -28,6 +28,7 @@ struct RealPreviewTests {
 
     @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
         let library = try makeTempDirectory()
+        AgentTape.active.watch(library)  // 预览是 Pi 的 bash 里跑的 cuepad 命令写进资料库的
         let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
