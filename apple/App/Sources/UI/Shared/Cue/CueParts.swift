@@ -223,7 +223,6 @@ struct CueTrayCard: View {
         if leaf.launching { return "正在开会话" }
         if leaf.sending { return "发送中" }
         guard let session else { return "还没开始" }
-        if session.wasInterrupted { return "做到一半被打断" }
         let shown = workspace.shown(session, delivery: nil, cueFollows: true)
         if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }
         if session.state == .known(.error) { return PiProgress.firstLine(session.detail) ?? shown.label }

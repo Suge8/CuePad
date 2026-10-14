@@ -98,7 +98,7 @@ public enum CueEnvelope {
   private static func change(_ change: CueChange) -> String {
     let label: String =
       switch change.kind {
-      case .settled: change.interrupted ? "被打断" : "歇下"
+      case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
       case .waitingForUser: "等回答"
       case .failed: "出错"
       case .done: "完成"
@@ -107,7 +107,7 @@ public enum CueEnvelope {
       case .left: "不再由你跟进"
       }
     var text = "[\(label)] \(where_(change))"
-    if !change.interrupted, let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
+    if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
   }
@@ -129,7 +129,7 @@ public enum CueEnvelope {
   }
 
   private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date) -> [String] {
-    let state = leaf.session.map(state) ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
+    let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
     var parts = ["\(name.map { "\($0) › " } ?? "")\(state) \(duration(now.timeIntervalSince(leaf.since)))"]
     if let session = leaf.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts
@@ -141,18 +141,15 @@ public enum CueEnvelope {
     return session.pendingPrompt.map { "你说：\($0)" } ?? session.lastReply
   }
 
-  /// 会话此刻的状态（看板与 peek 共用）：做到一半被打断的写出来，不当成歇着或已结束。
-  static func state(_ session: PiSessionState) -> String {
-    session.wasInterrupted ? "做到一半被打断" : state(session.state)
-  }
-
-  private static func state(_ state: Open<PiWorkState>) -> String {
+  /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
+  static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
     case .thinking, .outputting, .tool, .delegating, .compacting: "工作中"
     case .waitingForUser: "等回答"
     case .settled: "歇着"
     case .error: "出错"
     case .ended: "已结束"
+    case .interrupted: "做到一半被打断"
     case .incompatible: "版本不兼容"
     case nil: state.rawValue
     }

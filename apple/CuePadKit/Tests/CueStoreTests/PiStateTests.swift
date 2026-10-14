@@ -143,11 +143,11 @@ import Testing
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
     let mine = recorder(host: "mac-a")
     let other = recorder(host: "mac-b")
-    try await mine.update(sessionID: "s1", state: .thinking)
+    try await mine.update(sessionID: "s1", state: .settled)
     try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "上次的")))
     try await other.update(sessionID: "s2", state: .thinking)
 
-    try await mine.reset()
+    try await mine.reset { _ in false }
 
     let all = try await states()
     #expect(all["s1"]?.state == .known(.ended) && all["s1"]?.lastPrompt == "上次的")

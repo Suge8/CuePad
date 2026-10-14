@@ -4,7 +4,8 @@ import Foundation
 import Synchronization
 import Testing
 
-/// 什么算历史（会话记录的去留）：说过话的进程退出——托管的歇着、其余进历史；没留下会话文件的删除；启动对账也按这条规则。
+/// 什么算历史（会话记录的去留）：说过话的进程退出——托管的歇着、其余进历史，手上还有活的记为被打断；没留下会话文件的删除；
+/// 启动对账也按这条规则，只对进程确实没了的。
 @Suite struct PiHistoryRulesTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -18,11 +19,11 @@ import Testing
   @Test func 进程退出按有没有留下对话与是不是托管的分三种() async throws {
     let recorder = recorder
     for id in ["silent", "terminal", "hosted"] {
-      try await recorder.update(sessionID: id, state: .thinking, title: id, hosted: id == "hosted")
+      try await recorder.update(sessionID: id, state: .settled, title: id, hosted: id == "hosted")
     }
-    try await recorder.exited(sessionID: "silent", spoke: false, hosted: false)
-    try await recorder.exited(sessionID: "terminal", spoke: true, hosted: false)
-    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
+    try await recorder.exited(sessionID: "silent", spoke: false)
+    try await recorder.exited(sessionID: "terminal", spoke: true)
+    try await recorder.exited(sessionID: "hosted", spoke: true)
 
     let all = try await states()
     #expect(all["silent"] == nil, "没说过话：记录删掉")
@@ -35,8 +36,8 @@ import Testing
     #expect(try await states()["hosted"]?.state == .known(.ended))
   }
 
-  /// 歇下是一次提交过的写入：订阅它的界面、跨进程通知与同步都收到。
-  @Test func 托管会话歇下时订阅收到变更() async throws {
+  /// 进程没了的收尾是一次提交过的写入：订阅它的界面、跨进程通知与同步都收到（在干活时没的，是被打断）。
+  @Test func 托管会话进程没了时订阅收到变更() async throws {
     let recorder = recorder
     try await recorder.update(sessionID: "hosted", state: .thinking, title: "hosted", hosted: true)
     let seen = Mutex<[Open<PiWorkState>]>([])
@@ -46,16 +47,16 @@ import Testing
     defer { watcher.cancel() }
     try await Task.sleep(for: .milliseconds(200))
 
-    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
+    try await recorder.exited(sessionID: "hosted", spoke: true)
 
-    for _ in 0..<300 where seen.withLock({ $0.last }) != .known(.settled) { try await Task.sleep(for: .milliseconds(10)) }
-    #expect(seen.withLock { $0.last } == .known(.settled), "订阅收到歇着")
+    for _ in 0..<300 where seen.withLock({ $0.last }) != .known(.interrupted) { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(seen.withLock { $0.last } == .known(.interrupted), "订阅收到被打断")
   }
 
   @Test func 启动对账_托管的歇着_其余记为已结束_没有会话文件的清掉_在线的不动() async throws {
     let recorder = recorder
     for id in ["terminal", "hosted", "hosted-silent", "old-ended", "live-new"] {
-      try await recorder.update(sessionID: id, state: .thinking, title: id, hosted: id.hasPrefix("hosted") || id == "live-new")
+      try await recorder.update(sessionID: id, state: .settled, title: id, hosted: id.hasPrefix("hosted") || id == "live-new")
     }
     try await recorder.end(sessionID: "old-ended")
     // 有会话文件的有索引（本机会话文件索引）；"hosted-silent" 与 "old-ended" 没有
@@ -63,7 +64,7 @@ import Testing
       try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
     }
 
-    try await recorder.reset()
+    try await recorder.reset { _ in false }
     #expect(try await states()["terminal"]?.state == .known(.ended))
     #expect(try await states()["hosted"]?.state == .known(.settled))
 

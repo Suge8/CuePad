@@ -13,7 +13,7 @@ extension PiShown {
         case .working, .delivery: palette.live
         case .unread: palette.replied
         case .restart: palette.ink2
-        case .idle, .resting, .fresh, .unknown: palette.ink3
+        case .idle, .resting, .fresh, .interrupted, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
@@ -22,7 +22,7 @@ extension PiShown {
     var isColored: Bool {
         switch status {
         case .asking, .failed, .working, .delivery, .unread: true
-        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .unknown: false
+        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
     }
 
@@ -57,6 +57,8 @@ extension PiShown {
         case .fresh: "sparkle"
         // 不用空心圈：待办任务的圆圈就是它
         case .ended: "circle.slash"
+        // 断了电：做到一半停下
+        case .interrupted: "bolt.slash"
         case .unknown: "questionmark.circle"
         }
     }

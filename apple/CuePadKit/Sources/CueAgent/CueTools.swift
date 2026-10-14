@@ -293,7 +293,7 @@ public struct CueTools: Sendable {
             "leaves": item.leaves.map { leaf -> [String: Any] in
               [
                 "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "session": leaf.session?.sessionID ?? NSNull(),
-                "state": leaf.session?.state.rawValue ?? NSNull(), "interrupted": leaf.session?.wasInterrupted ?? false,
+                "state": leaf.session?.state.rawValue ?? NSNull(),
                 "launching": leaf.launching, "sending": leaf.sending, "since": iso(leaf.since),
               ]
             },
@@ -353,7 +353,7 @@ public struct CueTools: Sendable {
     for leaf in detail.leaves {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
       if let session = leaf.session {
-        head += " · \(Self.agentName(session))会话「\(session.title)」\(CueEnvelope.state(session)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
+        head += " · \(Self.agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
         if let question = session.question { head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）") }
       } else {
         head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"

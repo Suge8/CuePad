@@ -285,6 +285,28 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 重启 CuePad 时托管的会话还在跑（它不随 App 退出）：启动对账不把它记为被打断，Cue 看到的仍是工作中。
+    @Test func 重启时还活着的托管会话不算被打断() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let project = try #require(try await store.projects().first)
+        let task = try await store.createTask("三步并行 托管着", in: project.id)
+        let file = rig.folder.appending(path: "h0.jsonl")
+        try Data("{}\n".utf8).write(to: file)
+        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, sessionFile: file.path, hosted: true)
+        try await store.linkCard(task.id, toSession: "h0")
+        try await eventually("记下在干活") { try await store.allPiSessionStates().first?.state.isWorking == true }
+        try await store.setCueFollows(task.id, true)
+        _ = try await rig.message(.note, containing: "看板：")
+
+        try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
+        #expect(try await store.allPiSessionStates().first?.state == .known(.thinking))
+        try await rig.say("念一下看板")
+        let board = try await rig.message(.cue, containing: "看板：")
+        #expect(board.text.contains("工作中") && !board.text.contains("被打断"))
+        await rig.stop()
+    }
+
     /// 上下文到了换新线（刚启用那一轮就用到了）：下一次醒来提示先写交接；交接写好、这一轮结束后换新班次，第一轮带着交接醒来。
     @Test func 写交接后新班次接上() async throws {
         let rig = try await Rig(usage: 70_000)
@@ -440,7 +462,7 @@ nonisolated final class FakeModel: Sendable {
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
-        if text.contains("醒来：跟进的会话有动静"), text.contains("三步并行"), let board = text.firstMatch(of: /跟进中 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
+        if text.contains("三步并行"), let board = text.firstMatch(of: /跟进中 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return say("看板：\n" + board)
         }
         if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {

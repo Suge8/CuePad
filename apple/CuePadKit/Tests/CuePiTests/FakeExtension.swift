@@ -38,6 +38,8 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var context: (tokens: Int?, window: Int)?
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
+        /// CuePad 在后台托管的（hello 里带 `hosted`）
+        var hosted = false
         var tty: String? = "ttys009"
         var socketMode: mode_t = 0o600
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
@@ -160,6 +162,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         msg["context"] = Self.contextJSON(options.context)
         msg["commands"] = options.commands.map(\.json)
         msg["tty"] = options.tty ?? NSNull()
+        if options.hosted { msg["hosted"] = true }
         return msg
     }
 

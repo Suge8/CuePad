@@ -70,7 +70,7 @@ public struct CueBoardLeaf: Equatable, Sendable {
 /// 某时刻之后，Cue 跟进的事里的一处变化。
 public struct CueChange: Equatable, Sendable {
   public enum Kind: String, Sendable, CaseIterable {
-    /// 会话歇下：这一轮做完，或做到一半被打断（`interrupted`：进程没了，会话可能已结束）
+    /// 会话停下：这一轮做完歇下，或做到一半被打断（`interrupted`，会话状态是 `PiWorkState.interrupted`）
     case settled
     /// 会话在等回答
     case waitingForUser
@@ -98,11 +98,14 @@ public struct CueChange: Equatable, Sendable {
   public var detail: String?
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
   public var recap: PiRecap?
-  /// 歇下是因为做到一半被打断（`PiSessionState.wasInterrupted`），不是做完了。
-  public var interrupted: Bool { kind == .settled && detail == PiSessionState.interrupted }
+  /// 停下是因为做到一半被打断（`PiWorkState.interrupted`），不是做完了。
+  public var interrupted: Bool
 
-  init(kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil) {
+  init(
+    kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil, interrupted: Bool = false
+  ) {
     self.kind = kind
+    self.interrupted = interrupted
     self.taskID = taskID
     self.task = task
     self.leaf = leaf
@@ -529,7 +532,7 @@ extension CueStore {
           since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
       }
       let open = leaves.dropLast().filter { item in
-        item.launching || item.sending || item.session.map { $0.state != .known(.ended) || $0.wasInterrupted } ?? false
+        item.launching || item.sending || item.session.map { $0.state != .known(.ended) } ?? false
       }
       return CueBoardItem(task: task, progress: progress[task.id], leaves: open.isEmpty ? [leaves.last!] : Array(open))
     }
@@ -567,13 +570,16 @@ extension CueStore {
         guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
         let (kind, detail): (CueChange.Kind?, String?) =
           switch session.state.known {
-          case .settled: (.settled, session.wasInterrupted ? session.detail : nil)
-          case .ended where session.wasInterrupted: (.settled, session.detail)
+          case .settled, .interrupted: (.settled, nil)
           case .waitingForUser: (.waitingForUser, session.question?.text ?? session.detail)
           case .error: (.failed, session.detail)
           default: (nil, nil)
           }
-        if let kind { changes.append(CueChange(kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap)) }
+        if let kind {
+          changes.append(CueChange(
+            kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap,
+            interrupted: session.state == .known(.interrupted)))
+        }
       }
       // 一个会话可以绑好几件事：你在里面说的话算在它绑着的每件跟进的事上（同一件事的几个叶子共用它时只报一次）
       let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
