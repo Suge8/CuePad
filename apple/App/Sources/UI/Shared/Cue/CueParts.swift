@@ -176,6 +176,8 @@ struct CueNotes: View {
 /// 关掉或撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
+    /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
+    var fadesIn = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -186,7 +188,7 @@ struct CueSays: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.entry)
+        .transition(fadesIn ? .entry : .identity)
     }
 }
 
