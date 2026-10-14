@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 /// 任务的提示词：一张一张卡（内容预览与发没发出去），点开是大编辑区，卡上就地"发给 Agent"；末尾"写一条提示词"新建并进入编辑。
-/// 提示词是开会话时的第一句：任务绑了会话后话都在会话里说，末尾换成"打开会话"（挑来的灵感接进会话的回复框，见 `Workspace.attach`）。
+/// 提示词是开会话时的第一句：任务绑了会话后话都在会话里说，末尾换成会话此刻的样子（`AgentStatusCard`，点了打开会话；挑来的灵感接进会话的回复框，见 `Workspace.attach`）。
 /// 右上可从本项目的灵感里挑一条挂上来。
 struct PromptList: View {
     let task: Card
@@ -25,8 +25,15 @@ struct PromptList: View {
         let primary = detail?.primaryPrompt(agents: agents)
         let services = services
         VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
+            // 绑了会话：这件事此刻的样子在最上面，提示词在它下面
+            if let session = task.piSessionID {
+                AgentStatusCard(sessionID: session, item: agents.items[task.id]).padding(.bottom, 10)
+            }
             HStack(alignment: .firstTextBaseline) {
-                Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                // 绑了会话又没有提示词时不写空着的段标题，只留"从灵感里挑"
+                if !prompts.isEmpty || task.piSessionID == nil {
+                    Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                }
                 if !prompts.isEmpty {
                     Text("\(prompts.count)").monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                 }
@@ -40,19 +47,7 @@ struct PromptList: View {
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            if let session = task.piSessionID {
-                Button {
-                    navigation.openSession(PiSessionState.recordID(sessionID: session), sessionID: session, store: services.store)
-                } label: {
-                    Label("打开会话", systemImage: "bubble.left.and.text.bubble.right")
-                        .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
-                        .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
-                        .padding(.horizontal, TaskMetrics.cardPadding)
-                        .background(palette.fill, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-                        .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle(.wide))
-            } else if prompts.allSatisfy(\.isPinned) {  // 一个叶子最多一条草稿：已有就不再给"写一条"
+            if task.piSessionID == nil, prompts.allSatisfy(\.isPinned) {  // 一个叶子最多一条草稿：已有就不再给"写一条"
                 Button(action: write) {
                     Label("写一条提示词：要 Agent 做什么", systemImage: "plus")
                         .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
@@ -169,6 +164,51 @@ struct PromptCard: View {
         case .failed(_, let failure):
             Text(failure.text(sync: workspace.services.syncStatus)).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
         }
+    }
+}
+
+/// 任务绑着的会话此刻怎样（与 Mac 任务浮窗同一份说法，`TaskAgentLook`）：吉祥物、一句标题、一句进展，点了打开会话。
+/// 会话记录还没同步到时只写"打开会话"。
+private struct AgentStatusCard: View {
+    let sessionID: String
+    let item: PiSessionListItem?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let shown = item.map(workspace.shown)
+        let look = item.map { item in
+            let shown = workspace.shown(item)
+            return TaskAgentLook(shown, line: PiProgress.note(of: item.state, failure: shown.undelivered(item.delivery)?.failure))
+        }
+        Button {
+            navigation.openSession(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, store: services.store)
+        } label: {
+            HStack(spacing: 12) {
+                Image(look?.mascot.rawValue ?? Mascot.welcome.rawValue).resizable().scaledToFit().frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        if let shown { PiStateDot(shown: shown, size: 7) }
+                        Text(look?.title ?? "打开会话").font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.ink)
+                    }
+                    if let note = look?.note {
+                        Text(note).font(TaskMetrics.caption).foregroundStyle(palette.ink2).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            }
+            .padding(TaskMetrics.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.paperLit, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.paperEdge()))
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.wide))
+        .accessibilityHint("打开会话")
     }
 }
 #endif
