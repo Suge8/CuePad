@@ -81,7 +81,7 @@ private struct AgentPanelButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let waiting = workspace.cue.digest.waiting
+        let waiting = workspace.cue.digest.waiting.count
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
             Label(workspace.cue.name, systemImage: "bubble.left.and.text.bubble.right")
                 .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }

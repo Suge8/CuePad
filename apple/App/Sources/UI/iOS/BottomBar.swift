@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 底部一行：左边一块玻璃里的两个标签 [灵感 | Agent]，右边一颗同高同玻璃的圆形"写"，与系统悬浮标签栏（照片、音乐：标签组靠左、
+/// 底部一行：左边一块玻璃里的三个标签 [Cue | Agent | 灵感]，右边一颗同高同玻璃的圆形"写"，与系统悬浮标签栏（照片、音乐：标签组靠左、
 /// 搜索圆钮靠右）同一几何——高 62、离屏幕左右与底边都是 21（与屏幕圆角同心），选中滴同心内缩 4；不随滚动收小。
 /// 玻璃上不另铺底；选中那一格是一层中性的滴（浅色压暗、深色更暗，同系统）加靛青的图标与字，未选中的是墨色。
 /// 内容一直滚到栏后面、清楚可见，玻璃本身就是遮挡。
@@ -10,11 +10,11 @@ import SwiftUI
 /// 字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
+/// 角标是"等你 N"（`CueWaiting`）各归各的：Cue 那一格是 Cue 问你的，Agent 那一格是会话问你的。
 struct BottomBar: View {
-    /// "等你 N"（`CueWaiting`）：Agent 那一格的角标。
-    let waiting: Int
     let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 正按着的那一格。
@@ -24,7 +24,7 @@ struct BottomBar: View {
     private static let margin: CGFloat = 21
     /// 选中滴离轨道的边。
     private static let inset: CGFloat = 4
-    private static let tabWidth: CGFloat = 90
+    private static let tabWidth: CGFloat = 80
     private static let icon: CGFloat = 20
 
     /// 内容在安全区之上还要给底部栏让出的高度（栏顶到安全区底边）；键盘盖住底部栏时为 0。
@@ -62,13 +62,16 @@ struct BottomBar: View {
             .padding(Self.inset)
             .id(reduceMotion ? navigation.tab : nil)
             .transition(.opacity)
-            .frame(width: Self.tabWidth * 2 + Self.inset * 2, alignment: navigation.tab == .projects ? .leading : .trailing)
+            .offset(x: Self.tabWidth * CGFloat(Navigation.Tab.allCases.firstIndex(of: navigation.tab) ?? 0))
+            .frame(width: Self.tabWidth * CGFloat(Navigation.Tab.allCases.count) + Self.inset * 2, alignment: .leading)
             .glass(in: .capsule, interactive: true)
             .modifier(BarLift(shape: .capsule))
             .overlay {
+                let cue = workspace.cue
                 HStack(spacing: 0) {
+                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.digest.waiting.asked)
+                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", waiting: cue.digest.waiting.sessions)
                     tab(.projects, title: "灵感", symbol: "lightbulb")
-                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", waiting: waiting)
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isTabBar)
@@ -82,7 +85,7 @@ struct BottomBar: View {
                 Image(systemName: symbol).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                     .frame(height: Self.icon + 4)
                     .overlay(alignment: .topTrailing) { WaitingBadge(count: waiting).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) }
-                Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
+                Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium)).lineLimit(1)
             }
             .foregroundStyle(selected ? palette.signature : palette.ink)
             // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中

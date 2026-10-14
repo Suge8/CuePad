@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是两个标签（灵感 / Agent）加底部一行（标签与"写"；任务从书架一行进入），宽 iPad 用分栏。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是三个标签（Cue / Agent / 灵感）加底部一行（标签与"写"），宽 iPad 用分栏。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -45,13 +45,11 @@ struct IOSRoot: View {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
-            // 发给 Agent 的输入框；任务浮窗开着时由浮窗自己浮起（浮在浮窗下面会被挡住）
             .overlay {
-                FloatingInput(isPresented: navigation.task == nil && navigation.outbox != nil, close: { navigation.outbox = nil }) {
+                FloatingInput(isPresented: navigation.outbox != nil, close: { navigation.outbox = nil }) {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
@@ -121,8 +119,8 @@ struct RouteView: View {
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
-            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的"独占底部的页有几个"：那个数在推入、返回会话页与纸页时变，
-            // 读它的话两个标签里每一页（包括被盖住的）都要跟着重排一遍
+            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的 `Navigation.ownsBottom`：那个值在推入、返回会话页与纸页时变，
+            // 读它的话每个标签里每一页（包括被盖住的）都要跟着重排一遍
             .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
     }
 

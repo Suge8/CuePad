@@ -78,17 +78,19 @@ struct SessionNoticeTests {
     }
 
     /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
-    /// Agent 标签的根是 Cue 页，全部会话是推进去的第二层；iPad 右侧面板是 Cue 页，不是会话列表。
+    /// Agent 标签的根就是会话列表；Cue 标签与 iPad 右侧面板是 Cue 页，不是会话列表。
     @Test func 正看着Agent列表或那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let tabs = navigation(.tabs)
+        #expect(tabs.showsAlert(about: session))  // Cue 标签
         tabs.tab = .agent
-        #expect(tabs.showsAlert(about: session))  // Cue 页
-        tabs.agentPath = [.agent]
         #expect(!tabs.showsAlert(about: session))
-        tabs.agentPath = [.agent, .session(UUID())]  // 列表上推了别的会话
+        tabs.agentPath = [.session(UUID())]  // 列表上推了别的会话
         #expect(tabs.showsAlert(about: session))
-        tabs.agentPath = [.agent, .session(session)]
+        tabs.agentPath = [.session(session)]
+        #expect(!tabs.showsAlert(about: session))
+        tabs.tab = .cue
+        tabs.cuePath = [.session(session)]  // Cue 页里点进了这个会话
         #expect(!tabs.showsAlert(about: session))
         tabs.tab = .projects
         #expect(tabs.showsAlert(about: session))

@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 
-// 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
+// 任务页（手机推入的纸页、Mac 盖在当前页上的浮窗）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
 // 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；步骤是次要的一组（`SubtaskList`）。
 
 
