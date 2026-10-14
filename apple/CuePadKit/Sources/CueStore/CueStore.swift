@@ -8,6 +8,8 @@ public actor CueStore {
   let db: SQLite
   /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
   public nonisolated let files: AttachmentFiles
+  /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线、你的话等没等过时限）用的时钟；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
+  public nonisolated let timing: Timing
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   private var readExpiry: Date?
@@ -18,7 +20,7 @@ public actor CueStore {
   /// 这个连接是哪台 Mac（`ownSessions`）：它写的会话记录由它挂到任务上；手机与命令行为 nil。
   var sessionHost: String?
 
-  public init(url: URL) throws {
+  public init(url: URL, timing: Timing = .system) throws {
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let connection = try SQLite(path: url.path)
@@ -40,6 +42,7 @@ public actor CueStore {
       throw CueStoreError.unsupportedSchemaVersion(version)
     }
     db = connection
+    self.timing = timing
     files = AttachmentFiles(directory: url.deletingLastPathComponent().appending(path: "Attachments", directoryHint: .isDirectory))
     notificationName = ChangeNotification.name(forDatabase: url)
     changeListener = ChangeListener(name: notificationName)
@@ -92,6 +95,7 @@ public actor CueStore {
         signal.yield()
         var timer: Task<Void, Never>?
         defer { timer?.cancel() }
+        let timing = self.timing
         do {
           var last = initial
           for await _ in signals {
@@ -99,7 +103,7 @@ public actor CueStore {
             timer?.cancel()
             timer = expiry.map { due in
               Task {
-                guard (try? await Task.sleep(for: .seconds(max(0, due.timeIntervalSinceNow)))) != nil else { return }
+                guard (try? await timing.sleep(.seconds(max(0, due.timeIntervalSince(timing.now()))))) != nil else { return }
                 signal.yield()
               }
             }

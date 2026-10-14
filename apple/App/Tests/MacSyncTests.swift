@@ -70,6 +70,32 @@ struct MacSyncTests {
         #expect(rig.sync.stopped == 1)
     }
 
+    /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
+        // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        let rig = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let services: AppServices = rig.services, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        try await services.store.updateCueProfile {
+            $0.hostID = host
+            $0.enabledAt = .now
+        }
+        services.start()
+        #expect(await uploads.next() == record)
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+
+        #expect(await services.stop(within: .milliseconds(300)) == "Cue")
+
+        #expect(await uploads.next() == record)
+        #expect(try await !services.store.macOnline(host))
+    }
+
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
         services.startSync()
         try await services.executor.start()
@@ -96,6 +122,39 @@ struct MacSyncTests {
 
         try await eventually("rig.sync.syncNows == 1") { rig.sync.syncNows == 1 }
         #expect(rig.sync.syncNows == 1)
+    }
+
+    /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
+    /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
+    @Test(.timeLimit(.minutes(1)))
+    func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
+        let clock = ManualTiming()
+        let rig = TestApp(timing: clock.timing)
+        let services: AppServices = rig.services, store = services.store, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        services.start()
+        defer { services.cancelBackgroundWork() }
+
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
+
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        #expect(await uploads.next() == record)  // 续期
+        #expect(try await store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+        #expect(try await !store.macOnline(host))
+        #expect(await uploads.next() == record)
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        await clock.waitForSleeper()
+        #expect(try await !store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
     }
 
     // MARK: Pi 状态记录
@@ -421,15 +480,17 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
+    /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
     @Test(.timeLimit(.minutes(1)))
-    func 执行器写回结果后立即上传这一条() async throws {
+    func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
 
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }

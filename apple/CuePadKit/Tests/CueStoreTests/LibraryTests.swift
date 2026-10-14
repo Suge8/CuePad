@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 39：撤掉 40（请求上记 Cue 已知道没送到，本机列）。
-  static let undoSchema40 = "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
+  /// 把新建的库退回结构 40：撤掉 41（每台 Mac 的在线记录）。
+  static let undoSchema41 = "DROP TABLE macPresence;"
+  /// 退回结构 39：再撤掉 40（请求上记 Cue 已知道没送到，本机列）。
+  static let undoSchema40 = undoSchema41 + "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
   /// 退回结构 38：再撤掉 39（卡片上的跟进标记下线；盖序号的触发器去掉它后重建，退回时留着新的也照样能升级）。
   static let undoSchema39 = undoSchema40 + "ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 37：再撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
