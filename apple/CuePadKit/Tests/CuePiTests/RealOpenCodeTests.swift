@@ -304,10 +304,19 @@ struct RealOpenCodeTests {
             }
             #expect(store.files.fileURL(for: hash) != nil)
 
+            let answered = try await replies(store, opened.sessionID).count
             _ = try await bridge.send(PiMessage(text: "Use the subagent tool with agent explore and description find-readme, prompt: list the files in the current directory. Wait for its result, then reply DONE."), to: id)
-            try await eventually("子代理出现、做完", timeout: .seconds(180)) {
+            @MainActor func explored() -> Bool {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
+            // 免费模型偶尔不派子代理就答（实测 big-pickle 说"没有 subagent 工具"）：那样当场报出它的回答，不干等
+            try await eventually("子代理出现、做完", timeout: .seconds(180)) {
+                if explored() { return true }
+                guard session(bridge)?.state == .settled else { return false }
+                return try await replies(store, opened.sessionID).count > answered
+            }
+            let reply = try await replies(store, opened.sessionID).last?.prefix(200)
+            #expect(explored(), "模型没派子代理：\(String(describing: reply))")
             try await eventually("这一轮做完", timeout: .seconds(180)) { session(bridge)?.state == .settled }
 
             _ = try await bridge.send(PiMessage(text: "Use the question tool to ask me one question with header Color and question Which color? with options Red and Blue. After I answer, reply with exactly the color I chose."), to: id)
@@ -356,8 +365,12 @@ struct RealOpenCodeTests {
             let resumed = try await runtime.resume(indexed)
             #expect(bridge.session(id: resumed)?.sessionID == opened.sessionID)
             let before = try await replies(store, opened.sessionID).count
-            _ = try await bridge.send(PiMessage(text: "Reply with exactly the word BACK."), to: resumed)
-            try await eventually("接着说的回答到了", timeout: .seconds(90)) { try await replies(store, opened.sessionID).count > before }
+            // 停得早时那句长的还没回答就留在上下文里：不说明作废，模型会把两句当一个矛盾的要求、用提问工具反问（实测 big-pickle）
+            _ = try await bridge.send(PiMessage(text: "The earlier unfinished request is cancelled, do not do it. Reply with exactly the word BACK."), to: resumed)
+            try await eventually("接着说的回答到了", timeout: .seconds(90)) {
+                try await replies(store, opened.sessionID).count > before || session(bridge)?.question != nil
+            }
+            #expect(session(bridge)?.question == nil, "模型反问了而没回答：\(String(describing: session(bridge)?.question?.text))")
 
             try await sandbox.api("DELETE", "/api/session/\(opened.sessionID)")
             try await eventually("删掉的会话下线、索引也删了") {
