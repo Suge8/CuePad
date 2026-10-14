@@ -221,6 +221,23 @@ struct RealOpenCodeTests {
         }
     }
 
+    /// 在 CuePad 里停下跑着的一轮：没有回答，对话里留一行"已停止"（四家同一规则）。
+    @Test func aStoppedRoundLeavesAStoppedLine() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-s")
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
+            // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state == .tool }
+            try await bridge.abort(id)
+            try await eventually("停下了，对话里留下'已停止'", timeout: .seconds(60)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+            #expect(try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.isEmpty)
+        }
+    }
+
     /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
     @Test func cuePadStartsTheServiceAndHostsSessionsFromOpenToResume() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in

@@ -410,7 +410,7 @@ public enum PiHistory {
                 // 中途调工具时说的话不算回答；被停下（Esc）的一轮没有回答
                 switch message.stopReason {
                 case "toolUse": break
-                case "aborted": cp.interrupted()
+                case "aborted": cp.interrupted(entry, into: &transcript)
                 default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
                 }
             case "toolResult":
@@ -603,8 +603,11 @@ extension PiHistoryCheckpoint {
         round = nil
     }
 
-    /// 这一轮没做完就停了（被停下、中途退出）：没有回答，问答不变，这一轮的提问不再算进行中。
-    mutating func interrupted() {
+    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"）：没有回答，问答不变，这一轮的提问不再算进行中；
+    /// 对话里在停下的地方留一行系统行。
+    mutating func interrupted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+        guard round != nil else { return }
+        transcript.add(self, entry, role: .system, text: "已停止")
         round = nil
         recap.pendingPrompt = nil
     }

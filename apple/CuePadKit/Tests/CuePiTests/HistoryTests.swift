@@ -249,10 +249,14 @@ struct HistorySummaryOnlyTests {
     }
 
     /// 中途被停下的一轮：没有回答、不改问答，这一轮的提问也不再算进行中；之后机器消息触发的一轮沿用再往前你说的那句。
-    @Test func aStoppedRoundLeavesTheRecapAsItWas() throws {
+    /// 对话里在停下的地方留一行系统行"已停止"（四家同一规则）。
+    @Test func aStoppedRoundLeavesTheRecapAsItWasAndAStoppedLine() throws {
         let stopped = try shapes().last!
-        let recap = try PiHistory.index(file: stopped.url, from: nil).recap
-        #expect(recap == PiRecap(lastPrompt: "第一问", lastReply: "汇报", pendingPrompt: nil))
+        let read = try PiHistory.index(file: stopped.url, from: nil)
+        #expect(read.recap == PiRecap(lastPrompt: "第一问", lastReply: "汇报", pendingPrompt: nil))
+        #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == [
+            "user:第一问", "pi:第一答", "user:第二问", "system:已停止", "pi:汇报", "user:第三问", "system:已停止",
+        ])
     }
 
 }

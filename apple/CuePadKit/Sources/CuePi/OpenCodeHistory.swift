@@ -19,6 +19,8 @@ struct OpenCodeMessage: Decodable, Sendable {
     var tokens: OpenCodeTokens?
     /// 助手这一步出错的原因
     var error: OpenCodeFailure?
+    /// `idle` 的：这一轮怎么结束的（`succeeded` / `interrupted` / `failed`）
+    var outcome: String?
     var time: Time
 
     struct Time: Decodable, Sendable {
@@ -73,7 +75,7 @@ struct OpenCodeMessage: Decodable, Sendable {
 /// 轮次、摘要与工具活动的规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……）。这里与 Pi 不同的只有：
 /// - 你的消息是 `user`，文字在前、图片（`files` 里的原图）随后各占一行；CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
 /// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`）。
-/// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）。
+/// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
     /// 检查点：Pi 的那份，加读到哪。先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
@@ -142,13 +144,16 @@ enum OpenCodeHistory {
                 cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? PiToolArguments())
                 if let status = tool.state?.status, status == "completed" || status == "error" { cp.toolFinished(id: id, failed: status == "error") }
             }
+            // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
+            if message.error?.type == "aborted" { return cp.interrupted(entry, into: &transcript) }
             guard message.finish != "tool-calls" else { return }
             cp.answered((message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n"), entry, into: &transcript)
         case "compaction" where message.status == "completed":
             cp.compacted(entry, into: &transcript)
         case "idle":
-            // 一轮彻底结束；还没有回答就结束的（被停止、出错）是没做完的一轮
-            if cp.round != nil { cp.interrupted() }
+            // 一轮彻底结束；还没有回答就结束的：被停下的与各家同一规则，出错的与 Pi 出错一样以空回答结束
+            guard cp.round != nil else { return }
+            if message.outcome == "interrupted" { cp.interrupted(entry, into: &transcript) } else { cp.answered("", entry, into: &transcript) }
         default: break
         }
     }

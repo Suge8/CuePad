@@ -35,7 +35,7 @@ enum CodexHistory {
         case ("event_msg", "task_started"):
             cp.roundStarted(at: at)
         case ("event_msg", "turn_aborted"):
-            cp.interrupted()
+            cp.interrupted(PiHistory.Entry(id: "aborted-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "task_complete"):
             // 回答已在 final_answer 那条收下；没有回答的（只压缩了上下文）只结束这一轮
             cp.round = nil

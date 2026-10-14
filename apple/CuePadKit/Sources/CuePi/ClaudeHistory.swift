@@ -92,7 +92,7 @@ enum ClaudeHistory {
         var said = transcript.said()
         try content.said(into: &said, peer: peer)
         let trimmed = said.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(interruptedMarker) { return cp.interrupted() }
+        if trimmed.hasPrefix(interruptedMarker) { return cp.interrupted(entry, into: &transcript) }
         guard !commandEchoPrefixes.contains(where: trimmed.hasPrefix) else { return }
         cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
