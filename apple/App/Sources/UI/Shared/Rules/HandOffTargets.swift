@@ -14,7 +14,7 @@ enum HandOffTargets {
         return live.sorted { key($0) > key($1) }
     }
 
-    /// 菜单里一项的写法：会话名、哪家 Agent（Pi 不写）、所在、状态。
+    /// 菜单里一项的写法：会话名、哪家 Agent、所在、状态。
     static func title(_ item: PiSessionListItem, project: Project?, shown: PiShown) -> Dotted {
         Dotted(item.state.title, item.state.agentMark, PiPlace.name(of: item.state, project: project), shown.label)
     }
