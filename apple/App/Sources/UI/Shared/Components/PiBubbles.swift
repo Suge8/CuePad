@@ -202,12 +202,14 @@ struct SpeechBubble<Menu: View>: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    /// 刚从刻度滑条跳到的那一句（Cue 页里你的话）描一圈。
+    @Environment(\.chatHighlight) private var highlight
     @State private var now = Date.now
 
     var body: some View {
         let trip = said.trip(now: now, reachable: services.reaches(said.host))
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(stored: said.content, trip: trip.bubble, fromCue: fromCue) { menu(trip) }
+            UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
             status(trip).font(Typography.caption)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -265,12 +267,12 @@ extension Speech.Trip {
 }
 
 extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 没有回应。
+    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 一直没收下（只说这句话，不猜 Mac 在不在）。
     func text(sync: SyncStatus) -> String {
         switch self {
         case .reported(let reason): reason
         case .offline: "\(SyncSummary(sync).title)，发不到 Mac"
-        case .noReply: "Mac 没有回应：它可能睡着了，或没开 CuePad"
+        case .timedOut: "Mac 迟迟没收下这句"
         }
     }
 }

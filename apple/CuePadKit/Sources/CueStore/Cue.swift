@@ -47,6 +47,22 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   var notify: Bool = false
 }
 
+/// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
+public struct CueResume: Equatable, Sendable {
+  /// 没写过交接为 nil
+  public var handoff: CueMessage?
+  /// 交接之后的对话，从早到晚
+  public var messages: [CueMessage]
+  /// 更早的还有，没取
+  public var truncated: Bool
+
+  public init(handoff: CueMessage?, messages: [CueMessage], truncated: Bool) {
+    self.handoff = handoff
+    self.messages = messages
+    self.truncated = truncated
+  }
+}
+
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
@@ -154,8 +170,9 @@ public struct CueProfile: Equatable, Sendable {
   public var name: String
   /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
-  /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
+  /// 大脑跑在哪家 Agent 里（`runtimes` 之一）
   public var runtime: Open<AgentKind>
+  /// 大脑用的模型，按 `runtime` 那家的写法（`AgentKind.modelRef`）；nil 是用这家自己的默认。
   public var model: String?
   /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
@@ -166,11 +183,13 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 有回应（`asleep` 见 `CueStore.cueAsleep`），大脑也没停在起不来（`state` 不是出错）。
+  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
   /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
-  public func onDuty(_ state: CueState?, asleep: Bool) -> Bool { activeHost != nil && !asleep && state?.state != .known(.error) }
+  public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
+  /// 能当大脑的几家，按启用时挑选的顺序（OpenCode 不能当大脑）：Mac 查本机能用的、两端 Cue 页的模型菜单都按它。
+  public static let runtimes: [AgentKind] = [.pi, .codex, .claudeCode]
   /// 只有一行：任何设备上都是这个 id。
   public static let recordID = DeterministicID.uuid("cue-profile")
   /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。

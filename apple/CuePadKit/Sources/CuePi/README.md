@@ -33,7 +33,7 @@ CuePad 起的子进程（Cue 的大脑、后台托管的 Claude Code 与 Codex�
 
 ## Cue 的大脑（`Brain/`）
 
-常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 带文字与图，空闲时开始一轮、正忙时插进当前这一轮，图按各家原生的图片输入交，与托管会话同一份写法；`seesImages` 是模型能不能看图；`abort`；`stop` 返回不需要主线程的等待，等进程连同子进程退出），进程与协议用接入里的同一份（Pi 的 RPC 模式直接经 `LineProcess`）与同形的事件 `CueBrainEvent`（规则在类型的头注释里；一轮的回答就是做完时还留着的正在说的话，Pi 的从 RPC 的逐字增量累积）。系统提示整份替换，原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
+常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 带文字与图，空闲时开始一轮、正忙时插进当前这一轮，图按各家原生的图片输入交，与托管会话同一份写法；`seesImages` 是模型能不能看图；`configure` 就地换模型与思考强度，进程与上下文不动、下一次请求模型起生效（Pi 是 RPC 的 `set_model` / `set_thinking_level`，Claude Code 是控制请求 `set_model` 与 `apply_flag_settings`，Codex 是每轮随 `turn/start` 给），回到运行时默认做不到，要换大脑；`abort`；`stop` 返回不需要主线程的等待，等进程连同子进程退出），进程与协议用接入里的同一份（Pi 的 RPC 模式直接经 `LineProcess`）与同形的事件 `CueBrainEvent`（规则在类型的头注释里；一轮的回答就是做完时还留着的正在说的话，Pi 的从 RPC 的逐字增量累积）。系统提示整份替换，原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
 
 端到端测试 `RealBrainTests` 录的是真实运行时用用户自己的账号跑出来的输出；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着。Cue 用各家开工（带名字、模型、强度开会话，说两句、各自歇下，核对会话文件里实际用的模型）由 `RealCueStartTests` 守着，各家用自己的隔离测试台（Codex 复制的登录不会刷新，见 `copyCodexAuth`；Claude Code 走 DeepSeek，见 `ClaudeTestbed`）。
 

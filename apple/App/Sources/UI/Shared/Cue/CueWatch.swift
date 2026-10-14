@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// 一个窗口里 Cue 的现状（`CueDigest` 与 `CuePresence`）和 Cue 页的输入草稿：侧栏、底栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
-/// 你最近一句等回执满 `Speech.receiptLimit` 才可能算它在睡觉：到点由订阅重读（`CueStore.cueSpeech` 登记的 `expire(at:)`），这里不另计时；
+/// 它那台 Mac 的在线期限、你最近一句等回执的时限到点由订阅重读（`CueStore.macOnline`、`cueSpeech` 登记的 `expire(at:)`），这里不另计时；
 /// 只补一个库里没有的输入：到它那台 Mac 的同步此刻通不通（`reaches`）。
 @Observable
 final class CueWatch {

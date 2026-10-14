@@ -210,8 +210,8 @@ import Testing
     try await executor.start()
 
     var results = uploads.makeAsyncIterator()
-    #expect(await results.next() == true)  // 领取
-    #expect(await results.next() == true)  // 结果
+    #expect(await results.next() == true)  // 领取与结果各一次，先后不定（领取那次在后台任务里传）
+    #expect(await results.next() == true)
     #expect(await server.row(phone.id(made.id))?.fields["status"] == .text("succeeded"))
     await executor.stop()
   }
