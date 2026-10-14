@@ -1,6 +1,6 @@
 import CueStore
 
-/// 任务行行尾那一格：一件事此刻要你做什么，最多一个，点了就去那一步（Mac 与手机同一个判断，`Workspace.next(for:)`）。
+/// 任务行上"下一步"那一格：一件事此刻要你做什么，最多一个，点了就去那一步（Mac 与手机同一个判断，`Workspace.next(for:)`）。
 /// 一个叶子任务一个 Agent 会话：会话那边有事（等你确认、出错、话没送到、有新回复、正在做）就是它，点了打开会话；
 /// 否则写好了草稿还没交出去就是"开始"，点了把草稿交给 Agent；都没有就空着。会话的状态只经 `PiShown` 判定。
 nonisolated enum TaskNext: Equatable, Sendable {
@@ -44,7 +44,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
 }
 
 extension Workspace {
-    /// 一条任务行尾那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`AgentLinks`），
+    /// 一条任务"下一步"那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`AgentLinks`），
     /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。
     func next(for task: Card, agent: PiSessionListItem?, draft: Card?) -> TaskNext? {
         guard task.status != .done else { return nil }

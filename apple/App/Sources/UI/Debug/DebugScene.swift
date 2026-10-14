@@ -28,6 +28,7 @@ enum ScrollAnchor {
 /// - `-CuePadToolsOpen YES`：会话页每一轮回答上方的工具清单一开始就展开（`ToolActivityLine`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
+/// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡或那条任务一出现就画成指针停着的样子（"设为任务"、亮起的"开始"）；
 /// - `-CuePadShowsDone YES`（仅 iOS）：任务页的"最近完成"默认展开并滚到底；
 /// - `-CuePadExplain YES`（仅 iOS）：推入页顶栏有说明时（会话需要 /reload）直接弹出，核对点标题的说明；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
@@ -159,6 +160,9 @@ enum DebugScene {
         preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
+        #if os(macOS)
+        preset.hovered = defaults.string(forKey: "CuePadHover")
+        #endif
         #if os(iOS)
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus
