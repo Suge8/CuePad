@@ -210,6 +210,7 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
+            await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -226,6 +227,7 @@ extension View {
             .task {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)
+                await DebugScene.cycleIfAsked(workspace.services)
             }
         #else
         self

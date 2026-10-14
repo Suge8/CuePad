@@ -32,7 +32,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 
     /// 对话里的一格：你的话、Cue 的话（第一次提到一件活时下面一行这件活），连着的几条动态收成一格；交接备忘不显示。
-    /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），答了才回到它原来的位置，带着你选的那一项。
+    /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置（选了的带着你选的那一项）。
     enum Row: Identifiable, Equatable {
         case you(CueMessage)
         case cue(CueMessage, task: UUID?)
