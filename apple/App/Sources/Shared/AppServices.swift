@@ -16,7 +16,7 @@ import UIKit
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
-    static let bundleID = "com.sugeh.cuepad"
+    nonisolated static let bundleID = "com.sugeh.cuepad"
     /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
@@ -75,7 +75,8 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
-    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：大于 0 时不推 Cue 的通知（Mac 本机通知、iOS 前台的系统横幅），iOS 顶上的提示横幅也让给 Cue 页自己的。
+    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅），
+    /// iOS 顶上的提示横幅也让给 Cue 页自己的。
     var cueViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
@@ -95,6 +96,8 @@ final class AppServices {
     let updates: UpdateService
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
+    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
+    @ObservationIgnored weak var alerts: AlertCenter?
 
     @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper

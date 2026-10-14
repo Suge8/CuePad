@@ -60,14 +60,7 @@ struct LiveStatus: View {
         VStack(alignment: .leading, spacing: 8) {
             // 在等子代理时，子代理那一行汇总就是进展，不再另写一行"子代理工作中"
             if session.state.isWorking, session.state != .known(.delegating) || session.subagents.isEmpty {
-                // 与列表同一个转着的状态标：会话页底部这一行和列表里那一行是同一件事在动
-                HStack(spacing: 8) {
-                    PiStateDot(shown: PiShown(session), size: 7)
-                    Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
-                        .font(Typography.secondary.weight(.medium))
-                        .lineLimit(1).truncationMode(.middle)
-                        .shimmering()
-                }
+                LiveLine(shown: PiShown(session), text: session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
             }
             PiSubagentList(agents: session.subagents)
         }
@@ -77,6 +70,23 @@ struct LiveStatus: View {
     }
 }
 
+
+/// 在做事时对话末尾那一行（会话页与 Cue 页同一个）：与列表同一个转着的状态标（底部这一行和列表里那一行是同一件事在动），
+/// 后面是当前动作（没有动作时是状态词），文字上一道流光。
+struct LiveLine: View {
+    let shown: PiShown
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PiStateDot(shown: shown, size: 7)
+            Text(text)
+                .font(Typography.secondary.weight(.medium))
+                .lineLimit(1).truncationMode(.middle)
+                .shimmering()
+        }
+    }
+}
 
 extension View {
     /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。

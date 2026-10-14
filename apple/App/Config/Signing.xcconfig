@@ -1,15 +1,15 @@
 // 签名事实源：团队 SVPPQJM9JG。
 // 发布与真机构建用手动签名（各 target 的证书与描述文件名在工程里；描述文件由 scripts/provision.py 经 App Store Connect API 创建，
 // 因为 Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器）。
-// 日常构建与测试走 scripts/xc.sh 的本机模式：覆盖为 ad-hoc（不联网、不需要账号、用不带 iCloud/推送的权限文件）。
+// 日常构建与测试走 scripts/xc.sh 的本机模式：覆盖为 ad-hoc（不联网、不需要账号、用不带 iCloud 的 macOS 权限文件）。
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = Apple Development
 DEVELOPMENT_TEAM = SVPPQJM9JG
 
-// 推送环境：Debug 用 development，Release（描述文件是 production）在工程里覆盖为 production。
+// 推送环境（只有 iOS 要推送，Mac 不收推送）：Debug 用 development，Release（描述文件是 production）在工程里覆盖为 production。
 APS_ENVIRONMENT = development
 
-// macOS 主 App 的权限文件；本机 ad-hoc 构建由 xc.sh 覆盖成不含 iCloud/推送的那份（受限能力在 ad-hoc 下无法启动）。
+// macOS 主 App 的权限文件；本机 ad-hoc 构建由 xc.sh 覆盖成不含 iCloud 的那份（受限能力在 ad-hoc 下无法启动）。
 CUEPAD_MAC_ENTITLEMENTS = App/Config/CuePad-macOS.entitlements
 
 // Hardened Runtime 是 Developer ID 公证的前提；ad-hoc 构建会被系统自动关闭它。

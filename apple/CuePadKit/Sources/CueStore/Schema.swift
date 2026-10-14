@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile。约束：
+/// cueMessages、cueLines、cueProfile、cueState。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -119,7 +119,9 @@ enum Schema {
     Upgrade(stringLiteral: cueAcceptance),
     // 34：叶子记下以前用过的会话（换下来的会话仍属于它）；记着的卡只占一小部分（部分索引）
     Upgrade(stringLiteral: formerSessions),
-    // 35：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
+    // 35：Cue 此刻在做什么（值班的 Mac 写，各端读）
+    Upgrade(stringLiteral: cueState),
+    // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
     Upgrade(stringLiteral: piProcesses),
   ]
 
@@ -132,6 +134,8 @@ enum Schema {
     ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
     CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
     """
+
+  private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
   /// 33 加的列：建新库时跟在 `cue` 之后（`cue` 是 32 建的样子，升级 32 也用它）。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -295,6 +299,7 @@ enum Schema {
     \(cue)
     \(cueAcceptance)
     \(formerSessions)
+    \(cueState)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

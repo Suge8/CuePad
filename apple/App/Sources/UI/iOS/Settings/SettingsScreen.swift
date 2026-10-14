@@ -64,7 +64,7 @@ struct SettingsScreen: View {
 /// Pi 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
 private struct AlertSection: View {
     @Environment(AppServices.self) private var services
-    @Environment(PiAlertCenter.self) private var alerts
+    @Environment(AlertCenter.self) private var alerts
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
 
