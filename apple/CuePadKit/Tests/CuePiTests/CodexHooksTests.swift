@@ -6,7 +6,7 @@ import Testing
 
 /// 接入 Codex 的钩子，用真 codex 判定（它自己的 `hooks/list` 说信任了才算装好）。
 @MainActor
-@Suite(RealAgents.taped(.codex), .agentTape(.codex), .timeLimit(.minutes(2)))
+@Suite(RealAgents.taped(.codex), .agentTape(.codex), RealAgents.timeLimit(.minutes(2)))
 struct CodexHooksTests {
     let codex: CodexHome
     /// 钩子命令里的 cuepad 只是字符串（这里不跑钩子）。用固定路径：Codex 的信任哈希按命令算，录下的哈希回放时要对得上

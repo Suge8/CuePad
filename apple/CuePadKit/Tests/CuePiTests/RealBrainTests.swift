@@ -24,7 +24,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode), .timeLimit(.minutes(5)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode), RealAgents.timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor

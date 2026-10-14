@@ -57,6 +57,11 @@ enum RealAgents {
         .enabled(if: recording.contains(agent) && installed(agent), "只连真 \(agent.rawValue) 跑（\(why)）：CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
     }
 
+    /// 有录像带的套件的时限：回放一分钟（卡住的回放不空等到录制的时限），录制时给真 Agent 的 `recording`。
+    static func timeLimit(_ recording: TimeLimitTrait.Duration) -> TimeLimitTrait {
+        .timeLimit(Self.recording.isEmpty ? .minutes(1) : recording)
+    }
+
     /// 回放时套件内并行（快），录制时一个一个来（真 Agent 抢同一份额度与常驻服务）。
     static func serialWhenRecording(_ agents: AgentKind...) -> any SuiteTrait {
         agents.contains(where: recording.contains) ? ParallelizationTrait.serialized : ConditionTrait.enabled(if: true)

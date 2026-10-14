@@ -158,7 +158,7 @@ final class AgentTape: @unchecked Sendable {
 
     // MARK: 收尾
 
-    /// `keep`：录制时把这一盘写下来。用例抛错（真 Agent 出错、额度用完）时不写，原来那盘留着。
+    /// `keep`：用例没抛错。录制时只在这时写下这一盘（真 Agent 出错、额度用完时原来那盘留着）。
     func finish(keep: Bool = true) async {
         stopped.store(true, ordering: .relaxed)
         controlSource?.cancel()
@@ -202,7 +202,8 @@ final class AgentTape: @unchecked Sendable {
                 for connection in state.connections.values { connection.close() }
             }
             for problem in problems { Issue.record(Comment(rawValue: problem)) }
-            if let next { print("录像带 \(file.lastPathComponent)：回放停在 #\(next.index) \(next.event.k) \(next.event.c ?? "")") }
+            // 只在用例出错时报停在哪一步：通过的用例收尾早于录像带末尾是常态
+            if let next, !keep || !problems.isEmpty { print("录像带 \(file.lastPathComponent)：回放停在 #\(next.index) \(next.event.k) \(next.event.c ?? "")") }
         }
     }
 

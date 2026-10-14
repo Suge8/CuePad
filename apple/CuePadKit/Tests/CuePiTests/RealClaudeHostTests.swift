@@ -8,7 +8,7 @@ import Testing
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
 /// 斜杠命令、结束、接着已结束的会话、空闲退出（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
-@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.serialWhenRecording(.claudeCode), .timeLimit(.minutes(8)))
+@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.serialWhenRecording(.claudeCode), RealAgents.timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
     /// 新会话带着发起方的认领标识上桥；发的话带图，会话文件里认得出是哪条投送请求、图存进了附件目录。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {

@@ -11,7 +11,7 @@ import CueStore
 /// 摘要请求的停住与成败由对话里的标记控制（`[[slow-compact]]`、`[[fail-compact]]`、`[[overflow]]`，见 Fixtures/fake-model.ts）：
 /// 压缩停住多久由测试决定（`PiProcess.release`），不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
-@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealCompactTests {
     /// `keepRecentTokens` 很小：两轮对话就有可压缩的；`reserveTokens` 决定自动压缩的阈值（窗口 10 万减去它）。
     private func withRig(reserveTokens: Int = 16_384, _ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
