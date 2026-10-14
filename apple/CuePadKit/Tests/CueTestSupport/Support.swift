@@ -176,9 +176,9 @@ public struct TimedOut: Error, CustomStringConvertible {
   public let description: String
 }
 
-/// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
-/// 不空等到测试时限。重活经 xc.sh 全机排队，机器不再过载到一步慢几十秒；等真子进程起来的地方自己写更宽的上限。
-public let conditionTimeout: Duration = .seconds(5)
+/// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟、回放），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
+/// 不空等到测试时限。录制真 Agent（CUEPAD_AGENT_TESTS，见 CuePiTests 的 RealAgents）时每一步等的是真进程与真模型，放宽到一分钟。
+public let conditionTimeout: Duration = ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS", default: ""].isEmpty ? .seconds(5) : .seconds(60)
 
 /// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
 /// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。

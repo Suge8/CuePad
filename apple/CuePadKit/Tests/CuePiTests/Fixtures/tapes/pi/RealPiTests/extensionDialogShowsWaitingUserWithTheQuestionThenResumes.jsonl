@@ -4,35 +4,29 @@
 {"c":"p1","k":"exit","n":0}
 {"a":["--mode","rpc","--offline","--no-context-files","--no-skills","--no-prompt-templates","--no-themes","--model","fake/echo","--thinking","off","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:1}/work"}
 {"k":"dir","p":"{tmp:1}/agent/sessions/--private{dtmp:1}-work--"}
-{"c":"s1","k":"listen","p":"{tmp:1}/s/01a13b7d-1378-76d0-8c39-880116836128.{pid:p2}.sock"}
+{"c":"s1","k":"listen","p":"{tmp:1}/s/01a13b95-013d-74c9-8e32-30f4b439d2bb.{pid:p2}.sock"}
 {"c":"s1.1","k":"connect"}
-{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":13,\"extensionVersion\":27,\"sessionId\":\"01a13b7d-1378-76d0-8c39-880116836128\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-14T17-36-55-160Z_01a13b7d-1378-76d0-8c39-880116836128.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:294},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"]},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"]}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":14,\"extensionVersion\":28,\"sessionId\":\"01a13b95-013d-74c9-8e32-30f4b439d2bb\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-14T18-03-03-357Z_01a13b95-013d-74c9-8e32-30f4b439d2bb.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:685},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"]},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"]}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
 {"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/ask\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"26e16977-4005-42b9-96e4-7d2072ccca6f\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"f155a2a8-14fa-461e-b565-afa64493889c\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:318},\"busySince\":{ms:318}}}","k":"recv"}
-{"c":"p2","d":"{\"id\":\"f155a2a8-14fa-461e-b565-afa64493889c\",\"type\":\"extension_ui_response\",\"confirmed\":true}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"eb4b14c5-8419-42ea-8c5f-f6cfc586a2f9\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:720},\"busySince\":{ms:720}}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"106b3cca-ae15-4f79-a807-93287026c133\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_response\",\"confirmed\":true,\"id\":\"106b3cca-ae15-4f79-a807-93287026c133\"}","k":"stdin"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"97315442-59f8-411c-afa8-2370a2b6b247\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:329},\"busySince\":null}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:737},\"busySince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"1cfc03c2-6c05-4fff-b3b8-742103091752\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
 {"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/pick\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"58126e05-9478-4319-bc52-10ca058ed58a\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"28f81336-ef79-4e2d-ae88-40152260ed72\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:341},\"busySince\":{ms:341}}}","k":"recv"}
-{"c":"p2","d":"{\"id\":\"28f81336-ef79-4e2d-ae88-40152260ed72\",\"type\":\"extension_ui_response\",\"value\":\"Alpha\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"d62ebda9-99d1-47b7-9015-1f8fa031d993\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:746},\"busySince\":{ms:746}}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"8a71a966-b256-4cc6-b408-221f6890a9cd\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_response\",\"value\":\"Alpha\",\"id\":\"8a71a966-b256-4cc6-b408-221f6890a9cd\"}","k":"stdin"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"5d63b29f-9cee-4edc-846e-f301aaa7a512\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:354},\"busySince\":null}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:760},\"busySince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"2253b340-80a3-449b-91b1-964a45bf1f68\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
 {"c":"s1.1","k":"hangup"}
 {"c":"p2","k":"signal","n":15}
-{"c":"s1.2","k":"connect"}
-{"c":"s1.2","k":"close"}
 {"c":"s1.1","d":"{\"t\":\"bye\",\"reason\":\"quit\",\"undelivered\":[]}","k":"recv"}
-{"c":"s1.3","k":"connect"}
+{"c":"s1.2","k":"connect"}
 {"c":"s1.1","k":"close"}
-{"c":"s1.3","k":"close"}
-{"c":"s1.4","k":"connect"}
-{"c":"s1.4","k":"close"}
-{"c":"s1.5","k":"connect"}
-{"c":"s1.5","k":"close"}
+{"c":"s1.2","k":"close"}
 {"c":"p2","k":"exit","n":143}

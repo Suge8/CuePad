@@ -158,7 +158,8 @@ final class AgentTape: @unchecked Sendable {
 
     // MARK: 收尾
 
-    func finish() async {
+    /// `keep`：录制时把这一盘写下来。用例抛错（真 Agent 出错、额度用完）时不写，原来那盘留着。
+    func finish(keep: Bool = true) async {
         stopped.store(true, ordering: .relaxed)
         controlSource?.cancel()
         hookSource?.cancel()
@@ -170,6 +171,7 @@ final class AgentTape: @unchecked Sendable {
             for pid in pids { killpg(pid, SIGTERM) }
             for pid in pids { try? await eventually("真 Agent 进程组 \(pid) 退出", timeout: .seconds(5)) { killpg(pid, 0) != 0 } }
             for pid in pids { killpg(pid, SIGKILL) }
+            guard keep else { return }
             let events = state.withLock { state in
                 Self.snapshot(&state)
                 return state.events
@@ -1050,7 +1052,7 @@ struct AgentTapeTrait: SuiteTrait, TestTrait, TestScoping {
             do {
                 try await function()
             } catch {
-                await tape.finish()
+                await tape.finish(keep: false)
                 throw error
             }
             await tape.finish()

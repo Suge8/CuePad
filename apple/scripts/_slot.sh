@@ -91,15 +91,33 @@ else:
 for f in [files[n] for n in held] + [checkout]:
     mark(f, f"{time.strftime('%H:%M:%S')} 起  {me}")
 
-# 子进程自成一组：超时与转发的信号整组送达（xcodebuild 起的编译器、测试宿主一起结束）
-child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SLOT=str(held[0])), start_new_session=True)
+child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SLOT=str(held[0])))
+
+
+def tree(root):
+    """root 与它的全部后代：swift test 的测试宿主、xcodebuild 的编译器各自另起进程组，按组结束会漏下它们。"""
+    children = {}
+    for line in subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True).stdout.splitlines():
+        pid, ppid = map(int, line.split())
+        children.setdefault(ppid, []).append(pid)
+    found, todo = [], [root]
+    while todo:
+        pid = todo.pop()
+        found.append(pid)
+        todo += children.get(pid, [])
+    return found
+
+
+def signal_tree(sig):
+    for pid in reversed(tree(child.pid)):
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            pass
 
 
 def forward(sig, _):
-    try:
-        os.killpg(child.pid, sig)
-    except ProcessLookupError:
-        pass
+    signal_tree(sig)
 
 
 for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
@@ -108,11 +126,11 @@ try:
     code = child.wait(timeout=limit)
 except subprocess.TimeoutExpired:
     print(f"占槽超过 {limit // 60} 分钟，结束这一组进程", file=sys.stderr, flush=True)
-    os.killpg(child.pid, signal.SIGTERM)
+    signal_tree(signal.SIGTERM)
     try:
         child.wait(timeout=10)
     except subprocess.TimeoutExpired:
-        os.killpg(child.pid, signal.SIGKILL)
+        signal_tree(signal.SIGKILL)
     code = 124
 for f in [files[n] for n in held] + [checkout]:
     mark(f, "")

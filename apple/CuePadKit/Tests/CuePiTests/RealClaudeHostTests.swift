@@ -99,7 +99,9 @@ struct RealClaudeHostTests {
     }
 
     /// 结束托管的会话：进程退出、下桥；之后在后台接着它，上一轮说过的它还记得。
-    @Test func anEndedHostedSessionIsResumedWithItsHistory() async throws {
+    // 托管参数在主干上多了一个，录像带待重录；2026-10-15 录时 DeepSeek 余额为 0（额度用完）。充值后删掉这个 trait 再 CUEPAD_AGENT_TESTS=claude 重录
+    @Test(.disabled(if: RealAgents.mode(of: .claudeCode) == .replay, "录像带待重录：DeepSeek 余额为 0"))
+    func anEndedHostedSessionIsResumedWithItsHistory() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
