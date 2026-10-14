@@ -113,6 +113,22 @@ struct PiHistoryPersistenceTests {
     }
 }
 
+/// 设置里四家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
+struct AgentLineTests {
+    @Test func 四家接入后都写已接入与版本() async throws {
+        let rig = TestApp()
+        let versions: [AgentKind: String] = [.pi: "1.2.0", .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29"]
+        var lines: [String] = []
+        for kind in AgentKind.allCases {
+            try await rig.connect(kind, version: versions[kind]!)
+            let agents = rig.services.agents
+            lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind)).1?.visible ?? "")
+        }
+
+        #expect(lines == ["已接入 · Pi 1.2.0", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29"])
+    }
+}
+
 struct AgentUpgradeTests {
     /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
