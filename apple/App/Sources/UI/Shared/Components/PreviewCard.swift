@@ -12,10 +12,15 @@ struct PreviewGroup: View {
     @Environment(\.palette) private var palette
 
     /// 几个文件共用的标题；一个文件或各有各的标题时为 nil。
-    private var heading: String? {
-        guard previews.count > 1, let title = previews.first?.title, previews.allSatisfy({ $0.title == title }) else { return nil }
+    private var heading: String? { Self.heading(previews) }
+
+    static func heading(_ batch: [PiPreview]) -> String? {
+        guard batch.count > 1, let title = batch.first?.title, batch.allSatisfy({ $0.title == title }) else { return nil }
         return title
     }
+
+    /// 一个文件在卡片行上与全屏页顶上的写法：共用标题时写文件名，否则写自己的标题。
+    static func label(of preview: PiPreview, in batch: [PiPreview]) -> String { heading(batch) == nil ? preview.title : preview.name }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -24,7 +29,7 @@ struct PreviewGroup: View {
                     .padding(.horizontal, 8).padding(.top, 6).padding(.bottom, 2)
                     .accessibilityAddTraits(.isHeader)
             }
-            ForEach(previews) { PreviewCard(preview: $0, label: heading == nil ? $0.title : $0.name, open: open) }
+            ForEach(previews) { PreviewCard(preview: $0, label: Self.label(of: $0, in: previews), open: open) }
         }
         .padding(4)
         .frame(maxWidth: .infinity, alignment: .leading)

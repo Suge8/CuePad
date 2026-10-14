@@ -96,9 +96,6 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   /// 本机交给系统（快速查看、缩略图）的那份文件叫什么：系统认错类型的扩展名（.ts 等）另接 .txt，按这里归的类打开。
   public var systemFileName: String { PiPreviewKind.systemFileName(name) }
 
-  /// 交给系统的快速查看；网页与 Markdown 在 CuePad 自己的页里看。
-  public var opensInQuickLook: Bool { kind != .web && kind != .markdown }
-
   public init(id: UUID = UUID(), sessionID: String, hash: String, name: String, title: String, byteCount: Int, createdAt: Date? = nil) {
     let createdAt = createdAt ?? .stamp
     self.id = id
