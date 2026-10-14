@@ -136,7 +136,7 @@ public struct CueProfile: Equatable, Sendable {
   /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
   public var runtime: Open<AgentKind>
   public var model: String?
-  /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。
+  /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
@@ -153,7 +153,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
