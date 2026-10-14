@@ -353,6 +353,10 @@ final class ClaudeHostedSession: SessionLink {
             "type": "user", "message": ["role": "user", "content": .array(content)], "parent_tool_use_id": .null, "session_id": "",
             "uuid": .string(message.deliveryID ?? UUID().uuidString), "priority": priority(mode),
         ])
+        // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
+        if !message.text.isEmpty {
+            update { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
+        }
         return delivered
     }
 
