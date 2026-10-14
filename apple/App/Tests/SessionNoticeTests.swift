@@ -14,9 +14,9 @@ struct SessionNoticeTests {
     private func recorder() -> PiStateRecorder { PiStateRecorder(store: store, hostID: "mac") }
 
     /// 前台提示读的版本：`LiveSessions` 里在线的（`startSessionAlerts` 同一条路）。
-    private func live() async throws -> [PiSessionState] {
+    private func live() async throws -> [PiSessionListItem] {
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
-        return app.services.liveSessions.live.map(\.state)
+        return app.services.liveSessions.live
     }
 
     @Test func 第一次读到只记基线_之后的转换才提示_同一版本不重复() async throws {

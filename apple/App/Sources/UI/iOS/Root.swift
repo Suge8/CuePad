@@ -10,9 +10,9 @@ struct IOSRoot: View {
     @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    let alerts: PiAlertCenter
+    let alerts: AlertCenter
 
-    init(services: AppServices, alerts: PiAlertCenter) {
+    init(services: AppServices, alerts: AlertCenter) {
         _workspace = State(initialValue: Workspace(services: services))
         _navigation = State(initialValue: Navigation(settings: services.settings))
         self.alerts = alerts

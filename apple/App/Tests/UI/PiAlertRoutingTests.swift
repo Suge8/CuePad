@@ -25,7 +25,7 @@ struct PiAlertRoutingTests {
     @Test(arguments: [Navigation.Layout.tabs, .split])
     func 点Pi通知_打开该会话的近况(layout: Navigation.Layout) {
         let session = UUID()
-        let alerts = PiAlertCenter()
+        let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
         navigation.projectsPath = [.unfiled]
@@ -49,7 +49,7 @@ struct PiAlertRoutingTests {
         let seed = PiSessionState(
             id: id, sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.waitingForUser), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        let alerts = PiAlertCenter()
+        let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = .split
         navigation.splitPath = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
@@ -61,7 +61,7 @@ struct PiAlertRoutingTests {
     }
 
     @Test func 别的通知_不改导航() {
-        let alerts = PiAlertCenter()
+        let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
 
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
@@ -89,8 +89,8 @@ struct PiAlertRoutingTests {
         }
         typealias Entry = @convention(c) (AnyObject, Selector, UNUserNotificationCenter, UNNotificationResponse, @convention(block) () -> Void) -> Void
         let selector = NSSelectorFromString("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:")
-        let alerts = PiAlertCenter()
-        let entry = unsafeBitCast(class_getMethodImplementation(PiAlertCenter.self, selector), to: Entry.self)
+        let alerts = AlertCenter()
+        let entry = unsafeBitCast(class_getMethodImplementation(AlertCenter.self, selector), to: Entry.self)
         let response = unsafeBitCast(Response(payload(subscription: "cuepad.pi.waiting", record: UUID())), to: UNNotificationResponse.self)
 
         let onMain = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
@@ -131,7 +131,7 @@ struct PiAlertRoutingTests {
         let said = PiChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "接口约定改成 v2", at: .now)
         try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [said], recap: PiRecap(pendingPrompt: said.text)))
 
-        let alerts = PiAlertCenter()
+        let alerts = AlertCenter()
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session.id))
         let window = try show(IOSRoot(services: app.services, alerts: alerts).environment(alerts))
         defer { window.isHidden = true }

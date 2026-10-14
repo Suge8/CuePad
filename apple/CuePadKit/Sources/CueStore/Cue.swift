@@ -39,7 +39,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var createdAt: Date
   public var modifiedAt: Date
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
-  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
+  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
   /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，Cue 返工时撤回。
   public var isAcceptance: Bool = false
