@@ -211,6 +211,7 @@ struct CardTile: View {
         }
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
+        .onAppear { if DebugHooks.hovers(card) { hovering = true } }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .ideaDrag(card.id)
