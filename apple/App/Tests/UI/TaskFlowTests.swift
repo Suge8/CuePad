@@ -235,26 +235,21 @@ struct TaskFlowTests {
         #expect(board.done.first?.task.id == closed.id)  // 最近完成按完成时间排，不按项目分组
     }
 
-    @Test func 书架正在推进先列Agent要你处理与正在干活的_再按最近开始_只列顶层() async throws {
-        let recorder = PiStateRecorder(store: store, hostID: "mac")
-        try await recorder.update(sessionID: "s1", state: .tool, detail: "bash · pnpm test", title: "atlas")
-        try await recorder.update(sessionID: "s2", state: .waitingForUser, title: "deploy")
+    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
+    @Test func 书架正在推进按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
         try await store.setStatus(step.id, .inProgress)
-        let working = try await store.createTask("在干活", in: nil)
-        try await store.recordSend(working.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: working.id)
-        let asking = try await store.createTask("等你确认", in: nil)
-        try await store.recordSend(asking.body, to: SendTarget(kind: .piSession, name: "deploy", ref: "s2"), card: asking.id)
+        let middle = try await store.createTask("中间开始", in: nil)
+        try await store.setStatus(middle.id, .inProgress)
         let newest = try await store.createTask("最近开始", in: nil)
         try await store.setStatus(newest.id, .inProgress)
 
-        let active = try await TaskBoard.active(limit: 3, from: store)
+        let active = try await TaskBoard.active(limit: 2, from: store)
 
-        #expect(active.rows.map(\.task.id) == [asking.id, working.id, newest.id] && active.more == 1)
-        #expect(active.rows.first { $0.task.id == working.id }?.session?.state == .known(.tool))
-        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含步骤
+        #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
+        #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级

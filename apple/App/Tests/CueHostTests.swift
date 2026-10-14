@@ -162,20 +162,24 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处）：建任务时是"建任务 · 任务名"，
-    /// 这一轮说完回到歇着。
+    /// Cue 用工具时，值班的 Mac 把它在做什么写进库（同步出去，各设备 Cue 页的头像与进展一行读这一处），这一轮说完回到歇着。
+    /// 工具是读一个命名管道：没人往里写，读就停在那里，"工具进行中"一直在库里，断言完再写一行放行。
     @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {
         let rig = try await Rig()
-        let watch = Task {
-            var seen: [CueState] = []
-            do { for try await state in rig.store.observe({ try $0.cueState() }) { if let state { seen.append(state) } } } catch {}
-            return seen
+        let gate = rig.app.directory.appending(path: "gate")
+        try #require(mkfifo(gate.path, 0o600) == 0)
+        try await rig.say("请读一下关卡 \(gate.path)")
+        try await eventually("读的时候库里写着在读") {
+            let now = try await rig.store.cueState()
+            return now?.state == .known(.tool) && now?.detail == "read · gate"
         }
-        try await rig.say("请建个任务并开工")
+
+        var writer: Int32 = -1
+        try await eventually("关卡有人在读") { writer = open(gate.path, O_WRONLY | O_NONBLOCK); return writer >= 0 }
+        _ = write(writer, "放行\n", "放行\n".utf8.count)
+        close(writer)
         try await rig.message(.cue, containing: "办好了")
         try await eventually("这一轮歇下") { try await rig.store.cueState()?.state == .known(.settled) }
-        watch.cancel()
-        #expect(await watch.value.contains { $0.state == .known(.tool) && $0.detail == "建任务 · 修好登录页" })
         await rig.stop()
     }
 
@@ -529,6 +533,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
+        if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
