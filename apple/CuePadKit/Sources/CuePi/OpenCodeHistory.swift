@@ -57,9 +57,6 @@ struct OpenCodeMessage: Decodable, Sendable {
         var input: OpenCodeToolInput?
     }
 
-    /// 在会话里的先后：消息 id 是 `msg_` 加按时间递增的 12 位十六进制（服务按它排序），重读不变。
-    var seq: Int64 { Int64(id.dropFirst(4).prefix(12), radix: 16) ?? 0 }
-
     var at: Date { Date(timeIntervalSince1970: time.created / 1000) }
 
     /// 还在写的（助手这一步没完、压缩还在跑）不读：读到它为止，下次从它重读。
@@ -79,15 +76,20 @@ struct OpenCodeMessage: Decodable, Sendable {
 /// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
-    /// 检查点：Pi 的那份，加读到的最后一条消息（之后只读比它新的）。
+    /// 检查点：Pi 的那份，加读到哪。先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
+    /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比"读过没有"，也不拿 id 当 seq。
     struct Checkpoint: Codable, Sendable {
-        var last: String?
+        /// 接口给的游标（不透明），指向读过的最后一条之后；从头读为 nil
+        var cursor: String?
+        /// 读过几条：下一条消息的位置，也就是它的 seq
+        var position: Int64 = 0
         var history = PiHistoryCheckpoint()
     }
 
     private static let pageSize = 100
 
-    /// 从 `checkpoint` 往后读完这个会话现有的消息；`files` 是你的消息里的图片存进的附件目录。
+    /// 从 `checkpoint` 往后读完这个会话现有的消息（按对话里的先后，从早到晚）；`files` 是你的消息里的图片存进的附件目录。
+    /// 读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
     @concurrent static func read(
         _ client: OpenCodeClient, _ info: OpenCodeSessionInfo, from checkpoint: Checkpoint?, files: AttachmentFiles
     ) async throws -> (checkpoint: Checkpoint, transcript: PiTranscript) {
@@ -95,34 +97,37 @@ enum OpenCodeHistory {
         next.history.sessionID = info.id
         next.history.cwd = info.location.directory
         var transcript = PiHistory.Transcript(fallbackID: info.id, files: files)
-        for message in try await messages(client, session: info.id, after: next.last) {
-            guard message.isComplete else { break }
-            try ingest(message, &next.history, &transcript)
-            next.last = message.id
+        while true {
+            let page = try await self.page(client, session: info.id, from: next.cursor, limit: pageSize)
+            if let unfinished = page.data.firstIndex(where: { !$0.isComplete }) {
+                for message in page.data[..<unfinished] { try ingest(message, at: &next, &transcript) }
+                if unfinished > 0 { next.cursor = try await self.page(client, session: info.id, from: next.cursor, limit: unfinished).cursor?.next }
+                break
+            }
+            for message in page.data { try ingest(message, at: &next, &transcript) }
+            if let cursor = page.cursor?.next, !page.data.isEmpty { next.cursor = cursor }
+            guard page.data.count == pageSize else { break }
         }
         return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.recap))
     }
 
-    /// 比 `after` 新的消息，从早到晚。接口从新到旧分页，读到 `after` 就停。
-    @concurrent private static func messages(_ client: OpenCodeClient, session: String, after: String?) async throws -> [OpenCodeMessage] {
-        var newer: [OpenCodeMessage] = []
-        var cursor: String?
-        repeat {
-            let query = "limit=\(pageSize)" + (cursor.map { "&cursor=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? "")
-            let page = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(session)/message?\(query)")
-            for message in page.data {
-                if let after, message.id <= after { return newer.reversed() }
-                newer.append(message)
-            }
-            cursor = page.data.isEmpty ? nil : page.cursor?.next
-        } while cursor != nil
-        return newer.reversed()
+    /// `cursor` 之后的一页（从头读时是最早的一页），从早到晚。
+    @concurrent private static func page(
+        _ client: OpenCodeClient, session: String, from cursor: String?, limit: Int
+    ) async throws -> OpenCodePage<OpenCodeMessage> {
+        let from = cursor.map { "cursor=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? "order=asc"
+        return try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(session)/message?limit=\(limit)&\(from)")
     }
 
-    static func ingest(_ message: OpenCodeMessage, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
-        cp.seq = message.seq
+    private static func ingest(_ message: OpenCodeMessage, at checkpoint: inout Checkpoint, _ transcript: inout PiHistory.Transcript) throws {
+        try ingest(message, seq: checkpoint.position, &checkpoint.history, &transcript)
+        checkpoint.position += 1
+    }
+
+    static func ingest(_ message: OpenCodeMessage, seq: Int64, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+        cp.seq = seq
         cp.lastActivity = message.at
-        let entry = PiHistory.Entry(id: message.id, seq: message.seq, at: message.at)
+        let entry = PiHistory.Entry(id: message.id, seq: seq, at: message.at)
         switch message.type {
         case "user":
             var said = transcript.said()

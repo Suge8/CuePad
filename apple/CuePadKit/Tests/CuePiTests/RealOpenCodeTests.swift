@@ -195,6 +195,32 @@ struct RealOpenCodeTests {
         }
     }
 
+    /// 忙的时候先排一句、再插一句：OpenCode 按送进对话的先后排（插的话先进），排队那句的消息 id 却在入队时就定了、比插话的早。
+    /// CuePad 的对话按对话里的位置读，三句话与两次回答一条不少、先后与终端里一致。
+    @Test func aQueuedAndASteeredMessageKeepTheirPlaceInTheConversation() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-q")
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 20 . Then reply SLEPT."), to: id)
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
+            _ = try await bridge.send(PiMessage(text: "Queued: reply LATER", whenBusy: .followUp), to: id)
+            _ = try await bridge.send(PiMessage(text: "Steer: what is 6+6", whenBusy: .steer), to: id)
+
+            try await eventually("排队那句也答完", timeout: .seconds(180)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
+                    && messages.contains { $0.role == .known(.user) && $0.text.contains("Queued") }
+            }
+            let messages = try await store.piMessages(of: sessionID)
+            let said = messages.filter { $0.role == .known(.user) }.map(\.text)
+            #expect(said.count == 3 && said[1].contains("Steer") && said[2].contains("Queued"), "\(said)")
+            let steer = try #require(messages.firstIndex { $0.text.contains("Steer") })
+            let queued = try #require(messages.firstIndex { $0.text.contains("Queued") })
+            #expect(messages[steer..<queued].contains { $0.role == .known(.pi) }, "插话的回答在排队那句之前")
+            #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
+        }
+    }
+
     /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
     @Test func cuePadStartsTheServiceAndHostsSessionsFromOpenToResume() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
