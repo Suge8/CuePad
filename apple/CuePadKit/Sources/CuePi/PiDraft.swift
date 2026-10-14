@@ -20,7 +20,7 @@ public struct PiDraft: Equatable, Sendable {
 }
 
 /// 一条回答正在说的话怎么拼（各家协议层共用，各自只把事件映射到这几个动作）：依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；
-/// 说到一半的段由增量追加，说完的段换成运行时给的定稿（不发增量也照样有全文）；起点是第一次有字的时刻，或由调用方给；全是空白时没有。
+/// 说到一半的段由增量追加，说完的段换成运行时给的定稿（不发增量也照样有全文）；起点是第一次出字的时刻，或由调用方给；全是空白时没有。
 /// 换一条回答（`message` 变了）、转成工具调用等就新建一个。没变也照样交出去：去重只在下游一处（`PiDraftFeed`）。
 struct DraftParts {
     /// 这条回答的标识（消息、项）；不分条的为 nil
@@ -38,23 +38,18 @@ struct DraftParts {
 
     mutating func append(_ delta: String, to part: Int) {
         parts[part, default: ""] += delta
-        started()
+        since = since ?? .now
     }
 
     mutating func finish(_ part: Int, with text: String) {
         parts[part] = text
-        started()
+        since = since ?? .now
     }
 
     var draft: PiDraft? {
-        guard let since else { return nil }
         let text = parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n")
-        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: since)
-    }
-
-    private mutating func started() {
-        guard since == nil, parts.values.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else { return }
-        since = .now
+        guard let since, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return PiDraft(text: text, since: since)
     }
 }
 
