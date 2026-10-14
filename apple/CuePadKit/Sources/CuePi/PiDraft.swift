@@ -7,7 +7,8 @@ import Foundation
 /// 正常说完的留着，由界面在对话里出现它之后换下。
 public struct PiDraft: Equatable, Sendable {
     public var text: String
-    /// 这条回答开始出字的时刻
+    /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻，界面据此认出它已落库（`landed`）。
+    /// 对话里回答的时刻是写完那一刻的（Pi、Claude Code、Codex）取开始出字；是消息建立那一刻的（OpenCode）取那一刻
     public var since: Date
 
     public init(text: String, since: Date) {
