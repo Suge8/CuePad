@@ -3,17 +3,26 @@ import Foundation
 
 /// 到一个 `claude` 子进程的 stream-json 连接（`--input-format/--output-format stream-json`，与 Agent SDK 同一套线协议）：
 /// 后台托管的会话（`ClaudeHostedSession`）与 Cue 的大脑（`ClaudeBrain`）共用。
-/// 控制请求（`control_request`）按 `request_id` 配上回应，至多等 `requestTimeout`；逐字增量（`--include-partial-messages` 的 `stream_event`）
-/// 在这里累积成正在说的话交给 `onDraft`；其余每行交给 `onMessage`。
+/// 控制请求（`control_request`）按 `request_id` 配上回应，至多等 `requestTimeout`；正在说的话在这里得出交给 `onDraft`
+/// （逐字增量是 `--include-partial-messages` 的 `stream_event`，定稿是每个内容块说完时那一行完整的 `assistant`）；除增量外每行交给 `onMessage`。
 /// 退出靠关标准输入（读到 EOF 正常收尾）；进程退出时等着的请求以 `sessionEnded` 失败，再调 `onClose`。
 @MainActor
 final class ClaudeStream {
     let process: LineProcess
     var onMessage: ((ClaudeJSON) -> Void)?
-    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`）变了：只累积正文的 `text_delta`；新的一条消息开始（`message_start`）、
-    /// 转成工具调用（`tool_use` 块开始）、下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着
+    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`）变了：只算正文，文字块按换行连接；说到一半的块用 `text_delta` 累积，
+    /// 说完的块换成 `assistant` 行里的定稿（不发增量时也照样有全文）。新的一条消息开始（`message_start` 或换了消息 id）、
+    /// 转成工具调用（`tool_use` 块）、下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着
     var onDraft: ((PiDraft?) -> Void)?
     private var draft: PiDraft?
+    /// 主会话正在说的这条消息：说完的文字块（定稿）与说到一半的那块（增量）
+    private var speech = Speech()
+    private struct Speech {
+        var message: String?
+        var finished: [String] = []
+        var open = ""
+        var text: String { (finished + [open]).filter { !$0.isEmpty }.joined(separator: "\n") }
+    }
     /// 输出读完了（进程退出）；只调一次
     var onClose: (() -> Void)?
     private var requests: [String: CheckedContinuation<ClaudeJSON, any Error>] = [:]
@@ -83,8 +92,9 @@ final class ClaudeStream {
         switch message["type"]?.string {
         case "control_response": return respond(message)
         case "stream_event": return streamed(message)
-        case "system" where message["subtype"]?.string == "init": setDraft(nil)
-        case "result" where message["is_error"]?.bool == true: setDraft(nil)
+        case "system" where message["subtype"]?.string == "init": restart(nil)
+        case "result" where message["is_error"]?.bool == true: restart(nil)
+        case "assistant" where isMain(message): finished(message["message"])
         default: break
         }
         onMessage?(message)
@@ -100,23 +110,50 @@ final class ClaudeStream {
         }
     }
 
+    private func isMain(_ message: ClaudeJSON) -> Bool { message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null }
+
     private func streamed(_ message: ClaudeJSON) {
-        guard message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null, let event = message["event"] else { return }
+        guard isMain(message), let event = message["event"] else { return }
         switch event["type"]?.string {
         case "message_start":
-            setDraft(nil)
+            restart(event["message"]?["id"]?.string)
         case "content_block_start" where event["content_block"]?["type"]?.string == "tool_use":
-            setDraft(nil)
+            restart(speech.message)
         case "content_block_delta" where event["delta"]?["type"]?.string == "text_delta":
             guard let text = event["delta"]?["text"]?.string else { return }
-            setDraft(PiDraft(text: (draft?.text ?? "") + text, since: draft?.since ?? .now))
+            speech.open += text
+            publish()
         default:
             break
         }
     }
 
-    private func setDraft(_ next: PiDraft?) {
-        guard next != nil || draft != nil else { return }
+    /// 一个内容块说完了（完整的 `assistant` 行，一行一块）：文字块的定稿换下它的增量，工具调用清掉这条。
+    private func finished(_ message: ClaudeJSON?) {
+        let id = message?["id"]?.string
+        if id != speech.message { restart(id) }
+        for block in message?["content"]?.array ?? [] {
+            switch block["type"]?.string {
+            case "text":
+                speech.finished.append(block["text"]?.string ?? "")
+                speech.open = ""
+            case "tool_use": restart(id)
+            default: break
+            }
+        }
+        publish()
+    }
+
+    /// 重新开始一条（`message` 为它的 id）：清掉正在说的话。
+    private func restart(_ message: String?) {
+        speech = Speech(message: message)
+        publish()
+    }
+
+    private func publish() {
+        let text = speech.text
+        let next = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: draft?.since ?? .now)
+        guard next != draft else { return }
         draft = next
         onDraft?(next)
     }

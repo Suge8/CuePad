@@ -43,7 +43,7 @@ public enum CueBrainEvent: Sendable, Equatable {
     case turnStarted
     /// 正在说的话（`PiDraft`，规则同它）：这一轮此刻正在说的这条回答到目前为止的全文，随增量报（不节流），nil 是清掉。
     /// 转成工具调用、这一轮被停下或出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
-    /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。三家都从协议里的逐字增量累积，回答不另取一份
+    /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。三家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
     case speaking(PiDraft?)
     /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）与上下文窗口
     case context(used: Int, window: Int?)
