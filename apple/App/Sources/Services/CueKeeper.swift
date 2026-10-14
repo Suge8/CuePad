@@ -40,8 +40,17 @@ nonisolated struct CueTiming: Sendable {
     }
 }
 
-/// 一个"在这台 Mac 上值班"的时段：Cue 住在这台 Mac 且已启用时由 `CueService` 起一个，设置变了或不再住这里时停掉。
+/// 一个"在这台 Mac 上值班"的时段：Cue 住在这台 Mac 且已启用时由 `CueService` 起一个，不再住这里时停掉。
 /// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变；对话、看板与"等你"都在库里，换班次、App 重启都不丢。
+/// 设置（`CueProfile`，唯一的事实源）每次对账从库里读，与大脑在用的（`BrainSettings`）不同就去对上：
+/// - 只换了模型或思考强度：空闲时就地交给在跑的大脑（`CueBrain.configure`），下一轮起生效，不换班次、上下文不丢；
+///   大脑不认就把设置改回它在用的，并告诉你。
+/// - 换了名字（在系统提示里）、Agent，或模型、强度回到运行时默认（就地取不回默认）：要换大脑。正在跑的一轮先做完、你的话先交，
+///   再醒来请它写交接（`CueWake.settingsChanged`，就是下面的换新），交接出现后按新设置起新班次；这一轮没写出交接不再催，直接换。
+///   大脑没在跑（等着重起、停在起不来）就直接按新设置起。
+/// 新班次从哪接上只有一条规则：不论怎么起的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一次醒来的信封带上库里最近一份
+/// 交接与它之后的对话（`CueStore.cueResume`，上限见 `CueEnvelope.resumeMessages`），不为此多跑一轮。界面在交接处画"换了新上下文"的分隔，
+/// 说的是分隔以下都在 Cue 眼前：没写交接就起的班次也靠它让这句话成立。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
 ///
@@ -49,7 +58,7 @@ nonisolated struct CueTiming: Sendable {
 /// 1. 你的消息与"等你"的回答：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 ///    你关掉的提问不叫醒 Cue（`CueMessage.wakesCue`），随下一次醒来的信封写在变化里、记下送达。
 /// 2. 这一轮还没完就等。
-/// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，第一轮醒来带上交接。
+/// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，马上醒来接着做。要换大脑（见上）就醒来请它写交接，请过还没有就直接换。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
 /// 5. 有会话的事有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
@@ -82,7 +91,6 @@ final class CueKeeper {
 
     struct Setup {
         var store: CueStore
-        var profile: CueProfile
         /// 找起大脑要的可执行文件等（不问登录）
         var launch: @Sendable (AgentKind) async -> CueLaunch?
         /// 大脑起不来：请 `CueService` 重新查一遍本机的运行时
@@ -110,10 +118,31 @@ final class CueKeeper {
         case stuck(String)
     }
 
+    /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。
+    private struct BrainSettings: Equatable {
+        var name: String
+        var runtime: Open<AgentKind>
+        var model: String?
+        var effort: PiThinkingLevel?
+
+        init(_ profile: CueProfile) {
+            (name, runtime, model, effort) = (profile.name, profile.runtime, profile.model, profile.effort?.known)
+        }
+
+        /// 换成 `wanted` 要换大脑：名字在系统提示里、Agent 是另一个进程；模型、强度回到运行时默认就地也做不到。
+        func needsNewBrain(for wanted: BrainSettings) -> Bool {
+            wanted.name != name || wanted.runtime != runtime || (wanted.model == nil && model != nil) || (wanted.effort == nil && effort != nil)
+        }
+    }
+
     /// 一个班次：一个大脑进程与它这一段的状况。
     private struct Shift {
         let id: Int
         let brain: any CueBrain
+        /// 为换大脑请它写过交接（只请一次）
+        var handoffAsked = false
+        /// 这个大脑看过接上的（第一次醒来的信封带上）
+        var resumed = false
         let startedAt = Date.now
         var turn: Turn?
         /// 最近一次模型请求的上下文用量与窗口（token）
@@ -180,6 +209,7 @@ final class CueKeeper {
         var messages: [CueMessage]
         var board: [CueBoardItem]
         var memory: CueMemoryVersion
+        var profile: CueProfile?
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：变化不一定改动看板（说话、作答没能送达，你在会话里说话），
         /// 晚到的变化事件时刻也可能更早，只有写入序号一定跟着变
         var written: Int
@@ -192,6 +222,8 @@ final class CueKeeper {
     private let input: AsyncStream<Input>.Continuation
     private var progress: Progress
     private var phase = Phase.starting(failures: 0)
+    /// 此刻（或上一次试起）的大脑用的设置
+    private var brainSettings: BrainSettings?
     private var shifts = 0
     private var lastTurnEnd = Date.now
     /// 上一轮的回复写成谁的（换新时接着用）
@@ -262,7 +294,7 @@ final class CueKeeper {
                     for try await _ in store.observe({ store in
                         Signal(
                             messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion(),
-                            written: try store.lastWrite())
+                            profile: try store.cueProfile(), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -322,12 +354,13 @@ final class CueKeeper {
     /// `wake`：新班次第一轮醒来的原因（换新），回复写成 `author` 的。
     private func startShift(failures: Int = 0, wake: CueWake? = nil, author: CueAuthor = .note) async {
         phase = .starting(failures: failures)
-        let profile = setup.profile
-        guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
-            setup.startFailed()
-            return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
-        }
         do {
+            let profile = try await setup.store.cueProfile() ?? CueProfile()
+            brainSettings = BrainSettings(profile)
+            guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
+                setup.startFailed()
+                return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
+            }
             let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
             let memory = CueMemoryView(try await setup.store.cueMemory())
@@ -429,7 +462,8 @@ final class CueKeeper {
             lastTurnEnd = .now
             lastTurnAuthor = finished.author
             if let failure = finished.round.failure {
-                if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
+                // 请写交接的那一轮出错不重试：下一次对账直接换大脑
+                if let woke = finished.selfStarted, woke.wake != .settingsChanged { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
                 await markTold(finished.round)
@@ -484,6 +518,8 @@ final class CueKeeper {
         timer = nil
         do {
             let store = setup.store, now = Date.now
+            let profile = try await store.cueProfile() ?? CueProfile()
+            await follow(BrainSettings(profile))
             let pending = try await store.cueMessagesToDeliver().filter(\.wakesCue)
             if !pending.isEmpty {
                 if case .stuck = phase { await startShift() }
@@ -515,12 +551,22 @@ final class CueKeeper {
             if let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shift.startedAt }) {
                 await shift.brain.stop()()
                 // 换新后的第一轮接着写下交接的那一轮：那一轮是你发起的，回复照样给你看
-                await startShift(wake: .renewed(handoff: handoff.text), author: lastTurnAuthor)
+                await startShift(wake: .renewed, author: lastTurnAuthor)
+                return
+            }
+            if brainSettings?.needsNewBrain(for: BrainSettings(profile)) == true {
+                if shift.handoffAsked {
+                    await shift.brain.stop()()
+                    await startShift()
+                } else {
+                    updateShift { $0.handoffAsked = true }
+                    _ = try await wakeUp(.settingsChanged)
+                }
                 return
             }
 
-            if progress.greeted != setup.profile.enabledAt {
-                progress.greeted = setup.profile.enabledAt
+            if progress.greeted != profile.enabledAt {
+                progress.greeted = profile.enabledAt
                 _ = try await wakeUp(.enabled)
                 return
             }
@@ -568,7 +614,7 @@ final class CueKeeper {
                 window = nil
             }
 
-            let idleSince = lastSpoke ?? setup.profile.enabledAt ?? shift.startedAt
+            let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
             if try await !store.cueBoard().contains(where: \.isActive), let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {
                     let today = Self.day(now)
@@ -595,6 +641,33 @@ final class CueKeeper {
         }
     }
 
+    /// 设置里的大脑设置与在用的不同：大脑没在跑就直接按新设置起；在跑、空闲且只换了模型或强度，就地换（下一轮起生效）。
+    /// 要换大脑的在对账第 3 步，等这一轮做完、你的话交完。
+    private func follow(_ wanted: BrainSettings) async {
+        guard let current = brainSettings, wanted != current else { return }
+        switch phase {
+        case .restarting, .stuck:
+            await startShift()
+        case .running(let shift) where shift.turn == nil && !current.needsNewBrain(for: wanted):
+            do {
+                try await shift.brain.configure(model: wanted.model, effort: wanted.effort)
+                brainSettings = wanted
+                Self.log.notice("Cue 就地换了模型或强度：\(wanted.model ?? "默认", privacy: .public) · \(wanted.effort?.rawValue ?? "默认", privacy: .public)")
+            } catch {
+                // 大脑不认：设置改回它在用的（设置跟着事实走，选择器上看到的就是在用的），告诉你一声
+                do {
+                    try await setup.store.updateCueProfile { ($0.model, $0.effort) = (current.model, current.effort.map(Open.known)) }
+                    await setup.upload([CueProfile.recordID])
+                } catch {
+                    Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")
+                }
+                await say(.cue, "没换成\(wanted.model.map { " \($0)" } ?? "")：\(error.localizedDescription)\n我还用原来的。")
+            }
+        case .starting, .running:
+            break
+        }
+    }
+
     /// 什么时候可以巡视；这段空闲巡视过了、今天次数用完（等到明天）、整天都是打扰时段为 nil。
     private func patrolDue(idleSince: Date, now: Date) -> Date? {
         guard progress.patrolledIdle != idleSince else { return nil }
@@ -618,9 +691,15 @@ final class CueKeeper {
         let board = try await store.cueBoard()
         let dismissed = try await store.cueMessagesToDeliver().filter { !$0.wakesCue }
         let delivering = delivering + dismissed.map(\.id)
+        var resume: CueResume?
+        if !shift.resumed {
+            resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
+            resume?.messages.removeAll { delivering.contains($0.id) }
+        }
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, renewAt: Self.renewAt, projects: try await store.cueProjects(),
-            changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
+            changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
+            resume: resume, said: nil))
         var parts = [envelope]
         if let used = shift.context?.used, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
@@ -635,6 +714,7 @@ final class CueKeeper {
         }
         let round = beginRound(wake, sent: [sent], at: now)
         updateShift {
+            $0.resumed = true
             $0.turn = Turn(
                 author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark)
         }
@@ -709,7 +789,7 @@ final class CueKeeper {
     private static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
-        case .sessionActivity, .idle, .reminder, .renewed: .note
+        case .sessionActivity, .idle, .reminder, .renewed, .settingsChanged: .note
         }
     }
 

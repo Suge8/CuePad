@@ -10,7 +10,8 @@ import Foundation
 /// - 原生工具只有 `Read,Grep,Glob`，MCP 只有 CuePad 的（`--strict-mcp-config`）；这些工具预先放行，其余需要批准的一律拒绝
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
-/// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；
+/// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求 `set_model` 与 `apply_flag_settings` 的 `effortLevel`
+///   （与托管会话同一份，见 `ClaudeStream`）；
 /// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
 /// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
@@ -58,6 +59,12 @@ final class ClaudeBrain: CueBrain {
     func send(_ text: String, images: [PiImage]) async throws {
         guard let stream else { throw CueBrainError.notRunning }
         try stream.write(["type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: text, images: images)], "parent_tool_use_id": .null])
+    }
+
+    func configure(model: String?, effort: PiThinkingLevel?) async throws {
+        guard let stream else { throw CueBrainError.notRunning }
+        if let model { try await stream.setModel(model) }
+        if let effort { try await stream.setEffort(effort) }
     }
 
     func abort() async throws {
