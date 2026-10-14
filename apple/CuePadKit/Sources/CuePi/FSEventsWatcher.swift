@@ -65,11 +65,13 @@ final class FSEventsWatcher: Sendable {
         func arm(rescan: Bool = false) {
             guard !stopped else { return }
             disarm()
-            if Self.isDirectory(root) {
+            // 只判断一次：根目录可能就在两次判断之间建出来，第二次判断会把根目录自己当成要盯的上层目录（不递归），之后再也切不过去
+            let nearest = nearestExistingAncestor()
+            if nearest == root {
                 startStream()
                 if rescan { continuation.yield([root]) }
             } else {
-                watchNearestAncestor()
+                watch(ancestor: nearest)
             }
         }
 
@@ -143,8 +145,7 @@ final class FSEventsWatcher: Sendable {
         }
 
         /// 只看这个上层目录本身的增删（kqueue，不递归），下一级出现或它自己被删时重新判断。
-        private func watchNearestAncestor() {
-            let directory = nearestExistingAncestor()
+        private func watch(ancestor directory: String) {
             let descriptor = open(directory, O_EVTONLY)
             guard descriptor >= 0 else { return }
             let source = DispatchSource.makeFileSystemObjectSource(
