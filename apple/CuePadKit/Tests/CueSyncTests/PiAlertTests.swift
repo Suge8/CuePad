@@ -124,7 +124,7 @@ import Testing
 
     try await rig.coordinator.reconcile()
     try await rig.simulatePush()
-    try await rig.store.answerCueMessage(message.id, answer: "合并")
+    try await rig.store.endCueQuestion(message.id, .answered("合并"))
     let answered = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == "合并")
   }

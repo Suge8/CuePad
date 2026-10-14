@@ -23,6 +23,7 @@ extension CueStore {
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
+      try followTitle(of: sessionID, to: content.title)
       try db.run(
         """
         INSERT INTO piSessionStates (\(PiSessionState.columns.joined(separator: ", "))) VALUES (\(placeholders))
@@ -106,16 +107,15 @@ extension CueStore {
     var arguments: [any SQLBindable] = [host, PiWorkState.ended.rawValue]
     arguments += live.sorted().map { $0 as any SQLBindable }
     try write {
-      try db.run(
-        "DELETE FROM piSessionStates WHERE hostID = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
-        arguments)
+      try dropSessionRecords(
+        where: "hostID = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)", arguments)
     }
   }
 
   /// 删掉一个会话的记录（同步删除）：会话结束时没有留下会话文件的，不进历史。
   func deletePiState(sessionID: String) throws {
     try write {
-      try db.run("DELETE FROM piSessionStates WHERE id = ?", [PiSessionState.recordID(sessionID: sessionID)])
+      try dropSessionRecords(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
     }
   }
