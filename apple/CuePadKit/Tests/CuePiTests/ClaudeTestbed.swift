@@ -15,7 +15,8 @@ private let claudeKey: String? = {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
     return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["xiaomi"]?["key"]?.string
 }()
-let realClaudeAvailable = claudeURL != nil && claudeKey != nil
+/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有小米密钥
+let realClaudeAvailable = RealAgents.on(.claudeCode) && claudeURL != nil && claudeKey != nil
 
 /// 32×32 纯红 PNG
 let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAAKElEQVR4nO3NsQ0AAAzCMP5/un0CNkuZ41wybXsHAAAAAAAAAAAAxR4yw/wuPL6QkAAAAABJRU5ErkJggg==")!
@@ -184,11 +185,8 @@ final class ClaudeTerminal {
 
     @discardableResult
     private static func tmux(_ name: String, _ arguments: [String], environment: [String: String]) async throws -> String {
-        let process = Process()
-        process.executableURL = tmuxURL!
-        process.arguments = ["-L", name] + arguments
-        process.environment = environment
-        guard let result = await runCapturing(process, timeout: .seconds(10)), result.status == 0 else {
+        guard let result = await runCapturing(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
+              result.status == 0 else {
             throw TmuxFailed(command: arguments.joined(separator: " "))
         }
         return result.output

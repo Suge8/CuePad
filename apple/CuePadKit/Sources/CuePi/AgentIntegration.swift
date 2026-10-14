@@ -126,12 +126,8 @@ public struct ExecutableLocator: Sendable {
     /// 用户登录 shell 的 PATH（交互式启动才会读 .zshrc）；5 秒没结果就放弃。
     public static func loginShellPath() async -> String? {
         let marker = "__CUEPAD_PATH__"
-        let process = Process()
-        process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
+        let shell = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+        guard let result = await runCapturing(shell, ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""], timeout: .seconds(5)) else { return nil }
         return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }
@@ -294,13 +290,8 @@ public struct AgentIntegration: Sendable {
 
     /// 运行并取标准输出；超时或无法启动返回 nil。
     private static func capture(_ executable: URL, _ arguments: [String], path: String, timeout: Duration = .seconds(10)) async -> String? {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        return await runCapturing(process, timeout: timeout)?.output
+        let environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
+        return await runCapturing(executable, arguments, environment: environment, timeout: timeout)?.output
     }
 }
 
