@@ -103,7 +103,9 @@ struct SessionTaskTests {
 
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
     /// Cue 停用后，答得了的那个也回到"等你确认"。
-    @Test func Cue值班时_答得了的提问等Cue_答不了的和停用后等你() async throws {
+    /// 它住的那台 Mac 不在线（关机或睡着：你对 Cue 说的话满 30 秒没交出去）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
+    /// 到点自己变，不用等库里再写什么；那台 Mac 回来收下你的话，又归 Cue。
+    @Test func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
         try await store.updateCueProfile {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
@@ -125,9 +127,29 @@ struct SessionTaskTests {
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
-        try await store.updateCueProfile { $0.enabledAt = nil }
+        // 你在手机上对 Cue 说了一句，快 30 秒了它还没收下：到点"等你"自己从 1 变 2
+        let said = try await store.addCueMessage(.you, text: "看看登录回调")
+        try RawDB(rig.databaseURL).exec(
+            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - CueProfile.undeliveredGrace + 0.3) * 1000)) WHERE id = '\(said.id.uuidString.lowercased())'")
+        var counts: [Int] = []
+        for try await count in store.observe({ try CueWaiting.count(in: $0) }) {
+            counts.append(count)
+            if count == 2 { break }
+        }
+        #expect(counts == [1, 2])
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 2)
+        try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
+        try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
+        #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .known(.waitingForUser))
+
+        // 那台 Mac 醒来收下你的话：又在值班
+        try await store.markCueMessagesDelivered([said.id])
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
+        #expect(try await CueWaiting.count(in: store) == 1)
+
+        try await store.updateCueProfile { $0.enabledAt = nil }
+        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认", "s3": "等你确认"])
+        #expect(try await CueWaiting.count(in: store) == 3)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {

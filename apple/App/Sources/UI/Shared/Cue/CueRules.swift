@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（头像的表情与环、页头的一句、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
-/// 没启用；你最近一句还没交给它：不到 `undeliveredGrace` 是话在路上，超过是在睡觉（它住的那台 Mac 多半没开）；
+/// 没启用；你最近一句还没交给它：不到 `CueProfile.undeliveredGrace` 是话在路上，超过是在睡觉（它住的那台 Mac 不在线，`CueStore.cueAsleep`，与值班同一条）；
 /// 其余照值班的 Mac 写下的（`CueState`）：在想、在用工具是在做事，出错是起不来。
 /// 在路上与在做事和 Agent 会话是同一套状态（`shown`：状态标、状态词、颜色、对话末尾那一行都一样）。
 nonisolated enum CuePresence: Equatable, Sendable {
@@ -19,12 +19,10 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 管理器起不来：参数是给你看的原因。
     case unreachable(String)
 
-    /// 你的话多久没交给 Cue 就算它住的那台 Mac 不在线。
-    static let undeliveredGrace: TimeInterval = 30
-
-    static func derive(_ digest: CueDigest, overdue: Bool) -> CuePresence {
+    static func derive(_ digest: CueDigest) -> CuePresence {
         guard digest.enabled else { return .disabled }
-        if let pending = digest.pendingYou, !pending.delivered { return overdue ? .asleep : .sending }
+        if digest.asleep { return .asleep }
+        if digest.sending { return .sending }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
         return work.isWorking ? .working(work, detail: state.detail) : .idle
@@ -96,17 +94,14 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
-    /// 你最近一句之后它还没开口：那一句的时刻与交没交给它。
-    var pendingYou: Pending?
+    /// 你最近一句之后它还没开口，那一句也还没交给它。
+    var sending: Bool
+    /// 它住的那台 Mac 不在线（`CueStore.cueAsleep`）。
+    var asleep: Bool
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
     var state: CueState?
 
-    struct Pending: Equatable, Sendable {
-        var at: Date
-        var delivered: Bool
-    }
-
-    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil, state: nil)
+    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, sending: false, asleep: false, state: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -122,7 +117,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
-            pendingYou: spoke ? nil : lastYou.map { Pending(at: recent[$0].createdAt, delivered: recent[$0].deliveredAt != nil) },
+            sending: !spoke && lastYou.map { recent[$0].deliveredAt == nil } == true,
+            asleep: try store.cueAsleep(),
             state: try store.cueState())
     }
 
@@ -130,9 +126,9 @@ nonisolated struct CueDigest: Equatable, Sendable {
 }
 
 nonisolated extension CueSnapshot {
-    /// 小组件那一份：表情按库推出的状态定（小组件里没有"交不出去满 30 秒"的计时，按没超时算）。
+    /// 小组件那一份：表情按库推出的状态定（读的那一刻）。
     init(digest: CueDigest) {
-        let mood = CueMood.of(CuePresence.derive(digest, overdue: false), waiting: digest.waiting, justDone: digest.lastSaidDone)
+        let mood = CueMood.of(CuePresence.derive(digest), waiting: digest.waiting, justDone: digest.lastSaidDone)
         self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
     }
 }

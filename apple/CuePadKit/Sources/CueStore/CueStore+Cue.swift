@@ -292,8 +292,26 @@ extension CueStore {
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
   public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
 
-  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置与状态）。
-  public func cueOnDuty() throws -> Bool { try cueProfile()?.onDuty(try cueState()) ?? false }
+  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置、状态与你的话交没交出去）。
+  public func cueOnDuty() throws -> Bool {
+    guard let profile = try cueProfile() else { return false }
+    return profile.onDuty(try cueState(), asleep: try cueAsleep())
+  }
+
+  /// 它住的那台 Mac 不在线：你最近一句超过 `CueProfile.undeliveredGrace` 还没交给它。还没到时登记到点重读（`expire(at:)`），
+  /// 订阅它的（Cue 页的"在睡觉"、"等你 N"、会话显示）到点自己更新。
+  public func cueAsleep() throws -> Bool {
+    let latest = try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
+      $0.dateOrNil(1) == nil ? $0.date(0) : nil
+    }
+    guard let said = latest ?? nil else { return false }
+    let due = said.addingTimeInterval(CueProfile.undeliveredGrace)
+    guard due <= .now else {
+      expire(at: due)
+      return false
+    }
+    return true
+  }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
   public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {
