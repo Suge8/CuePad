@@ -33,16 +33,6 @@ extension Workspace {
         if let rule { await services.upload(rule.id) }
     }
 
-    /// 交给 Cue 跟进，或收回自己做（记在顶层任务上）。
-    func setCueFollows(_ task: UUID, _ on: Bool) {
-        let store = services.store, services = services, name = cue.name
-        attempt {
-            let top = try await store.setCueFollows(task, on)
-            await services.upload(top.id)
-            self.say(on ? "已交给 \(name)" : "已收回，你自己做")
-        }
-    }
-
     // MARK: 记忆
 
     func noteCueLine(_ text: String) async throws {

@@ -378,7 +378,7 @@ private struct PiSection: View {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
-            recorded: recorded, deliveries: deliveries, followed: services.liveSessions.cueFollowed)
+            recorded: recorded, deliveries: deliveries, cueOnDuty: services.liveSessions.cueOnDuty)
         if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") {
@@ -427,8 +427,7 @@ private struct PiSection: View {
         let bridge = live.first { $0.sessionID == session.sessionID }
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0,
-            cueFollows: services.liveSessions.cueFollowed.contains(session.sessionID), style: SidebarMetrics.session)
+            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
             .equatable()
             .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
             .frame(height: Spacing.sidebarProjectRow)
@@ -450,11 +449,11 @@ extension PiSessionState {
     /// "现在"的会话行（侧栏 Agent 区、项目页的 Agent 栏）：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）
     /// 一起按要你注意的先后；同一个会话只出现一次（本机实时优先）。已结束的不列，历史在 Agent 整页里。`recorded` 是会话列表查询的一页。
     static func liveRows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], followed: Set<String> = []
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) && $0.state != .known(.ended) }
-        return inListOrder(live + others, deliveries: deliveries, followed: followed)
+        return inListOrder(live + others, deliveries: deliveries, cueOnDuty: cueOnDuty)
     }
 }
 

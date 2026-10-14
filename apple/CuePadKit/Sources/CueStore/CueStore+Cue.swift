@@ -292,6 +292,9 @@ extension CueStore {
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
   public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
 
+  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置与状态）。
+  public func cueOnDuty() throws -> Bool { try cueProfile()?.onDuty(try cueState()) ?? false }
+
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
   public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {
     try write {

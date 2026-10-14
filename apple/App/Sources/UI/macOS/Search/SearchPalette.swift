@@ -143,7 +143,7 @@ struct SearchPalette: View {
         Divider()
         SessionResultList(
             groups: sessionGroups, deliveries: sessions?.deliveries ?? [:], undelivered: sessions?.undelivered ?? [:],
-            cueFollowed: sessions?.cueFollowed ?? [], more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
+            more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
             selection: $sessionSelection, open: openSession) { sessionPages += 1 }
             .environment(\.searchHighlight, query.text)
     }
@@ -157,7 +157,7 @@ struct SearchPalette: View {
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
-        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], followed: sessions?.cueFollowed ?? [], now: .now)
+        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], cueOnDuty: services.liveSessions.cueOnDuty, now: .now)
     }
 
     private var results: some View {

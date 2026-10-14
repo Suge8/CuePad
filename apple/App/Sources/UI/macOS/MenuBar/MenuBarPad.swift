@@ -26,14 +26,13 @@ struct MenuBarPad: View {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            }, followed: services.liveSessions.cueFollowed).prefix(Self.sessionLimit)
+            }, cueOnDuty: services.liveSessions.cueOnDuty).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0,
-                            cueFollows: services.liveSessions.cueFollowed.contains(session.sessionID)).equatable()
+                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
                             .contentShape(.rect)
                             .onTapGesture { open(.session(session.sessionID)) }
                             .accessibilityAddTraits(.isButton)

@@ -95,7 +95,7 @@ private struct StepRow: View {
 
     var body: some View {
         let done = step.status == .done
-        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery, cueFollows: $0.cueFollows) }
+        let shown = done ? nil : agents.items[step.id].map { workspace.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
         HStack(spacing: TaskRow.columnGap) {
             TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
             if selected {
@@ -133,7 +133,7 @@ private struct LeafDetail: View {
                 if let item { openSession(item.state.sessionID, primary: false) }
             } else if let item {
                 let state = workspace.withLiveState(item.state)
-                let shown = workspace.shown(state, delivery: item.delivery, cueFollows: item.cueFollows)
+                let shown = workspace.shown(state, delivery: item.delivery)
                 let look = Look(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)

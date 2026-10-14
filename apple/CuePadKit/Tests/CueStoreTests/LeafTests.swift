@@ -58,7 +58,7 @@ import Testing
     let codex = try await store.createTask("改文案", in: nil)
     try await store.linkCard(codex.id, toSession: "codex-1")
     try await recorder.update(sessionID: "codex-1", state: .settled, agent: .codex)
-    #expect(try await store.finishTask(codex.id, evidence: "- 文案改好了").ended.isEmpty)
+    #expect(try await store.finishTask(codex.id, evidence: ["文案改好了"]).ended.isEmpty)
     #expect(try await store.card(codex.id)?.status == .done)
   }
 
