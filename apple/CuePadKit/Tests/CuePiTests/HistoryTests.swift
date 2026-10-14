@@ -318,22 +318,43 @@ struct HistoryIndexerTests {
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
-    /// Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报内容变化：开着写的文件每次追加也要跟上。
+    /// Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报内容变化：开着写的会话每次追加都要跟上，
+    /// 之后别的会话（多于以前只盯的 8 个）也在写时，先开的那个照样跟上。
     @Test(.timeLimit(.minutes(1)))
-    func appendsToAFileKeptOpenAreIndexedWhileItStaysOpen() async throws {
-        let dir = root.appending(path: "p1")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appending(path: "a.jsonl")
-        FileManager.default.createFile(atPath: url.path, contents: nil)
-        let writer = try FileHandle(forWritingTo: url)
-        defer { try? writer.close() }
-        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
+    func codexAppendsToFilesKeptOpenAreIndexedWhileOthersAreWritten() async throws {
+        let day = root.appending(path: "2026/10/14")
+        try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
+        func line(_ type: String, _ second: Int, _ payload: [String: Any]) -> String {
+            SessionFile.line(["timestamp": SessionFile.stamp(second), "type": type, "payload": payload]) + "\n"
+        }
+        func open(_ name: String) throws -> FileHandle {
+            let url = day.appending(path: "rollout-\(name).jsonl")
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            return try FileHandle(forWritingTo: url)
+        }
+        let log = HistoryEventLog(PiHistoryIndexer(root: root, agent: .codex, files: scratchFiles) { _ in nil })
         try await eventually("回填完成") { log.finishedBackfill }
 
-        try writer.write(contentsOf: Data((SessionFile.header(id: "a") + "\n" + SessionFile.user("u", nil, "kept open", at: 1) + "\n").utf8))
-        try await eventually("开着写的第一句被索引") { log.updates.contains { $0.history.displayName == "kept open" } }
-        try writer.write(contentsOf: Data((SessionFile.assistant("a", "u", text: "still open", at: 2) + "\n").utf8))
-        try await eventually("开着写的回答被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(2) } }
+        let first = try open("first")
+        defer { try? first.close() }
+        try first.write(contentsOf: Data(line("session_meta", 1, ["id": "first", "cwd": "/work"]).utf8))
+        try await eventually("开着写的会话被索引") { log.updates.contains { $0.history.sessionID == "first" } }
+
+        var others: [FileHandle] = []
+        defer { others.forEach { try? $0.close() } }
+        for n in 0..<10 {
+            let other = try open("other-\(n)")
+            others.append(other)
+            try other.write(contentsOf: Data(line("session_meta", 2, ["id": "other-\(n)", "cwd": "/work"]).utf8))
+            try other.write(contentsOf: Data(line("event_msg", 3, ["type": "task_started"]).utf8))
+            try await eventually("别的会话 \(n) 的追加被索引") {
+                log.updates.contains { $0.history.sessionID == "other-\(n)" && $0.history.lastActivity == SessionFile.date(3) }
+            }
+        }
+        try first.write(contentsOf: Data(line("event_msg", 9, ["type": "task_started"]).utf8))
+        try await eventually("先开的会话之后的追加被索引") {
+            log.updates.contains { $0.history.sessionID == "first" && $0.history.lastActivity == SessionFile.date(9) }
+        }
     }
 
     /// 新用户常见顺序是先开 CuePad、后装 Pi：开始监听时会话目录还不存在。之后建出目录、写入会话（会话还没结束），
