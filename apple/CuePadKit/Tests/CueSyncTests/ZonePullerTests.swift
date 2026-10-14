@@ -1,4 +1,5 @@
 import CloudKit
+import CryptoKit
 import CueStore
 import Foundation
 import Testing
@@ -91,6 +92,51 @@ import Testing
 
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t0".utf8))
     #expect(try await store.cards(in: nil).isEmpty)
+  }
+
+  /// 带着文件的附件记录（`declaredHash` 不给就是内容的真哈希）。
+  private func attachment(_ data: Data, declaredHash: String? = nil) throws -> CKRecord {
+    let hash = declaredHash ?? SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    let record = remoteRecord(.attachments, [
+      "hash": .text(hash), "byteCount": .int(Int64(data.count)), "format": .text("png"), "createdAt": .int(1_000), "modifiedAt": .int(5_000),
+    ])
+    let file = rig.fixture.directory.appending(path: "download-\(UUID().uuidString)")
+    try data.write(to: file)
+    record["file"] = CKAsset(fileURL: file)
+    return record
+  }
+
+  /// 本机写不进附件文件（这里是附件目录的位置被一个文件占着）：这一页没应用，令牌不前移；故障消除后再拉，文件落盘、令牌前移。
+  @Test func anAttachmentThatCouldNotBeWrittenHereIsPulledAgainLater() async throws {
+    try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
+    let data = pngData(width: 5, height: 5)
+    let record = try attachment(data)
+    let blocker = rig.fixture.directory.appending(path: "Attachments")
+    try Data().write(to: blocker)
+    let zone = FakeZone([page("t1", [record]), page("t1", [record])])
+    let puller = ZonePuller(source: zone, coordinator: rig.coordinator)
+
+    await #expect(throws: (any Error).self) { try await puller.pull() }
+    #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t0".utf8))
+
+    try FileManager.default.removeItem(at: blocker)
+    try await puller.pull()
+    #expect(await zone.calls.map(\.token) == [Data("t0".utf8), Data("t0".utf8)])
+    #expect(try store.files.original(hash: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()) == data)
+    #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
+  }
+
+  /// 对照：附件记录本身坏了（内容与哈希不符）不会自己变好，拒绝这一条，令牌照常前移。
+  @Test func anAttachmentWhoseContentDoesNotMatchItsHashIsSkippedAndTheTokenMoves() async throws {
+    try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
+    let record = try attachment(pngData(width: 5, height: 5), declaredHash: String(repeating: "a", count: 64))
+    let zone = FakeZone([page("t1", [record])])
+
+    try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
+
+    #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
+    #expect(try RawDB(rig.fixture.url).count("attachments") == 0)
+    #expect(await rig.coordinator.issues.contains { $0.message.contains("已拒绝") })
   }
 
   /// 同时来的几次拉取一个接一个跑：不会两个同时拉、用同一个令牌拉两遍。
