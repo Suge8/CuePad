@@ -53,6 +53,27 @@ struct ComposerDraft {
         text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
     }
 
+    /// 只留去处收得下的：收不了图片时（会话做不到，`AgentCapabilities.images`）自己选的图片不带、带上的卡片里的图片去掉，只发文字。
+    /// 草稿里可能有看不见的图片（调回的上一句、展开编辑的卡片、编辑后重发的话），发出前都经这里，界面上没露出的不会跟着发出去。
+    func accepting(_ kinds: ComposerKinds) -> ComposerDraft {
+        guard !kinds.contains(.images) else { return self }
+        var draft = self
+        draft.images = []
+        draft.attachments = attachments.map { outbox in
+            var outbox = outbox
+            outbox.content = Self.withoutImages(outbox.content)
+            return outbox
+        }
+        return draft
+    }
+
+    /// 存储格式正文去掉图片、只留文字（收不了图片的会话；Mac 交给会话的提示词同样经它）。
+    nonisolated static func withoutImages(_ stored: String) -> String {
+        CueFormat.imageHashes(in: stored)
+            .reduce(stored) { $0.replacingOccurrences(of: CueFormat.imageMarkup(id: $1), with: "") }
+            .replacing(/\n{3,}/, with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// 存储格式正文：图片文件在这里写入图片库。
     func stored(in files: AttachmentFiles) throws -> String {
         StoredBody.make(attachments: attachments.map(\.content), text: text, imageHashes: try images.map { try files.store($0.data) })

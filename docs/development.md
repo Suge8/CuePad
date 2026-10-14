@@ -72,7 +72,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **编辑器。** 存储格式是纯字符串（`CueFormat`），唯一事实源；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。
 
-**接入 Agent。** Pi 接得最深（扩展 + 技能），Claude Code、Codex、OpenCode 只装技能，教 Agent 用 `cuepad`；装在哪、怎么认、怎么删干净以 CuePi README「接入 Agent」为准。App 层只有 `AgentIntegrations` 一份状态：装只在用户点了之后（首次启动的接入面板 `AgentSetupPanel`、设置里的开关、侧栏的「接入 Pi」，开关就是同意、不预先勾选），装过的启动时静默升级。
+**接入 Agent。** 四家都是双向接入：会话进 CuePad，能发话、作答、托管。每家写一个技能教 Agent 用 `cuepad`，上报通道 Pi 是桥扩展、Claude Code 与 Codex 是钩子，OpenCode 直连它的后台服务、不另装；装在哪、怎么认、怎么删干净以 CuePi README「接入 Agent」为准。App 层只有 `AgentIntegrations` 一份状态：装只在用户点了之后（首次启动的接入面板 `AgentSetupPanel`、设置里的开关；侧栏的接入小卡打开那个面板，开关就是同意、不预先勾选），装过的启动时静默升级。界面上一个会话能做什么只看 `AgentCapabilities`（界面规则收在 `MacDelivery` 与 `PiSessionState.usableCommands`、`composerKinds`），做不到的不露出、不置灰；收不了图片的会话发出前去掉图片只发文字（`ComposerDraft.accepting`、`withoutImages`，草稿里调回或展开来的图片界面上看不见，也不会跟着发出去）；开新会话默认用上次用的 Agent（`AppSettings.lastAgent`，Mac 上只在接入了的里选）。
 
 **Pi 桥。** 协议、版本策略、多客户端与已知边界都以 CuePi README 为准。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
 

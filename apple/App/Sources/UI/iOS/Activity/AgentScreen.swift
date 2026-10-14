@@ -208,7 +208,7 @@ struct AgentScreen: View {
             }
             .padding(.top, 40)
         case .none(inProject: false):
-            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 上运行 pi，或在这里开一个新会话") {
+            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 的终端里开一个 Agent，或在这里开新会话") {
                 EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init() })
             }
             .padding(.top, 40)

@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// 接入 Agent：首次启动出现一次（`Workspace.showsAgentSetup`），之后同样的几行在设置里。
-/// 一句话说接入能做什么，下面是与设置同一份的开关行（`AgentRows`、`CommandLineToolRow`）——开关就是同意，不预先勾选，点了才写；
+/// 一句话说接入后双向能做什么、会写什么，下面是与设置同一份的开关行（`AgentRows`、`CommandLineToolRow`）——开关就是同意，不预先勾选，点了才写；
 /// 底下一句教怎么用。只有"完成"一个主按钮，关掉就是不接。
 struct AgentSetupPanel: View {
     @Environment(\.closePanel) private var close
@@ -18,8 +18,8 @@ struct AgentSetupPanel: View {
                     .opacity(shown ? 1 : 0)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("让 Agent 用上 CuePad").font(Typography.heading).foregroundStyle(palette.ink)
-                    Text("在终端里写代码的 Agent 能帮你记灵感、看和改任务。CuePad 只在它自己的目录里放一个技能，关掉就删干净。")
+                    Text("把 Agent 接进 CuePad").font(Typography.heading).foregroundStyle(palette.ink)
+                    Text("接入后它的会话出现在 CuePad 里：在 Mac 和手机上看进展、发话、回答提问，也能在后台开会话。每家写什么列在下面，关掉就删干净。")
                         .font(Typography.secondary).foregroundStyle(palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
                 }

@@ -44,6 +44,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 }
 
 /// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
+/// 名字后紧跟着是哪家 Agent（`AgentMark`，Pi 不标，名字再长也留着它）。
 /// 整页（`page`）两层：状态标、名字、名字后小一号的所在（与"后台"）、右边时长；下面一句最要紧的话（`PiRowLine.lead`：
 /// 问题、原因、在做什么、结果，没有时才是状态词）。状态由状态标的形状与颜色表达，不再重复写状态词。
 /// 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两行——第二行是状态词接着那一句。
@@ -102,16 +103,18 @@ struct PiSessionRow: View {
             PiStateDot(shown: shown, size: style.dot, announces: style.full, halo: style.full)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    let name = Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
-                    if style.full, !placeLeads, let place {
-                        NameAndPlace {
-                            name
-                            // 放不下时宽度给到 0、裁掉：看不见，读屏照样读到
-                            place.font(style.meta).foregroundStyle(palette.ink3).lineLimit(1)
-                                .frame(minWidth: 0, alignment: .leading).clipped()
+                    NameLine {
+                        Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                        if session.agentMark != nil {
+                            AgentMark(session: session, font: style.meta).layoutValue(key: NameLine.Role.self, value: .kept)
                         }
-                    } else {
-                        name
+                        if style.full, !placeLeads, let place {
+                            // 放不下时宽度给到 0、裁掉：看不见，读屏照样读到
+                            Text("\(Text(session.agentMark == nil ? "" : "· "))\(place)")
+                                .font(style.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                                .frame(minWidth: 0, alignment: .leading).clipped()
+                                .layoutValue(key: NameLine.Role.self, value: .dropped)
+                        }
                     }
                     Spacer(minLength: 4)
                     if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
@@ -198,32 +201,46 @@ extension PiSessionRow: Equatable {
     }
 }
 
-/// 名字与名字后的所在：名字优先，放不下所在时只留名字（名字照常截断），不把所在挤成一两个字。
-/// 每次排版各量一次两者的理想宽度就定下来，不像 `ViewThatFits` 那样把两种排法都试排一遍（长列表滚动时每行都在排）。
-/// 对外的首行基线是名字的，与同一行的时长对齐。
-private struct NameAndPlace: Layout {
+/// 名字一行：名字、紧跟的 Agent 标（`Role.kept`）、名字后的所在（`Role.dropped`）。名字优先、放不下就截断，Agent 标一直留着；
+/// 放不下所在时整段让掉，不把它挤成一两个字。每次排版各量一次理想宽度就定下来，不像 `ViewThatFits` 那样把几种排法都试排一遍
+/// （长列表滚动时每行都在排）。对外的首行基线是名字的，与同一行的时长对齐。
+private struct NameLine: Layout {
+    enum Role: LayoutValueKey {
+        case name, kept, dropped
+        static let defaultValue = Role.name
+    }
+
     var spacing: CGFloat = 6
+    private static let joint: CGFloat = 3
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let name = subviews[0].sizeThatFits(.unspecified), place = subviews[1].sizeThatFits(.unspecified)
-        let full = name.width + spacing + place.width
-        return CGSize(width: min(proposal.width ?? full, full), height: name.height)
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let full = sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(max(subviews.count - 1, 0))
+        return CGSize(width: min(proposal.width ?? full, full), height: sizes.first?.height ?? 0)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let name = subviews[0], place = subviews[1]
-        let nameSize = name.sizeThatFits(.unspecified), placeSize = place.sizeThatFits(.unspecified)
-        let fits = nameSize.width + spacing + placeSize.width <= bounds.width + 0.5
-        let nameProposal = ProposedViewSize(width: fits ? nameSize.width : bounds.width, height: nameSize.height)
+        guard let name = subviews.first else { return }
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let kept = zip(subviews, sizes).dropFirst().filter { $0.0[Role.self] == .kept }.reduce(0) { $0 + spacing + $1.1.width }
+        let nameProposal = ProposedViewSize(width: min(sizes[0].width, max(0, bounds.width - kept)), height: sizes[0].height)
         name.place(at: bounds.origin, proposal: nameProposal)
-        let placeProposal = fits ? ProposedViewSize(placeSize) : ProposedViewSize(width: 0, height: placeSize.height)
-        let baseline = name.dimensions(in: nameProposal)[.firstTextBaseline] - place.dimensions(in: placeProposal)[.firstTextBaseline]
-        place.place(at: CGPoint(x: bounds.minX + (fits ? nameSize.width + spacing : bounds.width), y: bounds.minY + baseline), proposal: placeProposal)
+        let baseline = name.dimensions(in: nameProposal)[.firstTextBaseline]
+        var x = bounds.minX + (nameProposal.width ?? 0)
+        for (index, (subview, size)) in zip(subviews, sizes).enumerated().dropFirst() {
+            // 名字后一格空，Agent 标与所在之间只隔一个字距（所在自己以"·"起头）
+            let gap = index == 1 ? spacing : Self.joint
+            let fits = subview[Role.self] == .kept || x + gap + size.width <= bounds.maxX + 0.5
+            let proposal = fits ? ProposedViewSize(size) : ProposedViewSize(width: 0, height: size.height)
+            let origin = fits ? x + gap : bounds.maxX
+            subview.place(at: CGPoint(x: origin, y: bounds.minY + baseline - subview.dimensions(in: proposal)[.firstTextBaseline]), proposal: proposal)
+            if fits { x = origin + size.width }
+        }
     }
 
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? {
-        guard guide == .firstTextBaseline || guide == .lastTextBaseline else { return nil }
-        return subviews[0].dimensions(in: ProposedViewSize(width: bounds.width, height: nil))[guide]
+        guard guide == .firstTextBaseline || guide == .lastTextBaseline, let name = subviews.first else { return nil }
+        return name.dimensions(in: ProposedViewSize(width: bounds.width, height: nil))[guide]
     }
 }
 

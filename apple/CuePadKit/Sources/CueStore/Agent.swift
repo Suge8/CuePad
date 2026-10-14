@@ -53,7 +53,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
     // 终端里的会话经它的收件箱插话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
     case .claudeCode: return [.steer, .answer, .rename, .end]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子
-    case .codex: return [.images, .steer, .abort, .model, .rename, .answer]
+    case .codex: return [.images, .steer, .abort, .model, .rename, .commands, .answer]
     }
   }
 }

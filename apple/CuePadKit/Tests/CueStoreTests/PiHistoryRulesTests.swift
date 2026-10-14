@@ -15,20 +15,14 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.piSessionPage(PiSessionQuery(limit: .max)).items.map { ($0.state.sessionID, $0.state) })
   }
 
-  private func sessionFile() throws -> URL {
-    let file = FileManager.default.temporaryDirectory.appending(path: "hist-\(UUID().uuidString).jsonl")
-    try Data().write(to: file)
-    return file
-  }
-
-  @Test func 进程退出按有没有会话文件与是不是托管的分三种() async throws {
+  @Test func 进程退出按有没有留下对话与是不是托管的分三种() async throws {
     let recorder = recorder
     for id in ["silent", "terminal", "hosted"] {
       try await recorder.update(sessionID: id, state: .thinking, title: id, hosted: id == "hosted")
     }
-    try await recorder.exited(sessionID: "silent", file: URL(filePath: "/no/such/file.jsonl"), hosted: false)
-    try await recorder.exited(sessionID: "terminal", file: try sessionFile(), hosted: false)
-    try await recorder.exited(sessionID: "hosted", file: try sessionFile(), hosted: true)
+    try await recorder.exited(sessionID: "silent", spoke: false, hosted: false)
+    try await recorder.exited(sessionID: "terminal", spoke: true, hosted: false)
+    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
 
     let all = try await states()
     #expect(all["silent"] == nil, "没说过话：记录删掉")
@@ -52,7 +46,7 @@ import Testing
     defer { watcher.cancel() }
     try await Task.sleep(for: .milliseconds(200))
 
-    try await recorder.exited(sessionID: "hosted", file: try sessionFile(), hosted: true)
+    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
 
     for _ in 0..<300 where seen.withLock({ $0.last }) != .known(.settled) { try await Task.sleep(for: .milliseconds(10)) }
     #expect(seen.withLock { $0.last } == .known(.settled), "订阅收到歇着")

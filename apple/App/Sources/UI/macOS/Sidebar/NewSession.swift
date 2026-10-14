@@ -21,12 +21,15 @@ struct NewSessionButton: View {
     }
 }
 
-/// 新会话开在哪：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
+/// 新会话开在哪、用哪个 Agent：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
+/// Agent 只列本机接入了的（`AppServices.launchableAgents`），默认上次用的；只接入了一个时不出选择。
 struct NewSessionForm: View {
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var chosen: String?
+    @State private var agent: AgentKind?
     @State private var prompt = ""
     @State private var stage = Stage.idle
 
@@ -47,8 +50,21 @@ struct NewSessionForm: View {
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
         // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
+        let agents = services.launchableAgents
         VStack(alignment: .leading, spacing: 12) {
-            Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
+            HStack(spacing: 12) {
+                Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                Spacer(minLength: 0)
+                if agents.count > 1 {
+                    Picker("用哪个 Agent", selection: Binding(get: { agent ?? services.defaultAgent }, set: { agent = $0 })) {
+                        ForEach(agents) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.menu).labelsHidden().fixedSize()
+                    .controlSize(.small)
+                    .disabled(stage == .opening)
+                    .help("用哪个 Agent 开")
+                }
+            }
             if places.isEmpty {
                 Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
                     .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
@@ -125,13 +141,27 @@ struct NewSessionForm: View {
         Task {
             do {
                 let id = try await workspace.startSession(
-                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name) { stage = .connecting }
+                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name, agent: agent ?? services.defaultAgent
+                ) { stage = .connecting }
                 stage = .idle
                 opened(id)
             } catch {
                 stage = .failed(error.localizedDescription)
             }
         }
+    }
+}
+
+extension AppServices {
+    /// 本机能开新会话的 Agent：装着、也接入了 CuePad 的，按 `AgentKind` 的顺序。
+    var launchableAgents: [AgentKind] {
+        AgentKind.allCases.filter { kind in agents.status(kind).map { $0.isAvailable && $0.isConnected } ?? false }
+    }
+
+    /// 开新会话默认用哪个：上次用的还能用就是它，否则第一个能用的；一个都没接入时是 Pi（开不出来时如实报原因）。
+    var defaultAgent: AgentKind {
+        let agents = launchableAgents
+        return agents.contains(settings.lastAgent) ? settings.lastAgent : agents.first ?? .pi
     }
 }
 #endif

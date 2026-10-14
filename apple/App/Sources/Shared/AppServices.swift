@@ -85,10 +85,10 @@ final class AppServices {
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
 
-    @ObservationIgnored let paths: PiPaths
+    @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let host: any PiHosting
-    @ObservationIgnored let locatePi: @Sendable () async -> URL?
+    @ObservationIgnored let hooks: AgentHookServer
+    @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
@@ -98,7 +98,7 @@ final class AppServices {
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, host: host, hostID: hostID, recorder: piStateRecorder, locatePi: locatePi,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
         uploadResult: { [weak self] id in await self?.upload(id) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
@@ -310,8 +310,8 @@ final class AppServices {
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
-        locatePi = mac.locatePi
-        host = mac.host
+        hooks = mac.hooks
+        runtimes = mac.runtimes(store)
         agents = AgentIntegrations(mac.agents)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)

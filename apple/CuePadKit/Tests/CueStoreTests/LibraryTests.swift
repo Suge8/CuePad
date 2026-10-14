@@ -126,6 +126,9 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
+  /// 结构 30 之前的库没有记 Agent 的两列：倒回更早的结构时先去掉
+  static let beforeAgents = "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent; "
+
   /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表、对话里只有工具个数）就地升级，已有的会话记录不丢，
   /// 新列可写，预览可用；会话文件的检查点作废（下次从头读，补出旧对话的工具活动）。
   @Test func schema17LibraryUpgradesInPlaceAndKeepsSessionRecords() async throws {
@@ -135,7 +138,7 @@ import Testing
       """
       ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; DROP TABLE syncSent;
       ALTER TABLE piMessages DROP COLUMN tools; ALTER TABLE piMessages ADD COLUMN toolCount INTEGER NOT NULL DEFAULT 0;
-      DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; DROP INDEX cards_todoAt; DROP INDEX cards_piSessionID; PRAGMA user_version = 17;
+      DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; DROP INDEX cards_todoAt; DROP INDEX cards_piSessionID; \(Self.beforeAgents)PRAGMA user_version = 17;
       """)
 
     let upgraded = try CueStore(url: fixture.url)
@@ -150,7 +153,7 @@ import Testing
   /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
   @Test func schema22LibraryDropsSessionCheckpoints() async throws {
     try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
-    try RawDB(fixture.url).exec("DROP TABLE syncSent; PRAGMA user_version = 22;")
+    try RawDB(fixture.url).exec("DROP TABLE syncSent; \(Self.beforeAgents)PRAGMA user_version = 22;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
@@ -162,7 +165,7 @@ import Testing
     let sub = try await store.createTask("备份", under: top.id)
     let deep = try await store.createTask("导出", in: nil)
     let before = try #require(try await store.card(deep.id)).modifiedAt
-    try RawDB(fixture.url).exec("UPDATE cards SET parentID = '\(sub.id.uuidString.lowercased())' WHERE id = '\(deep.id.uuidString.lowercased())'; DROP TABLE syncSent; PRAGMA user_version = 23;")
+    try RawDB(fixture.url).exec("UPDATE cards SET parentID = '\(sub.id.uuidString.lowercased())' WHERE id = '\(deep.id.uuidString.lowercased())'; DROP TABLE syncSent; \(Self.beforeAgents)PRAGMA user_version = 23;")
 
     let upgraded = try CueStore(url: fixture.url)
     let lifted = try #require(try await upgraded.card(deep.id))
@@ -177,7 +180,7 @@ import Testing
     let first = try await store.createCard(body: "先复现", under: task.id)
     try await store.linkCard(task.id, toSession: "s1")
     let before = try #require(try await store.card(task.id)).modifiedAt
-    try RawDB(fixture.url).exec("UPDATE cards SET body = '修乱序\n第 6 位重连后会排到最前' WHERE id = '\(task.id.uuidString.lowercased())'; PRAGMA user_version = 26;")
+    try RawDB(fixture.url).exec("UPDATE cards SET body = '修乱序\n第 6 位重连后会排到最前' WHERE id = '\(task.id.uuidString.lowercased())'; \(Self.beforeAgents)PRAGMA user_version = 26;")
 
     let upgraded = try CueStore(url: fixture.url)
     let upgradedTask = try #require(try await upgraded.card(task.id))
@@ -202,7 +205,7 @@ import Testing
     let sessions = [(top, "s1"), (open, "s2")]
     let sql = pins.map { "UPDATE cards SET parentID = '\($1.id.uuidString.lowercased())', sortKey = '\($2)' WHERE id = '\($0.id.uuidString.lowercased())';" }.joined()
       + sessions.map { "UPDATE cards SET piSessionID = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';" }.joined()
-    try RawDB(fixture.url).exec(sql + "PRAGMA user_version = 27;")
+    try RawDB(fixture.url).exec(sql + "\(Self.beforeAgents)PRAGMA user_version = 27;")
     let before = try #require(try await store.card(ideas[0].id)).modifiedAt
 
     let upgraded = try CueStore(url: fixture.url)
@@ -238,7 +241,7 @@ import Testing
     let parents = zip(ideas, ["a", "b", "c", "d"]).map {
       "UPDATE cards SET parentID = '\(task.id.uuidString.lowercased())', sortKey = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';"
     }.joined()
-    try RawDB(fixture.url).exec(parents + "UPDATE deliveryRequests SET status = 'failed' WHERE id = '\(request.id.uuidString.lowercased())'; PRAGMA user_version = 25;")
+    try RawDB(fixture.url).exec(parents + "UPDATE deliveryRequests SET status = 'failed' WHERE id = '\(request.id.uuidString.lowercased())'; \(Self.beforeAgents)PRAGMA user_version = 25;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.children(of: task.id).map(\.id) == [resource.id, unsent.id])

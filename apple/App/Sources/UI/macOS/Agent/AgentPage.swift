@@ -157,7 +157,7 @@ struct AgentPage: View {
             }
         case .none(let inProject):
             EmptyState(mascot: .empty, title: inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
-                       message: "在终端运行 pi，或点右上角开一个新会话") { EmptyView() }
+                       message: "在终端里开一个 Agent，或点右上角开新会话") { EmptyView() }
         }
     }
 }

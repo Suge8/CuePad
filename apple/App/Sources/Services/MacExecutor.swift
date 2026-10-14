@@ -4,30 +4,27 @@ import CueStore
 import Foundation
 
 /// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
-/// 全 App 调用 Pi 桥发消息、作答、改配置、停止与后台托管 Pi 的只有这里；成功送出的话记发送记录。
+/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止，经各 Agent 的接入在后台开会话、接着会话、结束会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     private let store: CueStore
     private let pi: PiBridge
-    private let host: any PiHosting
+    private let runtimes: [AgentKind: any AgentRuntime]
     private let hostID: String
     private let recorder: PiStateRecorder
-    private let locatePi: @Sendable () async -> URL?
     private let uploadResult: @Sendable (UUID) async -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
-        store: CueStore, pi: PiBridge, host: any PiHosting, hostID: String, recorder: PiStateRecorder,
-        locatePi: @escaping @Sendable () async -> URL?,
+        store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
         uploadResult: @escaping @Sendable (UUID) async -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
         self.store = store
         self.pi = pi
-        self.host = host
+        self.runtimes = runtimes
         self.hostID = hostID
         self.recorder = recorder
-        self.locatePi = locatePi
         self.uploadResult = uploadResult
         self.reportIssue = reportIssue
     }
@@ -86,9 +83,9 @@ final class MacExecutor {
         }
     }
 
-    // MARK: 发给 Pi 会话
+    // MARK: 发给 Agent 会话
 
-    /// 发出的话：Pi 桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时报错。
+    /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时报错。
     /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
     private func deliver(_ request: DeliveryRequest, whenBusy: PiQueueMode?) async throws {
         let (_, id) = try await connect(request.target)
@@ -131,7 +128,7 @@ final class MacExecutor {
     /// 不能为了结束它而恢复它。两种都由这里记为已结束、进历史——托管的会话闲置退出不算结束，只有用户的结束请求才算。
     private func end(_ target: SendTarget) async throws {
         let ref = try sessionID(of: target)
-        if let id = pi.session(sessionID: ref)?.id { try await host.end(id) }
+        if let live = pi.session(sessionID: ref) { try await runtime(live.agent).end(live.id) }
         try await recorder.end(sessionID: ref)
     }
 
@@ -153,10 +150,14 @@ final class MacExecutor {
         let ref = try sessionID(of: target)
         if let live = pi.session(sessionID: ref) { return (ref, live.id) }
         guard let indexed = try await store.piSession(ref) else { throw SendError.sessionNotOnThisMac(target.name) }
-        let directory = URL(filePath: indexed.cwd, directoryHint: .isDirectory)
-        try requireDirectory(directory)
-        guard let executable = await locatePi() else { throw SendError.piNotInstalled }
-        return (ref, try await host.resume(sessionFile: URL(filePath: indexed.path), in: directory, executable: executable))
+        try requireDirectory(URL(filePath: indexed.cwd, directoryHint: .isDirectory))
+        return (ref, try await runtime(indexed.agent).resume(indexed))
+    }
+
+    /// 这个 Agent 在这台 Mac 上的接入；本版本不认识的 Agent 当作没装。
+    private func runtime(_ agent: AgentKind) throws -> any AgentRuntime {
+        guard let runtime = runtimes[agent] else { throw AgentRuntimeError.notInstalled(agent) }
+        return runtime
     }
 
     // MARK: 不指向某个会话的请求（都不写发送记录）
@@ -167,8 +168,7 @@ final class MacExecutor {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         let directory = try await directory(of: .project(launch.project))
         try requireDirectory(directory)
-        guard let executable = await locatePi() else { throw SendError.piNotInstalled }
-        let id = try await host.open(in: directory, launchToken: launch.token, executable: executable)
+        let id = try await runtime(launch.agent ?? .pi).open(in: directory, launchToken: launch.token)
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)
@@ -177,10 +177,10 @@ final class MacExecutor {
         }
     }
 
-    /// 补写一个会话的对话：从本机的会话文件从头读出，与摘要一起写。
+    /// 补写一个会话的对话：从头读出（会话文件，OpenCode 的经它的服务），与摘要一起写。
     private func writeTranscript(of sessionID: String) async throws {
         guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-        try await store.writePiTranscript(try PiHistory.index(file: URL(filePath: indexed.path), from: nil, files: store.files).transcript)
+        try await store.writePiTranscript(try await runtime(indexed.agent).transcript(of: indexed, files: store.files))
     }
 
     /// 绑定文件夹：手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入；
@@ -214,7 +214,7 @@ final class MacExecutor {
         }
     }
 
-    /// 正文里的图片按原顺序取原图与类型，交给 Pi 自行缩放。
+    /// 正文里的图片按原顺序取原图与类型，交给 Agent 自行缩放。
     private func piImages(in content: SendContent) throws -> [PiImage] {
         try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
