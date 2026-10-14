@@ -123,7 +123,8 @@ struct CuePage: View {
         return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
+                let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             .animation(Motion.quick, value: cue.presence.progress)
@@ -131,10 +132,12 @@ struct CuePage: View {
         .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef]) -> some View {
+    /// `lastYou`：你最后一句，只在它下面写"已送达"。
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?) -> some View {
         switch row {
         case .you(let message):
-            UserBubble(stored: message.text).padding(.top, 14)
+            SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
+                .padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
                 CueSays(message: message, fadesIn: !swapsInPlace)

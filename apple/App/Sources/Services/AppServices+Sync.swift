@@ -92,7 +92,8 @@ extension AppServices {
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
     ///   "等你"的回答、别的 Mac 接管只经这一拉才到，会话都关着时它也在等）；Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」）；
-    /// - 手机：有发往 Mac 还没结果的请求，或正在看 Agent 页、会话近况。进入后台整体停掉（见 `stopPolling`）。
+    /// - 手机：有在等回执的话（发往 Mac 还没结果的请求、还没交给 Cue 的你的话，`openDeliveries`），或正在看 Agent 页、会话近况。
+    ///   进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
         .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
@@ -121,9 +122,12 @@ extension AppServices {
         }
     }
 
-    /// 有没有还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
+    /// 有没有在等回执的话：还没结果的投送请求，或你对 Cue 说了、还没交给它的话（等 Cue 住的那台 Mac 写回送达，见 `Speech`）；
+    /// 请求表或对话变化时重算。读失败时报告并结束（不再主动拉，推送与切前台照常）。
     private func openDeliveries() -> AsyncStream<Bool> {
-        let changes = store.observe { store in try store.deliveryRequests().contains { $0.isOpen } }
+        let changes = store.observe { store in
+            try store.deliveryRequests().contains { $0.isOpen } || store.cueMessagesToDeliver().contains { $0.author == .known(.you) }
+        }
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 do {

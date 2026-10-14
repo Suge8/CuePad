@@ -4,7 +4,8 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing, succeeded, failed
 }
 
-/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。
+/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
+/// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   case send, steer, followUp

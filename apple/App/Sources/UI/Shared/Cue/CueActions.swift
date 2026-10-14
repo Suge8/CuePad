@@ -1,29 +1,19 @@
 import CueStore
 import Foundation
 
-/// 界面对 Cue 的写入（iOS 与 Mac 同一份）：都只写库。对 Cue 说话就是写一条你的消息，Cue 住的那台 Mac 的管理器读到再交给它；
-/// 写完立即上传这一条（手机与别的 Mac 上不等引擎自己排）。
+/// 界面对 Cue 的写入（iOS 与 Mac 同一份）：都只写库，写完立即上传这一条（手机与别的 Mac 上不等引擎自己排）。
+/// 对 Cue 说话就是写一条你的消息（经 `Workspace.speak`），Cue 住的那台 Mac 的管理器读到再交给它。
 extension Workspace {
     /// 跟随 Cue 的现状（窗口根视图调用）。
     func observeCue() async {
+        let services = services
+        cue.reaches = { host in services.reaches(host) }
         do {
             try await cue.follow(services.store)
         } catch is CancellationError {
         } catch {
             fail(error)
         }
-    }
-
-    /// 把 Cue 的草稿（`CueWatch.draft`，文字可带图片）说给它：图片写进图片库，写一条你的消息并上传；说出去了草稿清空。
-    func sayToCue() async throws {
-        try await sayToCue(cue.draft)
-        cue.draft = ComposerDraft()
-    }
-
-    /// 把一份别处的草稿说给 Cue（菜单栏的随手记直接交给它）。
-    func sayToCue(_ draft: ComposerDraft) async throws {
-        let message = try await services.store.addCueMessage(.you, text: try draft.stored(in: services.store.files))
-        await services.upload(message.id)
     }
 
     /// 结束 Cue 的一条"等你"：选一项或关掉。选"以后……都不用问"时 Store 同时记下这条规矩，一起上传。

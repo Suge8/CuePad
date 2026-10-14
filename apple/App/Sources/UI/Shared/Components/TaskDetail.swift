@@ -27,5 +27,7 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     }
 
     /// 一页的焦点：第一条还没发的提示词，只有它的"发给 Agent"是靛青主钮，其余没发的退成墨色，一眼看出从哪条开始。
-    func primaryPrompt(agents: AgentLinks) -> UUID? { prompts.first { PromptDelivery($0.id, agents: agents) == .unsent }?.id }
+    func primaryPrompt(agents: AgentLinks) -> UUID? {
+        prompts.first { PromptDelivery($0.id, agents: agents, now: .now, reaches: { _ in true }) == .unsent }?.id
+    }
 }
