@@ -11,7 +11,7 @@ private struct PiTypes {
 
     /// `~/.local/bin/pi` 指向的检出：向上找带类型声明（dist/index.d.ts）的包目录，再向上找带 typescript 与 @types 的 node_modules。
     init?() {
-        guard realPiAvailable else { return nil }
+        guard RealAgents.recording.contains(.pi), realPiInstalled else { return nil }
         var directory = realPiURL.resolvingSymlinksInPath().deletingLastPathComponent()
         while !FileManager.default.fileExists(atPath: directory.appending(path: "dist/index.d.ts").path) {
             guard directory.path != "/" else { return nil }

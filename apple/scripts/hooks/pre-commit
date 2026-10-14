@@ -9,7 +9,7 @@ if [ "$git_dir" = "$common_dir" ] && ! git rev-parse -q --verify MERGE_HEAD >/de
 主检出只收合并，不在这里提交（这里常有别人没提交的改动）。
 在主检出里开一个自己的检出，改动在那里提交，再回主检出合并：
   git worktree add ../CuePad-wt/<名> -b feat/<名>
-  cd ../CuePad-wt/<名>      # 构建与测试另设 CUEPAD_DERIVED=/tmp/<名>
+  cd ../CuePad-wt/<名>
   …提交…
   cd - && git merge --no-ff feat/<名>
 EOF

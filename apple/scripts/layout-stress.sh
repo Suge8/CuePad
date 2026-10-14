@@ -7,14 +7,14 @@
 #      否则判为"没覆盖到"，同样以 1 退出
 # 判定依据是该进程的系统日志："Geometry action is cycling"（SwiftUI 几何回调来回翻转）与
 # "has continued for 300 iterations"（AppKit 布局迭代超限，随后抛异常退出）。需要 DEBUG 条件编译的构建（调试场景参数）。
-# 用法：scripts/layout-stress.sh [--inject-loop] [CuePad.app]（缺省 $CUEPAD_DERIVED/Build/Products/Debug/CuePad.app）
+# 用法：scripts/layout-stress.sh [--inject-loop] [CuePad.app]（缺省 apple/.derived/Build/Products/Debug/CuePad.app，先 xc.sh build mac）
 # 某组进程中途退出时报出退出码或终止信号，并保留它的隔离库目录（资料库、Pi 目录、这段进程的系统日志 process.log），打印路径不删。
 # --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），检测器有效时脚本必须以 1 退出——用来证明它抓得到这类环。
 set -u
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 inject=()
 if [ "${1:-}" = --inject-loop ]; then inject=(-CuePadGeometryLoop YES); shift; fi
-app="${1:-${CUEPAD_DERIVED:-$APPLE_DIR/.derived}/Build/Products/Debug/CuePad.app}"
+app="${1:-$APPLE_DIR/.derived/Build/Products/Debug/CuePad.app}"
 failed=0
 # 假 Pi 会话的工作目录取演示库 CuePad 项目绑定的目录（从 Debug/DemoLibrary.swift 读，不另存一份），会话由此归到该项目；
 # 真实 pi 要求目录存在，用仓库根

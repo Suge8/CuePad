@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
-# 用法：perf-ios.sh [次数=3] [启动参数…]   启动参数原样传给 App，如任务多时：perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad
+# 用法：xc.sh perf ios [次数=3] [启动参数…]   启动参数原样传给 App，如任务多时：xc.sh perf ios 3 -CuePadManyTasks 150 -CuePadProject CuePad
 #   iPhone 模拟器上的单次交互（-CuePadBench interact，`IOSInteractionBench`）：演示库，每次全新进程，逐项量点击回合、合计、最重一圈
 #   （主线程 CPU 毫秒）、进程指令数（百万条）与掉帧，按"第几次"分开取各次的中位数列成表。
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单在进程内没有入口：App 写 `AWAIT 名 x y`，这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
-# 用 Release（带 DEBUG 条件，只为留下测量代码）；产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf-ios，设备是这个产物目录自己的模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
+# 用 Release（带 DEBUG 条件，只为留下测量代码）；产物在 apple/.derived-perf-ios。独占全部槽位（_slot.sh），设备是 0 号槽的模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
 command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/axe）" >&2; exit 1; }
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
+# shellcheck source=_slot.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_slot.sh"
+slot_enter all "$0" "$@"
 runs="${1:-3}"
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}-perf-ios"
+DERIVED="$APPLE_DIR/.derived-perf-ios"
 BUNDLE_ID=com.sugeh.cuepad
 
 mkdir -p "$DERIVED"
-DERIVED="$(cd "$DERIVED" && pwd)"
-udid="$(sim_udid "$DERIVED" "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
+udid="$(sim_udid "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
 # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
 xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
   -destination "platform=iOS Simulator,id=$udid" -derivedDataPath "$DERIVED" -quiet build \
   DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' \
   >"$DERIVED/build.log" 2>&1 || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
 
-# 每次从刚开机的模拟器量：开着很久的模拟器上（尤其用过 axe 查界面、点按之后）同一交互的指令数能高出一倍
+# 每次从刚开机的模拟器量：开着很久的模拟器上（尤其用过 axe 查界面、点按之后）同一交互的指令数能高出一倍。量完开着留给别的任务
 xcrun simctl shutdown "$udid" 2>/dev/null || true
-xcrun simctl boot "$udid"
-trap 'xcrun simctl shutdown "$udid" 2>/dev/null || true' EXIT
-xcrun simctl bootstatus "$udid" -b >/dev/null
+sim_boot "$udid"
 xcrun simctl install "$udid" "$DERIVED/Build/Products/Release-iphonesimulator/CuePad.app"
 
 running() { local list; list="$(xcrun simctl spawn "$udid" launchctl list 2>/dev/null)"; [[ "$list" == *"UIKitApplication:$BUNDLE_ID"* ]]; }
