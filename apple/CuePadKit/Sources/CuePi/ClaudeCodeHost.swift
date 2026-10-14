@@ -25,6 +25,8 @@ final class ClaudeHostedSession: SessionLink {
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     private var contextWindow: Int?
+    /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
+    private var resolved: [String: String] = [:]
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
     init(executable: URL, arguments: [String], sessionID: String, directory: URL, environment: [String: String], bridge: PiBridge) throws {
@@ -46,6 +48,7 @@ final class ClaudeHostedSession: SessionLink {
         let models = (info["models"]?.array ?? []).compactMap { model -> PiModelOption? in
             guard let value = model["value"]?.string else { return nil }
             let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
+            resolved[value] = model["resolvedModel"]?.string
             return ClaudeCode.model(value, name: model["displayName"]?.string, levels: levels)
         }
         let listed = (info["commands"]?.array ?? []).compactMap { command -> PiSlashCommand? in
@@ -123,11 +126,18 @@ final class ClaudeHostedSession: SessionLink {
         publish(at: now)
     }
 
+    /// 这一轮报的模型 id 对应的目录项：先认当前选的那项（几个别名可能解析到同一个 id），再按别名、按解析后的 id 找；都对不上才显示原始 id。
+    private func option(_ model: String, current: PiModelOption?, in catalog: [PiModelOption]) -> PiModelOption {
+        let matches = { (option: PiModelOption) in option.key.id == model || self.resolved[option.key.id] == model }
+        if let current, matches(current) { return current }
+        return catalog.first { $0.key.id == model } ?? catalog.first(where: matches) ?? ClaudeCode.model(model)
+    }
+
     private func system(_ message: JSONValue, at now: Date) {
         switch message["subtype"]?.string {
         case "init":
             if let model = message["model"]?.string, let id {
-                bridge?.update(id) { session in session.model = session.availableModels.first { $0.key.id == model } ?? ClaudeCode.model(model) }
+                bridge?.update(id) { session in session.model = self.option(model, current: session.model, in: session.availableModels) }
             }
         case "session_state_changed":
             switch message["state"]?.string {

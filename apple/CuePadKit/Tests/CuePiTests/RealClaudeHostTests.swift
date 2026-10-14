@@ -87,6 +87,9 @@ struct RealClaudeHostTests {
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
+            _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.waitForTurn(id)
+            #expect(testbed.bridge.session(id: id)?.model?.key.id == claudeTestModel, "\(String(describing: testbed.bridge.session(id: id)?.model))")
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
             try await testbed.bridge.configure(model: other, thinking: .low, name: "托管改名", in: id)
@@ -105,6 +108,9 @@ struct RealClaudeHostTests {
             #expect(answered.model?.contains(claudeOtherModel) == true, "\(String(describing: answered.model))")
             #expect(answered.effort == "low")
             #expect(try testbed.transcript(file).history.name == "命令改名")
+            // 每轮 Claude Code 报的是别名解析后的 id：界面上仍是选的那一项（名字、强度档都在），不回成原始 id
+            let model = try #require(testbed.bridge.session(id: id)?.model)
+            #expect(model.key == other && model.name != claudeOtherModel && !model.thinkingLevels.isEmpty, "\(model)")
         }
     }
 
