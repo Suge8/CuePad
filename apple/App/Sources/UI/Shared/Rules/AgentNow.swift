@@ -52,6 +52,7 @@ nonisolated struct AgentNow: Equatable, Sendable {
         let name = item.state.title
         return switch shown.status {
         case .asking: "\(name) 在等你确认"
+        case .cueAsking: "\(name) 在等 Cue 回答"
         case .failed: "\(name) 出错了"
         case .delivery(.failed): "没能送到 \(name)"
         case .delivery(.waking): "正在唤醒 \(name)"

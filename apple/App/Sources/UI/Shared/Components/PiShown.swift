@@ -97,13 +97,16 @@ nonisolated enum PiUnread {
 /// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
 /// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）；
-/// 由 Cue 跟进的会话（`PiSessionListItem.cueFollows`）这时该看的是 Cue，只说"歇着"。计时读哪一种（`clock`）也在这里定。
+/// 由 Cue 跟进的会话（`PiSessionListItem.cueFollows`）这时该看的是 Cue，只说"歇着"；它等回答时等的也是 Cue（"等 Cue 回答"，中性墨色），
+/// 赭黄只留给在等你的（与"等你 N"同一条规则，`CueWaiting`）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
         /// 思考、输出、运行工具、等子代理、压缩上下文。
         case working(PiWorkState)
         case asking
+        /// 由 Cue 跟进、在等回答：等的是 Cue，不是你。
+        case cueAsking
         case failed
         /// 在线，但它加载的扩展与这台 Mac 上的 CuePad 不同，要在终端里 /reload。
         case restart
@@ -128,18 +131,20 @@ nonisolated extension PiShown {
     init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cueFollows: Bool = false) {
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.isWorking || session.state == .known(.waitingForUser)
+        let reported = Self.status(of: session.state)
+        let asked = cueFollows && reported == .asking ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen) {
         case .failed:
             self.init(status: .delivery(.failed), clock: own)
         case let phase? where busy:
             let transit = delivery.map { PiDelivery.transit($0, busy: true) }
-            self.init(status: Self.status(of: session.state), note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own)
+            self.init(status: asked, note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own)
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) })
         case nil where session.state == .known(.settled):
             self.init(status: !session.hasStarted ? .fresh : cueFollows ? .resting : unread ? .unread : .idle, clock: own)
         case nil:
-            self.init(status: Self.status(of: session.state), clock: own)
+            self.init(status: asked, clock: own)
         }
     }
 
@@ -173,6 +178,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "正在压缩上下文"
         case .working: "思考中"
         case .asking: "等你确认"
+        case .cueAsking: "等 Cue 回答"
         case .failed: "出错"
         case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
@@ -198,6 +204,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"
+        case .cueAsking: "Agent 在等 Cue 回答"
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
@@ -228,7 +235,7 @@ nonisolated extension PiShown {
         switch status {
         case .asking: 0
         case .failed, .delivery(.failed): 1
-        case .working, .delivery: 2
+        case .working, .delivery, .cueAsking: 2
         // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
         case .restart: 3
         case .unread, .idle, .resting, .fresh, .unknown: 4
@@ -242,7 +249,7 @@ nonisolated extension PiShown {
         case .asking: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
-        case .working, .delivery: 3
+        case .working, .delivery, .cueAsking: 3
         case .restart: 2
         case .idle, .resting, .fresh, .unknown: 1
         case .ended: 0

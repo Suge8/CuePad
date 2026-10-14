@@ -8,7 +8,7 @@ extension PiShown {
         switch status {
         case .asking: palette.attention
         case .failed, .delivery(.failed): palette.failure
-        case .working, .delivery, .unread: palette.ink
+        case .working, .delivery, .unread, .cueAsking: palette.ink
         case .restart: palette.ink2
         case .idle, .resting, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
@@ -17,13 +17,15 @@ extension PiShown {
 
     /// 状态词的颜色：只有要你动手的那几个字带色，有新回复是墨色（由调用方加粗），已结束是灰，其余次要墨色。整句不上色。
     func labelTint(_ palette: Palette) -> Color {
-        needsYou ? tint(palette) : isUnread ? palette.ink : status == .ended ? palette.ink3 : palette.ink2
+        needsYou ? tint(palette) : isUnread || status == .cueAsking ? palette.ink : status == .ended ? palette.ink3 : palette.ink2
     }
 
     /// 状态标的形状，与颜色一起表达状态（色弱也分得出）。工作中与有新回复是自绘的（`PiStateDot`），这里是它们静止时的样子。
     var symbol: String {
         switch status {
         case .asking: "questionmark.circle.fill"
+        // 等 Cue 回答：空心的问号，墨色（实心赭黄只给等你的）
+        case .cueAsking: "questionmark.circle"
         case .failed: "exclamationmark.circle.fill"
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
         case .restart: "arrow.clockwise.circle.fill"

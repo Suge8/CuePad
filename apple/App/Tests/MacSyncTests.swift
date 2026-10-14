@@ -486,6 +486,35 @@ struct MacSyncTests {
         #expect(rig.host.extensions["new-tok-1"]?.messages == [PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString)])
     }
 
+    /// Cue 开的新会话：开场白同所有送进会话的话一样记发送记录（带请求 id 与来源），请求清理之后会话页里它仍标着 Cue。
+    @Test(.timeLimit(.minutes(1)))
+    @MainActor
+    func Cue开的新会话_请求清理之后开场白仍标着Cue() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+        let store = services.store
+
+        try await services.executor.start()
+        let request = try await store.requestLaunch(
+            PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
+        let done = try await awaitFinished(request.id)
+        #expect(done.status == .known(.succeeded))
+        let ext = try #require(rig.host.extensions["new-tok-cue"])
+        try await store.deleteDelivery(request.id)
+        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "看看测试为什么挂", at: .now, deliveryID: request.id)
+        try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
+
+        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store)
+        let derived = ChatDerived()
+        derived.refresh(digest)
+
+        #expect(digest.deliveries.isEmpty)
+        let entry = try #require(derived.items.compactMap { if case .entry(let entry) = $0 { entry } else { nil } }.first)
+        #expect(entry.fromCue)
+    }
+
     /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。
     @Test func 新会话_开场的话带卡片里的图片_原图随第一条消息送入() async throws {
         let directory = try folder("proj")
