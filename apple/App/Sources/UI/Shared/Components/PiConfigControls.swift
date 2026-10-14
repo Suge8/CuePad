@@ -6,8 +6,8 @@ import SwiftUI
 enum PiConfigPick { case model, thinking }
 
 
-/// 回复框下方的模型与思考强度（iOS 会话页、Mac 会话页共用）：左边模型胶囊（提供方的印 + 模型短名，点开按提供方分组的菜单，
-/// 当前打勾，每个写着它支持的强度），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是当前模型支持的档位，一格比一格高，
+/// 回复框下方的模型与思考强度（iOS 会话页、Mac 会话页共用）：左边模型胶囊（提供方图标 + 模型短名；有订阅额度的提供方，图标外一圈细环是卡着的那个窗口用了多少。
+/// 点开按提供方分组的菜单，有额度的分组标题写"Claude · 5 小时 14% · 本周 8%"，当前打勾，每个写着它支持的强度、带提供方图标），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是当前模型支持的档位，一格比一格高，
 /// 当前档以下填满，关着时格全空、一道斜线；点在哪格或横着拖就调到哪档，每过一档轻触一下；按下就在上方浮出档位名，
 /// 松手后停一会儿再淡出，点"思考"的标只看现在是哪档；最高档填色有一道流光）。
 /// 显示值由会话记录与配置请求推出（`SessionDigest.config`）：换了之后立即显示新值、填色轻轻呼吸直到送达，没换成回到原值
@@ -37,13 +37,17 @@ struct PiConfigControls: View {
             opening.wrappedValue = nil
             open(pick)
         }
+        #if os(macOS)
+        .task {
+            guard DebugHooks.preset.modelMenu, (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
+            open(.model)
+        }
+        #endif
     }
 
     private func row(wordy: Bool) -> some View {
         HStack(spacing: 6) {
-            PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
-                           maxWidth: PiModelLabel.capsuleWidth(available: available)) { configure(PiConfig(model: $0)) }
-                .popUpAnchor(anchors[.model])
+            modelCapsule
             if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
                 PiThinkingDial(meter: PiThinkingMeter(levels: levels, current: shown.thinking), pending: shown.pending, wordy: wordy) {
                     configure(PiConfig(thinking: $0))
@@ -53,6 +57,20 @@ struct PiConfigControls: View {
             if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
         }
         .fixedSize()
+    }
+
+    private var modelCapsule: some View {
+        #if os(macOS)
+        PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
+                       maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items,
+                       choose: { configure(PiConfig(model: $0)) }, pick: { open(.model) })
+            .popUpAnchor(anchors[.model])
+        #else
+        PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
+                       maxWidth: PiModelLabel.capsuleWidth(available: available), quotas: services.accountQuotas.items) {
+            configure(PiConfig(model: $0))
+        }
+        #endif
     }
 
     func configure(_ config: PiConfig) {

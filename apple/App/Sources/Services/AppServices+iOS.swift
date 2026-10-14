@@ -12,6 +12,7 @@ extension AppServices {
         startSnapshots()
         startSync()
         startLiveSessions()
+        startAccountQuotas()
         startSessionAlerts()
         if !location.isIsolated { diagnostics.start() }
     }

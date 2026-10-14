@@ -127,6 +127,8 @@ public enum PiSessionChange: Sendable, Equatable {
     case ended(PiSession, reason: PiSessionEndReason)
     /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。协议版本不同的会话不在此列，它以 `.incompatible` 状态出现
     case incompatible(id: String, detail: String)
+    /// 某个会话的扩展观测到订阅额度（回复里带回的，或 `PiBridge.refreshQuota` 查到的）：属于账号，记到 `AccountQuota` 上
+    case quota(QuotaReport)
 }
 
 public enum PiQueueMode: String, Sendable, Equatable {

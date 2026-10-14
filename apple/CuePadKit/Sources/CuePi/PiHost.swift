@@ -223,7 +223,7 @@ public final class PiHost {
             }
         case .stateChanged(let session, _):
             if let hosted = processes[session.pid] { update(hosted, busy: session.state.hasPendingWork) }
-        case .ended, .infoChanged, .incompatible:
+        case .ended, .infoChanged, .incompatible, .quota:
             break
         }
     }

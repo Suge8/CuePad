@@ -5,7 +5,8 @@ import SwiftUI
 
 /// Agent 页：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
 /// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。顶上一排（`SearchRow`）：左边按项目筛，中间搜索，
+/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。列表最上面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有；
+/// 页面出现、回到前台时数据陈旧就请 Mac 查一次）。顶上一排（`SearchRow`）：左边按项目筛，中间搜索，
 /// 右边新会话（同步到不了 Mac 时多一颗同步图标）；从项目页"全部 N 个会话"推入的那一页用推入页的悬浮顶栏（项目名、会话数、新会话），
 /// 筛选与搜索在它下面一排。在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
 /// Agent 页的项目筛选存在哪：标签页的记在本机偏好里（下次打开还是它），从项目页推入的那一页先筛进来的项目、
@@ -55,6 +56,10 @@ struct AgentScreen: View {
 
     var body: some View {
         List {
+            if !services.accountQuotas.items.isEmpty {
+                QuotaStrip().padding(.horizontal, 4).padding(.vertical, 2)
+                    .listRowInsets(.init()).listRowBackground(Color.clear).listRowSeparator(.hidden)
+            }
             if let list = model.list { sessions(list) }
         }
         // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
@@ -74,6 +79,7 @@ struct AgentScreen: View {
         .refreshable { await services.syncNow() }
         .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .agentList(model, filter: filter)
+        .refreshesQuota()
         .onAppear { if let query = DebugHooks.preset.agentQuery { model.query = query } }
     }
 

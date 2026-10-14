@@ -74,7 +74,12 @@ nonisolated struct PiContextMeter: Equatable {
         self.fraction = fraction
     }
 
-    var level: Level { fraction >= Self.criticalFraction ? .critical : fraction >= Self.tightFraction ? .tight : .roomy }
+    var level: Level { Self.level(of: fraction) }
+
+    /// 用量到了哪一档：上下文与订阅额度（`QuotaMeter`）同一个口径。
+    static func level(of fraction: Double) -> Level {
+        fraction >= criticalFraction ? .critical : fraction >= tightFraction ? .tight : .roomy
+    }
 
     var suggestsCompact: Bool { fraction >= Self.compactFraction }
 

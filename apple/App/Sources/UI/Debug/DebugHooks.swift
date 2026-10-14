@@ -23,6 +23,10 @@ enum DebugHooks {
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
         var demoMac = false
+        /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
+        var quotaDetail: String?
+        /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
+        var modelMenu = false
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false

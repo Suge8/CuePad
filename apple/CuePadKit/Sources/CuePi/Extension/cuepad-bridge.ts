@@ -2,8 +2,8 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ quota（订阅额度的一次观测）/ ack / bye
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ quota（查一次订阅额度）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -72,6 +72,90 @@ const HOSTED_ENV = "CUEPAD_HOSTED";
 const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
+
+/** 查订阅额度的单个请求最多等这么久（接口实测约 150ms；VPN 断了就是查不到，CuePad 保留上次的值） */
+const QUOTA_TIMEOUT_MS = 3_000;
+const FIVE_HOURS = 5 * 3_600;
+const WEEK = 7 * 86_400;
+/** 订阅额度：Pi 用 OAuth 订阅登录的提供方（其余是按量的 API 密钥，没有额度窗口）。查用量的接口只读、不耗额度。 */
+const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) => Record<string, string>; parse: (body: unknown) => QuotaWindow[] }> = {
+	anthropic: { url: "https://api.anthropic.com/api/oauth/usage", headers: () => ({ "anthropic-beta": "oauth-2025-04-20" }), parse: claudeUsage },
+	"openai-codex": {
+		url: "https://chatgpt.com/backend-api/wham/usage", headers: (token) => ({ "ChatGPT-Account-Id": codexAccount(token) }),
+		parse: (body) => codexWindows(record(record(body).rate_limit), "primary_window", "secondary_window", "limit_window_seconds", 1),
+	},
+};
+
+/** 一个额度窗口：长度（秒）、已用比例（0..1）、重置时刻（Unix 秒）、只算某个模型时的模型显示名；
+ * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
+type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
+/** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
+type Quota = { provider: string; windows: QuotaWindow[]; complete: boolean };
+
+function record(value: unknown): Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function finite(value: unknown): number | null {
+	const number = typeof value === "string" ? Number(value) : value;
+	return typeof number === "number" && Number.isFinite(number) ? number : null;
+}
+
+function quotaWindow(seconds: number | null, used: number | null, resetsAt: number | null, model: string | null = null): QuotaWindow[] {
+	return seconds !== null && seconds > 0 && used !== null && used >= 0 && resetsAt !== null ? [{ seconds, used, resetsAt, model }] : [];
+}
+
+/** Claude 响应头里的窗口：头里的名字、representative-claim 里的名字、长度。 */
+const CLAUDE_HEADER_WINDOWS = [
+	{ header: "5h", claim: "five_hour", seconds: FIVE_HOURS },
+	{ header: "7d", claim: "seven_day", seconds: WEEK },
+] as const;
+
+/** Claude 每次回复的响应头：5 小时与本周两个窗口（比例 0..1、重置 Unix 秒），没有按模型的周额度；representative-claim 指的那个标为卡着的。
+ * API 密钥的回复没有这些头。 */
+function claudeHeaderWindows(headers: Record<string, string>): QuotaWindow[] {
+	const header = (window: string, field: string) => finite(headers[`anthropic-ratelimit-unified-${window}-${field}`]);
+	const claim = headers["anthropic-ratelimit-unified-representative-claim"];
+	return CLAUDE_HEADER_WINDOWS.flatMap((w) =>
+		quotaWindow(w.seconds, header(w.header, "utilization"), header(w.header, "reset"))
+			.map((window): QuotaWindow => w.claim === claim ? { ...window, binding: true } : window));
+}
+
+/** Claude 的用量接口：`limits[]` 里的 5 小时、本周与按模型的周额度（百分比、ISO 时刻）。 */
+function claudeUsage(body: unknown): QuotaWindow[] {
+	const limits = record(body).limits;
+	if (!Array.isArray(limits)) return [];
+	return limits.flatMap((value) => {
+		const entry = record(value);
+		const percent = finite(entry.percent);
+		const used = percent === null ? null : percent / 100;
+		const reset = typeof entry.resets_at === "string" ? Date.parse(entry.resets_at) / 1000 : null;
+		const resetsAt = reset !== null && Number.isFinite(reset) ? reset : null;
+		if (entry.kind === "session") return quotaWindow(FIVE_HOURS, used, resetsAt);
+		if (entry.kind === "weekly_all") return quotaWindow(WEEK, used, resetsAt);
+		const model = record(record(entry.scope).model).display_name;
+		if (entry.kind === "weekly_scoped" && typeof model === "string" && model) return quotaWindow(WEEK, used, resetsAt, model);
+		return [];
+	});
+}
+
+/** Codex 的窗口：流里的 `codex.rate_limits`（`primary`/`secondary`，长度按分钟）与用量接口（`primary_window`/`secondary_window`，长度按秒）同一形状。 */
+function codexWindows(limits: Record<string, unknown>, primary: string, secondary: string, length: string, unit: number): QuotaWindow[] {
+	return [limits[primary], limits[secondary]].flatMap((value) => {
+		const entry = record(value);
+		const span = finite(entry[length]);
+		const percent = finite(entry.used_percent);
+		return quotaWindow(span === null ? null : span * unit, percent === null ? null : percent / 100, finite(entry.reset_at));
+	});
+}
+
+/** Codex 的令牌里带着账号 id，用量接口要它。 */
+function codexAccount(token: string): string {
+	const claims = record(JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")));
+	const id = record(claims["https://api.openai.com/auth"]).chatgpt_account_id;
+	if (typeof id !== "string" || !id) throw new Error("codex token has no account id");
+	return id;
+}
 
 /** Pi 的思考强度，包本身不导出这个类型 */
 type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
@@ -343,6 +427,43 @@ export default function (pi: ExtensionAPI) {
 		for (const client of clients) write(client, { t: "info", ...changed });
 	}
 
+	/** 正在查的额度：几个客户端同时要时共用这一次 */
+	let quotaFetch: Promise<string[]> | null = null;
+
+	/** 额度不属于会话、属于账号：每次观测都发给所有客户端（一行，随每次回复），由 CuePad 记到账号上。
+	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。 */
+	function reportQuota(quota: Quota) {
+		if (clients.size === 0 || quota.windows.length === 0) return;
+		for (const client of clients) write(client, { t: "quota", ...quota });
+	}
+
+	/** 查一个提供方的用量：没用 OAuth 订阅登录的（API 密钥、没登录）跳过，返回 false；查到就报出去。令牌经 Pi 取（会自动刷新）。 */
+	async function fetchQuota(provider: string): Promise<boolean> {
+		const source = QUOTA_PROVIDERS[provider];
+		const registry = ctx.modelRegistry;
+		const model = registry.getAll().find((m) => m.provider === provider);
+		if (!model || !registry.isUsingOAuth(model)) return false;
+		const token = (await registry.getProviderAuth(provider))?.auth.apiKey;
+		if (!token) throw new Error(`${provider}: no token`);
+		const response = await fetch(source.url, {
+			headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...source.headers(token) },
+			signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS),
+		});
+		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
+		const windows = source.parse(await response.json());
+		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
+		reportQuota({ provider, windows, complete: true });
+		return true;
+	}
+
+	/** 查一次所有订阅的额度；全部查到（或没有订阅）才 ok，否则带上各家的失败原因。查到的那几家已经报出去了。 */
+	function handleQuota(ack: Ack, reject: Reject) {
+		quotaFetch ??= Promise.allSettled(Object.keys(QUOTA_PROVIDERS).map(fetchQuota))
+			.then((results) => results.flatMap((r) => r.status === "rejected" ? [reason(r.reason)] : []))
+			.finally(() => { quotaFetch = null; });
+		void quotaFetch.then((failures) => failures.length === 0 ? ack({ ok: true }) : reject(`failed: ${failures.join("; ")}`));
+	}
+
 	/** 此刻的模型配置；Pi 里换了模型、强度后重新取。可选的模型与 Pi 的 /model 一致：配了范围（`--models`、`enabledModels`）就是范围内的，
 	 * 否则是已配好密钥的全部；当前模型总在其中。 */
 	function modelChoices(): Model[] {
@@ -423,6 +544,7 @@ export default function (pi: ExtensionAPI) {
 			if (command?.t === "end") return handleEnd(ack);
 			if (command?.t === "abort") return handleAbort(ack);
 			if (command?.t === "config") return void handleConfig(command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
+			if (command?.t === "quota") return handleQuota(ack, reject);
 			reject("bad_request");
 		} catch (error) {
 			reject(`failed: ${reason(error)}`);
@@ -851,6 +973,16 @@ export default function (pi: ExtensionAPI) {
 		commit();
 	});
 	pi.events?.on(FIRECODE_SUBAGENTS_CHANNEL, (data) => updateInfo({ subagents: subagentsOf((data as { workers?: unknown } | null)?.workers) }));
+	// 订阅额度随每次回复带回来（零额外请求）：Claude 在响应头里，Codex 在流里的 codex.rate_limits 事件里
+	pi.on("after_provider_response", (event, context) => {
+		const provider = context.model?.provider;
+		if (provider === "anthropic") reportQuota({ provider, windows: claudeHeaderWindows(event.headers), complete: false });
+	});
+	pi.on("provider_stream_event", (event) => {
+		const data = record(event.data);
+		if (event.provider !== "openai-codex" || data.type !== "codex.rate_limits") return;
+		reportQuota({ provider: event.provider, windows: codexWindows(record(data.rate_limits), "primary", "secondary", "window_minutes", 60), complete: true });
+	});
 	pi.on("agent_settled", () => {
 		tracker.active = false;
 		tracker.tools.clear();

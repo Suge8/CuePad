@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Agent 页（侧栏 Agent 区的"全部"进来）：与手机的 Agent 页同构——没有页标题（侧栏那一行选中就说了在哪），最上面就是一排（按项目筛、搜索、新会话），"现在"是没结束的会话、
 /// 按要你注意的先后（等你确认 → 出错 → 工作中 → 空闲），"历史"是已结束的、按结束时间分段（`PiHistorySection`），
-/// 读到底再接一页。行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
+/// 读到底再接一页；搜索那一排下面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有）。行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 struct AgentPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -20,6 +20,7 @@ struct AgentPage: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 topRow.padding(.bottom, 16)
+                QuotaStrip().padding(.horizontal, 4).padding(.bottom, 4)
                 if let list = model.list { sessions(list) }
             }
             .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
@@ -29,6 +30,7 @@ struct AgentPage: View {
         .fadesUnderBars()
         .background(palette.desk)
         .agentList(model, filter: filter)
+        .refreshesQuota()
     }
 
     /// 顶上一排：左边按项目筛（全部 + 在 Mac 上绑了文件夹的项目），中间搜索，右边新会话。
