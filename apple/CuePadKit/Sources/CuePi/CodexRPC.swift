@@ -5,8 +5,8 @@ import Foundation
 /// 一条到 Codex app-server 的 JSON-RPC 连接（app-server 协议：没有 `jsonrpc` 字段的 JSON-RPC 2.0）。两种传输：
 /// CuePad 自己起的 `codex app-server --listen stdio://`（一行一条 JSON），与常驻服务的控制 socket
 /// （`<CODEX_HOME>/app-server-control/app-server-control.sock`，unix socket 上的 WebSocket，一帧一条）。
-/// 回应按 id 配给请求；通知交给 `onNotification`。服务端请求（审批、提问）只发给订阅了线程的连接：CuePad 的审批在钩子里答、
-/// 不开 Plan 模式，所以来了一律回错误，不让对方干等。
+/// 回应按 id 配给请求；通知交给 `onNotification`，其中回答的逐字增量（`item/agentMessage/delta`）在这里累积成正在说的话交给 `onDraft`。
+/// 服务端请求（审批、提问）只发给订阅了线程的连接：CuePad 的审批在钩子里答、不开 Plan 模式，所以来了一律回错误，不让对方干等。
 @MainActor
 final class CodexRPC {
     typealias Object = [String: Any]
@@ -20,6 +20,10 @@ final class CodexRPC {
     private var reader: Task<Void, Never>?
     private(set) var isClosed = false
     var onNotification: ((String, Object) -> Void)?
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新；下一项开始（转成工具调用、思考等）、
+    /// 下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。只有订阅了线程的连接（自己起的进程）收得到增量
+    var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
+    private var drafts: [String: (item: String, draft: PiDraft)] = [:]
     /// 连接断了（进程退出、常驻服务退出）；只调一次
     var onClose: (() -> Void)?
 
@@ -138,10 +142,38 @@ final class CodexRPC {
         if let id = message["id"], let method {
             send(["id": id, "error": ["code": -32000, "message": "CuePad 不处理 \(method)"]])
         } else if let method {
-            onNotification?(method, message["params"] as? Object ?? [:])
+            let params = message["params"] as? Object ?? [:]
+            guard !drafted(method, params) else { return }
+            onNotification?(method, params)
         } else if let id = message["id"] as? Int, let continuation = pending.removeValue(forKey: id) {
             continuation.resume(returning: data)
         }
+    }
+
+    /// 改正在说的话；增量本身到此为止（不再交给 `onNotification`），返回 true。
+    private func drafted(_ method: String, _ params: Object) -> Bool {
+        guard let thread = params["threadId"] as? String else { return false }
+        switch method {
+        case "item/agentMessage/delta":
+            guard let item = params["itemId"] as? String, let delta = params["delta"] as? String else { return true }
+            let current = drafts[thread].flatMap { $0.item == item ? $0.draft : nil }
+            let draft = PiDraft(text: (current?.text ?? "") + delta, since: current?.since ?? .now)
+            drafts[thread] = (item, draft)
+            onDraft?(thread, draft)
+            return true
+        case "item/started", "turn/started":
+            clearDraft(thread)
+        case "turn/completed" where (params["turn"] as? Object)?["status"] as? String != "completed":
+            clearDraft(thread)
+        default:
+            break
+        }
+        return false
+    }
+
+    private func clearDraft(_ thread: String) {
+        guard drafts.removeValue(forKey: thread) != nil else { return }
+        onDraft?(thread, nil)
     }
 
     private func closed() {

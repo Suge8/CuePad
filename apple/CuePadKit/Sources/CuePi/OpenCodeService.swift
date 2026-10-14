@@ -79,7 +79,7 @@ struct OpenCodeClient: Sendable {
         try JSONDecoder().decode(T.self, from: await call("GET", path, directory: directory))
     }
 
-    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（逐字的增量不要），
+    /// 事件流（`GET /api/event`，SSE）：连上后第一条是 `server.connected`；只给出接入用得到的事件（`isRelevant`），
     /// 解码在后台。服务不续传：断开期间的事件就丢了，重连后要重拉快照。连接断开或出错时流结束（抛错）。
     func events() -> AsyncThrowingStream<OpenCodeEvent, any Error> {
         let (stream, continuation) = AsyncThrowingStream<OpenCodeEvent, any Error>.makeStream()
@@ -128,15 +128,67 @@ struct OpenCodeEvent: Decodable, Sendable {
         var resources: [String]?
         var requestID: String?
         var item: Item?
+        /// 正文的增量（`session.text.delta`）与说完的全文（`session.text.ended`）属于哪条回答的第几段
+        var assistantMessageID: String?
+        var ordinal: Int?
+        var delta: String?
+        var text: String?
 
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
 
-    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。
+    /// 接入用得到的事件：会话、执行、步骤、工具、权限、表单、压缩，以及工作目录里模型与命令清单变了。逐字增量只要正文的
+    /// （`session.text.delta`，正在说的话），思考、工具参数与压缩的不要。
     var isRelevant: Bool {
-        guard !type.hasSuffix(".delta") else { return false }
+        if type.hasSuffix(".delta") { return type == "session.text.delta" }
         return type == "server.connected" || type == "model.updated" || type == "command.updated"
             || type.hasPrefix("session.") || type.hasPrefix("permission.") || type.hasPrefix("form.")
+    }
+}
+
+/// 事件流里各会话正在说的话（`PiDraft`）：正文的增量（`session.text.delta`）按回答（`assistantMessageID`）累积，同一条回答的几段按段号
+/// （`ordinal`）排、换行连接（与对话里这条回答的写法一致，见 `OpenCodeHistory`），一段说完（`session.text.ended`）换成这段的全文；
+/// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
+/// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
+struct OpenCodeDrafts {
+    private struct Entry {
+        var message: String
+        var parts: [Int: String] = [:]
+        var since: Date
+        var draft: PiDraft { PiDraft(text: parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n"), since: since) }
+    }
+    private var entries: [String: Entry] = [:]
+
+    /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关或没有变化为 nil。
+    mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
+        let data = event.data
+        guard let sessionID = data.sessionID else { return nil }
+        switch event.type {
+        case "session.text.delta":
+            guard let message = data.assistantMessageID, let delta = data.delta else { return nil }
+            var entry = entries[sessionID].flatMap { $0.message == message ? $0 : nil } ?? Entry(message: message, since: .now)
+            entry.parts[data.ordinal ?? 0, default: ""] += delta
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.text.ended":
+            guard var entry = entries[sessionID], entry.message == data.assistantMessageID, let text = data.text,
+                  entry.parts[data.ordinal ?? 0].map({ $0 != text }) == true else { return nil }
+            entry.parts[data.ordinal ?? 0] = text
+            entries[sessionID] = entry
+            return (sessionID, entry.draft)
+        case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
+             "session.deleted":
+            guard entries.removeValue(forKey: sessionID) != nil else { return nil }
+            return (sessionID, nil)
+        default:
+            return nil
+        }
+    }
+
+    /// 全部清掉（断线重连），返回原先有草稿的会话。
+    mutating func reset() -> [String] {
+        defer { entries = [:] }
+        return Array(entries.keys)
     }
 }
 
