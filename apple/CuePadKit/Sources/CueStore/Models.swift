@@ -115,6 +115,9 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 这件事由 Cue 跟进（否则是你自己）：只有顶层任务能是真，挂到别的任务下、改回灵感时归零（库里的触发器守住，见 `Schema`）。
   /// 你在 CuePad 里亲自对它的会话说话时也归零（`requestDelivery`）。
   public internal(set) var cueFollows = false
+  /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
+  /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
+  public internal(set) var formerSessionIDs: [String] = []
 
   /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
@@ -414,6 +417,8 @@ public enum CueStoreError: Error, Equatable {
   case invalidSummaryRange
   /// Cue 没启用（没有 `cueProfile`、停用了或没选住在哪台 Mac）。
   case cueNotEnabled
+  /// 这条提问已经结束了（答了、关掉了或撤回了）。
+  case questionEnded
 }
 
 extension CueStoreError: LocalizedError {
@@ -456,6 +461,7 @@ extension CueStoreError: LocalizedError {
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
+    case .questionEnded: "这条提问已经结束了"
     }
   }
 }
@@ -479,12 +485,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows", "formerSessionIDs",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows,
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -493,7 +499,8 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16),
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(17)))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。

@@ -38,7 +38,7 @@ struct CueStatusRow<Trailing: View>: View {
                 CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
             }
             Spacer(minLength: 6)
-            CueWaitingBadge(count: cue.digest.waiting)
+            WaitingCount(count: cue.digest.waiting).font(Typography.meta)
             trailing
         }
         .animation(Motion.quick, value: cue.digest)
@@ -63,18 +63,4 @@ struct CueStatusLine: View {
 
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }
-}
-
-/// "等你 N"：赭黄的字（等你确认的颜色），没有在等的不画。Mac 侧栏、菜单栏面板、iPad 侧栏用它；iPhone 底栏是角标。
-struct CueWaitingBadge: View {
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if count > 0 {
-            Text("等你 \(count)").font(Typography.meta.weight(.semibold)).monospacedDigit().foregroundStyle(palette.attention)
-                .fixedSize()
-                .transition(.opacity)
-        }
-    }
 }

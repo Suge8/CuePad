@@ -38,7 +38,7 @@ private struct ReplyNoteLayer: ViewModifier {
             .background { WatchView(watch: watch, changed: selectionChanged) }
             .overlay {
                 if let float {
-                    Anchored(spot: float.at) { floating(float) }
+                    Anchored(spot: float.at, gap: Self.lineHalf + 4) { floating(float) }
                         .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
                 }
             }
@@ -65,12 +65,18 @@ private struct ReplyNoteLayer: ViewModifier {
         }
     }
 
+    /// 半行高（阅读字号的字高加行距）：挂点在一行字中间。
+    private static let lineHalf: CGFloat = {
+        let font = NSFont.systemFont(ofSize: Typography.readingSize)
+        return (font.ascender - font.descender + font.leading + Typography.readingLineSpacing) / 2
+    }()
+
     /// 松开鼠标后的选区：落在某条回答里就在松手那一行下面浮出"批注"，否则收起；正在写批注时不动。
     /// 松手处常拖出了字外（行尾右边的空白、段落下面），挂点收回到那段字里最近的一行，浮层也不出这段字的左右。
     private func selectionChanged(_ selection: SelectionWatch.Selection?) {
         if case .editing = float { return }
         float = selection.flatMap { selection in
-            let frame = selection.frame, half = Anchored.lineHalf
+            let frame = selection.frame, half = Self.lineHalf
             let point = CGPoint(
                 x: min(max(selection.at.x, frame.minX), frame.maxX),
                 y: min(max(selection.at.y, frame.minY + half), frame.maxY - half))
@@ -186,9 +192,9 @@ private struct NoteEditor: View {
 private struct Anchored: Layout {
     let spot: Spot
 
-    /// 半行高（阅读字号加行距）：挂点在一行字中间，上下各让开半行再多一点，不压住这一行。
-    static let lineHalf: CGFloat = 11
-    private static let gap: CGFloat = lineHalf + 4, margin: CGFloat = 8
+    /// 离挂点上下各让开这么多（`ReplyNoteLayer.lineHalf` 再多一点），不压住挂点那一行。
+    let gap: CGFloat
+    private static let margin: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
@@ -199,8 +205,8 @@ private struct Anchored: Layout {
         let size = child.sizeThatFits(.unspecified), point = spot.point
         let left = max(spot.columns.lowerBound, Self.margin), right = min(spot.columns.upperBound, bounds.width - Self.margin)
         let x = max(left, min(point.x - size.width / 2, right - size.width))
-        let below = point.y + Self.gap + size.height <= bounds.height - Self.margin
-        let y = below ? point.y + Self.gap : max(Self.margin, point.y - Self.gap - size.height)
+        let below = point.y + gap + size.height <= bounds.height - Self.margin
+        let y = below ? point.y + gap : max(Self.margin, point.y - gap - size.height)
         child.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: ProposedViewSize(size))
     }
 }

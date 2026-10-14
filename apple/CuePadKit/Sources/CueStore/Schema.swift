@@ -117,7 +117,15 @@ enum Schema {
       """),
     // 33：Cue 的验收由消息上的标记认（写入时定下），不再按选项文字猜
     Upgrade(stringLiteral: cueAcceptance),
+    // 34：叶子记下以前用过的会话（换下来的会话仍属于它）；记着的卡只占一小部分（部分索引）
+    Upgrade(stringLiteral: formerSessions),
   ]
+
+  /// 34 加的列与索引：建新库时跟在 `cueAcceptance` 之后。
+  private static let formerSessions = """
+    ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
+    CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
+    """
 
   /// 33 加的列：建新库时跟在 `cue` 之后（`cue` 是 32 建的样子，升级 32 也用它）。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -277,6 +285,7 @@ enum Schema {
 
     \(cue)
     \(cueAcceptance)
+    \(formerSessions)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

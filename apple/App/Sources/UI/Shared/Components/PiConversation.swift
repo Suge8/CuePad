@@ -16,7 +16,6 @@ struct PiConversation: View {
     /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
     var showEarlier: () -> Void = {}
-    @Environment(\.palette) private var palette
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
     @State private var opened: PreviewOpening?
@@ -99,7 +98,7 @@ struct PiConversation: View {
     @ViewBuilder private var ending: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
         if session.state == .known(.error) {
-            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 }
@@ -247,7 +246,6 @@ struct PiSessionSubtitle: View {
 struct PiQuestionDock: View {
     let session: PiSessionState
     var deliveries: [DeliveryRequest] = []
-    @Environment(\.palette) private var palette
 
     var body: some View {
         if session.state == .known(.waitingForUser) {
@@ -255,7 +253,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: session.question?.displayText ?? session.detail ?? "", prominent: true, docked: true)
+                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
         }
     }
