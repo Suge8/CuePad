@@ -154,6 +154,27 @@ import Testing
     #expect(all["s2"]?.state == .known(.thinking))
   }
 
+  /// App 重开：重新接上的会话状态种类没变就沿用重开前的起点（看过的不又成"有新回复"，排序不乱）；变了从接上时算。
+  /// 进程随上次退出的托管会话原本出错的，仍是出错、原因留着。
+  @Test func reconnectedSessionsKeepTheirStartAcrossARestartAndAHostedErrorStays() async throws {
+    let before = clock.now
+    let first = recorder()
+    try await first.update(sessionID: "same", state: .settled, times: PiTimes(stateSince: before, busySince: nil))
+    try await first.update(sessionID: "changed", state: .thinking, times: PiTimes(stateSince: before, busySince: before))
+    try await first.update(sessionID: "failed", state: .error, detail: "额度用完", times: PiTimes(stateSince: before, busySince: nil), hosted: true)
+    clock.advance(.seconds(60))
+
+    let restarted = recorder()
+    try await restarted.reset()
+    try await restarted.update(sessionID: "same", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
+    try await restarted.update(sessionID: "changed", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
+
+    let all = try await states()
+    #expect(all["same"]?.state == .known(.settled) && all["same"]?.stateSince == before)
+    #expect(all["changed"]?.stateSince == clock.now)
+    #expect(all["failed"]?.state == .known(.error) && all["failed"]?.detail == "额度用完" && all["failed"]?.stateSince == before)
+  }
+
   @Test func unknownStatesFromNewerVersionsAreKept() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)

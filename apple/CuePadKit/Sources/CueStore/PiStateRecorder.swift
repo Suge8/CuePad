@@ -36,22 +36,32 @@ extension CueStore {
     }
   }
 
-  /// 把这台 Mac 的会话记为已结束，近况留着。`sessionID` 为 nil 时是启动对账：上次没来得及结束的会话都记为已结束，
-  /// 只有托管着的（进程随上次退出而歇下，仍可唤醒）改记为歇着、不进历史。
-  func endPiStates(host: String, sessionID: String?, at now: Date) throws {
+  private static let endAssignments = """
+    UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
+      hosted = NULL, subagents = NULL, models = NULL, commands = NULL,
+      modifiedAt = ?
+    """
+
+  /// 把这台 Mac 的一个会话记为已结束，近况留着。
+  func endPiState(host: String, sessionID: String, at now: Date) throws {
     try write {
       let ended = PiWorkState.ended.rawValue
-      let end = """
-        UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
-          hosted = NULL, subagents = NULL, models = NULL, commands = NULL,
-          modifiedAt = ?
-        """
-      if let sessionID {
-        try db.run("\(end) WHERE id = ? AND state != ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), ended])
-      } else {
-        try db.run("\(end) WHERE hostID = ? AND state != ? AND hosted IS NULL", [ended, now, Date.stamp, host, ended])
-        try rest(host: host, sessionID: nil, at: now)
-      }
+      try db.run(
+        "\(Self.endAssignments) WHERE id = ? AND state != ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), ended])
+    }
+  }
+
+  /// 启动对账：上次没来得及结束的会话都记为已结束，只有托管着的（进程随上次退出而歇下，仍可唤醒）改记为歇着、不进历史。
+  /// 返回对账之前各会话的状态与计时（会话 id → ），重新接上时沿用（`PiStateRecorder.update`）。
+  func resetPiStates(host: String, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
+    try write {
+      let ended = PiWorkState.ended.rawValue
+      let before = try db.query(
+        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE hostID = ? AND state != ?", [host, ended]
+      ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3))) }
+      try db.run("\(Self.endAssignments) WHERE hostID = ? AND state != ? AND hosted IS NULL", [ended, now, Date.stamp, host, ended])
+      try rest(host: host, sessionID: nil, at: now)
+      return Dictionary(before.compactMap { id, state, times in state.map { (id, ($0, times)) } }) { $1 }
     }
   }
 
@@ -61,14 +71,18 @@ extension CueStore {
   }
 
   /// 托管的会话进程退出后的样子：记录留着、托管标记留着（进程不在），歇着——没有在做的事、没有问题、没有通知。
-  /// 已经歇着的不动起点（"多久前"仍从它歇下算起）；已结束的不碰，所以与用户结束会话写的已结束先后不论。
+  /// 上一轮出错的仍是出错、原因留着（进程退出不改变那一轮的结果）。已经歇着或出错的不动起点（"多久前"仍从那时算起）；
+  /// 已结束的不碰，所以与用户结束会话写的已结束先后不论。
   private func rest(host: String, sessionID: String?, at now: Date) throws {
     let rest = """
-      UPDATE piSessionStates SET stateSince = CASE WHEN state = ? THEN stateSince ELSE ? END, state = ?, detail = NULL, question = NULL,
-        notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL, modifiedAt = ?
-      WHERE hosted = 1 AND state != ?
+      UPDATE piSessionStates SET stateSince = CASE WHEN state IN (?1, ?2) THEN stateSince ELSE ?3 END,
+        state = CASE WHEN state = ?2 THEN state ELSE ?1 END, detail = CASE WHEN state = ?2 THEN detail END, question = NULL,
+        notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL, modifiedAt = ?4
+      WHERE hosted = 1 AND state != ?5
       """
-    let head: [any SQLBindable] = [PiWorkState.settled.rawValue, now, PiWorkState.settled.rawValue, Date.stamp, PiWorkState.ended.rawValue]
+    let head: [any SQLBindable] = [
+      PiWorkState.settled.rawValue, PiWorkState.error.rawValue, now, Date.stamp, PiWorkState.ended.rawValue,
+    ]
     if let sessionID {
       try db.run("\(rest) AND id = ?", head + [PiSessionState.recordID(sessionID: sessionID)])
     } else {
@@ -147,6 +161,8 @@ public actor PiStateRecorder {
   private let minInterval: Duration
   private let timing: Timing
   private var sessions: [String: Session] = [:]
+  /// 启动对账之前各会话的状态与计时：重新接上的会话第一次更新时，状态种类没变就沿用重开前的起点（各家重新接上时都从"现在"算）
+  private var beforeReset: [String: (state: PiWorkState, times: PiTimes)] = [:]
   private var tail: Task<Void, Never>?
 
   public init(store: CueStore, hostID: String, minInterval: Duration = .seconds(5), timing: Timing = .system) {
@@ -176,7 +192,12 @@ public actor PiStateRecorder {
     if let title { content.title = title }
     if let folder { content.folder = folder }
     if let projectID { content.projectID = projectID }
-    if let times { content.times = times }
+    if var times {
+      if session.content == nil, let before = beforeReset.removeValue(forKey: sessionID), before.state.phase == state.phase {
+        times = before.times
+      }
+      content.times = times
+    }
     if let launchToken { content.launchToken = launchToken }
     if let hosted { content.hosted = hosted }
     if let subagents { content.subagents = subagents }
@@ -249,17 +270,22 @@ public actor PiStateRecorder {
     }
   }
 
-  /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记）。
+  /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记，状态种类没变的沿用原来的起点）。
   public func reset() async throws {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
-    try await endRecords(sessionID: nil)
+    let now = timing.now()
+    let before = Before()
+    try await persist { [store, hostID] in before.value = try await store.resetPiStates(host: hostID, at: now) }
+    beforeReset = before.value
   }
 
-  private func endRecords(sessionID: String?) async throws {
+  private final class Before: @unchecked Sendable { var value: [String: (state: PiWorkState, times: PiTimes)] = [:] }
+
+  private func endRecords(sessionID: String) async throws {
     let now = timing.now()
-    try await persist { [store, hostID] in try await store.endPiStates(host: hostID, sessionID: sessionID, at: now) }
+    try await persist { [store, hostID] in try await store.endPiState(host: hostID, sessionID: sessionID, at: now) }
   }
 
   private func flush(_ sessionID: String) async {

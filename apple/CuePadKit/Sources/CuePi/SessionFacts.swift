@@ -95,18 +95,6 @@ struct SessionFacts {
     }
 }
 
-extension PiWorkState {
-    /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
-    var phase: Int {
-        if isWorking { return 0 }
-        switch self {
-        case .waitingForUser: return 1
-        case .error: return 2
-        default: return 3
-        }
-    }
-}
-
 extension PiSession {
     /// 进入 `next`：粗状态（`PiWorkState.phase`）变了才换 `stateSince`；离开空闲起记 `busySince`，
     /// 中间等你确认不断，歇下、出错时清掉。与 Pi 扩展的计时同一规则。

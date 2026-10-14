@@ -15,6 +15,16 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case incompatible
 
   /// 正在干活（思考、输出、调用工具）。
+  /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
+  public var phase: Int {
+    if isWorking { return 0 }
+    switch self {
+    case .waitingForUser: return 1
+    case .error: return 2
+    default: return 3
+    }
+  }
+
   public var isWorking: Bool {
     switch self {
     case .thinking, .outputting, .tool, .delegating, .compacting: true
