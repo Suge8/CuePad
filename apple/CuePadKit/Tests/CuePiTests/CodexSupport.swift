@@ -139,13 +139,16 @@ final class CodexRig {
     let hooks: AgentHookServer
     let bridge: PiBridge
     let runtime: CodexRuntime
+    /// 人在不在这台 Mac 前：默认不在（确认交给 CuePad）
+    let presence: TestPresence
 
     /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
     init(approvals: String = "never") async throws {
         let codex = try CodexHome()
+        let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
@@ -159,7 +162,7 @@ final class CodexRig {
             codex.remove()
             throw error
         }
-        (self.codex, self.hooks, self.bridge, self.runtime) = (codex, hooks, bridge, runtime)
+        (self.codex, self.hooks, self.bridge, self.runtime, self.presence) = (codex, hooks, bridge, runtime, presence)
     }
 
     /// 关掉托管的进程；终端测试起的常驻服务与它的升级进程按登记的进程号停掉，删掉它在共用的 /tmp/codex-daemon-<uid> 里留下的
@@ -170,7 +173,8 @@ final class CodexRig {
         bridge.stop()
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
-        for file in ["daemon.pid", "daemon-updater.pid"] {
+        // 先停升级进程：它会把停掉的常驻服务再拉起来
+        for file in ["daemon-updater.pid", "daemon.pid"] {
             let url = codex.home.appending(path: "app-server-daemon/\(file)")
             guard let data = try? Data(contentsOf: url), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let pid = (object["pid"] as? NSNumber)?.int32Value else { continue }
@@ -191,6 +195,24 @@ final class CodexRig {
 
     func replies(_ session: PiSession) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map(\.text)
+    }
+}
+
+/// 测试里说了算的人在不在：变成在时叫醒等着的。
+@MainActor
+final class TestPresence: UserPresence {
+    var isPresent = false {
+        didSet {
+            guard isPresent else { return }
+            for waiter in waiters { waiter.resume() }
+            waiters = []
+        }
+    }
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func untilPresent() async {
+        guard !isPresent else { return }
+        await withCheckedContinuation { waiters.append($0) }
     }
 }
 
@@ -224,8 +246,16 @@ final class CodexTerminal: @unchecked Sendable {
         }
     }
 
-    /// 终端到此刻输出过的全部字节里有没有这段文字。
-    func printed(_ text: String) -> Bool { screen.withLock { $0.range(of: Data(text.utf8)) != nil } }
+    /// 终端从第 `offset` 个字节起输出过的里有没有这段文字。
+    func printed(_ text: String, since offset: Int = 0) -> Bool {
+        screen.withLock { $0.range(of: Data(text.utf8), in: min(offset, $0.count)..<$0.count) != nil }
+    }
+
+    /// 到此刻输出了多少字节（配合 `printed(_:since:)` 只看之后的）。
+    var printedCount: Int { screen.withLock { $0.count } }
+
+    /// 按一个键（不当粘贴）。
+    func press(_ key: String) throws { try input.fileHandleForWriting.write(contentsOf: Data(key.utf8)) }
 
     /// 粘贴一段话（括号粘贴，界面不会把紧跟着的回车当成粘贴里的换行）再回车。
     func type(_ text: String) throws {

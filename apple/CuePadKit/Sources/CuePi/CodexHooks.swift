@@ -28,7 +28,7 @@ struct CodexHooks: AgentHookConfig {
         ("Stop", "stop", 10), ("Interrupt", "interrupt", 3), ("SessionEnd", "session_end", 3),
     ]
 
-    /// 权限确认的钩子在等 CuePad 时，Codex 终端里那一行显示它（钩子拿着这次确认，终端里不弹框）。
+    /// 权限确认的钩子挂住等 CuePad 时（人不在这台 Mac 前），Codex 终端里那一行显示它（钩子拿着这次确认，终端里不弹框）。
     static let waitingMessage = "等你在 CuePad 里确认"
 
     private var hooksFile: URL { home.appending(path: "hooks.json") }

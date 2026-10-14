@@ -13,9 +13,10 @@ import OSLog
 ///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
 ///   `thread/name/updated`、`thread/closed` 广播给所有连接：钩子漏掉的歇下（出错时没有 `Stop`）与改名靠它们补上。
-/// - 权限确认经阻塞的 `PermissionRequest` 钩子作答：Codex 先问钩子、钩子没给决定才在终端里弹框，所以 CuePad 在线时终端里不弹，
-///   只显示钩子的状态行（`CodexHooks.waitingMessage`）；在终端里按 Esc 停下这一轮会收回这次调用。Plan 模式的提问只发给订阅者
-///   （终端界面），CuePad 只显示、在终端里答；CuePad 开的会话不进 Plan 模式。
+/// - 权限确认经 `PermissionRequest` 钩子：Codex 先问钩子、钩子没给决定才在终端里弹框。终端会话按人在不在（`UserPresence`）分：
+///   人在就当场放行钩子，终端弹框，CuePad 里的问题只能在终端里答；人不在就挂住钩子等 CuePad 作答（终端里只显示钩子的状态行
+///   `CodexHooks.waitingMessage`），挂住期间人回来了就放行、终端补弹。托管的会话没有终端，总是挂住。在终端里按 Esc 停下这一轮
+///   会收回挂住的调用。Plan 模式的提问只发给订阅者（终端界面），CuePad 只显示、在终端里答；CuePad 开的会话不进 Plan 模式。
 @MainActor
 public final class CodexRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
@@ -23,6 +24,9 @@ public final class CodexRuntime: AgentRuntime {
     private let paths: AgentPaths
     private let hooks: AgentHookServer
     private let locator: ExecutableLocator
+    private let presence: any UserPresence
+    /// 有挂住的终端会话确认时等人回来
+    private var returnWatch: Task<Void, Never>?
     private let idleLimit: Duration
     private let launchTimeout: Duration
     private var tracked: [PiSession.ID: Tracked] = [:]
@@ -39,12 +43,13 @@ public final class CodexRuntime: AgentRuntime {
     /// - Parameter idleLimit: 托管的会话歇着满这么久就关掉进程（不算结束，发话时再接着）。
     public init(
         bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, locator: ExecutableLocator = .standard,
-        idleLimit: Duration = .seconds(30 * 60), launchTimeout: Duration = .seconds(30)
+        presence: any UserPresence = SystemPresence(), idleLimit: Duration = .seconds(30 * 60), launchTimeout: Duration = .seconds(30)
     ) {
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
         self.locator = locator
+        self.presence = presence
         self.idleLimit = idleLimit
         self.launchTimeout = launchTimeout
     }
@@ -57,7 +62,8 @@ public final class CodexRuntime: AgentRuntime {
         /// 这一轮的 id（`turn/steer`、`turn/interrupt` 要它）与是否在跑
         var turnID: String?
         var turnRunning = false
-        var question: Question?
+        var question: Question? { didSet { onQuestion?() } }
+        var onQuestion: (() -> Void)?
         /// 发起的子代理的任务名，等 `SubagentStart` 认领（按先后）
         var spawnNames: [String] = []
         /// 歇着时手动压缩：压完回到压缩前的状态与起点
@@ -102,6 +108,8 @@ public final class CodexRuntime: AgentRuntime {
         for session in tracked.values {
             if case .hook(let call) = session.question?.reply { call.finish() }
         }
+        returnWatch?.cancel()
+        returnWatch = nil
         for timer in idleTimers.values { timer.cancel() }
         idleTimers = [:]
         for watcher in exitWatchers.values { watcher.cancel() }
@@ -304,6 +312,7 @@ public final class CodexRuntime: AgentRuntime {
 
     private func attach(_ session: PiSession) {
         let entry = Tracked(id: session.id, threadID: session.sessionID, pid: session.pid)
+        entry.onQuestion = { [weak self] in self?.watchReturn() }
         tracked[session.id] = entry
         bridge.attach(session, via: CodexLink(runtime: self, id: session.id))
         watchExit(session.pid)
@@ -329,6 +338,7 @@ public final class CodexRuntime: AgentRuntime {
         guard let session = tracked.removeValue(forKey: id) else { return }
         if case .hook(let call) = session.question?.reply { call.finish() }
         bridge.detach(id, reason: reason)
+        watchReturn()
     }
 
     /// 从 Codex 重新读名字、模型与强度（`thread/read`），可换的模型（`model/list`）与 skill（`skills/list`，斜杠命令）。
@@ -535,15 +545,47 @@ public final class CodexRuntime: AgentRuntime {
 
     // MARK: 等你回答
 
-    /// 权限确认：钩子拿着，等 CuePad 作答；钩子先走了（终端里停下了这一轮）就收起问题。
+    /// 权限确认：终端会话的人在这台 Mac 前就交给终端；否则钩子拿着，等 CuePad 作答，钩子先走了（终端里停下了这一轮）就收起问题。
     private func ask(_ session: Tracked, call: AgentHookCall, _ input: CodexRPC.Object) {
         let arguments = input["tool_input"] as? CodexRPC.Object ?? [:]
         let action = (arguments["command"] as? String).map { "Codex 想运行：\($0)" } ?? "Codex 想用 \(input["tool_name"] as? String ?? "工具")"
-        let text = [action, arguments["description"] as? String].compactMap { $0 }.joined(separator: "\n")
-        present(session, PiQuestion(promptID: UUID().uuidString, kind: .confirm, text: String(text.prefix(500))), reply: .hook(call))
+        let text = String([action, arguments["description"] as? String].compactMap { $0 }.joined(separator: "\n").prefix(500))
+        if hosted[session.pid] == nil, presence.isPresent {
+            call.finish()
+            return handBack(session, text)
+        }
+        present(session, PiQuestion(promptID: UUID().uuidString, kind: .confirm, text: text), reply: .hook(call))
         call.onClose = { [weak self, weak session] in
             guard let self, let session, case .hook(let held) = session.question?.reply, held === call else { return }
             self.withdraw(session)
+        }
+    }
+
+    /// 确认交给终端：钩子不给决定（挂着的由 `present` 放行），Codex 在终端里弹框；CuePad 里还显示，只能在终端里答。
+    private func handBack(_ session: Tracked, _ text: String) {
+        present(session, PiQuestion(promptID: nil, kind: .confirm, text: text), reply: .terminal)
+    }
+
+    /// 有终端会话的确认挂着才等人回来，回来了全部交给终端；没有挂着的就停下等待。
+    private func watchReturn() {
+        let held = tracked.values.contains { session in
+            guard case .hook = session.question?.reply else { return false }
+            return hosted[session.pid] == nil
+        }
+        guard held else {
+            returnWatch?.cancel()
+            returnWatch = nil
+            return
+        }
+        guard returnWatch == nil else { return }
+        returnWatch = Task { [weak self, presence] in
+            await presence.untilPresent()
+            guard let self, !Task.isCancelled else { return }
+            for session in self.tracked.values where self.hosted[session.pid] == nil {
+                guard let pending = session.question, case .hook = pending.reply else { continue }
+                self.handBack(session, pending.question.text)
+            }
+            self.returnWatch = nil
         }
     }
 

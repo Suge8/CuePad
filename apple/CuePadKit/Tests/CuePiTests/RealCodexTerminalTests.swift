@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 /// 端到端：终端里开着的 Codex（真终端界面、真常驻服务、真模型）——CuePad 经钩子看到它，经常驻服务的控制接口对它说话、停止、改设置，
-/// 经阻塞的钩子回答它的权限确认。
+/// 权限确认按人在不在分给终端或 CuePad。
 @MainActor
 @Suite(.enabled(if: realCodexSignedIn, "需要本机装有并登录了 codex"), .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
@@ -48,15 +48,6 @@ struct RealCodexTerminalTests {
             try await eventually("停下了", timeout: .seconds(20)) { rig.bridge.session(id: id)?.state == .settled }
             #expect(rig.replies(session).count == replies)
 
-            // 权限确认：终端里不弹框，在 CuePad 里允许后命令照常跑
-            _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
-            try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
-            let question = try #require(rig.bridge.session(id: id)?.question)
-            #expect(question.kind == .known(.confirm) && question.text.contains("curl"))
-            try await rig.bridge.answer(.confirmed(true), to: question.promptID!, in: id)
-            try await eventually("这一轮做完", timeout: .seconds(120)) { rig.bridge.session(id: id)?.state == .settled }
-            #expect(FileManager.default.fileExists(atPath: rig.codex.work.appending(path: "page.html").path))
-
             // 改名、换强度、压缩
             try await rig.bridge.configure(thinking: .medium, name: "终端里的会话", in: id)
             #expect(rig.bridge.session(id: id)?.displayName == "终端里的会话")
@@ -83,6 +74,79 @@ struct RealCodexTerminalTests {
             try await eventually("停下了", timeout: .seconds(20)) { later.session(id: lateID)?.state == .settled }
             await runtime.stop()()
             later.stop()
+        }
+    }
+
+    /// 权限确认按人在不在这台 Mac 前分：人在，终端照常弹框，CuePad 里只显示；人不在，钩子挂住、在 CuePad 里答；
+    /// 挂着时人回来了，终端补弹确认框，CuePad 里收起成只显示。
+    @Test func aPermissionRequestGoesWhereThePersonIs() async throws {
+        try await withCodexRig(approvals: "on-request") { rig in
+            let terminal = try CodexTerminal(rig.codex)
+            defer { terminal.stop() }
+            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try terminal.type("Reply with the single word READY.")
+            try await eventually("终端会话的回答", timeout: .seconds(120)) { rig.session?.state == .settled && rig.session.map { !rig.replies($0).isEmpty } == true }
+            let id = try #require(rig.session?.id)
+            // 允许的那一项：联网时是 "Yes, just this once"
+            let approval = "Yes, "
+            @MainActor func fetch(_ file: String) async throws {
+                let text = "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o \(file) https://example.com"
+                _ = try await rig.bridge.send(PiMessage(text: text), to: id)
+            }
+            // 一条命令 Codex 可能先后要两次确认（提权、联网），每次都允许，直到这一轮做完
+            // 在终端里答：确认框弹出来后（从 `since` 起找）按 y，界面偶尔吞掉刚弹出时的按键，还在等就每秒再按；在 CuePad 里答：每个问题答一次
+            @MainActor func fetched(_ file: String, inTerminalSince since: Int? = nil) async throws {
+                var pressed: ContinuousClock.Instant?
+                var answered: Set<String> = []
+                try await eventually("都允许了、这一轮做完", timeout: .seconds(120)) {
+                    let session = rig.bridge.session(id: id)
+                    if let since, terminal.printed(approval, since: since), let question = session?.question, !question.isAnswerable,
+                       pressed.map({ ContinuousClock.now - $0 > .seconds(1) }) ?? true {
+                        pressed = .now
+                        try terminal.press("y")
+                    }
+                    if since == nil, let prompt = session?.question?.promptID, answered.insert(prompt).inserted {
+                        try await rig.bridge.answer(.confirmed(true), to: prompt, in: id)
+                    }
+                    return session?.state == .settled
+                }
+                #expect(FileManager.default.fileExists(atPath: rig.codex.work.appending(path: file).path))
+            }
+
+            // 人在：终端弹框，CuePad 里显示但答不了（一刻也不能答，手机不会收到要你确认的通知）；在终端里允许
+            rig.presence.isPresent = true
+            let log = ChangeLog(rig.bridge)
+            var mark = terminal.printedCount
+            try await fetch("here.html")
+            try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
+            let shown = try #require(rig.bridge.session(id: id)?.question)
+            #expect(!shown.isAnswerable && shown.kind == .known(.confirm) && shown.text.contains("here.html"))
+            #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
+            try await eventually("终端弹出确认框", timeout: .seconds(20)) { terminal.printed(approval, since: mark) }
+            try await fetched("here.html", inTerminalSince: mark)
+            #expect(!log.changes.contains { if case .stateChanged(let s, _) = $0 { s.question?.isAnswerable == true } else { false } })
+
+            // 人不在：终端不弹，在 CuePad 里允许
+            rig.presence.isPresent = false
+            mark = terminal.printedCount
+            try await fetch("away.html")
+            try await eventually("等你在 CuePad 里确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.isAnswerable == true }
+            let asked = try #require(rig.bridge.session(id: id)?.question)
+            #expect(asked.text.contains("away.html") && !terminal.printed(approval, since: mark))
+            try await fetched("away.html")
+            #expect(!terminal.printed(approval, since: mark))
+
+            // 挂着时人回来了：终端补弹确认框，CuePad 里收起成只显示；在终端里允许
+            mark = terminal.printedCount
+            try await fetch("back.html")
+            try await eventually("等你在 CuePad 里确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.isAnswerable == true }
+            #expect(!terminal.printed(approval, since: mark))
+            rig.presence.isPresent = true
+            try await eventually("CuePad 里收起成只显示") {
+                rig.bridge.session(id: id).map { $0.state == .waitingForUser && $0.question?.isAnswerable == false } ?? false
+            }
+            try await eventually("终端补弹确认框", timeout: .seconds(20)) { terminal.printed(approval, since: mark) }
+            try await fetched("back.html", inTerminalSince: mark)
         }
     }
 }
