@@ -10,15 +10,15 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
+  case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
   case cueMessages, cueLines, cueProfile, cueState, cueSummaries
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
-    .accountQuotas,
+    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
+    .previews, .accountQuotas,
     .cueMessages, .cueLines, .cueProfile, .cueState,
   ]
 
@@ -43,6 +43,7 @@ extension Table {
     case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
+    case .agentCatalogs: AgentCatalog.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
     case .directoryBindings: DirectoryBinding.columns
     case .piMessages: PiChatMessage.columns

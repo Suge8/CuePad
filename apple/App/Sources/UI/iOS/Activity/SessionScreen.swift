@@ -99,7 +99,7 @@ struct SessionScreen: View {
                     } else {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
                         PiReplyBar(
-                            session: session, config: digest?.config, compact: !follow.atNewest,
+                            session: session, config: digest?.config, catalog: digest?.catalog, compact: !follow.atNewest,
                             stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? []),
                             commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? []),
                             queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? []),

@@ -10,7 +10,7 @@ extension PiConfigControls {
         switch pick {
         case .model:
             let now = Date.now
-            let sections = PiModelLabel.groups(session.models).map { group in
+            let sections = PiModelLabel.groups(models).map { group in
                 let image = group.provider.nsImage
                 return ChoiceMenu.Section(
                     title: PiModelLabel.title(group.provider, quotas: services.accountQuotas.items, at: now), image: image,

@@ -9,7 +9,7 @@ struct HandOffTargetsTests {
     var store: CueStore { app.services.store }
 
     private func record(_ id: String, host: String, state: PiWorkState = .settled, project: UUID? = nil) async throws {
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: id, state: state, title: id, folder: id, projectID: project)
+        try await PiStateRecorder(store: store, hostID: host).update(sessionID: id, state: state, title: id, directory: id, projectID: project)
     }
 
     private func live() async throws -> [PiSessionListItem] {

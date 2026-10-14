@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 回复框里的斜杠命令（iOS 与 Mac 共用）：输入 "/" 弹出的面板列哪些命令，输入框里的内容算不算一条命令。
-/// 命令清单来自会话（`PiSessionState.commands`，扩展随会话上报，同步到手机）；命令由 Pi 派发执行（投送方式 `command`）。
+/// 命令清单来自会话所在目录的目录记录（`AgentCatalog.commands`，Agent 随会话上报，同步到手机）；命令由 Pi 派发执行（投送方式 `command`）。
 nonisolated enum PiSlash {
     /// 面板此刻要列的命令；输入框里不是 "/名字片段" 的形态（不以 / 开头、已经在写参数）时为 nil，面板不出现。
     /// 按相关度排：名字以片段开头的在前，名字里含有的其次，说明里含有的最后；同一档里内置在前，其次扩展、提示词模板、技能，各自保持清单顺序。

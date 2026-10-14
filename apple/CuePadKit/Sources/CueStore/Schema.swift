@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
+/// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
 /// cueMessages、cueLines、cueProfile、cueState。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
@@ -160,6 +160,15 @@ enum Schema {
         SELECT recordName, recordType, systemFields, pushedModifiedAt FROM syncRecordsOld;
       DROP TABLE syncRecordsOld;
       """),
+    // 40：可换的模型与斜杠命令从会话记录拆成按内容共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
+    // 在线会话的目录由桥重新连上后的第一次写入补上
+    Upgrade(stringLiteral: """
+      \(agentCatalogs)
+      ALTER TABLE piSessionStates DROP COLUMN models;
+      ALTER TABLE piSessionStates DROP COLUMN commands;
+      ALTER TABLE piSessionStates ADD COLUMN catalogID TEXT;
+      \(catalogIndex)
+      """),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -196,6 +205,13 @@ enum Schema {
     ) STRICT;
     CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
     """
+
+  private static let agentCatalogs = """
+    CREATE TABLE agentCatalogs (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, models TEXT, commands TEXT, modifiedAt INTEGER NOT NULL) STRICT;
+    """
+
+  /// 指向目录记录的只有在线会话：回收没人用的目录时不必翻全部历史
+  private static let catalogIndex = "CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;"
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -307,7 +323,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      model TEXT, thinking TEXT, models TEXT, context TEXT, commands TEXT, agent TEXT,
+      model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
@@ -315,6 +331,10 @@ enum Schema {
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
+    \(catalogIndex)
+
+    -- 会话可换的模型与斜杠命令（AgentCatalog）；id 由主机与内容算出，写下不改。
+    \(agentCatalogs)
 
     \(previews)
 

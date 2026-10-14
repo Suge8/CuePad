@@ -126,8 +126,15 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 37：撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
-  static let undoSchema38 = """
+  /// 把新建的库退回结构 39：撤掉 40（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema40 = """
+    DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
+    ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
+    """
+  /// 退回结构 38：39（同步元数据换形）从哪种形状都能重建，不用撤。
+  static let undoSchema39 = undoSchema40
+  /// 退回结构 37：再撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
+  static let undoSchema38 = undoSchema39 + """
     DROP TRIGGER piSessionStates_writeSeq_insert; DROP TRIGGER piSessionStates_writeSeq_update;
     DROP TRIGGER cards_writeSeq_insert; DROP TRIGGER cards_writeSeq_update;
     DROP TRIGGER deliveryRequests_writeSeq_insert; DROP TRIGGER deliveryRequests_writeSeq_update; DROP TRIGGER piMessages_writeSeq_insert;
@@ -155,6 +162,19 @@ import Testing
   static let undoSchema31 = undoSchema32 + "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent;"
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
+
+  /// 结构 39 的库升到 40：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
+  @Test func schema39LibraryMovesModelListsOffSessionRecords() async throws {
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
+    try RawDB(fixture.url).exec(Self.undoSchema40 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 39;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
+    let compact = PiSlashCommand(name: "compact", summary: nil, source: .known(.builtin))
+    try await PiStateRecorder(store: upgraded, hostID: "mac").update(sessionID: "s1", state: .settled, directory: "/w", commands: [compact])
+    let catalog = try #require(try await upgraded.allPiSessionStates().first?.catalogID)
+    #expect(try await upgraded.agentCatalog(catalog)?.commands == [compact])
+  }
 
   /// 结构 36 的库升到 37：还开着的旧验收是 Cue 已收尾的事——任务连同步骤完成，那条成了做完的结果；Cue 自拟选项的提问撤回，
   /// 不再等你、也不交给 Cue；答过的照原样留着。

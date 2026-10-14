@@ -35,7 +35,7 @@ struct Prewarm: View {
                     PiConversation(
                         session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: PiConversation.firstWindow)
                 }
-            case .replyBar: PiReplyBar(session: Self.session, config: nil, stopping: false) {}
+            case .replyBar: PiReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
             case .newSession: NewSessionForm { _ in }
             default: Color.clear
             }
