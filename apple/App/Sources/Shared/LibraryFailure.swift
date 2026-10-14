@@ -34,14 +34,12 @@ struct LibraryFailure: Equatable, Sendable {
 
     /// 复制给开发者的诊断：错误原文、库文件与结构版本、App 版本。
     var diagnostics: String {
-        let info = Bundle.main.infoDictionary
-        let app = "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
-        return """
+        """
             CuePad 资料库诊断
             原因：\(reason)
             库文件：\(path ?? "位置解析不出来")
             库结构版本：\(version.map(String.init) ?? "读不出来")（这个版本支持 \(CueStore.supportedSchemaVersions.lowerBound)–\(CueStore.supportedSchemaVersions.upperBound)）
-            CuePad：\(app)
+            CuePad：\(AppServices.version)
             """
     }
 }

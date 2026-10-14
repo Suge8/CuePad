@@ -74,7 +74,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **Pi 桥。** 协议、版本策略、多客户端、已知边界与 Pi 集成（扩展与 skill 的安装、升级、同意）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意与静默升级，没有第二套状态。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
 
-**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；设置里的开关在 `~/.local/bin/cuepad` 建符号链接。`cuepad --help` 是其唯一文档。
+**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；设置里的开关在 `~/.local/bin/cuepad` 建符号链接；隔离模式下建在隔离目录的 `bin/` 里，开发构建不会改到指向正式版的那个链接。`cuepad --help` 是其唯一文档。
 
 **测试。** Swift Testing。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
@@ -84,7 +84,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 与 Pi 的交互走真 `PiBridge` + 假扩展（`FakeExtension`，socket 上说桥协议；socket 路径有 104 字节上限，所以目录在 /tmp 下），不碰真实资料库、`~/.pi` 和其他应用。
 - 真实 Pi 与本机 FireCode 的端到端测试（`Real*Tests`）读 `~/.pi` 里装的 FireCode 源码，`CUEPAD_FIRECODE_SOURCE` 指向另一份检出时改读它。
 
-**macOS 壳层。** 主窗口在 `MainWindowFactory` 创建时就设好外框，界面不要再在运行时改窗口样式。退出时先等服务收尾再放行，整体最多约 2 秒，卡住的组件不拦着退出、记一条 `shutdown` 日志指出是哪个；收尾的等待不在主线程上（`terminate` 可能在主线程任务里被调用，那时主线程上排队的任务轮不到），所以同步引擎等组件的接口不能隶属主线程。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
+**macOS 壳层。** 窗口（主窗口、设置、资料库读不出的失败页）都在 `WindowFactory` 创建时设好外框：内容铺到透明标题栏下，页面底色通到窗口上沿，不留一条系统色的标题栏；界面不要再在运行时改窗口样式。退出时先等服务收尾再放行，整体最多约 2 秒，卡住的组件不拦着退出、记一条 `shutdown` 日志指出是哪个；收尾的等待不在主线程上（`terminate` 可能在主线程任务里被调用，那时主线程上排队的任务轮不到），所以同步引擎等组件的接口不能隶属主线程。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
 
 **iOS / iPadOS。**
 - 真机需要开发者账号给 App、分享扩展、小组件、通知服务扩展签上 App Group `group.com.sugeh.cuepad`。

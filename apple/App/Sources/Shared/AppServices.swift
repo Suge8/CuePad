@@ -17,6 +17,11 @@ import UIKit
 @Observable
 final class AppServices {
     static let bundleID = "com.sugeh.cuepad"
+    /// 给人看的版本："0.1.0（1）"。
+    static let version: String = {
+        let info = Bundle.main.infoDictionary
+        return "\(info?["CFBundleShortVersionString"] as? String ?? "?")（\(info?["CFBundleVersion"] as? String ?? "?")）"
+    }()
     static let log = Logger(subsystem: bundleID, category: "services")
 
     let store: CueStore

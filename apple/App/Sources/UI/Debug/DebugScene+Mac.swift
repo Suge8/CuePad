@@ -29,6 +29,11 @@ extension DebugScene {
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+        case "settings":
+            // 拍真的设置窗口（连同标题栏）：主窗口不带淡出地收起，截图脚本取到的就是它
+            NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            mainWindow?.animationBehavior = .none
+            mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor":
@@ -109,7 +114,7 @@ final class DebugWindow: NSWindow {
     }
 }
 
-/// `menubar` 画面：截图只截主窗口，所以把菜单栏面板放在桌面图上拍；`settings` 同理放设置窗口的内容。
+/// `menubar` 画面：截图只截普通层级的窗口，菜单栏面板拍不到，所以把它放在桌面图上拍。
 struct DebugMenuBarStage: View {
     var body: some View {
         ZStack(alignment: .top) {

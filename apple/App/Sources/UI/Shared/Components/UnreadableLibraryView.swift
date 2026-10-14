@@ -7,6 +7,13 @@ struct UnreadableLibraryView: View {
     let retry: () -> Void
     @Environment(\.palette) private var palette
 
+    /// 纸离窗口或屏幕左右边的距离：与各平台页面内容的边距一致。
+    #if os(iOS)
+    private static let margin: CGFloat = 16
+    #else
+    private static let margin = Spacing.page
+    #endif
+
     var body: some View {
         EmptyState(mascot: .error, title: "读不出资料库", message: failure.summary) {
             VStack(spacing: 16) {
@@ -27,6 +34,7 @@ struct UnreadableLibraryView: View {
                 #endif
             }
         }
+        .padding(.horizontal, Self.margin)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
     }

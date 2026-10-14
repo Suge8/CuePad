@@ -107,17 +107,4 @@ struct CommandLineToolTests {
         #expect(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("cuepad"))
     }
 }
-
-struct CommandLineToolRowTests {
-    @Test(arguments: [
-        (true as Bool?, false, "已安装：~/.local/bin/cuepad"),
-        (false as Bool?, true, "不在你的 shell 的 PATH 里"),
-        (nil as Bool?, true, "没能读取你的 shell PATH，请确认 ~/.local/bin 在 PATH 中"),
-    ])
-    func 已安装时按PATH检查结果提示_读不出来也要明说(included: Bool?, warning: Bool, expected: String) {
-        let detail = CommandLineToolRow.detail(state: .installed, pathIncludesLinkDirectory: included)
-        #expect(detail.isWarning == warning)
-        #expect(detail.text.contains(expected))
-    }
-}
 #endif

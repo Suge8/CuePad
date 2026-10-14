@@ -24,11 +24,14 @@ struct MacDependencies {
     /// 复制的去处。
     var pasteboard: NSPasteboard
 
-    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
+    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好，命令行的链接也建在隔离目录里，
+    /// 不去改指向正式版的 ~/.local/bin/cuepad。
     static func live(location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
-        let commandLineTool = CommandLineToolInstaller()
+        let commandLineTool = location.isIsolated
+            ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
+            : CommandLineToolInstaller()
         let installer = PiIntegration(paths: paths, cuepad: commandLineTool.helper)
         return MacDependencies(
             pi: pi,

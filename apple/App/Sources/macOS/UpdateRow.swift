@@ -1,16 +1,14 @@
 #if os(macOS)
 import SwiftUI
 
-/// 设置里"更新"一节的一行：自动检查开关与立即检查。
+/// 设置里"自动检查更新"那一行，状态写当前版本；立即检查在菜单"CuePad › 检查更新…"（Mac 上它的标准位置）。
 struct UpdateRow: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
         @Bindable var updates = services.updates
-        HStack {
-            Toggle("自动检查更新", isOn: $updates.automaticallyChecks).disabled(!updates.isAvailable)
-            Spacer()
-            Button("检查更新…") { updates.checkForUpdates() }.disabled(!updates.canCheckForUpdates)
+        SettingRow(title: "自动检查更新", symbol: "arrow.down.circle", status: "CuePad \(AppServices.version)") {
+            Toggle("自动检查更新", isOn: $updates.automaticallyChecks).labelsHidden().toggleStyle(.switch).disabled(!updates.isAvailable)
         }
     }
 }

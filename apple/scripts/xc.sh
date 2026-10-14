@@ -114,6 +114,8 @@ shot_mac() {
   done
   [ -n "$wid" ] || { echo "10 秒内没有出现 CuePad 窗口" >&2; kill -TERM "$pid"; rm -f "$pidfile"; exit 1; }
   wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
+  # 摆画面时可能换了窗口（settings 画面收起主窗口、拍设置窗口）：按就绪时屏上的窗口再取一次
+  wid="$(window_id "$pid")"
   screencapture -x -o -l "$wid" "$out"
   # SIGTERM 走应用的正常退出流程
   kill -TERM "$pid"

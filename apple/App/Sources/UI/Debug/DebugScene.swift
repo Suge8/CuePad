@@ -11,7 +11,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张：散放的灵感进编辑页，提示词在它任务的浮窗里展开）、attach（editor 再弹出"挂到任务"面板）、task（在任务浮窗里打开本项目第一条任务）、search、tasks、select（批量选择本页前三条灵感）、trash、archive、settings、menubar、projectform；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张：散放的灵感进编辑页，提示词在它任务的浮窗里展开）、attach（editor 再弹出"挂到任务"面板）、task（在任务浮窗里打开本项目第一条任务）、search、tasks、select（批量选择本页前三条灵感）、trash、archive、settings（拍真的设置窗口，主窗口收起）、menubar、projectform；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
@@ -28,6 +28,8 @@ enum ScrollAnchor {
 /// - `-CuePadExplain YES`（仅 iOS）：推入页顶栏有说明时（会话需要 /reload）直接弹出，核对点标题的说明；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
+/// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：设置里 iCloud 同步按这个状态显示（`DebugScene+Sync.swift`）；
+/// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
 /// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclined YES`。
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
@@ -69,6 +71,7 @@ enum DebugScene {
         if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().isEmpty) == true {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }
+        await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
         else { return nil }

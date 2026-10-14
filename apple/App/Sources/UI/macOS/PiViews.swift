@@ -10,8 +10,6 @@ import SwiftUI
 /// 版本太低是 Pi 自带的升级命令）、官网。
 struct PiSetupGuide: View {
     let installation: PiInstallation
-    /// 设置里已经有"Pi"小节标题，不再写标题
-    var showsTitle = true
     @State private var copied = false
 
     /// 官方安装脚本（macOS 与 Linux，见 Pi 的 README）。
@@ -24,7 +22,7 @@ struct PiSetupGuide: View {
         let missing = installation == .notFound
         let command = missing ? Self.installCommand : Self.updateCommand
         VStack(alignment: .leading, spacing: 10) {
-            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(Typography.bodyStrong) }
+            Text(missing ? "安装 Pi" : "升级 Pi").font(Typography.bodyStrong)
             Text("Pi 是在终端里运行的 AI 编程助手。装好后，灵感和任务可以直接发进 Pi 会话。")
                 .fixedSize(horizontal: false, vertical: true)
             if case .found(_, let version) = installation {
@@ -51,7 +49,7 @@ struct PiSetupGuide: View {
     }
 }
 
-/// 键帽：快捷键在界面上只有这一种写法（设置的快捷键一节、⌘K 面板的 esc）。
+/// 键帽：快捷键在界面上只有这一种写法（设置里显示或隐藏 CuePad 的快捷键、⌘K 面板的 esc）。
 struct Keycap: View {
     let text: String
 
