@@ -197,6 +197,30 @@ extension CueProfile: Record {
   }
 }
 
+/// Cue 此刻在做什么（同步，只有一行，只由它值班的那台 Mac 写）：与 Agent 会话同一套工作状态（`PiWorkState`）。
+/// 一轮里是思考（`thinking`）或调用工具（`tool`，`detail` 是"动作 · 目标"，同会话的工具说明），一轮之间歇着（`settled`），
+/// 大脑起不来是出错（`error`，`detail` 是原因）。别的设备与这台 Mac 的界面都只读它（`CuePresence`）。
+public struct CueState: Equatable, Sendable {
+  public var state: Open<PiWorkState>
+  public var detail: String?
+  public var modifiedAt: Date
+
+  public init(state: Open<PiWorkState>, detail: String? = nil, modifiedAt: Date = .now) {
+    self.state = state
+    self.detail = detail
+    self.modifiedAt = modifiedAt
+  }
+
+  static let recordID = DeterministicID.uuid("cue-state")
+}
+
+extension CueState: Record {
+  static let table = Table.cueState
+  static let columns = ["id", "state", "detail", "modifiedAt"]
+  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt] }
+  init(row: Row) { self.init(state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), modifiedAt: row.date(3)) }
+}
+
 /// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`，消息标着 `CueMessage.isAcceptance`），
 /// 你答 `accept` 就是收下（`CueStore.endCueQuestion` 完成任务）。选项只是显示的文字。
 public enum CueAcceptance {

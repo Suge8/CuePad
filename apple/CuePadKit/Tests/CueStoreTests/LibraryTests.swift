@@ -126,8 +126,8 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 32：撤掉 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
-  static let undoSchema33 = "ALTER TABLE cueMessages DROP COLUMN acceptance;"
+  /// 把新建的库退回结构 32：撤掉 34（Cue 此刻在做什么）与 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
+  static let undoSchema33 = "DROP TABLE cueState; ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。
   static let undoSchema32 = undoSchema33 + """
     DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;

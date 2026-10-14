@@ -103,6 +103,12 @@ final class PiBrain: CueBrain {
             guard turn == nil else { return }
             turn = Turn()
             session.emit(.turnStarted)
+        // 嵌套的调用（工具里再调工具）带 parentToolCallId，不报
+        case "tool_execution_start" where event["parentToolCallId"] == nil:
+            guard turn != nil, let name = event["toolName"] as? String else { return }
+            session.emit(.tool(name: brainToolName(name), arguments: jsonString(event["args"] ?? [:])))
+        case "tool_execution_end" where event["parentToolCallId"] == nil:
+            if turn != nil { session.emit(.toolDone) }
         case "message_end":
             guard let message = event["message"] as? [String: Any], message["role"] as? String == "assistant" else { return }
             assistantMessage(message)

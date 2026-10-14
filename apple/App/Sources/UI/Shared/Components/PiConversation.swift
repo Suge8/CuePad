@@ -220,14 +220,7 @@ struct PiSessionSubtitle: View {
                     AgentMark(session: session, font: Self.font)
                     if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
                 }
-                if speaks {
-                    #if os(iOS)
-                    PiStateDot(shown: shown, size: 6)
-                    #endif
-                    Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
-                        .contentTransition(.opacity)
-                        .animation(Motion.quick, value: shown)
-                }
+                if speaks { PiShownLabel(shown: shown) }
                 if let undelivered {
                     if speaks { Dot().foregroundStyle(palette.failure) }
                     Text(undelivered).foregroundStyle(palette.failure)
@@ -245,6 +238,24 @@ struct PiSessionSubtitle: View {
     }
 
     private static let font = Typography.caption
+}
+
+
+/// 顶栏里的状态（会话页与 Cue 页同一个样子）：着色的状态词，手机上前面加状态标（Mac 的标题玻璃里不画圆）。
+struct PiShownLabel: View {
+    let shown: PiShown
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 4) {
+            #if os(iOS)
+            PiStateDot(shown: shown, size: 6)
+            #endif
+            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+                .contentTransition(.opacity)
+                .animation(Motion.quick, value: shown)
+        }
+    }
 }
 
 

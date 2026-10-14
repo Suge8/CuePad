@@ -35,8 +35,6 @@ protocol CueNotifying: AnyObject {
 ///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
 final class CueService {
-    /// 值班时 Cue 此刻的样子（管理器说了算）；不在这台 Mac 值班为 nil，界面按库推（`CuePresence.derive`）。
-    private(set) var state: CuePresence?
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
     private(set) var runtimes: [AgentKind]?
 
@@ -49,7 +47,7 @@ final class CueService {
     @ObservationIgnored private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
     /// 上次看到的设置里的运行时：变了就重新查本机的运行时
     @ObservationIgnored private var lastRuntime: Open<AgentKind>?
-    private static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
+    private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     /// 换了就要新班次的设置。
     private struct Shift: Equatable {
@@ -123,10 +121,10 @@ final class CueService {
     func stop() -> @Sendable () async -> Void {
         guard let duty else { return {} }
         self.duty = nil
-        state = nil
-        let stopping = duty.keeper.stop(), task = duty.task
+        let stopping = duty.keeper.stop(), task = duty.task, store = store
         return {
             await stopping()
+            await Self.rest(store)
             await task.value
         }
     }
@@ -144,9 +142,7 @@ final class CueService {
             CueKeeper.Setup(
                 store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
-                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing)
-        ) { [weak self] in self?.state = $0 }
-        state = keeper.presence
+                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing))
         duty = (shift, keeper, Task { await keeper.run() })
     }
 
@@ -155,7 +151,16 @@ final class CueService {
         self.duty = nil
         duty.keeper.stop()
         await duty.task.value
-        state = nil
+        await Self.rest(store)
+    }
+
+    /// 不再值班：库里写回歇着，别的设备不会一直看到它在想（不在主线程上等，退出收尾时也能写）。
+    private nonisolated static func rest(_ store: CueStore) async {
+        do {
+            try await store.setCueState(.settled)
+        } catch {
+            log.error("Cue 歇着没能写进资料库：\(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: 通知

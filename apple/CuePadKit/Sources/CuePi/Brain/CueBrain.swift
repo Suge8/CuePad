@@ -36,14 +36,19 @@ public struct CueBrainConfig: Sendable {
     }
 }
 
-/// 三家同形的事件。一轮：`turnStarted` →（`context`…）→ `reply`（有文字时）/ `failed`（出错时）→ `turnFinished`；
+/// 三家同形的事件。一轮：`turnStarted` →（`context`、`tool` / `toolDone`…）→ `reply`（有文字时）/ `failed`（出错时）→ `turnFinished`；
 /// 一轮进行中再 `send` 的话并进这一轮，不另起一轮。被 `abort` 停下的一轮照常以 `turnFinished` 结束，不报 `reply` 也不报 `failed`。
+/// 子代理与嵌套的工具调用不报。
 public enum CueBrainEvent: Sendable, Equatable {
     case turnStarted
     /// 这一轮最后的助手文字
     case reply(String)
     /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）与上下文窗口
     case context(used: Int, window: Int?)
+    /// 开始调一个工具：名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
+    case tool(name: String, arguments: String)
+    /// 工具做完了，回到想
+    case toolDone
     case turnFinished
     /// 这一轮出错（提供方报错、额度、认证……），原文
     case failed(String)
@@ -82,6 +87,12 @@ extension CueBrainError: LocalizedError {
         case .unsupported(let kind): "\(kind.name) 不能当 Cue 的大脑"
         }
     }
+}
+
+/// 工具名去掉 CuePad 的 MCP 前缀（Pi 与 Claude Code 写成 `mcp__cuepad__task`）并小写（Claude Code 的 `Read`）。
+func brainToolName(_ name: String) -> String {
+    let prefix = "mcp__cuepad__"
+    return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
 }
 
 extension CueBrainConfig {

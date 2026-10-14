@@ -169,7 +169,7 @@ struct CueHostTests {
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.message(.note, containing: "登录页那边歇下了")
         try await rig.say("请对登录页说继续")
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
         #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)
 
@@ -236,7 +236,7 @@ struct CueHostTests {
         try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let asked = try await rig.message(.cue, containing: "收下吗？")
         #expect(asked.choices == CueAcceptance.choices && asked.taskID != nil)
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已请他收下") }
         #expect(try await rig.store.card(asked.taskID!)?.status != .done)
         #expect(try await rig.store.cueMessagesWaitingForYou().map(\.id) == [asked.id])
         #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
@@ -257,7 +257,7 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        try await eventually("Cue 在想") { rig.services.cue.state == .thinking }
+        try await eventually("Cue 在想") { try await rig.store.cueState()?.state.isWorking == true }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))
