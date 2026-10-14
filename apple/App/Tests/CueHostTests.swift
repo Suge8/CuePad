@@ -97,6 +97,34 @@ struct CueHostTests {
         }
     }
 
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
+    /// （别的设备上说的话经主动拉取到达这台 Mac，那一段见 CueSync 的 `CueMessageArrivalTests`。）
+    @Test func 库正忙时你的话马上送进Cue() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let busy = Task {
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            var round = 0
+            while !Task.isCancelled {
+                round += 1
+                for index in 0..<10 {
+                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        defer { busy.cancel() }
+        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
+        let start = ContinuousClock.now
+        try await rig.say("库正忙时说的")
+        try await eventually("交给 Cue", timeout: .milliseconds(500)) {
+            try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
+        }
+        print("送进 Cue：\(ContinuousClock.now - start)")
+        busy.cancel()
+        await rig.stop()
+    }
+
     /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
@@ -169,7 +197,7 @@ struct CueHostTests {
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.message(.note, containing: "登录页那边歇下了")
         try await rig.say("请对登录页说继续")
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "remote-1").last)
         #expect(sent.hostID == "mac-b" && sent.isOpen && sent.isFromCue)
 
@@ -236,7 +264,7 @@ struct CueHostTests {
         try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let asked = try await rig.message(.cue, containing: "收下吗？")
         #expect(asked.choices == CueAcceptance.choices && asked.taskID != nil)
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已请他收下") }
         #expect(try await rig.store.card(asked.taskID!)?.status != .done)
         #expect(try await rig.store.cueMessagesWaitingForYou().map(\.id) == [asked.id])
         #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
@@ -257,7 +285,7 @@ struct CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("交给了大脑") { try await rig.store.cueMessagesToDeliver().isEmpty }
-        try await eventually("Cue 在想") { rig.services.cue.state == .thinking }
+        try await eventually("Cue 在想") { try await rig.store.cueState()?.state.isWorking == true }
         kill(first, SIGKILL)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         #expect(!rig.brainPIDs.contains(first))

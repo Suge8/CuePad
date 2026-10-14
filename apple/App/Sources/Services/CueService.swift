@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import Foundation
 import Observation
-import UserNotifications
 import os
 
 /// 管理器的外部依赖；`MacDependencies.cue` 给出，测试换成替身。
@@ -18,10 +17,11 @@ struct CueDependencies {
     var timing = CueTiming()
 }
 
-/// Cue 的通知（Mac 本机）。点开时调 `onOpen`。
+/// Cue 的通知出口（Mac 本机）：生产是 `AlertCenter`（点开去哪、开关、提示音、前台怎么呈现都在那里），测试换成记录型替身。
 protocol CueNotifying: AnyObject {
-    var onOpen: (() -> Void)? { get set }
-    func post(id: UUID, title: String, body: String) async
+    /// 你正看着 Cue 页：这时不发本机通知，也不给手机推送。
+    var isWatchingCue: Bool { get }
+    func post(title: String, body: String) async
 }
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
@@ -31,12 +31,13 @@ protocol CueNotifying: AnyObject {
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
 /// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
-/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页不在前台、不在打扰时段（`CueTiming.quietHours`），
-///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
+/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
+///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
+///   免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
 @Observable
 final class CueService {
-    /// 值班时 Cue 此刻的样子（管理器说了算）；不在这台 Mac 值班为 nil，界面按库推（`CuePresence.derive`）。
-    private(set) var state: CuePresence?
+    /// Cue 在这台 Mac 值班（同步据此保持主动拉取，见 `AppServices.pollingCadence`）。
+    var onDuty: Bool { duty != nil }
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
     private(set) var runtimes: [AgentKind]?
 
@@ -46,10 +47,10 @@ final class CueService {
     @ObservationIgnored private let library: URL
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
-    @ObservationIgnored private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
+    private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
     /// 上次看到的设置里的运行时：变了就重新查本机的运行时
     @ObservationIgnored private var lastRuntime: Open<AgentKind>?
-    private static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
+    private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     /// 换了就要新班次的设置。
     private struct Shift: Equatable {
@@ -67,8 +68,6 @@ final class CueService {
         self.piAgentDirectory = piAgentDirectory
         self.dependencies = dependencies
     }
-
-    var notifier: any CueNotifying { dependencies.notifier }
 
     enum EnableError: LocalizedError {
         case noRuntime
@@ -123,10 +122,10 @@ final class CueService {
     func stop() -> @Sendable () async -> Void {
         guard let duty else { return {} }
         self.duty = nil
-        state = nil
-        let stopping = duty.keeper.stop(), task = duty.task
+        let stopping = duty.keeper.stop(), task = duty.task, store = store
         return {
             await stopping()
+            await Self.rest(store)
             await task.value
         }
     }
@@ -145,9 +144,7 @@ final class CueService {
                 store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
-                upload: { [sync] ids in for id in ids { await sync?.upload(id) } })
-        ) { [weak self] in self?.state = $0 }
-        state = keeper.presence
+                upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
         duty = (shift, keeper, Task { await keeper.run() })
     }
 
@@ -156,13 +153,22 @@ final class CueService {
         self.duty = nil
         duty.keeper.stop()
         await duty.task.value
-        state = nil
+        await Self.rest(store)
+    }
+
+    /// 不再值班：库里写回歇着，别的设备不会一直看到它在想（不在主线程上等，退出收尾时也能写）。
+    private nonisolated static func rest(_ store: CueStore) async {
+        do {
+            try await store.setCueState(.settled)
+        } catch {
+            log.error("Cue 歇着没能写进资料库：\(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: 通知
 
-    /// 推"等你"与 urgent 的 Cue 消息，直到任务取消。只推这次启动之后新写的；`viewing` 为真（Cue 页在前台）时不推。
-    func followNotifications(viewing: @escaping () -> Bool) async throws {
+    /// 推"等你"与 urgent 的 Cue 消息，直到任务取消。只推这次启动之后新写的；你正看着 Cue 页时不推。
+    func followNotifications() async throws {
         let since = Date.now
         var seen = Set<UUID>()
         for try await messages in store.observe({ try $0.cueMessages(limit: 20) }) {
@@ -170,11 +176,11 @@ final class CueService {
                 $0.author == .known(.cue) && $0.createdAt >= since && ($0.choices != nil || $0.urgent) && !seen.contains($0.id)
             }
             seen.formUnion(fresh.map(\.id))
-            guard duty != nil, !viewing(), !dependencies.timing.isQuiet(.now) else { continue }
+            guard duty != nil, !dependencies.notifier.isWatchingCue else { continue }
             let name = (try? await store.cueProfile())?.name
             for message in fresh {
                 let alert = CueAlert.content(name: name, text: message.text, choices: message.choices)
-                await dependencies.notifier.post(id: message.id, title: alert.title, body: alert.body)
+                await dependencies.notifier.post(title: alert.title, body: alert.body)
                 do {
                     try await store.flagCueMessageForPush(message.id)
                 } catch {
@@ -182,50 +188,6 @@ final class CueService {
                 }
             }
         }
-    }
-}
-
-/// 系统通知中心（UserNotifications）。第一次推之前请求权限。
-final class SystemCueNotifier: NSObject, CueNotifying, UNUserNotificationCenterDelegate {
-    var onOpen: (() -> Void)?
-    private var authorized: Bool?
-
-    override init() {
-        super.init()
-        UNUserNotificationCenter.current().delegate = self
-    }
-
-    func post(id: UUID, title: String, body: String) async {
-        let center = UNUserNotificationCenter.current()
-        do {
-            if authorized == nil { authorized = try await center.requestAuthorization(options: [.alert, .sound]) }
-            guard authorized == true else { return }
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = body
-            content.sound = .default
-            try await center.add(UNNotificationRequest(identifier: id.uuidString, content: content, trigger: nil))
-        } catch {
-            Logger(subsystem: AppServices.bundleID, category: "cue").error("Cue 的通知没能发出：\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        onOpen?()
-    }
-
-    /// App 在前台也显示：Cue 页没开着才会推到这里。
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions { [.banner, .sound] }
-}
-
-/// 隔离库（开发与验收）不发系统通知：通知权限按 bundle id 记，与正式版同一个。只记日志。
-final class LoggedCueNotifier: CueNotifying {
-    var onOpen: (() -> Void)?
-
-    func post(id: UUID, title: String, body: String) async {
-        Logger(subsystem: AppServices.bundleID, category: "cue").notice("Cue 通知（隔离库不发）：\(title, privacy: .public)：\(body, privacy: .private)")
     }
 }
 #endif

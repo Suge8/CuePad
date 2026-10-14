@@ -107,7 +107,15 @@ final class CodexBrain: CueBrain {
         switch method {
         case "turn/started":
             if let id = (params["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
+        case "item/started":
+            guard turn != nil, let item = params["item"] as? [String: Any] else { return }
+            switch item["type"] as? String {
+            case "mcpToolCall": session.emit(.tool(name: brainToolName(item["tool"] as? String ?? "?"), arguments: jsonString(item["arguments"] ?? [:])))
+            case "commandExecution": session.emit(.tool(name: "bash", arguments: jsonString(["command": item["command"] as? String ?? ""])))
+            default: break
+            }
         case "item/completed":
+            if turn != nil, ["mcpToolCall", "commandExecution"].contains((params["item"] as? [String: Any])?["type"] as? String) { session.emit(.toolDone) }
             // 只认给你看的回答，过程中的说明（commentary）不算
             guard let item = params["item"] as? [String: Any], item["type"] as? String == "agentMessage",
                   item["phase"] as? String != "commentary", let text = item["text"] as? String else { return }

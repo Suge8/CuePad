@@ -94,7 +94,7 @@ extension CueStore {
   func claimLaunchedCards() throws {
     try db.run(
       """
-      UPDATE cards SET piSessionID = s.sessionID, modifiedAt = ?1,
+      UPDATE cards SET \(Self.keepingFormerSession("s.sessionID")), piSessionID = s.sessionID, modifiedAt = ?1,
         startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
         completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
       FROM deliveryRequests r JOIN piSessionStates s

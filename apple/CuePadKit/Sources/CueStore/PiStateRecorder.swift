@@ -1,23 +1,22 @@
 import Foundation
 
 extension CueStore {
-  /// `notify` 是"等你确认"而会话由 Cue 跟进时不置标志：这类提问 Cue 处理，要你拍板的它会发"等你"。
+  /// `notify` 只置给你的提示（`PiAlert.reaches`）：会话由 Cue 跟进时进入等回答不置，这类提问 Cue 处理，要你拍板的它会发"等你"。
   func writePiState(sessionID: String, hostID: String, content: PiStateContent, notify: PiAlert?) throws {
     try write {
       let now = Date.stamp
-      var notify = notify
-      if notify == .waitingForUser,
-        try db.first("SELECT 1 WHERE \(Self.followedByCue("?"))", [sessionID], { _ in true }) != nil
-      {
-        notify = nil
-      }
-      let record = PiSessionState(
+      var record = PiSessionState(
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: content.title,
         projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
         lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
+      if let alert = notify, alert == .waitingForUser,
+        !alert.reaches(record, cueFollows: try db.first("SELECT 1 WHERE \(Self.followedByCue("?"))", [sessionID], { _ in true }) != nil)
+      {
+        record.notify = nil
+      }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }

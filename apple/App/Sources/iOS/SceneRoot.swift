@@ -5,9 +5,9 @@ import SwiftUI
 /// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘；有同步时开启 Pi 通知。
 struct SceneRoot: View {
     let services: AppServices
-    let alerts: PiAlertCenter
+    let alerts: AlertCenter
 
-    init(services: AppServices, alerts: PiAlertCenter) {
+    init(services: AppServices, alerts: AlertCenter) {
         self.services = services
         self.alerts = alerts
         alerts.services = services

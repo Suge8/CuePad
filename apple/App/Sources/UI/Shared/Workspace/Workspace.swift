@@ -161,6 +161,8 @@ final class Workspace {
         presses.clearSelection()
         presses.dismiss()
         pages.visit(from: self.page, to: page)
+        // 打开了这个会话：它那一组通知撤掉（点通知进来的也走这里）
+        if case .session(let route) = page, let alerts = services.alerts { Task { await alerts.dismiss(session: route.id) } }
         if case .project(let id) = page {
             nonProjectPage = nil
             services.settings.currentProject = id

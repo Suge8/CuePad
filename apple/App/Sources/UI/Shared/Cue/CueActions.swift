@@ -6,9 +6,6 @@ import Foundation
 extension Workspace {
     /// 跟随 Cue 的现状（窗口根视图调用）。
     func observeCue() async {
-        #if os(macOS)
-        cue.attach(services.cue)
-        #endif
         let services = services
         cue.relay = { host in services.relay(to: host) }
         do {

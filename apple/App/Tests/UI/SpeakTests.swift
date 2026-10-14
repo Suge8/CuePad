@@ -62,15 +62,15 @@ struct SpeakTests {
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
         #expect(Said.cue(message, host: "mac-cue").trip(now: .now, relay: .idle) == .sending)
-        #expect(try await presence(at: .now, relay: .idle) == .thinking)
+        #expect(try await presence(at: .now, relay: .idle) == .sending)  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
         #expect(Said.cue(delivered, host: "mac-cue").trip(now: .now, relay: .idle) == .delivered)
     }
 
-    /// 回执晚到但在时限内：一直是发送中，Cue 在想、不在睡觉；过了时限同步通着是 Mac 没有回应、Cue 在睡觉；
-    /// 本机同步不通时写同步的原因、不说 Cue 在睡觉；超时后回执来了照样是已送达。
+    /// 回执晚到但在时限内：一直是发送中，Cue 也是话在路上、不在睡觉；过了时限同步通着是 Mac 没有回应、Cue 在睡觉；
+    /// 本机同步不通时写同步的原因、不说 Cue 在睡觉（照它写下的状态）；超时后回执来了照样是已送达，Cue 照它写下的在做事。
     @Test func 对Cue说_回执在时限内不报睡觉_超时才报_本机同步不通时不报() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)
@@ -82,7 +82,7 @@ struct SpeakTests {
         let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
 
         #expect(said.trip(now: inTime, relay: .idle) == .sending)
-        #expect(try await presence(at: inTime, relay: .idle) == .thinking)
+        #expect(try await presence(at: inTime, relay: .idle) == .sending)
 
         #expect(said.trip(now: late, relay: .idle) == .failed(.noReply))
         #expect(try await presence(at: late, relay: .idle) == .asleep)
@@ -92,8 +92,9 @@ struct SpeakTests {
         #expect(try await presence(at: late, relay: .noAccount) == .idle)
 
         try await store.markCueMessagesDelivered([message.id])
+        try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(now: late, relay: .idle) == .delivered)
-        #expect(try await presence(at: late, relay: .idle) == .thinking)
+        #expect(try await presence(at: late, relay: .idle) == .working(.thinking, detail: nil))
     }
 
     @Test func 对Cue说_没能送达后重发_撤回旧的写一条同样的_交出去的撤不回也不重发() async throws {

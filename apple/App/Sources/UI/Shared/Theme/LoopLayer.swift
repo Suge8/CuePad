@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三层上箭头（`climb`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动（`float`）。
+/// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动、Cue 在做事时头像里的它上下跳（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）。
@@ -21,8 +21,8 @@ struct LoopLayer {
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
-        /// 一张图（等比铺满）上下浮动 8pt，一上一下 1.8s。
-        case float(CGImage)
+        /// 一张图（等比铺满）上下浮动 `lift`，一上一下 1.8s。
+        case float(CGImage, lift: CGFloat = 8)
     }
 
     let kind: Kind
@@ -187,13 +187,13 @@ struct LoopLayer {
                 fade.autoreverses = true
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(fade, on: layer)
-            case .float(let image):
+            case .float(let image, let lift):
                 let layer = CALayer()
                 layer.contents = image
                 layer.contentsGravity = .resizeAspect
                 let bob = CABasicAnimation(keyPath: "transform.translation.y")
                 bob.fromValue = 0
-                bob.toValue = 8
+                bob.toValue = lift
                 bob.duration = 0.9
                 bob.autoreverses = true
                 bob.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

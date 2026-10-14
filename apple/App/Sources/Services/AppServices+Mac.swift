@@ -43,11 +43,10 @@ extension AppServices {
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
         startCue()
-        // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
-        if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
         startLiveSessions()
         startAccountQuotas()
+        startAlerts()
     }
 
     /// 读出各 Agent 的接入状态，装过而内容不同的静默升级；失败报告一次。
@@ -97,16 +96,10 @@ extension AppServices {
         await beginShutdown(within: limit)()
     }
 
-    /// Cue：本机能用的运行时、按设置值班、通知；点通知把主窗口叫到前面、经深链打开 Cue 页。
+    /// Cue：本机能用的运行时、按设置值班、通知（点开去哪见 `AlertCenter`）。
     private func startCue() {
-        cue.notifier.onOpen = { [weak self] in
-            self?.setDeepLink(.cue)
-            self?.windowShell?.show()
-        }
         follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }
-        follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) {
-            try await self.cue.followNotifications { [weak self] in (self?.cueViewers ?? 0) > 0 }
-        }
+        follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) { try await self.cue.followNotifications() }
     }
 
     // MARK: 全局快捷键

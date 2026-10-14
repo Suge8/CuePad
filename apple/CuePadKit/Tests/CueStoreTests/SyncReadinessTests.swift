@@ -8,7 +8,7 @@ import Testing
 @Suite struct SyncReadinessTests {
   static let synced = [
     "projects", "cards", "sendRecords", "attachments", "piSessionStates", "deliveryRequests", "directoryBindings",
-    "piMessages", "previews", "accountQuotas", "cueMessages", "cueLines", "cueProfile",
+    "piMessages", "previews", "accountQuotas", "cueMessages", "cueLines", "cueProfile", "cueState",
   ]
   static let local = ["piSessions", "projectDirectories", "syncRecords", "syncSent", "syncState", "cueSummaries"]
   let fixture = try! Fixture()

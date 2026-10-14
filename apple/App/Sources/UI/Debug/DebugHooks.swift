@@ -1,5 +1,6 @@
 import CueStore
 import SwiftUI
+import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -103,6 +104,13 @@ enum DebugHooks {
         #endif
     }
 
+    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
+    static func previewWebLoaded(_ page: WebPage) {
+        #if DEBUG
+        DebugScene.snapshotWeb(page)
+        #endif
+    }
+
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
@@ -131,6 +139,24 @@ enum DebugHooks {
     /// 显示主窗口或设置窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
     static func present(_ window: NSWindow) {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
+    }
+
+    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
+    static var deliversNotifications: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        #else
+        false
+        #endif
+    }
+
+    /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
+    static var updater: (any AppUpdater)? {
+        #if DEBUG
+        DebugScene.scene == "updatewait" ? DebugScene.DemoUpdater() : nil
+        #else
+        nil
+        #endif
     }
 
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
