@@ -31,7 +31,7 @@ public struct CueTools: Sendable {
       [
         "name": "task",
         "description": """
-          派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
+          派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。prompt、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
           start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步还开着的会话（要接着用就在上一步 done 之前开工），上下文太长或要换 Agent 时用 fresh:true；
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；

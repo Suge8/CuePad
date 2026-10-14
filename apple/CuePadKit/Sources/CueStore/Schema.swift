@@ -12,9 +12,10 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt；piSessionStates、cards、deliveryRequests、
+/// piMessages 的 writeSeq（本机写入序号，见 37）。
 ///
-/// 本机表（不同步）：piSessions、piProcesses、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
@@ -146,7 +147,35 @@ enum Schema {
         """, [now])
       try db.exec("ALTER TABLE cueMessages DROP COLUMN acceptance;")
     },
+    // 38：本机写入序号（`CueStore.lastWrite`）：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
+    // 旧行是 0（早于升级后的任何一次醒来）
+    Upgrade(stringLiteral: writeSeq),
   ]
+
+  /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
+  /// 计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
+  /// 会话状态（进入的状态与时刻）、卡片（完成与跟进相关：完成、跟进、上级、是不是任务）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
+  private static let writeSeq = """
+    CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
+    INSERT INTO writeCounter (seq) VALUES (0);
+    \(stamped("piSessionStates", when: ["state", "stateSince"]))
+    \(stamped("cards", when: ["completedAt", "cueFollows", "parentID", "todoAt"]))
+    \(stamped("deliveryRequests", when: ["status"]))
+    \(stamped("piMessages", when: []))
+    """
+
+  /// `table` 加本机列 `writeSeq`：新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
+  private static func stamped(_ table: String, when columns: [String]) -> String {
+    let stamp = "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
+    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
+    return """
+      ALTER TABLE \(table) ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+      CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp) END;
+      """ + (columns.isEmpty ? "" : """
+
+      CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp) END;
+      """)
+  }
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -322,6 +351,7 @@ enum Schema {
     \(cue)
     \(formerSessions)
     \(cueState)
+    \(writeSeq)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

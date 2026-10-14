@@ -38,6 +38,12 @@ final class CodexRPC {
     static let handshakeTimeout: Duration = .seconds(30)
 
     /// 起一个 `codex app-server --listen stdio://`（`arguments` 接在后面，如 `-c` 覆盖配置）并完成握手；握手失败或超时时停掉这个进程再抛错。
+    /// 一条用户输入（`UserInput`）：文字在前（空文字不带）、图片以 data URL 在后。
+    static func input(text: String, images: [PiImage]) -> [Object] {
+        let text: [Object] = text.isEmpty ? [] : [["type": "text", "text": text, "text_elements": [] as [Any]]]
+        return text + images.map { ["type": "image", "url": "data:\($0.mimeType);base64,\($0.data.base64EncodedString())"] }
+    }
+
     static func launch(
         _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil
     ) async throws -> CodexRPC {
