@@ -1,17 +1,32 @@
-# CuePi —— Pi 桥（macOS）
+# CuePi —— Agent 桥（macOS）
 
-依赖 Foundation/AppKit 与 CueStore：Pi 会话的值类型（状态 `PiWorkState`、弹窗 `PiQuestion`、模型 `PiModelOption`、上下文 `PiContextUsage`、斜杠命令 `PiSlashCommand`、子代理 `PiSubagentState`、对话 `PiChatMessage`、摘要 `PiRecap`）只在 CueStore 定义一份，线上消息与会话文件在这里直接解码成它们，App 不再转换。三块能力，App 层各接一处：
+Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界面、记录器与投送执行器只认它；各家怎么发现会话、怎么说话由各自的接入（`AgentRuntime`）实现，见下文"其他 Agent"。依赖 Foundation/AppKit 与 CueStore：会话的值类型（状态 `PiWorkState`、弹窗 `PiQuestion`、模型 `PiModelOption`、上下文 `PiContextUsage`、斜杠命令 `PiSlashCommand`、子代理 `PiSubagentState`、对话 `PiChatMessage`、摘要 `PiRecap`）只在 CueStore 定义一份，线上消息与会话文件在这里直接解码成它们，App 不再转换。三块能力，App 层各接一处：
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
-| 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（Pi 读 `pi --version`，≥ 0.84.4；其余有命令或有配置目录就算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级（技能写不进去时扩展还原）。技能很短，写着 App 里 `cuepad` 的绝对路径，其余看 `--help`：手机预览（`show`）挂在 Pi 会话的对话里，只有 Pi 的提；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。状态只有一份：任一个是别人的同名文件为 `foreign`（不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
-| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
+| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
+| 各家接入 | `AgentRuntime`：`PiRuntime`、`ClaudeCodeRuntime`、`CodexRuntime`、`OpenCodeRuntime` | 发现会话并接上桥、后台开新会话（`open`）、接着已结束的会话（`resume`）、结束（`end`）、补写对话（`transcript`）；投送执行器按会话的 Agent 找到它。能做什么由 CueStore 的 `AgentCapabilities.of` 决定，界面只露出做得到的 |
+| 钩子转发 | `AgentHookServer` / `cuepad hook <agent>` | Claude Code、Codex 的钩子命令把这次调用（输入、环境、所在终端）发到 `PiPaths.hookSocket`，等 CuePad 回一行再写到标准输出；CuePad 没在运行时什么都不输出，Agent 照常往下走 |
+| 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（Pi 读 `pi --version`，≥ 0.84.4；其余有命令或有配置目录就算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级（技能写不进去时扩展还原）；Claude Code、Codex 另把钩子合并进它们的配置（`AgentHookConfig`，见下文），OpenCode 直连它的后台服务、不用装。技能很短，写着 App 里 `cuepad` 的绝对路径，其余看 `--help`：手机预览（`show`）挂在 Pi 会话的对话里，只有 Pi 的提；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。状态只有一份：任一个是别人的同名文件为 `foreign`（不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
+| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 每家一个索引器，逐行解码按 Agent 分（`ClaudeHistory`、`CodexHistory`），读取、检查点与摘要的规则共用；会话文件在 `AgentPaths.sessionsDirectory` 下：Pi 与 Claude Code 是 `<项目目录>/*.jsonl`（更深的子代理文件不算），Codex 是 `YYYY/MM/DD/rollout-*.jsonl`（带 `parent_thread_id` 的子代理文件由解码标为 `excluded`），OpenCode 的会话在它的数据库里、由它的接入写索引；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
-`PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。
+`AgentPaths` 是各家目录的唯一来源（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`、`XDG_*`），`PiPaths` 是 Pi 与 socket 目录那一部分。
+
+## 其他 Agent
+
+| | Claude Code | Codex | OpenCode |
+| --- | --- | --- | --- |
+| 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`）；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`） | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
+| 终端会话的说话 | 它的收件箱 socket，只收文字；插话不打断在跑的工具 | 常驻服务的控制 socket（`turn/steer`、`thread/queue/add`），能带图 | `POST /prompt`（steer / queue），能带图 |
+| 远程作答 | 阻塞的 PermissionRequest 钩子（权限与 AskUserQuestion），终端里同时弹出，哪边先答算哪边 | 阻塞的 PermissionRequest 钩子：CuePad 在运行时终端不弹框；Plan 模式的提问只能在终端里答 | 权限与单个问题的表单 |
+| 后台托管 | `claude --input-format stream-json --output-format stream-json`，全部能力；会话开在终端里时拒绝接着（两边会各写各的） | `codex app-server --listen stdio://`；线程被常驻服务持有时改走控制 socket | 在它的服务里开会话，服务没开时 `opencode service start` |
+| 终端会话做不到 | 图片、停止、换模型与强度、斜杠命令 | 结束会话、上下文余量 | 跳到终端（服务不知道终端） |
+| 认出 CuePad 发的话 | 消息的 uuid 就是投送请求 id | `clientUserMessageId` = `cuepad-<投送请求 id>` | 消息的 `metadata` |
+
+已知边界：Claude Code 的收件箱格式、改名控制、用 PermissionRequest 回答 AskUserQuestion 都来自实测（2.1.293），不在官方文档里；经收件箱发进终端会话的话 Claude Code 当作"另一个会话发来的"。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
 
 ## 协议（v11）
 
