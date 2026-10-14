@@ -70,6 +70,22 @@ struct MacSyncTests {
         #expect(rig.sync.stopped == 1)
     }
 
+    /// 退出时这台 Mac 当场离线：别的组件停得慢、耗尽了收尾的上限，离线这一条也已写下并上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 退出时这台Mac离线_收尾超时也不漏() async throws {
+        let host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        services.start()
+        #expect(await uploads.next() == record)
+        #expect(try await services.store.macOnline(host))
+
+        #expect(await services.stop(within: .zero) != nil)  // 第一步就超时，之后的步骤都不执行
+
+        #expect(await uploads.next() == record)
+        #expect(try await !services.store.macOnline(host))
+    }
+
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
         services.startSync()
         try await services.executor.start()

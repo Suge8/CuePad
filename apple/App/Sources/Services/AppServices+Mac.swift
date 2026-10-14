@@ -79,13 +79,15 @@ extension AppServices {
         hooks.stop()
         pi.stop()
         hotkey.unregister()
-        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync, presence = presence
+        // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步引擎前等它传完
+        let signingOff = Task.detached { [presence] in await presence.signOff() }
+        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
                 ("Cue", stopCue),
-                ("这台 Mac 离线的记录", { await presence.signOff() }),
+                ("这台 Mac 离线的记录", { await signingOff.value }),
                 ("同步引擎", { await sync?.stop() }),
                 ("后台托管的 Agent", hostedExit),
             ], within: limit)
