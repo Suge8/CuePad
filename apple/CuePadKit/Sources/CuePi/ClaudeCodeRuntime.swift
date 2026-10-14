@@ -134,6 +134,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     /// 启动时从会话列表补上的会话没有终端的环境变量：钩子带来时换上。
     private func refresh(_ terminal: ClaudeTerminalSession, from envelope: AgentHookEnvelope) {
         if let inbox = envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"] { terminal.inbox = inbox }
+        if let token = envelope.environment["CLAUDE_CODE_MESSAGING_TOKEN"] { terminal.inboxToken = token }
         let fresh = PiTerminal(tty: envelope.tty, environment: envelope.environment)
         bridge.update(terminal.id) { $0.terminal = fresh }
     }

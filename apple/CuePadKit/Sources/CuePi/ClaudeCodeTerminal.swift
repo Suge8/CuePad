@@ -20,6 +20,8 @@ final class ClaudeTerminalSession: SessionLink {
     private let gate: PresenceGate
     /// 收件箱 socket（钩子环境里的 `CLAUDE_CODE_MESSAGING_SOCKET`，或会话登记文件里的）
     var inbox: String?
+    /// 收件箱令牌（钩子环境里的 `CLAUDE_CODE_MESSAGING_TOKEN`）：没有它，跳过权限确认的会话把送来的话挂起等你批准
+    var inboxToken: String?
     private var facts = SessionFacts()
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
@@ -258,18 +260,22 @@ final class ClaudeTerminalSession: SessionLink {
 
     private func post(_ line: JSONValue) async throws {
         guard let inbox else { throw PiBridgeError.unsupported }
-        try await ClaudeInbox.post(line.data + Data([0x0A]), to: inbox)
+        var lines = Data()
+        if let inboxToken { lines += (["type": "auth", "token": .string(inboxToken)] as JSONValue).data + [0x0A] }
+        lines += line.data + [0x0A]
+        try await ClaudeInbox.post(lines, to: inbox)
     }
 }
 
-/// Claude Code 会话的收件箱（跨会话消息的 Unix socket，2.1.224 起，官方文档化）：连上、写一行、关掉。它不回话；macOS 上不要求先发认证行。
-/// 消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
+/// Claude Code 会话的收件箱（跨会话消息的 Unix socket，2.1.224 起，官方文档化）：连上、写几行、关掉。它不回话。
+/// 第一行可以是认证行 `{"type": "auth", "token": …}`（官方给"脚本往自己会话里投递"的路）：macOS 上不要求，但带上了，
+/// 跳过权限确认的会话才直接收下，不挂起等你批准。消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
 enum ClaudeInbox {
-    @concurrent static func post(_ line: Data, to path: String) async throws {
+    @concurrent static func post(_ lines: Data, to path: String) async throws {
         // 连不上：会话已经退出（socket 删了或没人听）
         guard let fd = try? UnixSocket.connect(path) else { throw PiBridgeError.sessionEnded }
         defer { close(fd) }
-        guard writeAll(fd, line) else { throw PiBridgeError.sessionEnded }
+        guard writeAll(fd, lines) else { throw PiBridgeError.sessionEnded }
         shutdown(fd, SHUT_WR)
     }
 }

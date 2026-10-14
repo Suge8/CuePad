@@ -54,7 +54,7 @@ final class ClaudeTestbed {
             try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
         }
         // 跳过首次启动的引导与"信任这个目录"的询问
-        let seed: JSONValue = ["hasCompletedOnboarding": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
+        let seed: JSONValue = ["hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
         environment = [
@@ -94,9 +94,9 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式 default：要用工具就问）。
-    func terminal(_ arguments: [String] = []) async throws -> ClaudeTerminal {
-        let terminal = try await ClaudeTerminal(testbed: self, arguments: arguments)
+    /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
+    func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
+        let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
     }
@@ -184,7 +184,7 @@ final class ClaudeTerminal {
         let environment = ProcessInfo.processInfo.environment.filter { key, _ in !["TMUX", "CLAUDE", "CUEPAD", "HERDR"].contains { key.hasPrefix($0) } }
             .merging(testbed.environment) { $1 }
         _ = try await Self.tmux(name, ["-f", "/dev/null", "new-session", "-d", "-x", "200", "-y", "50", "-c", testbed.work.path,
-                                       (["exec", claudeURL!.path, "--permission-mode", "default"] + arguments).joined(separator: " ")], environment: environment)
+                                       (["exec", claudeURL!.path] + arguments).joined(separator: " ")], environment: environment)
         let ids = try await Self.tmux(name, ["display-message", "-p", "#{pane_pid} #{pid}"], environment: environment)
             .split(separator: " ").compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
         guard ids.count == 2 else { throw TmuxFailed(command: "display-message") }
