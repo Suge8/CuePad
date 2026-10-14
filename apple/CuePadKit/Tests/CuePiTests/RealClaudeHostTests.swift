@@ -66,9 +66,9 @@ struct RealClaudeHostTests {
             try await testbed.waitForTurn(id)
             #expect(FileManager.default.fileExists(atPath: touched.path))
 
-            _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 sleep 120（不要放到后台），然后只回复 SLEPT"), to: id)
-            // sleep 也要确认（模型不同，问不问不一定）：问了就允许
-            try await eventually("在跑 sleep", timeout: .seconds(60)) {
+            _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 python3 -c 'import time; time.sleep(120)'（不要放到后台），然后只回复 SLEPT"), to: id)
+            // 跑命令也要确认（模型不同，问不问不一定）：问了就允许。不用 sleep：Claude Code 会把它挪到后台
+            try await eventually("在跑命令", timeout: .seconds(60)) {
                 if let asked = testbed.bridge.session(id: id)?.question?.promptID { try? await testbed.bridge.answer(.confirmed(true), to: asked, in: id) }
                 return testbed.bridge.session(id: id)?.state == .tool
             }
