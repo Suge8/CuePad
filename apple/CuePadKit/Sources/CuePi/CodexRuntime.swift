@@ -446,7 +446,7 @@ public final class CodexRuntime: AgentRuntime {
         let arguments = input["tool_input"] ?? .object([:])
         let command = arguments["command"]?.string
         let text = PermissionWording.question(
-            .codex, command == nil ? "使用 \(input["tool_name"]?.string ?? "工具")" : "运行命令", [command, arguments["description"]?.string])
+            .codex, command == nil ? "使用 \(input["tool_name"]?.string.map(ToolDetail.name) ?? "工具")" : "运行命令", [command, arguments["description"]?.string])
         release(session)
         let promptID = UUID().uuidString
         var hold: UUID?

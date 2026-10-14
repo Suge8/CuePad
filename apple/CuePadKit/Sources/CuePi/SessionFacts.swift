@@ -112,8 +112,16 @@ enum ToolDetail {
     static let limit = 120
 
     static func line(_ tool: String, _ input: JSONValue?) -> String {
-        guard let target = target(input) else { return clip(tool) }
-        return clip(tool + PiSessionState.detailSeparator + target)
+        guard let target = target(input) else { return clip(name(tool)) }
+        return clip(name(tool) + PiSessionState.detailSeparator + target)
+    }
+
+    /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"。
+    static func name(_ tool: String) -> String {
+        let prefix = "mcp__"
+        guard tool.hasPrefix(prefix), let split = tool.dropFirst(prefix.count).range(of: "__") else { return tool }
+        let rest = tool.dropFirst(prefix.count)
+        return "\(rest[..<split.lowerBound]) - \(rest[split.upperBound...]) (MCP)"
     }
 
     static func line(_ tool: String, _ arguments: PiToolArguments?) -> String {

@@ -158,7 +158,7 @@ struct RealClaudeTerminalTests {
     }
 
     /// MCP 服务要你填的只有一个字段的表单（Elicitation）：人不在时从 CuePad 答，答案交给 MCP 服务；
-    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是取消）它就收起。
+    /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是取消）它就收起。没放行的 MCP 工具问权限，标题与终端一样写"服务 - 工具 (MCP)"。
     @Test func cuePadAnswersAnMCPFormWhileTheUserIsAway() async throws {
         try await ClaudeTestbed.run() { testbed in
             try testbed.runtime.start()
@@ -183,6 +183,12 @@ struct RealClaudeTerminalTests {
             try await eventually("终端里弹表单", timeout: .seconds(30)) { await terminal.screen.contains("饮料") }
             try await terminal.keys("Escape")  // 在终端里取消这个表单
             try await eventually("CuePad 上收起", timeout: .seconds(60)) { testbed.bridge.session(id: session.id)?.question == nil }
+
+            testbed.presence.isPresent = false
+            try await testbed.waitForTurn(session.id)
+            let permission = try await testbed.ask("调用 mcp__cue__echo 工具（不要用别的工具），参数 text 为 hi", on: terminal, in: session.id)
+            #expect(permission.text.hasPrefix("允许 Claude Code 使用 cue - echo (MCP)？"), "\(permission.text)")
+            try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
         }
     }
 

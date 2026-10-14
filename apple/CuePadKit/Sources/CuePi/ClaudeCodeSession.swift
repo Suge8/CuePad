@@ -78,7 +78,7 @@ struct ClaudePermission {
             // 终端里每道选择题都有"自己填"（Type something）
             return PiQuestion(promptID: id, kind: .select, text: ToolDetail.clip(text, Self.textLimit), options: asked.options, allowsOther: true)
         }
-        let text = PermissionWording.question(.claudeCode, "使用 \(tool)", [ToolDetail.target(input), input["description"]?.string])
+        let text = PermissionWording.question(.claudeCode, "使用 \(ToolDetail.name(tool))", [ToolDetail.target(input), input["description"]?.string])
         return PiQuestion(promptID: id, kind: .confirm, text: text)
     }
 
