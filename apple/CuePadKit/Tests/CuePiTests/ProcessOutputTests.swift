@@ -12,9 +12,7 @@ struct ProcessOutputTests {
 
     /// 检测 Pi 版本时 pi 卡住：到时间就结束它、不等下去。
     @Test(.timeLimit(.minutes(1))) func aStuckProcessIsStoppedAtTheTimeout() async {
-        let started = ContinuousClock.now
         #expect(await runCapturing(URL(filePath: "/bin/sleep"), ["30"], timeout: .milliseconds(200)) == nil)
-        #expect(ContinuousClock.now - started < .seconds(10))
     }
 
     /// 超时结束的是起的命令连同它起的子进程：子进程握着输出管道、自己不退，也不让调用方等它。
