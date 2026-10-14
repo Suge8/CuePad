@@ -115,6 +115,9 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 这件事由 Cue 跟进（否则是你自己）：只有顶层任务能是真，挂到别的任务下、改回灵感时归零（库里的触发器守住，见 `Schema`）。
   /// 你在 CuePad 里亲自对它的会话说话时也归零（`requestDelivery`）。
   public internal(set) var cueFollows = false
+  /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
+  /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
+  public internal(set) var formerSessionIDs: [String] = []
 
   /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
@@ -482,12 +485,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows", "formerSessionIDs",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows,
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -496,7 +499,8 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16),
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(17)))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。
