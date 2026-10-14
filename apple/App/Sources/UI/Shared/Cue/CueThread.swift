@@ -25,7 +25,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch row {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
             case .renewed(let handoff):
-                ChatMark(id: handoff.id, kind: .boundary, preview: "换了新上下文 · \(handoff.createdAt.formatted(date: .omitted, time: .shortened))")
+                ChatMark(id: handoff.id, kind: .boundary, preview: Dotted("换了新上下文", handoff.createdAt.formatted(date: .omitted, time: .shortened)).visible)
             case .cue, .notes: nil
             }
         })
