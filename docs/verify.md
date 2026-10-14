@@ -27,7 +27,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 - SwiftUI 输入框用 `setText` 只改了无障碍的值、进不了绑定（不保存）：先 `click` 再 `typeText`（状态要 `--image always`）。
 - 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
 - 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
-- iOS 没有可操作的窗口（本机没装 Simulator.app）：手机界面靠流程测试与 `xc.sh shot ios`。
+- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。用自己建的模拟器（`CUEPAD_IOS_DEVICE`）：默认那台常被并行的 agent 装上别的构建。
 
 ## 性能测量
 
