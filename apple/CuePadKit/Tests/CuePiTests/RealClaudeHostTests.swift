@@ -8,7 +8,7 @@ import Testing
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
 /// 斜杠命令、结束、接着已结束的会话、空闲退出。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
-@Suite(.enabled(if: realClaudeAvailable, RealAgents.skipped(.claudeCode, needs: "claude 与小米密钥")), .serialized, .timeLimit(.minutes(8)))
+@Suite(.enabled(if: realClaudeAvailable, RealAgents.skipped(.claudeCode, needs: "claude 与 Claude 订阅令牌")), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
     /// CuePad 起的 `claude` 是外壳、真 claude 是它的子进程：托管进程的钩子仍认得是它自己的，桥上不多出一个终端会话。
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。

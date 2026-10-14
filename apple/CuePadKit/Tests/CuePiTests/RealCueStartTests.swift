@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走小米网关，OpenCode 用免费模型。
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 用免费模型。
 /// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 列出的几家）。
 private let enabledAgents = RealAgents.enabled
 
@@ -35,7 +35,8 @@ struct RealCueStartTests {
             if agent != .opencode {
                 let file = try #require(bridge.session(id: id)?.sessionFile)
                 let used = try #require(Self.used(in: file, agent), "会话文件里没记下用的模型")
-                #expect(used.model == model.id, "\(used)")
+                // Claude Code 的别名（sonnet）在会话文件里记成它解析到的完整 id（claude-sonnet-…）
+                #expect(agent == .claudeCode ? used.model?.hasPrefix("claude-\(model.id)") == true : used.model == model.id, "\(used)")
                 if agent != .pi { #expect(used.effort == "medium", "\(used)") }
             }
         }

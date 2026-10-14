@@ -8,7 +8,7 @@ import Testing
 /// 端到端：终端里的 Claude Code（真 `claude`，tmux 里跑）接进 CuePad——经钩子出现在桥上、经收件箱收到 CuePad 发的话、
 /// 等你确认时从 CuePad 作答、改名、结束；接入（装钩子）与关掉接入（删钩子）只动 settings.json 里 CuePad 的条目。
 @MainActor
-@Suite(.enabled(if: realClaudeAvailable && tmuxURL != nil, RealAgents.skipped(.claudeCode, needs: "claude、tmux 与小米密钥")), .serialized, .timeLimit(.minutes(8)))
+@Suite(.enabled(if: realClaudeAvailable && tmuxURL != nil, RealAgents.skipped(.claudeCode, needs: "claude、tmux 与 Claude 订阅令牌")), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeTerminalTests {
     /// 用户自己的 settings.json：别的设置、自己的一个 Stop 钩子
     nonisolated static let userSettings = """
