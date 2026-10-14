@@ -38,7 +38,7 @@ struct CueStatusRow<Trailing: View>: View {
                 CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
             }
             Spacer(minLength: 6)
-            WaitingCount(count: cue.digest.waiting.count).font(Typography.meta)
+            WaitingCount(count: cue.digest.waiting).font(Typography.meta)
             trailing
         }
         .animation(Motion.quick, value: cue.digest)

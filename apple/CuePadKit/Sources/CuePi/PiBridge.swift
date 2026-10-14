@@ -22,12 +22,40 @@ public final class PiBridge {
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
         /// 此刻正在说的这条回答（见 `PiDraft`）；单独一项，出字时只有读它的视图重算
-        public internal(set) var draft: PiDraft?
+        public private(set) var draft: PiDraft?
+        /// 最近交来、还没显示的草稿与等着显示它的那一拍
+        @ObservationIgnored private var offered: PiDraft?
+        @ObservationIgnored private var shownAt: ContinuousClock.Instant?
+        @ObservationIgnored private var flush: Task<Void, Never>?
+
         init(_ session: PiSession) {
             id = session.id
             sessionID = session.sessionID
             cwd = session.cwd
             self.session = session
+        }
+
+        /// 刷新节奏只定在这里：同一条话的增长最多每 `PiBridge.draftInterval` 显示一次（落后的那次在这一拍末尾补上）；
+        /// 清掉与开始另一条（起点不同）立即显示，不让上一条的尾巴晚到。
+        func offer(_ next: PiDraft?) {
+            offered = next
+            let now = ContinuousClock.now
+            if next == nil || next?.since != draft?.since || shownAt.map({ now - $0 >= PiBridge.draftInterval }) ?? true {
+                show(at: now)
+                return
+            }
+            guard flush == nil, let shownAt else { return }
+            flush = Task { [weak self] in
+                guard (try? await Task.sleep(until: shownAt + PiBridge.draftInterval)) != nil else { return }
+                self?.show(at: .now)
+            }
+        }
+
+        private func show(at now: ContinuousClock.Instant) {
+            flush?.cancel()
+            flush = nil
+            shownAt = now
+            if draft != offered { draft = offered }
         }
     }
 
@@ -38,7 +66,10 @@ public final class PiBridge {
     public var sessions: [PiSession] { slots.map(\.session) }
 
     /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
-    public func session(sessionID: String) -> PiSession? { slots.first { $0.sessionID == sessionID }?.session }
+    public func session(sessionID: String) -> PiSession? { slot(sessionID: sessionID)?.session }
+
+    /// 这个会话（`sessionID`）在线的那一格，规则同 `session(sessionID:)`；只随会话出现、消失通知。
+    public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
     /// 这个连接（`PiSession.id`）的会话。
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
@@ -136,6 +167,8 @@ public final class PiBridge {
     }
 
     fileprivate static let ackTimeout: Duration = .seconds(10)
+    /// 正在说的话最多每这么久刷新一次：逐字的增量（每秒几十个）合成每秒十次，读它的视图（Markdown 重排）不随每个增量重算
+    static let draftInterval: Duration = .milliseconds(100)
     /// 对"进程活着但还没 listen"的 socket 只重试一次；之后由下一次目录事件/重扫再看
     private static let retryDelay: Duration = .milliseconds(200)
 
@@ -264,11 +297,10 @@ public final class PiBridge {
         emit(session.state == previous ? .infoChanged(session) : .stateChanged(session, from: previous))
     }
 
-    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由桥统一定；只改这一格的 `draft`，
-    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做。
+    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由桥统一定（`Slot.offer`）；只改这一格的 `draft`，
+    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做；会话下线时随它的格子一起没了。
     public func setDraft(_ id: PiSession.ID, _ draft: PiDraft?) {
-        guard let slot = slots.first(where: { $0.id == id }), slot.draft != draft else { return }
-        slot.draft = draft
+        slots.first { $0.id == id }?.offer(draft)
     }
 
     /// 一个会话下线（进程退出、会话结束）。
@@ -385,6 +417,9 @@ public final class PiBridge {
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let bye):
             link.bye = bye
+        case .draft(let draft):
+            guard let session = link.session else { throw HandlingError.messageBeforeHello }
+            setDraft(session.id, draft)
         case .quota(let report):
             guard link.session != nil else { throw HandlingError.messageBeforeHello }
             emit(.quota(report))

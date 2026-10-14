@@ -36,6 +36,15 @@ final class ClaudeStream {
         }
     }
 
+    /// 一条用户消息的内容：文字在前、图片块在后（空文字不带）。
+    static func content(text: String, images: [PiImage]) -> ClaudeJSON {
+        var content: [ClaudeJSON] = text.isEmpty ? [] : [["type": "text", "text": .string(text)]]
+        for image in images {
+            content.append(["type": "image", "source": ["type": "base64", "media_type": .string(image.mimeType), "data": .string(image.data.base64EncodedString())]])
+        }
+        return .array(content)
+    }
+
     /// 写一条。输入已关或进程已退出时抛 `sessionEnded`。
     func write(_ message: ClaudeJSON) throws {
         guard !inputClosed, !isClosed else { throw PiBridgeError.sessionEnded }

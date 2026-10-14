@@ -121,7 +121,7 @@ struct TaskFlowTests {
         #expect(try await ends() == ["s1"])
     }
 
-    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、还有没做完的步骤时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
+    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
     /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
     @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
         let workspace = Workspace(services: rig.services)
@@ -150,9 +150,16 @@ struct TaskFlowTests {
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
-        try await store.linkCard(second.id, toSession: "s1")  // 送达时由执行的 Mac 绑上（这里没有执行端）
+        // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
+        let executor = DeliveryExecutor(store: store, hostID: "mac-other", onIssue: { Issue.record("\($0)") }) { [store] request in
+            _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+            return .succeeded
+        }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+        await executor.stop()
         try await workspace.toggle(second.id)
-        #expect(try await requests(.end).isEmpty)  // 还有"发版"没做完
+        #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
         try await workspace.toggle(third.id)
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
@@ -235,26 +242,21 @@ struct TaskFlowTests {
         #expect(board.done.first?.task.id == closed.id)  // 最近完成按完成时间排，不按项目分组
     }
 
-    @Test func 书架正在推进先列Agent要你处理与正在干活的_再按最近开始_只列顶层() async throws {
-        let recorder = PiStateRecorder(store: store, hostID: "mac")
-        try await recorder.update(sessionID: "s1", state: .tool, detail: "bash · pnpm test", title: "atlas")
-        try await recorder.update(sessionID: "s2", state: .waitingForUser, title: "deploy")
+    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
+    @Test func 书架正在推进按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
         try await store.setStatus(step.id, .inProgress)
-        let working = try await store.createTask("在干活", in: nil)
-        try await store.recordSend(working.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: working.id)
-        let asking = try await store.createTask("等你确认", in: nil)
-        try await store.recordSend(asking.body, to: SendTarget(kind: .piSession, name: "deploy", ref: "s2"), card: asking.id)
+        let middle = try await store.createTask("中间开始", in: nil)
+        try await store.setStatus(middle.id, .inProgress)
         let newest = try await store.createTask("最近开始", in: nil)
         try await store.setStatus(newest.id, .inProgress)
 
-        let active = try await TaskBoard.active(limit: 3, from: store)
+        let active = try await TaskBoard.active(limit: 2, from: store)
 
-        #expect(active.rows.map(\.task.id) == [asking.id, working.id, newest.id] && active.more == 1)
-        #expect(active.rows.first { $0.task.id == working.id }?.session?.state == .known(.tool))
-        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含步骤
+        #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
+        #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级
