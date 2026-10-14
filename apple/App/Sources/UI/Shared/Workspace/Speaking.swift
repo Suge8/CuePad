@@ -5,14 +5,16 @@ import SwiftUI
 /// 手机发给 Agent，Mac 把提示词发给 Agent，压缩按钮）：
 /// 按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（`Listener`）→ 后台立即上传。界面从不等上传或执行结果，
 /// 到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。
+/// 正文写不出（图片存不进图片库）时什么都没发：草稿原样留着、只提示原因；调用方看返回值，只有写出了才收起输入框、
+/// 当作发出（`saying` 是写出后的那句提示，也只在写出时说，不盖掉报错）。
 /// 写"说的话"的底层调用只在这里（源码检查 `lint.sh` 拦别处的）。
 extension Workspace {
     /// 从输入框说出去：`box` 是输入框的草稿，`content` 把取走的草稿写成存储格式正文（图片在这里写进图片库；写不出时什么都不动、提示），
-    /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库与上传的那个任务（测试等它）。
-    @discardableResult
+    /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库与上传的那个任务（测试等它）；
+    /// 正文写不出、什么都没发时为 nil。
     func speak(
         to listener: Listener, from box: Binding<ComposerDraft>, keeping: (ComposerDraft) -> ComposerDraft = { _ in ComposerDraft() },
-        content: (ComposerDraft) throws -> String
+        saying: Dotted? = nil, content: (ComposerDraft) throws -> String
     ) -> Task<Void, Never>? {
         let taken = box.wrappedValue
         let stored: String
@@ -24,13 +26,15 @@ extension Workspace {
         }
         let kept = keeping(taken)
         box.wrappedValue = kept
+        if let saying { say(saying) }
         return write(stored, to: listener) { box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: kept) }
     }
 
     /// 不是从输入框说的（提示词、压缩按钮）：写不进库时只提示，原文还在原处。
     @discardableResult
-    func speak(_ stored: String, to listener: Listener) -> Task<Void, Never> {
-        write(stored, to: listener) {}
+    func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {
+        if let saying { say(saying) }
+        return write(stored, to: listener) {}
     }
 
     /// 重发一句没能送达的话：先撤回它（撤不回——Mac 已领取、Cue 已收到——就不重发，免得说两遍），再用同样的内容写一条新的。

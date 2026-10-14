@@ -45,7 +45,7 @@ struct CueComposer: View {
     private func send() {
         let cue = workspace.cue, files = workspace.services.store.files
         guard cue.canHear, !cue.draft.isEmpty(accepting: .images) else { return }
-        workspace.speak(to: .cue, from: Bindable(cue).draft) { try $0.stored(in: files) }
+        guard workspace.speak(to: .cue, from: Bindable(cue).draft, content: { try $0.stored(in: files) }) != nil else { return }
         #if os(iOS)
         focused = false
         #endif

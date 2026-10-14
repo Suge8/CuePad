@@ -188,8 +188,7 @@ extension Workspace {
     @discardableResult
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Bool {
         guard let (content, listener) = sendState.destination(of: stored, to: target, card: card) else { return false }
-        speak(content, to: listener)
-        say(sendState.handed(target))
+        speak(content, to: listener, saying: sendState.handed(target))
         return true
     }
 

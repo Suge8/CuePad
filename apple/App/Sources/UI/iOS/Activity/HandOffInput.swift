@@ -129,14 +129,16 @@ struct HandOffInput: View {
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, workspace: workspace, navigation: navigation)
         }
         let kinds = session.composerKinds, mode = session.deliveryModes[0], files = services.store.files
-        if let line = PiSlash.line(of: draft.accepting(kinds), in: session.usableCommands) {
-            workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box) { _ in line }
+        let saying: Dotted = "已交给 \(session.title)"
+        let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: session.usableCommands) {
+            workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {
-            workspace.speak(to: .session(session, mode: mode, card: outbox.card), from: box) { try $0.accepting(kinds).stored(in: files) }
+            workspace.speak(to: .session(session, mode: mode, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }
         }
+        // 图片存不进图片库时什么都没发：浮框留着、草稿原样，只看到报错
+        guard written != nil else { return }
         focused = false
         navigation.outbox = nil
-        workspace.say("已交给 \(session.title)")
     }
 
     /// 默认目标是新会话时点发送，按交到哪的决定：未分类的开不了会话，说一句（与 Mac 上发给 Agent 同一句）、什么都不开；

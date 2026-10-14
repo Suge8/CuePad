@@ -74,8 +74,7 @@ struct MenuBarPad: View {
     /// 这次随手记不记成灵感，直接作为一句话说给 Cue。
     private func handToCue() {
         let files = services.store.files
-        workspace.speak(to: .cue, from: $capture.draft) { try $0.stored(in: files) }
-        workspace.say("已交给 \(workspace.cue.name)")
+        _ = workspace.speak(to: .cue, from: $capture.draft, saying: "已交给 \(workspace.cue.name)") { try $0.stored(in: files) }
     }
 
     private struct Block: ViewModifier {

@@ -22,7 +22,7 @@ extension DebugScene {
             listener = .cue
         }
         box.wrappedValue.text = "把重连用例也跑一遍，结果贴给我"
-        if speech == "sent" { workspace.speak(to: listener, from: box) { try $0.stored(in: files) } }
+        if speech == "sent" { _ = workspace.speak(to: listener, from: box) { try $0.stored(in: files) } }
     }
 }
 #endif

@@ -273,10 +273,10 @@ struct PiReplyBar: View {
     /// 作答框只收文字：答完文字清空，其余（别处带进草稿的卡片、图片）留着。
     private func answer() {
         guard canSend, let promptID = answering?.promptID else { return }
-        workspace.speak(to: .session(session, mode: .answer), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+        let written = workspace.speak(to: .session(session, mode: .answer), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
             PiAnswer(promptID: promptID, value: .text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))).stored
         }
-        didSend()
+        if written != nil { didSend() }
     }
 
     private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
@@ -301,13 +301,14 @@ struct PiReplyBar: View {
         guard canSend else { return }
         let accepts = accepts, files = services.store.files
         let card = draft.attachments.first?.card
-        if mode == .command, let line = commandLine {
+        let written = if mode == .command, let line = commandLine {
             // 命令不是说的话：批注留着，跟下一句发
             workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
         } else {
             workspace.speak(to: .session(session, mode: mode, card: card), from: box) { try $0.accepting(accepts).stored(in: files) }
         }
-        didSend()
+        // 图片存不进图片库时什么都没发：不收键盘、不当作发出
+        if written != nil { didSend() }
     }
 }
 

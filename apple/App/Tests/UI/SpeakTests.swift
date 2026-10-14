@@ -132,6 +132,29 @@ struct SpeakTests {
         #expect(try await youSaid().isEmpty)
     }
 
+    /// 图片存不进图片库（磁盘满、目录没权限）：什么都没发，两条去处都一样——草稿原样留着，只看到报错，写出后的那句"已交给"不出现。
+    @Test func 图片存不进图片库_什么都没发_草稿留着_只看到报错() async throws {
+        try await enableCue()
+        let target = try await session()
+        let workspace = Workspace(services: app.services)
+        let attachments = app.services.location.databaseURL.deletingLastPathComponent().appending(path: "Attachments")
+        try FileManager.default.createDirectory(at: attachments, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: attachments.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: attachments.path) }
+        let photo = PickedImage(data: pngData())
+        let reply = app.services.settings.replyDraftBinding(for: target.id)
+
+        for (listener, box) in [(Listener.cue, Bindable(workspace.cue).draft), (.session(target, mode: .send), reply)] {
+            box.wrappedValue = ComposerDraft(text: "参考这张", images: [photo])
+            let writing = workspace.speak(to: listener, from: box, saying: "已交给") { try $0.stored(in: files) }
+            #expect(writing == nil)
+            #expect(box.wrappedValue.text == "参考这张" && box.wrappedValue.images.map(\.id) == [photo.id])
+            #expect(workspace.notice?.isError == true && workspace.notice?.text != "已交给")
+        }
+        #expect(try await youSaid().isEmpty)
+        #expect(try await store.deliveryRequests().isEmpty)
+    }
+
     // MARK: 发给会话
 
     @Test func 发给会话_按发送输入框立刻空_只多一个气泡_Mac送达后是已送达() async throws {
