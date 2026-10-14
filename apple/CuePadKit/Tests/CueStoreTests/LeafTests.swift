@@ -38,7 +38,7 @@ import Testing
     #expect(try await store.sayToLeaf(leaf.id, text: "停一下", when: .now, host: "mac").mode == .known(.steer))
     #expect(try await store.sayToLeaf(leaf.id, text: "做完再看", when: .after, host: "mac").mode == .known(.followUp))
     _ = try await store.createCard(body: "跑测试", under: leaf.id)
-    let started = try #require(try await store.startLeaf(leaf.id, host: "mac"))
+    let started = try await store.startLeaf(leaf.id, host: "mac")
     #expect(started.mode == .known(.followUp) && started.content == "跑测试")
   }
 
@@ -51,7 +51,7 @@ import Testing
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
     let image = try store.files.store(pngData(width: 8, height: 8, shade: 0.5))
     _ = try await store.createCard(body: "看截图\n\(CueFormat.imageMarkup(id: image))", under: claude.id)
-    #expect(try await store.startLeaf(claude.id, host: "mac")?.content == "看截图")
+    #expect(try await store.startLeaf(claude.id, host: "mac").content == "看截图")
     try await recorder.update(sessionID: "claude-1", state: .thinking, agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopLeaf(claude.id, host: "mac") }
 

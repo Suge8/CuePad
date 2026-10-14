@@ -53,6 +53,8 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var session: PiSessionState?
   /// 正在为叶子开新会话（请求还没执行完，或开好了还没认领到）。
   public var launching: Bool
+  /// 叶子还没绑会话、它的话正送进上一步的会话（`CueStore.sendingLeaves`；送到时绑上）。
+  public var sending: Bool
   /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或设为任务的时刻。
   public var since: Date
   public var id: UUID { task.id }
@@ -112,6 +114,8 @@ public struct CueLeafDetail: Equatable, Sendable {
   public var leaf: Card
   public var draft: Card?
   public var session: PiSessionState?
+  /// 还没绑会话、话正送进上一步的会话（同 `CueBoardItem.sending`）。
+  public var sending: Bool
   /// 最近几轮问答（你说的与 Pi 的回答），从早到晚。
   public var recent: [PiChatMessage]
   public var previews: [PiPreview]
@@ -160,13 +164,14 @@ extension CueStore {
 
   /// Cue 开工：把叶子（没有步骤的任务）的草稿交到 `handOffPlan` 定下的地方（与界面的"开始"同一条规则，含接着用上一步的会话与 `fresh`）。
   /// 交给已有会话时会话正忙就等它做完再说；开新会话时草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
-  /// 接着用上一步的会话时叶子当下就绑上（Cue 接着要对它说话、看它的近况），没有草稿就只绑上，返回 nil。
-  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，开不了会话抛 `noFolder`。
+  /// 接着用上一步的会话时，话送到才绑上（同界面、同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
+  /// 已有会话却没有草稿抛 `alreadyStarted`，接着用上一步的会话却没有草稿抛 `draftNeeded`（不先绑上），
+  /// 正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
   /// `agent` 缺省是 Pi，给了就只接着用这一家的会话；`agent`、`model` 与 `thinking` 只用于开新会话。
   public func startLeaf(
     _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
     host: String, cue: Bool = false
-  ) throws -> DeliveryRequest? {
+  ) throws -> DeliveryRequest {
     let request = try start(leaf, agent: agent, fresh: fresh, model: model, thinking: thinking, host: host, cue: cue)
     if cue { try withdrawAcceptance(of: leaf) }
     return request
@@ -174,19 +179,17 @@ extension CueStore {
 
   private func start(
     _ leaf: UUID, agent: AgentKind?, fresh: Bool, model: PiModelKey?, thinking: PiThinkingLevel?, host: String, cue: Bool
-  ) throws -> DeliveryRequest? {
+  ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
+    let card = try requireLeaf(plan.leaf)
     let draft = try draft(of: plan.leaf)
     let content = draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
     switch plan.destination {
     case .session(let sessionID, _, _):
-      let continuing = try requireLeaf(plan.leaf).piSessionID == nil
-      if continuing { try linkCard(plan.leaf, toSession: sessionID) }
-      guard let draft else {
-        if continuing { return nil }
-        throw CueStoreError.alreadyStarted(try requireLeaf(plan.leaf).heading)
-      }
-      return try say(content, to: try sessionTarget(of: try requireLeaf(plan.leaf)), when: .after, card: draft.id, host: host, cue: cue)
+      let continuing = card.piSessionID == nil
+      guard let draft else { throw continuing ? CueStoreError.draftNeeded(card.heading) : CueStoreError.alreadyStarted(card.heading) }
+      if continuing, try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
+      return try say(content, to: try sessionTarget(sessionID, name: card.heading), when: .after, card: draft.id, host: host, cue: cue)
     case .launch(let project, let host):
       guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(try requireLeaf(plan.leaf).heading) }
       let launch = PiLaunch(
@@ -266,6 +269,20 @@ extension CueStore {
       WHERE (deliveryRequests.cardID IN leaves OR c.parentID IN leaves) AND deliveryRequests.mode = 'start'
         AND deliveryRequests.status IN ('pending', 'executing', 'succeeded') AND \(Self.launchUnclaimed)
         AND deliveryRequests.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
+      """, [Self.idList(leaves)]) { $0.uuid(0) })
+  }
+
+  /// 这些叶子里话正在送进会话的：带着叶子或它的草稿、发给会话的话（送达时叶子绑上那个会话、草稿用掉）还没有结果。
+  /// 接着用上一步的会话时，开工到话送到之间就是这样：还没绑上，看板与 peek 写"发送中"。
+  public func sendingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
+    guard !leaves.isEmpty else { return [] }
+    let modes = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    return Set(try db.query(
+      """
+      WITH leaves(id) AS (SELECT value FROM json_each(?))
+      SELECT CASE WHEN r.cardID IN leaves THEN r.cardID ELSE c.parentID END
+      FROM deliveryRequests r LEFT JOIN cards c ON c.id = r.cardID AND c.todoAt IS NULL
+      WHERE (r.cardID IN leaves OR c.parentID IN leaves) AND r.mode IN (\(modes)) AND r.status IN ('pending', 'executing')
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 
@@ -421,11 +438,13 @@ extension CueStore {
     return card
   }
 
-  /// 叶子与它的会话；没有会话抛 `noSession`（正在开会话抛 `launching`）。
+  /// 叶子与它的会话；没有会话抛 `noSession`（正在开会话抛 `launching`，话正送进上一步的会话抛 `sending`）。
   private func requireSession(of leaf: UUID) throws -> (card: Card, session: SessionTarget) {
     let card = try requireLeaf(leaf)
     guard card.piSessionID != nil else {
-      throw try launchingLeaves([leaf]).isEmpty ? CueStoreError.noSession(card.heading) : CueStoreError.launching(card.heading)
+      if try !launchingLeaves([leaf]).isEmpty { throw CueStoreError.launching(card.heading) }
+      if try !sendingLeaves([leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
+      throw CueStoreError.noSession(card.heading)
     }
     return (card, try sessionTarget(of: card))
   }
@@ -442,9 +461,13 @@ extension CueStore {
 
   /// 叶子 `leaf`（绑着会话）的会话目标。
   private func sessionTarget(of leaf: Card) throws -> SessionTarget {
-    let sessionID = leaf.piSessionID!
+    try sessionTarget(leaf.piSessionID!, name: leaf.heading)
+  }
+
+  /// 发给会话 `sessionID` 的目标；会话记录还没到时以 `name` 称呼它。
+  private func sessionTarget(_ sessionID: String, name: String) throws -> SessionTarget {
     let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
-    return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), state: state)
+    return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? name, ref: sessionID), state: state)
   }
 
   /// 这件事的叶子：有步骤的是各步骤（按顺序），没有步骤的是它自己。
@@ -480,11 +503,13 @@ extension CueStore {
     let sessions = try sessionStates(Array(leaves.values.compactMap(\.piSessionID)))
     let progress = try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(tasks.map(\.id))])
     let launching = try launchingLeaves(Array(leaves.keys))
+    let sending = try sendingLeaves(leaves.values.filter { $0.piSessionID == nil }.map(\.id))
     return tasks.map { task in
       let leaf = lastDone[task.id] ?? leaves[links.home(of: task.id)] ?? task
       let session = leaf.piSessionID.flatMap { sessions[$0] }
       return CueBoardItem(
         task: task, progress: progress[task.id], leaf: leaf, session: session, launching: launching.contains(leaf.id),
+        sending: sending.contains(leaf.id),
         since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
     }
   }
@@ -626,6 +651,7 @@ extension CueStore {
     guard let card = try find(Card.self, top) else { throw CueStoreError.notFound }
     let leaves = try leaves(of: card)
     let sessions = try sessionStates(leaves.compactMap(\.piSessionID))
+    let sending = try sendingLeaves(leaves.filter { $0.piSessionID == nil }.map(\.id))
     let details = try leaves.map { leaf in
       let sessionID = leaf.piSessionID
       let recent = try sessionID.map {
@@ -636,7 +662,7 @@ extension CueStore {
       } ?? []
       return CueLeafDetail(
         leaf: leaf, draft: try draft(of: leaf.id),
-        session: sessionID.flatMap { sessions[$0] }, recent: Array(recent), previews: try sessionID.map(previews(of:)) ?? [])
+        session: sessionID.flatMap { sessions[$0] }, sending: sending.contains(leaf.id), recent: Array(recent), previews: try sessionID.map(previews(of:)) ?? [])
     }
     return CueTaskDetail(task: card, progress: try subtaskProgress(of: top)[top], leaves: details)
   }

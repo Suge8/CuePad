@@ -286,8 +286,9 @@ import Testing
     #expect(changes.first?.taskID == task.id)
   }
 
-  /// 分步做一件事：上一步收尾、还有没做完的步骤时不结束会话，下一步开工接着用它——绑上、草稿作为下一句发进去，不开新会话；
-  /// 最后一步做完，会话按做完了的规则结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
+  /// 分步做一件事：上一步收尾、还有没做完的步骤时不结束会话，下一步开工接着用它——草稿作为下一句发进去，不开新会话；
+  /// 话送到时这一步才绑上那个会话（同界面、同开新会话"开成了才绑"），送到前看板与 peek 写"发送中"、不能再开工或说话；
+  /// 下一步还没有草稿时开工报错，不先绑上。最后一步做完，会话按做完了的规则结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
   @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -303,19 +304,45 @@ import Testing
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
-    _ = try await store.createCard(body: "照调研结论改 release.sh", under: second.id)
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
+    func refused(_ arguments: [String: Any]) async throws -> String? {
+      let result = try await server.request("tools/call", ["name": "task", "arguments": arguments])
+      guard result["isError"] as? Bool == true else { return nil }
+      return (result["content"] as? [[String: Any]])?.first?["text"] as? String
+    }
 
     _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": "- 看完了"])
     #expect(try await store.card(first.id)?.status == .done)
     #expect(try await store.deliveryRequests().isEmpty)
 
+    // 下一步还没有草稿：报错，什么都不写、不绑
+    #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("edit") == true)
+    #expect(try await store.card(second.id)?.piSessionID == nil)
+    #expect(try await store.deliveryRequests().isEmpty)
+
+    _ = try await store.createCard(body: "照调研结论改 release.sh", under: second.id)
     _ = try await server.call("task", ["action": "start", "task": second.id.uuidString])
-    #expect(try await store.card(second.id)?.piSessionID == "s1")
     let sent = try await store.deliveryRequests()
     #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
     #expect(sent.first?.content == "照调研结论改 release.sh")
+    // 送到前：还没绑上，看板写发送中，不能再开工或说话
+    #expect(try await store.card(second.id)?.piSessionID == nil)
+    let board = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
+    #expect(board["sending"] as? Bool == true)
+    let peek = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "task": task.id.uuidString]])
+    #expect(((peek["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("发送中") == true)
+    #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("送到") == true)
+    #expect(try await refused(["action": "say", "task": second.id.uuidString, "text": "还有"])?.contains("送到") == true)
+
+    // Mac 送到：记下这次发送，这一步绑上会话
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request in
+      _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+      return .succeeded
+    }
+    try await executor.start()
+    _ = try await eventually(store, { try $0.card(second.id)?.piSessionID }) { $0 == "s1" }
+    await executor.stop()
 
     // 最后一步做完：没有没做完的步骤了，会话按做完了的规则结束；收下时不再请第二次
     let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) }

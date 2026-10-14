@@ -115,12 +115,8 @@ enum Schema {
       CREATE INDEX sendRecords_deliveryID ON sendRecords(deliveryID) WHERE deliveryID IS NOT NULL;
       \(cue)
       """),
-    // 33：Cue 的验收由消息上的标记认（写入时定下），不再按选项文字猜；已有的、选项正是"收下 / 再改改"的关联了任务的 Cue 消息补上标记
-    Upgrade(stringLiteral: """
-      \(cueAcceptance)
-      UPDATE cueMessages SET acceptance = 1
-      WHERE author = 'cue' AND taskID IS NOT NULL AND choices IS NOT NULL AND json(choices) = json('["收下","再改改"]');
-      """),
+    // 33：Cue 的验收由消息上的标记认（写入时定下），不再按选项文字猜
+    Upgrade(stringLiteral: cueAcceptance),
   ]
 
   /// 33 加的列：建新库时跟在 `cue` 之后（`cue` 是 32 建的样子，升级 32 也用它）。

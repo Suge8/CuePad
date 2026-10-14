@@ -140,16 +140,15 @@ import Testing
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 32 的库升到 33：还没答的验收（那时按选项文字认）补上标记，答"收下"照样完成任务；选项碰巧相同的、没关联任务的问题不算。
-  @Test func schema32LibraryMarksPendingAcceptances() async throws {
+  /// 结构 32 的库升到 33：已有的消息原样都在（都不是验收），之后写的验收带着标记，答"收下"完成任务。
+  @Test func schema32LibraryUpgradesForAcceptance() async throws {
     let task = try await store.createTask("发布", in: nil)
-    let asked = try await store.askToAccept(task.id, evidence: "- 测试全过").message
-    let other = try await store.addCueMessage(.cue, text: "先收下草稿？", choices: CueAcceptance.choices)
+    let said = try await store.addCueMessage(.cue, text: "开工了")
     try RawDB(fixture.url).exec(Self.undoSchema33 + "PRAGMA user_version = 32;")
 
     let upgraded = try CueStore(url: fixture.url)
-    let messages = try await upgraded.cueMessages()
-    #expect(messages.first { $0.id == asked.id }?.isAcceptance == true && messages.first { $0.id == other.id }?.isAcceptance == false)
+    #expect(try await upgraded.cueMessages().map { [$0.id: $0.isAcceptance] } == [[said.id: false]])
+    let asked = try await upgraded.askToAccept(task.id, evidence: "- 测试全过").message
     try await upgraded.answerCueMessage(asked.id, answer: CueAcceptance.accept)
     #expect(try await upgraded.card(task.id)?.status == .done)
   }
