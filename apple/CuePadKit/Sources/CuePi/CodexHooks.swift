@@ -54,7 +54,7 @@ struct CodexHooks: AgentHookConfig {
         let state = hooks.files(command: command)
         guard state == .current, let text = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(text) else { return state }
         let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
-        let path = Self.realPath(hooks.file)
+        let path = hooks.file.realPath.path
         let trusted = hooks.ourGroups(in: tree).allSatisfy { group in
             Self.events.first { $0.name == group.event }.map { event in
                 Self.trustedHash(of: Self.key(path, event.name, group.index), in: config) == Self.hash(event, command: command, hooks: hooks)
@@ -79,7 +79,7 @@ struct CodexHooks: AgentHookConfig {
     func uninstall() async throws {
         let footprint = hooks.footprint() ?? .unknown
         if let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) {
-            let path = Self.realPath(hooks.file)
+            let path = hooks.file.realPath.path
             let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
             let keys = hooks.ourGroups(in: tree).map { Self.key(path, $0.event, $0.index) }.filter { Self.trustedHash(of: $0, in: config) != nil }
             if !keys.isEmpty { try await untrust(keys, footprint: footprint.config) }
@@ -182,15 +182,6 @@ struct CodexHooks: AgentHookConfig {
     }
 
     static func key(_ path: String, _ event: String, _ group: Int) -> String { "\(path):\(label(event)):\(group):0" }
-
-    /// Codex 认的路径：解析符号链接后的真实路径（`/tmp` 是 `/private/tmp`）。
-    static func realPath(_ url: URL) -> String {
-        if let resolved = realpath(url.path, nil) {
-            defer { free(resolved) }
-            return String(cString: resolved)
-        }
-        return (realPath(url.deletingLastPathComponent()) as NSString).appendingPathComponent(url.lastPathComponent)
-    }
 
     private static func quoted(_ key: String) -> String {
         "\"" + key.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""

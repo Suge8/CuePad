@@ -33,78 +33,45 @@ enum CodexHistory {
             // 子代理自己的会话文件与主会话同层，它的过程在主会话的子代理里看
             if line.payload.parentThreadID != nil { cp.excluded = true }
         case ("event_msg", "task_started"):
-            cp.round = .init(startedAt: at)
+            cp.roundStarted(at: at)
         case ("event_msg", "turn_aborted"):
-            guard cp.round != nil else { return }
-            cp.recap = PiRecap(lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: nil, pendingPrompt: nil)
-            cp.round = nil
+            cp.interrupted()
         case ("event_msg", "task_complete"):
             // 回答已在 final_answer 那条收下；没有回答的（只压缩了上下文）只结束这一轮
             cp.round = nil
         case ("event_msg", "item_completed"):
             guard let item = line.payload.item else { return }
-            try completed(item, entry: (item.id ?? "\(cp.seq)", cp.seq, at), into: &cp, transcript: &transcript)
+            try completed(item, PiHistory.Entry(id: item.id ?? "\(cp.seq)", seq: cp.seq, at: at), into: &cp, transcript: &transcript)
         default:
             break
         }
     }
 
-    private typealias Entry = (id: String, seq: Int64, at: Date)
-
-    private static func completed(_ item: Item, entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func completed(_ item: Item, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
         switch item.type {
         case "UserMessage":
-            try userMessage(item, entry, into: &cp, transcript: &transcript)
-        case "AgentMessage" where item.phase == "final_answer":
-            let text = (item.content ?? []).compactMap(\.text).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            let round = cp.round ?? .init(startedAt: nil)
-            if !text.isEmpty {
-                transcript.add(
-                    cp, entryID: entry.id, seq: entry.seq, role: .pi, text: text, at: entry.at, tools: round.tools.summary(),
-                    roundStartedAt: round.startedAt)
+            var said = transcript.said()
+            for input in item.content ?? [] {
+                switch input.type {
+                case "text": said.text(input.text)
+                case "image": try said.image(input.imageURL.flatMap(imageData))
+                default: break
+                }
             }
-            cp.recap = PiRecap(
-                lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: PiHistory.clip(text, PiRecap.replyLimit), pendingPrompt: nil)
-            cp.round = nil
+            let delivery = item.clientID.flatMap { $0.hasPrefix(clientIDPrefix) ? String($0.dropFirst(clientIDPrefix.count)) : nil }
+            cp.said(said, entry, deliveryID: delivery, into: &transcript)
+        case "AgentMessage" where item.phase == "final_answer":
+            cp.answered((item.content ?? []).compactMap(\.text).joined(separator: "\n"), entry, into: &transcript)
         case "ContextCompaction":
-            transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .system, text: "已压缩上下文", at: entry.at)
+            cp.compacted(entry, into: &transcript)
         default:
             // 工具活动只算进还没做完的那一轮（后台命令可能在这一轮结束之后才落定）
             guard cp.round != nil else { return }
             for call in toolCalls(item) {
-                cp.round?.tools.start(id: call.id, name: call.name, arguments: call.arguments, cwd: cp.cwd)
-                cp.round?.tools.finish(id: call.id, failed: call.failed)
+                cp.toolStarted(id: call.id, name: call.name, arguments: call.arguments)
+                cp.toolFinished(id: call.id, failed: call.failed)
             }
         }
-    }
-
-    /// 你说的一句：进对话、成为进行中的提问。整条只由 `<名字>…</名字>` 块组成的是机器消息（如子代理的通知），只开始一轮。
-    private static func userMessage(_ item: Item, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
-        if cp.round == nil { cp.round = .init(startedAt: entry.at) }
-        var texts: [String] = [], pieces: [String] = []
-        for input in item.content ?? [] {
-            switch input.type {
-            case "text":
-                guard let text = input.text, !text.isEmpty else { continue }
-                texts.append(text)
-                pieces.append(text)
-            case "image":
-                guard let files = transcript.files, let data = input.imageURL.flatMap(imageData) else { continue }
-                do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage { continue }
-            default:
-                break
-            }
-        }
-        let text = texts.joined(separator: "\n")
-        guard !PiHistory.isMachineMessage(text) else { return }
-        if cp.firstMessage == nil, !text.isEmpty {
-            cp.firstMessage = String(text.split(whereSeparator: \.isNewline).joined(separator: " ").prefix(PiSessionName.firstMessageLimit))
-        }
-        let delivery = item.clientID.flatMap { $0.hasPrefix(clientIDPrefix) ? String($0.dropFirst(clientIDPrefix.count)) : nil }
-        transcript.add(
-            cp, entryID: entry.id, seq: entry.seq, role: .user, text: transcript.files == nil ? text : pieces.joined(separator: "\n"), at: entry.at,
-            deliveryID: delivery)
-        cp.recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(text), PiRecap.promptLimit)
     }
 
     /// `data:<类型>;base64,<数据>`；别的地址（网络图片）不存。

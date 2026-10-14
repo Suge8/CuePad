@@ -22,12 +22,10 @@ extension AppServices {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
         for agent in AgentKind.allCases {
-            guard let root = paths.sessionsDirectory(of: agent) else { continue }
-            let indexer = PiHistoryIndexer(
-                root: root, agent: agent, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
-            ) { [weak self] file in
-                await self?.loadPiCheckpoint(for: file)
-            }
+            guard let indexer = PiHistoryIndexer(
+                agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
+                start: { [weak self] file in await self?.loadHistoryStart(for: file) })
+            else { continue }
             follow { await self.consumePiHistory(indexer.events(), agent: agent) }
         }
         follow { await self.historyStore.keepPruned() }
@@ -124,9 +122,9 @@ extension AppServices {
 
     /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
-    nonisolated func loadPiCheckpoint(for file: URL) async -> PiHistoryCheckpoint? {
+    nonisolated func loadHistoryStart(for file: URL) async -> PiHistoryStart? {
         do {
-            return try await historyStore.checkpoint(for: file)
+            return try await historyStore.start(for: file)
         } catch {
             await reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
             return nil

@@ -173,7 +173,7 @@ struct RealPiTests {
     @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
             let ended = ChangeLog(bridge)
-            let history = HistoryEventLog(PiHistoryIndexer(root: pi.paths.sessionsDirectory) { _ in nil })
+            let history = HistoryEventLog(PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!)
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")

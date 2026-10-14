@@ -55,13 +55,15 @@ let scratchFiles = try! Fixture().store.files
 
 extension PiHistory {
     static func index(file: URL, from checkpoint: PiHistoryCheckpoint?, transcript: Bool = true) throws -> PiHistoryUpdate {
-        try index(file: file, from: checkpoint, transcript: transcript, files: scratchFiles)
+        try index(file: file, agent: .pi, from: checkpoint, transcript: transcript, files: scratchFiles)
     }
 }
 
 extension PiHistoryIndexer {
-    init(root: URL, checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?) {
-        self.init(root: root, files: scratchFiles, checkpoint: checkpoint)
+    /// 索引 `sessions` 这个会话目录（Pi 或 Codex 的，名字是 sessions：它的上层就是这家的配置目录）。
+    init(sessions: URL, agent: AgentKind = .pi, start: @escaping @Sendable (URL) async -> PiHistoryStart? = { _ in nil }) {
+        let home = sessions.deletingLastPathComponent()
+        self.init(agent: agent, paths: AgentPaths(pi: PiPaths(agentDirectory: home), environment: ["CODEX_HOME": home.path]), files: scratchFiles, start: start)!
     }
 }
 

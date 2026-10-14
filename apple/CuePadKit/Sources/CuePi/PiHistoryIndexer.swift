@@ -2,39 +2,42 @@
 import CueStore
 import Foundation
 
-/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件）：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
-/// 用 FSEvents 跟随文件变化，只读新增字节。Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报它的变化：
-/// 它最近写过的文件另盯追加（`FSEventsWatcher.follow`，见 `Followed`）。
+/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
+/// （最近的会话最先可用），发出 `backfillFinished` 后用 FSEvents 跟随文件变化，只读新增字节。一直开着会话文件写的 Agent（Codex 的常驻服务），
+/// FSEvents 只在关闭时报它的变化：它最近写过的文件另盯追加（`FSEventsWatcher.follow`，见 `Followed`）。
 ///
-/// 不持有全部检查点：起点由调用方通过 `checkpoint` 提供（App 层从 Store 读），每个 `updated`
-/// 里带回新检查点由调用方持久化。索引器只对最近修改/最近被触碰的若干文件在内存里保留检查点，
-/// 这样调用方持久化滞后时增量也不会退化成重读。
+/// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
+/// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
+///
+/// 要不要对话：首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话；本机已存着对话的也要
+/// （从头读时整份重写，规则升级后已存的跟着变）。要对话而本机还没有的（刚进入范围），从头读一遍补齐全部消息。
 public struct PiHistoryIndexer: Sendable {
-    private let root: URL
     private let agent: AgentKind
+    private let format: SessionFileFormat
+    private let root: URL
     private let transcriptWindow: TimeInterval
     private let files: AttachmentFiles
-    private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
+    private let start: @Sendable (URL) async -> PiHistoryStart?
 
     private static let liveCacheLimit = 64
-    /// 同时另盯追加的 Codex 文件数：每个占一个文件描述符，GUI 应用默认只有 256 个
+    /// 同时另盯追加的文件数：每个占一个文件描述符，GUI 应用默认只有 256 个
     private static let followLimit = 64
 
-    /// - Parameter transcriptWindow: 首次读（没有检查点）时只为这么久之内修改过的会话文件解析对话（按修改时间，不读内容），
-    ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:files:)`）。
-    /// - Parameter files: 你的消息里的图片存进的附件目录。
-    public init(
-        root: URL = PiPaths().sessionsDirectory, agent: AgentKind = .pi, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
-        checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?
+    /// 会话不在文件里的 Agent（OpenCode）为 nil。`files` 是你的消息里的图片存进的附件目录。
+    public init?(
+        agent: AgentKind, paths: AgentPaths, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
+        start: @escaping @Sendable (URL) async -> PiHistoryStart?
     ) {
-        self.root = root
+        guard let format = SessionFileFormat.of(agent), let root = paths.sessionsDirectory(of: agent) else { return nil }
         self.agent = agent
+        self.format = format
+        self.root = root
         self.transcriptWindow = transcriptWindow
         self.files = files
-        self.checkpoint = checkpoint
+        self.start = start
     }
 
-    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Pi）或被删再建，见 `FSEventsWatcher`。
+    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent）或被删再建，见 `FSEventsWatcher`。
     public func events() -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
             let task = Task(priority: .utility) { await run(continuation) }
@@ -44,7 +47,7 @@ public struct PiHistoryIndexer: Sendable {
 
     @concurrent private func run(_ continuation: AsyncStream<PiHistoryEvent>.Continuation) async {
         // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致（目录还不存在时解析其上层）
-        let root = FSEventsWatcher.resolve(self.root)
+        let root = self.root.realPath
         let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
@@ -54,18 +57,22 @@ public struct PiHistoryIndexer: Sendable {
         var followed = Followed(limit: Self.followLimit)
 
         func index(_ file: URL, modified: Date?, remember: Bool) async {
-            let base: PiHistoryCheckpoint?
-            if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
+            let base: PiHistoryStart?
+            if let cached = live[file] { base = cached } else { base = await start(file) }
             let written = modified ?? Self.modified(file)
             let recent = written.map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
+            let wanted = recent || base?.hasTranscript == true
+            // 要对话而本机还没有：从头读一遍补齐，不靠接着读到的那一段碰巧完整
+            let from = wanted && base?.hasTranscript != true ? nil : base?.checkpoint
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
-            guard let update = try? PiHistory.index(file: file, agent: agent, from: base, transcript: recent, files: files) else { return }
-            if remember { live[file] = update.checkpoint }
-            if update.checkpoint.excluded == true {
+            guard let update = try? PiHistory.index(file: file, agent: agent, from: from, transcript: wanted, modified: written, files: files)
+            else { return }
+            if remember { live[file] = PiHistoryStart(checkpoint: update.checkpoint, hasTranscript: wanted || base?.hasTranscript == true) }
+            if update.checkpoint.excluded {
                 excluded.insert(file)
                 return
             }
-            if keepsFilesOpen, let written {
+            if format.keepsFilesOpen, let written {
                 let change = followed.note(file.path, writtenAt: written)
                 if let dropped = change.dropped { watcher.unfollow(dropped) }
                 if change.follows { watcher.follow(file.path) }
@@ -75,13 +82,12 @@ public struct PiHistoryIndexer: Sendable {
                 return
             }
             notYet.remove(file)
-            if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
+            if update.bytesRead > 0 || base?.checkpoint == nil { continuation.yield(.updated(update)) }
         }
 
-        // 回填时记住最近修改的那批文件（正在被 Pi 写入的最可能是它们）：之后的事件（包括 FSEvents
+        // 回填时记住最近修改的那批文件（正在被 Agent 写入的最可能是它们）：之后的事件（包括 FSEvents
         // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
-        let depth = Self.depth(of: agent)
-        let found = Self.sessionFiles(under: root, depth: depth)
+        let found = Self.sessionFiles(under: root, depth: format.depth)
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
@@ -92,19 +98,16 @@ public struct PiHistoryIndexer: Sendable {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
                 // 与回填一样只记住最近修改的那批：从新到旧全记住会让旧文件把新的挤出缓存
-                for (rank, file) in Self.sessionFiles(under: root, depth: depth).enumerated() {
+                for (rank, file) in Self.sessionFiles(under: root, depth: format.depth).enumerated() {
                     await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
                 }
                 continue
             }
-            for path in Set(paths) where Self.isSessionFile(path, under: root, depth: depth) {
+            for path in Set(paths) where Self.isSessionFile(path, under: root, depth: format.depth) {
                 await index(URL(filePath: path), modified: nil, remember: true)
             }
         }
     }
-
-    /// Agent 写会话文件时一直开着它（Codex）；Pi、Claude Code 每次追加都关上，FSEvents 报得到。
-    private var keepsFilesOpen: Bool { agent == .codex }
 
     /// 另盯追加的文件：按文件的修改时间留最近写过的 `limit` 个，满了换下最久没写的那个。
     /// 不按被读到的先后：重扫、旧文件的迟到通知都会读到旧文件，它们不该把还在写的会话挤掉。
@@ -131,17 +134,12 @@ public struct PiHistoryIndexer: Sendable {
         }
     }
 
-    /// 会话文件在 `root` 下第几层，与各家自己的会话列表一致：Pi 与 Claude Code 是 `<root>/<项目目录>/*.jsonl`（更深的，如子代理的
-    /// `<项目目录>/…/subagents/*.jsonl`，不是会话列表里的会话）；Codex 是 `<root>/YYYY/MM/DD/rollout-*.jsonl`。
-    private static func depth(of agent: AgentKind) -> Int { agent == .codex ? 4 : 2 }
-
     private static func isSessionFile(_ path: String, under root: URL, depth: Int) -> Bool {
         let url = URL(filePath: path)
         guard url.pathExtension == "jsonl" else { return false }
         var parent = url
         for _ in 0..<depth { parent = parent.deletingLastPathComponent() }
-        // FSEvents 报 /private/var/…，解析符号链接后的 root 是 /var/…：两边都解析再比
-        return parent.resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path
+        return parent.path == root.path
     }
 
     private static func modified(_ file: URL) -> Date? {
@@ -164,13 +162,13 @@ public struct PiHistoryIndexer: Sendable {
         return files.sorted { $0.1 > $1.1 }.map { (url: $0.0, modified: $0.1) }
     }
 
-    /// 最近使用的若干文件的检查点。
+    /// 最近使用的若干文件从哪接着读。
     private struct LiveCache {
         let limit: Int
-        private var values: [URL: PiHistoryCheckpoint] = [:]
+        private var values: [URL: PiHistoryStart] = [:]
         private var order: [URL] = []
 
-        subscript(file: URL) -> PiHistoryCheckpoint? {
+        subscript(file: URL) -> PiHistoryStart? {
             get { values[file] }
             set {
                 order.removeAll { $0 == file }

@@ -85,7 +85,7 @@ struct CodexHome {
             sandbox_mode = "workspace-write"
             check_for_update_on_startup = false
 
-            [projects."\(CodexHooks.realPath(work))"]
+            [projects."\(work.realPath.path)"]
             trust_level = "trusted"
 
             """
