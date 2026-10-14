@@ -21,12 +21,9 @@ public final class PiBridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
-        /// 此刻正在说的这条回答（见 `PiDraft`）；单独一项，出字时只有读它的视图重算
-        public private(set) var draft: PiDraft?
-        /// 最近交来、还没显示的草稿与等着显示它的那一拍
-        @ObservationIgnored private var offered: PiDraft?
-        @ObservationIgnored private var shownAt: ContinuousClock.Instant?
-        @ObservationIgnored private var flush: Task<Void, Never>?
+        /// 此刻正在说的这条回答（见 `PiDraft`，刷新节奏见 `PiDraftFeed`）：出字时只有读它的视图重算
+        public var draft: PiDraft? { feed.draft }
+        private let feed = PiDraftFeed()
 
         init(_ session: PiSession) {
             id = session.id
@@ -35,28 +32,7 @@ public final class PiBridge {
             self.session = session
         }
 
-        /// 刷新节奏只定在这里：同一条话的增长最多每 `PiBridge.draftInterval` 显示一次（落后的那次在这一拍末尾补上）；
-        /// 清掉与开始另一条（起点不同）立即显示，不让上一条的尾巴晚到。
-        func offer(_ next: PiDraft?) {
-            offered = next
-            let now = ContinuousClock.now
-            if next == nil || next?.since != draft?.since || shownAt.map({ now - $0 >= PiBridge.draftInterval }) ?? true {
-                show(at: now)
-                return
-            }
-            guard flush == nil, let shownAt else { return }
-            flush = Task { [weak self] in
-                guard (try? await Task.sleep(until: shownAt + PiBridge.draftInterval)) != nil else { return }
-                self?.show(at: .now)
-            }
-        }
-
-        private func show(at now: ContinuousClock.Instant) {
-            flush?.cancel()
-            flush = nil
-            shownAt = now
-            if draft != offered { draft = offered }
-        }
+        func offer(_ next: PiDraft?) { feed.offer(next) }
     }
 
     /// 在线会话的格子，按出现先后。界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
@@ -167,8 +143,6 @@ public final class PiBridge {
     }
 
     fileprivate static let ackTimeout: Duration = .seconds(10)
-    /// 正在说的话最多每这么久刷新一次：逐字的增量（每秒几十个）合成每秒十次，读它的视图（Markdown 重排）不随每个增量重算
-    static let draftInterval: Duration = .milliseconds(100)
     /// 对"进程活着但还没 listen"的 socket 只重试一次；之后由下一次目录事件/重扫再看
     private static let retryDelay: Duration = .milliseconds(200)
 
@@ -297,7 +271,7 @@ public final class PiBridge {
         emit(session.state == previous ? .infoChanged(session) : .stateChanged(session, from: previous))
     }
 
-    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由桥统一定（`Slot.offer`）；只改这一格的 `draft`，
+    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由 `PiDraftFeed` 统一定；只改这一格的 `draft`，
     /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做；会话下线时随它的格子一起没了。
     public func setDraft(_ id: PiSession.ID, _ draft: PiDraft?) {
         slots.first { $0.id == id }?.offer(draft)

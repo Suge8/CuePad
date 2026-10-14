@@ -5,7 +5,8 @@ import Foundation
 /// 一条到 Codex app-server 的 JSON-RPC 连接（app-server 协议：没有 `jsonrpc` 字段的 JSON-RPC 2.0）。两种传输：
 /// CuePad 自己起的 `codex app-server --listen stdio://`（一行一条 JSON），与常驻服务的控制 socket
 /// （`<CODEX_HOME>/app-server-control/app-server-control.sock`，unix socket 上的 WebSocket，一帧一条）。
-/// 回应按 id 配给请求；通知交给 `onNotification`，其中回答的逐字增量（`item/agentMessage/delta`）在这里累积成正在说的话交给 `onDraft`。
+/// 回应按 id 配给请求；通知交给 `onNotification`，其中回答的逐字增量（`item/agentMessage/delta`）在这里累积成正在说的话交给 `onDraft`，
+/// 回答项说完时换成它的全文。
 /// 服务端请求（审批、提问）只发给订阅了线程的连接：CuePad 的审批在钩子里答、不开 Plan 模式，所以来了一律回错误，不让对方干等。
 @MainActor
 final class CodexRPC {
@@ -20,7 +21,8 @@ final class CodexRPC {
     private var reader: Task<Void, Never>?
     private(set) var isClosed = false
     var onNotification: ((String, Object) -> Void)?
-    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新；过程中的说明（`phase` 为 commentary）说完、
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新，这一项说完（`item/completed`）时换成它带的全文
+    /// （不发增量时也照样有）；过程中的说明（`phase` 为 commentary）说完、
     /// 下一项开始（转成工具调用、思考等）、下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。
     /// 说明说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
     /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
@@ -159,20 +161,33 @@ final class CodexRPC {
         case "item/agentMessage/delta":
             guard let item = params["itemId"] as? String, let delta = params["delta"] as? String else { return true }
             let current = drafts[thread].flatMap { $0.item == item ? $0.draft : nil }
-            let draft = PiDraft(text: (current?.text ?? "") + delta, since: current?.since ?? .now)
-            drafts[thread] = (item, draft)
-            onDraft?(thread, draft)
+            setDraft(thread, item: item, text: (current?.text ?? "") + delta)
             return true
         case "item/started", "turn/started":
             clearDraft(thread)
-        case "item/completed" where (params["item"] as? Object).map({ $0["type"] as? String == "agentMessage" && $0["phase"] as? String == "commentary" }) == true:
-            clearDraft(thread)
+        case "item/completed":
+            guard let item = params["item"] as? Object, item["type"] as? String == "agentMessage" else { break }
+            if item["phase"] as? String == "commentary" {
+                clearDraft(thread)
+            } else if let id = item["id"] as? String, let text = item["text"] as? String,
+                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                setDraft(thread, item: id, text: text)
+            }
         case "turn/completed" where (params["turn"] as? Object)?["status"] as? String != "completed":
             clearDraft(thread)
         default:
             break
         }
         return false
+    }
+
+    /// 一个回答项此刻的全文：同一项接着用它开始出字的时刻，没变不报。
+    private func setDraft(_ thread: String, item: String, text: String) {
+        let current = drafts[thread].flatMap { $0.item == item ? $0.draft : nil }
+        let draft = PiDraft(text: text, since: current?.since ?? .now)
+        guard draft != current else { return }
+        drafts[thread] = (item, draft)
+        onDraft?(thread, draft)
     }
 
     private func clearDraft(_ thread: String) {

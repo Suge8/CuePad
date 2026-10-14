@@ -36,13 +36,15 @@ public struct CueBrainConfig: Sendable {
     }
 }
 
-/// 三家同形的事件。一轮：`turnStarted` →（`context`、`tool` / `toolDone`…）→ `reply`（有文字时）/ `failed`（出错时）→ `turnFinished`；
-/// 一轮进行中再 `send` 的话并进这一轮，不另起一轮。被 `abort` 停下的一轮照常以 `turnFinished` 结束，不报 `reply` 也不报 `failed`。
-/// 子代理与嵌套的工具调用不报。
+/// 三家同形的事件。一轮：`turnStarted` →（`speaking`、`context`、`tool` / `toolDone`…）→ `failed`（出错时）→ `turnFinished`；
+/// 一轮进行中再 `send` 的话并进这一轮，不另起一轮。被 `abort` 停下的一轮照常以 `turnFinished` 结束，不报 `failed`。
+/// 子代理与嵌套的工具调用、子代理说的话不报。
 public enum CueBrainEvent: Sendable, Equatable {
     case turnStarted
-    /// 这一轮最后的助手文字
-    case reply(String)
+    /// 正在说的话（`PiDraft`，规则同它）：这一轮此刻正在说的这条回答到目前为止的全文，随增量报（不节流），nil 是清掉。
+    /// 转成工具调用、这一轮被停下或出错（都在 `turnFinished` 之前）、下一轮开始时清掉；正常说完的留着——
+    /// `turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。三家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
+    case speaking(PiDraft?)
     /// 最近一次模型请求的输入 token 合计（含缓存命中与写入）与上下文窗口
     case context(used: Int, window: Int?)
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
