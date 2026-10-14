@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// 项目页收起其余任务时，纸底那一行（"收起" → "还有 N 条"）留在原来的屏幕位置：收起与滚动在同一个事务里一步到位，偏移减去被收走的高度。
-/// 被收走的高度 = 那一行此刻在内容里的位置 − 收起后它该在的位置；后者是折起时列出的那几条顶层任务最后一行的下沿（`taskFoldBoundary`），
+/// 被收走的高度 = 那一行此刻在内容里的位置 − 收起后它该在的位置；后者是折起时列出的那几条顶层任务最后一行的下沿
+/// （大纲在内容里的上沿 + 那一行在大纲里的下沿，后者借大纲本来就为拖放量着的行位置，`rowFrame`，不给每行另挂东西），
 /// 展开时它就在列表里、随上面任务的增减实时挪，所以展开期间上面的任务变了也准。
 /// 偏移与位置随滚动每帧都变，只记在这个不触发更新的盒子里（ui.md「渲染性能约束」），收起那一下才读。Mac 与 iOS 共用。
 /// 两端收起都一步到位，iOS 也不随弹簧：锚定纸底那一行优先于弹簧（iOS 只让纸上留下的几行淡入）。否决的方案：滚动随收起的弹簧一起动——
@@ -12,14 +13,22 @@ final class TaskFoldAnchor {
     fileprivate static let space = "taskFoldPage"
     fileprivate var offset: CGFloat = 0
     fileprivate var bar: CGFloat = 0
-    fileprivate var boundary: CGFloat?
+    fileprivate var outlineTop: CGFloat = 0
+    private var rows: [UUID: CGFloat] = [:]
+    private static let lowestTarget: CGFloat = 1
 
-    /// 收起其余任务：一步到位，同一个事务里把滚动挪到让纸底那一行留在原处。
-    func collapse(_ fold: Binding<TaskFold>, scrolling position: Binding<ScrollPosition>) {
-        let target = boundary.map { offset - (bar - $0) }
+    /// 大纲报来的一行位置（大纲自己的坐标），记下沿。
+    func rowFrame(_ id: UUID, _ frame: CGRect) { rows[id] = frame.maxY }
+
+    /// 收起其余任务：一步到位，同一个事务里把滚动挪到让纸底那一行留在原处。`boundary` 是折起时列出的最后一行（`TaskFold.lastFolded`）。
+    func collapse(_ fold: Binding<TaskFold>, boundary: UUID?, scrolling position: Binding<ScrollPosition>) {
+        // 页面停在顶上时不用滚：收走的都在纸底那一行上面，留不住它，也不会被夹到别处
+        let target = offset > 0 ? boundary.flatMap { rows[$0] }.map { offset - (bar - (outlineTop + $0)) } : nil
         withTransaction(\.disablesAnimations, true) {
             fold.wrappedValue.showsAll = false
-            if let target { position.wrappedValue.scrollTo(y: target) }
+            // 纸底那一行在窗口里比收起后它上面剩下的内容还低时留不住，退到页顶。不用 0 或 `edge(.top)`：与内容变短同一个事务时
+            // 它们被丢掉，滚动停在旧偏移、随后夹到页底（macOS 27 实测）；1 点照常生效，差的这一点看不出来。
+            if let target { position.wrappedValue.scrollTo(y: max(Self.lowestTarget, target)) }
         }
     }
 }
@@ -41,8 +50,8 @@ extension View {
         onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(TaskFoldAnchor.space)).minY } action: { anchor.bar = $0 }
     }
 
-    /// 折起时列出的那几条顶层任务的最后一行：它的下沿就是收起后纸底那一行的位置（大纲与纸底那一行之间没有间距）。
-    func taskFoldBoundary(_ anchor: TaskFoldAnchor) -> some View {
-        onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(TaskFoldAnchor.space)).maxY } action: { anchor.boundary = $0 }
+    /// 任务纸里的大纲：把它在内容里的上沿记进 `anchor`。
+    func taskFoldOutline(_ anchor: TaskFoldAnchor) -> some View {
+        onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(TaskFoldAnchor.space)).minY } action: { anchor.outlineTop = $0 }
     }
 }

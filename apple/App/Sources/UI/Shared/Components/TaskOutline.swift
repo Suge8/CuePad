@@ -37,14 +37,20 @@ struct TaskOutline<Line: View>: View {
     private let line: (TaskTree.Row) -> Line
     /// 行按需建（只建看得见的）：外面给了固定高度的滚动区、行数多到一屏放不下时用，否则整列的行都要在打开的那一圈里量一遍。
     private let lazy: Bool
+    /// 每行在大纲里的位置有变时报给外面（拖放本来就在量）：项目页收起任务时靠它锚定纸底那一行（`TaskFoldAnchor`）。
+    private let onRowFrame: ((UUID, CGRect) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drag = OutlineDrag()
     @State private var commits = 0
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
-    init(tree: TaskTree, roots: [UUID]? = nil, lazy: Bool = false, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+    init(
+        tree: TaskTree, roots: [UUID]? = nil, lazy: Bool = false, onRowFrame: ((UUID, CGRect) -> Void)? = nil,
+        @ViewBuilder line: @escaping (TaskTree.Row) -> Line
+    ) {
         self.lazy = lazy
+        self.onRowFrame = onRowFrame
         whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
@@ -88,7 +94,10 @@ struct TaskOutline<Line: View>: View {
         .background { DropHighlight(drag: drag, id: row.id) }
         .contentShape(.rect)
         .environment(\.taskStructure, structure)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { frame in
+            drag.frames[row.id] = frame
+            onRowFrame?(row.id, frame)
+        }
         .onDrag { TaskDragSession.shared.begin(row.id, isTask: true) }
         #if os(iOS)
         .rowSwipes(.card(row.task, workspace: workspace, structure: structure))

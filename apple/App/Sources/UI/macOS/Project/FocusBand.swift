@@ -45,17 +45,19 @@ struct FocusBand: View {
         let roots = data.tasks.roots
         let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
         let shown = fold.shown(roots, limit: Self.visibleTasks)
-        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
         let done = data.taskCounts.done
         // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
-            TaskOutline(tree: data.tasks, roots: shown, lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
+            TaskOutline(
+                tree: data.tasks, roots: shown, lazy: data.tasks.ordered.count >= Self.lazyFrom,
+                onRowFrame: anchor.rowFrame
+            ) { row in
                 let agent = cardAgents.items[row.id]
-                let line = TaskRow(
+                TaskRow(
                     task: row.task, session: agent?.state, delivery: agent?.delivery,
                     subtasks: data.subtasks[row.id], hasDraft: data.prompts[row.id] != nil)
-                if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
             }
+            .taskFoldOutline(anchor)
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {
                     if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
@@ -77,7 +79,7 @@ struct FocusBand: View {
 
     /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时滚动在同一步里把纸底这一行留在原处。
     private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
-        if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, scrolling: $position) }
+        if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, boundary: TaskFold.lastFolded(data.tasks, limit: Self.visibleTasks), scrolling: $position) }
         withTransaction(\.disablesAnimations, true) { fold[keyPath: key].toggle() }
     }
 

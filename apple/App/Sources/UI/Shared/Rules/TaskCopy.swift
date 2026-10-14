@@ -17,6 +17,11 @@ nonisolated struct TaskFold: Equatable, Sendable {
     func shown(_ roots: [UUID], limit: Int) -> [UUID] {
         showsAll || Self.hidden(roots.count, limit: limit) == 0 ? roots : Array(roots.prefix(limit))
     }
+
+    /// 折起时列出的最后一行（前几条顶层任务连同步骤）：收起后纸底那一行接在它下面。
+    static func lastFolded(_ tree: TaskTree, limit: Int) -> UUID? {
+        tree.rows(of: Array(tree.roots.prefix(limit))).last?.id
+    }
 }
 
 /// 步骤进度与完成上级时的确认，项目页任务纸底的开合（Mac 与 iOS 同一套）。

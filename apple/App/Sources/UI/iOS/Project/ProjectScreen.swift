@@ -224,11 +224,13 @@ private struct FocusCard: View {
                 if !roots.isEmpty {
                     Group {
                         SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
-                        TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
-                            let line = TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
-                            if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
+                        TaskOutline(
+                            tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom,
+                            onRowFrame: anchor.rowFrame
+                        ) { row in
+                            TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
                         }
+                        .taskFoldOutline(anchor)
                     }
                     .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
                         MoveKeyframe(0.0)
@@ -282,7 +284,7 @@ private struct FocusCard: View {
         if key == \.showsAll, fold.showsAll {
             // 收起是一步到位的（`TaskFoldAnchor`：纸底那一行留在原处，没有能跟着弹簧走的位移），换上来的那几行淡入；减弱动态效果时同样
             collapses += 1
-            return anchor.collapse($fold, scrolling: $position)
+            return anchor.collapse($fold, boundary: TaskFold.lastFolded(data.tasks, limit: Self.visibleTasks), scrolling: $position)
         }
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
     }
