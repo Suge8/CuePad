@@ -28,7 +28,7 @@ struct AgentRow: View {
     var body: some View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
-        SettingRow(title: kind.name, symbol: kind.symbol, tone: tone, busy: working, status: line, help: help) {
+        SettingRow(title: kind.name, icon: kind.icon, tone: tone, busy: working, status: line, help: help) {
             Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -115,16 +115,6 @@ struct AgentRow: View {
 }
 
 extension AgentKind {
-    /// 设置行的图标
-    var symbol: String {
-        switch self {
-        case .pi: "pi"
-        case .claudeCode: "asterisk"
-        case .codex: "circle.hexagongrid"
-        case .opencode: "chevron.left.forwardslash.chevron.right"
-        }
-    }
-
     /// 接入会写什么（没接入时那一行的状态；能做什么写在接入面板的说明与悬停提示里）
     var writes: String {
         switch self {

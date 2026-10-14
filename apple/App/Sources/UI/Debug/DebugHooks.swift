@@ -23,6 +23,12 @@ enum DebugHooks {
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
         var demoMac = false
+        /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
+        var quotaDetail: String?
+        /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
+        var modelMenu = false
+        /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
+        var taskFold = TaskFold()
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false
@@ -144,6 +150,15 @@ extension View {
         #endif
     }
     #endif
+
+    /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
+    func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
+        #if DEBUG
+        onChange(of: active, initial: true) { if active { DebugScene.toggleTaskFold = toggle } }
+        #else
+        self
+        #endif
+    }
 
     /// 性能打点：这一页出现时（见 `DebugHooks.mark`）。
     func perfMark(_ event: String) -> some View {

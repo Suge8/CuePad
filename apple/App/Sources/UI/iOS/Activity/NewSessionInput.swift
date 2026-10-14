@@ -97,10 +97,10 @@ struct NewSessionInput: View {
             .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
             Menu {
                 Picker("用哪个 Agent", selection: Bindable(services.settings).lastAgent) {
-                    ForEach(AgentKind.allCases) { Text($0.name).tag($0) }
+                    ForEach(AgentKind.allCases) { (kind: AgentKind) in Label { Text(kind.name) } icon: { kind.icon }.tag(kind) }
                 }
             } label: {
-                DestinationChip(title: Text(services.settings.lastAgent.name)) { EmptyView() }
+                DestinationChip(title: Text("\(services.settings.lastAgent.icon) \(services.settings.lastAgent.name)")) { EmptyView() }
             }
             .disabled(inFlight)
             .accessibilityLabel("用哪个 Agent：\(services.settings.lastAgent.name)")

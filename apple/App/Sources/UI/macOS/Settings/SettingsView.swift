@@ -15,7 +15,7 @@ struct SettingsView: View {
         @Bindable var settings = services.settings
         Form {
             Section {
-                SettingRow(title: "外观", symbol: "sun.max") {
+                SettingRow(title: "外观", icon: Image(systemName: "sun.max")) {
                     Picker("外观", selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
@@ -60,7 +60,7 @@ private struct ShortcutRow: View {
     @State private var error: String?
 
     var body: some View {
-        SettingRow(title: "显示/隐藏", symbol: "keyboard", tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
+        SettingRow(title: "显示/隐藏", icon: Image(systemName: "keyboard"), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -137,7 +137,7 @@ private struct CrashRow: View {
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, symbol: "exclamationmark.triangle", tone: .notice,
+            title: report.kind.label, icon: Image(systemName: "exclamationmark.triangle"), tone: .notice,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()
@@ -158,7 +158,7 @@ private struct ConflictsRow: View {
 
     var body: some View {
         SettingRow(
-            title: "同步冲突", symbol: "square.on.square", tone: .notice,
+            title: "同步冲突", icon: Image(systemName: "square.on.square"), tone: .notice,
             status: "\(services.conflicts.count) 条灵感或任务有两个版本"
         ) {
             EmptyView()

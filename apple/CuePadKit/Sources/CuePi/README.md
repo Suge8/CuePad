@@ -4,7 +4,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
+| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）/ `refreshQuota`（查一次订阅额度，只有 Pi）；订阅额度的观测也经 `changes()` 报出（`.quota`）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
 | 各家接入 | `AgentRuntime`：`PiRuntime`、`ClaudeCodeRuntime`、`CodexRuntime`、`OpenCodeRuntime` | 发现会话并接上桥、后台开新会话（`open`）、接着已结束的会话（`resume`）、结束（`end`）、补写对话（`transcript`）；投送执行器按会话的 Agent 找到它。能做什么由 CueStore 的 `AgentCapabilities.of` 决定，界面只露出做得到的 |
 | 钩子转发 | `AgentHookServer` / `cuepad hook <agent>` | Claude Code、Codex 的钩子命令把这次调用（输入、环境、所在终端）发到 `PiPaths.hookSocket`，等 CuePad 回一行再写到标准输出；CuePad 没在运行时什么都不输出，Agent 照常往下走 |
 | 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（Pi 读 `pi --version`，≥ 0.84.4；其余有命令或有配置目录就算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级（技能写不进去时扩展还原）；Claude Code、Codex 另把钩子合并进它们的配置（`AgentHookConfig`，见下文），OpenCode 直连它的后台服务、不用装。技能很短，写着 App 里 `cuepad` 的绝对路径，其余看 `--help`：手机预览（`show`）挂在 Pi 会话的对话里，只有 Pi 的提；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。状态只有一份：任一个是别人的同名文件为 `foreign`（不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
@@ -28,7 +28,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 
 已知边界：Claude Code 的收件箱格式、改名控制、用 PermissionRequest 回答 AskUserQuestion 都来自实测（2.1.293），不在官方文档里；经收件箱发进终端会话的话 Claude Code 当作"另一个会话发来的"。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
 
-## 协议（v11）
+## 协议（v12）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -40,6 +40,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
 | `info` | 变化时只带变了的那几项（没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`、上下文余量 `context` 与命令清单 `commands`（见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
+| `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（受理了却没来得及交给 Pi 的话的投送请求 id，见下"压缩"） |
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（自己这轮已歇下，还有子代理在飞）、`compacting`（在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
@@ -90,6 +91,13 @@ CuePad → 扩展（都带 `id`）：
 - `{"t":"abort","id"}`：停止这一轮，走 Pi 的 `ctx.abort()`（与用户在 Pi 里按 Esc 同一能力）。先取消正在等的弹窗（否则这一轮卡在等你），再中止指挥官正在跑的回合，`ack` 立即回（`ok` 只表示已受理，不等歇下）；随后会话以"被中止"歇下（`state` 为 `done`、`aborted: true`），不退出，能接着说。已经空闲就什么都不做，也 `ack ok`。**只停指挥官自己这一轮**：FireCode 的子代理是独立会话，不受影响，指挥官已歇下、在等子代理（`delegating`）时没有这一轮可停，成功但状态不变；子代理落定后照常把结果投回来开始新的一轮。要连子代理一起停得在 Pi 里让指挥官 `interrupt`（FireCode 的 subagents 工具），CuePad 不做。
 - `{"t":"end","id"}`：结束会话，走用户在 Pi 里退出的同一条路（`ctx.shutdown()`）：先 `ack`，再取消正在等的弹窗、中止正在跑的一轮（否则 Pi 要等它们结束才退出），然后 TUI 恢复终端、提示怎么恢复这个会话，扩展发 `bye quit` 后连接断开。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，所以后台托管的进程不靠它，`PiHost.end` 直接关它的标准输入（RPC 读到 EOF 就收尾，不论这一轮在不在跑）。`PiBridge.end` 只发命令；要等到真的退出用 `PiHost.end`（超时抛 `PiHostError.notEnded`，多半是非托管的 RPC 进程或卡在别处）。
 - `{"t":"answer","id","promptId","value"}`：回答正在等的弹窗。`value` 在 `confirm` 是布尔，`select` 是选项原文之一，`text` 是字符串。扩展先记下答案再 abort 自己接上的 signal：Pi 的界面随之收起（TUI 隐藏选择器与确认框，RPC 删掉待答请求并按"取消"结束），原调用的结果被换成这个答案交回发起弹窗的扩展，随后 `ui_prompt_end` 清空 `question`、状态回到工作中。拒绝：`no_prompt`（没有在等、或已经答过）、`stale_prompt`（`promptId` 不是正在等的那个）、`bad_answer`（类型不对或选项不在列表里）。
+
+- `{"t":"quota","id"}`：查一次所有 OAuth 订阅的额度（见下"订阅额度"）：查到的先以 `quota` 消息发给所有客户端，再 `ack`；有一家没查到时拒绝 `failed: …`（带各家的原因，查到的照常发出）。同时来的几条共用一次查询。
+
+订阅额度：只有 Pi 用 OAuth 订阅登录的 Claude（`anthropic`）与 Codex（`openai-codex`）有额度窗口，其余提供方是按量的 API 密钥，不报。窗口 `seconds` 是长度，`used` 是已用比例（0..1，到顶后可能略超 1），`resetsAt` 是重置时刻（Unix 秒），`model` 是只算某个模型的窗口的显示名（Claude 按模型的周额度，如 `Fable`），算整个账号的为 null。两个来源，都发给所有客户端：
+
+- 回复里带回的（零额外请求）：Claude 每次回复的响应头（`after_provider_response`，当前模型的提供方是 `anthropic` 且带 `anthropic-ratelimit-unified-5h/7d-utilization` 与 `-reset`；API 密钥的回复没有这些头）只有 5 小时与本周，没有按模型的周额度，`complete` 为 false；`anthropic-ratelimit-unified-representative-claim`（`five_hour` / `seven_day`）指的那个窗口带 `binding: true`（提供方说此刻卡着的就是它，CuePad 胶囊的环与总览据此选窗口；其余窗口不带这个键）。Codex 流里的 `codex.rate_limits` 事件（`provider_stream_event`，`rate_limits.primary`/`secondary` 的 `used_percent`、`window_minutes`、`reset_at`）是全部窗口，`complete` 为 true，没有 `binding`。每次观测都发、不去重：值没变的观测也说明刚观测过，写不写库与"更新于"由 CuePad 定（`CueStore.recordQuota`）。
+- 查用量接口（`quota` 命令）：Claude `GET https://api.anthropic.com/api/oauth/usage`（头 `anthropic-beta: oauth-2025-04-20`，取 `limits[]` 里 `session`、`weekly_all`、`weekly_scoped`），Codex `GET https://chatgpt.com/backend-api/wham/usage`（头 `ChatGPT-Account-Id` 取自令牌，取 `rate_limit.primary_window`/`secondary_window`），都只读、不耗额度，单个请求 3 秒超时；令牌经 `ctx.modelRegistry.getProviderAuth` 取（Pi 负责刷新），CuePad 不碰 Pi 的登录文件。结果 `complete` 为 true，没有 `binding`（CuePad 沿用上次响应头的判定）。
 
 扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。
 

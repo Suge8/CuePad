@@ -16,7 +16,7 @@ nonisolated private struct ProjectPage: Sendable, Equatable {
 }
 
 /// 项目页：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
-/// 整页是一个懒加载列表：大项目只创建屏幕内的卡与行。
+/// 任务纸以下是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -26,6 +26,10 @@ struct ProjectScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: ProjectPage?
     @State private var expanded: Set<OlderGroup.Period> = []
+    /// 任务纸的开合放在页面上：收起其余任务时连带页面的滚动（`TaskFoldAnchor`）。
+    @State private var fold = DebugHooks.preset.taskFold
+    @State private var position = ScrollPosition()
+    @State private var anchor = TaskFoldAnchor()
     @State private var board = WallBoard()
     @State private var pi: PiSessionList?
 
@@ -38,6 +42,8 @@ struct ProjectScreen: View {
                 Color.clear.frame(height: 0).debugScrollsToOlder(proxy, ready: board.arrangement != nil)
             }
         }
+        .scrollPosition($position)
+        .taskFoldScroll(anchor)
         // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
         .cardSearch(
             project: projectID, available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
@@ -58,47 +64,51 @@ struct ProjectScreen: View {
     @ViewBuilder
     private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
         let data = page.data, lastTarget = data.lastTarget
-        // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
-        LazyVStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide).padding(.bottom, Self.sectionGap) }
-            if data.cards.isEmpty {
-                // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
-                let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false
-                EmptyIdeas(compact: busy) { navigation.startCapture(project: .some(projectID)) }.padding(.bottom, busy ? 0 : 24)
-            }
-            if !arrangement.pinned.isEmpty {
-                // 资料：长期参考的灵感，一行一条压在任务区下面
-                SectionHeader(title: "资料", count: arrangement.pinned.count).padding(.bottom, Self.headerGap)
-                let ids = arrangement.pinned
-                VStack(spacing: 0) {
-                    ForEach(ids.compactMap { page.entries[$0] }) { entry in
-                        OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last)
-                    }
+        // 任务纸不进懒加载栈：收起时与之同一个事务的滚动在懒加载栈里会被丢掉（`TaskFoldAnchor`）
+        VStack(alignment: .leading, spacing: 0) {
+            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
+            // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if data.cards.isEmpty {
+                    // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
+                    let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false
+                    EmptyIdeas(compact: busy) { navigation.startCapture(project: .some(projectID)) }.padding(.bottom, busy ? 0 : 24)
                 }
-                .padding(.bottom, Self.sectionGap)
-            }
-            if !arrangement.wall.isEmpty {
-                SectionHeader(title: "最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
-                wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, Self.sectionGap)
-            }
-            if !arrangement.older.isEmpty {
-                let groups = data.olderGroups(arrangement)
-                let titled = OlderGroup.needsTitles(in: groups)
-                // 有组标题时由组标题自己与段标题隔开
-                SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
-                ForEach(groups, id: \.period) { group in
-                    if titled { OlderGroupHeader(group: group, expanded: $expanded) }
-                    if !group.isMonth || expanded.contains(group.period) {
-                        let ids = group.cards
-                        ForEach(ids, id: \.self) { id in
-                            if let entry = page.entries[id] {
-                                OlderRow(entry: entry, lastTarget: lastTarget[id], isFirst: id == ids.first, isLast: id == ids.last)
+                if !arrangement.pinned.isEmpty {
+                    // 资料：长期参考的灵感，一行一条压在任务区下面
+                    SectionHeader(title: "资料", count: arrangement.pinned.count).padding(.bottom, Self.headerGap)
+                    let ids = arrangement.pinned
+                    VStack(spacing: 0) {
+                        ForEach(ids.compactMap { page.entries[$0] }) { entry in
+                            OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last)
+                        }
+                    }
+                    .padding(.bottom, Self.sectionGap)
+                }
+                if !arrangement.wall.isEmpty {
+                    SectionHeader(title: "最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
+                    wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, Self.sectionGap)
+                }
+                if !arrangement.older.isEmpty {
+                    let groups = data.olderGroups(arrangement)
+                    let titled = OlderGroup.needsTitles(in: groups)
+                    // 有组标题时由组标题自己与段标题隔开
+                    SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
+                    ForEach(groups, id: \.period) { group in
+                        if titled { OlderGroupHeader(group: group, expanded: $expanded) }
+                        if !group.isMonth || expanded.contains(group.period) {
+                            let ids = group.cards
+                            ForEach(ids, id: \.self) { id in
+                                if let entry = page.entries[id] {
+                                    OlderRow(entry: entry, lastTarget: lastTarget[id], isFirst: id == ids.first, isLast: id == ids.last)
+                                }
                             }
                         }
                     }
                 }
             }
         }
+        .taskFoldContent()
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
     }
@@ -158,19 +168,30 @@ struct ProjectScreen: View {
 }
 
 /// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（前 3 条没做完的顶层任务连同步骤，
-/// 可拖动、缩进，同任务页；没列出的与已完成的只在纸底写个数、点开是任务页，见 `TaskCopy.more`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
+/// 可拖动、缩进，同任务页；没列出的与最近完成的在纸底写个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`；收起其余任务时纸底那一行留在原处、位置一步到位、纸上留下的几行淡入，见 `TaskFoldAnchor`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
 /// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
 /// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
     let guide: FolderGuide?
+    @Binding var fold: TaskFold
+    @Binding var position: ScrollPosition
+    let anchor: TaskFoldAnchor
+    /// 收起其余任务的次数：每次收起，纸上留下的那几行淡入。
+    @State private var collapses = 0
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleTasks = 3
+    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
+    /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
+    private static let lazyFrom = 20
+    /// 收起后纸上留下的那几行淡入多久（同 `Motion.quick`）。
+    private static let revealDuration = 0.16
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -182,6 +203,7 @@ private struct FocusCard: View {
             }
             card
         }
+        .debugExposesTaskFold { toggle(\.showsAll) }
     }
 
     /// 还没绑文件夹、而这里该给绑定引导的项目（同名建议或绑定进行中）。
@@ -197,22 +219,34 @@ private struct FocusCard: View {
             // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
             VStack(alignment: .leading, spacing: 0) {
                 let roots = data.tasks.roots
+                let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
+                let done = data.taskCounts.done
                 if !roots.isEmpty {
-                    SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                    TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                        TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
+                    Group {
+                        SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
+                        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
+                        TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
+                            let line = TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
+                            if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
+                        }
+                    }
+                    .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
+                        MoveKeyframe(0.0)
+                        LinearKeyframe(1.0, duration: Self.revealDuration)
                     }
                 }
-                if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
-                    Button { navigation.push(.tasks) } label: {
-                        HStack(spacing: 4) {
-                            Text(more)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
-                        }
-                        .frame(minHeight: 44).contentShape(.rect)
+                if hidden > 0 || done > 0 {
+                    HStack(spacing: 6) {
+                        if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
+                        if hidden > 0, done > 0 { Dot() }
+                        if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
                     }
-                    .buttonStyle(.plain)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
+                    .taskFoldBar(anchor)
+                }
+                if fold.showsDone {
+                    // 同任务页里已完成的行：淡一档，点圆圈回到待办
+                    ForEach(data.done) { TaskLine(task: $0) }
                 }
                 NewTaskLine(project: data.project?.id)
             }
@@ -242,6 +276,28 @@ private struct FocusCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: 18)
+    }
+
+    private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
+        if key == \.showsAll, fold.showsAll {
+            // 收起是一步到位的（`TaskFoldAnchor`：纸底那一行留在原处，没有能跟着弹簧走的位移），换上来的那几行淡入；减弱动态效果时同样
+            collapses += 1
+            return anchor.collapse($fold, scrolling: $position)
+        }
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
+    }
+
+    /// 纸底展开或收起的一格。
+    private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
+        Button { toggle(key) } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
+            }
+            .frame(minHeight: 44).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(open ? "已展开" : "已折叠")
     }
 
     private func sessionLine(_ item: PiSessionListItem) -> some View {

@@ -24,6 +24,8 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadToolsOpen YES`：会话页每一轮回答上方的工具清单一开始就展开（`ToolActivityLine`）；
+/// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
+/// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadShowsDone YES`（仅 iOS）：任务页的"最近完成"默认展开并滚到底；
 /// - `-CuePadExplain YES`（仅 iOS）：推入页顶栏有说明时（会话需要 /reload）直接弹出，核对点标题的说明；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
@@ -47,6 +49,8 @@ enum DebugScene {
     }
     /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
     static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
+    /// 项目页任务纸点"还有 N 条"的那条路（`debugExposesTaskFold`，看得见的那一页上的纸）。
+    static var toggleTaskFold: () -> Void = {}
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {
@@ -75,6 +79,10 @@ enum DebugScene {
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
         else { return nil }
+        let many = defaults.integer(forKey: "CuePadManyTasks")
+        if many > 0, ((try? await store.taskCounts(in: project.id).open) ?? 0) < many {
+            for index in 1...many { _ = try? await store.createTask("压力任务 \(index)：画布与节点的一段说明", in: project.id) }
+        }
         #if os(macOS)
         workspace.show(.project(project.id))
         #endif
@@ -143,6 +151,9 @@ enum DebugScene {
         preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
+        preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
+        preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
+        if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         #if os(iOS)
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus

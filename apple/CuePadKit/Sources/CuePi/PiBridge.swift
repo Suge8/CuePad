@@ -97,6 +97,8 @@ public final class PiBridge {
             _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
         }
 
+        func refreshQuota() async throws { _ = try await request { try PiWire.quotaCommand(id: $0) } }
+
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
             guard let session, !closed else { throw PiBridgeError.sessionEnded }
             guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
@@ -218,6 +220,12 @@ public final class PiBridge {
     /// 模型不在 Agent 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
         try await control(id).configure(model: model, thinking: thinking, name: name)
+    }
+
+    /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
+    /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。只有 Pi 有。
+    public func refreshQuota(in id: PiSession.ID) async throws {
+        try await control(id).refreshQuota()
     }
 
     private func control(_ id: PiSession.ID) throws -> any SessionLink {
@@ -363,6 +371,9 @@ public final class PiBridge {
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let bye):
             link.bye = bye
+        case .quota(let report):
+            guard link.session != nil else { throw HandlingError.messageBeforeHello }
+            emit(.quota(report))
         }
     }
 

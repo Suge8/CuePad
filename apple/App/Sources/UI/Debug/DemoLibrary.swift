@@ -40,12 +40,32 @@ enum DemoLibrary {
                 try await store.trashCard(card.id)
             }
         }
+        try await seedQuotas(store)
         let home = demoHome
         for (index, item) in [("cuepad", "规划投送队列的重试边界"), ("atlas", "多 Agent 调度压测"), ("homepage", "首页改版文案")].enumerated() {
             try await store.upsertPiSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
         }
+    }
+
+    /// 订阅额度：Claude 的 5 小时略超匀速刻度（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用；Codex 本周已过九成（胭脂）。
+    /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对仪表在那一刻变成已重置）。
+    private static func seedQuotas(_ store: CueStore) async throws {
+        let now = Date.now
+        let resetIn = DebugScene.defaults.double(forKey: "CuePadQuotaResetIn")
+        if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
+        func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
+            QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)
+        }
+        let (hours5, week) = (5 * 3_600, 7 * 86_400)
+        try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [
+            window(hours5, used: 0.68, left: resetIn > 0 ? resetIn : 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: 4 * 86_400 + 3 * 3_600),
+            window(week, used: 0.12, left: 4 * 86_400 + 3 * 3_600, model: "Fable"),
+        ], complete: true), host: "demo-mac")
+        try await store.recordQuota(QuotaReport(provider: "openai-codex", windows: [
+            window(week, used: 0.91, left: 36 * 3_600),
+        ], complete: true), host: "demo-mac")
     }
 
     private static func projects(image: String) -> [DemoProject] {
@@ -113,11 +133,21 @@ enum DemoLibrary {
         ("CuePad", "投送队列超时报错不发键", false),
         ("CuePad", "导入旧数据时保留回收站", false),
         ("CuePad", "菜单栏面板 ⌘↩ 直接发出", false),
+        ("CuePad", "小组件显示进行中的任务", false),
+        ("CuePad", "分享扩展支持多张图片", false),
+        ("CuePad", "设置页加快捷键冲突提示", false),
+        ("CuePad", "首次启动引导绑定文件夹", true),
+        ("CuePad", "深色模式下纸色偏灰", true),
         ("圆桌", "发言轮次在 5 人以上会乱序", false),
         ("圆桌", "登录回调改走统一网关", false),
+        ("圆桌", "房间链接过期后给出提示", false),
+        ("圆桌", "主持人可以静音全部", false),
         ("圆桌", "清理旧的计费脚本", true),
         ("Flow", "画布缩放锚点跟随指针", false),
         ("Flow", "撤销栈合并连续拖拽", false),
+        ("Flow", "导出 PNG 时保留透明背景", false),
+        ("Flow", "节点吸附到网格", false),
+        ("Flow", "多选后统一改颜色", false),
         (nil, "README 截图换成 Swift 版", false),
         (nil, "续费域名", false),
     ]

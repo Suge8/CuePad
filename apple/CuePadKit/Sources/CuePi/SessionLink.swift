@@ -15,6 +15,8 @@ public protocol SessionLink: AnyObject {
     func abort() async throws
     func answer(_ answer: PiAnswerValue, to promptID: String) async throws
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws
+    /// 查一次订阅额度（结果经桥的 `.quota` 报出）。
+    func refreshQuota() async throws
 }
 
 extension SessionLink {
@@ -24,5 +26,6 @@ extension SessionLink {
     public func abort() async throws { throw PiBridgeError.unsupported }
     public func answer(_ answer: PiAnswerValue, to promptID: String) async throws { throw PiBridgeError.unsupported }
     public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws { throw PiBridgeError.unsupported }
+    public func refreshQuota() async throws { throw PiBridgeError.unsupported }
 }
 #endif

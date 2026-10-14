@@ -42,6 +42,7 @@ extension AppServices {
         if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
         startLiveSessions()
+        startAccountQuotas()
     }
 
     /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。

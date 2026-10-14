@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews。约束：
+/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -97,9 +97,18 @@ enum Schema {
     },
     // 29：对话里你的消息改用正文格式（文字加图片引用），去掉 Pi 附给模型的图片说明；会话文件的检查点作废，下次启动从头读一遍，已存的消息跟着更新、补出图片
     "UPDATE piSessions SET checkpoint = NULL;",
-    // 30：会话记录与历史索引记下是哪个 Agent 的会话（Pi 之外接入 Claude Code、Codex、OpenCode）；旧行没有，是 Pi
+    // 30：订阅账号的用量（每个提供方一条，Mac 写）
+    Upgrade(stringLiteral: accountQuotas),
+    // 31：会话记录与历史索引记下是哪个 Agent 的会话（Pi 之外接入 Claude Code、Codex、OpenCode）；旧行没有，是 Pi
     "ALTER TABLE piSessionStates ADD COLUMN agent TEXT; ALTER TABLE piSessions ADD COLUMN agent TEXT;",
   ]
+
+  private static let accountQuotas = """
+    CREATE TABLE accountQuotas (
+      id TEXT PRIMARY KEY NOT NULL, provider TEXT NOT NULL, hostID TEXT NOT NULL, windows TEXT NOT NULL,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """
 
   private static let syncSent = """
     CREATE TABLE syncSent (recordName TEXT NOT NULL, modifiedAt INTEGER NOT NULL, row BLOB NOT NULL, PRIMARY KEY (recordName, modifiedAt)) STRICT, WITHOUT ROWID;
@@ -167,6 +176,9 @@ enum Schema {
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
 
     \(previews)
+
+    -- 订阅账号的用量：每个提供方一条（id 由提供方定），windows 是 JSON 数组。
+    \(accountQuotas)
 
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,

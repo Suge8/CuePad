@@ -32,6 +32,8 @@ nonisolated enum SendError: Error, Equatable {
     case terminalFailed(String)
     /// 排队的话已被 Mac 领取、交给了 Pi：Pi 的扩展接口收不回，撤回与改为马上说都晚了。
     case alreadyHanded
+    /// 查订阅额度要经在线 Agent 会话里的扩展，这台 Mac 上此刻没有。
+    case noLiveSession
 }
 
 extension SendError: LocalizedError {
@@ -52,6 +54,7 @@ extension SendError: LocalizedError {
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .terminalFailed(let reason): "终端没能打开：\(reason)"
         case .alreadyHanded: "Mac 已经把它发给 Agent，撤不回了"
+        case .noLiveSession: "这台 Mac 上没有在线的 Agent 会话，查不了额度"
         }
     }
 }

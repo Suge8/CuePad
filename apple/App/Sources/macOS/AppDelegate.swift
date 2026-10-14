@@ -66,7 +66,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         })
         menuBarPanel = panel
         statusItem = StatusItemController(
-            togglePanel: { panel.toggle(below: $0) },
+            togglePanel: {
+                panel.toggle(below: $0)
+                // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧
+                if panel.isVisible { Task { await services.refreshQuotaIfStale() } }
+            },
             toggleWindow: { shell.toggleFromMenu() })
 
         settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services) }

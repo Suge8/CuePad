@@ -12,12 +12,14 @@ final class MacExecutor {
     private let hostID: String
     private let recorder: PiStateRecorder
     private let uploadResult: @Sendable (UUID) async -> Void
+    private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
         uploadResult: @escaping @Sendable (UUID) async -> Void,
+        refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
         self.store = store
@@ -26,6 +28,7 @@ final class MacExecutor {
         self.hostID = hostID
         self.recorder = recorder
         self.uploadResult = uploadResult
+        self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
 
@@ -72,6 +75,7 @@ final class MacExecutor {
         case .start: try await startSession(request)
         case .transcript: try await writeTranscript(of: request.content)
         case .bind: try await bindFolder(request)
+        case .quota: try await refreshQuota()
         case .end: try await end(request.target)
         case .stop: try await stop(request.target)
         case .answer: try await answer(request)

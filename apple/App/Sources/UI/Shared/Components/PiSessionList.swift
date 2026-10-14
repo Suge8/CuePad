@@ -102,7 +102,8 @@ struct PiSessionRow: View {
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 HStack(spacing: 6) {
-                    if let place { place; Dot() }
+                    // 已结束的没有状态词：所在后面不留孤零零的分隔点
+                    if let place { place; if searchHit != nil || !ended { Dot() } }
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
                     } else if !ended {
@@ -295,8 +296,8 @@ private struct FactColumns: View {
     var body: some View {
         HStack(spacing: 10) {
             ContextFact(meter: facts.context).frame(width: contextWidth, alignment: .leading)
-            Text(facts.model ?? "").foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
-                .accessibilityLabel(facts.model.map { "模型 \($0)" } ?? "")
+            (facts.model.map { Text("\($0.provider.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
+                .accessibilityLabel(facts.model.map { "模型 \($0.name)" } ?? "")
             if let subagents = facts.subagents { SubagentRoster(summary: subagents) }
             Spacer(minLength: 0)
         }

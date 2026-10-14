@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 12
+    static let protocolVersion = 13
 
     struct State: Decodable {
         var kind: String
@@ -194,6 +194,8 @@ enum PiWire {
         case info(Info)
         case ack(Ack)
         case bye(Bye)
+        /// 订阅额度的一次观测（属于账号，不属于会话）
+        case quota(QuotaReport)
     }
 
     enum DecodeError: Error { case unknownType(String) }
@@ -209,6 +211,10 @@ enum PiWire {
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
         case "bye": return .bye(try decoder.decode(Bye.self, from: line))
+        case "quota":
+            let seconds = JSONDecoder()
+            seconds.dateDecodingStrategy = .secondsSince1970  // 重置时刻是 Unix 秒
+            return .quota(try seconds.decode(QuotaReport.self, from: line))
         case let other: throw DecodeError.unknownType(other)
         }
     }
@@ -259,6 +265,13 @@ enum PiWire {
     }
 
     static func abortCommand(id: String) throws -> Data { try encodeLine(AbortCommand(id: id)) }
+
+    private struct QuotaCommand: Encodable {
+        var t = "quota"
+        var id: String
+    }
+
+    static func quotaCommand(id: String) throws -> Data { try encodeLine(QuotaCommand(id: id)) }
 
     private struct ConfigCommand: Encodable {
         var t = "config"
