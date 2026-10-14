@@ -21,13 +21,14 @@ final class CodexRPC {
     private var reader: Task<Void, Never>?
     private(set) var isClosed = false
     var onNotification: ((String, Object) -> Void)?
-    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新，这一项说完（`item/completed`）时换成它带的全文
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）：随增量更新，这一项说完（`item/completed`）时换成它带的全文
     /// （不发增量时也照样有）；过程中的说明（`phase` 为 commentary）说完、
     /// 下一项开始（转成工具调用、思考等）、下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。
     /// 说明说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
     /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
     var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
-    private var drafts: [String: (item: String, draft: PiDraft)] = [:]
+    /// 每个线程正在说的那一项（`DraftParts` 的 `message` 是项 id，整项一段）
+    private var drafts: [String: DraftParts] = [:]
     /// 连接断了（进程退出、常驻服务退出）；只调一次
     var onClose: (() -> Void)?
 
@@ -160,8 +161,7 @@ final class CodexRPC {
         switch method {
         case "item/agentMessage/delta":
             guard let item = params["itemId"] as? String, let delta = params["delta"] as? String else { return true }
-            let current = drafts[thread].flatMap { $0.item == item ? $0.draft : nil }
-            setDraft(thread, item: item, text: (current?.text ?? "") + delta)
+            update(thread, item: item) { $0.append(delta, to: 0) }
             return true
         case "item/started", "turn/started":
             clearDraft(thread)
@@ -169,9 +169,8 @@ final class CodexRPC {
             guard let item = params["item"] as? Object, item["type"] as? String == "agentMessage" else { break }
             if item["phase"] as? String == "commentary" {
                 clearDraft(thread)
-            } else if let id = item["id"] as? String, let text = item["text"] as? String,
-                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                setDraft(thread, item: id, text: text)
+            } else if let id = item["id"] as? String, let text = item["text"] as? String {
+                update(thread, item: id) { $0.finish(0, with: text) }
             }
         case "turn/completed" where (params["turn"] as? Object)?["status"] as? String != "completed":
             clearDraft(thread)
@@ -181,17 +180,16 @@ final class CodexRPC {
         return false
     }
 
-    /// 一个回答项此刻的全文：同一项接着用它开始出字的时刻，没变不报。
-    private func setDraft(_ thread: String, item: String, text: String) {
-        let current = drafts[thread].flatMap { $0.item == item ? $0.draft : nil }
-        let draft = PiDraft(text: text, since: current?.since ?? .now)
-        guard draft != current else { return }
-        drafts[thread] = (item, draft)
-        onDraft?(thread, draft)
+    /// 改一个线程正在说的那一项（换了项就重新开始）。
+    private func update(_ thread: String, item: String, _ edit: (inout DraftParts) -> Void) {
+        var parts = drafts[thread].flatMap { $0.message == item ? $0 : nil } ?? DraftParts(message: item)
+        edit(&parts)
+        drafts[thread] = parts
+        onDraft?(thread, parts.draft)
     }
 
     private func clearDraft(_ thread: String) {
-        guard drafts.removeValue(forKey: thread) != nil else { return }
+        drafts[thread] = nil
         onDraft?(thread, nil)
     }
 
