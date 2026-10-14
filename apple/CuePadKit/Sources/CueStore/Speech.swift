@@ -7,7 +7,8 @@ import Foundation
 /// - 已送达：会话请求成功；Cue 消息有 `deliveredAt`。
 /// - 没能送达：会话请求失败（原因读 `DeliveryRequest.failure`）；或过了 `receiptLimit` 还没回执——Cue 消息没有 `deliveredAt`，
 ///   会话请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话）。超时的原因只有两种：本机同步不通，或 Mac 没有回应。
-///   超时后记录仍在，回执来了就是已送达；到点翻状态由界面的睡眠任务刷新"此刻"（`deadline`），不轮询。
+///   超时后记录仍在，回执来了就是已送达。到点翻状态不轮询：库里推出的（Cue 在不在，`CueStore.cueSpeech`）由订阅到点重读，
+///   气泡这类拿着记录在手的视图由睡眠任务到 `deadline` 刷新"此刻"。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
@@ -71,4 +72,9 @@ public enum Speech {
     guard now.timeIntervalSince(said) >= receiptLimit else { return .sending }
     return .failed(reachable ? .noReply : .offline)
   }
+}
+
+extension Speech.Trip {
+  /// 按同步通着推出的（库里推的，`CueStore.cueSpeech`）补上本机同步此刻通不通：超时没回执而本机不通，原因是 `offline`。
+  public func reached(_ reachable: Bool) -> Self { self == .failed(.noReply) && !reachable ? .failed(.offline) : self }
 }
