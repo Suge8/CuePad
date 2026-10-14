@@ -184,7 +184,7 @@ struct CueEnableTests {
         let cue = app.services.cue, store = app.services.store
         func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
 
-        try await cue.update {
+        try await app.services.updateCue {
             $0.runtime = .known(.pi)
             $0.model = "fake/m"
             $0.effort = .known(.high)
@@ -198,7 +198,7 @@ struct CueEnableTests {
         now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
 
-        try await cue.update { $0.runtime = .known(.claudeCode) }
+        try await app.services.updateCue { $0.runtime = .known(.claudeCode) }
         available.withLock { $0 = [.codex, .pi] }
         try await cue.enable()
         now = try await profile()

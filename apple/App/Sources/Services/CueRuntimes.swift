@@ -16,7 +16,6 @@ nonisolated struct CueLaunch: Equatable, Sendable {
 /// （Pi 是 `--list-models` 有没有可用模型，Codex 是 `login status` 的退出码，Claude Code 是 `auth status` 的 `loggedIn`）。
 /// 状态命令慢（每条最多等 `timeout`），只在启用、换运行时与大脑起不来时跑；每个班次开始只用 `launch(_:store:)`。只读，不改任何一家的配置。
 nonisolated struct CueRuntimes: Sendable {
-    static let order: [AgentKind] = [.pi, .codex, .claudeCode]
     private static let timeout: Duration = .seconds(15)
 
     var integration: AgentIntegration
@@ -26,7 +25,7 @@ nonisolated struct CueRuntimes: Sendable {
     var hostID: String
     var locator: @Sendable () async -> ExecutableLocator = { await .resolved() }
 
-    /// 装了且登录了的，按 `order`。
+    /// 装了且登录了的，按 `CueProfile.runtimes` 的顺序。
     @concurrent func scan() async -> [AgentKind] {
         let locator = await locator()
         let path = locator.path
@@ -40,7 +39,7 @@ nonisolated struct CueRuntimes: Sendable {
             (try? JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])?["loggedIn"] as? Bool == true
         }
         let ready: [AgentKind: Bool] = await [.pi: pi, .codex: codex, .claudeCode: claude]
-        return Self.order.filter { ready[$0] == true }
+        return CueProfile.runtimes.filter { ready[$0] == true }
     }
 
     /// 起 `runtime` 的大脑要的可执行文件、PATH 与可选的 Agent 和模型；没装为 nil。
@@ -52,7 +51,7 @@ nonisolated struct CueRuntimes: Sendable {
 
     /// 能开新会话的 Agent（与开新会话同一个条件 `AgentStatus.canLaunch`），按 `AgentKind` 的顺序，一家一行 `agent=…, model=…`：
     /// Pi 是设置里的默认模型（标"默认"）与 `enabledModels`，其余是这台 Mac 上它最近一个会话记录里的模型；没有模型的只写 agent（用它自己的默认）。
-    /// 模型在这家自己的命名空间里的（`AgentKind.modelProvider`）只写 id，其余写 `provider/id`。
+    /// 模型按这家的写法（`AgentKind.modelRef`）。
     private func agents(store: CueStore) async -> [String] {
         let statuses = await withTaskGroup(of: (AgentKind, Bool).self) { group in
             for kind in AgentKind.allCases { group.addTask { (kind, await integration.status(of: kind).canLaunch) } }
@@ -62,7 +61,7 @@ nonisolated struct CueRuntimes: Sendable {
         return AgentKind.allCases.filter { statuses[$0] == true }.flatMap { kind -> [String] in
             let line = "agent=\(kind.rawValue)"
             guard kind == .pi else {
-                return [recent[kind].map { "\(line), model=" + (kind.modelProvider != nil ? $0.id : "\($0.provider)/\($0.id)") } ?? line]
+                return [recent[kind].map { "\(line), model=" + kind.modelRef($0) } ?? line]
             }
             let (preferred, enabled) = piModels()
             let models = (preferred.map { [$0] } ?? []) + enabled.filter { $0 != preferred }
