@@ -166,4 +166,43 @@ struct CueRuntimeScanTests {
         app.services.cancelBackgroundWork()
     }
 }
+
+/// 启用只是"住到这台、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了才换成第一家能用的，
+/// 模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
+struct CueEnableTests {
+    @Test func 全新设置启用后强度是低() async throws {
+        let app = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        try await app.services.cue.enable()
+        #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
+    }
+
+    @Test func 启用不动你选的Agent与模型() async throws {
+        let available = Mutex<[AgentKind]>([.pi])
+        let app = TestApp(cue: CueDependencies(
+            scan: { available.withLock { $0 } }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let cue = app.services.cue, store = app.services.store
+        func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
+
+        try await cue.update {
+            $0.runtime = .known(.pi)
+            $0.model = "fake/m"
+            $0.effort = .known(.high)
+        }
+        try await cue.enable()
+        var now = try await profile()
+        #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
+
+        try await cue.disable()
+        try await cue.enable()
+        now = try await profile()
+        #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
+
+        try await cue.update { $0.runtime = .known(.claudeCode) }
+        available.withLock { $0 = [.codex, .pi] }
+        try await cue.enable()
+        now = try await profile()
+        #expect(now.runtime == .known(.codex) && now.model == nil && now.effort == .known(.high))
+    }
+}
 #endif
