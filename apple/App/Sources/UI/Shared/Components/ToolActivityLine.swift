@@ -55,11 +55,7 @@ struct ToolActivityLine: View {
             } else {
                 Text("用时 \(note.took)").fixedSize()
             }
-            if chevron {
-                Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .rotationEffect(.degrees(expanded ? 180 : 0))
-                    .accessibilityHidden(true)
-            }
+            if chevron { DisclosureChevron(open: expanded) }
         }
     }
 
@@ -117,6 +113,18 @@ private struct RoundNoteLine: ViewModifier {
 
     func body(content: Content) -> some View {
         content.font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2).frame(minHeight: 24)
+    }
+}
+
+/// 就地展开的那一行末尾的箭头（工具清单、子代理汇总、Cue 的运行情况共用）：收着朝下，展开转过来朝上。
+struct DisclosureChevron: View {
+    let open: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+            .rotationEffect(.degrees(open ? 180 : 0))
+            .accessibilityHidden(true)
     }
 }
 

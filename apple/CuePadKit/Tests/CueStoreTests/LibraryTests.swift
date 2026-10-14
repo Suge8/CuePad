@@ -126,8 +126,18 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 35：撤掉 36（本机的会话进程表）。
-  static let undoSchema36 = "DROP TABLE piProcesses;"
+  /// 把新建的库退回结构 37：撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
+  static let undoSchema38 = """
+    DROP TRIGGER piSessionStates_writeSeq_insert; DROP TRIGGER piSessionStates_writeSeq_update;
+    DROP TRIGGER cards_writeSeq_insert; DROP TRIGGER cards_writeSeq_update;
+    DROP TRIGGER deliveryRequests_writeSeq_insert; DROP TRIGGER deliveryRequests_writeSeq_update; DROP TRIGGER piMessages_writeSeq_insert;
+    ALTER TABLE piSessionStates DROP COLUMN writeSeq; ALTER TABLE cards DROP COLUMN writeSeq;
+    ALTER TABLE deliveryRequests DROP COLUMN writeSeq; ALTER TABLE piMessages DROP COLUMN writeSeq; DROP TABLE writeCounter;
+    """
+  /// 退回结构 36：再撤掉 37（验收标记下线）。
+  static let undoSchema37 = undoSchema38 + "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
+  /// 退回结构 35：再撤掉 36（本机的会话进程表）。
+  static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
   static let undoSchema35 = undoSchema36 + "DROP TABLE cueState;"
   /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。
@@ -146,17 +156,31 @@ import Testing
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 32 的库升到 33：已有的消息原样都在（都不是验收），之后写的验收带着标记，答"收下"完成任务。
-  @Test func schema32LibraryUpgradesForAcceptance() async throws {
+  /// 结构 36 的库升到 37：还开着的旧验收是 Cue 已收尾的事——任务连同步骤完成，那条成了做完的结果；Cue 自拟选项的提问撤回，
+  /// 不再等你、也不交给 Cue；答过的照原样留着。
+  @Test func schema36LibraryUpgradesWithoutAcceptance() async throws {
     let task = try await store.createTask("发布", in: nil)
-    let said = try await store.addCueMessage(.cue, text: "开工了")
-    try RawDB(fixture.url).exec(Self.undoSchema33 + "PRAGMA user_version = 32;")
+    let step = try await store.createTask("跑检查", under: task.id)
+    let accept = try await store.addCueMessage(.cue, text: "「发布」做好了，收下吗？\n- 检查都过了", ask: .push, task: task.id)
+    let custom = try await store.addCueMessage(.cue, text: "调研方案好了，照这个做吗？", ask: .push)
+    let answered = try await store.addCueMessage(.cue, text: "要推送吗？", ask: .push)
+    try await store.endCueQuestion(answered.id, .answered("允许一次"))
+    try await store.markCueMessagesDelivered([answered.id])
+    try RawDB(fixture.url).exec(Self.undoSchema37 + """
+      UPDATE cueMessages SET acceptance = 1, choices = '["收下","再改改"]' WHERE id = '\(accept.id.uuidString.lowercased())';
+      UPDATE cueMessages SET choices = '["照这个做","我再看看"]' WHERE id = '\(custom.id.uuidString.lowercased())';
+      PRAGMA user_version = 36;
+      """)
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.cueMessages().map { [$0.id: $0.isAcceptance] } == [[said.id: false]])
-    let asked = try await upgraded.askToAccept(task.id, evidence: "- 测试全过").message
-    try await upgraded.endCueQuestion(asked.id, .answered(CueAcceptance.accept))
+    #expect(try await upgraded.cueMessagesWaitingForYou().isEmpty)
+    #expect(try await upgraded.cueMessagesToDeliver().isEmpty)
     #expect(try await upgraded.card(task.id)?.status == .done)
+    #expect(try await upgraded.card(step.id)?.status == .done)
+    let messages = Dictionary(uniqueKeysWithValues: try await upgraded.cueMessages().map { ($0.id, $0) })
+    #expect(messages[accept.id]?.text == "「发布」做完了。\n- 检查都过了" && messages[accept.id]?.choices == nil)
+    #expect(messages[custom.id]?.answeredAt != nil && messages[custom.id]?.answer == nil)
+    #expect(messages[answered.id]?.answer == "允许一次")
   }
 
   /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。

@@ -2,32 +2,29 @@
 import CueStore
 import Foundation
 
-/// 书架自己读的数据：项目、各项目的灵感数与任务数在窗口的项目目录（`ProjectCatalog`）里，在线会话在 `LiveSessions`，这里只有这两处没有的。
+/// 书架自己读的数据：项目、各项目的灵感数与任务数在窗口的项目目录（`ProjectCatalog`）里，这里只有它没有的。
 /// 相等就不重画：编辑器自动保存写 cards 时，书架重读后多半还是同一份。
 nonisolated struct ShelfData: Sendable, Equatable {
     /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
     var leading: [UUID: [ProjectNow.InProgress]]
-    /// 正在推进的任务（顶层进行中的，Agent 要你处理的在前，规则 `TaskBoard.active`），书架最上面。
-    var active: [TaskBoard.Row]
+    /// 正在推进的任务（顶层进行中的，最近开始的在前，规则 `TaskBoard.active`），书架最上面。
+    var active: [Card]
     /// 纸上列不下的进行中任务数：纸底写"还有 N 项"（点开是任务页）。
     var activeMore: Int
     var trashCount: Int
 
     static let activeLimit = 3
 
-    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
-    /// `sessions` 是此刻有事的 Pi 会话（`LiveSessions.items`，各项目的"此刻"一行再按本机的规则挑；nil 是还没读到）。
-    @MainActor func now(
-        projects: [Project], sessions: [PiSessionListItem]?, shown: (PiSessionListItem) -> PiShown
-    ) -> [UUID: ProjectNow] {
-        ProjectNow.byProject(projects, sessions: sessions, tasks: leading, listed: Set(active.map(\.id)), shown: shown)
+    /// 各项目的"此刻"（`ProjectNow.shelf`）：数据变化时算一次，卡与行只拿结果；"正在推进"已列出的任务不再写一遍。
+    func now(projects: [Project]) -> [UUID: ProjectNow] {
+        ProjectNow.shelf(projects, tasks: leading, listed: Set(active.map(\.id)))
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
         let active = try TaskBoard.active(limit: activeLimit, from: store)
         return ShelfData(
             leading: try TaskBoard.leading(from: store),
-            active: active.rows, activeMore: active.more, trashCount: try store.trashCount())
+            active: active.tasks, activeMore: active.more, trashCount: try store.trashCount())
     }
 }
 

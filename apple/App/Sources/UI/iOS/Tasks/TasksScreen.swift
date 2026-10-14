@@ -5,7 +5,7 @@ import SwiftUI
 /// 任务页（书架上的"任务"一行、iPad 侧栏进入）：列表顶上一行快速添加（↩ 即一条，落当前项目或未分类，可换），
 /// 跟着列表一起滚走——它是一张纸、不是玻璃，钉在顶栏下会把滚过去的列表切成上下两截；回到顶就能看到；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
-/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
+/// 点圆圈完成（完成的点了回到待办），点文字推入任务的纸页（`TaskPage`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -159,7 +159,7 @@ struct TaskLine: View {
             .accessibilityHint(hint)
             .accessibilityAction { tap() }
             .accessibilityActions {
-                Button("打开") { navigation.openTask(task.id) }
+                Button("打开") { navigation.push(.card(task.id)) }
                 if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
             }
             .confirmationDialog(
@@ -208,7 +208,7 @@ struct TaskLine: View {
             .padding(.vertical, hasDetail ? 6 : 0)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
-            .onTapGesture { navigation.openTask(task.id) }
+            .onTapGesture { navigation.push(.card(task.id)) }
         }
     }
 

@@ -14,7 +14,8 @@ extension CueStore {
     try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
   }
 
-  /// `requestDelivery` 的事务内部分：必须在写事务内调用。
+  /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
+  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。
   private func insertDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
@@ -29,7 +30,18 @@ extension CueStore {
       resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
     try insert(request)
     try registerImages(in: content)
+    if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
+      try endUnusedSessions(of: leaf, cue: cue)
+    }
     return request
+  }
+
+  /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。
+  private func leaf(holding card: UUID) throws -> UUID? {
+    guard let found = try link(of: card) else { return nil }
+    if found.isTask { return try promptHome(card) }
+    guard let parent = found.parent, try link(of: parent)?.isTask == true else { return nil }
+    return try promptHome(parent)
   }
 
   /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。

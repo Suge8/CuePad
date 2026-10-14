@@ -23,7 +23,7 @@ struct PageMenuSlot: View {
             switch self {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .project: "选择灵感、新建任务、项目操作"
-            case .cue: "记得什么、运行情况"
+            case .cue: "记得什么"
             case .none: ""
             }
         }
