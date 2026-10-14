@@ -60,6 +60,7 @@ nonisolated struct AgentNow: Equatable, Sendable {
         case .working: "\(name) 在干活"
         case .unread: "\(name) 回复了"
         case .restart: "\(name) 要在终端里重载"
+        case .interrupted: "\(name) 被打断了"
         case .idle, .resting, .fresh, .ended, .unknown: name
         }
     }

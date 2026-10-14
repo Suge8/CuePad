@@ -14,7 +14,7 @@ import Foundation
 ///
 /// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// 本机表（不同步）：piSessions、piProcesses、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
@@ -121,7 +121,13 @@ enum Schema {
     Upgrade(stringLiteral: formerSessions),
     // 35：Cue 此刻在做什么（值班的 Mac 写，各端读）
     Upgrade(stringLiteral: cueState),
+    // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
+    Upgrade(stringLiteral: piProcesses),
   ]
+
+  private static let piProcesses = """
+    CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
+    """
 
   /// 34 加的列与索引：建新库时跟在 `cueAcceptance` 之后。
   private static let formerSessions = """
@@ -270,6 +276,9 @@ enum Schema {
       lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
+
+    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
+    \(piProcesses)
 
     -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
     CREATE TABLE projectDirectories (
