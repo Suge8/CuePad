@@ -86,7 +86,8 @@ final class PiProcess: @unchecked Sendable {
         if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
-        var environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("HERDR") && !$0.key.hasPrefix("TMUX") }
+        // 不继承跑测试的环境里的终端复用器与 CuePad 变量：在 CuePad 托管的 Pi 会话里跑测试时，CUEPAD_HOSTED 会让这里起的每个 Pi 都自认是托管的
+        var environment = ProcessInfo.processInfo.environment.filter { key, _ in !["HERDR", "TMUX", "CUEPAD_"].contains { key.hasPrefix($0) } }
         environment["PI_CODING_AGENT_DIR"] = paths.agentDirectory.path
         environment["CUEPAD_PI_SOCKET_DIR"] = paths.socketDirectory.path
         environment["TERM_PROGRAM"] = "test-term"
