@@ -7,7 +7,8 @@ import Testing
 @testable import CuePi
 
 /// 本机装的 OpenCode（`brew install opencode`）；没装就跳过。
-let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
+/// 真 OpenCode 的用例开了（`RealAgents`）时，本机装的 OpenCode
+let realOpenCodeURL = RealAgents.on(.opencode) ? ExecutableLocator.standard.candidates("opencode").first : nil
 private let freeModel = PiModelKey(provider: "opencode", id: "big-pickle")
 
 /// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
@@ -100,7 +101,7 @@ final class OpenCodeSandbox {
 /// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(.enabled(if: realOpenCodeURL != nil, "需要 opencode（brew install opencode）"), .serialized, .timeLimit(.minutes(10)))
+@Suite(.enabled(if: realOpenCodeURL != nil, RealAgents.skipped(.opencode, needs: "opencode")), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     private func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 

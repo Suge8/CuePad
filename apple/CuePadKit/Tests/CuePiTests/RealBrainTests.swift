@@ -6,9 +6,9 @@ import Testing
 @testable import CuePi
 
 /// 端到端：真实的 Pi / Codex / Claude Code 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude` 开启列出的运行时；模型用 `CUEPAD_BRAIN_MODEL_PI` 等换，强度用 `CUEPAD_BRAIN_EFFORT` 换（缺省 off）。
+/// 要花钱，默认不跑：开关见 `RealAgents`（`CUEPAD_AGENT_TESTS` 里除 opencode 外列出的几家）；模型、强度的换法也在那里。
 private let environment = ProcessInfo.processInfo.environment
-private let enabledRuntimes: [AgentKind] = (environment["CUEPAD_BRAIN_TESTS"] ?? "").split(separator: ",").compactMap { AgentKind(rawValue: String($0)) }
+private let enabledRuntimes = RealAgents.enabled.filter { $0 != .opencode }
 private let cheapModels: [AgentKind: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claudeCode: "haiku"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
@@ -21,7 +21,7 @@ private func executable(_ name: String) -> URL? {
 }
 
 @MainActor
-@Suite(.enabled(if: !enabledRuntimes.isEmpty, "要花钱：CUEPAD_BRAIN_TESTS=pi,codex,claude 开启"), .serialized, .timeLimit(.minutes(5)))
+@Suite(.enabled(if: !enabledRuntimes.isEmpty, "要花钱，默认不跑：开关见 RealAgents（CUEPAD_AGENT_TESTS）"), .serialized, .timeLimit(.minutes(5)))
 struct RealBrainTests {
     /// 一个大脑与它的现场：独立的工作目录（名字里有随机标记，用来在各家的历史里找它）、MCP 替身的调用记录、收到的事件。
     @MainActor

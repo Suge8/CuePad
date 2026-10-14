@@ -6,7 +6,7 @@ import Testing
 
 /// 接入 Codex 的钩子，用真 codex 判定（它自己的 `hooks/list` 说信任了才算装好）。
 @MainActor
-@Suite(.enabled(if: realCodexAvailable, "需要本机装有 codex"), .timeLimit(.minutes(2)))
+@Suite(.enabled(if: realCodexAvailable, RealAgents.skipped(.codex, needs: "本机装有 codex")), .timeLimit(.minutes(2)))
 struct CodexHooksTests {
     let codex: CodexHome
     var cuepad: URL { codex.root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }

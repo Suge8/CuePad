@@ -6,7 +6,7 @@ import Testing
 
 /// 端到端：真实 Pi + 本机 FireCode（指挥官开进程内子代理、把子代理事件以信封投回会话）+ 桥扩展 + 假模型。
 @MainActor
-@Suite(.enabled(if: realPiAvailable && firecodeAvailable, "需要 ~/.local/bin/pi 与 ~/.pi/agent/extensions/firecode"))
+@Suite(.enabled(if: realPiAvailable && firecodeAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi 与 firecode 源码")))
 struct RealFirecodeTests {
     @Test func subagentsAreSummarizedOnTheMasterSessionAndTheirEventsAreNotYourPrompt() async throws {
         let pi = try await PiProcess(extraExtensions: [], firecode: true)
