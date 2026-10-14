@@ -123,7 +123,7 @@ enum Schema {
     Upgrade(stringLiteral: cueState),
     // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
     Upgrade(stringLiteral: piProcesses),
-    // 37：可换的模型与斜杠命令从会话记录拆成按 Mac、Agent 与工作目录共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
+    // 37：可换的模型与斜杠命令从会话记录拆成按内容共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
     // 在线会话的目录由桥重新连上后的第一次写入补上
     Upgrade(stringLiteral: """
       \(agentCatalogs)
@@ -261,7 +261,7 @@ enum Schema {
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
     \(catalogIndex)
 
-    -- 一台 Mac 上一种 Agent 在一个工作目录里可换的模型与斜杠命令（AgentCatalog）；id 由主机、Agent 与完整路径算出。
+    -- 会话可换的模型与斜杠命令（AgentCatalog）；id 由主机与内容算出，写下不改。
     \(agentCatalogs)
 
     \(previews)

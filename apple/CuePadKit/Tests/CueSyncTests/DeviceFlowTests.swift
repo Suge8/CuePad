@@ -122,16 +122,22 @@ import Testing
     await executor.stop()
   }
 
-  /// 三百个模型的清单：同一目录里的会话共用一份，状态变化不再带着它上传；会话的进程都没了，这一份也删掉。
-  @Test func sessionsInOneFolderShareOneModelListThatStateChangesDoNotResend() async throws {
+  /// 三百个模型的清单：报的一样的会话共用一份，状态变化不再带着它上传；同一目录里报的不一样的（如 `--models` 限定了范围）各看各的；
+  /// 会话的进程都没了，这一份也删掉。
+  @Test func sessionsReportingTheSameModelListShareOneThatStateChangesDoNotResend() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
     let models = PiModelState(model: options[0], models: options)
     try await recorder.update(sessionID: "s1", state: .thinking, title: "t", directory: "/Users/me/app", modelState: models)
     try await recorder.update(sessionID: "s2", state: .thinking, title: "u", directory: "/Users/me/app", modelState: models)
+    let scoped = PiModelState(model: options[0], models: Array(options.prefix(2)))
+    try await recorder.update(sessionID: "s3", state: .thinking, title: "v", directory: "/Users/me/app", modelState: scoped)
     try await cloud.exchange()
-    let shared = try #require(try await phone.store.allPiSessionStates().map(\.catalogID).first ?? nil)
-    #expect(Set(try await phone.store.allPiSessionStates().map(\.catalogID)) == [shared])
+    let states = Dictionary(uniqueKeysWithValues: try await phone.store.allPiSessionStates().map { ($0.sessionID, $0.catalogID) })
+    let shared = try #require(states["s1"] ?? nil)
+    #expect(states["s2"] == shared && states["s3"] != shared)
+    let own = try #require(states["s3"] ?? nil)
+    #expect(try await phone.store.agentCatalog(own)?.models == scoped.models)
     let sent = try #require(try await mac.store.agentCatalog(shared))
 
     try await recorder.update(sessionID: "s1", state: .settled, detail: "做完了")

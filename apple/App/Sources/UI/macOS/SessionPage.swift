@@ -35,9 +35,7 @@ extension SessionDigest {
         var digest = self
         digest.session = .live(
             session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
-        digest.catalog = AgentCatalog(
-            id: AgentCatalog.recordID(host: hostID, agent: session.agent, directory: session.cwd.path(percentEncoded: false)), hostID: hostID,
-            models: session.availableModels, commands: session.commands, modifiedAt: session.stateSince)
+        digest.catalog = AgentCatalog(host: hostID, models: session.availableModels, commands: session.commands, at: session.stateSince)
         if let project { digest.project = project }
         return digest
     }

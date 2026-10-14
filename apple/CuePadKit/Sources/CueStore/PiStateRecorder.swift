@@ -2,12 +2,13 @@ import Foundation
 
 extension CueStore {
   /// `notify` 只置给你的提示（`PiAlert.reaches`）：会话由 Cue 跟进时进入等回答不置，这类提问 Cue 处理，要你拍板的它会发"等你"。
-  /// `catalogChanged`：这个会话报的模型与命令和它上次写的不同（或还没写过），才写目录记录——同一目录里各会话报的偶有不同（见 `AgentCatalog`），
-  /// 每次状态变化都写会让它们来回覆盖。
-  func writePiState(sessionID: String, hostID: String, content: PiStateContent, catalogChanged: Bool, notify: PiAlert?) throws {
+  /// `catalog`：会话报的模型与命令所在的目录记录；`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，
+  /// 不必每次状态变化都去比一遍几十 KB 的清单。
+  func writePiState(
+    sessionID: String, hostID: String, content: PiStateContent, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
+  ) throws {
     try write {
       let now = Date.stamp
-      let catalog = content.catalog(host: hostID, at: now)
       var record = PiSessionState(
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: content.title,
         projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
@@ -15,7 +16,7 @@ extension CueStore {
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id)
-      if catalogChanged, let catalog { try writeCatalog(catalog) }
+      if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let alert = notify, alert == .waitingForUser,
         !alert.reaches(record, cueFollows: try db.first("SELECT 1 WHERE \(Self.followedByCue("?"))", [sessionID], { _ in true }) != nil)
       {
@@ -150,7 +151,7 @@ struct PiStateContent: Equatable, Sendable {
   var state: PiWorkState
   var detail: String?
   var title = ""
-  /// 工作目录（完整路径，不同步）：记录上只写文件夹名，目录记录按它分。
+  /// 工作目录（完整路径，不同步）：记录上只写文件夹名。
   var directory: String?
   var projectID: UUID?
   var question: PiQuestion?
@@ -167,19 +168,15 @@ struct PiStateContent: Equatable, Sendable {
 
   var folder: String? { directory.flatMap(CueStore.folderName(ofWorkingDirectory:)) }
 
-  /// 这个会话的目录记录；没有工作目录或什么都没报的没有。
+  /// 这个会话的目录记录；什么都没报的没有。
   func catalog(host: String, at now: Date) -> AgentCatalog? {
-    guard let directory, !modelState.models.isEmpty || !commands.isEmpty else { return nil }
-    return AgentCatalog(
-      id: AgentCatalog.recordID(host: host, agent: agent, directory: directory), hostID: host, models: modelState.models,
-      commands: commands, modifiedAt: now)
+    guard !modelState.models.isEmpty || !commands.isEmpty else { return nil }
+    return AgentCatalog(host: host, models: modelState.models, commands: commands, at: now)
   }
 
-  /// 目录记录的键或内容和上次写的（`written`，没写过为 nil）不同。
+  /// 模型与命令和上次写的（`written`，没写过为 nil）不同。
   func catalogDiffers(from written: PiStateContent?) -> Bool {
-    guard let written else { return true }
-    return written.directory != directory || written.agent != agent || written.modelState.models != modelState.models
-      || written.commands != commands
+    written.map { $0.modelState.models != modelState.models || $0.commands != commands } ?? true
   }
 
   /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
@@ -209,6 +206,8 @@ public actor PiStateRecorder {
     var content: PiStateContent?
     var written: PiStateContent?
     var writtenAt: Date?
+    /// `written` 的目录记录（模型与命令没变时沿用，不重算内容的 id）
+    var catalog: AgentCatalog?
     /// 有挂起的更新（节流期内只保留最新一次，就是 `content`）时在等的定时写入
     var timer: Task<Void, Never>?
   }
@@ -355,11 +354,13 @@ public actor PiStateRecorder {
   private func commit(
     _ sessionID: String, _ session: inout Session, _ content: PiStateContent, notify: PiAlert? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {
-    let catalogChanged = content.catalogDiffers(from: session.written)
+    let writesCatalog = content.catalogDiffers(from: session.written)
+    if writesCatalog { session.catalog = content.catalog(host: hostID, at: now) }
     session.written = content
     session.writtenAt = now
-    return { [store, hostID] in
-      try await store.writePiState(sessionID: sessionID, hostID: hostID, content: content, catalogChanged: catalogChanged, notify: notify)
+    return { [store, hostID, catalog = session.catalog] in
+      try await store.writePiState(
+        sessionID: sessionID, hostID: hostID, content: content, catalog: catalog, writesCatalog: writesCatalog, notify: notify)
     }
   }
 
