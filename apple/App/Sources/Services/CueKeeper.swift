@@ -60,7 +60,8 @@ nonisolated struct CueTiming: Sendable {
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
-/// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
+/// 基线（变化从哪算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
+/// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
@@ -113,8 +114,8 @@ final class CueKeeper {
 
     /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
     private nonisolated struct Progress: Codable {
-        /// 基线：变化从这之后算（上一次做完的一轮醒来的时刻）
-        var since = Date.now
+        /// 基线：变化从这些写入序号之后算（`advanceBaseline`）；nil 是这台 Mac 还没值过班，从上班时库里的最新写入算起
+        var marks: CueMarks?
         /// 基线时看板上的任务；nil 是还没醒过（不比跟进集合）
         var followed: [UUID]?
         var patrolDay: String?
@@ -137,8 +138,8 @@ final class CueKeeper {
         var delivered: [UUID] = []
         /// 这一轮中途插进了你的话（`delivered` 不算数：随信封记下送达的还有你关掉的提问，那不是在等回答）
         var youSpoke = false
-        /// 醒来时的基线候选：这一轮做完且没出错才前移到它
-        var baseline: (since: Date, followed: [UUID])?
+        /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
+        var mark: Int?
         /// 这一轮报的错（原文）
         var failure: String?
         /// 正在用的工具（`CueActivity.detail`）；nil 是在想
@@ -152,9 +153,9 @@ final class CueKeeper {
         }
     }
 
-    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（晚于 `latest`）。
+    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`）。
     private struct Setback {
-        var latest: Date?
+        var latest: Int?
         var retryAt: Date?
         var wake: CueWake
         var extra: String?
@@ -188,7 +189,8 @@ final class CueKeeper {
     private var lastTurnAuthor: CueAuthor = .note
     private var lastFailure: String?
     private var setback: Setback?
-    private var window: (first: Date, last: Date, latest: Date)?
+    /// 安静窗口：第一处变化、最近一处新变化被看到的时刻，与看到过的最新写入序号
+    private var window: (first: Date, last: Date, latest: Int)?
     private var timer: Task<Void, Never>?
 
     init(_ setup: Setup) {
@@ -231,6 +233,14 @@ final class CueKeeper {
             }
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
+            if progress.marks == nil {
+                do {
+                    progress.marks = CueMarks(try await store.lastWrite())
+                    save()
+                } catch {
+                    Self.log.error("Cue 读写入序号失败：\(error.localizedDescription, privacy: .public)")
+                }
+            }
             await startShift()
             await publish()
             loop: for await next in inputs {
@@ -371,7 +381,7 @@ final class CueKeeper {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
-                await advanceBaseline(finished.baseline)
+                await advanceBaseline(from: finished.mark)
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
@@ -381,16 +391,15 @@ final class CueKeeper {
 
     /// 基线之后 Cue 跟进的事里的变化。
     private func changes() async throws -> [CueChange] {
-        try await setup.store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init))
+        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), followed: progress.followed.map(Set.init))
     }
 
-    /// 一轮做完、没出错：基线前移到醒来时，看板以此刻为准（这一轮里 Cue 自己建的、交还的不算变化）；
-    /// 这一轮里会话的动静留到下次醒来，其余变化（多是 Cue 自己做的）不再报。
-    private func advanceBaseline(_ baseline: (since: Date, followed: [UUID])?) async {
-        if let baseline { (progress.since, progress.followed) = (baseline.since, baseline.followed) }
+    /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
+    /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的）；看板以此刻为准（这一轮里 Cue 自己建的、交还的不算变化）。
+    private func advanceBaseline(from mark: Int?) async {
         do {
-            let sessions: Set<CueChange.Kind> = [.settled, .waitingForUser, .failed, .youSpoke]
-            progress.since = try await changes().filter { sessions.contains($0.kind) }.map(\.at).min()?.addingTimeInterval(-0.001) ?? .now
+            let latest = try await setup.store.lastWrite()
+            progress.marks = CueMarks(sessions: mark ?? latest, tasks: latest)
             progress.followed = try await setup.store.cueBoard().map(\.task.id)
         } catch {
             Self.log.error("Cue 读变化失败：\(error.localizedDescription, privacy: .public)")
@@ -400,7 +409,7 @@ final class CueKeeper {
 
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
     private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
-        let latest = try? await changes().map(\.at).max()
+        let latest = try? await changes().map(\.seq).max()
         let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
             latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
@@ -467,10 +476,10 @@ final class CueKeeper {
             let timing = setup.timing
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let changes = try await changes()
-            let latest = changes.map(\.at).max()
+            let latest = changes.map(\.seq).max()
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
-                if let latest, latest > held.latest ?? .distantPast {
+                if let latest, latest > held.latest ?? Int.min {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
@@ -542,11 +551,12 @@ final class CueKeeper {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
         let store = setup.store, now = Date.now
+        let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
         let dismissed = try await store.cueMessagesToDeliver().filter { !$0.wakesCue }
         let delivering = delivering + dismissed.map(\.id)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.contextUsed, renewAt: Self.renewAt, since: progress.since, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.contextUsed, renewAt: Self.renewAt, projects: try await store.cueProjects(),
             changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
         var parts = [envelope]
         if let used = shift.contextUsed, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
@@ -561,7 +571,7 @@ final class CueKeeper {
         }
         updateShift {
             $0.turn = Turn(
-                author: author, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, baseline: (now, board.map(\.task.id)))
+                author: author, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark)
         }
         save()
         try await store.markCueMessagesDelivered(delivering)

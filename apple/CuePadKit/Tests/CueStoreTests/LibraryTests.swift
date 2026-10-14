@@ -126,8 +126,16 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 35：撤掉 36（本机的会话进程表）。
-  static let undoSchema36 = "DROP TABLE piProcesses;"
+  /// 退回结构 35：再撤掉 36（本机的会话进程表）。
+  static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
+  /// 把新建的库退回结构 36：撤掉 37（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
+  static let undoSchema37 = """
+    DROP TRIGGER piSessionStates_writeSeq_insert; DROP TRIGGER piSessionStates_writeSeq_update;
+    DROP TRIGGER cards_writeSeq_insert; DROP TRIGGER cards_writeSeq_update;
+    DROP TRIGGER deliveryRequests_writeSeq_insert; DROP TRIGGER deliveryRequests_writeSeq_update; DROP TRIGGER piMessages_writeSeq_insert;
+    ALTER TABLE piSessionStates DROP COLUMN writeSeq; ALTER TABLE cards DROP COLUMN writeSeq;
+    ALTER TABLE deliveryRequests DROP COLUMN writeSeq; ALTER TABLE piMessages DROP COLUMN writeSeq; DROP TABLE writeCounter;
+    """
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
   static let undoSchema35 = undoSchema36 + "DROP TABLE cueState;"
   /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。

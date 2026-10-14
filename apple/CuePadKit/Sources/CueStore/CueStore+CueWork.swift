@@ -93,7 +93,10 @@ public struct CueChange: Equatable, Sendable {
   public var task: Card?
   /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
+  /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
+  /// 本机收到它的写入序号（`CueStore.lastWrite`）：越大越晚写进库。永久删除的任务没有行，是读到它时的最新序号
+  public var seq: Int
   /// 提问、错误、你说的话、为什么不再跟进、哪个请求为什么没成。
   public var detail: String?
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
@@ -102,9 +105,11 @@ public struct CueChange: Equatable, Sendable {
   public var interrupted: Bool
 
   init(
-    kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil, interrupted: Bool = false
+    kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, seq: Int, detail: String? = nil, recap: PiRecap? = nil,
+    interrupted: Bool = false
   ) {
     self.kind = kind
+    self.seq = seq
     self.interrupted = interrupted
     self.taskID = taskID
     self.task = task
@@ -113,6 +118,20 @@ public struct CueChange: Equatable, Sendable {
     self.detail = detail
     self.recap = recap
   }
+}
+
+/// Cue 的变化从哪算起（本机写入序号，`CueStore.lastWrite`）：会话的动静从 `sessions` 之后，任务完成从 `tasks` 之后。
+/// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。
+public struct CueMarks: Codable, Equatable, Sendable {
+  public var sessions: Int
+  public var tasks: Int
+
+  public init(sessions: Int, tasks: Int) {
+    self.sessions = sessions
+    self.tasks = tasks
+  }
+
+  public init(_ both: Int) { self.init(sessions: both, tasks: both) }
 }
 
 /// 一件事的细节（Cue 的 peek）：叶子、各自的草稿、会话、最近几轮问答与预览。
@@ -548,24 +567,32 @@ extension CueStore {
   /// 看板上的（跟进中的）：没做完、没归档。
   private static let onBoard = "t.completedAt IS NULL AND t.archivedAt IS NULL"
 
-  /// `since` 之后 Cue 跟进的事里的变化，从早到晚：会话歇下、等回答、出错（按会话进入这个状态的时刻），叶子或任务完成，
-  /// 你在会话的终端里亲自说了话，Cue 发起的请求没能执行（按本机得知结果的时刻）。`followed` 是上次醒来时看板上的任务 id：给了就和此刻的看板比，
-  /// 多出来的是交给了 Cue（`joined`），少了的是不再跟进（`left`，完成了的只报 `done`）；nil 不比（如管理器刚启动）。
-  public func cueChanges(since: Date, followed: Set<UUID>? = nil) throws -> [CueChange] {
-    let tasks = try topTasks(followedOnly: true, where: "(t.completedAt IS NULL OR t.completedAt > ?)", [since])
+  /// 本机最近一次写入的序号：构成 Cue 的变化的那几列被写时（本机写入与同步落库一样），那一行盖上新序号（见 `Schema` 37）。
+  /// Cue 按它分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来。
+  public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
+
+  /// 写入序号 `marks` 之后 Cue 跟进的事里的变化，按事件时刻从早到晚：会话歇下、等回答、出错，你在会话的终端里亲自说了话，
+  /// Cue 发起的请求没能执行（这些从 `marks.sessions` 之后算），叶子或任务完成（从 `marks.tasks` 之后算）。`followed` 是上次醒来时看板上的任务 id：
+  /// 给了就和此刻的看板比，多出来的是交给了 Cue（`joined`），少了的是不再跟进（`left`，完成了的只报 `done`）；nil 不比（如管理器刚启动）。
+  public func cueChanges(after marks: CueMarks, followed: Set<UUID>? = nil) throws -> [CueChange] {
+    let tasks = try topTasks(followedOnly: true, where: "(t.completedAt IS NULL OR t.writeSeq > ?)", [marks.tasks])
     var changes: [CueChange] = []
-    if let followed { changes += try membershipChanges(from: followed, since: since, reported: Set(tasks.map(\.id))) }
+    if let followed { changes += try membershipChanges(from: followed, after: marks.tasks, reported: Set(tasks.map(\.id))) }
     if !tasks.isEmpty {
       let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
       let sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
-      for task in tasks where task.completedAt.map({ $0 > since }) ?? false {
-        changes.append(CueChange(kind: .done, taskID: task.id, task: task, at: task.completedAt!, recap: try latestRecap(of: task.id)))
+      let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
+      let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))
+      func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
+      for task in tasks where task.completedAt != nil && seq(task) > marks.tasks {
+        changes.append(CueChange(kind: .done, taskID: task.id, task: task, at: task.completedAt!, seq: seq(task), recap: try latestRecap(of: task.id)))
       }
       for (task, leaf) in leaves {
-        if leaf.id != task.id, let done = leaf.completedAt, done > since {
-          changes.append(CueChange(kind: .done, taskID: task.id, task: task, leaf: leaf, at: done, recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
+        if leaf.id != task.id, let done = leaf.completedAt, seq(leaf) > marks.tasks {
+          changes.append(CueChange(
+            kind: .done, taskID: task.id, task: task, leaf: leaf, at: done, seq: seq(leaf), recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
         }
-        guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
+        guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), let written = sessionSeqs[session.sessionID], written > marks.sessions else { continue }
         let (kind, detail): (CueChange.Kind?, String?) =
           switch session.state.known {
           case .settled, .interrupted: (.settled, nil)
@@ -575,29 +602,29 @@ extension CueStore {
           }
         if let kind {
           changes.append(CueChange(
-            kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap,
+            kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, seq: written, detail: detail, recap: session.recap,
             interrupted: session.state == .known(.interrupted)))
         }
       }
       // 一个会话可以绑好几件事：你在里面说的话算在它绑着的每件跟进的事上（同一件事的几个叶子共用它时只报一次）
       let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
         .mapValues { pairs in pairs.filter { pair in pairs.first { $0.task.id == pair.task.id }!.leaf.id == pair.leaf.id } }
-      let typed = try select(
+      let typed = try selectWritten(
         PiChatMessage.self,
-        where: "sessionID IN (SELECT value FROM json_each(?)) AND role = '\(PiChatRole.user.rawValue)' AND deliveryID IS NULL AND at > ?",
-        [JSONColumn.encode(Array(bySession.keys)), since], orderBy: "at, seq")
-      for message in typed {
+        where: "sessionID IN (SELECT value FROM json_each(?)) AND role = '\(PiChatRole.user.rawValue)' AND deliveryID IS NULL AND writeSeq > ?",
+        [JSONColumn.encode(Array(bySession.keys)), marks.sessions], orderBy: "writeSeq")
+      for (message, written) in typed {
         for pair in bySession[message.sessionID] ?? [] {
           changes.append(CueChange(
-            kind: .youSpoke, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: message.at, detail: CueFormat.plainText(message.text),
-            recap: sessions[message.sessionID]?.recap))
+            kind: .youSpoke, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: message.at, seq: written,
+            detail: CueFormat.plainText(message.text), recap: sessions[message.sessionID]?.recap))
         }
       }
       // 请求带着卡（叶子或它的草稿）就算在那个叶子上，否则算在会话绑着的叶子上
-      let failed = try select(
-        DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND \(Self.resultKnownAt) > ?", [since],
-        orderBy: "createdAt, rowid")
-      for request in failed {
+      let failed = try selectWritten(
+        DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND writeSeq > ?", [marks.sessions],
+        orderBy: "writeSeq")
+      for (request, written) in failed {
         let card = try request.cardID.flatMap { try find(Card.self, $0) }
         let pairs = card.map { card in leaves.filter { $0.leaf.id == card.id || $0.leaf.id == card.parentID } }
           ?? request.target.ref.flatMap { bySession[$0] } ?? []
@@ -605,7 +632,7 @@ extension CueStore {
         let detail = "\(Self.action(request.mode))：\(request.failure ?? "")"
         for pair in pairs {
           changes.append(CueChange(
-            kind: .failed, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: at, detail: detail,
+            kind: .failed, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: at, seq: written, detail: detail,
             recap: pair.leaf.piSessionID.flatMap { sessions[$0] }?.recap))
         }
       }
@@ -646,18 +673,23 @@ extension CueStore {
 
   /// 跟进集合的差异：此刻看板上有、`followed` 里没有的是 `joined`；反过来的是 `left`，带上原因（永久删除的也报，只有 id）。
   /// 完成了的报 `done`（`reported` 里的已经报过，不重复）。
-  private func membershipChanges(from followed: Set<UUID>, since: Date, reported: Set<UUID>) throws -> [CueChange] {
+  private func membershipChanges(from followed: Set<UUID>, after mark: Int, reported: Set<UUID>) throws -> [CueChange] {
     let current = try topTasks(followedOnly: true, where: Self.onBoard)
-    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, taskID: $0.id, task: $0, at: $0.modifiedAt) }
     let gone = followed.subtracting(current.map(\.id))
-    let trashedProjects = Set(try select(Project.self, where: "deletedAt IS NOT NULL").map(\.id))
     let remaining = try cards(gone)
+    let seqs = try writeSeqs(of: .cards, "id", (current.map(\.id) + remaining.keys).map { $0.uuidString.lowercased() })
+    func seq(_ card: Card) -> Int { seqs[card.id.uuidString.lowercased()] ?? 0 }
+    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, taskID: $0.id, task: $0, at: $0.modifiedAt, seq: seq($0)) }
+    let trashedProjects = Set(try select(Project.self, where: "deletedAt IS NOT NULL").map(\.id))
+    let deletedAt = try lastWrite()
     for id in gone where remaining[id] == nil {
-      changes.append(CueChange(kind: .left, taskID: id, task: nil, at: Date.stamp, detail: "删了"))
+      changes.append(CueChange(kind: .left, taskID: id, task: nil, at: Date.stamp, seq: deletedAt, detail: "删了"))
     }
     for card in remaining.values {
       if let done = card.completedAt {
-        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, taskID: card.id, task: card, at: done, recap: try latestRecap(of: card.id))) }
+        if !reported.contains(card.id), seq(card) > mark {
+          changes.append(CueChange(kind: .done, taskID: card.id, task: card, at: done, seq: seq(card), recap: try latestRecap(of: card.id)))
+        }
         continue
       }
       let reason =
@@ -666,7 +698,7 @@ extension CueStore {
         else if card.todoAt == nil { "改回了灵感" }
         else if card.parentID != nil { "挂到了别的任务下" }
         else { "你接手了" }
-      changes.append(CueChange(kind: .left, taskID: card.id, task: card, at: card.modifiedAt, detail: reason))
+      changes.append(CueChange(kind: .left, taskID: card.id, task: card, at: card.modifiedAt, seq: seq(card), detail: reason))
     }
     return changes
   }
@@ -746,6 +778,25 @@ extension CueStore {
   private func cards(_ ids: Set<UUID>) throws -> [UUID: Card] {
     Dictionary(
       uniqueKeysWithValues: try select(Card.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)]).map { ($0.id, $0) })
+  }
+
+  /// 这些行的写入序号，按 `key` 列（同一个键有几行取最新的）。
+  private func writeSeqs(of table: Table, _ key: String, _ keys: [String]) throws -> [String: Int] {
+    guard !keys.isEmpty else { return [:] }
+    return Dictionary(
+      try db.query(
+        "SELECT \(key), MAX(writeSeq) FROM \(table.rawValue) WHERE \(key) IN (SELECT value FROM json_each(?)) GROUP BY \(key)", [JSONColumn.encode(keys)]
+      ) { ($0.text(0), Int($0.int(1))) },
+      uniquingKeysWith: { first, _ in first })
+  }
+
+  /// 满足条件的行，带上它的写入序号。
+  private func selectWritten<R: Record>(
+    _ type: R.Type, where condition: String, _ arguments: [any SQLBindable], orderBy: String
+  ) throws -> [(R, Int)] {
+    try db.query(
+      "SELECT \(R.columns.joined(separator: ", ")), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
+    ) { (R(row: $0), Int($0.int(Int32(R.columns.count)))) }
   }
 
   private func sessionStates(_ sessionIDs: [String]) throws -> [String: PiSessionState] {

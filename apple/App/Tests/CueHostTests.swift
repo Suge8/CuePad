@@ -66,7 +66,7 @@ struct CueHostTests {
         /// 等的是开工结果之后那句回复、且 Cue 空闲：只等"办好了"会撞上更早一轮的同一句。
         func settleFollowedTask(titled title: String, beforeSettling: () async throws -> Void = {}) async throws {
             try await say("请建个任务并开工")
-            try await eventually("开工这一轮做完") { self.model.answered("开新会话") && self.services.cue.state == .idle }
+            try await eventually("开工这一轮做完") { try await self.store.cueState()?.state == .known(.settled) && self.model.answered("开新会话") }
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
             let session = try #require(app.host.extensions.values.first)
             let task = try #require(try await store.cueBoard().first?.task)
@@ -199,7 +199,7 @@ struct CueHostTests {
     @Test func 刚启用问过你_开场只有一条() async throws {
         let rig = try await Rig(asksOnEnable: true)
         try await eventually("回了最后一句") { rig.model.answered("已问用户") }
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
         let said = try await rig.store.cueMessages().filter { $0.author == .known(.cue) }
         #expect(said.map(\.text) == ["要交给我跟进吗？"])
         await rig.stop()
@@ -276,6 +276,25 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// 会话歇下的事件比它写进库早（这台机器忙、或从另一台 Mac 同步过来）：写进库时 Cue 已经做完了一轮、基线已经越过这个时刻，
+    /// Cue 仍然要醒来看到它，不能因为事件时刻早于基线就漏掉。
+    @Test func 歇下晚到_事件时刻早于上一轮_Cue仍然醒来() async throws {
+        let rig = try await Rig()
+        let project = try #require(try await rig.store.projects().first)
+        let task = try await rig.store.createTask("修好登录页 晚到", in: project.id)
+        try await rig.store.setCueFollows(task.id, true)
+        try await rig.store.linkCard(task.id, toSession: "remote-1")
+        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
+        let settledAt = Date.now
+        try await rig.say("你好")
+        try await rig.message(.cue, containing: "收到：你好")
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
+        try await remote.update(sessionID: "remote-1", state: .settled, times: PiTimes(stateSince: settledAt, busySince: nil))
+        try await rig.message(.note, containing: "登录页那边歇下了")
+        await rig.stop()
+    }
+
     /// Cue 带选项问你；你回答后 Cue 被唤醒，回答写成 Cue 说的。"等你"推了通知。
     @Test func 等你被回答_Cue被唤醒() async throws {
         let rig = try await Rig()
@@ -349,7 +368,7 @@ struct CueHostTests {
             try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
         }
         let asked = try await rig.message(.cue, containing: "收下吗？")
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
+        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已请他收下") }
         #expect(try await rig.store.cueMessages().filter { $0.createdAt >= asked.createdAt && $0.id != asked.id }.isEmpty)
         await rig.stop()
     }
