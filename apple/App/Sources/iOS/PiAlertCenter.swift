@@ -17,10 +17,8 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private(set) var pendingTap: PiAlertTap?
-    /// 点开的 Cue 通知（那条 Cue 消息的 id）：界面打开 Cue 页后调 `consumeCueTap()`。
-    private(set) var pendingCueTap: UUID?
-    /// 开着的 Cue 页数（Cue 页出现时加一、消失时减一）：大于 0 时前台不弹 Cue 的通知。
-    var cuePageViewers = 0
+    /// 点开的 Cue 通知交给它（`pendingDeepLink`），前台弹不弹看它的 `cueViewers`；窗口建出时接上（早于系统交来点开的通知）。
+    @ObservationIgnored weak var services: AppServices?
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
@@ -66,12 +64,7 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 点开的通知；不是 Pi 或 Cue 的通知则忽略。
     func receive(_ userInfo: [AnyHashable: Any]) {
         if let tap = PiAlertRoute.tap(from: userInfo) { pendingTap = tap }
-        if let message = CueAlertRoute.message(from: userInfo) { pendingCueTap = message }
-    }
-
-    func consumeCueTap() -> UUID? {
-        defer { pendingCueTap = nil }
-        return pendingCueTap
+        if CueAlertRoute.message(from: userInfo) != nil { services?.setDeepLink(.cue) }
     }
 
     func consumeTap() -> PiAlertTap? {
@@ -90,7 +83,7 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        CueAlertRoute.message(from: notification.request.content.userInfo) != nil && cuePageViewers == 0 ? [.banner, .list, .sound] : []
+        CueAlertRoute.message(from: notification.request.content.userInfo) != nil && services?.cueViewers == 0 ? [.banner, .list, .sound] : []
     }
 }
 

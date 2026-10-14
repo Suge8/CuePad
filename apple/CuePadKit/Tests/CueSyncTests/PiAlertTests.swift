@@ -118,7 +118,7 @@ import Testing
 
     let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？")
-    let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueAlertRoute.profileRecordName, zoneID: zone)))
+    let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     let text = try #require(CueAlertText.content(message: record, profile: profile))
     #expect(text.title == "小管家" && text.body == "要合并到 main 吗？\n合并 / 先别")
 

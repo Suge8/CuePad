@@ -3,16 +3,9 @@ import Foundation
 
 // 任务交给会话、跟进与看板：界面与 Cue（经 MCP）共用这一份规则。`cue` 为真的写入标明来自 Cue（`DeliveryOrigin`）。
 
-/// 交给会话的结果：发进了叶子绑着的会话，或开了新会话（请求正文是 `PiLaunch`，会话开好后叶子认领它）。
-public enum CueHandOff: Equatable, Sendable {
-  case sent(DeliveryRequest)
-  case started(DeliveryRequest)
-
-  public var request: DeliveryRequest {
-    switch self {
-    case .sent(let request), .started(let request): request
-    }
-  }
+/// 对会话说话的时机（`CueStore.sayToLeaf`）：会话正忙时马上说（插进这一轮）还是等它做完再说；歇着时两种都是直接说。
+public enum SayTiming: Sendable {
+  case now, after
 }
 
 /// Cue 眼里的一个项目（`CueStore.cueProjects`）。
@@ -77,11 +70,7 @@ public struct CueChange: Equatable, Sendable {
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
   public var recap: PiRecap?
 
-  init(kind: Kind, task: Card, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil) {
-    self.init(kind: kind, taskID: task.id, task: task, leaf: leaf, at: at, detail: detail, recap: recap)
-  }
-
-  init(kind: Kind, taskID: UUID, task: Card?, leaf: Card?, at: Date, detail: String?, recap: PiRecap?) {
+  init(kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil) {
     self.kind = kind
     self.taskID = taskID
     self.task = task
@@ -121,33 +110,43 @@ extension UUID {
 extension CueStore {
   // MARK: 交给会话
 
-  /// 把话交给叶子（没有步骤的任务）的会话：叶子绑着会话就发进那个会话（会话在别的 Mac 就写那台的 `hostID`）；
-  /// 没绑就在项目绑定的文件夹开一个以叶子标题命名的新会话，话作为第一句。`text` 为 nil 时交出叶子的草稿（提示词），
-  /// 送达后草稿用掉（`PromptConsumption`）。`host` 是这台 Mac：会话记录不在时、项目在这台 Mac 上绑了文件夹时用它。
-  /// `mode` 是说话的方式（`send` / `steer` / `followUp`）：直接发送而会话正忙时不写请求，抛 `sessionBusy`。
-  /// 项目没绑文件夹抛 `noFolder`。`model` 与 `thinking` 只用于开新会话。
-  public func handOff(
-    _ leaf: UUID, text: String? = nil, mode: DeliveryMode = .send, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
-    host: String, cue: Bool = false
-  ) throws -> CueHandOff {
+  /// 开工：把叶子（没有步骤的任务）的草稿交出去。叶子绑着会话就发进那个会话（会话正忙时等它做完再说），
+  /// 没绑就在项目绑定的文件夹开一个以叶子标题命名的新会话，草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
+  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，项目没绑文件夹抛 `noFolder`。
+  /// `host` 是这台 Mac：会话记录不在、项目在这台 Mac 上绑了文件夹时用它。`model` 与 `thinking` 只用于开新会话。
+  public func startLeaf(
+    _ leaf: UUID, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, host: String, cue: Bool = false
+  ) throws -> DeliveryRequest {
     let card = try requireLeaf(leaf)
     let draft = try draft(of: leaf)
-    let content = text ?? draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
-    let carrier = text == nil ? draft?.id ?? leaf : leaf
-    if let sessionID = card.piSessionID {
-      let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
-      if mode == .send, state?.state.known?.isTurnRunning == true { throw CueStoreError.sessionBusy }
-      let target = SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: sessionID)
-      return .sent(try requestDelivery(content, to: target, on: state?.hostID ?? host, mode: mode, card: carrier, cue: cue))
+    let content = draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
+    if card.piSessionID != nil {
+      guard let draft else { throw CueStoreError.alreadyStarted(card.heading) }
+      let session = try sessionTarget(of: card, host: host)
+      return try requestDelivery(content, to: session.target, on: session.host, mode: Self.mode(.after, session.state), card: draft.id, cue: cue)
     }
     guard try launchingLeaves([leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
     guard let project = card.projectID else { throw CueStoreError.noFolder("") }
     guard let launchHost = try launchHost(for: project, preferring: host) else {
       throw CueStoreError.noFolder(try find(Project.self, project)?.name ?? "")
     }
-    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-    let launch = PiLaunch(project: project, prompt: trimmed.isEmpty ? nil : content, token: UUID().uuidString, name: card.heading, model: model, thinking: thinking)
-    return .started(try requestLaunch(launch, title: card.heading, on: launchHost, card: carrier, cue: cue))
+    let launch = PiLaunch(
+      project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
+      name: card.heading, model: model, thinking: thinking)
+    return try requestLaunch(launch, title: card.heading, on: launchHost, card: draft?.id ?? leaf, cue: cue)
+  }
+
+  /// 对叶子已有的会话说话。方式由会话此刻的状态定：歇着就直接说；正在跑一轮时 `now` 马上说、`after` 等它做完再说。
+  /// 没有会话抛 `noSession`（正在开会话抛 `launching`）。
+  public func sayToLeaf(_ leaf: UUID, text: String, when: SayTiming, host: String, cue: Bool = false) throws -> DeliveryRequest {
+    let (card, session) = try requireSession(of: leaf, host: host)
+    return try requestDelivery(text, to: session.target, on: session.host, mode: Self.mode(when, session.state), card: card.id, cue: cue)
+  }
+
+  /// 说话的方式：会话正在跑一轮才分马上说与等它做完再说，否则直接说（记录不在时也直接说）。
+  private static func mode(_ when: SayTiming, _ state: PiSessionState?) -> DeliveryMode {
+    guard state?.state.known?.isTurnRunning == true else { return .send }
+    return when == .now ? .steer : .followUp
   }
 
   /// 这些叶子里正在开新会话的：带着叶子或它的草稿（交出草稿时请求带的是草稿，送达后改记到叶子上）的开新会话请求还在路上，
@@ -173,13 +172,12 @@ extension CueStore {
 
   /// 回答叶子的会话正在等的提问：选择框给选项原文或从 1 起的序号，确认框给是或否，输入框给文字。
   public func answerLeaf(_ leaf: UUID, _ value: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let (card, state) = try requireSession(of: leaf)
-    guard let question = state?.question, question.isAnswerable, let promptID = question.promptID, let kind = question.kind.known else {
+    let session = try requireSession(of: leaf, host: host).session
+    guard let question = session.state?.question, question.isAnswerable, let promptID = question.promptID, let kind = question.kind.known else {
       throw CueStoreError.nothingToAnswer
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
-    let target = SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: card.piSessionID)
-    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: target, on: state?.hostID ?? host, cue: cue)
+    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host, cue: cue)
   }
 
   private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String]) throws -> PiAnswerValue {
@@ -202,8 +200,8 @@ extension CueStore {
 
   /// 停止叶子的会话正在跑的这一轮。
   public func stopLeaf(_ leaf: UUID, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let (card, state) = try requireSession(of: leaf)
-    return try requestStop(of: SendTarget(kind: .piSession, name: state?.title ?? card.heading, ref: card.piSessionID), on: state?.hostID ?? host, cue: cue)
+    let session = try requireSession(of: leaf, host: host).session
+    return try requestStop(of: session.target, on: session.host, cue: cue)
   }
 
   /// 完成一件事并结束它的会话（写结束请求），返回结束请求。叶子直接完成；有步骤的任务要步骤都完成了才行
@@ -212,15 +210,15 @@ extension CueStore {
   public func completeTask(_ task: UUID, host: String, cue: Bool = false) throws -> [DeliveryRequest] {
     guard let link = try link(of: task), let card = try find(Card.self, task) else { throw CueStoreError.notFound }
     guard link.isTask else { throw CueStoreError.notATask }
-    let steps = try select(Card.self, where: "parentID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [task], orderBy: "sortKey, id")
-    let remaining = steps.filter { $0.completedAt == nil }.count
+    let leaves = try leaves(of: card)
+    let remaining = leaves.filter { $0.id != task && $0.completedAt == nil }.count
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
     try write { _ = try applyStatus(task, .done) }
-    return try (steps.isEmpty ? [card] : steps).compactMap { leaf in
-      guard let sessionID = leaf.piSessionID else { return nil }
-      let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
-      guard state?.state != .known(.ended) else { return nil }
-      return try requestEnd(of: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), on: state?.hostID ?? host, cue: cue)
+    return try leaves.compactMap { leaf in
+      guard leaf.piSessionID != nil else { return nil }
+      let session = try sessionTarget(of: leaf, host: host)
+      guard session.state?.state != .known(.ended) else { return nil }
+      return try requestEnd(of: session.target, on: session.host, cue: cue)
     }
   }
 
@@ -256,10 +254,33 @@ extension CueStore {
     return card
   }
 
-  private func requireSession(of leaf: UUID) throws -> (Card, PiSessionState?) {
+  /// 叶子与它的会话；没有会话抛 `noSession`（正在开会话抛 `launching`）。
+  private func requireSession(of leaf: UUID, host: String) throws -> (card: Card, session: SessionTarget) {
     let card = try requireLeaf(leaf)
-    guard let sessionID = card.piSessionID else { throw CueStoreError.noSession(card.heading) }
-    return (card, try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)))
+    guard card.piSessionID != nil else {
+      throw try launchingLeaves([leaf]).isEmpty ? CueStoreError.noSession(card.heading) : CueStoreError.launching(card.heading)
+    }
+    return (card, try sessionTarget(of: card, host: host))
+  }
+
+  /// 发给叶子会话的目标、由哪台 Mac 执行（会话所在的那台；记录不在时 `host`），与会话此刻的记录。
+  private struct SessionTarget {
+    var target: SendTarget
+    var host: String
+    var state: PiSessionState?
+  }
+
+  /// 叶子 `leaf`（绑着会话）的会话目标。
+  private func sessionTarget(of leaf: Card, host: String) throws -> SessionTarget {
+    let sessionID = leaf.piSessionID!
+    let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
+    return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), host: state?.hostID ?? host, state: state)
+  }
+
+  /// 这件事的叶子：有步骤的是各步骤（按顺序），没有步骤的是它自己。
+  private func leaves(of task: Card) throws -> [Card] {
+    let steps = try select(Card.self, where: "parentID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [task.id], orderBy: "sortKey, id")
+    return steps.isEmpty ? [task] : steps
   }
 
   // MARK: 看板与变化
@@ -272,7 +293,7 @@ extension CueStore {
 
   /// Cue 跟进的、没做完的顶层任务（没删除、没归档），按项目与手动顺序。
   public func cueBoard() throws -> [CueBoardItem] {
-    try boardItems(try followedTasks(where: Self.onBoard))
+    try boardItems(try topTasks(followedOnly: true, where: Self.onBoard))
   }
 
   /// 所有没做完的顶层任务（不论谁在跟进；没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序：Cue 刚启用和巡视时看你手上有哪些事。
@@ -303,23 +324,18 @@ extension CueStore {
   /// 你在会话的终端里亲自说了话。`followed` 是上次醒来时看板上的任务 id：给了就和此刻的看板比，
   /// 多出来的是交给了 Cue（`joined`），少了的是不再跟进（`left`，完成了的只报 `done`）；nil 不比（如管理器刚启动）。
   public func cueChanges(since: Date, followed: Set<UUID>? = nil) throws -> [CueChange] {
-    let tasks = try followedTasks(where: "(t.completedAt IS NULL OR t.completedAt > ?)", [since])
+    let tasks = try topTasks(followedOnly: true, where: "(t.completedAt IS NULL OR t.completedAt > ?)", [since])
     var changes: [CueChange] = []
     if let followed { changes += try membershipChanges(from: followed, since: since, reported: Set(tasks.map(\.id))) }
     if !tasks.isEmpty {
-      let steps = Dictionary(
-        grouping: try select(
-          Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL",
-          [Self.idList(tasks.map(\.id))], orderBy: "sortKey, id"),
-        by: { $0.parentID! })
-      let leaves = tasks.flatMap { task in (steps[task.id] ?? [task]).map { (task: task, leaf: $0) } }
+      let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
       let sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
       for task in tasks where task.completedAt.map({ $0 > since }) ?? false {
-        changes.append(CueChange(kind: .done, task: task, at: task.completedAt!, recap: try latestRecap(of: task.id)))
+        changes.append(CueChange(kind: .done, taskID: task.id, task: task, at: task.completedAt!, recap: try latestRecap(of: task.id)))
       }
       for (task, leaf) in leaves {
         if leaf.id != task.id, let done = leaf.completedAt, done > since {
-          changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
+          changes.append(CueChange(kind: .done, taskID: task.id, task: task, leaf: leaf, at: done, recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
         }
         guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
         let (kind, detail): (CueChange.Kind?, String?) =
@@ -329,7 +345,7 @@ extension CueStore {
           case .error: (.failed, session.detail)
           default: (nil, nil)
           }
-        if let kind { changes.append(CueChange(kind: kind, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap)) }
+        if let kind { changes.append(CueChange(kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap)) }
       }
       let bySession = Dictionary(leaves.compactMap { pair in pair.leaf.piSessionID.map { ($0, pair) } }, uniquingKeysWith: { first, _ in first })
       let typed = try select(
@@ -339,7 +355,7 @@ extension CueStore {
       for message in typed {
         guard let pair = bySession[message.sessionID] else { continue }
         changes.append(CueChange(
-          kind: .youSpoke, task: pair.task, leaf: pair.leaf, at: message.at, detail: CueFormat.plainText(message.text),
+          kind: .youSpoke, taskID: pair.task.id, task: pair.task, leaf: pair.leaf, at: message.at, detail: CueFormat.plainText(message.text),
           recap: sessions[message.sessionID]?.recap))
       }
     }
@@ -358,17 +374,17 @@ extension CueStore {
   /// 跟进集合的差异：此刻看板上有、`followed` 里没有的是 `joined`；反过来的是 `left`，带上原因（永久删除的也报，只有 id）。
   /// 完成了的报 `done`（`reported` 里的已经报过，不重复）。
   private func membershipChanges(from followed: Set<UUID>, since: Date, reported: Set<UUID>) throws -> [CueChange] {
-    let current = try followedTasks(where: Self.onBoard)
-    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, task: $0, at: $0.modifiedAt) }
+    let current = try topTasks(followedOnly: true, where: Self.onBoard)
+    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, taskID: $0.id, task: $0, at: $0.modifiedAt) }
     let gone = followed.subtracting(current.map(\.id))
     let trashedProjects = Set(try select(Project.self, where: "deletedAt IS NOT NULL").map(\.id))
     let remaining = try cards(gone)
     for id in gone where remaining[id] == nil {
-      changes.append(CueChange(kind: .left, taskID: id, task: nil, leaf: nil, at: Date.stamp, detail: "删了", recap: nil))
+      changes.append(CueChange(kind: .left, taskID: id, task: nil, at: Date.stamp, detail: "删了"))
     }
     for card in remaining.values {
       if let done = card.completedAt {
-        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, task: card, at: done, recap: try latestRecap(of: card.id))) }
+        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, taskID: card.id, task: card, at: done, recap: try latestRecap(of: card.id))) }
         continue
       }
       let reason =
@@ -377,7 +393,7 @@ extension CueStore {
         else if card.todoAt == nil { "改回了灵感" }
         else if card.parentID != nil { "挂到了别的任务下" }
         else { "你接手了" }
-      changes.append(CueChange(kind: .left, task: card, at: card.modifiedAt, detail: reason))
+      changes.append(CueChange(kind: .left, taskID: card.id, task: card, at: card.modifiedAt, detail: reason))
     }
     return changes
   }
@@ -386,8 +402,7 @@ extension CueStore {
   public func cueTaskDetail(_ task: UUID, rounds: Int = 3) throws -> CueTaskDetail {
     let top = try topTask(of: task)
     guard let card = try find(Card.self, top) else { throw CueStoreError.notFound }
-    let steps = try select(Card.self, where: "parentID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [top], orderBy: "sortKey, id")
-    let leaves = steps.isEmpty ? [card] : steps
+    let leaves = try leaves(of: card)
     let sessions = try sessionStates(leaves.compactMap(\.piSessionID))
     let details = try leaves.map { leaf in
       let sessionID = leaf.piSessionID
@@ -441,10 +456,6 @@ extension CueStore {
   /// 会话 `session`（SQL 表达式）由 Cue 跟进。
   static func followedByCue(_ session: String) -> String {
     "EXISTS (SELECT 1 FROM cards t WHERE t.cueFollows = 1 AND t.parentID IS NULL AND t.deletedAt IS NULL AND t.id IN (\(topTasks(ofSession: session))))"
-  }
-
-  private func followedTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
-    try topTasks(followedOnly: true, where: condition, arguments)
   }
 
   private func topTasks(followedOnly: Bool, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {

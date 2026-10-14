@@ -225,14 +225,10 @@ private struct SessionsButton: View {
 }
 #endif
 
-/// Cue 页在前台时算一个在看的：大于 0 时不推 Cue 的通知（Mac 是 `CueService.pageViewers`，iPhone 与 iPad 是 `PiAlertCenter.cuePageViewers`）。
-/// Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
+/// Cue 页在前台时算一个在看的（`AppServices.cueViewers`）。Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
 private struct CueViewing: ViewModifier {
     let active: Bool
     @Environment(AppServices.self) private var services
-    #if os(iOS)
-    @Environment(PiAlertCenter.self) private var alerts
-    #endif
     @State private var counted = false
 
     func body(content: Content) -> some View {
@@ -244,10 +240,6 @@ private struct CueViewing: ViewModifier {
     private func count(_ on: Bool) {
         guard on != counted else { return }
         counted = on
-        #if os(macOS)
-        services.cue.pageViewers += on ? 1 : -1
-        #else
-        alerts.cuePageViewers += on ? 1 : -1
-        #endif
+        services.cueViewers += on ? 1 : -1
     }
 }

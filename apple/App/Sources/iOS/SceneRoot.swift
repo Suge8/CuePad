@@ -6,6 +6,12 @@ import SwiftUI
 struct SceneRoot: View {
     let services: AppServices
     let alerts: PiAlertCenter
+
+    init(services: AppServices, alerts: PiAlertCenter) {
+        self.services = services
+        self.alerts = alerts
+        alerts.services = services
+    }
     @Environment(\.scenePhase) private var phase
 
     var body: some View {

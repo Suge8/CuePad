@@ -9,21 +9,21 @@ import Testing
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
-        let services: AppServices = rig.services
-        services.settings.globalShortcut = "Control+Alt+KeyP"
-        services.applySavedShortcut()
-        let saved = Shortcut(keyCode: 35, modifiers: [.control, .option])
-        #expect(rig.hotkeys.active == [saved])
+        let defaults = rig.services.settings.defaults
+        defaults.set("Control+Alt+KeyP", forKey: "slot")
+        let hotkey = GlobalHotkey(label: "测试", key: "slot", defaultAccelerator: "Alt+Space", defaults: defaults, backend: rig.hotkeys) {}
+        try hotkey.registerSaved()
+        #expect(rig.hotkeys.active == [Shortcut(keyCode: 35, modifiers: [.control, .option])])
 
-        try services.setGlobalShortcut("Alt+KeyQ")
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        try hotkey.set("Alt+KeyQ")
+        #expect(defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option)])
 
         // 另一个组合已被占用：抛错，旧的继续生效，设置不变
         let taken = Shortcut(keyCode: 13, modifiers: .option)
         _ = try rig.hotkeys.register(taken) {}
-        #expect(throws: HotkeyError.occupied(taken)) { try services.setGlobalShortcut("Alt+KeyW") }
-        #expect(services.settings.globalShortcut == "Alt+KeyQ")
+        #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
+        #expect(hotkey.accelerator == "Alt+KeyQ" && defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option), taken])
     }
 }
