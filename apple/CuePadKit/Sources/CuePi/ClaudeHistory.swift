@@ -129,13 +129,15 @@ enum ClaudeHistory {
 
     // MARK: 收件箱送来的话
 
-    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间。
+    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；CuePad 发的正文前还有一句
+    /// `ClaudeInbox.userNote`。
     private static let peerPrefix = "Another Claude session sent a message:\n"
     private static let peerSuffix = "\n\nThis came from another Claude session"
 
     static func withoutPeerWrapper(_ text: String) -> String {
         guard text.hasPrefix(peerPrefix) else { return text }
-        let body = text.dropFirst(peerPrefix.count)
+        var body = text.dropFirst(peerPrefix.count)
+        if body.hasPrefix(ClaudeInbox.userNote) { body = body.dropFirst(ClaudeInbox.userNote.count) }
         return String(body.range(of: peerSuffix).map { body[..<$0.lowerBound] } ?? body)
     }
 

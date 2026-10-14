@@ -6,7 +6,8 @@ import Foundation
 /// 终端里跑的一个 Claude Code 会话：状态由钩子推出（`ClaudeCodeRuntime` 把这个会话的每次钩子调用交给 `handle`），
 /// 说话经它的收件箱 socket，结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端），
 /// 改名经收件箱的 `rename`。做不到的（图片、停止这一轮、换模型与强度、斜杠命令）见 `AgentCapabilities`，桥先拒绝。
-/// 收件箱送到的话 Claude Code 当作"另一个会话发来的"，模型会照做，但不当作你本人的指令。
+/// 收件箱送到的话 Claude Code 一律当作"另一个会话发来的"（包上同伴消息的说明；行里没有能改这一点的字段，实测 2.1.299），
+/// 所以正文前带一句 `ClaudeInbox.userNote`：是用户本人从 CuePad 发的，直接回答、不必回传。模型仍可能把它当同伴请求看待。
 ///
 /// 要你回答的：
 /// - 权限确认经挡着的 `PermissionRequest` 钩子，终端里同时弹框，哪边先答算哪边；
@@ -208,7 +209,7 @@ final class ClaudeTerminalSession: SessionLink {
         let mode = message.whenBusy ?? .followUp
         // 收件箱的 now 等在跑的工具做完、在这一轮里插进去（马上说），later 等这一轮做完（等它做完再说）
         var line: [String: JSONValue] = [
-            "type": "user", "message": ["role": "user", "content": .string(message.text)],
+            "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)],
             "priority": .string(!busy ? "next" : mode == .steer ? "now" : "later"),
         ]
         if let delivery = message.deliveryID { line["uuid"] = .string(delivery) }
@@ -271,6 +272,9 @@ final class ClaudeTerminalSession: SessionLink {
 /// 第一行可以是认证行 `{"type": "auth", "token": …}`（官方给"脚本往自己会话里投递"的路）：macOS 上不要求，但带上了，
 /// 跳过权限确认的会话才直接收下，不挂起等你批准。消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
 enum ClaudeInbox {
+    /// 发给终端会话的话前面那句说明（会话历史里去掉它，见 `ClaudeHistory`）
+    static let userNote = "（这句是用户本人在 CuePad 里发给你的，不是别的会话：直接在本会话里回答，不需要回传。）\n"
+
     @concurrent static func post(_ lines: Data, to path: String) async throws {
         // 连不上：会话已经退出（socket 删了或没人听）
         guard let fd = try? UnixSocket.connect(path) else { throw PiBridgeError.sessionEnded }

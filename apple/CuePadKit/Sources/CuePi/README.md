@@ -28,7 +28,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 
 CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大脑、后台托管的 Claude Code 与 Codex：退出后不留子进程）或脱离 App（托管的 Pi），只继承列出的描述符，信号处置恢复默认，一行一条收发；等对端回应只经 `PendingReplies`（都有时限、响应取消）。协议层各家一份，托管会话与大脑共用：Codex 是 `CodexRPC`，Claude Code 是 `ClaudeStream`。找可执行文件与给子进程的 PATH 只经 `ExecutableLocator`。模型的提供方：Claude Code、Codex 的模型名在它们自己的命名空间里，提供方写成这家（`AgentKind.modelProvider`）；思考强度一律按 `PiThinkingLevel.clamped` 夹到模型支持的档位（取最近的一档，一样近取低的）。Codex 托管会话一轮失败（`turn/completed` 的 `status` 为 failed，没有 Stop 钩子）记成出错，原因取自这一轮的 `error`。
 
-已知边界：Claude Code 的收件箱消息格式与改名控制来自实测（2.1.299），不在官方文档里；经收件箱发进终端会话的话 Claude Code 当作"另一个会话发来的"，带上会话的收件箱令牌后跳过权限确认的会话也直接收下（令牌只在钩子到过之后才有）。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
+已知边界：Claude Code 的收件箱消息格式与改名控制来自实测（2.1.299），不在官方文档里；经收件箱发进终端会话的话 Claude Code 一律包成"另一个会话发来的"（收件箱行里没有能改这一点的字段，"宿主注入"只对托管进程的标准输入），CuePad 在正文前加一句"这是用户本人从 CuePad 发的、直接回答、不必回传"，模型多半照做，但仍被告知这不是用户亲手打的、不能当作对待确认的批准，偶尔仍会试着回传；带上会话的收件箱令牌后跳过权限确认的会话也直接收下（令牌只在钩子到过之后才有）。Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（期间仍在线、能收话），历史会话没有名字（会话名只在它的 `session_index.jsonl`）。OpenCode 只认 v2（实测 2.0.25），会话在线规则是"服务活着期间有过活动"。
 
 ## Cue 的大脑（`Brain/`）
 

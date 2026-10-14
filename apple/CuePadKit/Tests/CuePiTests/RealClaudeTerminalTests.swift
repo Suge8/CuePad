@@ -163,9 +163,10 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 跳过权限确认的会话默认把别处送进收件箱的话挂起等你批准；CuePad 带上会话交给钩子的收件箱令牌（官方给脚本的认证行），话直接送到。
-    /// 只看话进没进会话，不等模型回答。
-    @Test func aMessageReachesATerminalSessionThatBypassesPermissions() async throws {
+    /// 收件箱送到的话 Claude Code 一律当作"另一个会话发来的"（行里没有能改这一点的字段，实测）：正文前带一句说明是用户本人从 CuePad 发的、
+    /// 直接回答不必回传；CuePad 的对话里只显示你说的那句。跳过权限确认的会话默认把收件箱的话挂起等你批准，CuePad 带上会话交给钩子的
+    /// 收件箱令牌（官方给脚本的认证行），话直接送到。只看话进没进会话，不等模型回答。
+    @Test func aMessageReachesATerminalSessionThatBypassesPermissionsAsTheUsersOwn() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
             try testbed.runtime.start()
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
@@ -174,11 +175,16 @@ struct RealClaudeTerminalTests {
             _ = try await testbed.bridge.send(PiMessage(text: "INBOX-PROBE 只回复 OK"), to: session.id)
 
             let file = try #require(testbed.bridge.session(id: session.id)?.sessionFile)
+            var sent: Substring?
             try await eventually("话进了会话") {
                 let lines = (try? String(contentsOf: file, encoding: .utf8))?.split(separator: "\n") ?? []
-                return lines.contains { JSONValue.parse(Data($0.utf8))?["type"]?.string == "user" && $0.contains("INBOX-PROBE") }
+                sent = lines.first { JSONValue.parse(Data($0.utf8))?["type"]?.string == "user" && $0.contains("INBOX-PROBE") }
+                return sent != nil
             }
+            #expect(sent?.contains("CuePad") == true, "正文前说明是用户本人从 CuePad 发的")
             #expect(await !terminal.screen.contains("Held"))
+            let said = try testbed.transcript(file).messages.filter { $0.role == .known(.user) }.map(\.text)
+            #expect(said == ["INBOX-PROBE 只回复 OK"])
         }
     }
 
