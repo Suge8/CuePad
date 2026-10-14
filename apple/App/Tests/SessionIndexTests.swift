@@ -67,5 +67,30 @@ struct SessionIndexTests {
         #expect(try await store.allPiSessionStates().contains { $0.sessionID == realID })
         app.services.cancelBackgroundWork()
     }
+
+    /// 旧版本按文件名记下的孤儿，会话文件到启动时还是空的：启动对账就清掉它（空文件还不算会话）；文件头写上后只有真 id 的那一个。
+    @Test func 文件还空着的孤儿会话启动时清掉() async throws {
+        let app = TestApp()
+        let file = try codexFile(app, realID)
+        FileManager.default.createFile(atPath: file.path, contents: nil)
+        let stem = file.deletingPathExtension().lastPathComponent
+        let store = app.services.store
+        try await store.upsertPiSessions([PiSessionUpsert(
+            session: IndexedSession(id: stem, path: file.path, cwd: "", lastActivityAt: .now, agent: .codex), checkpoint: nil, transcript: nil)
+        ], host: TestApp.hostID)
+
+        app.services.start()
+        try await eventually("孤儿清掉了") {
+            let sessions = try await store.piSessions(), states = try await store.allPiSessionStates()
+            return !sessions.contains { $0.id == stem } && !states.contains { $0.sessionID == stem }
+        }
+
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.write(contentsOf: meta(realID))
+        try handle.close()
+        try await eventually("文件头写上后记下了会话") { try await store.piSession(realID) != nil }
+        #expect(try await store.piSessions().filter { $0.path == file.path }.map(\.id) == [realID])
+        app.services.cancelBackgroundWork()
+    }
 }
 #endif
