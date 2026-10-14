@@ -53,10 +53,13 @@ import Testing
     #expect(seen.withLock { $0.last } == .known(.interrupted), "订阅收到被打断")
   }
 
+  /// 启动对账收尾的是记下的进程已经不在了的（这里一律判为不在）。
   @Test func 启动对账_托管的歇着_其余记为已结束_没有会话文件的清掉_在线的不动() async throws {
     let recorder = recorder
-    for id in ["terminal", "hosted", "hosted-silent", "old-ended", "live-new"] {
-      try await recorder.update(sessionID: id, state: .settled, title: id, hosted: id.hasPrefix("hosted") || id == "live-new")
+    for (index, id) in ["terminal", "hosted", "hosted-silent", "old-ended", "live-new"].enumerated() {
+      try await recorder.update(
+        sessionID: id, state: .settled, title: id, hosted: id.hasPrefix("hosted") || id == "live-new",
+        process: PiProcess(pid: Int32(index + 1), startedAt: 1))
     }
     try await recorder.end(sessionID: "old-ended")
     // 有会话文件的有索引（本机会话文件索引）；"hosted-silent" 与 "old-ended" 没有

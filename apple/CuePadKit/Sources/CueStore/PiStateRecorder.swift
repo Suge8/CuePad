@@ -45,7 +45,7 @@ extension CueStore {
   /// 其余记为已结束、进历史；记录上手上还有活（在跑一轮、等你确认、子代理还在跑）的都记为做到一半被打断（`PiWorkState.interrupted`）。
   func losePiState(host: String, sessionID: String, at now: Date) throws {
     try write {
-      try close(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)], lost: true, at: now)
+      try close(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)], at: now)
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
     }
   }
@@ -60,43 +60,35 @@ extension CueStore {
     }
   }
 
-  /// 启动对账：这台 Mac 上次留下的、还没收尾的记录——
-  /// - 记下的进程还在（托管的 Pi 不随 App 退出，终端里的会话也还开着）：不动，由桥重新连上后接着写；
-  /// - 记下的进程确实没了：按进程没了收尾（`losePiState`），手上还有活的记为被打断；
-  /// - 没记下进程（如刚升级、本机进程表还空着）：不知道它还在不在，照旧收尾（托管的歇着、其余已结束），不记为被打断，
-  ///   还活着的由桥重新连上后接着写。
-  /// `running` 判断记下的进程是不是还是那一个。
+  /// 启动对账：只收尾这台 Mac 上记下的进程确实没了的记录（`running` 判断记下的进程是不是还是那一个），按进程没了收尾
+  /// （`losePiState`），手上还有活的记为被打断。其余一律不动：记下的进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着），
+  /// 与没记下进程、不知道还在不在的（如刚升级、本机进程表还空着），都由桥重新连上后接着写，或在进程退出时收尾。
   func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws {
     try write {
       let processes = try db.query(
         "SELECT p.sessionID, p.pid, p.startedAt FROM piProcesses p JOIN piSessionStates s ON s.sessionID = p.sessionID WHERE s.hostID = ?",
         [host]
       ) { (sessionID: $0.text(0), process: PiProcess(pid: Int32($0.int(1)), startedAt: $0.int(2))) }
-      let known = processes.map(\.sessionID)
       let gone = processes.filter { !running($0.process) }.map(\.sessionID)
-      func among(_ ids: [String]) -> String { "(\(ids.map { _ in "?" }.joined(separator: ", ")))" }
-      if !gone.isEmpty {
-        try close(where: "hostID = ? AND sessionID IN \(among(gone))", [host] + gone.map { $0 as any SQLBindable }, lost: true, at: now)
-        try db.run("DELETE FROM piProcesses WHERE sessionID IN \(among(gone))", gone.map { $0 as any SQLBindable })
-      }
-      let unknown = known.isEmpty ? "" : " AND sessionID NOT IN \(among(known))"
-      try close(where: "hostID = ?\(unknown)", [host] + known.map { $0 as any SQLBindable }, lost: false, at: now)
+      guard !gone.isEmpty else { return }
+      let among = "(\(gone.map { _ in "?" }.joined(separator: ", ")))"
+      try close(where: "hostID = ? AND sessionID IN \(among)", [host] + gone.map { $0 as any SQLBindable }, at: now)
+      try db.run("DELETE FROM piProcesses WHERE sessionID IN \(among)", gone.map { $0 as any SQLBindable })
     }
   }
 
-  /// 收尾（见 `losePiState`），只动还没收尾的（不是已结束、被打断）：托管的歇着，其余已结束；`lost`（确知进程没了）时
-  /// 手上还有活的记为被打断。被打断与已结束的起点是此刻；托管的本来就歇着的不动起点（"多久前"仍从它歇下算起）。
+  /// 进程没了的收尾（见 `losePiState`），只动还没收尾的（不是已结束、被打断）：托管的歇着，其余已结束，手上还有活的记为被打断。
+  /// 被打断与已结束的起点是此刻；托管的本来就歇着的不动起点（"多久前"仍从它歇下算起）。
   /// 托管标记照旧：托管的被打断了也由本机在后台唤醒。
-  private func close(where condition: String, _ arguments: [any SQLBindable], lost: Bool, at now: Date) throws {
+  private func close(where condition: String, _ arguments: [any SQLBindable], at now: Date) throws {
     let finals = [PiWorkState.ended, .interrupted].map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    let interrupted = lost ? Self.hadWork : "FALSE"
     let state = """
-      CASE WHEN \(interrupted) THEN '\(PiWorkState.interrupted.rawValue)' WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)'
+      CASE WHEN \(Self.hadWork) THEN '\(PiWorkState.interrupted.rawValue)' WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)'
         ELSE '\(PiWorkState.ended.rawValue)' END
       """
     try db.run(
       """
-      UPDATE piSessionStates SET stateSince = CASE WHEN state = '\(PiWorkState.settled.rawValue)' AND NOT \(interrupted) THEN stateSince ELSE ? END,
+      UPDATE piSessionStates SET stateSince = CASE WHEN state = '\(PiWorkState.settled.rawValue)' AND NOT \(Self.hadWork) THEN stateSince ELSE ? END,
         state = \(state), \(Self.cleared), modifiedAt = ?
       WHERE state NOT IN (\(finals)) AND \(condition)
       """, [now, Date.stamp] + arguments)
@@ -305,8 +297,8 @@ public actor PiStateRecorder {
     }
   }
 
-  /// App 启动时对账这台 Mac 上次留下的记录：进程确实没了的按 `exited` 收尾（手上还有活的记为被打断），进程还在的不动——
-  /// 托管的 Pi 不随 App 退出，终端里的会话也还开着，桥重新连上它们后接着写。`running` 判断记下的进程是不是还是那一个。
+  /// App 启动时对账这台 Mac 上次留下的记录：记下的进程确实没了的按 `exited` 收尾（手上还有活的记为被打断），其余不动——
+  /// 进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着）与没记下进程的，由桥重新连上后接着写。`running` 判断记下的进程是不是还是那一个。
   public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }

@@ -297,7 +297,7 @@ struct CueHostTests {
     }
 
     /// 重启 CuePad 时托管的会话还在跑（它不随 App 退出）：启动对账不把它记为被打断，Cue 看到的仍是工作中。
-    /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，照旧收尾成歇着，也不记为被打断。
+    /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，原样不动：仍是工作中，说明与子代理都在，不写成歇着或被打断。
     @Test func 重启时还活着的托管会话不算被打断() async throws {
         let rig = try await Rig()
         let store = rig.store
@@ -309,19 +309,23 @@ struct CueHostTests {
         _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, sessionFile: file.path, hosted: true)
         try await store.linkCard(running.id, toSession: "h0")
         // 升级前写的记录：在跑、托管的，本机没有它的进程
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "h1", state: .tool, hosted: true)
+        let helper = PiSubagentState(name: "helper", role: "工程师", phase: .known(.running))
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID)
+            .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
         try await store.linkCard(upgraded.id, toSession: "h1")
         try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
         try await store.setCueFollows(task.id, true)
         _ = try await rig.message(.note, containing: "看板：")
 
         try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
-        let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0.state) })
-        #expect(states["h0"] == .known(.thinking) && states["h1"] == .known(.settled))
+        let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
+        #expect(states["h0"]?.state == .known(.thinking))
+        #expect(states["h1"]?.state == .known(.tool) && states["h1"]?.detail == "bash · swift test" && states["h1"]?.subagents == [helper])
         try await rig.say("念一下看板")
         let board = try await rig.message(.cue, containing: "看板：")
-        #expect(board.text.split(separator: "\n").first { $0.contains("托管着在跑") }?.contains("工作中") == true)
-        #expect(!board.text.contains("被打断"))
+        let lines = board.text.split(separator: "\n")
+        for step in ["托管着在跑", "升级前就在跑"] { #expect(lines.first { $0.contains(step) }?.contains("工作中") == true, "\(step)") }
+        #expect(!board.text.contains("被打断") && !board.text.contains("歇着"))
         await rig.stop()
     }
 

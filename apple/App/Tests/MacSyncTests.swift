@@ -190,7 +190,7 @@ struct MacSyncTests {
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
         let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .settled)
+        try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try await services.resetPiState()
