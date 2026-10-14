@@ -47,7 +47,7 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
   /// 步骤完成了几个；没有步骤为 nil。
   public var progress: TaskProgress?
-  /// 此刻在做的叶子：没有步骤是任务自己，否则第一个没完成的步骤（没有就第一个）。
+  /// 此刻在做的叶子：没有步骤是任务自己，否则第一个没完成的步骤；步骤都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
   public var leaf: Card
   /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
   public var session: PiSessionState?
@@ -441,17 +441,28 @@ extension CueStore {
   private func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {
     guard !tasks.isEmpty else { return [] }
     let links = try CardLinks(db, around: tasks.map(\.id))
-    let leaves = try cards(Set(tasks.map { links.home(of: $0.id) }))
+    let homes = try cards(Set(tasks.map { links.home(of: $0.id) }))
+    let lastDone = try lastCompletedSteps(of: tasks.filter { task in homes[links.home(of: task.id)].map { $0.id != task.id && $0.completedAt != nil } ?? false })
+    let leaves = homes.merging(lastDone.values.map { ($0.id, $0) }) { $1 }
     let sessions = try sessionStates(Array(leaves.values.compactMap(\.piSessionID)))
     let progress = try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(tasks.map(\.id))])
     let launching = try launchingLeaves(Array(leaves.keys))
     return tasks.map { task in
-      let leaf = leaves[links.home(of: task.id)] ?? task
+      let leaf = lastDone[task.id] ?? leaves[links.home(of: task.id)] ?? task
       let session = leaf.piSessionID.flatMap { sessions[$0] }
       return CueBoardItem(
         task: task, progress: progress[task.id], leaf: leaf, session: session, launching: launching.contains(leaf.id),
         since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
     }
+  }
+
+  /// 这些任务各自最后做完的那一步（同一时刻做完的取排在后面的），按任务 id。
+  private func lastCompletedSteps(of tasks: [Card]) throws -> [UUID: Card] {
+    guard !tasks.isEmpty else { return [:] }
+    let steps = try select(
+      Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NOT NULL",
+      [Self.idList(tasks.map(\.id))], orderBy: "completedAt, sortKey, id")
+    return Dictionary(steps.compactMap { step in step.parentID.map { ($0, step) } }, uniquingKeysWith: { _, later in later })
   }
 
   /// 看板上的（跟进中的）：没做完、没归档。

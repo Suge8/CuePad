@@ -324,6 +324,33 @@ import Testing
     #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) == ["s1"])
   }
 
+  /// 看板上一件事的近况取在做的那一步；步骤都做完、等你收下时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
+  @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let task = try await store.createTask("加语言参数", in: nil)
+    try await store.setCueFollows(task.id, true)
+    let first = try await store.createTask("加 --lang", under: task.id), second = try await store.createTask("写 README", under: task.id)
+    try await store.linkCard(first.id, toSession: "s1")
+    try await store.linkCard(second.id, toSession: "s2")
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    for session in ["s1", "s2"] { try await recorder.update(sessionID: session, state: .settled) }
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+    func shown() async throws -> (leaf: String?, session: String?) {
+      let item = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
+      return (item["leaf"] as? String, item["session"] as? String)
+    }
+
+    _ = try await store.toggleDone(first.id)
+    #expect(try await shown().session == "s2")  // 在做第二步
+    try await Task.sleep(for: .milliseconds(5))  // 完成时刻分得出先后
+    _ = try await store.toggleDone(second.id)
+    let done = try await shown()
+    #expect(done.session == "s2" && done.leaf == second.id.uuidString.lowercased())
+  }
+
   /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
   /// 换不了模型的会话（终端里的 Claude Code）直接报错，什么都不写，告诉 Cue 可以 fresh 开新会话。
   @Test(.timeLimit(.minutes(1))) func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
