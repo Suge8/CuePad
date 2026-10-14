@@ -757,6 +757,32 @@ struct MacSyncTests {
 
     /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
     /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
+    /// 扩展升级后旧版会话在终端里 /reload：旧协议的连接告别、新扩展接回同一个会话。说过话的会话这时不是"没说话就退出"，
+    /// 记录与它的摘要留着，接回后不变成"新会话"。
+    @Test(.timeLimit(.minutes(1)))
+    func 旧协议会话重载接回_摘要还在() async throws {
+        let changes = rig.pi.changes()
+        try rig.pi.start()
+        let services: AppServices = services
+        let consuming = Task { try await services.consumePiChanges(changes) }
+        defer { consuming.cancel() }
+        let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: file.path, contents: Data())
+        let store = services.store
+
+        let old = try await rig.host.connect("s1", cwd: "/work/app", protocolVersion: 3, sessionFile: file.path)
+        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.incompatible) })
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "修登录", at: .now)],
+            recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了")))
+
+        old.close(bye: "reload")
+        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
+
+        let back = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.settled) })
+        #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
+    }
+
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true

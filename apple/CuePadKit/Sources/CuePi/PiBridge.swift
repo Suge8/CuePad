@@ -448,7 +448,7 @@ public final class PiBridge {
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
-                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
+                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
                 terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
