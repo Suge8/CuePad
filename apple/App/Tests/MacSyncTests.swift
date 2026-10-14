@@ -73,9 +73,11 @@ struct MacSyncTests {
     /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
     @Test(.timeLimit(.minutes(1)))
     func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
-        // Cue 的大脑一直起不来也取消不了：停 Cue 这一步卡住
+        // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
         let rig = TestApp(cue: CueDependencies(
-            scan: { [.pi] }, launch: { _, _ in await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }; return nil },
+            scan: { [.pi] }, launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
             helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
         let services: AppServices = rig.services, host = TestApp.hostID
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
@@ -478,15 +480,17 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
+    /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
     @Test(.timeLimit(.minutes(1)))
-    func 执行器写回结果后立即上传这一条() async throws {
+    func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
 
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
