@@ -111,6 +111,8 @@ final class AppServices {
     @ObservationIgnored let hostID: String
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
+    /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
+    @ObservationIgnored let presence: MacPresenceKeeper
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
@@ -158,10 +160,9 @@ final class AppServices {
     func reaches(_ host: String?) -> Bool {
         #if os(macOS)
         if host == nil || host == hostID { return true }
-        #else
+        #endif
         // 演示 Mac 就在本机库里接手，不经同步
         if DebugHooks.preset.demoMac { return true }
-        #endif
         return syncStatus.reachesMac
     }
 
@@ -298,7 +299,7 @@ final class AppServices {
 
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let store = try Self.openLibrary(at: location)
+        let store = try Self.openLibrary(at: location, timing: mac.timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -307,6 +308,7 @@ final class AppServices {
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
+        presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
         pi = mac.pi
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
@@ -335,8 +337,8 @@ final class AppServices {
 
     /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     /// （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
-    static func openLibrary(at location: LibraryLocation) throws -> CueStore {
-        try CueStore(url: location.databaseURL)
+    static func openLibrary(at location: LibraryLocation, timing: Timing = .system) throws -> CueStore {
+        try CueStore(url: location.databaseURL, timing: timing)
     }
 
     /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。

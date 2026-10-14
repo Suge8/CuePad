@@ -42,6 +42,9 @@ extension AppServices {
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
+        follow(reporting: { .syncUnavailable("这台 Mac 在线的记录没能写下：\($0)") }) { [presence, wakeNotifications] in
+            try await presence.keep(notifications: wakeNotifications)
+        }
         startCue()
         startSync()
         startLiveSessions()
@@ -76,12 +79,13 @@ extension AppServices {
         hooks.stop()
         pi.stop()
         hotkey.unregister()
-        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
+        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync, presence = presence
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
                 ("Cue", stopCue),
+                ("这台 Mac 离线的记录", { await presence.signOff() }),
                 ("同步引擎", { await sync?.stop() }),
                 ("后台托管的 Agent", hostedExit),
             ], within: limit)

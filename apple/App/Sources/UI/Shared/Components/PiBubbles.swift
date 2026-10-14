@@ -265,12 +265,12 @@ extension Speech.Trip {
 }
 
 extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 没有回应。
+    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 一直没收下（只说这句话，不猜 Mac 在不在）。
     func text(sync: SyncStatus) -> String {
         switch self {
         case .reported(let reason): reason
         case .offline: "\(SyncSummary(sync).title)，发不到 Mac"
-        case .noReply: "Mac 没有回应：它可能睡着了，或没开 CuePad"
+        case .timedOut: "Mac 迟迟没收下这句"
         }
     }
 }

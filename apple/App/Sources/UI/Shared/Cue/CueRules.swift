@@ -3,9 +3,9 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（头像的表情与环、页头的一句、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
-/// 没启用；你最近一句还没交给它时按说的话那条规则（`Speech`，与气泡同一个事实；库里推出、到点重读，`CueStore.cueSpeech`）：还在等回执是话在路上，
-/// 过了时限、原因是 Mac 没有回应是在睡觉（它住的那台 Mac 多半没开，与值班同一条，`CueStore.cueAsleep`）；本机同步不通时说不准它在做什么，
-/// 不说它在睡觉，照它写下的状态（值班仍按没回应算，取舍见 `cueAsleep`）；
+/// 没启用；它住的那台 Mac 不在线是在睡觉（那台的在线记录，与值班同一条，`CueStore.macOnline`；到期由订阅重读）——本机同步不通时
+/// 那条记录可能只是没同步来，说不准它在不在，不说它在睡觉、照它写下的状态（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）；
+/// 你最近一句还在等回执是话在路上（`Speech`，与气泡同一个事实，`CueStore.cueSpeech`）；
 /// 其余照值班的 Mac 写下的（`CueState`）：在想、在用工具是在做事，出错是起不来。
 /// 在路上与在做事和 Agent 会话是同一套状态（`shown`：状态标、状态词、颜色、对话末尾那一行都一样）。
 nonisolated enum CuePresence: Equatable, Sendable {
@@ -24,11 +24,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// `reachable`：到 Cue 住的那台 Mac 的同步通不通（`AppServices.reaches`）。
     static func derive(_ digest: CueDigest, reachable: Bool) -> CuePresence {
         guard digest.enabled else { return .disabled }
-        switch digest.you?.reached(reachable) {
-        case .sending: return .sending
-        case .failed(.noReply): return .asleep
-        case .delivered, .failed, nil: break
-        }
+        if !digest.hostOnline && reachable { return .asleep }
+        if digest.you == .sending { return .sending }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
         return work.isWorking ? .working(work, detail: state.detail) : .idle
@@ -101,13 +98,15 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
-    /// 你最近一句此刻到哪了（`CueStore.cueSpeech`，按本机同步通着推出，`derive` 补上通不通）；你还没说过为 nil。
+    /// 它住的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
+    var hostOnline: Bool
+    /// 你最近一句此刻到哪了（`CueStore.cueSpeech`）；你还没说过为 nil。
     var you: Speech.Trip?
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
     var state: CueState?
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, you: nil, state: nil)
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false, you: nil, state: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -122,6 +121,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.flatMap { $0.ask?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
+            hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             you: try store.cueSpeech(),
             state: try store.cueState())
     }

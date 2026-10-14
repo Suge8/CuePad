@@ -98,6 +98,39 @@ struct MacSyncTests {
         #expect(rig.sync.syncNows == 1)
     }
 
+    /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
+    /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
+    @Test(.timeLimit(.minutes(1)))
+    func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
+        let clock = ManualTiming()
+        let rig = TestApp(timing: clock.timing)
+        let services: AppServices = rig.services, store = services.store, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        services.start()
+        defer { services.cancelBackgroundWork() }
+
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
+
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        #expect(await uploads.next() == record)  // 续期
+        #expect(try await store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+        #expect(try await !store.macOnline(host))
+        #expect(await uploads.next() == record)
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        await clock.waitForSleeper()
+        #expect(try await !store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
+    }
+
     // MARK: Pi 状态记录
 
     /// 桥上会话的每个字段原样写进同步记录（手机据此画状态、计时、子代理、用量条、命令面板、模型选择与弹窗）；

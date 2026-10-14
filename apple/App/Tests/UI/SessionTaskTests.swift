@@ -103,13 +103,18 @@ struct SessionTaskTests {
 
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
     /// Cue 停用后，答得了的那个也回到"等你确认"。
-    /// 它住的那台 Mac 不在线（关机或睡着：你对 Cue 说的话满 30 秒没交出去）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
-    /// 到点自己变，不用等库里再写什么；那台 Mac 回来收下你的话，又归 Cue。
-    @Test func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
+    /// 它住的那台 Mac 不在线（在线记录过了期限没续：崩溃、断电、断网）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
+    /// 到期自己变，不用等库里再写什么；那台 Mac 续上在线，又归 Cue。
+    @Test(.timeLimit(.minutes(1)))
+    func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let services: AppServices = app.services, store = services.store
         try await store.updateCueProfile {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
         }
+        try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         let questions = [("s1", PiQuestion(promptID: "p", kind: .confirm, text: "继续？")), ("s2", PiQuestion(promptID: nil, kind: .confirm, text: "在终端里确认"))]
         for (session, question) in questions {
@@ -127,23 +132,19 @@ struct SessionTaskTests {
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
-        // 你在手机上对 Cue 说了一句，快到时限（`Speech.receiptLimit`）了它还没收下：到点"等你"自己从 1 变 2
-        let said = try await store.addCueMessage(.you, text: "看看登录回调")
-        try RawDB(rig.databaseURL).exec(
-            "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - Speech.receiptLimit + 0.3) * 1000)) WHERE id = '\(said.id.uuidString.lowercased())'")
-        var counts: [Int] = []
-        for try await count in store.observe({ try CueWaiting.count(in: $0) }) {
-            counts.append(count)
-            if count == 2 { break }
-        }
-        #expect(counts == [1, 2])
+        // mac-b 之后再没续期：期限（`MacPresence.lifetime`）一到"等你"自己从 1 变 2
+        var counts = store.observe({ try CueWaiting.count(in: $0) }).makeAsyncIterator()
+        #expect(try await counts.next() == 1)
+        await clock.waitForSleeper()
+        clock.advance(.seconds(MacPresence.lifetime))
+        #expect(try await counts.next() == 2)
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
         try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
         #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .known(.waitingForUser))
 
-        // 那台 Mac 醒来收下你的话：又在值班
-        try await store.markCueMessagesDelivered([said.id])
+        // mac-b 续上在线：又在值班
+        try await store.recordMacPresence(host: "mac-b") { true }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
         #expect(try await CueWaiting.count(in: store) == 1)
 

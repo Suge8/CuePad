@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState。约束：
+/// cueMessages、cueLines、cueProfile、cueState、macPresence。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -159,6 +159,8 @@ enum Schema {
     """,
     // 40：Cue 已经知道没送到的请求（本机）：说话工具当场报给它、那一轮好好做完时记下；没记下的失败写进它下一轮的变化
     "ALTER TABLE deliveryRequests ADD COLUMN cueToldAt INTEGER;",
+    // 41：每台 Mac 的在线记录（它自己写，各端读）：Mac 在不在、Cue 在不在值班的唯一信号
+    Upgrade(stringLiteral: macPresence),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -203,6 +205,8 @@ enum Schema {
     ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
     CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
     """
+
+  private static let macPresence = "CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
@@ -362,6 +366,7 @@ enum Schema {
     \(formerSessions)
     \(cueState)
     \(writeSeq)
+    \(macPresence)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
