@@ -55,7 +55,7 @@ public struct CueTools: Sendable {
         "name": "tell",
         "description": """
           对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他允许时才 tell 带 ask。
-          ask 是请他允许、等他选（"等你"），只有这几类：\(asks)。选项由 CuePad 给（\(CueAsk.once) / 以后这类事都不用问 / \(CueAsk.deny)），
+          ask 是请他允许、等他选（"等你"），只有这几类：\(CuePrompt.asks)。选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），
           text 写清要做什么、为什么、不做会怎样；他说过这类事以后不用问的，ask 会被拒，直接做。urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。
           withdraw 写"等你"里你问的那条的 id：你已拿了主意或情况变了，撤回它（从"等你"里消失）；可同时带 text 说为什么，或换个问法再问。
           """,
@@ -87,8 +87,6 @@ public struct CueTools: Sendable {
 
   private static var string: [String: Any] { ["type": "string"] }
 
-  /// ask 的取值与说法（"push 推送"）。
-  private static var asks: String { CueAsk.allCases.map { "\($0.rawValue) \($0.name)" }.joined(separator: "、") }
 
   private static func schema(_ properties: [String: Any], required: [String]) -> [String: Any] {
     ["type": "object", "properties": properties, "required": required, "additionalProperties": false]
@@ -417,7 +415,7 @@ public struct CueTools: Sendable {
       return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。", ["withdrawn": id(withdrawn.id)])
     }
     let ask = try args.string("ask").map { raw -> CueAsk in
-      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是 \(Self.asks)；别的事你自己定，做完告诉他") }
+      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
       return ask
     }
     let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)

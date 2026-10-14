@@ -123,8 +123,29 @@ enum Schema {
     Upgrade(stringLiteral: cueState),
     // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
     Upgrade(stringLiteral: piProcesses),
-    // 37：Cue 自己验收、做完告诉你，不再请你收下：验收标记下线（还开着的旧验收照常是一条提问，答了交给 Cue）
-    "ALTER TABLE cueMessages DROP COLUMN acceptance;",
+    // 37：Cue 自己验收、做完告诉你，"等你"只给 `CueAsk` 那几类事、选项由它给。还开着的旧验收是 Cue 已经收尾的事：
+    // 任务连同步骤完成，那条改成做完的结果；其余还开着的提问都是 Cue 自拟的选项，撤回（同 Cue 撤回，不再交给它）。验收标记下线。
+    // modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let accepting = "SELECT taskID FROM cueMessages WHERE acceptance = 1 AND choices IS NOT NULL AND answeredAt IS NULL AND taskID IS NOT NULL"
+      try db.run(
+        """
+        UPDATE cards SET completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE todoAt IS NOT NULL AND completedAt IS NULL AND (id IN (\(accepting)) OR parentID IN (\(accepting)))
+        """, [now])
+      try db.run(
+        """
+        UPDATE cueMessages SET text = replace(text, '做好了，收下吗？', '做完了。'), choices = NULL, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE acceptance = 1 AND choices IS NOT NULL AND answeredAt IS NULL
+        """, [now])
+      try db.run(
+        """
+        UPDATE cueMessages SET answeredAt = ?1, deliveredAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL
+        """, [now])
+      try db.exec("ALTER TABLE cueMessages DROP COLUMN acceptance;")
+    },
   ]
 
   private static let piProcesses = """
