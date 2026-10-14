@@ -67,9 +67,9 @@ final class PiProcess: @unchecked Sendable {
         paths = other?.paths ?? PiPaths(
             agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
         if installBridge && other == nil {
-            let installer = PiIntegration(
-                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), helper: Self.cuepad, shellPath: { nil })
-            try await installer.install()
+            let agents = AgentIntegration(
+                paths: AgentPaths(pi: paths, environment: [:]), locator: ExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), cuepad: Self.cuepad)
+            try await agents.install(.pi)
         }
 
         if let settings {

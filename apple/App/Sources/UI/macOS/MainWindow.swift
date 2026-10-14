@@ -93,6 +93,7 @@ private struct WindowPanels: View {
                 message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
                 buttons: [DeliveryMode.steer, .followUp].map { mode in DialogButton(title: mode.label) { workspace.resolveBusySend(mode) } }
             )
+            .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
 
     private var busy: Binding<Bool> {

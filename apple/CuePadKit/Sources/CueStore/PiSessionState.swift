@@ -135,6 +135,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）与此刻能用的斜杠命令（已结束的会话清空）。旧版本写的记录没有。
   public var context: PiContextUsage?
   public var commands: [PiSlashCommand]
+  /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
+  public var agent: Open<AgentKind>
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
@@ -143,7 +145,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = [], context: PiContextUsage? = nil,
-    commands: [PiSlashCommand] = []
+    commands: [PiSlashCommand] = [], agent: Open<AgentKind> = .known(.pi)
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -170,6 +172,36 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.models = models
     self.context = context
     self.commands = commands
+    self.agent = agent
+  }
+
+  /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted) } ?? [] }
+
+  // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
+
+  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时直接发送会被拒绝，只能等它做完再说（默认，不打断）或马上说（次级，
+  /// 只给做得到的会话，见 `AgentCapabilities.steer`）。已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
+  public var deliveryModes: [DeliveryMode] {
+    guard state.known?.isTurnRunning == true else { return [.send] }
+    return capabilities.contains(.steer) ? [.followUp, .steer] : [.followUp]
+  }
+
+  /// 能结束：做得到，在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
+  public var canEnd: Bool {
+    capabilities.contains(.end) && state != .known(.ended) && state != .known(.incompatible)
+  }
+
+  /// 能停止这一轮：做得到，且指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
+  /// 等子代理时这一轮已经歇下，都没有可停的。
+  public var canStop: Bool {
+    capabilities.contains(.abort) && state.known?.isTurnRunning == true && state != .known(.waitingForUser)
+  }
+
+  /// 等你确认、且能从 CuePad 作答的问题（问题本身可答，这个会话也做得到）；其余只能在 Agent 那边答。
+  public var answerableQuestion: PiQuestion? {
+    guard state == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
+    return question
   }
 
   /// 记录上的摘要（对话的投影）。
@@ -192,13 +224,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "models", "context", "commands",
+    "model", "thinking", "models", "context", "commands", "agent",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, JSONColumn.encodeList(models), context.map(JSONColumn.encode),
-     JSONColumn.encodeList(commands)]
+     JSONColumn.encodeList(commands), agent.rawValue]
   }
   init(row: Row) {
     self.init(
@@ -214,6 +246,7 @@ extension PiSessionState: Record {
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       models: JSONColumn.decodeList(PiModelOption.self, from: row.textOrNil(22)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(23)),
-      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)))
+      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)),
+      agent: row.textOrNil(25).map(Open.init(rawValue:)) ?? .known(.pi))
   }
 }

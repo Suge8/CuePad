@@ -103,7 +103,9 @@ enum Schema {
     "UPDATE piSessions SET checkpoint = NULL;",
     // 30：订阅账号的用量（每个提供方一条，Mac 写）
     Upgrade(stringLiteral: accountQuotas),
-    // 31：总控 Agent Cue：任务由谁跟进、请求来自谁（发送记录也记下送出它的请求与来源：请求清理后对话仍认得出 Cue 说的话），
+    // 31：会话记录与历史索引记下是哪个 Agent 的会话（Pi 之外接入 Claude Code、Codex、OpenCode）；旧行没有，是 Pi
+    "ALTER TABLE piSessionStates ADD COLUMN agent TEXT; ALTER TABLE piSessions ADD COLUMN agent TEXT;",
+    // 32：总控 Agent Cue：任务由谁跟进、请求来自谁（发送记录也记下送出它的请求与来源：请求清理后对话仍认得出 Cue 说的话），
     // Cue 的对话、记忆、设置与记忆摘要缓存
     Upgrade(stringLiteral: """
       ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;
@@ -210,7 +212,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      model TEXT, thinking TEXT, models TEXT, context TEXT, commands TEXT,
+      model TEXT, thinking TEXT, models TEXT, context TEXT, commands TEXT, agent TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
@@ -248,7 +250,7 @@ enum Schema {
     -- Pi 历史索引：checkpoint 是服务层的不透明字节（读取偏移与解析状态）。
     CREATE TABLE piSessions (
       id TEXT PRIMARY KEY NOT NULL, path TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
-      lastActivityAt INTEGER NOT NULL, checkpoint BLOB
+      lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
 

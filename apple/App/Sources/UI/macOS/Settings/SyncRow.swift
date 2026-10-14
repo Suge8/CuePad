@@ -24,7 +24,7 @@ struct SyncRow: View {
         let summary = SyncSummary(services.syncStatus)
         let fix = fix
         SettingRow(
-            title: "iCloud 同步", symbol: summary.symbol, tone: tone(summary), busy: busy, status: status(summary, fix: fix),
+            title: "iCloud 同步", icon: Image(systemName: summary.symbol), tone: tone(summary), busy: busy, status: status(summary, fix: fix),
             help: fix == nil ? nil : summary.detail
         ) {
             if services.sync != nil, fix != .decide, fix != .openSettings {

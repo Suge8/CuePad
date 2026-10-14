@@ -163,8 +163,7 @@ extension CueStore {
     switch plan.destination {
     case .session:
       guard let draft else { throw CueStoreError.alreadyStarted(try requireLeaf(plan.leaf).heading) }
-      let session = try sessionTarget(of: try requireLeaf(plan.leaf))
-      return try requestDelivery(content, to: session.target, on: session.host(or: host), mode: Self.mode(.after, session.state), card: draft.id, cue: cue)
+      return try say(content, to: try sessionTarget(of: try requireLeaf(plan.leaf)), when: .after, card: draft.id, host: host, cue: cue)
     case .launch(let project, let host):
       guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(try requireLeaf(plan.leaf).heading) }
       let launch = PiLaunch(
@@ -180,13 +179,18 @@ extension CueStore {
   /// 没有会话抛 `noSession`（正在开会话抛 `launching`）。
   public func sayToLeaf(_ leaf: UUID, text: String, when: SayTiming, host: String, cue: Bool = false) throws -> DeliveryRequest {
     let (card, session) = try requireSession(of: leaf)
-    return try requestDelivery(text, to: session.target, on: session.host(or: host), mode: Self.mode(when, session.state), card: card.id, cue: cue)
+    return try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
   }
 
-  /// 说话的方式：会话正在跑一轮才分马上说与等它做完再说，否则直接说（记录不在时也直接说）。
-  private static func mode(_ when: SayTiming, _ state: PiSessionState?) -> DeliveryMode {
-    guard state?.state.known?.isTurnRunning == true else { return .send }
-    return when == .now ? .steer : .followUp
+  /// 交给会话一句话，按会话此刻做得到的（与界面同一组规则，`PiSessionState.deliveryModes`、`AgentCapabilities.images`）：
+  /// 正在跑一轮时 `now` 马上说（做不到就等它做完再说），收不了图片的只发文字。记录还没到时直接说、原样发。
+  private func say(
+    _ content: String, to session: SessionTarget, when: SayTiming, card: UUID, host: String, cue: Bool
+  ) throws -> DeliveryRequest {
+    let modes = session.state?.deliveryModes ?? [.send]
+    let mode = when == .now && modes.contains(.steer) ? DeliveryMode.steer : modes[0]
+    let content = session.state?.capabilities.contains(.images) == false ? CueFormat.withoutImages(content) : content
+    return try requestDelivery(content, to: session.target, on: session.host(or: host), mode: mode, card: card, cue: cue)
   }
 
   /// 这些叶子里正在开新会话的：带着叶子或它的草稿（交出草稿时请求带的是草稿，送达后改记到叶子上）的开新会话请求还在路上，
@@ -215,7 +219,7 @@ extension CueStore {
   /// 回答叶子的会话正在等的提问：选择框给选项原文或从 1 起的序号，确认框给是或否，输入框给文字。
   public func answerLeaf(_ leaf: UUID, _ value: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
     let session = try requireSession(of: leaf).session
-    guard let question = session.state?.question, question.isAnswerable, let promptID = question.promptID, let kind = question.kind.known else {
+    guard let question = session.state?.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known else {
       throw CueStoreError.nothingToAnswer
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
@@ -240,9 +244,10 @@ extension CueStore {
     }
   }
 
-  /// 停止叶子的会话正在跑的这一轮。
+  /// 停止叶子的会话正在跑的这一轮；此刻停不了（`PiSessionState.canStop`，与界面的停止按钮同一条）抛 `cannotStop`。
   public func stopLeaf(_ leaf: UUID, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let session = try requireSession(of: leaf).session
+    let (card, session) = try requireSession(of: leaf)
+    guard session.state?.canStop == true else { throw CueStoreError.cannotStop(card.heading) }
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
@@ -274,14 +279,15 @@ extension CueStore {
     return (status, try endFinishedSessions(of: id, cue: false))
   }
 
-  /// 刚完成的 `task`（与它的步骤）绑着的会话里，绑着的事都做完了、还没结束的，请它所在的 Mac 结束。
+  /// 刚完成的 `task`（与它的步骤）绑着的会话里，绑着的事都做完了、能结束的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类
+  /// 做不到的留着），请它所在的 Mac 结束。
   private func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
     let sessions = try db.query(
       "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [task]
     ) { $0.text(0) }
     return try sessions.compactMap { sessionID in
       guard try tasks(boundTo: sessionID).allSatisfy({ $0.task.status == .done }),
-        let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.state != .known(.ended)
+        let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
       else { return nil }
       return try requestEnd(of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }

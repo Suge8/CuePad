@@ -40,7 +40,7 @@ extension Table {
     case .cards: Card.columns
     case .sendRecords: SendRecord.columns
     case .attachments: Attachment.columns
-    case .piSessions: PiSession.columns
+    case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
@@ -235,31 +235,33 @@ public struct Attachment: Identifiable, Equatable, Sendable {
 
 /// 一个会话索引的写入：索引、检查点（nil：保留已存的）与同一次读会话文件得到的对话（见 `CueStore.upsertPiSessions`）。
 public struct PiSessionUpsert: Sendable {
-  public var session: PiSession
+  public var session: IndexedSession
   public var checkpoint: Data?
   public var transcript: PiTranscript?
 
-  public init(session: PiSession, checkpoint: Data?, transcript: PiTranscript?) {
+  public init(session: IndexedSession, checkpoint: Data?, transcript: PiTranscript?) {
     self.session = session
     self.checkpoint = checkpoint
     self.transcript = transcript
   }
 }
 
-/// 仅本机：Pi 会话历史索引的元数据。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
-public struct PiSession: Identifiable, Equatable, Sendable {
+/// 仅本机：Agent 会话历史索引的一条（会话文件路径与工作目录，OpenCode 的是它数据库里的会话）。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
+public struct IndexedSession: Identifiable, Equatable, Sendable {
   public let id: String
   public var path: String
   public var cwd: String
   public var title: String
   public var lastActivityAt: Date
+  public var agent: AgentKind
 
-  public init(id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date) {
+  public init(id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date, agent: AgentKind = .pi) {
     self.id = id
     self.path = path
     self.cwd = cwd
     self.title = title
     self.lastActivityAt = lastActivityAt
+    self.agent = agent
   }
 }
 
@@ -381,6 +383,8 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
+  case readOnlyLibrary
   // 以下除 memoryLineTooLong 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它）。
   /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
@@ -396,6 +400,7 @@ public enum CueStoreError: Error, Equatable {
   case noFolder(String)
   /// 会话此刻没有能从 CuePad 作答的提问。
   case nothingToAnswer
+  case cannotStop(String)
   /// 答案不在可选的里面（参数是可选的答案）。
   case invalidAnswer([String])
   /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
@@ -427,6 +432,7 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .readOnlyLibrary: "资料库是只读的，写不进去"
     case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
     case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
@@ -436,7 +442,8 @@ extension CueStoreError: LocalizedError {
       project.isEmpty
         ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
         : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
-    case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Pi 里答）：用 say 说话"
+    case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Agent 那边答）：用 say 说话"
+    case .cannotStop(let title): "「\(title)」的会话现在停不了：没在跑一轮、在等你回答，或它在终端里开、不能从 CuePad 停止"
     case .invalidAnswer(let options): "答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
@@ -512,14 +519,14 @@ extension Attachment: Record {
   }
 }
 
-extension PiSession: Record {
+extension IndexedSession: Record {
   static let table = Table.piSessions
-  static let columns = ["id", "path", "cwd", "title", "lastActivityAt"]
-  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt] }
+  static let columns = ["id", "path", "cwd", "title", "lastActivityAt", "agent"]
+  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt, agent.rawValue] }
   init(row: Row) {
     self.init(
       id: row.text(0), path: row.text(1), cwd: row.text(2), title: row.text(3),
-      lastActivityAt: row.date(4))
+      lastActivityAt: row.date(4), agent: row.textOrNil(5).flatMap(AgentKind.init(rawValue:)) ?? .pi)
   }
 }
 

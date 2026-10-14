@@ -118,7 +118,7 @@ struct SendTargetTests {
         let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(PiSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
+        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
         try await end(alpha)

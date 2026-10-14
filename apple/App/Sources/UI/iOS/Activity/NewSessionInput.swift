@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 新会话：只有一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部一颗落点胶囊"新会话 · 项目名"，点开换在哪开
-/// （只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）。发送钮就是开始：
+/// （只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名），旁边一颗胶囊选用哪个 Agent 开
+/// （列全部，默认上次用的 `AppSettings.lastAgent`；那台 Mac 没接入它时由 Mac 写回原因）。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
 /// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
 /// 没有项目时输入框换成一句说明。
@@ -95,6 +96,15 @@ struct NewSessionInput: View {
             }
             .disabled(inFlight)
             .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
+            Menu {
+                Picker("用哪个 Agent", selection: Bindable(services.settings).lastAgent) {
+                    ForEach(AgentKind.allCases) { (kind: AgentKind) in Label { Text(kind.name) } icon: { kind.icon }.tag(kind) }
+                }
+            } label: {
+                DestinationChip(title: Text("\(services.settings.lastAgent.icon) \(services.settings.lastAgent.name)")) { EmptyView() }
+            }
+            .disabled(inFlight)
+            .accessibilityLabel("用哪个 Agent：\(services.settings.lastAgent.name)")
             Spacer(minLength: 0)
         }
     }
@@ -123,7 +133,7 @@ struct NewSessionInput: View {
         sending = true
         workspace.attempt {
             defer { sending = false }
-            launched = try await start.launch(in: place.project, binding: binding, draft: draft, services: services)
+            launched = try await start.launch(in: place.project, binding: binding, draft: draft, agent: services.settings.lastAgent, services: services)
         }
     }
 }

@@ -24,7 +24,7 @@ struct SessionGroup: Equatable {
     }
 }
 
-/// ⌘K 搜什么：卡片或 Pi 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
+/// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
 enum SearchScope: Hashable {
     case cards, sessions
 }
@@ -83,7 +83,7 @@ struct SessionResultList: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
-                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端运行 pi，会话就会出现在这里")
+                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
                             .font(Typography.secondary).foregroundStyle(.secondary).padding(16)
                     }
                     ForEach(groups, id: \.key) { group in

@@ -14,8 +14,13 @@ extension PiSessionState {
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
             pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, models: session.availableModels,
-            context: session.context, commands: session.commands)
+            context: session.context, commands: session.commands, agent: .known(session.agent))
     }
+}
+
+extension CuePi.PiSession {
+    /// 能跳到它所在的终端：开在终端里、知道是哪个终端应用（跳转至少要激活它）。后台托管的与没报终端的（OpenCode 的服务）没有。
+    var canJump: Bool { !hosted && terminal.bundleID != nil }
 }
 
 extension SessionDigest {
@@ -142,7 +147,7 @@ struct SessionPage: View {
         return SessionHeader.State(
             session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered), cueFollows: digest.cueFollows,
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
-            liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
+            liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
@@ -208,12 +213,15 @@ extension Workspace {
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
     /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
+    /// `agent`：用哪个 Agent 开，记作下次的默认（`AppSettings.lastAgent`）。
     func startSession(
-        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, launched: @escaping () -> Void
+        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
+        launched: @escaping () -> Void
     ) async throws -> String {
         let token = UUID().uuidString
+        services.settings.lastAgent = agent
         let request = try await services.launch(
-            PiLaunch(project: project, prompt: prompt, token: token), title: title, on: host ?? services.hostID, card: card)
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent), title: title, on: host ?? services.hostID, card: card)
         var reported = false
         for try await progress in services.store.observe({
             try LaunchProgress.read(request: request.id, token: token, from: $0)

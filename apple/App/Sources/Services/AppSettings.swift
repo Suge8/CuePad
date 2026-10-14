@@ -22,7 +22,6 @@ final class AppSettings {
         static let globalShortcut = "globalShortcut"
         static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
-        static let piConnectDeclined = "piConnectDeclined"
         #endif
         static let replyTexts = "replyTexts"
         static let replyNotes = "replyNotes"
@@ -30,6 +29,7 @@ final class AppSettings {
         static let unreadSince = "unreadSince"
         static let agentProject = "agentProject"
         static let holdSendLearned = "holdSendLearned"
+        static let lastAgent = "lastAgent"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -44,9 +44,6 @@ final class AppSettings {
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
-
-    /// 用户拒绝过接入 Pi，或在设置里移除过：之后不再询问、不修复（`PiIntegrationManager`）。存储属性：询问卡片据此在点"不用了"的同一刻收起。
-    var piConnectDeclined: Bool { didSet { defaults.set(piConnectDeclined, forKey: Key.piConnectDeclined) } }
     #endif
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
@@ -54,6 +51,9 @@ final class AppSettings {
 
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
+
+    /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
+    var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
 
     /// iOS Agent 页上次选的项目筛选；nil 是全部。存储属性：选的那一刻页面就跟着变。
     var agentProject: UUID? { didSet { defaults.set(agentProject?.uuidString, forKey: Key.agentProject) } }
@@ -144,9 +144,9 @@ final class AppSettings {
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
-        piConnectDeclined = defaults.bool(forKey: Key.piConnectDeclined)
         #endif
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
+        lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in

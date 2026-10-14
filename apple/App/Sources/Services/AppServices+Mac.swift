@@ -1,28 +1,35 @@
 #if os(macOS)
 import AppKit
 import CuePi
+import CueStore
 import Foundation
 import os
 import Synchronization
 
-/// macOS 壳层与后台服务的生命周期：启动、停止、全局快捷键、Pi 历史索引、终端跳转。
+/// macOS 壳层与后台服务的生命周期：启动、停止、全局快捷键、Agent 会话历史索引、终端跳转。
 extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
         guard !tasks.isRunning else { return }
         register(hotkey)
         if !location.isIsolated { diagnostics.start() }
-        let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
-        host.start()
+        let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
         do {
             try pi.start()
+            try hooks.start()
+            for runtime in runtimes.values { try runtime.start() }
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files) { [weak self] file in
-            await self?.loadPiCheckpoint(for: file)
+        for agent in AgentKind.allCases {
+            guard let root = paths.sessionsDirectory(of: agent) else { continue }
+            let indexer = PiHistoryIndexer(
+                root: root, agent: agent, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
+            ) { [weak self] file in
+                await self?.loadPiCheckpoint(for: file)
+            }
+            follow { await self.consumePiHistory(indexer.events(), agent: agent) }
         }
-        follow { await self.consumePiHistory(indexer.events()) }
         follow { await self.historyStore.keepPruned() }
         follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {
             try await self.resetPiState()
@@ -31,7 +38,7 @@ extension AppServices {
         // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。
         // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
         follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) {
-            await self.refreshPiIntegration()
+            await self.refreshAgentIntegrations()
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
@@ -43,12 +50,12 @@ extension AppServices {
         startAccountQuotas()
     }
 
-    /// 读出接入 Pi 的状态，已接入而有哪样旧了就静默修复；失败报告一次。
-    private func refreshPiIntegration() async {
+    /// 读出各 Agent 的接入状态，装过而内容不同的静默升级；失败报告一次。
+    private func refreshAgentIntegrations() async {
         do {
-            try await piIntegration.refresh()
+            try await agents.refresh()
         } catch where !Task.isCancelled {
-            reportIssue(.piBridgeUnavailable("Pi 接入没能修复：\(error.localizedDescription)"))
+            reportIssue(.piBridgeUnavailable("CuePad 写给 Agent 的技能或扩展没能升级：\(error.localizedDescription)"))
         } catch {}
     }
 
@@ -65,6 +72,9 @@ extension AppServices {
     /// 卡住的组件不拦着退出，记一条日志指出是哪个；等待的结果是它的名字，按时结束为 nil。
     func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
         cancelBackgroundWork()
+        let hosted = runtimes.values.map { $0.stop() }
+        let hostedExit: @Sendable () async -> Void = { for exit in hosted { await exit() } }
+        hooks.stop()
         pi.stop()
         hotkey.unregister()
         let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
@@ -74,6 +84,7 @@ extension AppServices {
                 ("远程投送执行器", stopExecutor),
                 ("Cue", stopCue),
                 ("同步引擎", { await sync?.stop() }),
+                ("后台托管的 Agent", hostedExit),
             ], within: limit)
             if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }
             return late
@@ -109,7 +120,7 @@ extension AppServices {
         }
     }
 
-    // MARK: Pi
+    // MARK: Agent 会话历史
 
     /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
@@ -125,8 +136,8 @@ extension AppServices {
     /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
     static let backfillBatch = 200
 
-    /// 消费历史索引事件：先落检查点再写会话行。
-    func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>) async {
+    /// 消费一个 Agent 的历史索引事件：先落检查点再写会话行。
+    func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
         var pending: [PiHistoryUpdate] = []
         var backfilling = true
@@ -146,7 +157,7 @@ extension AppServices {
                 await flush()
                 backfilling = false
                 do {
-                    try await historyStore.retain(files)
+                    try await historyStore.retain(files, of: agent)
                     try await piStateRecorder.dropUnindexedHosted()
                 } catch {
                     reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))

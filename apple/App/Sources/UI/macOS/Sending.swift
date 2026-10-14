@@ -98,6 +98,8 @@ final class SendState {
 
     /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
+        // 收不了图片的会话只发文字（`AgentCapabilities.images`）
+        let stored = capabilities(of: target.session).contains(.images) ? stored : CueFormat.withoutImages(stored)
         do {
             switch route(of: target.session, host: target.host) {
             case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)
@@ -106,8 +108,21 @@ final class SendState {
             }
             return true
         } catch SendError.piSessionBusy {
+            // 会话正忙：做不到马上说的只剩等它做完再说，不问
+            guard capabilities(of: target.session).contains(.steer) else {
+                return try await send(stored, to: AgentTarget(session: target.session, mode: .followUp, host: target.host), card: card)
+            }
             busy = Busy(text: stored, session: target.session, host: target.host, card: card)
             return false
+        }
+    }
+
+    /// 这个会话从 CuePad 能做什么（`AgentCapabilities`）：本机在线的看桥上的，别的 Mac 上的看同步记录；已结束的发话时会被唤醒、不会正忙。
+    private func capabilities(of sessionID: String) -> AgentCapabilities {
+        switch route(of: sessionID) {
+        case .local(let live): live.capabilities
+        case .remote(let session): session.capabilities
+        case .ended: .all
         }
     }
 }
@@ -140,7 +155,7 @@ extension Workspace {
             await send(text, to: AgentTarget(session: session, host: host), card: prompt)
         case .launch(let project, let host):
             // 会话名由带着的提示词定（`CueStore.requestLaunch`）
-            _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name ?? "", on: host, card: prompt) {}
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name ?? "", on: host, card: prompt, agent: services.defaultAgent) {}
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)

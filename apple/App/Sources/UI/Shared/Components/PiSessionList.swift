@@ -106,7 +106,8 @@ struct PiSessionRow: View {
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 HStack(spacing: 6) {
-                    if let place { place; Dot() }
+                    // 已结束的没有状态词：所在后面不留孤零零的分隔点
+                    if let place { place; if searchHit != nil || !ended { Dot() } }
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
                     } else if !ended {
@@ -152,6 +153,8 @@ struct PiSessionRow: View {
             Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
+            // 是哪家 Agent（Pi 不标）：名字先截断，它一直留着
+            if session.agentMark != nil { AgentMark(session: session, font: style.meta).fixedSize() }
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)
             if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {

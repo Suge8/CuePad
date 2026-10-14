@@ -21,7 +21,7 @@
 - **发给 Agent**：任务的提示词直达运行中的 Agent 会话（目前支持 [Pi](https://pi.dev)，图文皆可）。每次发送自动记录内容快照，可一键重发；随时也能复制正文。
 - **看见 Agent**：Agent 会话显示实时状态（思考中、跑工具、等你、完成）与历史，并按工作目录归入对应项目。
 - **批注回答（Mac）**：在 Agent 的回答里选中任意一段写一句批注，批注随你的下一句发出，只带简短摘录，不把长回答原样发回去。
-- **手机上看演示**：Agent 可以把页面、截图、PDF 或报告发给你，在手机的会话里是一张卡片，点开全屏预览。（CuePad 给 Pi 装了一个小技能，Agent 知道该运行 `cuepad show <文件>`。）
+- **手机上看演示**：Agent 可以把页面、截图、PDF 或报告发给你，在手机的会话里是一张卡片，点开全屏预览。（CuePad 给每家 Agent 的技能都教它运行 `cuepad show <文件>`。）
 - **懂代码的项目**：项目可绑定代码目录，Agent 会话与 `cuepad` 命令行按所在目录自动选中项目。
 - **选区与变量**：提示词整条发送，或选中一段只发这一段；把选中的几行转成任务；发送前集中填写 `{{变量}}`，每条记住上次的值。
 - **随处搜索**：`⌘K` 搜项目、灵感与任务，可按项目、含图片、是否交给过 Agent、时间筛选。
@@ -40,17 +40,9 @@ cuepad task add 写发布说明
 cuepad task done <id>
 ```
 
-在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。接入 Pi 时会把它链接进 PATH（见下文）；完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
+在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
 
-## 接入 Pi（Mac）
-
-CuePad 第一次在你的 Mac 上发现 Pi 时，会问一次要不要接入。接入会写三个文件：
-
-- `~/.pi/agent/extensions/cuepad-bridge.ts`：让 CuePad 看到 Pi 会话、把提示词发进会话
-- `~/.pi/agent/skills/cuepad/SKILL.md`：告诉 Agent 怎么把文件发到你的手机上
-- `~/.local/bin/cuepad`：指向 App 里 `cuepad` 命令行的链接
-
-App 更新或移动位置后，CuePad 会自动把它们更新好。要移除，在设置里关掉「接入 Pi」；不是 CuePad 写的同名文件不会动。删除 App 之前，先在设置里关掉，或自己删掉这三个路径（设置过 `PI_CODING_AGENT_DIR` 的话，前两个在那个目录下，而不是 `~/.pi/agent`）。
+**Pi、Claude Code、Codex 与 OpenCode 都是双向接入。** 首次打开（之后在设置的 Agent 一节）每个 Agent 一个开关。打开后 CuePad 看得到它的会话在做什么，能把提示词发进会话，在 Mac 或手机上回答它的提问与权限确认，在后台开会话；Agent 也能用 `cuepad` 记灵感、改任务、把文件发到手机上预览。每家在它自己的目录里放一个小技能（`~/.pi/agent/skills`、`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`）；Pi 另装桥扩展，Claude Code 与 Codex 另在设置里加钩子，OpenCode 不用再装，CuePad 直连它的后台服务。不打开就什么都不写，关掉即删掉 CuePad 写的全部文件。同一处还能把 `cuepad` 链接进 `~/.local/bin`，自己在终端里用。
 
 ## 下载
 

@@ -9,7 +9,7 @@ import Testing
   var store: CueStore { fixture.store }
 
   private func index(_ id: String, cwd: String) async throws {
-    try await store.upsertPiSession(PiSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
+    try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
   }
 
   private func projects() async throws -> [String: UUID?] {

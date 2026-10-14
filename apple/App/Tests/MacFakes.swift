@@ -22,8 +22,8 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
-final class RecordingHost: PiHosting {
+/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
+final class RecordingHost: AgentRuntime {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
         case open(directory: String, launchToken: String, name: String? = nil, model: String? = nil, thinking: String? = nil)
@@ -42,10 +42,11 @@ final class RecordingHost: PiHosting {
     }
 
     func start() {}
+    func stop() -> @concurrent @Sendable () async -> Void { {} }
 
-    func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> String {
-        calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))
-        return try await connect(sessionFile.deletingPathExtension().lastPathComponent, cwd: directory.path).id
+    func resume(_ session: IndexedSession) async throws -> String {
+        calls.append(.resume(sessionFile: session.path, directory: session.cwd))
+        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 
     func end(_ id: String) async throws {
@@ -54,7 +55,7 @@ final class RecordingHost: PiHosting {
     }
 
     func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, executable: URL
+        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> String {
         calls.append(.open(
             directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))

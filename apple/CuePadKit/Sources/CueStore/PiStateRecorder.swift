@@ -17,7 +17,7 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
-        models: content.modelState.models, context: content.context, commands: content.commands)
+        models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
@@ -109,6 +109,7 @@ struct PiStateContent: Equatable, Sendable {
   var modelState = PiModelState()
   var context: PiContextUsage?
   var commands: [PiSlashCommand] = []
+  var agent = AgentKind.pi
 
   /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
   var steady: PiStateContent {
@@ -161,7 +162,8 @@ public actor PiStateRecorder {
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
     projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
-    subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil
+    subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
+    agent: AgentKind? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
     let now = timing.now()
@@ -181,6 +183,7 @@ public actor PiStateRecorder {
     if let modelState { content.modelState = modelState }
     if let context { content.context = context }
     if let commands { content.commands = commands }
+    if let agent { content.agent = agent }
     // 工作中总有这段连续处理的起点（界面的"已运行"、停止的进度都从它算）：桥上的会话由扩展给，
     // 不带时间的调用方（演示、测试）从进入工作算
     if state.isWorking, content.times.busySince == nil { content.times.busySince = content.times.stateSince }
@@ -229,15 +232,14 @@ public actor PiStateRecorder {
   }
 
   /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——
-  /// - 没留下会话文件的（Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
+  /// - 没留下对话的（`spoke` 为 false：Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
   /// - CuePad 后台托管的：闲置退出不算结束，记录留着、歇着，仍在"现在"，发话由本机执行器照常唤醒；
   /// - 其余（终端里的 Pi 退出）：记为已结束，进历史。
   /// 托管的会话要结束，由用户的结束请求写 `end`。
-  public func exited(sessionID: String, file: URL?, hosted: Bool) async throws {
+  public func exited(sessionID: String, spoke: Bool, hosted: Bool) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
     let id = sessionID
     let now = timing.now()
-    let spoke = file.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
     if !spoke {
       try await persist { [store] in try await store.deletePiState(sessionID: id) }
     } else if hosted {

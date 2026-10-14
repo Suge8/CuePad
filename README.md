@@ -21,7 +21,7 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 - **Send to agents.** A task's prompts go straight to a running agent session (currently [Pi](https://pi.dev); text and images). Every send is logged with a snapshot and can be resent; you can always copy the text too.
 - **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
 - **Annotate replies (Mac).** Select any part of an agent's reply and leave a note; your notes go out with your next message as short quotes, so a long reply doesn't get sent back.
-- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (CuePad installs a small skill for Pi so the agent knows to run `cuepad show <file>`.)
+- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (CuePad's skill teaches every agent to run `cuepad show <file>`.)
 - **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.
 - **Selections and variables.** Send a whole prompt or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
 - **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.
@@ -40,17 +40,9 @@ cuepad task add Write release notes
 cuepad task done <id>
 ```
 
-Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. It's linked into your PATH when you connect Pi (below); `cuepad --help` and `cuepad <command> --help` are the full reference.
+Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. `cuepad --help` and `cuepad <command> --help` are the full reference.
 
-## Connecting Pi (Mac)
-
-The first time CuePad finds Pi on your Mac, it asks once whether to connect. Connecting writes three files:
-
-- `~/.pi/agent/extensions/cuepad-bridge.ts`: lets CuePad see your Pi sessions and send prompts into them
-- `~/.pi/agent/skills/cuepad/SKILL.md`: tells the agent how to send files to your phone
-- `~/.local/bin/cuepad`: a link to the `cuepad` command line inside the app
-
-CuePad keeps them current when the app updates or moves. To remove them, turn off **接入 Pi** (Connect Pi) in Settings; files with the same names that CuePad didn't write are left alone. Before deleting the app, turn it off in Settings or delete those three paths yourself (if you set `PI_CODING_AGENT_DIR`, the first two are under that directory instead of `~/.pi/agent`).
+**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch (and any time in Settings → Agent) flip a switch per agent. CuePad then sees that agent's sessions live, sends your prompts into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode needs nothing more — CuePad talks to its background server. Nothing is written until you flip it, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
 
 ## Download
 

@@ -6,6 +6,7 @@ import SwiftUI
 /// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。默认交到哪与 Mac 的发给 Agent、
 /// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑就是新会话。
 /// 发出即收起，提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
+/// 选中会话做不到的（图片、斜杠命令、换模型，`AgentCapabilities`）不露出。
 struct HandOffInput: View {
     let outbox: Outbox
     @Environment(Workspace.self) private var workspace
@@ -43,7 +44,8 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
-            accepts: [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card, commands: chosen?.state.commands ?? [],
+            accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card,
+            commands: chosen?.state.usableCommands ?? [],
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if !services.reachesPiHost {
@@ -56,7 +58,7 @@ struct HandOffInput: View {
                 }
             },
             tools: {
-                if let session = chosen?.state, let config, !session.models.isEmpty {
+                if let session = chosen?.state, let config, session.capabilities.contains(.model), !session.models.isEmpty {
                     PiConfigControls(session: session, shown: config)
                 }
             },
@@ -119,8 +121,8 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, workspace: workspace, navigation: navigation)
         }
-        let sent = draft, mode = MacDelivery.modes(for: session).first ?? .send
-        let line = PiSlash.line(of: sent, in: session.commands)
+        let sent = draft.accepting(session.composerKinds), mode = session.deliveryModes[0]
+        let line = PiSlash.line(of: sent, in: session.usableCommands)
         sending = true
         workspace.attempt {
             defer { sending = false }

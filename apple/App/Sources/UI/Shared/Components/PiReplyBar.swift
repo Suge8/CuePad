@@ -2,7 +2,8 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Pi 会话（＋ 选卡片与图片）。
+/// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Agent 会话（＋ 选卡片与图片）。
+/// 这个会话做不到的不露出（`AgentCapabilities`）：图片、马上说、停止、模型与思考强度、斜杠命令、作答，规则同 `MacDelivery`。
 /// 右下角只有一颗主按钮，此刻是哪种只看 `MacDelivery.button`：空着而 Agent 自己在跑一轮是停止；写了字是发送——
 /// Pi 空闲时直接发，正忙时点按（⌘↩）等它做完再说、长按（⌘⇧↩）马上说，停止也在长按菜单里；文字型问题是作答。
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
@@ -49,7 +50,9 @@ struct PiReplyBar: View {
     }
 
     /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。
-    private var hasTools: Bool { config != nil && session.state != .known(.ended) && !session.models.isEmpty }
+    private var hasTools: Bool {
+        config != nil && session.capabilities.contains(.model) && session.state != .known(.ended) && !session.models.isEmpty
+    }
 
     private var form: ComposerForm {
         #if os(macOS)
@@ -65,13 +68,15 @@ struct PiReplyBar: View {
         if case .answer(let question) = reply { question } else { nil }
     }
 
-    private var accepts: ComposerKinds { answering == nil ? [.images, .cards, .notes] : [] }
+    private var accepts: ComposerKinds { answering == nil ? session.composerKinds : [] }
+    /// 输入 "/" 时弹出的命令（作答时不弹）。
+    private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands : [] }
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && reachable && !sending }
-    private var canStop: Bool { MacDelivery.canStop(session) }
+    private var canStop: Bool { session.canStop }
     /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
-    private var commandLine: String? { answering == nil ? PiSlash.line(of: draft, in: session.commands) : nil }
+    private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     /// 与输入框同一个圆角（贴在它上方的问题卡、收成一行的说明用）。
@@ -96,9 +101,11 @@ struct PiReplyBar: View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
-                commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
+                commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
-                    if !compact, !queued.isEmpty { PiQueueStack(requests: queued, folded: Self.foldsQueue && focused) }
+                    if !compact, !queued.isEmpty {
+                        PiQueueStack(requests: queued, folded: Self.foldsQueue && focused, steers: session.capabilities.contains(.steer))
+                    }
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if form == .open || focused, let failure = config?.failure {
@@ -293,7 +300,7 @@ struct PiReplyBar: View {
     /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
-        let outgoing = draft, line = commandLine
+        let outgoing = draft.accepting(accepts), line = commandLine
         guard canSend else { return }
         sending = true
         workspace.attempt {

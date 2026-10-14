@@ -293,6 +293,9 @@ public struct CueTools: Sendable {
   /// peek all 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
   static let overviewLimit = 60
 
+  /// 会话是哪家 Agent 的（本版本不认识的写 Agent）。
+  private static func agentName(_ session: PiSessionState) -> String { session.agent.known?.name ?? "Agent" }
+
   private func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
     let now = Date()
@@ -303,7 +306,7 @@ public struct CueTools: Sendable {
     for leaf in detail.leaves {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
       if let session = leaf.session {
-        head += " · 会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
+        head += " · \(Self.agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
         if let question = session.question { head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）") }
       } else {
         head += " · 没有会话"
@@ -312,15 +315,16 @@ public struct CueTools: Sendable {
       if let draft = leaf.draft { lines.append("  草稿：\(CueEnvelope.clip(CueFormat.plainText(draft.body), 200))") }
       // 最新的那条回答给全文（常是测试输出、验收证据），更早的截短
       let latest = leaf.recent.lastIndex { $0.role == .known(.pi) }
+      let agent = leaf.session.map(Self.agentName) ?? "Agent"
       for (index, message) in leaf.recent.enumerated() {
         let text = CueFormat.plainText(message.text)
         guard index == latest else {
-          lines.append("  \(message.role == .known(.user) ? "你" : "Pi")：\(CueEnvelope.clip(text, 300))")
+          lines.append("  \(message.role == .known(.user) ? "你" : agent)：\(CueEnvelope.clip(text, 300))")
           continue
         }
         let full = text.count > Self.latestReplyLimit
           ? String(text.prefix(Self.latestReplyLimit)) + "\n（后面还有 \(text.count - Self.latestReplyLimit) 字，截掉了）" : text
-        lines.append("  Pi（最新的回答）：\n" + full.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n"))
+        lines.append("  \(agent)（最新的回答）：\n" + full.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n"))
       }
       if !leaf.previews.isEmpty { lines.append("  预览：" + leaf.previews.map(\.name).joined(separator: "、")) }
     }

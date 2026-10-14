@@ -1,5 +1,4 @@
 #if os(macOS)
-import struct CueStore.PiSession
 import CueStore
 import CueSync
 import Foundation
@@ -23,7 +22,7 @@ struct MacSyncTests {
             FileManager.default.createFile(atPath: file!.path, contents: Data())
         }
         return CuePi.PiSession(
-            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
+            id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
@@ -435,8 +434,8 @@ struct MacSyncTests {
         return url
     }
 
-    private func indexed(_ id: String, cwd: URL) async throws -> PiSession {
-        let session = PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
+    private func indexed(_ id: String, cwd: URL) async throws -> IndexedSession {
+        let session = IndexedSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
         try await services.store.upsertPiSession(session, host: TestApp.hostID)
         return session
     }

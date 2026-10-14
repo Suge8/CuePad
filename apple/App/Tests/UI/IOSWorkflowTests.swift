@@ -60,7 +60,7 @@ struct IOSWorkflowTests {
         let session = PiSessionState(
             id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(MacDelivery.modes(for: session) == modes)
+        #expect(session.deliveryModes == modes)
     }
 
     // MARK: 发给 Agent
@@ -102,7 +102,7 @@ struct IOSWorkflowTests {
         let start = try #require(navigation.newSession)
         let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)
         let place = try #require(start.place(among: places)), binding = try #require(place.binding)
-        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), services: app.services)
+        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, services: app.services)
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.launch?.project == project.id && request.hostID == "mac-a")
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == prompt.id)

@@ -87,17 +87,19 @@ final class AppServices {
     #endif
 
     #if os(macOS)
-    /// 接入 Pi（扩展、skill 与命令行链接；写入前需征得同意）。
-    let piIntegration: PiIntegrationManager
+    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
+    let agents: AgentIntegrations
+    /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
+    let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
 
-    @ObservationIgnored let paths: PiPaths
+    @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let host: any PiHosting
-    @ObservationIgnored let locatePi: @Sendable () async -> URL?
+    @ObservationIgnored let hooks: AgentHookServer
+    @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
@@ -107,7 +109,7 @@ final class AppServices {
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, host: host, hostID: hostID, recorder: piStateRecorder, locatePi: locatePi,
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
         uploadResult: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
@@ -314,13 +316,14 @@ final class AppServices {
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
-        locatePi = mac.locatePi
-        host = mac.host
-        piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings, isEnabled: !location.isIsolated || mac.paths.isExplicit)
+        hooks = mac.hooks
+        runtimes = mac.runtimes(store)
+        agents = AgentIntegrations(mac.agents, isEnabled: !location.isIsolated || mac.paths.pi.isExplicit)
+        commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
-            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.agentDirectory, dependencies: mac.cue)
+            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

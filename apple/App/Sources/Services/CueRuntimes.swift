@@ -21,7 +21,7 @@ nonisolated struct CueRuntimes: Sendable {
 
     /// Pi 的配置目录（`PiPaths.agentDirectory`）：登录状态与默认模型从这里读。
     var piAgentDirectory: URL
-    var shellPath: @Sendable () async -> String? = { await PiIntegration.loginShellPath() }
+    var shellPath: @Sendable () async -> String? = { await CommandLineToolInstaller.loginShellPath() }
 
     /// 装了且登录了的，按 `order`。
     @concurrent func scan() async -> [CueRuntime] {

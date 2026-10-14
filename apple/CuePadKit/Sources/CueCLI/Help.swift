@@ -10,13 +10,14 @@ enum Help {
       cuepad task add 写发布说明          加任务
       cuepad task list                   看未完成任务
       cuepad task done <id>              完成任务
-      cuepad show 页面.html              把文件发到手机上预览（在 Pi 里运行，对话里出现预览卡）
+      cuepad show 页面.html              把文件发到手机上预览（在 Agent 会话里运行，对话里出现预览卡）
 
     默认项目：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称 / --unfiled 指定，--all-projects 不限。
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
     选项与输出字段：cuepad <命令> --help，例如 cuepad card add --help
     --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
     隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次）。
+    cuepad hook <agent> 是 CuePad 写进 Claude Code、Codex 钩子配置的转发命令，不用手动运行。
     """
 
   static func group(_ noun: String, _ commands: [Command]) -> String {

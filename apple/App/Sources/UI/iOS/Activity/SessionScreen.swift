@@ -73,7 +73,7 @@ struct SessionScreen: View {
                     if MacDelivery.canRename(session) {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }
-                    if MacDelivery.canEnd(session) {
+                    if session.canEnd {
                         Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
                             .disabled(shownEnd?.isOpen == true)
                     }

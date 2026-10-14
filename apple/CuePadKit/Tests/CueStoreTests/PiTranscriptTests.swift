@@ -17,7 +17,7 @@ import Testing
     let now = Date.now
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for (id, activity) in [("quiet", longAgo), ("active", now.addingTimeInterval(7 * 86_400))] {
-      try await store.upsertPiSession(PiSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: activity), host: "mac")
+      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: activity), host: "mac")
       // 两个会话的消息都很旧：active 只是之后没有新消息，文件里仍有别的活动
       try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [message(id, id, at: longAgo)], recap: PiRecap()))
     }
@@ -37,7 +37,7 @@ import Testing
     let only = try store.files.store(pngData(width: 8, height: 8, shade: 0.1))
     let shared = try store.files.store(pngData(width: 8, height: 8, shade: 0.9))
     _ = try await store.createCard(in: nil, body: CueFormat.imageMarkup(id: shared))
-    try await store.upsertPiSession(PiSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
     let text = "看\n\(CueFormat.imageMarkup(id: only))\n\(CueFormat.imageMarkup(id: shared))"
     try await store.writePiTranscript(
       PiTranscript(sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u", seq: 1, role: .user, text: text, at: longAgo)], recap: PiRecap()))

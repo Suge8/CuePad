@@ -31,17 +31,19 @@ public struct PiTerminal: Sendable, Equatable {
     }
 }
 
-/// 一个活着的 Pi 会话（一个进程里的一个会话）。状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
+/// 一个活着的 Agent 会话（一个进程里的一个会话）。状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct PiSession: Identifiable, Sendable, Equatable {
-    /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一，等于 socket 文件名去掉 `.sock`
+    /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
-    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil。只有测试读（读会话文件核对对话）
+    public let agent: AgentKind
+    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。只有测试读（读会话文件核对对话）
     public let sessionFile: URL?
+    /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
     public let pid: Int32
     public let cwd: URL
     public let terminal: PiTerminal
-    /// 该会话加载的扩展版本；只有测试读（核对 /reload 后载入的是随包的扩展）
+    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）；只有测试读（核对 /reload 后载入的是随包的扩展）
     public let extensionVersion: Int
     public internal(set) var state: PiWorkState
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
@@ -74,6 +76,14 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var commands: [PiSlashCommand] = []
 
     public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }
+
+    /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
+    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted) }
+
+    /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
+    public var spoke: Bool {
+        agent == .opencode || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
+    }
 
     /// 会话的显示名，规则见 `PiSessionName`。
     public var displayName: String {
@@ -181,6 +191,8 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiWorkState.incompatible`），不发命令
     case incompatibleExtension
+    /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
+    case unsupported
 }
 
 extension PiBridgeError: LocalizedError {
@@ -190,6 +202,7 @@ extension PiBridgeError: LocalizedError {
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
+        case .unsupported: "这个 Agent 会话不支持这样操作"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

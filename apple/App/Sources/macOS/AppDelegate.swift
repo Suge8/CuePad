@@ -79,6 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.cueBar = cueBar
         settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services, cueBar: cueBar) }
         DebugHooks.present(window)
+        // 首次启动出现一次接入 Agent 的面板（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
+        if !location.isIsolated, !services.settings.agentSetupShown {
+            services.settings.agentSetupShown = true
+            workspace.showsAgentSetup = true
+        }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {

@@ -786,14 +786,14 @@ extension CueStore {
   /// 插入或更新会话索引（本机，不同步）；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。
   /// 同一事务里把它写成这个会话的同步记录（见 `writePiHistory`），`host` 是这台 Mac。
   /// `transcript` 是同一次读会话文件得到的对话与摘要，在同一事务里写（见 `writePiTranscript`）。
-  public func upsertPiSession(_ session: PiSession, checkpoint: Data? = nil, host: String, transcript: PiTranscript? = nil) throws {
+  public func upsertPiSession(_ session: IndexedSession, checkpoint: Data? = nil, host: String, transcript: PiTranscript? = nil) throws {
     try upsertPiSessions([PiSessionUpsert(session: session, checkpoint: checkpoint, transcript: transcript)], host: host)
   }
 
   /// 一批会话索引在同一个事务里写（首次回填几千个文件时：一次提交、一次变更通知，界面不为每个文件重读重画）。
   public func upsertPiSessions(_ batch: [PiSessionUpsert], host: String) throws {
-    let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-    let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
+    let assignments = IndexedSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+    let placeholders = (IndexedSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
     try write {
       let bound = try boundDirectories()
       for item in batch {
@@ -801,7 +801,7 @@ extension CueStore {
         if let transcript = item.transcript { try applyTranscript(transcript) }
         try db.run(
           """
-          INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
+          INSERT INTO piSessions (\(IndexedSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
           ON CONFLICT(id) DO UPDATE SET \(assignments),
             checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
           """, item.session.bindings + [item.checkpoint])
@@ -813,17 +813,22 @@ extension CueStore {
   /// 同时让已结束的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，
   /// 如 `--no-session` 或没发过消息的——这也是已经留下的这类历史记录的清理，每次启动一次），补写有会话文件却没有记录的。在线的不动；
   /// 歇着的托管会话同样要有会话文件，由 `PiStateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。
+  /// 每个 Agent 的索引各自对账自己的会话（`agent`），别家的不动。
   @discardableResult
-  public func retainPiSessions(paths: Set<String>, host: String) throws -> Int {
+  public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
-      let stale = try db.query("SELECT id, path FROM piSessions") { ($0.text(0), $0.text(1)) }.filter { !paths.contains($0.1) }
+      let stale = try db.query("SELECT id, path FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
+        .filter { !paths.contains($0.1) }
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
-        "DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND sessionID NOT IN (SELECT id FROM piSessions)",
-        [host, PiWorkState.ended.rawValue])
+        """
+        DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND COALESCE(agent, 'pi') = ?
+          AND sessionID NOT IN (SELECT id FROM piSessions)
+        """,
+        [host, PiWorkState.ended.rawValue, agent.rawValue])
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
       let unrecorded = try select(
-        PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
+        IndexedSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       let bound = try boundDirectories()
       for session in unrecorded { try writePiHistory(session, host: host, bound: bound) }
       try refreshSessionFolders()
@@ -862,11 +867,11 @@ extension CueStore {
   }
 
   /// 本机索引里的一个会话（会话文件路径与工作目录）。
-  public func piSession(_ id: String) throws -> PiSession? { try find(PiSession.self, id) }
+  public func piSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
   /// 会话文件索引写成同步记录：没有记录时插入一条已结束的；已结束的记录更新名字、所在与最后活动时间（没变不写，
   /// 免得每次启动把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
-  private func writePiHistory(_ session: PiSession, host: String, bound: [BoundDirectory]) throws {
+  private func writePiHistory(_ session: IndexedSession, host: String, bound: [BoundDirectory]) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
     let folder = Self.folderName(ofWorkingDirectory: session.cwd)
@@ -877,7 +882,7 @@ extension CueStore {
       _ = try insert(PiSessionState(
         id: id, sessionID: session.id, hostID: host, title: title, projectID: projectID, state: .known(.ended), detail: nil,
         folder: folder, lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: session.lastActivityAt,
-        busySince: nil, createdAt: now, modifiedAt: now))
+        busySince: nil, createdAt: now, modifiedAt: now, agent: .known(session.agent)))
       return
     }
     guard existing.state == .known(.ended) else { return }

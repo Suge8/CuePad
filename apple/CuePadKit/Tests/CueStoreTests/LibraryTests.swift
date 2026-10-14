@@ -126,23 +126,23 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表、对话里只有工具个数）就地升级，已有的会话记录不丢，
-  /// 结构 30（Cue）之前的样子：撤掉 30 加的列、表与触发器。更早结构的升级测试先撤它，再撤自己那一步。
-  /// 把新建的库退回结构 30：撤掉 31（Cue）。
-  static let undoSchema31 = """
+  /// 把新建的库退回结构 31：撤掉 32（Cue）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
+  static let undoSchema32 = """
     DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
     DROP INDEX sendRecords_deliveryID; ALTER TABLE sendRecords DROP COLUMN deliveryID; ALTER TABLE sendRecords DROP COLUMN origin;
     """
+  /// 退回结构 30：再撤掉 31（会话记录与历史索引记 Agent 的两列）。
+  static let undoSchema31 = undoSchema32 + "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent;"
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 30 的库升到 31：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
-  @Test func schema30LibraryUpgradesForCue() async throws {
+  /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
+  @Test func schema31LibraryUpgradesForCue() async throws {
     let task = try await store.createTask("发布", in: nil)
     try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "s", ref: "s1"), on: "mac")
-    try RawDB(fixture.url).exec(Self.undoSchema31 + "PRAGMA user_version = 30;")
+    try RawDB(fixture.url).exec(Self.undoSchema32 + "PRAGMA user_version = 31;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.card(task.id)?.cueFollows == false)
@@ -151,10 +151,11 @@ import Testing
     #expect(try await upgraded.addCueMessage(.cue, text: "开工了").author == .known(.cue))
   }
 
+  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表、对话里只有工具个数）就地升级，已有的会话记录不丢，
   /// 新列可写，预览可用；会话文件的检查点作废（下次从头读，补出旧对话的工具活动）。
   @Test func schema17LibraryUpgradesInPlaceAndKeepsSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema30 + 
       """
       ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; DROP TABLE syncSent;
@@ -173,7 +174,7 @@ import Testing
 
   /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
   @Test func schema22LibraryDropsSessionCheckpoints() async throws {
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema30 + "DROP TABLE syncSent; PRAGMA user_version = 22;")
 
     let upgraded = try CueStore(url: fixture.url)

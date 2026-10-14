@@ -215,8 +215,9 @@ final class SQLite {
     return (value, tracked ?? [])
   }
 
-  private func error(_ sql: String) -> SQLiteError {
-    SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
+  private func error(_ sql: String) -> any Error {
+    if sqlite3_errcode(handle) & 0xff == SQLITE_READONLY { return CueStoreError.readOnlyLibrary }
+    return SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
   }
 }
 

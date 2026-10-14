@@ -65,7 +65,7 @@ final class PiSocketConnection: Sendable {
     private let closed = Mutex(false)
 
     /// 连接到本机 socket：本地 connect 是微秒级；对端进程被冻结时也由内核 backlog 接住，不会阻塞。
-    init(path: String) throws {
+    convenience init(path: String) throws {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw ConnectError.socket(errno) }
         var one: Int32 = 1
@@ -80,7 +80,13 @@ final class PiSocketConnection: Sendable {
         }
         guard rc == 0 else { let e = errno; Darwin.close(fd); throw ConnectError.connect(e) }
 
-        // 对端必须是当前用户的进程
+        try self.init(peer: fd)
+    }
+
+    /// 接管一个已连上的描述符（connect 得到的，或监听端 accept 得到的）。对端必须是当前用户的进程，否则关掉它并抛错。
+    init(peer fd: Int32) throws {
+        var one: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
         var euid: uid_t = 0, egid: gid_t = 0
         guard getpeereid(fd, &euid, &egid) == 0, euid == getuid() else { Darwin.close(fd); throw ConnectError.peerNotOwner }
 
@@ -105,8 +111,10 @@ final class PiSocketConnection: Sendable {
         source.resume()
     }
 
-    func write(_ data: Data) {
+    /// `thenClose`：写完（排在之前的写入之后）再关连接。
+    func write(_ data: Data, thenClose: Bool = false) {
         writeQueue.async { [self] in
+            defer { if thenClose { source.cancel() } }
             closed.withLock {
                 guard !$0 else { return }
                 data.withUnsafeBytes { raw in

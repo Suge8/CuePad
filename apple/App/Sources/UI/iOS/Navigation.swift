@@ -56,13 +56,15 @@ final class Navigation {
             } ?? places.first
         }
 
-        /// 在 `binding` 那台 Mac、它绑的文件夹开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
+        /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent` 开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
         /// （没有就是带上的第一张）。返回这一次的请求与认领标识。
-        func launch(in project: Project, binding: DirectoryBinding, draft: ComposerDraft, services: AppServices) async throws -> Launched {
+        func launch(
+            in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, services: AppServices
+        ) async throws -> Launched {
             let token = UUID().uuidString
             let opening = try draft.stored(in: services.store.files).nonEmpty
             let request = try await services.launch(
-                PiLaunch(project: project.id, prompt: opening, token: token), title: name ?? project.name, on: binding.hostID,
+                PiLaunch(project: project.id, prompt: opening, token: token, agent: agent), title: name ?? project.name, on: binding.hostID,
                 card: card ?? draft.attachments.first?.card)
             return Launched(request: request.id, token: token)
         }

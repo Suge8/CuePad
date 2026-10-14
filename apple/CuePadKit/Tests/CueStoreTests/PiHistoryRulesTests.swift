@@ -15,20 +15,14 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.piSessionPage(PiSessionQuery(limit: .max)).items.map { ($0.state.sessionID, $0.state) })
   }
 
-  private func sessionFile() throws -> URL {
-    let file = FileManager.default.temporaryDirectory.appending(path: "hist-\(UUID().uuidString).jsonl")
-    try Data().write(to: file)
-    return file
-  }
-
-  @Test func 进程退出按有没有会话文件与是不是托管的分三种() async throws {
+  @Test func 进程退出按有没有留下对话与是不是托管的分三种() async throws {
     let recorder = recorder
     for id in ["silent", "terminal", "hosted"] {
       try await recorder.update(sessionID: id, state: .thinking, title: id, hosted: id == "hosted")
     }
-    try await recorder.exited(sessionID: "silent", file: URL(filePath: "/no/such/file.jsonl"), hosted: false)
-    try await recorder.exited(sessionID: "terminal", file: try sessionFile(), hosted: false)
-    try await recorder.exited(sessionID: "hosted", file: try sessionFile(), hosted: true)
+    try await recorder.exited(sessionID: "silent", spoke: false, hosted: false)
+    try await recorder.exited(sessionID: "terminal", spoke: true, hosted: false)
+    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
 
     let all = try await states()
     #expect(all["silent"] == nil, "没说过话：记录删掉")
@@ -52,7 +46,7 @@ import Testing
     defer { watcher.cancel() }
     try await Task.sleep(for: .milliseconds(200))
 
-    try await recorder.exited(sessionID: "hosted", file: try sessionFile(), hosted: true)
+    try await recorder.exited(sessionID: "hosted", spoke: true, hosted: true)
 
     for _ in 0..<300 where seen.withLock({ $0.last }) != .known(.settled) { try await Task.sleep(for: .milliseconds(10)) }
     #expect(seen.withLock { $0.last } == .known(.settled), "订阅收到歇着")
@@ -66,7 +60,7 @@ import Testing
     try await recorder.end(sessionID: "old-ended")
     // 有会话文件的有索引（本机会话文件索引）；"hosted-silent" 与 "old-ended" 没有
     for id in ["terminal", "hosted"] {
-      try await store.upsertPiSession(PiSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
+      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
     }
 
     try await recorder.reset()
@@ -75,7 +69,7 @@ import Testing
 
     // 对账之后才连上桥的新会话（还没有会话文件）：记录器正在跟它，对账不删
     try await recorder.update(sessionID: "live-new", state: .settled, title: "live-new", hosted: true)
-    try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], host: host)
+    try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], agent: .pi, host: host)
     try await recorder.dropUnindexedHosted()
     #expect(Set(try await states().keys) == ["terminal", "hosted", "live-new"], "没有会话文件的已结束与歇着的托管记录被清掉，有的与在线的留着")
   }
