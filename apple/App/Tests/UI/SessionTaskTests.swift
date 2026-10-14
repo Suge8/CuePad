@@ -7,7 +7,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 每个会话都属于一个任务叶子：不经任务开的会话（终端里的 Pi、只在会话文件里找到的历史），Mac 建同名任务挂上，看板与 Cue 都从任务看到它。
+/// 每个没结束的会话都属于一个任务叶子：不经任务开的会话（终端里的 Pi 等），Mac 建同名任务挂上，看板与 Cue 都从任务看到它；历史会话不补建。
 struct SessionTaskTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -37,26 +37,35 @@ struct SessionTaskTests {
         #expect(try await store.card(row.task.id) == nil)
     }
 
-    @Test func 启动时只在会话文件里的历史会话_挂上已完成并归档的同名任务_不占看板() async throws {
+    @Test func 只在会话文件里的历史会话_启动时不建任务_从头重读也不改写记录() async throws {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appending(path: "old.jsonl")
         try """
             {"type":"session","version":3,"id":"old","timestamp":"2026-09-01T08:00:00.000Z","cwd":"/work/x"}
-            {"type":"message","id":"u1","parentId":null,"timestamp":"2026-09-01T08:00:01.000Z","message":{"role":"user","content":"整理发布脚本","timestamp":1}}
+            {"type":"message","id":"u1","parentId":null,"timestamp":"2026-09-01T08:00:01.237Z","message":{"role":"user","content":"整理发布脚本","timestamp":1}}
+            {"type":"message","id":"a1","parentId":"u1","timestamp":"2026-09-01T08:00:09.613Z","message":{"role":"assistant","content":[{"type":"text","text":"好了"}],"stopReason":"stop","timestamp":2}}
 
             """.write(to: file, atomically: true, encoding: .utf8)
-        await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: false, files: store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [file]))
-            continuation.finish()
-        }, agent: .pi)
+        // 没有检查点、从头读：首次回填，或升级作废检查点之后
+        func backfill() async {
+            await services.consumePiHistory(AsyncStream { continuation in
+                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: false, files: store.files)))
+                continuation.yield(.backfillFinished(sessionFiles: [file]))
+                continuation.finish()
+            }, agent: .pi)
+        }
+        await backfill()
+        try await services.resetPiState()  // Mac 启动
 
-        try await services.resetPiState()  // 升级后第一次启动：已有的游离会话归位
-
-        let task = try #require(try await store.archived().first)
-        #expect(task.title == "整理发布脚本" && task.status == .done && task.piSessionID == "old")
+        #expect(try await store.archived().isEmpty)
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
+        let written = try #require(try await store.piSessions(sessionIDs: ["old"])["old"]?.state)
+        #expect(written.title == "整理发布脚本" && written.lastReply == "好了")
+
+        try await Task.sleep(for: .milliseconds(5))  // 改写了的话修改时间一定不同
+        await backfill()
+        #expect(try await store.piSessions(sessionIDs: ["old"])["old"]?.state == written)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {
