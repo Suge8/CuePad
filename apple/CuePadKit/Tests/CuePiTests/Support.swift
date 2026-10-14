@@ -28,7 +28,7 @@ func makeTempDirectory() throws -> URL {
     return dir
 }
 
-/// 托管的 Pi 不随测试进程、桥或 `PiHost` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
+/// 托管的 Pi 不随测试进程、桥或 `PiRuntime` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
 /// 它们都连在本用例的临时 socket 目录里，是本用例启动的；只按这些 pid 发，不碰别的进程。
 @MainActor func stopHostedProcesses(_ bridge: PiBridge) {
     for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }

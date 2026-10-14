@@ -115,7 +115,7 @@ final class PiProcess: @unchecked Sendable {
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
-    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiHost` 的 `extraArguments`）。
+    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiRuntime` 的 `extraArguments`）。
     static let quietArguments = [
         "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off",
     ]

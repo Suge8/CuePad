@@ -79,7 +79,7 @@ enum PiWire {
     }
 
     /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
-    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiHost`）。
+    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiBridge`）。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
         var extensionVersion: Int
