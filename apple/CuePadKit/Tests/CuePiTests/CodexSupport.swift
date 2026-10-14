@@ -157,6 +157,18 @@ final class CodexRig {
     /// 人在不在这台 Mac 前：默认不在（确认交给 CuePad）
     let presence: TestPresence
 
+    /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
+    /// 固定的 /tmp 链接，指向本次构建的 cuepad（录制时真钩子经它跑）。
+    static let hookHelper: URL = {
+        let link = URL(filePath: "/tmp/cuepad-test-helper/cuepad")
+        try! FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? link.checkResourceIsReachable()) != nil || (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) != nil {
+            try! FileManager.default.removeItem(at: link)
+        }
+        try! FileManager.default.createSymbolicLink(at: link, withDestinationURL: PiProcess.cuepad)
+        return link
+    }()
+
     /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
     init(approvals: String = "never") async throws {
         let codex = try CodexHome()
@@ -166,7 +178,7 @@ final class CodexRig {
         let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: Self.hookHelper).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()

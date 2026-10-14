@@ -8,7 +8,7 @@ import CueStore
 /// 斜杠命令与上下文余量的端到端：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
 /// 提示词模板与 skill 用 Pi 的显式路径参数加载，扩展命令来自测试夹具。
 @MainActor
-@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealSlashTests {
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
         let resources = try makeTempDirectory()

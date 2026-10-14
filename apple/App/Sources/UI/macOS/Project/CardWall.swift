@@ -206,18 +206,61 @@ struct CardTile: View {
         .contentShape(.rect(cornerRadius: Self.radius))
         }
         .buttonStyle(CardOpenStyle())
+        .overlay(alignment: .bottomTrailing) {
+            if hovering { MakeTaskButton(card: card.id).padding(10).transition(.opacity) }
+        }
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
         .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
+        .accessibilityAction(named: "设为任务", makeTask)
         .perfMark("content")
+    }
+
+    private func makeTask() {
+        let id = card.id
+        workspace.attempt { try await workspace.setTodo(id, true) }
     }
 
     private func open() {
         guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
         workspace.open(card)
+    }
+}
+
+/// 悬停在墙上一张卡时右下角露出的"设为任务"：灵感变成任务的那一下（第一行做任务名，其余成为它的提示词，`CueStore.setTodo`），
+/// 卡离开墙、出现在上面的任务里，行尾就是"开始"。圈是任务圈的样子，告诉你它会变成什么；批量选择时不出现（点按是选择）。
+private struct MakeTaskButton: View {
+    let card: UUID
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        if !workspace.presses.isSelecting {
+            Button {
+                let id = card
+                workspace.attempt { try await workspace.setTodo(id, true) }
+            } label: {
+                HStack(spacing: 5) {
+                    Circle().strokeBorder(hovering ? palette.onSignature : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
+                    Text("设为任务").fontWeight(.medium)
+                }
+                .font(Typography.meta)
+                .foregroundStyle(hovering ? palette.onSignature : palette.ink)
+                .padding(.horizontal, 9).frame(height: 24)
+                .background(hovering ? palette.signatureFill : palette.paperLit, in: .capsule)
+                .overlay(Capsule().strokeBorder(palette.hair).opacity(hovering ? 0 : 1))
+                .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.08), radius: 6, y: 2)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(PressStyle())
+            .onHover { hovering = $0 }
+            .animation(Motion.quick, value: hovering)
+            .help("设为任务：第一行做任务名，其余成为交给 Agent 的话")
+        }
     }
 }
 

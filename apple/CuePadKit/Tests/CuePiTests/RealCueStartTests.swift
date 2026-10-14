@@ -11,7 +11,7 @@ import Testing
 private let agents = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 
 @MainActor
-@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), .timeLimit(.minutes(6)))
+@Suite(.agentTapes, RealAgents.serialWhenRecording(.pi, .codex, .claudeCode, .opencode), RealAgents.timeLimit(.minutes(6)))
 struct RealCueStartTests {
     @Test(arguments: agents) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
         AgentTape.use(agent)

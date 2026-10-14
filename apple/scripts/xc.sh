@@ -5,15 +5,16 @@
 #       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着（给 bcu 操作），就绪后打印 PID；RUN_MAC_TTL 秒后自己退出，下次 run/shot 先结束它
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh test kit [swift test 参数…]   CuePadKit 的 swift test（macOS），如 --filter SuiteName
-#       xc.sh perf <mac|ios> [参数…]   单次交互的性能测量（perf-mac.sh、perf-ios.sh，参数见各自头注释），独占全部槽位
+#       xc.sh perf <mac|ios> [参数…]   单次交互的性能测量（perf-mac.sh、perf-ios.sh，参数见各自头注释），独占机器
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
-# 编译、测试、截图、测量全机排队，同时最多 3 个（_slot.sh），排队时打印在跑的是谁；Agent 直接调 xcodebuild、swift build/test、simctl 开关机会被拦（.pi/extensions/xc-guard.ts）。
-# 产物目录固定是本检出的 apple/.derived（Kit 是 CuePadKit/.build）：每个检出一份增量，同一检出的任务排队、不互相覆盖。
+# 产物目录固定是本检出的 apple/.derived（Kit 是 CuePadKit/.build）：每个检出一份增量。同一检出的任务排队、性能测量独占机器、
+# iOS 任务从固定的一小池模拟器里领一台、任务最多跑 30 分钟（_lock.sh），排队时打印在等谁。
+# Agent 直接调 xcodebuild、swift build/test、simctl 开关机会被拦（.pi/extensions/xc-guard.ts）。
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
 # 提交钩子在 apple/scripts/hooks（主检出只收合并，其余检出跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
 # ios 是 iPhone 模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
-# 模拟器是本槽位固定的一台（_sim.sh），开着复用；每次装新包，资料库与偏好用隔离目录。
+# 模拟器开着复用（_sim.sh）；每次装新包，资料库与偏好用隔离目录。
 # test 里每个测试最多 TEST_TIME_LIMIT 秒（xcodebuild 的测试时限，Xcode 27 实测对 Swift Testing 也生效，主线程死锁也会被结束）：
 # 超时的测试记一条 "Time limit was exceeded"，测试宿主重启后接着跑，最后非零退出。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
@@ -26,8 +27,8 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_signing.sh"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
-# shellcheck source=_slot.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_slot.sh"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
 absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 DERIVED="$APPLE_DIR/.derived"
 BUNDLE_ID=com.sugeh.cuepad
@@ -58,7 +59,8 @@ case "$cmd" in
       mac|ios) exec "$APPLE_DIR/scripts/perf-$platform.sh" "${@:3}" ;;
       *) echo "用法：$0 perf <mac|ios> [参数…]" >&2; exit 2 ;;
     esac ;;
-  check|build|test|shot|rec|run) slot_enter one "$0" "$@" ;;
+  test|shot|rec) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
+  check|build|run) xc_enter plain "$0" "$@" ;;
 esac
 if [ "$cmd" = test ] && [ "$platform" = kit ]; then
   cd "$APPLE_DIR/CuePadKit" && exec swift test "${@:3}"
@@ -150,7 +152,7 @@ run_mac() {
   local ready="$DERIVED/shot-ready" pidfile="$DERIVED/shot-mac.pid" pid=""
   start_mac
   wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
-  # 到点自己退出：守护进程脱离本脚本（不占槽、不随脚本结束），到时只结束仍是这个可执行文件的那个 PID
+  # 到点自己退出：守护进程脱离本脚本（不占检出锁、不随脚本结束），到时只结束仍是这个可执行文件的那个 PID
   # shellcheck disable=SC2016 # 由里层 bash 展开
   nohup bash -c 'sleep "$1"; [ "$(ps -o comm= -p "$2")" != "$3" ] || kill -TERM "$2"' _ "$RUN_MAC_TTL" "$pid" "$app/Contents/MacOS/CuePad" >/dev/null 2>&1 &
   echo "$pid"
@@ -214,7 +216,7 @@ case "$cmd" in
   build) xcb -quiet build ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
-    # 先开好本槽的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台
+    # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台
     if [ -n "${device:-}" ]; then sim_boot "$device"; fi
     # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
     # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
