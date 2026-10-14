@@ -61,6 +61,46 @@ struct SessionTaskTests {
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
     }
 
+    /// 会话里谁说的按来源认（会话页的气泡与 Cue 的 peek 同一条）：Cue 发进去的是"你"，在 CuePad 里发的与终端里打的都是"他"。
+    /// 他发起的那一轮还在跑时，Cue 要"马上说"也只排到这一轮做完再发；Cue 自己发起的那一轮里照常马上说。
+    @Test func 会话消息按来源标注_他那一轮没完时Cue不插嘴() async throws {
+        try await store.updateCueProfile {
+            $0.hostID = "mac-b"
+            $0.enabledAt = .now
+        }
+        let task = try await store.createTask("修登录", in: nil)
+        try await store.linkCard(task.id, toSession: "s1")
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
+        let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
+        let byCue = UUID(), byPad = UUID(), byCueLater = UUID()
+        try await store.recordSend("先跑测试", to: target, delivery: byCue, origin: .known(.cue))
+        try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
+        func said(_ seq: Int64, _ text: String, _ delivery: UUID?) -> PiChatMessage {
+            PiChatMessage(sessionID: "s1", entryID: "u\(seq)", seq: seq, role: .user, text: text, at: .now, deliveryID: delivery)
+        }
+        let reply = PiChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad), said(4, "顺便看下注册页", nil)],
+            recap: PiRecap()))
+        try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
+
+        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
+        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter(\.isUser).map(\.fromCue) == [true, false, false])
+        let cue = CueTools(store: store)
+        let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
+        #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
+
+        let waited = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动", "when": "now"]))
+        #expect(!waited.isError && waited.structured["mode"] as? String == DeliveryMode.followUp.rawValue)
+
+        // Cue 自己说的那句开的一轮：照常马上说
+        try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
+        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
+        let steered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的", "when": "now"]))
+        #expect(!steered.isError && steered.structured["mode"] as? String == DeliveryMode.steer.rawValue)
+    }
+
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
     /// Cue 停用后，答得了的那个也回到"等你确认"。
     @Test func Cue值班时_答得了的提问等Cue_答不了的和停用后等你() async throws {
