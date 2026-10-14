@@ -26,7 +26,7 @@ struct SessionTaskTests {
         try await bridge(.appeared(session))
 
         let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
-        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.session?.sessionID == "s1")
+        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.task.piSessionID == "s1")
         let overview = try #require(await CueTools(store: store).call("task", ["action": "peek"]))
         #expect(!overview.isError && overview.text.contains("在做 1 件：\n圆桌：\n- 修登录（\(row.task.id.shortID)） · 歇着"))
 
