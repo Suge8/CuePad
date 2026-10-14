@@ -25,7 +25,7 @@ public final class PiHost {
     private let idleLimit: Duration
     private let connectTimeout: Duration
     private let endTimeout: Duration
-    private let locator: ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     private let extraArguments: [String]
     private var watcher: Task<Void, Never>?
     /// 已经发过 SIGTERM 的进程：同一个只发一次（Pi 收尾中再收到一次会跳过收尾直接退出）。随它结束清掉。
@@ -35,14 +35,15 @@ public final class PiHost {
     /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(
         bridge: PiBridge, paths: PiPaths, idleLimit: Duration = .seconds(30 * 60), connectTimeout: Duration = .seconds(30),
-        endTimeout: Duration = .seconds(10), locator: ExecutableLocator = .standard, extraArguments: [String] = []
+        endTimeout: Duration = .seconds(10), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
+        extraArguments: [String] = []
     ) {
         self.bridge = bridge
         self.paths = paths
         self.idleLimit = idleLimit
         self.connectTimeout = connectTimeout
         self.endTimeout = endTimeout
-        self.locator = locator
+        self.locate = locate
         self.extraArguments = extraArguments
     }
 
@@ -111,15 +112,12 @@ public final class PiHost {
     ) async throws -> PiSession {
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         let (exited, exit) = AsyncStream<Void>.makeStream()
+        let environment = await locate().environment(
+            launching: executable,
+            overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
         let errors = try Self.scratchFile()
         defer { close(errors) }
-        let pid = try Self.spawn(
-            executable, ["--mode", "rpc"] + arguments + extraArguments, in: directory, stderr: errors,
-            environment: ProcessInfo.processInfo.environment
-                .merging(paths.launchEnvironment) { $1 }
-                .merging(environment) { $1 }
-                .merging([Self.hostedVariable: String(idleLimit.components.seconds), "PATH": Self.path(executable, locator)]) { $1 }
-        ) {
+        let pid = try Self.spawn(executable, ["--mode", "rpc"] + arguments + extraArguments, in: directory, stderr: errors, environment: environment) {
             exit.yield()
             exit.finish()
         }
@@ -160,11 +158,6 @@ public final class PiHost {
 
     /// 扩展读这个环境变量判断自己是被 CuePad 托管的，值是空闲多少秒后退出。
     static let hostedVariable = "CUEPAD_HOSTED"
-
-    /// `pi` 是 node 脚本：App 的环境里没有用户 shell 的 PATH，按找 Pi 时的同一组目录补上（node 多半与 pi 装在一起）。
-    private static func path(_ executable: URL, _ locator: ExecutableLocator) -> String {
-        ExecutableLocator(searchDirectories: [executable.deletingLastPathComponent()] + locator.searchDirectories).path
-    }
 
     /// 启动一个脱离本进程的 Pi，返回它的 pid；它退出时调 `onExit`（在 App 还活着时回收，App 不在了就归 launchd）。
     /// - 新会话组（`POSIX_SPAWN_SETSID`）：App 所在会话与进程组的信号碰不到它；

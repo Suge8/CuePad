@@ -2,18 +2,6 @@
 import CueStore
 import Foundation
 
-extension AgentKind {
-    /// 可执行文件名
-    public var command: String {
-        switch self {
-        case .pi: "pi"
-        case .claudeCode: "claude"
-        case .codex: "codex"
-        case .opencode: "opencode"
-        }
-    }
-}
-
 public struct PiVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
     public var major: Int, minor: Int, patch: Int
     public init(_ major: Int, _ minor: Int, _ patch: Int) { self.major = major; self.minor = minor; self.patch = patch }
@@ -84,55 +72,6 @@ extension AgentInstallError: LocalizedError {
         case .foreign(let path): "\(path) 是别人的同名文件，没有改动"
         case .halfInstalled(let reason): "扩展装上了，技能没写上，扩展也没能还原：\(reason)。下次启动会再试一次"
         }
-    }
-}
-
-/// 在哪里找 Agent 的可执行文件，也是给它们的子进程的 PATH（唯一的一处）。GUI 应用的 PATH 很短，所以除了 PATH 还查各家安装脚本的默认位置。
-public struct ExecutableLocator: Sendable {
-    public var searchDirectories: [URL]
-    public init(searchDirectories: [URL]) {
-        var unique: [URL] = []
-        for directory in searchDirectories where !directory.path.isEmpty && !unique.contains(directory) { unique.append(directory) }
-        self.searchDirectories = unique
-    }
-
-    /// 本进程的 PATH 加常见安装目录。
-    public static var standard: ExecutableLocator { ExecutableLocator(shellPath: ProcessInfo.processInfo.environment["PATH"]) }
-
-    /// 用户登录 shell 的 PATH 在前（Agent 的 bash 看到的是它），再是 `standard`；查不到登录 shell 的就是 `standard`。慢（起一个登录 shell）。
-    public static func resolved() async -> ExecutableLocator {
-        let login = await loginShellPath()
-        return ExecutableLocator(shellPath: [login, ProcessInfo.processInfo.environment["PATH"]].compactMap { $0 }.joined(separator: ":"))
-    }
-
-    private init(shellPath: String?) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let path = (shellPath ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
-        let common = [home.appending(path: ".local/bin"), URL(filePath: "/opt/homebrew/bin"), URL(filePath: "/usr/local/bin"),
-                      home.appending(path: ".bun/bin"), home.appending(path: ".npm-global/bin"), home.appending(path: ".opencode/bin")]
-        self.init(searchDirectories: path + common)
-    }
-
-    /// 给子进程的 PATH：这组目录，再保底 /usr/bin 与 /bin。
-    public var path: String {
-        ExecutableLocator(searchDirectories: searchDirectories + [URL(filePath: "/usr/bin"), URL(filePath: "/bin")]).searchDirectories.map(\.path)
-            .joined(separator: ":")
-    }
-
-    public func candidates(_ command: String) -> [URL] {
-        searchDirectories.map { $0.appending(path: command) }.filter { FileManager.default.isExecutableFile(atPath: $0.path) }
-    }
-
-    /// 用户登录 shell 的 PATH（交互式启动才会读 .zshrc）；5 秒没结果就放弃。
-    public static func loginShellPath() async -> String? {
-        let marker = "__CUEPAD_PATH__"
-        let process = Process()
-        process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
-        return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }
 

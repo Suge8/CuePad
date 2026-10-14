@@ -163,7 +163,7 @@ final class CodexRig {
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator, presence: presence)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator = codex.locator] in locator }, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)

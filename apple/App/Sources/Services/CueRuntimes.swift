@@ -6,13 +6,13 @@ import Foundation
 /// 起一个大脑要的本机信息：只找可执行文件，不问登录（登录不了大脑会起不来或一轮出错，由管理器报出）。
 nonisolated struct CueLaunch: Equatable, Sendable {
     var executable: URL
-    /// 给大脑与 MCP 服务的 PATH（`ExecutableLocator.resolved`）：App 自己的 PATH 很短，运行时起的 node 等靠它找到。
+    /// 给大脑与 MCP 服务的 PATH（`ExecutableLocator.system`）：App 自己的 PATH 很短，运行时起的 node 等靠它找到。
     var path: String
     /// 开会话可选的 Agent 与模型，一项一行、能照抄进 start（`CuePrompt.system` 的 `agents`）
     var agents: [String]
 }
 
-/// 查本机的 Pi、Codex、Claude Code 能不能当大脑：按 `ExecutableLocator.resolved` 找可执行文件，`scan()` 再用各家自己的命令问登录了没有
+/// 查本机的 Pi、Codex、Claude Code 能不能当大脑：按 `ExecutableLocator.system` 找可执行文件，`scan()` 再用各家自己的命令问登录了没有
 /// （Pi 是 `--list-models` 有没有可用模型，Codex 是 `login status` 的退出码，Claude Code 是 `auth status` 的 `loggedIn`）。
 /// 状态命令慢（每条最多等 `timeout`），只在启用、换运行时与大脑起不来时跑；每个班次开始只用 `launch(_:store:)`。只读，不改任何一家的配置。
 nonisolated struct CueRuntimes: Sendable {
@@ -24,19 +24,18 @@ nonisolated struct CueRuntimes: Sendable {
     var piAgentDirectory: URL
     /// 这台 Mac（会话记录的 `hostID`）：各家最近用的模型从这台的会话记录里取
     var hostID: String
-    var locator: @Sendable () async -> ExecutableLocator = { await .resolved() }
+    var locator: @Sendable () async -> ExecutableLocator = { await .system }
 
     /// 装了且登录了的，按 `order`。
     @concurrent func scan() async -> [AgentKind] {
         let locator = await locator()
-        let path = locator.path
-        func found(_ kind: AgentKind) -> URL? { locator.candidates(kind.command).first }
-        async let pi = loggedIn(found(.pi), ["--list-models"], path: path) { _, output in
+        func found(_ kind: AgentKind) -> URL? { locator.executable(kind) }
+        async let pi = loggedIn(found(.pi), ["--list-models"], locator: locator) { _, output in
             let rows = output.split(separator: "\n")
             return rows.first?.hasPrefix("provider") == true && rows.count > 1  // 没登录时只有一句"No models available…"
         }
-        async let codex = loggedIn(found(.codex), ["login", "status"], path: path) { status, _ in status == 0 }
-        async let claude = loggedIn(found(.claudeCode), ["auth", "status"], path: path) { _, output in
+        async let codex = loggedIn(found(.codex), ["login", "status"], locator: locator) { status, _ in status == 0 }
+        async let claude = loggedIn(found(.claudeCode), ["auth", "status"], locator: locator) { _, output in
             (try? JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any])?["loggedIn"] as? Bool == true
         }
         let ready: [AgentKind: Bool] = await [.pi: pi, .codex: codex, .claudeCode: claude]
@@ -46,7 +45,7 @@ nonisolated struct CueRuntimes: Sendable {
     /// 起 `runtime` 的大脑要的可执行文件、PATH 与可选的 Agent 和模型；没装为 nil。
     @concurrent func launch(_ runtime: AgentKind, store: CueStore) async -> CueLaunch? {
         let locator = await locator()
-        guard let executable = locator.candidates(runtime.command).first else { return nil }
+        guard let executable = locator.executable(runtime) else { return nil }
         return CueLaunch(executable: executable, path: locator.path, agents: await agents(store: store))
     }
 
@@ -80,14 +79,14 @@ nonisolated struct CueRuntimes: Sendable {
     }
 
     private func loggedIn(
-        _ executable: URL?, _ arguments: [String], path: String, _ check: @Sendable (Int32, String) -> Bool
+        _ executable: URL?, _ arguments: [String], locator: ExecutableLocator, _ check: @Sendable (Int32, String) -> Bool
     ) async -> Bool {
         guard let executable else { return false }
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
-        process.environment = ProcessInfo.processInfo.environment
-            .merging(["PATH": path, "PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": piAgentDirectory.path]) { $1 }
+        process.environment = locator.environment(
+            launching: executable, overrides: ["PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": piAgentDirectory.path])
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         guard let result = await runCapturing(process, timeout: Self.timeout) else { return false }
