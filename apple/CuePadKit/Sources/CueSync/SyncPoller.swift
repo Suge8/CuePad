@@ -55,12 +55,36 @@ public struct SyncPoller: Sendable {
     await loop?.value
   }
 
-  /// 先拉一次，再按走到哪一档隔着拉，直到档位走完或被取消（新节奏到来、不再等）。
+  /// 先拉一次，再按走到哪一档隔着拉，直到档位走完或被取消（新节奏到来、不再等）。间隔从上一次开拉算起（拉的耗时算在间隔里）：
+  /// 服务器上新到的东西最多等一个间隔加一次拉取就到。
   private func loop(_ cadence: Cadence, _ fetch: @escaping @Sendable () async -> Void) async {
     let start = timing.now()
     while !Task.isCancelled, let interval = cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) {
+      let began = timing.now()
       await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）。取消屏蔽 withTaskCancellationShield 要 macOS 27，部署目标是 26
-      try? await timing.sleep(interval)
+      let spent = Duration.seconds(timing.now().timeIntervalSince(began))
+      if spent < interval { try? await timing.sleep(interval - spent) }
+    }
+  }
+}
+
+extension SyncPoller.Cadence {
+  /// Mac：Cue 在这台值班时每 1 秒——你在手机上对它说的话、"等你"的回答只经这一拉才到（推送到不了 Mac），要约 1 秒内交给它；
+  /// 会话都关着时它也在等。否则桥上有连着的 Pi 会话（手机可能随时发来请求），或有还没结果的投送请求（发给本机的，或本机发给别的
+  /// Mac 上会话的）时每 2 秒。Mac 上会话一连几天，2 秒是一天四万多次、1 秒翻倍；实测推送到不了 Mac，所以不放慢（docs/sync.md「拉取节奏」）。
+  public static func mac(hasOpenDeliveries: Bool, hasSessions: Bool, hostsCue: Bool) -> Self? {
+    if hostsCue { return Self(.every(.seconds(1))) }
+    return hasOpenDeliveries || hasSessions ? Self(.every(.seconds(2))) : nil
+  }
+
+  /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
+  /// 不靠推送），离开即停；两者都有时每 2 秒、不限时。
+  public static func phone(hasOpenDeliveries: Bool, isViewingAgents: Bool) -> Self? {
+    switch (hasOpenDeliveries, isViewingAgents) {
+    case (true, true): Self(.every(.seconds(2)))
+    case (true, false): Self(.every(.seconds(2), for: .seconds(120)))
+    case (false, true): Self(.every(.seconds(3)))
+    case (false, false): nil
     }
   }
 }
