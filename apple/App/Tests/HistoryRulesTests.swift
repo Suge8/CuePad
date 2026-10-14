@@ -36,7 +36,7 @@ struct HistoryRulesTests {
                 "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
             ])
             let agents = AgentIntegration(
-                paths: agentPaths, locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+                paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) },
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
             try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")

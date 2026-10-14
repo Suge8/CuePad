@@ -131,7 +131,7 @@ struct AgentUpgradeTests {
 
         #expect(rig.services.agents.status(.pi)?.files == .current)
         #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.agentDirectory.appending(path: "skills/cuepad/SKILL.md").path))
     }
 
     /// 没装过的不碰：检测完什么都不写，等用户自己接入。

@@ -3,8 +3,8 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 没装某个 Agent（或 Pi 版本太低）时的说明（设置与首次接入面板里那一行的"安装方法"）：一行可复制的官方安装命令
-/// （Pi 版本太低时是它自带的升级命令）、官网。命令取自各家官网的安装页。
+/// 没装某个 Agent（或版本不对）时的说明（设置与首次接入面板里那一行的"安装方法"）：一行可复制的官方安装命令
+/// （Pi 版本太低时是它自带的升级命令；OpenCode 是 v1 时是 v2 的安装命令）、官网。命令取自各家官网的安装页。
 struct AgentSetupGuide: View {
     let kind: AgentKind
     let presence: AgentStatus.Presence
@@ -12,9 +12,12 @@ struct AgentSetupGuide: View {
 
     var body: some View {
         let command = Self.command(kind, upgrading: isTooOld)
-        SettingPopover(title: isTooOld ? "升级 \(kind.name)" : "安装 \(kind.name)") {
+        SettingPopover(title: title) {
             if case .tooOld(let version) = presence {
-                Text("现在是 \(version)，需要 \(PiVersion.minimumSupported) 或更新。").foregroundStyle(.secondary)
+                Text(kind == .opencode
+                    ? "现在是 \(version)。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。"
+                    : "现在是 \(version)，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新。")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Text("在终端运行：").foregroundStyle(.secondary)
             HStack(spacing: 8) {
@@ -37,6 +40,14 @@ struct AgentSetupGuide: View {
 
     private var isTooOld: Bool { if case .tooOld = presence { true } else { false } }
 
+    private var title: String {
+        switch (kind, isTooOld) {
+        case (.opencode, _): "安装 OpenCode 2"
+        case (_, true): "升级 \(kind.name)"
+        default: "安装 \(kind.name)"
+        }
+    }
+
     private static func command(_ kind: AgentKind, upgrading: Bool) -> String {
         switch kind {
         case .pi: upgrading ? "pi update --self" : "curl -fsSL https://pi.dev/install.sh | sh"
@@ -51,7 +62,7 @@ struct AgentSetupGuide: View {
         case .pi: URL(string: "https://pi.dev")!
         case .claudeCode: URL(string: "https://code.claude.com")!
         case .codex: URL(string: "https://developers.openai.com/codex")!
-        case .opencode: URL(string: "https://opencode.ai")!
+        case .opencode: URL(string: "https://opencode.ai/v2/docs")!
         }
     }
 }

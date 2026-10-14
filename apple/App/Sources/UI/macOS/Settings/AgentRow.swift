@@ -29,13 +29,16 @@ struct AgentRow: View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
         SettingRow(title: kind.name, icon: kind.icon, tone: tone, busy: working, status: line, help: help) {
-            Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .disabled(working || !(status.map(Self.canToggle) ?? false))
+            // 开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）不给开关，免得像是能点
+            if let status, canToggle(status) {
+                Toggle(kind.name, isOn: Binding(get: { status.isConnected }, set: apply))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(working)
+            }
         } fix: {
             if let status, Self.needsSetup(status) {
-                Button(status.presence == .notFound ? "安装方法" : "升级方法") { showsGuide = true }
+                Button(kind == .pi && status.presence != .notFound ? "升级方法" : "安装方法") { showsGuide = true }
                     .settingFix()
                     .popover(isPresented: $showsGuide, arrowEdge: .bottom) { AgentSetupGuide(kind: kind, presence: status.presence) }
             }
@@ -43,9 +46,11 @@ struct AgentRow: View {
         .task { await services.agents.detect(kind) }
     }
 
-    /// 别人的同名文件不碰；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
-    private static func canToggle(_ status: AgentStatus) -> Bool {
-        status.files != .foreign && (status.isAvailable || status.files != .missing)
+    /// 别人的同名文件不碰；开发构建不写真实配置目录；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
+    private func canToggle(_ status: AgentStatus) -> Bool {
+        guard services.agents.isWritable(kind) else { return false }
+        if case .foreign = status.files { return false }
+        return status.isAvailable || status.files != .missing
     }
 
     private static func needsSetup(_ status: AgentStatus) -> Bool {
@@ -59,39 +64,31 @@ struct AgentRow: View {
     private func describe(_ status: AgentStatus?) -> (StatusTone, Dotted?) {
         if case .failed(let message) = outcome { return (.failure, Dotted(message)) }
         guard let status else { return (.calm, "检测中…") }
+        guard services.agents.isWritable(kind) else { return (.calm, Dotted("开发构建", "先用 \(kind.homeVariable) 指定目录")) }
         switch (status.presence, status.files) {
-        case (_, .foreign): return (.failure, "\(kind == .pi ? "Pi 目录里" : services.agents.skillPath(kind)) 有别人的同名文件，没有改动")
-        case (.tooOld(let version), _): return (.notice, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
+        case (_, .foreign(let path)): return (.failure, "\(path) 是别人的同名文件，没有改动")
+        case (.tooOld(let version), _) where kind == .opencode: return (.notice, "需要 OpenCode 2，现在是 \(version)")
+        case (.tooOld(let version), _): return (.notice, "\(version) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新")
         case (.notFound, .missing): return (.calm, "没有检测到")
         case (.notFound, _): return (.calm, "已卸载，CuePad 的技能还留着")
         case (.found, .missing): return (.calm, Dotted(kind.writes))
         case (.found, .outdated): return (.notice, "需要升级")
         case (.found(let version), .current):
             if case .done(let note) = outcome { return (.calm, Dotted("已接入", note)) }
-            return (.calm, Dotted("已接入", version.map { "\(kind.name) \($0)" } ?? services.agents.skillPath(kind)))
+            return (.calm, Dotted("已接入", version.map { "\(kind.name) \($0)" } ?? services.agents.writtenFiles(kind)[0]))
         }
     }
 
     private var help: String {
-        let skill = services.agents.skillPath(kind)
-        let files = switch kind {
-        case .pi: "Pi 目录的 extensions 与 skills 里各一个文件"
-        case .claudeCode: "技能 \(skill)，与 \(Self.home(of: skill))/settings.json 里的钩子"
-        case .codex: "技能 \(skill)，与 \(Self.home(of: skill))/hooks.json 里的钩子"
-        case .opencode: "技能 \(skill)（会话直连 OpenCode 的后台服务，不用另装）"
-        }
+        let files = services.agents.writtenFiles(kind).joined(separator: "、")
         return [
             "接入后，\(kind.name) 的会话出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问，也能让 CuePad 在后台开新会话。",
             kind.limits,
             "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。",
             kind == .codex ? "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。" : nil,
-            "会写入\(files)；关掉即删除。",
+            kind == .opencode ? "会话直连 OpenCode 的后台服务，不用另装。" : nil,
+            "会写入 \(files)（配置文件里只加 CuePad 自己的条目）；关掉即删除。",
         ].compactMap { $0 }.joined()
-    }
-
-    /// 技能目录（`<配置目录>/skills/cuepad`）所在的配置目录。
-    private static func home(of skill: String) -> String {
-        ((skill as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent
     }
 
     private func apply(_ on: Bool) {

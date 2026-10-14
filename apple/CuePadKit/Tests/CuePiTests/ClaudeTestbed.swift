@@ -37,7 +37,7 @@ final class ClaudeTestbed {
     private let store: CueStore
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]), cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) }, cuepad: PiProcess.cuepad)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。

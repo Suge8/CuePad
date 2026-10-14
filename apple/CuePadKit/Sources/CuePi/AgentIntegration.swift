@@ -2,14 +2,12 @@
 import CueStore
 import Foundation
 
-public struct PiVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
+/// Agent 报的版本（`--version` 输出里的第一个 `x.y.z`）。
+public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
     public var major: Int, minor: Int, patch: Int
     public init(_ major: Int, _ minor: Int, _ patch: Int) { self.major = major; self.minor = minor; self.patch = patch }
 
-    /// 有 `ui_prompt_*` 事件的最低 Pi 版本
-    public static let minimumSupported = PiVersion(0, 84, 4)
-
-    /// 从 `pi --version` 的输出里取第一个 `x.y.z`（容忍前缀 `v`）
+    /// 从 `--version` 的输出里取第一个 `x.y.z`（容忍前缀 `v`）
     init?(parsing output: String) {
         guard let m = output.firstMatch(of: /(\d+)\.(\d+)\.(\d+)/),
               let major = Int(m.1), let minor = Int(m.2), let patch = Int(m.3) else { return nil }
@@ -17,27 +15,48 @@ public struct PiVersion: Sendable, Equatable, Comparable, CustomStringConvertibl
     }
 
     public var description: String { "\(major).\(minor).\(patch)" }
-    public static func < (a: PiVersion, b: PiVersion) -> Bool { (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
+    public static func < (a: AgentVersion, b: AgentVersion) -> Bool { (a.major, a.minor, a.patch) < (b.major, b.minor, b.patch) }
+}
+
+extension AgentKind {
+    /// CuePad 要求的最低版本：Pi 要有 `ui_prompt_*` 事件；OpenCode 只认 v2（v1 的服务接口不同，不做兼容）。其余没有要求。
+    public var minimumVersion: AgentVersion? {
+        switch self {
+        case .pi: AgentVersion(0, 84, 4)
+        case .opencode: AgentVersion(2, 0, 0)
+        case .claudeCode, .codex: nil
+        }
+    }
+
+    /// 指定它配置目录的环境变量（OpenCode 另认 `XDG_CONFIG_HOME`）；隔离运行没给它时不接入这家（`AgentInstallError.isolated`）。
+    public var homeVariable: String {
+        switch self {
+        case .pi: "PI_CODING_AGENT_DIR"
+        case .claudeCode: "CLAUDE_CONFIG_DIR"
+        case .codex: "CODEX_HOME"
+        case .opencode: "OPENCODE_CONFIG_DIR"
+        }
+    }
 }
 
 /// 一个 Agent 在这台 Mac 上的情况，与 CuePad 写给它的文件——唯一的一份状态。
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
         case notFound
-        /// 只有 Pi 有版本要求
-        case tooOld(PiVersion)
-        /// 只有 Pi 报版本
-        case found(PiVersion?)
+        /// 比 `AgentKind.minimumVersion` 旧
+        case tooOld(AgentVersion)
+        /// 有版本要求的报出版本，其余为 nil
+        case found(AgentVersion?)
     }
 
-    /// CuePad 写给它的文件（Pi 是扩展与技能两样，合起来算）。
+    /// CuePad 写给它的文件（技能，加 Pi 的扩展或钩子配置，合起来算）。
     public enum Files: Sendable, Equatable {
         case missing
         case current
         /// 是 CuePad 写的，但与这个版本的 App 要写的不同（旧版、缺一样、App 移动后路径变了）
         case outdated
-        /// 同名文件不是 CuePad 写的，不碰
-        case foreign
+        /// 同名文件不是 CuePad 写的，不碰（参数是它的位置，`~` 缩写）
+        case foreign(String)
     }
 
     public var presence: Presence
@@ -57,20 +76,20 @@ public struct AgentStatus: Sendable, Equatable {
 
 public enum AgentInstallError: Error, Equatable {
     case notFound(AgentKind)
-    case piTooOld(found: PiVersion)
+    case tooOld(AgentKind, found: AgentVersion)
     /// 同名文件不是 CuePad 写的（参数是它的位置）
     case foreign(String)
-    /// Pi 的技能没写上，把扩展还原也失败了：扩展已是新版而技能缺失或旧（原因是两个错误），下次检查会当作旧版重试
-    case halfInstalled(reason: String)
+    /// 隔离运行（开发构建）而这家的配置目录是缺省的真实位置：不写，免得把正式版写的条目改成指向开发构建
+    case isolated(AgentKind)
 }
 
 extension AgentInstallError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .notFound(let kind): "没有找到 \(kind.name)"
-        case .piTooOld(let found): "Pi \(found) 太旧，需要 \(PiVersion.minimumSupported) 或更新"
+        case .tooOld(let kind, let found): "\(kind.name) \(found) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新"
         case .foreign(let path): "\(path) 是别人的同名文件，没有改动"
-        case .halfInstalled(let reason): "扩展装上了，技能没写上，扩展也没能还原：\(reason)。下次启动会再试一次"
+        case .isolated(let kind): "开发构建用的隔离资料库：先用 \(kind.homeVariable) 指定 \(kind.name) 的目录再接入"
         }
     }
 }
@@ -79,26 +98,38 @@ extension AgentInstallError: LocalizedError {
 /// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意；`uninstall` 删掉 CuePad 写的全部文件和因此空出来的目录。
 /// 技能只写进每个 Agent 自己的配置目录（`<目录>/skills/cuepad/SKILL.md`），不写几家共用的 `~/.agents/skills`：
 /// 那里是用户自己维护的，且会被好几家同时读到。OpenCode 也读 `~/.claude/skills`，两份同名同内容，按名字去重。
+/// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
     private let paths: AgentPaths
     private var pi: PiPaths { paths.pi }
-    private let locator: ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
+    /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
+    private let isolated: Bool
 
-    public init(paths: AgentPaths = AgentPaths(), locator: ExecutableLocator = .standard, cuepad: URL) {
+    public init(
+        paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
+        isolated: Bool = false
+    ) {
         self.paths = paths
-        self.locator = locator
+        self.locate = locate
         self.cuepad = cuepad
+        self.isolated = isolated
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
 
+    /// 能不能写这家：隔离运行而它的配置目录就是缺省的真实位置（没经环境变量或参数换走）时不能。
+    public func isWritable(_ kind: AgentKind) -> Bool {
+        !isolated || home(of: kind).standardizedFileURL != AgentPaths(pi: PiPaths(environment: [:]), environment: [:]).home(of: kind).standardizedFileURL
+    }
+
     /// Claude Code、Codex 的钩子配置（其余没有钩子）。
     private func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
         switch kind {
-        case .claudeCode: ClaudeCodeHooks(home: home(of: kind))
-        case .codex: CodexHooks(home: home(of: kind), locator: locator, environment: paths.environment)
+        case .claudeCode: HookFile.claudeCode(home: home(of: kind), skillDirectory: skillDirectory(of: kind))
+        case .codex: CodexHooks(home: home(of: kind), skillDirectory: skillDirectory(of: kind), locate: locate, environment: paths.environment)
         case .pi, .opencode: nil
         }
     }
@@ -106,54 +137,45 @@ public struct AgentIntegration: Sendable {
     /// 写进钩子配置的命令：App 里 `cuepad` 的绝对路径（App 被移动后它变了，钩子就成了旧版，启动时重写）。
     private func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
 
-    /// CuePad 的技能所在的目录（`<配置目录>/skills/cuepad`）。
-    public func skillDirectory(of kind: AgentKind) -> URL {
+    private func skillDirectory(of kind: AgentKind) -> URL {
         home(of: kind).appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory)
     }
 
     private func skillFile(_ kind: AgentKind) -> URL { skillDirectory(of: kind).appending(path: AgentSkill.fileName) }
     private var extensionFile: URL { pi.extensionsDirectory.appending(path: PiExtensionBundle.fileName) }
 
-    @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
-        AgentStatus(presence: await presence(of: kind), files: files(of: kind))
+    /// CuePad 写给这家的文件：技能，Pi 的扩展，钩子配置（只改其中 CuePad 的条目）。界面据此说明会写哪里。
+    public func writtenFiles(of kind: AgentKind) -> [URL] {
+        [skillFile(kind)] + (kind == .pi ? [extensionFile] : []) + (hooks(kind)?.writtenFiles ?? [])
     }
 
-    /// 写入（新装或升级）。Agent 不在、Pi 过旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
+    @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
+        AgentStatus(presence: await detect(kind).presence, files: files(of: kind))
+    }
+
+    /// 写入（新装或升级）。隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
     @concurrent public func install(_ kind: AgentKind) async throws {
-        switch await presence(of: kind) {
+        guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
+        switch await detect(kind).presence {
         case .notFound: throw AgentInstallError.notFound(kind)
-        case .tooOld(let version): throw AgentInstallError.piTooOld(found: version)
+        case .tooOld(let version): throw AgentInstallError.tooOld(kind, found: version)
         case .found: break
         }
-        try refuseForeign(kind)
-        let skill = skillFile(kind)
-        try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard kind == .pi else {
-            try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skill, options: .atomic)
-            try await hooks(kind)?.install(command: hookCommand(kind))
-            return
+        if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
+        if kind == .pi {
+            try FileManager.default.createDirectory(at: pi.extensionsDirectory, withIntermediateDirectories: true)
+            try Data(PiExtensionBundle.source.utf8).write(to: extensionFile, options: .atomic)
         }
-        // 两个文件各自原子写入，合起来靠顺序与还原：先把两个目录都建好（建不出来就什么都没写），再写扩展，
-        // 技能写不进去时把扩展还原成原来的样子（没有就删掉），不留半升级的状态。
-        try FileManager.default.createDirectory(at: pi.extensionsDirectory, withIntermediateDirectories: true)
-        let previous = try? Data(contentsOf: extensionFile)
-        try Data(PiExtensionBundle.source.utf8).write(to: extensionFile, options: .atomic)
-        do {
-            try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skill, options: .atomic)
-        } catch {
-            do {
-                if let previous { try previous.write(to: extensionFile, options: .atomic) } else { try FileManager.default.removeItem(at: extensionFile) }
-            } catch let restoreError {
-                throw AgentInstallError.halfInstalled(reason: "\(error.localizedDescription)；\(restoreError.localizedDescription)")
-            }
-            throw error
-        }
+        try FileManager.default.createDirectory(at: skillDirectory(of: kind), withIntermediateDirectories: true)
+        try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skillFile(kind), options: .atomic)
+        try await hooks(kind)?.install(command: hookCommand(kind))
     }
 
     /// 删掉 CuePad 写给这个 Agent 的全部文件，以及因此空出来的目录（`skills/cuepad`，空了的 `skills`、`extensions`）。
-    /// Agent 已经卸掉了也能删；有别人的同名文件时什么都不删。
+    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。
     @concurrent public func uninstall(_ kind: AgentKind) async throws {
-        try refuseForeign(kind)
+        guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
+        if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
         try await hooks(kind)?.uninstall()
         var files = [skillFile(kind)]
         if kind == .pi { files.append(extensionFile) }
@@ -169,38 +191,33 @@ public struct AgentIntegration: Sendable {
 
     /// 这台 Mac 上能用的 `pi`（版本够新）；后台托管会话时启动它。
     @concurrent public func locatePi() async -> URL? {
-        await detectPi()?.executable
-    }
-
-    private func refuseForeign(_ kind: AgentKind) throws {
-        guard files(of: kind) == .foreign else { return }
-        let foreign = kind == .pi && (isForeignExtension(read(extensionFile)) || unreadable(extensionFile)) ? extensionFile : skillFile(kind)
-        throw AgentInstallError.foreign((foreign.path as NSString).abbreviatingWithTildeInPath)
+        let found = await detect(.pi)
+        guard case .found = found.presence else { return nil }
+        return found.executable
     }
 
     private func files(of kind: AgentKind) -> AgentStatus.Files {
         let skill = read(skillFile(kind))
-        let skillIsForeign = skill.map { !$0.contains(AgentSkill.ownershipMarker) } ?? unreadable(skillFile(kind))
-        let expectedSkill = AgentSkill.text(for: kind, cuepad: cuepad)
-        guard kind == .pi else {
-            let hooks = hooks(kind)?.files(command: hookCommand(kind))
-            if skillIsForeign || hooks == .foreign { return .foreign }
-            let skillState: AgentStatus.Files = skill.map { $0 == expectedSkill ? .current : .outdated } ?? .missing
-            switch (skillState, hooks ?? skillState) {
-            case (.missing, .missing): return .missing
-            case (.current, .current): return .current
-            default: return .outdated
+        if skill.map({ !$0.contains(AgentSkill.ownershipMarker) }) ?? unreadable(skillFile(kind)) { return .foreign(abbreviated(skillFile(kind))) }
+        let skillState: AgentStatus.Files = skill.map { $0 == AgentSkill.text(for: kind, cuepad: cuepad) ? .current : .outdated } ?? .missing
+        let other: AgentStatus.Files
+        if kind == .pi {
+            let installed = read(extensionFile)
+            if installed.map({ $0 != PiExtensionBundle.source && !$0.hasPrefix(PiExtensionBundle.ownershipMarker) }) ?? unreadable(extensionFile) {
+                return .foreign(abbreviated(extensionFile))
             }
+            other = installed.map { $0 == PiExtensionBundle.source ? .current : .outdated } ?? .missing
+        } else {
+            other = hooks(kind)?.files(command: hookCommand(kind)) ?? skillState
         }
-        let installed = read(extensionFile)
-        if isForeignExtension(installed) || unreadable(extensionFile) || skillIsForeign { return .foreign }
-        guard let installed else { return .missing }
-        return installed == PiExtensionBundle.source && skill == expectedSkill ? .current : .outdated
+        switch (skillState, other) {
+        case (.missing, .missing): return .missing
+        case (.current, .current): return .current
+        default: return .outdated
+        }
     }
 
-    private func isForeignExtension(_ text: String?) -> Bool {
-        text.map { $0 != PiExtensionBundle.source && !$0.hasPrefix(PiExtensionBundle.ownershipMarker) } ?? false
-    }
+    private func abbreviated(_ file: URL) -> String { (file.path as NSString).abbreviatingWithTildeInPath }
 
     private func read(_ file: URL) -> String? {
         (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) }
@@ -211,32 +228,29 @@ public struct AgentIntegration: Sendable {
         (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil && read(file) == nil
     }
 
-    /// Pi 要报得出够新的版本；其余有可执行文件或配置目录（用过它，含各家的桌面版）就算在。
-    private func presence(of kind: AgentKind) async -> AgentStatus.Presence {
-        guard kind == .pi else {
-            let used = FileManager.default.fileExists(atPath: home(of: kind).path)
-            return used || !locator.candidates(kind.command).isEmpty ? .found(nil) : .notFound
+    /// 有版本要求的（Pi、OpenCode）问它的 `--version`：Pi 要报得出够新的版本；OpenCode 报的版本太旧是 v1，报不出版本照常算在。
+    /// 其余有可执行文件或配置目录（用过它，含各家的桌面版）就算在；OpenCode 没有可执行文件时也按配置目录算（桌面版）。
+    private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
+        let locator = await locate()
+        let used = FileManager.default.fileExists(atPath: home(of: kind).path)
+        guard let minimum = kind.minimumVersion else {
+            let executable = locator.executable(kind)
+            return (used || executable != nil ? .found(nil) : .notFound, executable)
         }
-        guard let pi = await detectPi() else { return .notFound }
-        return pi.version >= .minimumSupported ? .found(pi.version) : .tooOld(pi.version)
-    }
-
-    private func detectPi() async -> (executable: URL, version: PiVersion)? {
-        let path = locator.path
-        for executable in locator.candidates(AgentKind.pi.command) {
-            if let output = await Self.capture(executable, ["--version"], path: path), let version = PiVersion(parsing: output) {
-                return (executable, version)
-            }
+        for executable in locator.candidates(kind.command) {
+            guard let output = await Self.capture(executable, ["--version"], locator: locator),
+                  let version = AgentVersion(parsing: output) else { continue }
+            return (version >= minimum ? .found(version) : .tooOld(version), executable)
         }
-        return nil
+        return (kind != .pi && used ? .found(nil) : .notFound, nil)
     }
 
     /// 运行并取标准输出；超时或无法启动返回 nil。
-    private static func capture(_ executable: URL, _ arguments: [String], path: String, timeout: Duration = .seconds(10)) async -> String? {
+    private static func capture(_ executable: URL, _ arguments: [String], locator: ExecutableLocator, timeout: Duration = .seconds(10)) async -> String? {
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
+        process.environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1"])
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         return await runCapturing(process, timeout: timeout)?.output
@@ -288,16 +302,5 @@ enum AgentSkill {
     static func shellQuoted(_ path: String) -> String {
         path.allSatisfy { $0.isLetter || $0.isNumber || "/._-+".contains($0) } ? path : "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
-}
-#endif
-
-#if os(macOS)
-/// Claude Code、Codex 的钩子配置：CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目。
-/// 认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）。
-protocol AgentHookConfig: Sendable {
-    /// 没有 CuePad 的条目为 `.missing`；条目齐全、命令就是 `command` 为 `.current`；其余（缺事件、旧路径、没被信任）为 `.outdated`。
-    func files(command: String) -> AgentStatus.Files
-    func install(command: String) async throws
-    func uninstall() async throws
 }
 #endif

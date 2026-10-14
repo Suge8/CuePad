@@ -64,7 +64,7 @@ struct RealClaudeTerminalTests {
         try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in
             let file = testbed.config.appending(path: "settings.json")
             let moved = AgentIntegration(
-                paths: testbed.paths, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]),
+                paths: testbed.paths, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
                 cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"))
 
             try await testbed.integration.install(.claudeCode)

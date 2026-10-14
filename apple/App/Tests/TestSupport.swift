@@ -158,7 +158,7 @@ final class TestApp {
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegration(
-                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+                paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
                 cuepad: helper),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
