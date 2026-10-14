@@ -36,6 +36,16 @@ struct SessionControlsTests {
         throw CancellationError()
     }
 
+    /// 选择题：Agent 本身允许自己填的（经同步记录到手机也还认得），回复框也能答，答案是文字；不允许的回复框收成"先在上面作答"。
+    @Test(arguments: [true, false])
+    func 允许自己填的选择题_回复框也能作答(allowsOther: Bool) async throws {
+        let question = PiQuestion(promptID: "p-1", kind: .select, text: "喝什么？", options: ["茶", "咖啡"], allowsOther: allowsOther)
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
+        let session = try #require(try await store.allPiSessionStates().first)
+
+        #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))
+    }
+
     @Test func 换了模型_立即显示新值并标在路上() async throws {
         let atlas = try await session()
         let request = try await store.requestConfig(PiConfig(model: luna.key, thinking: .high), to: target(atlas), on: atlas.hostID)

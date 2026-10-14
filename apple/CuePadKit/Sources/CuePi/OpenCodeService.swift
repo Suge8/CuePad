@@ -212,6 +212,8 @@ struct OpenCodeForm: Decodable, Sendable {
         var title: String?
         var description: String?
         var options: [Option]?
+        /// 有选项时还能自己填
+        var custom: Bool?
     }
 
     struct Option: Decodable, Sendable {

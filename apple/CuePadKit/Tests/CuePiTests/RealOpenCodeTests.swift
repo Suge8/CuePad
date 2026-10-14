@@ -251,6 +251,17 @@ struct RealOpenCodeTests {
                 return session(bridge)?.state == .settled && reply?.contains("Blue") == true
             }
 
+            // OpenCode 的选择题本身允许自己填：从 CuePad 写一个不在选项里的答案
+            _ = try await bridge.send(PiMessage(text: "Use the question tool once more: header Color, question Which color now? with options Red and Blue. After I answer, reply with exactly the color I gave."), to: id)
+            try await eventually("又在等你回答", timeout: .seconds(90)) { session(bridge)?.question?.kind == .known(.select) }
+            let open = try #require(session(bridge)?.question)
+            #expect(open.allowsOther)
+            try await bridge.answer(.text("Green"), to: open.promptID!, in: id)
+            try await eventually("按你自己填的接着做完", timeout: .seconds(90)) {
+                let reply = try await replies(store, opened.sessionID).last
+                return session(bridge)?.state == .settled && reply?.contains("Green") == true
+            }
+
             let long = PiMessage(text: "Write the numbers from 1 to 400, one per line, each with a long sentence about it.")
             _ = try await bridge.send(PiMessage(text: "Write the numbers from 1 to 30, one per line, each with a short sentence about it."), to: id)
             try await eventually("在忙", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }

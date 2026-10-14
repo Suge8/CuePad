@@ -78,7 +78,7 @@ extension MacDelivery {
         guard session.state != .known(.incompatible) else { return .restartPi }
         guard session.state == .known(.waitingForUser) else { return .message(session.deliveryModes) }
         guard let question = session.answerableQuestion else { return .unanswerable }
-        return question.kind == .known(.text) ? .answer(question) : .answerAbove
+        return question.acceptsText ? .answer(question) : .answerAbove
     }
 }
 

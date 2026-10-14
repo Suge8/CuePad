@@ -68,7 +68,8 @@ struct ClaudePermission {
         if let asked {
             let header = input["questions"]?.array?.first?["header"]?.string
             let text = [header, asked.question].compactMap { $0 }.joined(separator: "\n")
-            return PiQuestion(promptID: id, kind: .select, text: ToolDetail.clip(text, Self.textLimit), options: asked.options)
+            // 终端里每道选择题都有"自己填"（Type something）
+            return PiQuestion(promptID: id, kind: .select, text: ToolDetail.clip(text, Self.textLimit), options: asked.options, allowsOther: true)
         }
         let text = ["允许 Claude Code 使用 \(tool)？", ToolDetail.target(input), input["description"]?.string]
             .compactMap { $0 }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: "\n")
@@ -89,10 +90,14 @@ struct ClaudePermission {
     /// 提问的作答：原样的输入加上 `answers`（问题 → 选中的选项）。
     func answered(_ answer: PiAnswerValue, to id: String) throws -> JSONValue {
         guard id == promptID, answerable else { throw PiBridgeError.rejected("stale_prompt") }
-        guard let asked, case .option(let label) = answer, asked.options.contains(label), case .object(var updated) = input else {
-            throw PiBridgeError.rejected("bad_answer")
+        guard let asked, case .object(var updated) = input else { throw PiBridgeError.rejected("bad_answer") }
+        let chosen: String
+        switch answer {
+        case .option(let label) where asked.options.contains(label): chosen = label
+        case .text(let text) where !text.isEmpty: chosen = text
+        default: throw PiBridgeError.rejected("bad_answer")
         }
-        updated["answers"] = [asked.question: .string(label)]
+        updated["answers"] = [asked.question: .string(chosen)]
         return .object(updated)
     }
 }

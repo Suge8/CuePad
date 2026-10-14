@@ -260,7 +260,7 @@ struct PiReplyBar: View {
 
     /// 占位只说这里写什么；忙时点发送与长按各是什么由发送钮自己说（读屏标签与长按菜单）。
     private var placeholder: String {
-        if answering != nil { return "回答上面的问题" }
+        if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
         return replyPrompt
     }

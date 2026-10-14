@@ -494,12 +494,15 @@ public final class CodexRuntime: AgentRuntime {
         return answerable
     }
 
-    /// Plan 模式的提问（`request_user_input` 的参数，一次可能几个，显示第一个）：有选项是单选，否则填文字；标题与问题换行连接。
+    /// Plan 模式的提问（`request_user_input` 的参数，一次可能几个，显示第一个）：有选项是单选（`isOther` 的还能自己填），否则填文字；
+    /// 标题与问题换行连接。
     private static func userInput(_ arguments: JSONValue, promptID: String?) -> PiQuestion {
         let first = arguments["questions"]?.array?.first ?? .object([:])
         let text = [first["header"]?.string, first["question"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
         let options = (first["options"]?.array ?? []).compactMap { $0["label"]?.string }
-        return PiQuestion(promptID: promptID, kind: options.isEmpty ? .text : .select, text: String(text.prefix(500)), options: options)
+        return PiQuestion(
+            promptID: promptID, kind: options.isEmpty ? .text : .select, text: String(text.prefix(500)), options: options,
+            allowsOther: first["isOther"]?.bool == true)
     }
 
     /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程的提问回给服务端请求。
@@ -514,7 +517,7 @@ public final class CodexRuntime: AgentRuntime {
             call.reply(JSONValue.object(["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]).data)
             gate.drop(hold)
         case (.request(let rpc, let requestID, let questionID), .option(let text)) where question.options.contains(text),
-             (.request(let rpc, let requestID, let questionID), .text(let text)) where question.options.isEmpty:
+             (.request(let rpc, let requestID, let questionID), .text(let text)) where question.acceptsText:
             rpc.respond(to: requestID, result: ["answers": [questionID: ["answers": [.string(text)]]]])
         default:
             throw PiBridgeError.rejected("bad_answer")

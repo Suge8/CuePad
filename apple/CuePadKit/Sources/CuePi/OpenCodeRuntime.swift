@@ -542,7 +542,9 @@ public final class OpenCodeRuntime: AgentRuntime {
         let text = String([field.title, field.description].compactMap { $0 }.joined(separator: "\n").prefix(500))
         switch field.type {
         case "string" where field.options?.isEmpty == false:
-            return PiQuestion(promptID: prompt(.form, form.sessionID, form.id), kind: .select, text: text, options: field.options!.map(\.label))
+            return PiQuestion(
+                promptID: prompt(.form, form.sessionID, form.id), kind: .select, text: text, options: field.options!.map(\.label),
+                allowsOther: field.custom == true)
         case "string": return PiQuestion(promptID: prompt(.form, form.sessionID, form.id), kind: .text, text: text)
         case "boolean": return PiQuestion(promptID: prompt(.form, form.sessionID, form.id), kind: .confirm, text: text)
         default: return PiQuestion(promptID: nil, kind: .unknown(field.type), text: text)
@@ -624,7 +626,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         case (.select, .option(let label)):
             guard let option = field.options?.first(where: { $0.label == label }) else { throw PiBridgeError.rejected("bad_answer") }
             value = .string(option.value)
-        case (.text, .text(let text)): value = .string(text)
+        case (.text, .text(let text)), (.select, .text(let text)) where question.acceptsText: value = .string(text)
         case (.confirm, .confirmed(let yes)): value = .bool(yes)
         default: throw PiBridgeError.rejected("bad_answer")
         }

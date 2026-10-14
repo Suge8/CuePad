@@ -22,20 +22,38 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
   public var text: String
   /// 选择框的选项原文，作答时按原文回传。
   public var options: [String]
+  /// 选择题也能自己填（Agent 本身就给"其他"的：Claude Code 的提问、Codex 带 `isOther` 的、OpenCode 带 `custom` 的）
+  public var allowsOther: Bool
 
-  public init(promptID: String?, kind: Open<PiQuestionKind>, text: String, options: [String] = []) {
+  public init(promptID: String?, kind: Open<PiQuestionKind>, text: String, options: [String] = [], allowsOther: Bool = false) {
     self.promptID = promptID
     self.kind = kind
     self.text = text
     self.options = options
+    self.allowsOther = allowsOther
   }
 
-  public init(promptID: String?, kind: PiQuestionKind, text: String, options: [String] = []) {
-    self.init(promptID: promptID, kind: .known(kind), text: text, options: options)
+  public init(promptID: String?, kind: PiQuestionKind, text: String, options: [String] = [], allowsOther: Bool = false) {
+    self.init(promptID: promptID, kind: .known(kind), text: text, options: options, allowsOther: allowsOther)
   }
 
   /// 能从 CuePad 作答：有标识，种类认识。
   public var isAnswerable: Bool { promptID != nil && kind.known != nil }
+
+  /// 能用文字答（回复框作答，答案是 `PiAnswerValue.text`）：文字题，或允许自己填的选择题。
+  public var acceptsText: Bool { kind == .known(.text) || (kind == .known(.select) && allowsOther) }
+
+  private enum CodingKeys: String, CodingKey { case promptID, kind, text, options, allowsOther }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    promptID = try container.decodeIfPresent(String.self, forKey: .promptID)
+    kind = try container.decode(Open<PiQuestionKind>.self, forKey: .kind)
+    text = try container.decode(String.self, forKey: .text)
+    options = try container.decodeIfPresent([String].self, forKey: .options) ?? []
+    // 旧版本写的记录没有这个键
+    allowsOther = try container.decodeIfPresent(Bool.self, forKey: .allowsOther) ?? false
+  }
 
   /// 同步记录里的 `question` 字段（通知扩展也读它）；读不成 JSON 按没有提问处理，不让整条记录解码失败。
   public init?(stored: String) {
