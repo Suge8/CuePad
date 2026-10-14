@@ -360,7 +360,7 @@ struct CueWaitingDock: View {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "questionmark.circle.fill").foregroundStyle(palette.attention).accessibilityHidden(true)
+                    WaitingMark()
                     FoldedMarkdown(source: message.text).id(message.id)
                 }
                 // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
