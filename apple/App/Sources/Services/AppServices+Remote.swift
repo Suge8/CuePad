@@ -8,8 +8,10 @@ import SystemConfiguration
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时清掉这台 Mac 上次没来得及结束的会话记录（别的 Mac 的不动）；托管的会话留着、歇着（见 `PiStateRecorder.exited`）。
+    /// 启动时认下这台 Mac 记录的会话（从此每个都挂在任务上，见 `CueStore.ownSessions`），再清掉上次没来得及结束的会话记录
+    /// （别的 Mac 的不动）；托管的会话留着、歇着（见 `PiStateRecorder.exited`）。先认再清：上次还在跑的游离会话归位成进行中，不当历史归档。
     func resetPiState() async throws {
+        try await store.ownSessions(host: hostID)
         try await piStateRecorder.reset()
     }
 
