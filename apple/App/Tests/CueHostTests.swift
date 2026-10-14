@@ -295,6 +295,35 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// Cue 的请求失败晚到（从执行它的那台 Mac 同步过来时，完成时刻早于这台已经知道的另一次失败）：仍是新变化，Cue 醒来看到它。
+    @Test func 请求失败晚到_完成时刻更早_Cue仍然醒来() async throws {
+        let rig = try await Rig()
+        let project = try #require(try await rig.store.projects().first)
+        let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
+        try await rig.store.setCueFollows(task.id, true)
+        try await rig.store.linkCard(task.id, toSession: "remote-1")
+        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
+        try await remote.update(sessionID: "remote-1", state: .settled)
+        try await rig.message(.note, containing: "登录页那边歇下了")
+
+        /// 你请 Cue 对会话说一句，这一轮做完后由替身当那台 Mac 按 `clock` 的时刻回报没送达，Cue 醒来看到 `reason`。
+        func sayFails(_ reason: String, at clock: Timing) async throws {
+            try await rig.say("请对登录页说继续")
+            try await eventually("这一轮做完") {
+                let open = try await rig.store.deliveryRequests(toSession: "remote-1").contains { $0.isOpen }
+                return try await rig.store.cueState()?.state == .known(.settled) && open
+            }
+            let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", timing: clock, onIssue: { Issue.record("\($0)") }) { _ in .failed(reason) }
+            try await macB.start()
+            try await rig.message(.note, containing: reason)
+            await macB.stop()
+        }
+        try await sayFails("会话已关闭", at: .system)
+        try await sayFails("早一小时就关了", at: ManualTiming(start: .now.addingTimeInterval(-3600)).timing)
+        await rig.stop()
+    }
+
     /// Cue 带选项问你；你回答后 Cue 被唤醒，回答写成 Cue 说的。"等你"推了通知。
     @Test func 等你被回答_Cue被唤醒() async throws {
         let rig = try await Rig()

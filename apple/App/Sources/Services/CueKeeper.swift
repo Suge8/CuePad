@@ -172,8 +172,9 @@ final class CueKeeper {
         var messages: [CueMessage]
         var board: [CueBoardItem]
         var memory: CueMemoryVersion
-        /// Cue 的请求最近一次失败：失败不一定改动看板（说话、作答没能送达），单独订阅
-        var failed: Date?
+        /// 本机最近一次写入的序号（`CueStore.lastWrite`）：变化不一定改动看板（说话、作答没能送达，你在会话里说话），
+        /// 晚到的变化事件时刻也可能更早，只有写入序号一定跟着变
+        var written: Int
     }
 
     private nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
@@ -225,7 +226,7 @@ final class CueKeeper {
                     for try await _ in store.observe({ store in
                         Signal(
                             messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion(),
-                            failed: try store.lastCueRequestFailure())
+                            written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")

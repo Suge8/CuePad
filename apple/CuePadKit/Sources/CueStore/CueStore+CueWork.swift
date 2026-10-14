@@ -640,9 +640,6 @@ extension CueStore {
     return changes.sorted { $0.at < $1.at }
   }
 
-  /// 本机得知请求结果的时刻：发起的这台收到结果时记的（本机时钟），本机执行的是完成时刻。
-  private static let resultKnownAt = "COALESCE(resultReceivedAt, completedAt)"
-
   /// 请求的动作在变化里的说法。
   private static func action(_ mode: Open<DeliveryMode>) -> String {
     switch mode.known {
@@ -653,13 +650,6 @@ extension CueStore {
     case .end: "结束"
     default: mode.rawValue
     }
-  }
-
-  /// Cue 发起的请求最近一次失败的时刻（本机得知结果的时刻）：管理器订阅它，请求一失败就对账、醒来。
-  public func lastCueRequestFailure() throws -> Date? {
-    try db.first(
-      "SELECT MAX(\(Self.resultKnownAt)) FROM deliveryRequests WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed'"
-    ) { $0.dateOrNil(0) } ?? nil
   }
 
   /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
