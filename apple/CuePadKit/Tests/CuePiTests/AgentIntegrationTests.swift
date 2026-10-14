@@ -90,7 +90,7 @@ struct AgentIntegrationTests {
         try installAll()
         let home = skillFile(kind).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        try "用户自己的".write(to: home.appending(path: "settings.json"), atomically: true, encoding: .utf8)
+        try #"{"theme": "用户自己的"}"#.write(to: home.appending(path: "settings.json"), atomically: true, encoding: .utf8)
         let before = contents(root)
 
         try await integration().install(kind)
