@@ -52,8 +52,11 @@ public struct PiHistoryUpdate: Sendable {
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器按文件修改时间——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话 id：会话文件头里的，没有就用文件名（与会话索引的 id 同一规则）
+    /// 会话 id：会话文件头里的；Claude Code 的文件名就是会话 id，文件头还没读到时用它。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    /// 算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
+    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。Claude Code 的文件名就是会话 id，总算。
+    public var isSession: Bool { history.sessionID != nil || agent == .claudeCode }
     public var recap: PiRecap { checkpoint.recap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -64,7 +67,7 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除等）可以丢掉
+    /// `sessionFiles` 是此刻全部会话文件（文件头还没写好的不算）：不在其中的旧索引（文件已删除、按文件名记下的等）可以丢掉
     case backfillFinished(sessionFiles: [URL])
 }
 
