@@ -71,7 +71,7 @@ final class ClaudeTestbed {
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]),
+            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
             idleLimit: idleLimit)
         if installHooks { try await integration.install(.claudeCode) }
     }

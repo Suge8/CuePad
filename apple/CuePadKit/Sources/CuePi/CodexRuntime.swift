@@ -23,7 +23,7 @@ public final class CodexRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
-    private let locator: ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     private let presence: any UserPresence
     /// 有挂住的终端会话确认时等人回来
     private var returnWatch: Task<Void, Never>?
@@ -42,13 +42,14 @@ public final class CodexRuntime: AgentRuntime {
 
     /// - Parameter idleLimit: 托管的会话歇着满这么久就关掉进程（不算结束，发话时再接着）。
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, locator: ExecutableLocator = .standard,
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         presence: any UserPresence = SystemPresence(), idleLimit: Duration = .seconds(30 * 60), launchTimeout: Duration = .seconds(30)
     ) {
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
-        self.locator = locator
+        self.locate = locate
         self.presence = presence
         self.idleLimit = idleLimit
         self.launchTimeout = launchTimeout
@@ -164,18 +165,15 @@ public final class CodexRuntime: AgentRuntime {
         paths.home(of: .codex).appending(path: "app-server-control/app-server-control.sock").path
     }
 
-    /// 托管进程的环境：`AgentPaths` 的环境（App 里是自己的环境，隔离测试里指到临时目录），配置目录与钩子 socket 目录照它定。
-    private var codexEnvironment: [String: String] {
-        paths.environment.merging([
-            "CODEX_HOME": paths.home(of: .codex).path,
-            "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
-            "PATH": locator.path,
-        ]) { $1 }
-    }
 
     /// 起一个托管进程交给 `body`；超过 `launchTimeout` 停掉进程（等着的请求随之失败），出错时也停掉。握手由 `CodexRPC.launch` 自己限时。
     private func withLaunchTimeout(_ body: @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
-        guard let codex = locator.candidates(AgentKind.codex.command).first else { throw AgentRuntimeError.notInstalled(.codex) }
+        let locator = await locate()
+        guard let codex = locator.executable(.codex) else { throw AgentRuntimeError.notInstalled(.codex) }
+        // 配置目录与钩子 socket 目录照 `AgentPaths` 定（隔离测试里指到临时目录）
+        let environment = locator.environment(launching: codex, overrides: paths.environment.merging([
+            "CODEX_HOME": paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
+        ]) { $1 })
         let launched = Launched()
         let timeout = launchTimeout
         let timer = Task { [launched] in
@@ -185,7 +183,7 @@ public final class CodexRuntime: AgentRuntime {
         }
         defer { timer.cancel() }
         do {
-            let rpc = try await CodexRPC.launch(codex, environment: codexEnvironment)
+            let rpc = try await CodexRPC.launch(codex, environment: environment)
             launched.rpc = rpc
             host(rpc)
             guard !launched.timedOut else { throw AgentRuntimeError.launchTimedOut(.codex) }

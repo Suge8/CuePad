@@ -17,7 +17,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
-    private let locator: ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
     private let endTimeout: Duration
     private var terminals: [PiSession.ID: ClaudeTerminalSession] = [:]
@@ -26,22 +26,20 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, locator: ExecutableLocator = .standard,
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         idleLimit: Duration = .seconds(30 * 60), endTimeout: Duration = .seconds(10)
     ) {
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
-        self.locator = locator
+        self.locate = locate
         self.idleLimit = idleLimit
         self.endTimeout = endTimeout
     }
 
     private var home: URL { paths.home(of: .claudeCode) }
 
-    /// 给 `claude` 的环境：本进程的，加上 `paths` 里指定的（隔离的配置目录等）。不自己补 `CLAUDE_CONFIG_DIR`：
-    /// 设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
-    private var environment: [String: String] { ProcessInfo.processInfo.environment.merging(paths.environment) { $1 } }
 
     public func start() throws {
         hooks.handle(.claudeCode) { [weak self] call in self?.received(call) }
@@ -98,19 +96,20 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 托管
 
-    private func executable() throws -> URL {
-        guard let claude = locator.candidates(AgentKind.claudeCode.command).first else { throw AgentRuntimeError.notInstalled(.claudeCode) }
-        return claude
+    /// `claude` 与给它的环境：`paths` 里指定的（隔离的配置目录等）盖在本进程的环境上。不自己补 `CLAUDE_CONFIG_DIR`：
+    /// 设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
+    private func executable() async throws -> (url: URL, environment: [String: String]) {
+        let locator = await locate()
+        guard let claude = locator.executable(.claudeCode) else { throw AgentRuntimeError.notInstalled(.claudeCode) }
+        return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 
     /// 起托管进程、握手、上桥；进程先退出或握手超时（这时让它退出）都抛错。
     private func launch(sessionID: String, arguments: [String], in directory: URL, launchToken: String?) async throws -> PiSession.ID {
-        let claude = try executable()
-        // App 的环境里没有用户 shell 的 PATH：把找 Claude Code 的那组目录加在前面（它的 Bash 工具在这个 PATH 下找命令），原有的留在后面
-        let path = [locator.path, environment["PATH"]].compactMap { $0 }.joined(separator: ":")
+        let claude = try await executable()
         let session = try ClaudeHostedSession(
-            executable: claude, arguments: arguments, sessionID: sessionID, directory: directory,
-            environment: environment.merging(["PATH": path]) { $1 }, bridge: bridge, idleLimit: idleLimit)
+            executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
+            environment: claude.environment, bridge: bridge, idleLimit: idleLimit)
         hosted[sessionID] = session
         Task { [weak self] in
             _ = await session.process.exited()
@@ -215,10 +214,11 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     private func running() async throws -> [Running] {
+        let claude = try await executable()
         let process = Process()
-        process.executableURL = try executable()
+        process.executableURL = claude.url
         process.arguments = ["agents", "--json"]
-        process.environment = environment
+        process.environment = claude.environment
         process.standardError = FileHandle.nullDevice
         guard let result = await runCapturing(process, timeout: .seconds(15)), result.status == 0 else {
             throw ClaudeCodeError.listingFailed

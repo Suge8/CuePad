@@ -63,7 +63,7 @@ struct RealCodexTerminalTests {
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
             let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
-            let runtime = CodexRuntime(bridge: later, paths: rig.codex.paths, hooks: rig.hooks, locator: rig.codex.locator)
+            let runtime = CodexRuntime(bridge: later, paths: rig.codex.paths, hooks: rig.hooks, locate: { [locator = rig.codex.locator] in locator })
             try runtime.start()
             try await eventually("认出了终端里正在跑的会话") {
                 later.session(sessionID: session.sessionID).map { $0.displayName == "终端里的会话" && $0.state.isWorking } ?? false

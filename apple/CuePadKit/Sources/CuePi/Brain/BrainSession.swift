@@ -41,13 +41,9 @@ final class BrainSession {
         exited(nil)
     }
 
-    /// 运行时的环境：CuePad 自己的环境加上配置给的与 `extra`；可执行文件所在目录放到 PATH 最前（`pi` 是 node 脚本，
-    /// node 多半与它装在一起）。
+    /// 运行时的环境：CuePad 自己的环境加上配置给的与 `extra`，PATH 按 `ExecutableLocator.environment` 的规则（配置给的 PATH 已是找到它的那组目录）。
     static func environment(_ config: CueBrainConfig, _ extra: [String: String] = [:]) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment.merging(config.environment) { _, new in new }.merging(extra) { _, new in new }
-        let path = environment["PATH"].map { ":" + $0 } ?? ""
-        environment["PATH"] = config.executable.deletingLastPathComponent().path + path
-        return environment
+        ExecutableLocator(searchDirectories: []).environment(launching: config.executable, overrides: config.environment.merging(extra) { $1 })
     }
 }
 

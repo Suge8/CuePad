@@ -25,7 +25,7 @@ public final class OpenCodeRuntime: AgentRuntime {
     private let paths: AgentPaths
     private let store: CueStore
     private let hostID: String
-    private let locator: ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     private let transcriptWindow: TimeInterval
 
     private var watcher: FSEventsWatcher?
@@ -95,14 +95,15 @@ public final class OpenCodeRuntime: AgentRuntime {
     }
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, store: CueStore, hostID: String, locator: ExecutableLocator = .standard,
+        bridge: PiBridge, paths: AgentPaths, store: CueStore, hostID: String,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         transcriptWindow: TimeInterval = .infinity
     ) {
         self.bridge = bridge
         self.paths = paths
         self.store = store
         self.hostID = hostID
-        self.locator = locator
+        self.locate = locate
         self.transcriptWindow = transcriptWindow
     }
 
@@ -775,11 +776,13 @@ public final class OpenCodeRuntime: AgentRuntime {
     /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。输出不接管道：常驻的服务进程继承它，
     /// 管道就永远读不到结尾。
     private func launchService() async throws {
-        guard let executable = locator.candidates(AgentKind.opencode.command).first else { throw AgentRuntimeError.notInstalled(.opencode) }
+        let locator = await locate()
+        guard let executable = locator.executable(.opencode) else { throw AgentRuntimeError.notInstalled(.opencode) }
         let process = Process()
         process.executableURL = executable
         process.arguments = ["service", "start"]
-        process.environment = paths.environment
+        // 服务常驻，它起的工具也用这个 PATH
+        process.environment = locator.environment(launching: executable, overrides: paths.environment)
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         let (exited, exit) = AsyncStream<Int32>.makeStream()
