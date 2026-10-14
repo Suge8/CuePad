@@ -50,7 +50,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 ## 通知（Mac）
 
 - 隔离库默认不发系统通知（只记日志），也不要权限、不装提示音、不设角标：权限、提示音与角标按 bundle id 记，与正式版同一个。验收时给 Debug 启动参数 `-CuePadNotifications YES` 才真发，提示音这时装进真实的 ~/Library/Sounds。
-- /tmp 下的构建（含 `CUEPAD_DERIVED=/tmp/…` 的产物）拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications，改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 AGENTS.md 要的几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
+- /tmp 下的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications，改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 AGENTS.md 要的几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
 - 触发：本机会话在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）切它的状态；Cue 来问用 `-CuePadSampleCue <秒>`（隔离库里 Cue 不值班）。
 - 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，本机实测有时要 20 秒；横幅 5 秒就收，按横幅要边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
 - 实际播了哪个文件看 `systemsoundserverd` 日志里的 `mAudioToken`（通知中心那行 `Playing notification sound` 只有声音名，找不到文件时也照样打，实际播的是系统兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
