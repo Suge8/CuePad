@@ -126,13 +126,15 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 39：撤掉 40（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema40 = """
+  /// 把新建的库退回结构 40：撤掉 41（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema41 = """
     DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
     ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
     """
-  /// 退回结构 38：39（同步元数据换形）从哪种形状都能重建，不用撤。
-  static let undoSchema39 = undoSchema40
+  /// 退回结构 39：40（同步元数据换形）从哪种形状都能重建，不用撤。
+  static let undoSchema40 = undoSchema41
+  /// 退回结构 38：再撤掉 39（卡片上的跟进标记下线；盖序号的触发器去掉它后重建，退回时留着新的也照样能升级）。
+  static let undoSchema39 = undoSchema40 + "ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 37：再撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
   static let undoSchema38 = undoSchema39 + """
     DROP TRIGGER piSessionStates_writeSeq_insert; DROP TRIGGER piSessionStates_writeSeq_update;
@@ -153,7 +155,6 @@ import Testing
   static let undoSchema33 = undoSchema34 + "ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。
   static let undoSchema32 = undoSchema33 + """
-    DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
     DROP INDEX sendRecords_deliveryID; ALTER TABLE sendRecords DROP COLUMN deliveryID; ALTER TABLE sendRecords DROP COLUMN origin;
@@ -163,10 +164,10 @@ import Testing
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 39 的库升到 40：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
-  @Test func schema39LibraryMovesModelListsOffSessionRecords() async throws {
+  /// 结构 40 的库升到 41：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
+  @Test func schema40LibraryMovesModelListsOffSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
-    try RawDB(fixture.url).exec(Self.undoSchema40 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 39;")
+    try RawDB(fixture.url).exec(Self.undoSchema41 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 40;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
@@ -203,16 +204,15 @@ import Testing
     #expect(messages[answered.id]?.answer == "允许一次")
   }
 
-  /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
+  /// 结构 31 的库升到 32 起：卡片与投送请求原样都在（请求来自你），Cue 的对话可写。
   @Test func schema31LibraryUpgradesForCue() async throws {
     let task = try await store.createTask("发布", in: nil)
     try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "s", ref: "s1"), on: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema32 + "PRAGMA user_version = 31;")
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.card(task.id)?.cueFollows == false)
+    #expect(try await upgraded.card(task.id)?.heading == "发布")
     #expect(try await upgraded.deliveryRequests().map(\.origin) == [nil])
-    #expect(try await upgraded.setCueFollows(task.id, true).cueFollows)
     #expect(try await upgraded.addCueMessage(.cue, text: "开工了").author == .known(.cue))
   }
 

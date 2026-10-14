@@ -6,6 +6,7 @@ import Foundation
 /// CuePad 掌握它的全部输入输出——发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束都能做。
 ///
 /// - 状态来自它的输出：`session_state_changed`（要 `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`）、模型回答里的工具调用、`can_use_tool`、`result`；
+///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥，开始出字即进入输出；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
 /// - 发话的 `priority`：`next` 在这一轮跑完当前工具后插进去（马上说），`later` 等这一轮做完（等它做完再说）；`now` 会打断在跑的工具，不用。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；空闲满时限、或这个会话在终端里打开了（让出）时也这样退，都不算结束。
@@ -37,6 +38,7 @@ final class ClaudeHostedSession: SessionLink {
             executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "default"] + arguments,
             directory: directory, environment: environment.merging(["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1"]) { $1 })
         stream.onMessage = { [weak self] in self?.received($0) }
+        stream.onDraft = { [weak self] in self?.drafted($0) }
         stream.onClose = { [weak self] in self?.ended() }
     }
 
@@ -104,7 +106,6 @@ final class ClaudeHostedSession: SessionLink {
             for block in message["message"]?["content"]?.array ?? [] {
                 switch block["type"]?.string {
                 case "tool_use": update { $0.enter(.tool, detail: ClaudeCode.toolDetail(block["name"]?.string ?? "?", block["input"]), at: now) }
-                case "text": update { $0.enter(.outputting, at: now) }
                 case "thinking": update { $0.enter(.thinking, at: now) }
                 default: break
                 }
@@ -131,6 +132,12 @@ final class ClaudeHostedSession: SessionLink {
         default:
             break
         }
+    }
+
+    private func drafted(_ draft: PiDraft?) {
+        guard let id, let bridge else { return }
+        if draft != nil, bridge.session(id: id)?.state != .outputting { update { $0.enter(.outputting) } }
+        bridge.setDraft(id, draft)
     }
 
     private func system(_ message: ClaudeJSON, at now: Date) {

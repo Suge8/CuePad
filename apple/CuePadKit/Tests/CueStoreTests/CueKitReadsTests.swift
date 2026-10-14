@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// 管理器与界面直接读的几项：待交给大脑的、跟进的会话、批量预览、记忆的版本读数、跟进会话的手机推送。
+/// 管理器与界面直接读的几项：待交给大脑的、批量预览、记忆的版本读数。
 @Suite struct CueKitReadsTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -18,35 +18,6 @@ import Testing
     #expect(try await store.cueMessagesToDeliver().map(\.id) == [said.id, asked.id])
     try await store.markCueMessagesDelivered([said.id, asked.id])
     #expect(try await store.cueMessagesToDeliver().isEmpty)
-  }
-
-  /// 跟进的会话：Cue 跟进的任务自己的会话与它的步骤的会话；你自己做的不算。
-  @Test func sessionsOfFollowedTasksIncludingTheirSteps() async throws {
-    let followed = try await store.createTask("发布", in: nil)
-    let step = try await store.createTask("改脚本", under: followed.id)
-    let leaf = try await store.createTask("写周报", in: nil)
-    let mine = try await store.createTask("自己做", in: nil)
-    for (card, session) in [(step, "s1"), (leaf, "s2"), (mine, "s3")] { try await store.linkCard(card.id, toSession: session) }
-    try await store.setCueFollows(followed.id, true)
-    try await store.setCueFollows(leaf.id, true)
-    #expect(try await store.cueFollowedSessions() == ["s1", "s2"])
-  }
-
-  /// Cue 跟进的会话弹出提问不给手机推"等你确认"（Cue 处理）；你自己的照推。
-  @Test func followedSessionsDoNotPushWaitingForYou() async throws {
-    let followed = try await store.createTask("发布", in: nil)
-    let mine = try await store.createTask("自己做", in: nil)
-    try await store.linkCard(followed.id, toSession: "s1")
-    try await store.linkCard(mine.id, toSession: "s2")
-    try await store.setCueFollows(followed.id, true)
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
-    for session in ["s1", "s2"] {
-      try await recorder.update(sessionID: session, state: .thinking)
-      try await recorder.update(sessionID: session, state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "继续？"))
-    }
-    let states = try await store.piSessions(sessionIDs: ["s1", "s2"])
-    #expect(states["s1"]?.state.notify == nil)
-    #expect(states["s2"]?.state.notify == .known(.waitingForUser))
   }
 
   /// 一批任务的预览一次取：任务自己的会话与步骤的会话发的都算在任务上。

@@ -9,13 +9,13 @@ import os
 
 /// 管理器的时间规则；测试缩短它们。
 nonisolated struct CueTiming: Sendable {
-    /// 跟进的事有变化后，安静这么久才醒（又有新变化就重新计时）……
+    /// 有会话的事有变化后，安静这么久才醒（又有新变化就重新计时）……
     var quiet: Duration = .seconds(20)
     /// ……但从第一处变化算起最多等这么久。
     var quietLimit: Duration = .seconds(120)
     /// 你这么久之内对 Cue 说过话，就是还在和它说话：变化先压着。
     var talking: Duration = .seconds(60)
-    /// 你这么久没说话、Cue 又没在跟进任何事，才巡视。
+    /// 你这么久没说话、又没有在做的事，才巡视。
     var patrolAfter: Duration = .seconds(2 * 3600)
     /// 记忆有待合并的块时，空闲这么久才叫它合并。
     var mergeAfter: Duration = .seconds(600)
@@ -41,7 +41,7 @@ nonisolated struct CueTiming: Sendable {
 }
 
 /// 一个"在这台 Mac 上值班"的时段：Cue 住在这台 Mac 且已启用时由 `CueService` 起一个，设置变了或不再住这里时停掉。
-/// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变；对话、跟进与"等你"都在库里，换班次、App 重启都不丢。
+/// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变；对话、看板与"等你"都在库里，换班次、App 重启都不丢。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
 /// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
 ///
@@ -52,16 +52,19 @@ nonisolated struct CueTiming: Sendable {
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，第一轮醒来带上交接。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
-/// 5. 跟进的事有变化（含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
+/// 5. 有会话的事有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
 ///    其中有会话在等回答（如"允许使用 Bash？"）就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
-/// 6. 空闲巡视：没在跟进任何事、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
+/// 6. 空闲巡视：没有在做的事（`CueBoardItem.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
+/// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
+/// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
+/// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
-/// 基线（变化从哪算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
+/// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
@@ -122,8 +125,6 @@ final class CueKeeper {
     private nonisolated struct Progress: Codable {
         /// 基线：变化从这些写入序号之后算（`advanceBaseline`）；nil 是这台 Mac 还没值过班，从上班时库里的最新写入算起
         var marks: CueMarks?
-        /// 基线时看板上的任务；nil 是还没醒过（不比跟进集合）
-        var followed: [UUID]?
         var patrolDay: String?
         var patrols = 0
         /// 巡视过的那段空闲（从你上次说话起）
@@ -144,6 +145,8 @@ final class CueKeeper {
         var delivered: [UUID] = []
         /// 这一轮中途插进了你的话（`delivered` 不算数：随信封记下送达的还有你关掉的提问，那不是在等回答）
         var youSpoke = false
+        /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
+        var speaking: PiDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
 
@@ -211,6 +214,9 @@ final class CueKeeper {
     var context: (used: Int, window: Int?)? { shift?.context }
     /// 此刻班次从什么时候起。
     var shiftStartedAt: Date? { shift?.startedAt }
+    /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
+    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
+    let speech = PiDraftFeed()
 
     /// Cue 此刻在做什么：一轮里在想或在用工具，起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
     private var work: (state: PiWorkState, detail: String?) {
@@ -352,6 +358,7 @@ final class CueKeeper {
                 archive(round)
             }
             await shift.brain.stop()()
+            speech.offer(nil)
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
                     try await setup.store.unmarkCueMessagesDelivered(delivered)
@@ -379,17 +386,15 @@ final class CueKeeper {
         if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
         switch event {
         case .turnStarted:
+            speech.offer(nil)
             // 没有醒来就开始的一轮只能是插进来的你的话开的
             if turn == nil {
                 let round = beginRound(.message, sent: [])
                 updateShift { $0.turn = Turn(author: .cue, round: round) }
             }
-        case .reply(let text):
-            lastFailure = nil
-            let author = turn?.author ?? .note
-            // 不是在回答你的一轮里已经对你说过了：最后那句只是复述（动态那一行、刚启用的开场都一样）
-            if turn?.answersYou != true, await hasTold(since: turn?.round.startedAt ?? lastTurnEnd) { return }
-            await say(author, text)
+        case .speaking(let draft):
+            updateShift { $0.turn?.speaking = draft }
+            speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used, let window):
             updateShift { $0.context = (used, window ?? $0.context?.window) }
         case .tool(let id, let name, let arguments):
@@ -407,6 +412,12 @@ final class CueKeeper {
             await say(.cue, "这一轮出错了：\(line)")
         case .turnFinished:
             guard let finished = turn else { return }
+            if let reply = finished.speaking?.text.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty {
+                lastFailure = nil
+                // 不是在回答你的一轮里已经对你说过了：最后那句只是复述（动态那一行、刚启用的开场都一样）
+                let repeated = !finished.answersYou ? await hasTold(since: finished.round.startedAt) : false
+                if !repeated { await say(finished.author, reply) }
+            }
             archive(finished.round)
             updateShift {
                 $0.turn = nil
@@ -426,18 +437,17 @@ final class CueKeeper {
         }
     }
 
-    /// 基线之后 Cue 跟进的事里的变化。
+    /// 基线之后有会话的事里的变化。
     private func changes() async throws -> [CueChange] {
-        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), followed: progress.followed.map(Set.init))
+        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0))
     }
 
     /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
-    /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的）；看板以此刻为准（这一轮里 Cue 自己建的、交还的不算变化）。
+    /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的）。
     private func advanceBaseline(from mark: Int?) async {
         do {
             let latest = try await setup.store.lastWrite()
             progress.marks = CueMarks(sessions: mark ?? latest, tasks: latest)
-            progress.followed = try await setup.store.cueBoard().map(\.task.id)
         } catch {
             Self.log.error("Cue 读变化失败：\(error.localizedDescription, privacy: .public)")
         }
@@ -544,7 +554,7 @@ final class CueKeeper {
             }
 
             let idleSince = lastSpoke ?? setup.profile.enabledAt ?? shift.startedAt
-            if try await store.cueBoard().isEmpty, let due = patrolDue(idleSince: idleSince, now: now) {
+            if try await !store.cueBoard().contains(where: \.isActive), let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1

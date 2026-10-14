@@ -25,14 +25,6 @@ extension Table {
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
-  /// 远端记录没有这些列（更早的版本写的）时本机落的值：NOT NULL 的列不能写 NULL。
-  var missingDefaults: [String: SQLValue] {
-    switch self {
-    case .cards: ["cueFollows": .int(0)]
-    default: [:]
-    }
-  }
-
   /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
     switch self {
@@ -114,9 +106,6 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
-  /// 这件事由 Cue 跟进（否则是你自己）：只有顶层任务能是真，挂到别的任务下、改回灵感时归零（库里的触发器守住，见 `Schema`）。
-  /// 你在 CuePad 里亲自对它的会话说话时也归零（`requestDelivery`）。
-  public internal(set) var cueFollows = false
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
   /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
@@ -493,12 +482,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows", "formerSessionIDs",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows, JSONColumn.encodeList(formerSessionIDs),
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -507,8 +496,8 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16),
-      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(17)))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。

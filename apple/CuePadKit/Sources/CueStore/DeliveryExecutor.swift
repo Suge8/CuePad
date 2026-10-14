@@ -5,8 +5,7 @@ import os
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
-  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。不是 Cue 写的、对会话说的话（`DeliveryMode.toSession`）落在 Cue 跟进的任务的叶子会话上时，
-  /// 是你亲自接手：同一个事务里任务的 `cueFollows` 归零（Cue 下次醒来从跟进集合的差异里看到，见 `cueChanges`）。
+  /// `cue` 为真是 Cue 写的（`DeliveryOrigin.cue`）。
   @discardableResult
   public func requestDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
@@ -21,9 +20,6 @@ extension CueStore {
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     let now = Date.stamp
-    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
-      try takeOver(session: session, at: now)
-    }
     let request = DeliveryRequest(
       id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
       status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
@@ -42,13 +38,6 @@ extension CueStore {
     if found.isTask { return try promptHome(card) }
     guard let parent = found.parent, try link(of: parent)?.isTask == true else { return nil }
     return try promptHome(parent)
-  }
-
-  /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。
-  private func takeOver(session: String, at now: Date) throws {
-    try db.run(
-      "UPDATE cards SET cueFollows = 0, modifiedAt = ?2 WHERE cueFollows = 1 AND parentID IS NULL AND id IN (\(Self.topTasks(ofSession: "?1")))",
-      [session, now])
   }
 
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
@@ -91,12 +80,12 @@ extension CueStore {
   }
 
   /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：卡所在的任务的标题——任务是它自己，
-  /// 提示词是它挂着的任务；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
+  /// 提示词是它挂着的任务——超长的截断（`CueName.clipped`）；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
   func sessionName(forCard card: UUID) throws -> String? {
     guard let card = try find(Card.self, card) else { return nil }
     let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
     guard let title = task?.heading, !title.isEmpty else { return nil }
-    return title
+    return CueName.clipped(title)
   }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
