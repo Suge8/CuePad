@@ -1,21 +1,20 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页（Mac 内容区的一页、iPhone Agent 标签的第一屏、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
+/// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
 /// 连着的动态折成一行灰字（`CueNotes`），它在做事时末尾一行进展（`LiveLine`，同会话页）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 跟进的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
 struct CuePage: View {
-    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上），"会话"换到侧栏的 Agent 页。
+    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
     var inPanel = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     #if os(iOS)
-    @Environment(Navigation.self) private var navigation
     @Environment(\.tabPageReady) private var tabPageReady
     #endif
     @State private var thread: CueThread?
@@ -92,17 +91,14 @@ struct CuePage: View {
         }
     }
 
-    /// 右上角：会话列表是常用入口，单独一颗圆钮（角标是在跑的会话数）；"⋯"里只留次要的（记忆）。
+    /// 右上角"⋯"：Cue 记得什么。会话在 Agent 标签里，这里不另放入口。
     private var trailing: some View {
-        HStack(spacing: 4) {
-            SessionsButton { navigation.push(.agent) }
-            Menu {
-                Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .accessibilityLabel("更多")
+        Menu {
+            Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
+        } label: {
+            Image(systemName: "ellipsis")
         }
+        .accessibilityLabel("更多")
     }
     #endif
 
@@ -176,36 +172,6 @@ struct CuePage: View {
         .animation(Motion.quick, value: cue.presence == .disabled)
     }
 }
-
-#if os(iOS)
-/// Cue 页顶栏的会话钮：图标右上一个墨色小角标写在跑的会话数（没有在跑的不画；墨色不是注意色：在跑不用你管）。
-private struct SessionsButton: View {
-    let action: () -> Void
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 9
-    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 15
-
-    var body: some View {
-        let running = services.liveSessions.live.count { $0.state.isWorking }
-        Button(action: action) {
-            Image(systemName: "rectangle.stack")
-                .overlay(alignment: .topTrailing) {
-                    if running > 0 {
-                        Text("\(running)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(palette.paper)
-                            .padding(.horizontal, 3).frame(minWidth: diameter, minHeight: diameter)
-                            .background(palette.ink, in: .capsule)
-                            .offset(x: diameter * 0.6, y: -diameter * 0.45)
-                            .transition(.opacity)
-                    }
-                }
-                .animation(Motion.quick, value: running)
-        }
-        .accessibilityLabel("会话")
-        .accessibilityValue(running > 0 ? "\(running) 个在跑" : "")
-    }
-}
-#endif
 
 /// Cue 页在前台时算一个在看的（`AppServices.cueViewers`）。Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
 private struct CueViewing: ViewModifier {

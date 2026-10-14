@@ -21,7 +21,7 @@ final class CueWatch {
     var canHear: Bool { presence != .disabled }
 
     func mood(composing: Bool = false) -> CueMood {
-        CueMood.of(presence, waiting: digest.waiting, composing: composing, justDone: digest.lastSaidDone)
+        CueMood.of(presence, waiting: digest.waiting.count, composing: composing, justDone: digest.lastSaidDone)
     }
 
     /// 跟随资料库直到任务取消。

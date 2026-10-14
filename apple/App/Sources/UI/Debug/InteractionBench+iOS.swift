@@ -47,6 +47,8 @@ enum IOSInteractionBench {
             row["name"] = name
             write("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
         }
+        DebugScene.selectTab(.projects)
+        try? await Task.sleep(for: .seconds(1))
         // 书架点项目（推入项目页）→ 返回；同一个项目两遍，另一个项目再一遍
         for id in [projects[0], projects[0], projects[1]] {
             await step("书架点项目") { navigation.projectsPath.append(.project(id)) }
@@ -83,8 +85,8 @@ enum IOSInteractionBench {
             await step("收起随手记") { navigation.endCapture() }
         }
         for _ in 0..<2 {
-            await step("打开任务浮窗") { navigation.openTask(task) }
-            await step("关任务浮窗") { navigation.task = nil }
+            await step("打开任务页") { navigation.projectsPath.append(.card(task)) }
+            await step("返回（任务页）") { navigation.projectsPath.removeAll() }
         }
         for _ in 0..<2 {
             await step("挂到任务面板") { workspace.attaching = idea }
