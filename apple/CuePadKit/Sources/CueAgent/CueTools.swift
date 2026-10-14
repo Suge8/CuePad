@@ -34,7 +34,7 @@ public struct CueTools: Sendable {
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
           start{task,agent?,model?,effort?,fresh?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（Pi 以外可只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
-          say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说，answer 不带）；
+          say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
           done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成，会话留给下一步；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
@@ -252,12 +252,12 @@ public struct CueTools: Sendable {
     let leaf = try await workingLeaf(try args.required("task"))
     let host = try await host()
     let when = args.string("when") ?? "now"
+    let config = try await config(args, of: leaf)
+    let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? "已"
     if when == "answer" {
-      // 作答不换模型：要换就答完后再 say 带 model 说下一句
-      guard args.string("model") == nil, args.string("effort") == nil else { throw Failure("answer 不能带 model、effort：先回答，再用 say 带 model 说下一句") }
       guard let value = args.string("value") ?? args.string("text") else { throw Failure("answer 要给 value（选项原文、序号或 yes/no）") }
-      let request = try await store.answerLeaf(leaf.id, value, host: host, cue: true)
-      return .ok("已回答「\(leaf.heading)」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
+      let request = try await store.answerLeaf(leaf.id, value, config: config, host: host, cue: true)
+      return .ok("\(switched)回答「\(leaf.heading)」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
     }
     let timing: SayTiming
     switch when {
@@ -265,19 +265,17 @@ public struct CueTools: Sendable {
     case "after": timing = .after
     default: throw Failure("when 只能是 now、after 或 answer")
     }
-    // 带 model、effort 就先换上再说；model 的写法同 start，只写 id 时提供方按会话是哪家补
-    var config: PiConfig?
-    let effort = try Self.effort(args)
-    if let raw = args.string("model") {
-      let agent = try await leaf.piSessionID.asyncMap { try await store.piSessions(sessionIDs: [$0])[$0]?.state.agent.known } ?? nil
-      config = PiConfig(model: try Self.model(raw, of: agent ?? .pi), thinking: effort)
-    } else if let effort {
-      config = PiConfig(thinking: effort)
-    }
     let request = try await store.sayToLeaf(leaf.id, text: try args.required("text"), when: timing, config: config, host: host, cue: true)
     let how = request.mode == .known(.steer) ? "（会话正忙，马上说）" : request.mode == .known(.followUp) ? "（会话正忙，等它做完再说）" : ""
-    let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? "已"
     return .ok("\(switched)对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
+  }
+
+  /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补。都没带为 nil。
+  private func config(_ args: Args, of leaf: Card) async throws -> PiConfig? {
+    let effort = try Self.effort(args)
+    guard let raw = args.string("model") else { return effort.map { PiConfig(thinking: $0) } }
+    let agent = try await leaf.piSessionID.asyncMap { try await store.piSessions(sessionIDs: [$0])[$0]?.state.agent.known } ?? nil
+    return PiConfig(model: try Self.model(raw, of: agent ?? .pi), thinking: effort)
   }
 
   private func board() async throws -> Result {

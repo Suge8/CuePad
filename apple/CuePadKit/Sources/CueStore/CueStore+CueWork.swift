@@ -205,11 +205,16 @@ extension CueStore {
     _ leaf: UUID, text: String, when: SayTiming, config: PiConfig? = nil, host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
     let (card, session) = try requireSession(of: leaf)
-    if let config {
-      guard session.state?.capabilities.contains(.model) == true else { throw CueStoreError.cannotChangeModel(card.heading) }
-      try requestDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
-    }
+    try requestConfig(config, of: card, in: session, host: host, cue: cue)
     return try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
+  }
+
+  /// 说话、作答之前先请会话换上 `config`（与界面换模型同一种请求，执行器按先后执行）；换不了模型
+  /// （`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`。调用方先做完别的检查：抛错时什么都没写。
+  private func requestConfig(_ config: PiConfig?, of card: Card, in session: SessionTarget, host: String, cue: Bool) throws {
+    guard let config else { return }
+    guard session.state?.capabilities.contains(.model) == true else { throw CueStoreError.cannotChangeModel(card.heading) }
+    try requestDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
   /// 交给会话一句话，按会话此刻做得到的（与界面同一组规则，`PiSessionState.deliveryModes`、`AgentCapabilities.images`）：
@@ -247,12 +252,14 @@ extension CueStore {
   }
 
   /// 回答叶子的会话正在等的提问：选择框给选项原文或从 1 起的序号，确认框给是或否，输入框给文字。
-  public func answerLeaf(_ leaf: UUID, _ value: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let session = try requireSession(of: leaf).session
+  /// 带 `config` 时先请会话换上再答（同 `sayToLeaf`）；答案无效、没有提问时什么都不写。
+  public func answerLeaf(_ leaf: UUID, _ value: String, config: PiConfig? = nil, host: String, cue: Bool = false) throws -> DeliveryRequest {
+    let (card, session) = try requireSession(of: leaf)
     guard let question = session.state?.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known else {
       throw CueStoreError.nothingToAnswer
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
+    try requestConfig(config, of: card, in: session, host: host, cue: cue)
     return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
   }
 

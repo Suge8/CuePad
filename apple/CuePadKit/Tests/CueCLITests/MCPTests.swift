@@ -359,12 +359,22 @@ import Testing
     #expect(reason.contains("换不了模型") && reason.contains("fresh"))
     #expect(try await store.deliveryRequests().count == 2)
 
-    // 回答提问不带换模型：明说，不悄悄丢掉
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "继续？"))
-    let answering = try await server.request(
-      "tools/call", ["name": "task", "arguments": ["action": "say", "task": pi.id.uuidString, "when": "answer", "value": "yes", "model": "openai/gpt-6-luna"]])
-    #expect(answering["isError"] as? Bool == true)
+    // 作答同样先换模型再答；答案无效时什么都不写，换不了模型的会话报错
+    let question = PiQuestion(promptID: "p", kind: .confirm, text: "继续？")
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
+    try await recorder.update(sessionID: "c1", state: .waitingForUser, question: question, agent: .claudeCode)
+    let answer = ["action": "say", "task": pi.id.uuidString, "when": "answer", "model": "openai/gpt-6-sol", "effort": "low"]
+    let invalid = try await server.request("tools/call", ["name": "task", "arguments": answer.merging(["value": "也许"]) { $1 }])
+    #expect(invalid["isError"] as? Bool == true)
     #expect(try await store.deliveryRequests().count == 2)
+    let claudeAnswer = try await server.request(
+      "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "when": "answer", "value": "yes", "model": "opus"]])
+    #expect(((claudeAnswer["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("换不了模型") == true)
+    #expect(try await store.deliveryRequests().count == 2)
+    _ = try await server.call("task", answer.merging(["value": "yes"]) { $1 })
+    let answered = try await store.deliveryRequests(toSession: "s1").suffix(2)
+    #expect(answered.map(\.mode) == [.known(.config), .known(.answer)] && answered.allSatisfy(\.isFromCue))
+    #expect(answered.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-sol"), thinking: .low))
 
     // 照提示 fresh 开新会话：绑着会话的叶子也开新的
     _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
