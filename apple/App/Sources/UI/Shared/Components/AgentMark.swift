@@ -21,15 +21,18 @@ nonisolated extension PiSessionState {
     var agentMark: String? { agent.known.flatMap { $0 == .pi ? nil : $0.name } }
 }
 
-/// 会话是哪家 Agent 的（会话行、会话页标题区、⌘K、菜单栏面板同一个）：标志与名字，次要墨色，与所在、时长同一号字。
+/// 会话是哪家 Agent 的，次要墨色，与所在、时长同一号字。会话页标题区写标志与名字；会话列表的行（侧栏、Agent 页、⌘K、菜单栏面板、
+/// iPhone 列表）只放标志（`named` 为 false）：行里名字优先，名字后再跟一串文字标、加上 Cue 的小头像，窄处名字会被挤成"…"。
 struct AgentMark: View {
     let session: PiSessionState
     var font = Typography.meta
+    var named = true
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let name = session.agentMark, let kind = session.agent.known {
-            Text("\(kind.icon) \(name)").font(font).foregroundStyle(palette.ink3).lineLimit(1)
+            (named ? Text("\(kind.icon) \(name)") : Text(kind.icon)).font(font).foregroundStyle(palette.ink3).lineLimit(1)
+                .accessibilityLabel(name)
         }
     }
 }

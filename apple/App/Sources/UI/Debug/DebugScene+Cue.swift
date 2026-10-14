@@ -80,6 +80,37 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadScene cuerows`（不配演示库）：Cue 启用、只有它跟进的五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
+    /// 停着的、等你的、在跑的都有；各绑一件交给 Cue 的任务。看窄处名字优先、Agent 只留标志。
+    static func seedCueRows(_ services: AppServices) async {
+        do { try await seedCueRows(services.store) } catch { print("cuerows: \(error)") }
+    }
+
+    private static func seedCueRows(_ store: CueStore) async throws {
+        guard try await store.cueFollowedSessions().isEmpty else { return }
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "demo-mac"
+            profile.enabledAt = .now
+        }
+        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+        let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?)] = [
+            ("cue-pi-long", "把 README 的截图换成 Swift 版并补上深色模式的那一张", .pi, .settled, nil),
+            ("cue-codex-short", "greet", .codex, .waitingForUser, "要覆盖 tests/test_greet.py 吗？"),
+            ("cue-codex-long", "为 greet 添加 --upper 参数并验证测试输出原文", .codex, .tool, "bash · python3 -m unittest"),
+            ("cue-claude-short", "faq", .claudeCode, .settled, nil),
+            ("cue-claude-long", "评估 README 是否需要加一节 FAQ 并跑一遍测试", .claudeCode, .waitingForUser, "加在「安装」后面吗？"),
+        ]
+        for row in rows {
+            _ = try await recorder.update(
+                sessionID: row.id, state: row.state, detail: row.detail, title: row.title, folder: "greet",
+                context: PiContextUsage(tokens: 60_000, window: 200_000), agent: row.agent)
+            try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
+            let task = try await store.createTask(row.title, in: nil)
+            _ = try await store.setCueFollows(task.id, true)
+            try await store.linkCard(task.id, toSession: row.id)
+        }
+    }
+
     /// 部署那一步（deploy 会话）发来一张预发的截图：卡片与"等你"上的证据。
     private static func seedEvidence(_ store: CueStore) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-staging.png")

@@ -73,6 +73,9 @@ extension DebugScene {
                 if scene == "cuesessions" { navigation.agentPath = [.agent] }
             }
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+        case "cuerows":
+            await seedCueRows(workspace.services)
+            if split { navigation.select(.agent) } else { navigation.tab = .agent; navigation.agentPath = [.agent] }
         case "tasks":
             navigation.show(.tasks)
         case "task":

@@ -50,6 +50,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词；读数三列上下对齐——上下文（不知道时写"—"）、
 ///   会话的模型、子代理（角色图标，颜色是它的状态，后接在跑 / 共几个；没有时空着）。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
+/// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`）。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
 struct PiSessionRow: View {
@@ -153,8 +154,8 @@ struct PiSessionRow: View {
             Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
-            // 是哪家 Agent（Pi 不标）：名字先截断，它一直留着
-            if session.agentMark != nil { AgentMark(session: session, font: style.meta).fixedSize() }
+            // 是哪家 Agent（Pi 不标）：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
+            if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)
             if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
