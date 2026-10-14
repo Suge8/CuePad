@@ -77,8 +77,8 @@ public struct CueChange: Equatable, Sendable {
     case waitingForUser
     /// 会话出错，或 Cue 发起的请求（开工、停下、结束、换模型）没能执行（`detail` 是"动作：Mac 报的原因"；你发起的失败界面上看得见，不报）
     case failed
-    /// Cue 说的话（说话、作答，`DeliveryMode.toSession`）没送到，且是它的说话工具等结果的时限（`Speech.cueWait`）过后才知道的——
-    /// 时限内的失败工具当场回报了，不再报（`detail` 是 Mac 报的原因）。会话那边在等它接着说，所以与等回答一样立即叫醒它
+    /// Cue 说的话（说话、作答，`DeliveryMode.toSession`）没送到，而它还不知道：工具等结果超时、收到报告的那一轮半路断了都算；
+    /// 记下已知道的（`CueStore.markCueTold`）不再报（`detail` 是 Mac 报的原因）。会话那边在等它接着说，所以与等回答一样立即叫醒它
     case undelivered
     /// 叶子或任务完成
     case done
@@ -562,12 +562,11 @@ extension CueStore {
       }
       // 请求带着卡（叶子或它的草稿）就算在那个叶子上，否则算在会话绑着的叶子上
       let failed = try select(
-        DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND \(Self.resultKnownAt) > ?", [since],
+        DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND cueToldAt IS NULL AND \(Self.resultKnownAt) > ?", [since],
         orderBy: "createdAt, rowid")
       for request in failed {
         let at = request.resultReceivedAt ?? request.completedAt ?? request.createdAt
         let spoken = request.mode.known.map(DeliveryMode.toSession.contains) == true
-        if spoken, at.timeIntervalSince(request.createdAt) <= Speech.cueWait { continue }
         let card = try request.cardID.flatMap { try find(Card.self, $0) }
         let pairs = card.map { card in leaves.filter { $0.leaf.id == card.id || $0.leaf.id == card.parentID } }
           ?? request.target.ref.flatMap { bySession[$0] } ?? []
@@ -594,6 +593,17 @@ extension CueStore {
     case .stop: "停下"
     case .end: "结束"
     default: mode.rawValue
+    }
+  }
+
+  /// Cue 已经知道这些请求没送到：说话工具当场报给了它，且收到报告的那一轮好好做完了（值班的管理器记下，`CueKeeper`）。
+  /// 之后不再作为变化报给它（`CueChange.Kind.undelivered`）。本机列：管理器与它的工具在同一台 Mac 上。
+  public func markCueTold(_ requests: [UUID]) throws {
+    guard !requests.isEmpty else { return }
+    try write {
+      try db.run(
+        "UPDATE deliveryRequests SET cueToldAt = ? WHERE id IN (SELECT value FROM json_each(?)) AND status = 'failed'",
+        [Date.stamp, Self.idList(requests)])
     }
   }
 

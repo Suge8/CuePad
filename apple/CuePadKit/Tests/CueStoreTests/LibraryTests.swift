@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 36：撤掉 37（验收标记下线）。
-  static let undoSchema37 = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
+  /// 把新建的库退回结构 37：撤掉 38（请求上记 Cue 已从工具结果得知没送到，本机列）。
+  static let undoSchema38 = "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
+  /// 退回结构 36：再撤掉 37（验收标记下线）。
+  static let undoSchema37 = undoSchema38 + "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 35：再撤掉 36（本机的会话进程表）。
   static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。

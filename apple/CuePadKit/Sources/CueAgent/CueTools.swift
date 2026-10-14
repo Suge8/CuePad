@@ -296,11 +296,20 @@ public struct CueTools: Sendable {
     case .failed(let failure):
       structured["status"] = "failed"
       let reason = if case .reported(let reason) = failure { reason } else { DeliveryRequest.unexplainedFailure }
-      return Result(text: "\(what)：没送到——\(reason)\(tail)", structured: structured, isError: true)
+      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", structured: structured, isError: true)
     case .sending:
       structured["status"] = "sending"
       return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)", structured)
     }
+  }
+
+  /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
+  /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
+  static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
+
+  /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。
+  public static func undeliveredRequests(in result: String) -> [UUID] {
+    result.matches(of: /\[请求 ([0-9a-f-]{36})\]/).compactMap { UUID(uuidString: String($0.1)) }
   }
 
   /// 等请求有结果，至多到写下后 `wait`；到点还没结果返回此刻的记录。等的是别的进程（执行它的 Mac 上的 App）写回的结果：

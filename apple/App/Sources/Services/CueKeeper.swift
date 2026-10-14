@@ -399,11 +399,23 @@ final class CueKeeper {
                 if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
             } else {
                 setback = nil
+                await markTold(finished.round)
                 await advanceBaseline(finished.baseline)
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
             await broke(reason.map { "大脑退出了（\($0)）" } ?? "大脑退出了")
+        }
+    }
+
+    /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——
+    /// 工具写出了结果、这一轮却断了（大脑被杀、重起），Cue 没看到，下一轮照样报。
+    private func markTold(_ round: CueRound) async {
+        let told = round.calls.filter(\.failed).flatMap { CueTools.undeliveredRequests(in: $0.result ?? "") }
+        do {
+            try await setup.store.markCueTold(told)
+        } catch {
+            Self.log.error("Cue 记下已知道的失败没写成，下一轮会再报一次：\(error.localizedDescription, privacy: .public)")
         }
     }
 
