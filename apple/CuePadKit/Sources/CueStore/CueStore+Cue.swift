@@ -24,7 +24,7 @@ extension CueStore {
   }
 
   /// 回答 Cue 的一条消息（"等你"的那种）。已答过的改成新的回答。回答照常交给 Cue（`toDeliver`）。
-  /// 对关联了任务的验收（选项是 `CueAcceptance.choices`）答 `accept` 就是收下：同一个事务里完成任务，同你点圆圈
+  /// 对关联了任务的验收（`CueMessage.isAcceptance`）答 `accept` 就是收下：同一个事务里完成任务，同你点圆圈
   /// （连同结束做完了的会话，请求算你发起的）；返回结束请求，调用方上传。
   @discardableResult
   public func answerCueMessage(_ id: UUID, answer: String) throws -> [DeliveryRequest] {
@@ -32,7 +32,7 @@ extension CueStore {
       let now = Date.stamp
       try db.run("UPDATE cueMessages SET answer = ?, answeredAt = ?, modifiedAt = ? WHERE id = ?", [answer, now, now, id])
       guard db.changes > 0, let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
-      guard answer == CueAcceptance.accept, message.author == .known(.cue), message.choices == CueAcceptance.choices,
+      guard answer == CueAcceptance.accept, message.isAcceptance,
         let task = message.taskID, let card = try find(Card.self, task), card.status != nil, card.status != .done
       else { return [] }
       _ = try applyStatus(task, .done)

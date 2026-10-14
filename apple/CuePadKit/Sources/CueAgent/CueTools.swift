@@ -33,11 +33,11 @@ public struct CueTools: Sendable {
         "description": """
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
-          start{task,agent?,model?,effort?,fresh?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
+          start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成，会话留给下一步；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
+          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成（还有下一步时会话留着）；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
           """,
         "inputSchema": schema(
           [
@@ -133,8 +133,7 @@ public struct CueTools: Sendable {
     _ = try await host()  // 停用后不能再收尾
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
     guard card.parentID == nil, args.bool("accepted") != true else {
-      // 步骤收尾不结束会话：同一任务的下一步接着用，你收下整件事时一起结束
-      let ends = try await store.completeTask(card.id, requireStepsDone: true, endsSessions: card.parentID == nil, cue: true)
+      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
       return .ok(
         "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
         ["task": id(card.id), "requests": ends.map { id($0.id) }])
@@ -218,16 +217,15 @@ public struct CueTools: Sendable {
     let effort = try Self.effort(args)
     let request = try await store.startLeaf(
       leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: model, thinking: effort, host: try await host(), cue: true)
-    let started = request?.mode == .known(.start), continued = leaf.piSessionID == nil && !started
+    let started = request.mode == .known(.start), continued = leaf.piSessionID == nil && !started
     let text =
       started
-      ? "已请 Mac 为「\(leaf.heading)」开新会话" + (request?.launch?.prompt == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
+      ? "已请 Mac 为「\(leaf.heading)」开新会话，草稿作为第一句。"
       : continued
-        ? "「\(leaf.heading)」接着用上一步的会话" + (request == nil ? "（没有草稿，用 say 说下一句）。" : "，草稿作为下一句发进去了。")
+        ? "「\(leaf.heading)」接着用上一步的会话，草稿作为下一句发出去了（送到后这一步绑上它）。"
         : "草稿已发进「\(leaf.heading)」的会话。"
-    var data: [String: Any] = ["task": id(leaf.id), "started": started, "continued": continued]
-    if let request { data["request"] = id(request.id) }
-    return .ok(text + "（\(leaf.id.shortID)）", data)
+    return .ok(
+      text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "started": started, "continued": continued])
   }
 
   private static func effort(_ args: Args) throws -> PiThinkingLevel? {
@@ -293,7 +291,7 @@ public struct CueTools: Sendable {
             "id": id(item.task.id), "title": item.task.heading, "leaf": id(item.leaf.id),
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
             "session": item.session?.sessionID ?? NSNull(), "state": item.session?.state.rawValue ?? NSNull(),
-            "launching": item.launching, "since": iso(item.since),
+            "launching": item.launching, "sending": item.sending, "since": iso(item.since),
           ]
         }
       ])
@@ -354,7 +352,7 @@ public struct CueTools: Sendable {
         head += " · \(Self.agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
         if let question = session.question { head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）") }
       } else {
-        head += " · 没有会话"
+        head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"
       }
       lines.append(head)
       if let draft = leaf.draft { lines.append("  草稿：\(CueEnvelope.clip(CueFormat.plainText(draft.body), 200))") }
