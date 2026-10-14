@@ -821,6 +821,9 @@ final class AgentTape: @unchecked Sendable {
         return pairs.filter { $0.0.count >= 4 }
     }()
     private static let jwt = #"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+"#
+    fileprivate static var isoPattern: String { iso }
+    fileprivate static var millisecondsPattern: String { milliseconds }
+    fileprivate static var secondsPattern: String { seconds }
     private static let iso = #"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})"#
     private static let milliseconds = #"(?<![0-9.])1[6-9][0-9]{11}(?![0-9])"#
     private static let seconds = #"(?<![0-9.])1[6-9][0-9]{8}(?![0-9])"#
@@ -1006,17 +1009,22 @@ private enum TapeCompare {
             for (r, n) in zip(x, y) where r != n { replay.substitutions[r] = n }
             return nil
         }
-        if e.replacing(/[0-9]/, with: "") == a.replacing(/[0-9]/, with: "") { return nil }  // 只差在数字（时间）
-        if withoutScratchNames(e) == withoutScratchNames(a) { return nil }  // 只差在临时文件名（mkstemp 的随机名）
+        if timeless(e) == timeless(a) { return nil }  // 只差在此刻的时间
         let same = zip(e, a).prefix { $0 == $1 }.count
         func around(_ text: String) -> String { String(text.dropFirst(max(0, same - 60)).prefix(200)).replacing("\u{1}", with: " ") }
         return "「…\(around(a))」而不是「…\(around(e))」"
     }
 
-    private static let scratch = (NSTemporaryDirectory() as NSString).standardizingPath
-
-    private static func withoutScratchNames(_ text: String) -> String {
-        AgentTape.replacing(NSRegularExpression.escapedPattern(for: scratch) + #"/[^\s"\x{1}]+"#, in: text) { _ in "T" }
+    /// 此刻前后两天内的时间（ISO、毫秒、秒）换成同一个记号；别的数字照比
+    private static func timeless(_ text: String) -> String {
+        var text = AgentTape.replacing(AgentTape.isoPattern, in: text) { _ in "{time}" }
+        for pattern in [AgentTape.millisecondsPattern, AgentTape.secondsPattern] {
+            text = AgentTape.replacing(pattern, in: text) { groups in
+                let value = Double(groups[0] ?? "") ?? 0
+                return isTime(value) ? "{time}" : groups[0]!
+            }
+        }
+        return text
     }
 
     private static func isTime(_ value: Double) -> Bool {

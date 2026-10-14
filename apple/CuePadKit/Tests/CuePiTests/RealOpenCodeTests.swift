@@ -97,7 +97,7 @@ final class OpenCodeSandbox {
 /// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(RealAgents.live(.opencode, "它的 HTTP/SSE 边界还没接进录像带"), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.live(.opencode, "录不出录像带：要 OpenCode v2，它的免费模型拒绝自行构建的 v2，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     private func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
