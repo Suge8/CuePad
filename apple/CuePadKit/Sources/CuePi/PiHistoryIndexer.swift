@@ -4,7 +4,7 @@ import Foundation
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件）：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
 /// 用 FSEvents 跟随文件变化，只读新增字节。Codex 的常驻服务整段会话都开着会话文件写，FSEvents 只在关闭时报它的变化：
-/// 它的文件凡在内存里留着检查点（见下），同时另盯追加（`FSEventsWatcher.follow`），检查点被挤出时才不盯——在写的会话一直在最近被触碰的那批里。
+/// 它最近写过的文件另盯追加（`FSEventsWatcher.follow`，见 `Followed`）。
 ///
 /// 不持有全部检查点：起点由调用方通过 `checkpoint` 提供（App 层从 Store 读），每个 `updated`
 /// 里带回新检查点由调用方持久化。索引器只对最近修改/最近被触碰的若干文件在内存里保留检查点，
@@ -17,6 +17,8 @@ public struct PiHistoryIndexer: Sendable {
     private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
 
     private static let liveCacheLimit = 64
+    /// 同时另盯追加的 Codex 文件数：每个占一个文件描述符，GUI 应用默认只有 256 个
+    private static let followLimit = 64
 
     /// - Parameter transcriptWindow: 首次读（没有检查点）时只为这么久之内修改过的会话文件解析对话（按修改时间，不读内容），
     ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:files:)`）。
@@ -47,23 +49,24 @@ public struct PiHistoryIndexer: Sendable {
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
         var excluded: Set<URL> = []
+        var followed = Followed(limit: Self.followLimit)
 
         func index(_ file: URL, modified: Date?, remember: Bool) async {
             let base: PiHistoryCheckpoint?
             if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
-            let recent = (modified ?? Self.modified(file)).map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
+            let written = modified ?? Self.modified(file)
+            let recent = written.map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
             guard let update = try? PiHistory.index(file: file, agent: agent, from: base, transcript: recent, files: files) else { return }
-            if remember {
-                let evicted = live.store(file, update.checkpoint)
-                if keepsFilesOpen {
-                    if let evicted { watcher.unfollow(evicted.path) }
-                    watcher.follow(file.path)
-                }
-            }
+            if remember { live[file] = update.checkpoint }
             if update.checkpoint.excluded == true {
                 excluded.insert(file)
                 return
+            }
+            if keepsFilesOpen, let written {
+                let change = followed.note(file.path, writtenAt: written)
+                if let dropped = change.dropped { watcher.unfollow(dropped) }
+                if change.follows { watcher.follow(file.path) }
             }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
@@ -81,7 +84,10 @@ public struct PiHistoryIndexer: Sendable {
         for await paths in watcher.paths {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
-                for file in Self.sessionFiles(under: root, depth: depth) { await index(file.url, modified: file.modified, remember: true) }
+                // 与回填一样只记住最近修改的那批：从新到旧全记住会让旧文件把新的挤出缓存
+                for (rank, file) in Self.sessionFiles(under: root, depth: depth).enumerated() {
+                    await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
+                }
                 continue
             }
             for path in Set(paths) where Self.isSessionFile(path, under: root, depth: depth) {
@@ -92,6 +98,31 @@ public struct PiHistoryIndexer: Sendable {
 
     /// Agent 写会话文件时一直开着它（Codex）；Pi、Claude Code 每次追加都关上，FSEvents 报得到。
     private var keepsFilesOpen: Bool { agent == .codex }
+
+    /// 另盯追加的文件：按文件的修改时间留最近写过的 `limit` 个，满了换下最久没写的那个。
+    /// 不按被读到的先后：重扫、旧文件的迟到通知都会读到旧文件，它们不该把还在写的会话挤掉。
+    private struct Followed {
+        let limit: Int
+        private var writtenAt: [String: Date] = [:]
+
+        init(limit: Int) { self.limit = limit }
+
+        /// 读到一个文件时记下它的修改时间：返回要不要盯它、换下了哪个。
+        mutating func note(_ path: String, writtenAt date: Date) -> (follows: Bool, dropped: String?) {
+            if let known = writtenAt[path] {
+                writtenAt[path] = max(known, date)
+                return (true, nil)
+            }
+            guard writtenAt.count >= limit else {
+                writtenAt[path] = date
+                return (true, nil)
+            }
+            guard let oldest = writtenAt.min(by: { $0.value < $1.value }), oldest.value < date else { return (false, nil) }
+            writtenAt[oldest.key] = nil
+            writtenAt[path] = date
+            return (true, oldest.key)
+        }
+    }
 
     /// 会话文件在 `root` 下第几层，与各家自己的会话列表一致：Pi 与 Claude Code 是 `<root>/<项目目录>/*.jsonl`（更深的，如子代理的
     /// `<项目目录>/…/subagents/*.jsonl`，不是会话列表里的会话）；Codex 是 `<root>/YYYY/MM/DD/rollout-*.jsonl`。
@@ -132,17 +163,15 @@ public struct PiHistoryIndexer: Sendable {
         private var values: [URL: PiHistoryCheckpoint] = [:]
         private var order: [URL] = []
 
-        subscript(file: URL) -> PiHistoryCheckpoint? { values[file] }
-
-        /// 记下（成为最近的一个），返回因此挤出的文件。
-        mutating func store(_ file: URL, _ checkpoint: PiHistoryCheckpoint) -> URL? {
-            order.removeAll { $0 == file }
-            values[file] = checkpoint
-            order.append(file)
-            guard order.count > limit else { return nil }
-            let evicted = order.removeFirst()
-            values[evicted] = nil
-            return evicted
+        subscript(file: URL) -> PiHistoryCheckpoint? {
+            get { values[file] }
+            set {
+                order.removeAll { $0 == file }
+                guard let newValue else { values[file] = nil; return }
+                values[file] = newValue
+                order.append(file)
+                if order.count > limit { values[order.removeFirst()] = nil }
+            }
         }
     }
 }
