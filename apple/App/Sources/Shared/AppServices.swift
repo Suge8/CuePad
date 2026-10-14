@@ -68,6 +68,8 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
+    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：大于 0 时不推 Cue 的通知（Mac 本机通知、iOS 前台的系统横幅），iOS 顶上的提示横幅也让给 Cue 页自己的。
+    var cueViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -102,9 +104,11 @@ final class AppServices {
         uploadResult: { [weak self] id in await self?.upload(id) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
-    @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
-        self?.windowShell?.toggleFromHotkey()
-    }
+    /// "显示或隐藏 CuePad"的全局快捷键。
+    @ObservationIgnored lazy var hotkey = GlobalHotkey(
+        label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
+        backend: hotkeyBackend
+    ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
     nonisolated enum StartupIssue: Equatable {
@@ -158,17 +162,9 @@ final class AppServices {
         return request
     }
 
-    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒），也不排在引擎正在做的事后面（`CloudSync.sendNow`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
-    /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
+    /// 立即上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
     func upload(_ record: UUID, deleted: Bool = false) async {
-        guard let sync else { return }
-        let began = Date.now
-        do {
-            try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
-            Self.log.info("立即上传 \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
-        } catch {
-            Self.log.notice("立即上传记录失败，等引擎自动上传：\(error.localizedDescription, privacy: .public)")
-        }
+        await sync?.upload(record, deleted: deleted)
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
@@ -315,7 +311,8 @@ final class AppServices {
         piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings, isEnabled: !location.isIsolated || mac.paths.isExplicit)
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
-        cue = CueService(store: store, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.agentDirectory, dependencies: mac.cue)
+        cue = CueService(
+            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

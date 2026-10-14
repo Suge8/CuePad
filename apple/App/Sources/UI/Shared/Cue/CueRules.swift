@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 此刻在做什么（头像的表情与环、页头的一句、菜单栏面板的一行）。Cue 住在这台 Mac 上时就是管理器的状态（`services.cue.state`，见 `CueWatch`）；
+/// Cue 此刻在做什么（头像的表情与环、页头的一句、菜单栏面板的一行）。在这台 Mac 值班时由管理器给出（`services.cue.state`，见 `CueWatch`）；
 /// 手机与别的 Mac 上没有管理器，由库推出（`derive`）：没启用；你最近一句已交给它、之后它还没说话是在想；
 /// 没交出去超过 `undeliveredGrace` 是在睡觉（它住的那台 Mac 多半没开）。
 nonisolated enum CuePresence: Equatable, Sendable {
@@ -24,17 +24,6 @@ nonisolated enum CuePresence: Equatable, Sendable {
         if pending.delivered { return .thinking }
         return overdue ? .asleep : .thinking
     }
-
-    #if os(macOS)
-    /// 管理器的状态（只在 Cue 启用且住在这台 Mac 时用）：还没开始值班的那一下算空闲。
-    init(_ state: CueState) {
-        switch state {
-        case .asleep, .idle: self = .idle
-        case .thinking: self = .thinking
-        case .failed(let reason): self = .unreachable(reason)
-        }
-    }
-    #endif
 
     /// 头像变暗、闭眼：它此刻不会接话。
     var isAway: Bool {

@@ -6,21 +6,10 @@ import Observation
 import UserNotifications
 import os
 
-/// Cue 在这台 Mac 上的样子（`CueService.state`）。
-enum CueState: Equatable {
-    /// 没启用，或住在别的 Mac
-    case asleep
-    case idle
-    /// 在跑一轮
-    case thinking
-    /// 起不来（原因）；你的下一条消息会让它再试
-    case failed(String)
-}
-
 /// 管理器的外部依赖；`MacDependencies.cue` 给出，测试换成替身。
 struct CueDependencies {
     /// 查本机装了且登录了的运行时（生产是 `CueRuntimes.scan`，慢）
-    var scan: @Sendable () async -> [CueRuntimeOption]
+    var scan: @Sendable () async -> [CueRuntime]
     /// 起大脑前找可执行文件等（生产是 `CueRuntimes.launch`，不问登录）
     var launch: @Sendable (CueRuntime) async -> CueLaunch?
     /// App 里的 `cuepad` 命令行：Cue 的 MCP 服务
@@ -36,23 +25,22 @@ protocol CueNotifying: AnyObject {
 }
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
+/// - 设置只经这里写（启用、停用、`update`），写完立即上传：手机与别的 Mac 马上看到。
 /// - 启用：按 `CueRuntimes.order` 选第一家装了且登录了的运行时，写 `cueProfile`（住这台 Mac、默认模型、低思考强度）；
-///   另一台 Mac 启用就是接管，这台看到 `hostID` 变了就停下。停用只清 `enabledAt`。
-/// - Cue 住在这台 Mac 且已启用时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
+///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
+/// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
 /// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时重新查（状态命令慢）。
-/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页没开着、本地 8–23 点之间，
+/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页不在前台、不在打扰时段（`CueTiming.quietHours`），
 ///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
 final class CueService {
-    private(set) var state: CueState = .asleep
+    /// 值班时 Cue 此刻的样子（管理器说了算）；不在这台 Mac 值班为 nil，界面按库推（`CuePresence.derive`）。
+    private(set) var state: CuePresence?
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
     private(set) var runtimes: [CueRuntime] = []
-    /// 开着的 Cue 页数：Cue 页出现时加一、消失时减一。大于 0 时不推通知。
-    var pageViewers = 0
-    /// 点开了 Cue 的通知：界面打开 Cue 页后调 `consumeOpen()`。
-    private(set) var pendingOpen = false
 
     @ObservationIgnored private let store: CueStore
+    @ObservationIgnored private let sync: (any SyncControlling)?
     @ObservationIgnored private let hostID: String
     @ObservationIgnored private let library: URL
     @ObservationIgnored private let piAgentDirectory: URL
@@ -70,8 +58,9 @@ final class CueService {
         var effort: Open<PiThinkingLevel>?
     }
 
-    init(store: CueStore, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
+    init(store: CueStore, sync: (any SyncControlling)?, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
         self.store = store
+        self.sync = sync
         self.hostID = hostID
         self.library = library
         self.piAgentDirectory = piAgentDirectory
@@ -88,9 +77,9 @@ final class CueService {
     /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）。
     func enable() async throws {
         guard let pick = await refreshRuntimes().first else { throw EnableError.noRuntime }
-        try await store.updateCueProfile { [hostID] profile in
+        try await update { [hostID] profile in
             profile.hostID = hostID
-            profile.runtime = .known(pick.runtime)
+            profile.runtime = .known(pick)
             profile.model = nil
             profile.effort = .known(.low)
             profile.enabledAt = .now
@@ -98,21 +87,19 @@ final class CueService {
     }
 
     func disable() async throws {
-        try await store.updateCueProfile { $0.enabledAt = nil }
+        try await update { $0.enabledAt = nil }
+    }
+
+    /// 改设置（名字、运行时、模型、思考强度）并立即上传。
+    func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
+        try await store.updateCueProfile(edit)
+        await sync?.upload(CueProfile.recordID)
     }
 
     @discardableResult
-    func refreshRuntimes() async -> [CueRuntimeOption] {
-        let available = await dependencies.scan()
-        runtimes = available.map(\.runtime)
-        return available
-    }
-
-    func requestOpen() { pendingOpen = true }
-
-    func consumeOpen() -> Bool {
-        defer { pendingOpen = false }
-        return pendingOpen
+    func refreshRuntimes() async -> [CueRuntime] {
+        runtimes = await dependencies.scan()
+        return runtimes
     }
 
     /// 跟着设置值班，直到任务取消。
@@ -126,18 +113,20 @@ final class CueService {
         await endDuty()
     }
 
-    /// 退出收尾：立即不再值班；返回的等待只停大脑（不在主线程上，见 `AppServices.beginShutdown`）。
-    func beginStop() -> @Sendable () async -> Void {
-        let brain = duty?.keeper.brain
-        duty?.task.cancel()
-        duty = nil
-        return { await brain?.stop() }
+    /// 退出收尾：立即不再值班；返回的过程等大脑退出（不需要主线程，见 `AppServices.beginShutdown`）。
+    func stop() -> @Sendable () async -> Void {
+        guard let duty else { return {} }
+        self.duty = nil
+        state = nil
+        let stopping = duty.keeper.stop()
+        duty.task.cancel()
+        return stopping
     }
 
     private func apply(_ profile: CueProfile?) async {
         if let runtime = profile?.runtime, let last = lastRuntime, runtime != last { Task { await refreshRuntimes() } }
         lastRuntime = profile?.runtime ?? lastRuntime
-        guard let profile, profile.hostID == hostID, profile.enabledAt != nil else { return await endDuty() }
+        guard let profile, profile.activeHost == hostID else { return await endDuty() }
         let shift = Shift(name: profile.name, runtime: profile.runtime, model: profile.model, effort: profile.effort)
         guard duty?.shift != shift else { return }
         await endDuty()
@@ -147,7 +136,7 @@ final class CueService {
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing)
         ) { [weak self] in self?.state = $0 }
-        state = .idle
+        state = keeper.presence
         duty = (shift, keeper, Task { await keeper.run() })
     }
 
@@ -156,13 +145,13 @@ final class CueService {
         self.duty = nil
         duty.keeper.stop()
         await duty.task.value
-        state = .asleep
+        state = nil
     }
 
     // MARK: 通知
 
-    /// 推"等你"与 urgent 的 Cue 消息，直到任务取消。只推这次启动之后新写的。
-    func followNotifications() async throws {
+    /// 推"等你"与 urgent 的 Cue 消息，直到任务取消。只推这次启动之后新写的；`viewing` 为真（Cue 页在前台）时不推。
+    func followNotifications(viewing: @escaping () -> Bool) async throws {
         let since = Date.now
         var seen = Set<UUID>()
         for try await messages in store.observe({ try $0.cueMessages(limit: 20) }) {
@@ -170,7 +159,7 @@ final class CueService {
                 $0.author == .known(.cue) && $0.createdAt >= since && ($0.choices != nil || $0.urgent) && !seen.contains($0.id)
             }
             seen.formUnion(fresh.map(\.id))
-            guard duty != nil, pageViewers == 0, !dependencies.timing.quietHours.contains(Calendar.current.component(.hour, from: .now)) else { continue }
+            guard duty != nil, !viewing(), !dependencies.timing.isQuiet(.now) else { continue }
             let name = (try? await store.cueProfile())?.name
             for message in fresh {
                 let alert = CueAlert.content(name: name, text: message.text, choices: message.choices)

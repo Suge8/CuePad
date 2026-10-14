@@ -8,29 +8,23 @@ import SwiftUI
 /// 快捷键存在设备偏好里；注册失败记成启动问题，设置里换一个。
 @Observable
 final class CueBar {
-    /// ⌥Space 是"显示或隐藏 CuePad"的默认，这里错开一个 ⇧。
-    static let defaultShortcut = "Alt+Shift+Space"
-    private static let shortcutKey = "cueShortcut"
     /// 唤出处离屏幕顶边的比例。
     private static let anchorFraction: CGFloat = 0.28
 
-    private(set) var shortcut: String
     /// 唤出的次数：输入条看它变了就聚焦。
     private(set) var opens = 0
     @ObservationIgnored private let panel = MenuBarPanel()
-    @ObservationIgnored private let settings: AppSettings
-    @ObservationIgnored private var hotkey: GlobalHotkey?
+    @ObservationIgnored private let services: AppServices
+    /// ⌥Space 是"显示或隐藏 CuePad"的默认，这里错开一个 ⇧。
+    @ObservationIgnored private(set) lazy var hotkey = GlobalHotkey(
+        label: "对 Cue 说", key: AppSettings.Key.cueShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: services.settings.defaults,
+        backend: services.hotkeyBackend
+    ) { [weak self] in self?.toggle() }
 
     init(services: AppServices, workspace: Workspace) {
-        settings = services.settings
-        shortcut = services.settings.defaults.string(forKey: Self.shortcutKey) ?? Self.defaultShortcut
-        hotkey = GlobalHotkey(backend: services.hotkeyBackend) { [weak self] in self?.toggle() }
+        self.services = services
         panel.setContent(CueBarView(bar: self).environment(workspace).modifier(PaletteProvider()).environment(services))
-        do {
-            try register(shortcut)
-        } catch {
-            services.reportIssue(.globalShortcutUnavailable("对 Cue 说（\(ShortcutText.display(shortcut))）：\(error)"))
-        }
+        services.register(hotkey)
     }
 
     func toggle() {
@@ -41,23 +35,5 @@ final class CueBar {
     }
 
     func hide() { panel.hide() }
-
-    /// 换快捷键：注册成功才写进偏好；失败时旧的照用，错误交给设置页。
-    func setShortcut(_ accelerator: String) throws {
-        let normalized = try register(accelerator)
-        shortcut = normalized
-        settings.defaults.set(normalized, forKey: Self.shortcutKey)
-    }
-
-    @discardableResult
-    private func register(_ accelerator: String) throws -> String {
-        guard let parsed = Shortcut(accelerator: accelerator), let normalized = parsed.accelerator else {
-            throw HotkeyError.unsupportedAccelerator(accelerator)
-        }
-        try hotkey?.register(parsed)
-        return normalized
-    }
-
-    func unregister() { hotkey?.unregister() }
 }
 #endif
