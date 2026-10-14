@@ -168,7 +168,7 @@ struct ProjectScreen: View {
 }
 
 /// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（前 3 条没做完的顶层任务连同步骤，
-/// 可拖动、缩进，同任务页；没列出的与最近完成的在纸底写个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`；收起其余任务一步到位、纸底那一行留在原处，见 `TaskFoldAnchor`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
+/// 可拖动、缩进，同任务页；没列出的与最近完成的在纸底写个数，点了在纸里原地展开（无回弹弹簧）、各自开合，见 `TaskFold`；收起其余任务时纸底那一行留在原处、位置一步到位、纸上留下的几行淡入，见 `TaskFoldAnchor`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
 /// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
 /// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
@@ -178,6 +178,8 @@ private struct FocusCard: View {
     @Binding var fold: TaskFold
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
+    /// 收起其余任务的次数：每次收起，纸上留下的那几行淡入。
+    @State private var collapses = 0
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -188,6 +190,8 @@ private struct FocusCard: View {
     /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
     private static let lazyFrom = 20
+    /// 收起后纸上留下的那几行淡入多久（同 `Motion.quick`）。
+    private static let revealDuration = 0.16
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -218,9 +222,17 @@ private struct FocusCard: View {
                 let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
                 let done = data.taskCounts.done
                 if !roots.isEmpty {
-                    SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                    TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
-                        TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
+                    Group {
+                        SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
+                        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
+                        TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
+                            let line = TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
+                            if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
+                        }
+                    }
+                    .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
+                        MoveKeyframe(0.0)
+                        LinearKeyframe(1.0, duration: Self.revealDuration)
                     }
                 }
                 if hidden > 0 || done > 0 {
@@ -230,7 +242,7 @@ private struct FocusCard: View {
                         if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
                     }
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
-                    .taskFoldBar(anchor, folded: !fold.showsAll)
+                    .taskFoldBar(anchor)
                 }
                 if fold.showsDone {
                     // 同任务页里已完成的行：淡一档，点圆圈回到待办
@@ -267,7 +279,11 @@ private struct FocusCard: View {
     }
 
     private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
-        if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, scrolling: $position) }
+        if key == \.showsAll, fold.showsAll {
+            // 收起是一步到位的（`TaskFoldAnchor`：纸底那一行留在原处，没有能跟着弹簧走的位移），换上来的那几行淡入；减弱动态效果时同样
+            collapses += 1
+            return anchor.collapse($fold, scrolling: $position)
+        }
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
     }
 

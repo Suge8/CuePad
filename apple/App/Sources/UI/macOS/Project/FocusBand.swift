@@ -45,14 +45,16 @@ struct FocusBand: View {
         let roots = data.tasks.roots
         let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
         let shown = fold.shown(roots, limit: Self.visibleTasks)
+        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
         let done = data.taskCounts.done
         // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
             TaskOutline(tree: data.tasks, roots: shown, lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
                 let agent = cardAgents.items[row.id]
-                TaskRow(
+                let line = TaskRow(
                     task: row.task, session: agent?.state, delivery: agent?.delivery,
                     subtasks: data.subtasks[row.id], hasDraft: data.prompts[row.id] != nil)
+                if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
             }
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {
@@ -62,7 +64,7 @@ struct FocusBand: View {
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 .padding(.horizontal, TaskRow.inset + TaskRow.ringColumn + TaskRow.columnGap).padding(.vertical, 6)
-                .taskFoldBar(anchor, folded: !fold.showsAll)
+                .taskFoldBar(anchor)
             }
             if fold.showsDone {
                 // 同任务面板里已完成的行：淡一档，点圆圈回到待办

@@ -95,10 +95,11 @@ struct ProjectPage: View {
         let lastTarget = shape.lastTarget
         if stage < .focus {
             EmptyView()
-        } else if !data.tasks.isEmpty {
+        } else if !data.tasks.isEmpty || data.taskCounts.done > 0 {
+            // 没做完的都做完了也留着任务纸：纸底的"已完成"要能原地展开、点圆圈回到待办
             FocusBand(data: data, guide: workspace.folderGuide, position: $position, anchor: anchor)
         } else if let project = projectID {
-            // 没有任务：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与任务区里同一个组件）
+            // 一条任务都没有：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与任务区里同一个组件）
             VStack(alignment: .leading, spacing: 12) {
                 NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
