@@ -9,7 +9,7 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 require_asc
 
 mode="${1:-}"
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
+DERIVED="$APPLE_DIR/.derived"
 OUT="$DERIVED/release/ios"
 provision="$APPLE_DIR/scripts/provision.py"
 

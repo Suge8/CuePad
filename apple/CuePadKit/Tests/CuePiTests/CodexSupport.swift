@@ -7,12 +7,9 @@ import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（不在就跳过真 Codex 的测试）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
+/// 本机装的 Codex（录制时用）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-/// 真 Codex 的用例开了（`RealAgents`）且本机装了 codex
-let realCodexAvailable = RealAgents.on(.codex) && realCodexURL != nil
 let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
-let realCodexSignedIn = realCodexAvailable && FileManager.default.fileExists(atPath: realCodexAuth.path)
 /// 账号里最便宜的模型
 let codexTestModel = "gpt-6-luna"
 
@@ -27,6 +24,7 @@ func copyCodexAuth(to file: URL) throws {
     let format = ISO8601DateFormatter()
     format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     auth["last_refresh"] = format.string(from: .now)
+    AgentTape.current?.secret(tokens: auth)
     try JSONSerialization.data(withJSONObject: auth).write(to: file, options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
 }
@@ -57,7 +55,7 @@ struct CodexHome {
     var paths: AgentPaths {
         AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
     }
-    var locator: ExecutableLocator { ExecutableLocator(searchDirectories: [realCodexURL!.deletingLastPathComponent()]) }
+    var locator: ExecutableLocator { AgentTape.locator("codex") }
     var environment: [String: String] {
         let isolated = ["CUEPAD_", "HERDR", "TMUX", "XDG_", "CLAUDE_", "OPENCODE_", "CODEX_", "PI_"]
         func path(_ name: String) -> String { root.appending(path: name).path }
@@ -74,11 +72,12 @@ struct CodexHome {
         for directory in [home, work, root.appending(path: "user")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
+        AgentTape.current?.watch(home.appending(path: "sessions"), home.appending(path: "config.toml"), work)
     }
 
     /// 能跑模型的配置：复制凭据、最便宜的模型、不检查更新、常驻服务不自动升级、工作目录受信任。
     func signIn(approvals: String = "never") throws {
-        try copyCodexAuth(to: home.appending(path: "auth.json"))
+        if AgentTape.current?.mode != .replay { try copyCodexAuth(to: home.appending(path: "auth.json")) }
         let config = """
             model = "\(codexTestModel)"
             model_reasoning_effort = "low"
@@ -124,7 +123,7 @@ struct CodexHome {
 
     /// 起一个指向这个配置目录的 app-server，用完（失败也一样）等它退出。
     @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
-        let rpc = try await CodexRPC.launch(realCodexURL!, environment: environment)
+        let rpc = try await CodexRPC.launch(AgentTape.executable("codex"), environment: environment)
         do {
             try await body(rpc)
         } catch {
@@ -158,6 +157,18 @@ final class CodexRig {
     /// 人在不在这台 Mac 前：默认不在（确认交给 CuePad）
     let presence: TestPresence
 
+    /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
+    /// 固定的 /tmp 链接，指向本次构建的 cuepad（录制时真钩子经它跑）。
+    static let hookHelper: URL = {
+        let link = URL(filePath: "/tmp/cuepad-test-helper/cuepad")
+        try! FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? link.checkResourceIsReachable()) != nil || (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) != nil {
+            try! FileManager.default.removeItem(at: link)
+        }
+        try! FileManager.default.createSymbolicLink(at: link, withDestinationURL: PiProcess.cuepad)
+        return link
+    }()
+
     /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
     init(approvals: String = "never") async throws {
         let codex = try CodexHome()
@@ -167,7 +178,7 @@ final class CodexRig {
         let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: Self.hookHelper).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()

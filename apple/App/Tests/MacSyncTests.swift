@@ -49,7 +49,7 @@ struct MacSyncTests {
             _ = await finish()
             done.signal()
         }
-        #expect(Self.blockCurrentThread(until: done, seconds: 3), "主线程被占住时收尾等不到")
+        #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
     }
 

@@ -10,19 +10,13 @@ import Foundation
 final class ClaudeStream {
     let process: LineProcess
     var onMessage: ((ClaudeJSON) -> Void)?
-    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`）变了：只算正文，文字块按换行连接；说到一半的块用 `text_delta` 累积，
-    /// 说完的块换成 `assistant` 行里的定稿（不发增量时也照样有全文）。新的一条消息开始（`message_start` 或换了消息 id）、
-    /// 转成工具调用（`tool_use` 块）、下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着
+    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）：文字块是段，块号是段号，`text_delta` 追加，
+    /// 块说完时那一行完整的 `assistant`（一行一块）是定稿。新的一条消息开始（`message_start` 或换了消息 id）、转成工具调用（`tool_use` 块）、
+    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着
     var onDraft: ((PiDraft?) -> Void)?
-    private var draft: PiDraft?
-    /// 主会话正在说的这条消息：说完的文字块（定稿）与说到一半的那块（增量）
-    private var speech = Speech()
-    private struct Speech {
-        var message: String?
-        var finished: [String] = []
-        var open = ""
-        var text: String { (finished + [open]).filter { !$0.isEmpty }.joined(separator: "\n") }
-    }
+    private var speech = DraftParts()
+    /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
+    private var openBlock: Int?
     /// 输出读完了（进程退出）；只调一次
     var onClose: (() -> Void)?
     private var requests: [String: CheckedContinuation<ClaudeJSON, any Error>] = [:]
@@ -114,48 +108,44 @@ final class ClaudeStream {
 
     private func streamed(_ message: ClaudeJSON) {
         guard isMain(message), let event = message["event"] else { return }
+        let index = event["index"]?.number.map { Int($0) }
         switch event["type"]?.string {
         case "message_start":
             restart(event["message"]?["id"]?.string)
         case "content_block_start" where event["content_block"]?["type"]?.string == "tool_use":
             restart(speech.message)
+        case "content_block_start" where event["content_block"]?["type"]?.string == "text":
+            openBlock = index
         case "content_block_delta" where event["delta"]?["type"]?.string == "text_delta":
             guard let text = event["delta"]?["text"]?.string else { return }
-            speech.open += text
-            publish()
+            speech.append(text, to: index ?? openBlock ?? 0)
+            onDraft?(speech.draft)
         default:
             break
         }
     }
 
-    /// 一个内容块说完了（完整的 `assistant` 行，一行一块）：文字块的定稿换下它的增量，工具调用清掉这条。
+    /// 一个内容块说完了（完整的 `assistant` 行）：文字块的定稿换下它的增量，工具调用清掉这条。
     private func finished(_ message: ClaudeJSON?) {
         let id = message?["id"]?.string
         if id != speech.message { restart(id) }
         for block in message?["content"]?.array ?? [] {
             switch block["type"]?.string {
             case "text":
-                speech.finished.append(block["text"]?.string ?? "")
-                speech.open = ""
+                speech.finish(openBlock ?? speech.lastPart.map { $0 + 1 } ?? 0, with: block["text"]?.string ?? "")
+                openBlock = nil
             case "tool_use": restart(id)
             default: break
             }
         }
-        publish()
+        onDraft?(speech.draft)
     }
 
     /// 重新开始一条（`message` 为它的 id）：清掉正在说的话。
     private func restart(_ message: String?) {
-        speech = Speech(message: message)
-        publish()
-    }
-
-    private func publish() {
-        let text = speech.text
-        let next = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: draft?.since ?? .now)
-        guard next != draft else { return }
-        draft = next
-        onDraft?(next)
+        speech = DraftParts(message: message)
+        openBlock = nil
+        onDraft?(nil)
     }
 
     private func closed() {
