@@ -218,7 +218,7 @@ struct CueWaitingDock: View {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    WaitingMark()
+                    PiStateGlyph(status: .asking)
                     Text((message.ask ?? .rule).question(task: ref?.task.heading))
                         .font(Typography.bodyStrong).foregroundStyle(palette.ink)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)

@@ -61,7 +61,10 @@ struct NoticeCapsule: View {
         HStack(spacing: 0) {
             Button { if let link = notice.link { workspace.notice = nil; navigation.show(link) } } label: {
                 HStack(spacing: 6) {
-                    Label { Text(notice.text) } icon: { Image(systemName: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")) }
+                    Label { Text(notice.text) } icon: {
+                        if let status = notice.status { PiStateGlyph(status: status) }
+                        else { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
+                    }
                     if notice.link != nil {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                             .accessibilityHidden(true)

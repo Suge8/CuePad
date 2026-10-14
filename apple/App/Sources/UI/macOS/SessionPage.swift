@@ -90,7 +90,7 @@ struct SessionPage: View {
                     if secondary {
                         PiQuestionDock(session: session, deliveries: digest.deliveries)
                         if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                            Callout(.failure, text: "没能结束：\(reason)", docked: true)
+                            Callout(.failed, text: "没能结束：\(reason)", docked: true)
                         }
                         PiReplyBar(
                             session: session, config: digest.config,

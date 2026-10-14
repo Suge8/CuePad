@@ -163,8 +163,8 @@ struct PiSessionRow: View {
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)
             if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
-                Image(systemName: "arrow.uturn.backward").font(style.meta.weight(.semibold)).foregroundStyle(palette.failure)
-                    .accessibilityLabel(unsent)
+                PiStateGlyph(status: .delivery(.failed)).font(style.meta.weight(.semibold))
+                    .accessibilityHidden(false).accessibilityLabel(unsent)
             }
             // 时间只占它要的宽度，名字拿剩下的
             PiElapsed(shown: shown, font: style.meta, style: .span).fixedSize()
