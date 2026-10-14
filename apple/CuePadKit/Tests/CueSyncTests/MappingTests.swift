@@ -35,6 +35,7 @@ import Testing
     try await store.addCueMessage(.cue, text: "要不要升级？", choices: ["要", "不要"], urgent: true, task: card.id)
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }
+    try await store.setCueState(.tool, detail: "建任务 · 修好登录页")
     return (card, hash)
   }
 

@@ -11,7 +11,7 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
-  case cueMessages, cueLines, cueProfile, cueSummaries
+  case cueMessages, cueLines, cueProfile, cueState, cueSummaries
 }
 
 extension Table {
@@ -19,7 +19,7 @@ extension Table {
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
     .accountQuotas,
-    .cueMessages, .cueLines, .cueProfile,
+    .cueMessages, .cueLines, .cueProfile, .cueState,
   ]
 
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
@@ -51,6 +51,7 @@ extension Table {
     case .cueMessages: CueMessage.columns
     case .cueLines: CueMemoryLine.columns
     case .cueProfile: CueProfile.columns
+    case .cueState: CueState.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     }
   }

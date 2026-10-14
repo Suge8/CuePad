@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 33：撤掉 34（叶子以前用过的会话）。
-  static let undoSchema34 = "DROP INDEX cards_formerSessionIDs; ALTER TABLE cards DROP COLUMN formerSessionIDs;"
+  /// 把新建的库退回结构 34：撤掉 35（Cue 此刻在做什么）。
+  static let undoSchema35 = "DROP TABLE cueState;"
+  /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。
+  static let undoSchema34 = undoSchema35 + "DROP INDEX cards_formerSessionIDs; ALTER TABLE cards DROP COLUMN formerSessionIDs;"
   /// 退回结构 32：再撤掉 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
   static let undoSchema33 = undoSchema34 + "ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。

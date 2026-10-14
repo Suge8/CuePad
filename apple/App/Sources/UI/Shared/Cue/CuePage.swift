@@ -2,12 +2,13 @@ import CueStore
 import SwiftUI
 
 /// Cue 页（Mac 内容区的一页、iPhone Agent 标签的第一屏、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
-/// 最上面是页头（大头像、名字、此刻在做什么），离开期间有变化时下面一张"你不在时"（`CueAwayCard`）；
+/// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`）；底部从上到下是跟进中的托盘（`CueTray`）、"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 连着的动态折成一行灰字（`CueNotes`），它在做事时末尾一行进展（`LiveLine`，同会话页）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 跟进的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
 struct CuePage: View {
-    /// iPad 右侧面板里：没有自己的顶栏，"会话"换到侧栏的 Agent 页。
+    /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上），"会话"换到侧栏的 Agent 页。
     var inPanel = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -18,7 +19,6 @@ struct CuePage: View {
     @Environment(\.tabPageReady) private var tabPageReady
     #endif
     @State private var thread: CueThread?
-    @State private var away: CueAway?
     @State private var follow = ChatFollow()
     @State private var window = Self.firstWindow
     @State private var opened: PreviewOpening?
@@ -34,14 +34,10 @@ struct CuePage: View {
     #endif
 
     private var cue: CueWatch { workspace.cue }
-    /// 头像露"在听"：输入框里有没说出去的话。
-    private var composing: Bool { !cue.draft.isEmpty(accepting: .images) }
 
     var body: some View {
         page
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
-            .task(id: active) { if active { await loadAway() } else { markSeen() } }
-            .onDisappear(perform: markSeen)
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(active: active))
@@ -88,9 +84,11 @@ struct CuePage: View {
             .animation(Motion.quick, value: workspace.notice)
             .modifier(NoticeFeedback(notice: workspace.notice))
         if inPanel {
-            body
+            body.safeAreaBar(edge: .top, spacing: 0) {
+                CueTitle().frame(height: FloatingHeaderLayout.height).glass(in: .capsule, ink: .legible)
+            }
         } else {
-            body.floatingHeader(cue.name, detail: Dotted(cue.presence.line(name: cue.name) ?? "")) { trailing }
+            body.floatingHeader(cue.name) { CueTitle() } trailing: { trailing }
         }
     }
 
@@ -114,15 +112,15 @@ struct CuePage: View {
         let thread = thread
         let rows = thread?.rows ?? []
         let first = max(0, rows.count - window)
-        return ChatScroll(followKey: FollowKey(thread), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
+        return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
-                if first == 0 { CueHead(composing: composing) }
-                if let away, !away.isEmpty {
-                    CueAwayCard(away: away) { withAnimation(Motion.quick) { self.away = nil } }
-                }
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
                 ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
+                if let shown = cue.presence.shown, let progress = cue.presence.progress {
+                    LiveLine(shown: shown, text: progress).transition(.entry)
+                }
             }
+            .animation(Motion.quick, value: cue.presence.progress)
         }
         .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
@@ -147,16 +145,18 @@ struct CuePage: View {
         window += Self.firstWindow
     }
 
-    /// 有新内容：多了消息、有一条被答了、派出的活变了。
+    /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
     private struct FollowKey: Equatable {
         var count: Int
         var last: Date?
         var waiting: Int
+        var live: Bool
 
-        init(_ thread: CueThread?) {
+        init(_ thread: CueThread?, live: Bool) {
             count = thread?.messages.count ?? 0
             last = thread?.messages.last?.modifiedAt
             waiting = thread?.waiting.count ?? 0
+            self.live = live
         }
     }
 
@@ -165,35 +165,16 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 8) {
             if let thread {
-                CueTray(board: thread.board, startsCollapsed: !thread.waiting.isEmpty) { opened = PreviewOpening(preview: $0) }
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = PreviewOpening(preview: $0) }
             }
             if cue.presence == .disabled {
                 CueEnableCard().transition(.opacity)
-            } else if cue.presence.isAway {
-                // 页头翻出屏幕之后，输入框上方仍看得到它为什么不接话
-                CueStatusLine().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18)
             }
             CueComposer(style: .page) { follow.jumpToNewest() }
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
-        .animation(Motion.quick, value: thread?.board.map(\.id))
-        .animation(Motion.quick, value: cue.presence)
+        .animation(Motion.quick, value: cue.presence == .disabled)
     }
-
-    // MARK: 你不在时
-
-    private func loadAway() async {
-        guard let since = services.settings.cueSeenAt else { return markSeen() }
-        do {
-            let found = try await CueAway.read(since: since, from: services.store)
-            withAnimation(Motion.quick) { away = found.isEmpty ? nil : found }
-        } catch {
-            workspace.fail(error)
-        }
-    }
-
-    private func markSeen() { services.settings.cueSeenAt = .now }
 }
 
 #if os(iOS)

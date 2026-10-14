@@ -95,7 +95,7 @@ extension AppServices {
     /// - 手机：有发往 Mac 还没结果的请求，或正在看 Agent 页、会话近况。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.state != nil)
+        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
         #else
         .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
         #endif

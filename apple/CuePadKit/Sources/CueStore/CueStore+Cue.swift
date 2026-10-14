@@ -258,6 +258,26 @@ extension CueStore {
   }
 }
 
+// MARK: 此刻
+
+extension CueStore {
+  /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
+  public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
+
+  /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
+  public func setCueState(_ state: PiWorkState, detail: String? = nil) throws {
+    try write {
+      let next = CueState(state: .known(state), detail: detail, modifiedAt: Date.stamp)
+      if let current = try cueState(), current.state == next.state, current.detail == next.detail { return }
+      try db.run(
+        """
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt
+        """, next.bindings)
+    }
+  }
+}
+
 // MARK: 回想
 
 /// `CueStore.recallCue` 的结果：命中的记忆（带序号）、对话与灵感任务。
