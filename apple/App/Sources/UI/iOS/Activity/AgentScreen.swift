@@ -161,7 +161,7 @@ struct AgentScreen: View {
             .animation(Motion.snappy, value: list.now.map(\.id))
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
-            .animation(Motion.quick, value: list.ends.mapValues(\.status))
+            .animation(Motion.quick, value: list.ends)
         }
     }
 
@@ -173,8 +173,8 @@ struct AgentScreen: View {
     }
 
     /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
-    private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
-        let endable = item.state.canEnd && end?.isOpen != true
+    private func row(_ item: PiSessionListItem, filtered: Bool, end: Speech.Trip?) -> some View {
+        let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { model.confirmingEnd = item.state }] : [])
@@ -376,14 +376,14 @@ private struct SessionRow: View {
     let item: PiSessionListItem
     let filtered: Bool
     /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
-    var end: DeliveryRequest?
+    var end: Speech.Trip?
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
 
     var body: some View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
+            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))

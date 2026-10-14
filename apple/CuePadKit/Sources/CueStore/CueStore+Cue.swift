@@ -319,16 +319,12 @@ extension CueStore {
     return profile.onDuty(try cueState(), hostOnline: try macOnline(host))
   }
 
-  /// 你最近一句对 Cue 说的话此刻到哪了（`Speech.trip`，与气泡同一条规则）；你还没说过为 nil。还在等回执时登记到点重读（`expire(at:)`），
-  /// 订阅它的（Cue 页的话在路上）到时限自己更新，界面不另计时。只说这句话自己的状态，不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
-  public func cueSpeech() throws -> Speech.Trip? {
-    let latest = try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
+  /// 你最近一句对 Cue 说的话：写下的时刻与交给它的时刻；你还没说过为 nil。到哪了由读的人按此刻推（`Speech.trip`，
+  /// App 的"此刻"只在 `SpeechClock` 一处到点刷新），这里只给记录。不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
+  public func cueLastYou() throws -> (said: Date, delivered: Date?)? {
+    try db.first("SELECT createdAt, deliveredAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC, rowid DESC LIMIT 1") {
       (said: $0.date(0), delivered: $0.dateOrNil(1))
     }
-    guard let latest else { return nil }
-    let now = timing.now()
-    if let due = Speech.deadline(said: latest.said, delivered: latest.delivered), due > now { expire(at: due) }
-    return Speech.trip(said: latest.said, delivered: latest.delivered, now: now, reachable: true)
   }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。

@@ -52,8 +52,8 @@ struct ProjectScreen: View {
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
-            try PiSessionList.read(text: "", project: projectID, historyLimit: 0, from: store)
+        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), limit: 0, moment: services.speech), into: $pi, onError: workspace.fail) {
+            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, historyLimit: 0, at: moment, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
@@ -304,7 +304,7 @@ private struct FocusCard: View {
         let session = item.state
         // 项目卡里已经是这个项目：不再写所在
         return Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: nil, delivery: item.delivery, rename: item.rename, undelivered: item.undelivered).equatable()
+            PiSessionRow(session: session, project: nil, delivery: item.delivery, rename: item.rename, undelivered: item.undelivered(at: services.speech)).equatable()
                 .padding(.vertical, 6)
                 .frame(minHeight: 44)
                 .contentShape(.rect)

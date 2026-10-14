@@ -14,7 +14,7 @@ struct HandOffInput: View {
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @State private var configs: [UUID: PiConfigShown]?
+    @State private var digests: [UUID: SessionDigest]?
     @State private var choice: UUID?
     @State private var planned: Planned?
     @FocusState private var focused: Bool
@@ -29,7 +29,7 @@ struct HandOffInput: View {
 
     /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
     private var sessions: [PiSessionListItem] {
-        let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project)
+        let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, at: services.speech)
         guard let bound = planned?.bound, !live.contains(where: { $0.state.sessionID == bound.state.sessionID }) else { return live }
         return [bound] + live
     }
@@ -50,7 +50,7 @@ struct HandOffInput: View {
         }
     }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
-    private var config: PiConfigShown? { chosen.flatMap { configs?[$0.state.id] } }
+    private var config: PiConfigShown? { chosen.flatMap { digests?[$0.state.id]?.config(at: services.speech) } }
 
     var body: some View {
         Composer(
@@ -64,7 +64,7 @@ struct HandOffInput: View {
                         .padding(.horizontal, 18).padding(.top, 8)
                 }
                 if let failure = config?.failure {
-                    Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
+                    Text("没换成：\(failure.text(sync: services.syncStatus))").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
                         .padding(.horizontal, 18).padding(.top, 6)
                 }
             },
@@ -86,13 +86,12 @@ struct HandOffInput: View {
             return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true))
         }
         // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
-        .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
-            var configs: [UUID: PiConfigShown] = [:]
+        .observing(services.store, id: services.liveSessions.live, into: $digests, onError: workspace.fail) { [live = services.liveSessions.live] store in
+            var digests: [UUID: SessionDigest] = [:]
             for item in live {
-                let deliveries = try store.deliveryRequests(toSession: item.state.sessionID)
-                configs[item.state.id] = SessionDigest(session: item.state, project: nil, deliveries: deliveries).config
+                digests[item.state.id] = SessionDigest(session: item.state, project: nil, deliveries: try store.deliveryRequests(toSession: item.state.sessionID))
             }
-            return configs
+            return digests
         }
     }
 

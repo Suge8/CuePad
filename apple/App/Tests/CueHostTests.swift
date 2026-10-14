@@ -293,7 +293,7 @@ struct CueHostTests {
         let seen = try await rig.message(.note, containing: "看到了")
         #expect(seen.text.contains("[发送失败] 修好登录页 说不出去") && seen.text.contains("会话已关闭"), "\(seen.text)")
         let failed = try #require(try await rig.store.deliveryRequest(sent.id))
-        #expect(Said.request(failed).trip(now: .now, reachable: true) == .failed(.reported("会话已关闭")))
+        #expect(Said.request(failed).trip(at: .always(at: .now)) == .failed(.reported("会话已关闭")))
         await macB.stop()
         await rig.stop()
     }
@@ -355,7 +355,7 @@ struct CueHostTests {
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("已送达") }
         #expect(rig.app.host.calls.count == 2)  // 第一次没起来，重试那次起来了
         let sent = try #require(try await rig.store.deliveryRequests(toSession: "local-1").last)
-        #expect(Said.request(sent).trip(now: .now, reachable: true) == .delivered)
+        #expect(Said.request(sent).trip(at: .always(at: .now)) == .delivered)
         #expect(try await rig.store.cueChanges(after: CueMarks(0)).allSatisfy { $0.kind != .undelivered && $0.kind != .failed })
         await rig.stop()
     }

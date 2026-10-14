@@ -15,19 +15,23 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     enum Phase: Equatable {
         /// 还没有发出。
         case idle
-        /// 请求在路上，或 Mac 还没执行完。
-        case sending(DeliveryRequest)
+        /// 请求在路上，或 Mac 还没执行完：Mac 接没接手（`PiDelivery.Transit`）。
+        case sending(PiDelivery.Transit)
         /// Mac 已启动 Pi，等它连上来。
         case opening
-        case failed(String)
+        /// 没能开成：Mac 报的原因，或超时、本机同步不通（说的话那条规则，`Speech`）。
+        case failed(Speech.Failure)
         case claimed
     }
 
-    var phase: Phase {
+    func phase(at moment: Speech.Moment) -> Phase {
         if claimed != nil { return .claimed }
         guard let request else { return .idle }
-        if let failure = request.failure { return .failed(failure) }
-        return request.status == .known(.succeeded) ? .opening : .sending(request)
+        switch Speech.trip(request, at: moment) {
+        case .sending: return .sending(.of(request, session: nil))
+        case .delivered: return .opening
+        case .failed(let failure): return .failed(failure)
+        }
     }
 
     static func read(request: UUID, token: String, from store: isolated CueStore) throws -> LaunchProgress {

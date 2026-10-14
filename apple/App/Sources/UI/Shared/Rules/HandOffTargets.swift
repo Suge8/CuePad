@@ -7,9 +7,9 @@ import Foundation
 /// 发出去的路也是一条：写一条指定会话所在 Mac 的投送请求（`Workspace.speak`）；Mac 上发给本机的会话时
 /// 请求的执行者就是本机，所以本机的会话不必另走一条路。
 enum HandOffTargets {
-    static func sessions(_ live: [PiSessionListItem], project: UUID?) -> [PiSessionListItem] {
+    static func sessions(_ live: [PiSessionListItem], project: UUID?, at moment: Speech.Moment) -> [PiSessionListItem] {
         func key(_ item: PiSessionListItem) -> (Int, Int) {
-            (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)
+            (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery, at: moment).urgency)
         }
         return live.sorted { key($0) > key($1) }
     }

@@ -147,7 +147,7 @@ struct SendTargetTests {
 
         let request = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0?.isOpen == false })
         #expect(request.status == .known(.failed))
-        let delivery = PromptDelivery(draft.id, agents: try await AgentLinks.read(from: store), now: .now, reaches: { _ in true })
+        let delivery = PromptDelivery(draft.id, agents: try await AgentLinks.read(from: store), at: .always())
         #expect(delivery == .failed(request, .reported(try #require(request.failure))) && delivery.canSend)
         #expect(rig.host.calls.isEmpty)
         #expect(try await store.card(draft.id) != nil)

@@ -68,14 +68,14 @@ struct ProjectFoldersTests {
         _ = try await store.requestBind(PiBind(project: a.id, folder: .besideSession("s1")), title: "A", on: "mac-wait")
         _ = try await store.requestBind(PiBind(project: a.id, folder: nil), title: "A", on: "mac-wait")
         _ = try await store.requestBind(PiBind(project: b.id, folder: .besideSession("s2")), title: "B", on: "mac-wait")
-        #expect(ProjectFolders.bindProgress(of: a.id, in: try await store.deliveryRequests()) == .binding)
-        #expect(ProjectFolders.bindProgress(of: UUID(), in: try await store.deliveryRequests()) == nil)
+        #expect(ProjectFolders.bindProgress(of: a.id, in: try await store.deliveryRequests(), at: .always()) == .binding)
+        #expect(ProjectFolders.bindProgress(of: UUID(), in: try await store.deliveryRequests(), at: .always()) == nil)
 
         let lone = try await project("Lone")
         let failing = try await store.requestBind(PiBind(project: lone.id, folder: .besideSession("s3")), title: "Lone", on: "mac-fail")
         try await executor.start()
         defer { Task { await executor.stop() } }
         _ = try await eventually(store, { try $0.deliveryRequest(failing.id)?.isOpen }) { $0 == false }
-        #expect(ProjectFolders.bindProgress(of: lone.id, in: try await store.deliveryRequests()) == .failed("目录不存在：gone"))
+        #expect(ProjectFolders.bindProgress(of: lone.id, in: try await store.deliveryRequests(), at: .always()) == .failed(.reported("目录不存在：gone")))
     }
 }

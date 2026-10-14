@@ -29,17 +29,10 @@ nonisolated enum Said: Equatable, Sendable {
         }
     }
 
-    var deadline: Date? {
+    func trip(at moment: Speech.Moment) -> Speech.Trip {
         switch self {
-        case .cue(let message, _): Speech.deadline(said: message.createdAt, delivered: message.deliveredAt)
-        case .request(let request): Speech.deadline(request)
-        }
-    }
-
-    func trip(now: Date, reachable: Bool) -> Speech.Trip {
-        switch self {
-        case .cue(let message, _): Speech.trip(said: message.createdAt, delivered: message.deliveredAt, now: now, reachable: reachable)
-        case .request(let request): Speech.trip(request, now: now, reachable: reachable)
+        case .cue(let message, let host): Speech.trip(said: message.createdAt, delivered: message.deliveredAt, host: host, at: moment)
+        case .request(let request): Speech.trip(request, at: moment)
         }
     }
 

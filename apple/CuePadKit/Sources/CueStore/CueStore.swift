@@ -8,7 +8,7 @@ public actor CueStore {
   let db: SQLite
   /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
   public nonisolated let files: AttachmentFiles
-  /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线、你的话等没等过时限）用的时钟；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
+  /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。

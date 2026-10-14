@@ -51,7 +51,7 @@ struct PiConversation: View {
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
             ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -74,10 +74,9 @@ struct PiConversation: View {
     /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request)
-        let busy = session.isWorking || session.state == .known(.waitingForUser)
         return SpeechBubble(
             said: said, box: services.settings.replyDraftBinding(for: session.id),
-            transit: session.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy), fromCue: request.isFromCue
+            transit: .of(request, session: session), fromCue: request.isFromCue
         ) { trip in
             let failed = if case .failed = trip { true } else { false }
             MessageActions(
@@ -258,12 +257,14 @@ extension PiConversation {
     struct FollowKey: Equatable {
         var messages: Int
         var previews: Int
-        var outgoing: [Open<DeliveryStatus>]
+        var outgoing: [Speech.Trip]
         var state: Open<PiWorkState>?
     }
 
-    static func followKey(session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest]) -> FollowKey {
-        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
+    static func followKey(
+        session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest], at moment: Speech.Moment
+    ) -> FollowKey {
+        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages, at: moment).map { Speech.trip($0, at: moment) }, state: session?.state)
     }
 }
 
@@ -279,7 +280,7 @@ struct PiSessionSubtitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
+        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`SpeechBubble`）；正在看的会话没有"有新回复"
         let shown = PiShown(session, cue: workspace.cueOnDuty).speaking(drafting)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark

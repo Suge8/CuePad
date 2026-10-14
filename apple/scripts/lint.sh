@@ -51,6 +51,9 @@ forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里�
   '(?i:A8740A|EDBD57)' 'App/AppGroup/Waiting.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
   '(\baddCueMessage\(\s*\.you\b|\bstore\.requestDelivery\()' '**/Workspace/Speaking.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
+  '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
+  'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
   '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
 

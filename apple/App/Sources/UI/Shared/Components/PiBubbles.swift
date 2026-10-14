@@ -187,15 +187,15 @@ struct MessageActions: View {
 
 /// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。
 /// 发送中整颗变淡、下面转圈；已送达下面写"已送达"（`showsDelivered` 时）；没能送达写原因，给"重发"与"移除"（长按菜单里也有）。
-/// 等回执到点翻成没能送达靠一个可取消的睡眠任务（`refreshes`），不轮询；超时后回执来了，记录一变就是已送达。
+/// 到点翻成没能送达靠全 App 一份的此刻（`AppServices.speech`）；超时后回执来了，记录一变就是已送达。
 struct SpeechBubble<Menu: View>: View {
     let said: Said
     /// 重发时撤回了旧的却写不进新的：原文放回这个去处的输入框。
     let box: Binding<ComposerDraft>
     /// 已送达写不写：会话页每句都写（进了对话就不在这里），Cue 页只写你最后一句（旧的不写，免得满屏）。
     var showsDelivered = true
-    /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.transit`）；nil 是"发送中"。
-    var transit: String?
+    /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
+    var transit: PiDelivery.Transit?
     var fromCue = false
     /// 长按菜单（会话页的消息菜单）；给的是此刻到哪了。
     @ViewBuilder var menu: (Speech.Trip) -> Menu
@@ -204,23 +204,21 @@ struct SpeechBubble<Menu: View>: View {
     @Environment(\.palette) private var palette
     /// 刚从刻度滑条跳到的那一句（Cue 页里你的话）描一圈。
     @Environment(\.chatHighlight) private var highlight
-    @State private var now = Date.now
 
     var body: some View {
-        let trip = said.trip(now: now, reachable: services.reaches(said.host))
+        let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: 6) {
             UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
             status(trip).font(Typography.caption)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .refreshes($now, at: said.deadline)
         .transition(.entry)
     }
 
     @ViewBuilder private func status(_ trip: Speech.Trip) -> some View {
         switch trip {
         case .sending:
-            HStack(spacing: 6) { Spinner(.mini); Text(transit ?? "发送中") }.foregroundStyle(palette.ink2)
+            HStack(spacing: 6) { Spinner(.mini); Text(transit?.label ?? "发送中") }.foregroundStyle(palette.ink2)
         case .delivered:
             if showsDelivered {
                 Label { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: {
@@ -266,25 +264,14 @@ extension Speech.Trip {
     }
 }
 
-extension Speech.Failure {
-    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通（`sync` 此刻的状态，同步状态那套说法）与 Mac 一直没收下（只说这句话，不猜 Mac 在不在）。
-    func text(sync: SyncStatus) -> String {
+nonisolated extension Speech.Failure {
+    /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通与 Mac 一直没收下（只说这句话，不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）。
+    /// 同步不通写同步状态那套说法（`sync` 此刻的状态），手里没有同步状态的规则（项目"此刻"）只写"同步不通"——那时同步状态另有提示。
+    func text(sync: SyncStatus?) -> String {
         switch self {
         case .reported(let reason): reason
-        case .offline: "\(SyncSummary(sync).title)，发不到 Mac"
+        case .offline: "\(sync.map { SyncSummary($0).title } ?? "同步不通")，发不到 Mac"
         case .timedOut: "Mac 迟迟没收下这句"
-        }
-    }
-}
-
-extension View {
-    /// 到 `deadline` 时把 `now` 刷成此刻（可取消的睡眠任务，不轮询）：由记录与时间推出的状态（`Speech`）到点自己翻。
-    func refreshes(_ now: Binding<Date>, at deadline: Date?) -> some View {
-        task(id: deadline) {
-            guard let deadline else { return }
-            let left = deadline.timeIntervalSinceNow
-            if left > 0 { guard (try? await Task.sleep(for: .seconds(left))) != nil else { return } }
-            now.wrappedValue = .now
         }
     }
 }
