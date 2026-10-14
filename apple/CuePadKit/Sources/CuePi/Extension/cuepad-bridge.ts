@@ -614,9 +614,21 @@ export default function (pi: ExtensionAPI) {
 		runInternal("reload-session");
 	}
 
-	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。 */
+	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。会话正忙时按 followUp 排队（Pi 1.2 起不给就抛错）。 */
 	function runInternal(action: string) {
-		setImmediate(() => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
+		later("会话操作", () => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { deliverAs: "followUp", expandPromptTemplates: true }));
+	}
+
+	/** 下一轮事件循环再交给 Pi。`sendUserMessage` 不返回结果：异步的失败 Pi 报在它自己的界面里；同步抛出的（本扩展实例已被换掉等）
+	 * 在这里报，不让它在事件循环里成为未捕获的异常。 */
+	function later(what: string, action: () => void) {
+		setImmediate(() => {
+			try {
+				action();
+			} catch (error) {
+				ctx.ui.notify(`CuePad：${what}没交给 Pi：${reason(error)}`, "error");
+			}
+		});
 	}
 
 	pi.registerCommand(INTERNAL_COMMAND, {
@@ -986,8 +998,7 @@ export default function (pi: ExtensionAPI) {
 		tracker.compacting = false;
 		commit(resume);
 		// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
-		const waiting = held.splice(0);
-		setImmediate(() => { for (const { deliver } of waiting) deliver(); });
+		for (const { deliver } of held.splice(0)) later("留着的话", deliver);
 	}
 	pi.on("session_compact", finishCompaction);
 	pi.on("session_compact_failed", finishCompaction);
