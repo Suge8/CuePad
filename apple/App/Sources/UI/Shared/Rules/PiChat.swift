@@ -17,6 +17,8 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     var tools: PiChatMessage.Tools?
     /// 预览：要显示的预览记录
     var preview: PiPreview?
+    /// 你的话这一格其实是 Cue 发进会话的（投送请求的 `origin` 是 cue）：气泡上标出 Cue。
+    var fromCue = false
 
     var isUser: Bool { role == .user }
 }
@@ -37,7 +39,8 @@ nonisolated enum PiChat {
     /// 对话只来自 Pi 的会话文件（唯一事实源），与终端里看到的一致。
     /// 预览卡不是会话文件里的内容（文件在 Agent 的命令行里发出，不留对话条），按创建时间插进对话：排在它创建之前最近的那条之后，
     /// 一轮里发的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
-    static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = []) -> [PiChatEntry] {
+    /// `cueSent` 是 Cue 写的投送请求的 id（`DeliveryRequest.isFromCue`）：带着其中之一的用户消息标成 Cue 说的。
+    static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = [], cueSent: Set<UUID> = []) -> [PiChatEntry] {
         var waiting = previews.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }[...]
         var entries: [PiChatEntry] = []
         func place(before time: Date?) {
@@ -49,7 +52,9 @@ nonisolated enum PiChat {
         for message in messages {
             guard let role = message.role.known else { continue }
             place(before: message.at)
-            entries.append(PiChatEntry(id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools))
+            entries.append(PiChatEntry(
+                id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools,
+                fromCue: message.deliveryID.map(cueSent.contains) ?? false))
         }
         place(before: nil)
         return entries

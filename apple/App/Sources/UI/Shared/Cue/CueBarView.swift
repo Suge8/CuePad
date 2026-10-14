@@ -62,7 +62,7 @@ struct CueStatusRow<Trailing: View>: View {
             CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
-                if let line = cue.presence.line(name: cue.name) ?? cue.digest.lastSaid?.firstLine {
+                if let line = cue.presence.line(name: cue.name) ?? cue.digest.lastSaid {
                     Text(line).font(Typography.meta).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).lineLimit(1)
                 }
             }

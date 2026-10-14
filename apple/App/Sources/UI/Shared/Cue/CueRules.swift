@@ -83,7 +83,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
-    /// Cue 最近对你说的一句（纯文字）。
+    /// Cue 最近对你说的那条的摘要行（第一行纯文字，Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
@@ -109,7 +109,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.enabledAt != nil && profile?.hostID != nil, hostID: profile?.hostID,
             hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
             waiting: try CueWaiting.count(in: store),
-            lastSaid: said.map { CueFormat.plainText($0.text) },
+            lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             pendingYou: spoke ? nil : lastYou.map { Pending(at: recent[$0].createdAt, delivered: recent[$0].deliveredAt != nil) })
     }
@@ -121,7 +121,7 @@ nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按库推出的状态定（小组件里没有"交不出去满 30 秒"的计时，按没超时算）。
     init(digest: CueDigest) {
         let mood = CueMood.of(CuePresence.derive(digest, overdue: false), waiting: digest.waiting, justDone: digest.lastSaidDone)
-        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid?.firstLine, mood: mood.rawValue)
+        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
     }
 }
 

@@ -140,7 +140,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, highlighted: entry.id == highlight) {
+            UserBubble(stored: entry.text, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
                 MessageActions(text: entry.text, kind: .mine, session: session)
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截

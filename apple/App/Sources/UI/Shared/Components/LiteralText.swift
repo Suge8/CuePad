@@ -1,7 +1,6 @@
 #if os(macOS)
 import AppKit
 #else
-import ObjectiveC
 import UIKit
 #endif
 
@@ -21,20 +20,29 @@ enum LiteralText {
         defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     }
     #else
-    /// UIKit 的智能破折号与引号默认跟着键盘设置走，没有全局偏好：把输入框（单行是 `UITextField`，多行与回复框是 `UITextView`）
-    /// 这两项的取值换成"关"。只换取值，设置照常存。
+    /// UIKit 的智能破折号与引号默认跟着键盘设置走，没有全局偏好，SwiftUI 的输入框也拿不到底下的系统视图：
+    /// 任何输入框（单行是 `UITextField`，多行与回复框是 `UITextView`）开始编辑时把这两项设成"关"，再让键盘重读一次。
     static func install() {
-        for type in [UITextField.self, UITextView.self] as [AnyClass] {
-            replace(type, "smartDashesType", UITextSmartDashesType.no.rawValue)
-            replace(type, "smartQuotesType", UITextSmartQuotesType.no.rawValue)
+        for name in [UITextField.textDidBeginEditingNotification, UITextView.textDidBeginEditingNotification] {
+            _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { note in
+                let field = note.object as? UIView
+                MainActor.assumeIsolated { literal(field) }
+            }
         }
     }
 
-    private static func replace(_ type: AnyClass, _ getter: String, _ value: Int) {
-        let selector = NSSelectorFromString(getter)
-        guard let method = class_getInstanceMethod(type, selector) else { preconditionFailure("\(type) 没有 \(getter)") }
-        let block: @convention(block) (AnyObject) -> Int = { _ in value }
-        class_replaceMethod(type, selector, imp_implementationWithBlock(block), method_getTypeEncoding(method))
+    private static func literal(_ field: UIView?) {
+        switch field {
+        case let field as UITextField where field.smartDashesType != .no || field.smartQuotesType != .no:
+            field.smartDashesType = .no
+            field.smartQuotesType = .no
+            field.reloadInputViews()
+        case let view as UITextView where view.smartDashesType != .no || view.smartQuotesType != .no:
+            view.smartDashesType = .no
+            view.smartQuotesType = .no
+            view.reloadInputViews()
+        default: break
+        }
     }
     #endif
 }

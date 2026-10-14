@@ -84,6 +84,7 @@ extension DebugScene {
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 navigation.open(alert: PiAlertTap(kind: .settled, sessionState: session.id))  // 点锁屏通知进来：只带记录 id、没有首帧

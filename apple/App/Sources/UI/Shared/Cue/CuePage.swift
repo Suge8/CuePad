@@ -3,8 +3,8 @@ import SwiftUI
 
 /// Cue 页（Mac 内容区的一页、iPhone Agent 标签的第一屏、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 最上面是页头（大头像、名字、此刻在做什么），离开期间有变化时下面一张"你不在时"（`CueAwayCard`）；
-/// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面是这件活的实时卡片（`CueTaskCard`），
-/// 连着的动态折成一行灰字（`CueNotes`）；底部是"等你"（`CueWaitingDock`）与输入框（`Composer`，可带图片）。
+/// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
+/// 连着的动态折成一行灰字（`CueNotes`）；底部从上到下是跟进中的托盘（`CueTray`）、"等你"（`CueWaitingDock`）与输入框（`Composer`，可带图片）。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
 struct CuePage: View {
     /// iPad 右侧面板里：没有自己的顶栏，"会话"换到侧栏的 Agent 页。
@@ -124,14 +124,14 @@ struct CuePage: View {
         .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueLiveTask]) -> some View {
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef]) -> some View {
         switch row {
         case .you(let message):
             UserBubble(stored: message.text).padding(.top, 14)
-        case .cue(let message, let card):
-            VStack(alignment: .leading, spacing: 10) {
+        case .cue(let message, let task):
+            VStack(alignment: .leading, spacing: 6) {
                 CueSays(message: message)
-                if let card, let live = tasks[card] { CueTaskCard(live: live) { opened = $0 } }
+                if let task, let ref = tasks[task] { CueTaskLine(ref: ref) }
             }
         case .notes(let notes):
             CueNotes(notes: notes)
@@ -161,7 +161,10 @@ struct CuePage: View {
 
     private var bottom: some View {
         VStack(spacing: 8) {
-            if let thread { CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 } }
+            if let thread {
+                CueTray(board: thread.board, startsCollapsed: !thread.waiting.isEmpty) { opened = $0 }
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 }
+            }
             if cue.presence == .disabled {
                 CueEnableCard().transition(.opacity)
             } else if cue.presence == .asleep || cue.presence.isUnreachable, let line = cue.presence.line(name: cue.name) {
@@ -185,6 +188,7 @@ struct CuePage: View {
                 })
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
+        .animation(Motion.quick, value: thread?.board.map(\.id))
         .animation(Motion.quick, value: cue.presence)
     }
 

@@ -56,7 +56,10 @@ extension DebugScene {
             workspace.attaching = card
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
             if let id = sessionToOpen {
                 workspace.show(.session(id))
                 if defaults.bool(forKey: "CuePadStream") { Task { await stream(id, store: workspace.services.store) } }

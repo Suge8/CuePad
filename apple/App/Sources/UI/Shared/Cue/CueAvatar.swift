@@ -96,6 +96,22 @@ struct CueSessionMark: View {
     }
 }
 
+/// 会话里 Cue 说的话上面那一行：小头像与名字（`UserBubble.fromCue`）。
+struct CueByline: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        HStack(spacing: 5) {
+            CueAvatar(mood: .listening, size: .inline)
+            Text(cue.name).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(cue.name) 说")
+    }
+}
+
 /// 由 Cue 跟进的标记（任务行、会话标题旁）：行内的小头像，读屏读"由 Cue 跟进"。
 struct CueFollowMark: View {
     @Environment(Workspace.self) private var workspace

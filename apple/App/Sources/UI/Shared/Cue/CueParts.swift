@@ -109,63 +109,105 @@ struct CueEnableCard: View {
     #endif
 }
 
-/// 派出去的一件活：一张纸，任务圈、标题、在做那一步的状态标与一句近况，右边是最近一份预览的缩略图；随库就地更新。
-/// 做完了收成一行（对勾与标题）。点它打开任务，点缩略图看预览。
-struct CueTaskCard: View {
+/// 跟进中的事：Cue 页输入框上方常驻的托盘（"等你"之上）。一行"跟进中 N 件"，点它收起或展开；展开时每件一张实时卡片（`CueTrayCard`），
+/// 多件时横着排、可以左右滑。没有跟进中的不画。打开页面时有"等你"就先收起：底部让给要你拿主意的那条，对话还看得见。
+struct CueTray: View {
+    let board: [CueLiveTask]
+    let open: (PiPreview) -> Void
+    @Environment(\.palette) private var palette
+    @State private var collapsed: Bool
+
+    init(board: [CueLiveTask], startsCollapsed: Bool, open: @escaping (PiPreview) -> Void) {
+        self.board = board
+        self.open = open
+        _collapsed = State(initialValue: startsCollapsed)
+    }
+
+    private static let cardWidth: CGFloat = 280
+
+    var body: some View {
+        if !board.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Button { withAnimation(Motion.quick) { collapsed.toggle() } } label: {
+                    HStack(spacing: 6) {
+                        Text("跟进中 \(board.count) 件").font(Typography.meta.weight(.semibold))
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                            .rotationEffect(.degrees(collapsed ? -90 : 0))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(palette.ink3)
+                    .padding(.horizontal, 6).frame(minHeight: 24).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(collapsed ? "已收起" : "已展开")
+                if !collapsed {
+                    if board.count == 1 {
+                        CueTrayCard(live: board[0], open: open)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(board) { CueTrayCard(live: $0, open: open).frame(width: Self.cardWidth) }
+                            }
+                        }
+                        .scrollClipDisabled()
+                    }
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+/// 跟进中的一件活：一张纸，任务圈、标题与步骤数，在做那一步的状态点与一句近况，右边是最近一份预览的缩略图；随库就地更新。
+/// 点它打开任务，长按（Mac 右键）可以直接进会话，点缩略图看预览。
+struct CueTrayCard: View {
     let live: CueLiveTask
     let open: (PiPreview) -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @Environment(Navigation.self) private var navigation
+    #endif
     @Environment(\.palette) private var palette
 
+    private var item: CueBoardItem { live.item }
+
     var body: some View {
-        CueTaskButton(task: live.task.id) {
-            if live.done { doneLine } else { card }
+        CueTaskButton(task: item.task.id) {
+            HStack(alignment: .center, spacing: 12) {
+                TaskRingView(status: item.task.status, ring: TaskRing(item.progress), done: false, size: 20)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(item.task.title).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        if let progress = item.progress {
+                            Text("\(progress.done)/\(progress.total)").font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
+                        }
+                    }
+                    status
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if let preview = live.preview { CuePreviewThumb(preview: preview, open: open) }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .paper(radius: 14)
         }
-        .animation(Motion.snappy, value: live.done)
+        .contextMenu {
+            if let session { Button("打开会话", systemImage: "bubble.left.and.text.bubble.right") { openSession(session) } }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityHint("打开任务")
     }
 
-    private var doneLine: some View {
-        HStack(spacing: 8) {
-            TaskRingView(status: .done, ring: .plain, done: true, size: 15)
-            Text(live.task.title).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12).frame(minHeight: 32)
-        .transition(.opacity)
-    }
-
-    private var card: some View {
-        HStack(alignment: .center, spacing: 12) {
-            TaskRingView(status: live.task.status, ring: TaskRing(live.progress), done: false, size: 20)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(live.task.title).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
-                    if let progress = live.progress {
-                        Text("\(progress.done)/\(progress.total)").font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
-                    }
-                }
-                status
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let preview = live.previews.first { CuePreviewThumb(preview: preview, open: open) }
-        }
-        .padding(12)
-        .paper(radius: 14)
-        .transition(.opacity)
-    }
-
-    /// 在做那一步的状态标与一句近况（步骤名、提问、出错原因、动作、上一轮的回答）。
+    /// 在做那一步的状态点与一句近况（步骤名、提问、出错原因、动作、上一轮的回答）。
     private var status: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let session {
                 PiStateDot(shown: services.settings.shown(session, delivery: nil), size: 6)
-            } else if live.launching {
+            } else if item.launching {
                 Spinner(.mini)
             }
-            Text(Dotted(live.leaf.id == live.task.id ? nil : live.leaf.title, note)).lineLimit(1)
+            Text(Dotted(item.leaf.id == item.task.id ? nil : item.leaf.title, note)).lineLimit(1)
                 .foregroundStyle(session?.waitsForYou == true ? palette.attention : session?.state == .known(.error) ? palette.failure : palette.ink2)
         }
         .font(Typography.meta)
@@ -173,22 +215,52 @@ struct CueTaskCard: View {
 
     private var session: PiSessionState? {
         #if os(macOS)
-        live.session.map(workspace.withLiveState)
+        item.session.map(workspace.withLiveState)
         #else
-        live.session
+        item.session
         #endif
     }
 
     private var note: String {
-        if live.launching { return "正在开会话" }
+        if item.launching { return "正在开会话" }
         guard let session else { return "还没开始" }
         let shown = services.settings.shown(session, delivery: nil)
         if session.waitsForYou { return session.question?.text.firstLine ?? shown.label }
         if session.state == .known(.error) { return session.detail?.firstLine ?? shown.label }
         if shown.isLive { return session.detail.flatMap(PiProgress.action) ?? shown.label }
-        return session.lastReply.map { CueFormat.plainText($0).firstLine } ?? shown.label
+        return session.lastReply.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0)) } ?? shown.label
     }
 
+    private func openSession(_ session: PiSessionState) {
+        #if os(iOS)
+        navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+        #else
+        workspace.show(.session(session.sessionID))
+        #endif
+    }
+}
+
+/// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务。
+struct CueTaskLine: View {
+    let ref: CueTaskRef
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        CueTaskButton(task: ref.task.id) {
+            HStack(spacing: 6) {
+                TaskRingView(status: ref.task.status, ring: TaskRing(ref.progress), done: ref.done, size: 13)
+                Text(ref.task.title).lineLimit(1)
+                if let progress = ref.progress, !ref.done {
+                    Text("\(progress.done)/\(progress.total)").monospacedDigit().foregroundStyle(palette.ink3)
+                }
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+            }
+            .font(Typography.meta).foregroundStyle(palette.ink2)
+            .frame(minHeight: 24)
+        }
+        .accessibilityLabel("关于 \(ref.task.title)")
+        .accessibilityHint("打开任务")
+    }
 }
 
 /// 一份预览的缩略图：图片是图本身，其余是类型图标；点它全屏看（`previewPresenter`）。
@@ -281,11 +353,11 @@ struct CueSays: View {
     }
 }
 
-/// "等你"：固定在输入框上方，最早的那一条。问题、关联任务发来看的文件（缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮、
-/// 其余选项、关联的任务；还有别的在等时写一句。
+/// "等你"：固定在输入框上方，最早的那一条。问题（Markdown，同对话里的渲染；长了限高、点"展开"看全）、关联任务发来看的文件
+/// （缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮、其余选项、关联的任务；还有别的在等时写一句。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
-    let tasks: [UUID: CueLiveTask]
+    let tasks: [UUID: CueTaskRef]
     let open: (PiPreview) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -293,33 +365,29 @@ struct CueWaitingDock: View {
 
     var body: some View {
         if let message = waiting.first(where: { !answered.contains($0.id) }) {
-            Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: CueFormat.plainText(message.text), docked: true) {
-                VStack(alignment: .leading, spacing: 10) {
-                    // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
-                    if let id = message.taskID, let previews = tasks[id]?.previews, !previews.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) { ForEach(previews) { CuePreviewThumb(preview: $0, side: 64, open: open) } }
-                        }
-                    }
-                    choices(message)
-                    HStack(spacing: 10) {
-                        if let id = message.taskID, let live = tasks[id] {
-                            CueTaskButton(task: id) {
-                                HStack(spacing: 6) {
-                                    TaskRingView(status: live.task.status, ring: .plain, done: live.done, size: 13)
-                                    Text(live.task.title).lineLimit(1)
-                                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                                }
-                                .font(Typography.meta).foregroundStyle(palette.ink2)
-                            }
-                            .accessibilityLabel("关于 \(live.task.title)")
-                        }
-                        Spacer(minLength: 0)
-                        let others = waiting.count - answered.count - 1
-                        if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
+            let ref = message.taskID.flatMap { tasks[$0] }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "questionmark.circle.fill").foregroundStyle(palette.attention).accessibilityHidden(true)
+                    FoldedMarkdown(source: message.text).id(message.id)
+                }
+                // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
+                if let previews = ref?.previews, !previews.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) { ForEach(previews) { CuePreviewThumb(preview: $0, side: 64, open: open) } }
                     }
                 }
+                choices(message)
+                HStack(spacing: 10) {
+                    if let ref { CueTaskLine(ref: ref) }
+                    Spacer(minLength: 0)
+                    let others = waiting.count - answered.count - 1
+                    if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
+                }
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous))
             .id(message.id)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
@@ -389,5 +457,52 @@ struct CueAwayCard: View {
             .frame(minHeight: 28)
         }
         .accessibilityLabel(failed ? "出错：\(item.title)" : "完成：\(item.title)")
+    }
+}
+
+/// 限高的 Markdown（"等你"的问题）：超过 `foldedHeight` 时只露上面一截、底边渐隐，下面一个"展开"；展开后最高 `expandedHeight`，再长在里面滚。
+struct FoldedMarkdown: View {
+    let source: String
+    @Environment(\.palette) private var palette
+    @State private var expanded = false
+    @State private var height: CGFloat = 0
+
+    #if os(macOS)
+    private static let foldedHeight: CGFloat = 120
+    #else
+    private static let foldedHeight: CGFloat = 88
+    #endif
+    private static let expandedHeight: CGFloat = 360
+
+    private var folds: Bool { height > Self.foldedHeight + 24 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Group {
+                if expanded && height > Self.expandedHeight {
+                    ScrollView { text }.frame(height: Self.expandedHeight)
+                } else {
+                    text.frame(maxHeight: folds && !expanded ? Self.foldedHeight : nil, alignment: .top).clipped()
+                        .mask {
+                            LinearGradient(stops: [.init(color: .black, location: 0.7), .init(color: folds && !expanded ? .clear : .black, location: 1)],
+                                startPoint: .top, endPoint: .bottom)
+                        }
+                }
+            }
+            if folds {
+                Button(expanded ? "收起" : "展开") { withAnimation(Motion.quick) { expanded.toggle() } }
+                    .font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 24).contentShape(.rect)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var text: some View {
+        MarkdownText(source: source).equatable()
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
     }
 }
