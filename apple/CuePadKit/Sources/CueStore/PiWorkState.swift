@@ -18,13 +18,6 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 会自己重载的扩展等空闲后换上新版本；更早的要在终端里 /reload。不是"已结束"，不进历史。
   case incompatible
 
-  /// 早先的版本把正在出字同步成 "outputting"：读成思考（工作中），旧记录照常显示。
-  public init?(rawValue: String) {
-    let raw = rawValue == "outputting" ? Self.thinking.rawValue : rawValue
-    guard let state = Self.allCases.first(where: { $0.rawValue == raw }) else { return nil }
-    self = state
-  }
-
   /// 正在干活（思考、调用工具、等子代理、压缩）。
   public var isWorking: Bool {
     switch self {
