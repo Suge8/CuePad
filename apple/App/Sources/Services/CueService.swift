@@ -29,7 +29,7 @@ protocol CueNotifying: AnyObject {
 /// - 启用：按 `CueRuntimes.order` 选第一家装了且登录了的运行时，写 `cueProfile`（住这台 Mac、默认模型、低思考强度）；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
-/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时重新查（状态命令慢）。
+/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时、大脑起不来与启动时就在这台值班时查（状态命令慢）。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页不在前台、不在打扰时段（`CueTiming.quietHours`），
 ///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
@@ -113,18 +113,24 @@ final class CueService {
         await endDuty()
     }
 
-    /// 退出收尾：立即不再值班；返回的过程等大脑退出（不需要主线程，见 `AppServices.beginShutdown`）。
+    /// 退出收尾：立即不再值班；返回的过程等大脑退出，再等值班收尾（正在起的大脑起好后由值班停掉）。
+    /// 已在跑的大脑不经主线程就停（见 `AppServices.beginShutdown`）；正在起的那个要等主线程把值班走完。
     func stop() -> @Sendable () async -> Void {
         guard let duty else { return {} }
         self.duty = nil
         state = nil
-        let stopping = duty.keeper.stop()
-        duty.task.cancel()
-        return stopping
+        let stopping = duty.keeper.stop(), task = duty.task
+        return {
+            await stopping()
+            await task.value
+        }
     }
 
     private func apply(_ profile: CueProfile?) async {
-        if let runtime = profile?.runtime, let last = lastRuntime, runtime != last { Task { await refreshRuntimes() } }
+        // 换了运行时，或 App 启动时 Cue 就在这台值班（设置页要知道本机哪几家能用），才查一遍
+        if let runtime = profile?.runtime, runtime != lastRuntime, lastRuntime != nil || profile?.activeHost == hostID {
+            Task { await refreshRuntimes() }
+        }
         lastRuntime = profile?.runtime ?? lastRuntime
         guard let profile, profile.activeHost == hostID else { return await endDuty() }
         let shift = Shift(name: profile.name, runtime: profile.runtime, model: profile.model, effort: profile.effort)

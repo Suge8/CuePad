@@ -91,7 +91,6 @@ extension AppServices {
             self?.setDeepLink(.cue)
             self?.windowShell?.show()
         }
-        follow { await self.cue.refreshRuntimes() }
         follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }
         follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) {
             try await self.cue.followNotifications { [weak self] in (self?.cueViewers ?? 0) > 0 }
