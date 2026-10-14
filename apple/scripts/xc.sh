@@ -8,6 +8,8 @@
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
+# 例外：CUEPAD_SIGN=development 时 Mac 用 Apple Development 证书与「CuePad macOS Development」描述文件签名、写定 CloudKit 开发环境，
+# 只给同步测量（docs/verify.md「同步测量」）；描述文件要先登记这台 Mac（provision.py device <Provisioning UDID> <名称> MAC_OS，再 provision.py profiles）。
 # 提交钩子在 apple/scripts/hooks（主检出只收合并，其余检出跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
 # ios 是 iPhone 模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # 模拟器是这个产物目录自己的一台（_sim.sh），第一次建、之后复用；脚本启动的跑完就关。
@@ -69,6 +71,24 @@ app="$products/CuePad.app"
 # 本机模式：ad-hoc 签名。工程默认是团队 + 自动签名（给发布用），iCloud 这类受限能力在 ad-hoc 下无法启动，
 # 所以日常构建覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。
 local_signing=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements)
+
+# CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
+# 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
+sign_development() {
+  [ "${CUEPAD_SIGN:-}" = development ] || return 0
+  [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
+  python3 "$APPLE_DIR/scripts/provision.py" unlock
+  local profile entitlements="$DERIVED/CuePad-macOS-development.entitlements" decoded="$DERIVED/profile.plist"
+  profile="$(for f in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"/*.provisionprofile; do
+    security cms -D -i "$f" > "$decoded" 2>/dev/null && [ "$(plutil -extract Name raw "$decoded")" = "CuePad macOS Development" ] && echo "$f"; done | head -1)"
+  [ -n "$profile" ] || { echo "没有「CuePad macOS Development」描述文件：先 provision.py profiles" >&2; exit 1; }
+  cp "$profile" "$app/Contents/embedded.provisionprofile"
+  cp "$APPLE_DIR/App/Config/CuePad-macOS.entitlements" "$entitlements"
+  /usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-environment string Development" \
+    -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$BUNDLE_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
+  # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
+  codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
+}
 
 # 退出码即 xcodebuild 的退出码（pipefail）。-quiet 下只有警告的编译步骤会被打成
 # "error: the following command failed with exit code 0 but produced no further output"——不是失败，滤掉这一行免得误读。
@@ -201,7 +221,7 @@ case "$cmd" in
     "$APPLE_DIR/scripts/lint.sh"
     (cd "$APPLE_DIR/CuePadKit" && swift build --quiet)
     xcb -quiet build ;;
-  build) xcb -quiet build ;;
+  build) xcb -quiet build; sign_development ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
     # xcodebuild 会启动模拟器且不关；本次启动的由脚本关掉，已开着的不动

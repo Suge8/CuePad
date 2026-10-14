@@ -21,12 +21,14 @@ extension AppServices {
         }
     }
 
-    /// 不创建引擎的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据）；
+    /// 不创建引擎的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
+    /// 例外只有同步测量：Debug 构建、开发环境签名、给了 `-CuePadCloudKit YES`，见 `DebugHooks.syncsIsolatedLibrary`）；
     /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
     static func makeSync(
-        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit
+        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit,
+        syncsIsolated: Bool = DebugHooks.syncsIsolatedLibrary
     ) -> Result<any SyncControlling, NoSync> {
-        guard !location.isIsolated else { return .failure(.isolated) }
+        guard !location.isIsolated || syncsIsolated else { return .failure(.isolated) }
         guard hasCloudKitEntitlement else { return .failure(.noEntitlement) }
         return .success(CloudSync(store: store))
     }
@@ -95,7 +97,9 @@ extension AppServices {
     /// - 手机：有发往 Mac 还没结果的请求，或正在看 Agent 页、会话近况。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
+        DebugHooks.pollsLikePhone
+            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: true)
+            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
         #else
         .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
         #endif

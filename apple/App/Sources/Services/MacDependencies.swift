@@ -37,7 +37,7 @@ struct MacDependencies {
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
         let agents = AgentIntegration(paths: paths, cuepad: commandLineTool.helper)
-        let hostID = HostIdentity.current()
+        let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),

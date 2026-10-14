@@ -14,4 +14,12 @@ nonisolated enum Entitlements {
         true
         #endif
     }
+
+    #if os(macOS)
+    /// 签名里写定的 CloudKit 环境（"Development" / "Production"）；没写为 nil。
+    static var cloudKitEnvironment: String? {
+        guard let task = SecTaskCreateFromSelf(nil) else { return nil }
+        return SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-container-environment" as CFString, nil) as? String
+    }
+    #endif
 }

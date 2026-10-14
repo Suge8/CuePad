@@ -63,6 +63,33 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库也连 iCloud：只给同步测量（docs/verify.md「同步测量」），只连 CloudKit 开发环境，见 `DebugScene.syncsIsolatedLibrary`。
+    static var syncsIsolatedLibrary: Bool {
+        #if DEBUG && os(macOS)
+        DebugScene.syncsIsolatedLibrary
+        #else
+        false
+        #endif
+    }
+
+    /// 同步测量里代替手机的实例按手机开着 Agent 页的节奏拉（`-CuePadSyncBench remote`，见 `SyncBench`）。
+    static var pollsLikePhone: Bool {
+        #if DEBUG && os(macOS)
+        DebugScene.defaults.string(forKey: "CuePadSyncBench") == "remote"
+        #else
+        false
+        #endif
+    }
+
+    /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
+    static var hostID: String? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadHost").map { "mac-\($0)" }
+        #else
+        nil
+        #endif
+    }
+
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 Debug 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
     static var launchArgumentOverrides: [String: Any] {
