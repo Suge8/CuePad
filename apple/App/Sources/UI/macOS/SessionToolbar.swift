@@ -206,10 +206,11 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
     var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
 
     /// 会话名下面那一行"任务 · 步骤"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（不经任务开的会话挂的是同名任务，
-    /// 改名时跟着改），什么都不剩时没有这一行。
+    /// 名字取法见 `CueStore.taskTitle`，改名时跟着改），什么都不剩时没有这一行。
     func path(below title: String) -> Dotted? {
         guard let primary else { return nil }
-        let named = [primary.parent?.title, primary.task.title].filter { $0 != title }
+        let own = CueStore.taskTitle(title)
+        let named = [primary.parent?.title, primary.task.title].filter { $0 != own }
         return Dotted(named + [tasks.count > 1 ? "等 \(tasks.count) 件" : nil]).nonEmpty
     }
 
