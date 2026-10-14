@@ -10,9 +10,9 @@ nonisolated struct PiRowFacts: Equatable {
     var context: PiContextMeter?
     var model: Model?
 
-    /// 会话的模型：提供方（图标）与短名（`PiModelName`，与回复框的模型胶囊同一种写法）。
+    /// 会话的模型：标志（`BrandMark.model`）与短名（`PiModelName`），与回复框的模型胶囊同一种写法。
     struct Model: Equatable {
-        let provider: PiProvider
+        let mark: BrandMark
         let name: String
     }
 
@@ -48,7 +48,7 @@ nonisolated struct PiRowFacts: Equatable {
         guard session.state != .known(.ended) else { return }
         subagents = PiSubagentSummary(session.subagents)
         context = session.context.flatMap(PiContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
-        model = session.model.map { Model(provider: PiProvider(id: $0.key.provider), name: PiModelName.short($0)) }
+        model = session.model.map { Model(mark: .model($0), name: PiModelName.short($0)) }
     }
 }
 

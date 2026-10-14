@@ -342,9 +342,18 @@ extension DebugScene {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
     }
 
-    /// 演示会话的模型配置，按哪家 Agent：Pi 与 OpenCode 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，
-    /// 菜单里是通用图标）；Claude Code、Codex 的模型在它们自己的命名空间里（提供方是 `AgentKind.modelProvider`）。
+    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里是通用图标）；
+    /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
+    /// Claude Code、Codex 的模型在它们自己的命名空间里（提供方是 `AgentKind.modelProvider`）。
     static func demoModels(for agent: AgentKind?) -> PiModelState {
+        if agent == .opencode {
+            let models = [
+                model("openrouter", "anthropic/claude-sonnet-5", "Claude Sonnet 5", [.low, .medium, .high]),
+                model("openrouter", "google/gemini-3-pro", "Gemini 3 Pro", [.low, .high]),
+                model("openrouter", "qwen/qwen3-coder", "Qwen3 Coder", [.off]),
+            ]
+            return PiModelState(model: models[0], thinking: .known(.medium), models: models)
+        }
         guard let provider = agent?.modelProvider else { return demoModels }
         let models = agent == .codex
             ? [model(provider, "gpt-5.5-codex", "GPT-5.5 Codex", [.low, .medium, .high, .xhigh]), model(provider, "gpt-5.5-mini", "", [.low, .medium])]
@@ -358,6 +367,7 @@ extension DebugScene {
             opus,
             model("anthropic", "claude-sonnet-5-20260801", "Claude Sonnet 5", [.off, .low, .medium, .high]),
             model("openai-codex", "gpt-6-luna", "GPT-6 Luna", [.off, .low, .high]),
+            model("xai", "grok-5", "Grok 5", [.low, .high]),
             model("deepseek", "deepseek-v4", "DeepSeek V4", [.off, .high]),
             model("kimi-coding", "kimi-k3", "Kimi K3", [.off]),
             model("xiaomi", "mimo-v3-pro", "MiMo V3 Pro", [.off, .high]),

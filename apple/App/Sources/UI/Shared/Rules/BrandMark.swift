@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 品牌标志，全 App 只此一处：资源名规则、认不出时的通用图标、AppKit 用的图都在这里；模型的提供方（`PiProvider`）与
-/// 哪家 Agent（`AgentKind.mark`）都从这里取。规则：模型显示做模型的那家（Anthropic、OpenAI…）；Agent 与订阅账号显示产品
-/// （Claude Code、Codex、Claude…）。
+/// 品牌标志，全 App 只此一处：资源名规则、认不出时的通用图标、AppKit 用的图都在这里。规则：标志是产品的，不是公司的——
+/// 模型显示它的家族（Claude、GPT、Gemini、Grok…，`BrandMark.model`，规则在 `PiProvider` 旁边）；提供方（模型菜单的分组、
+/// 订阅额度的账号）显示它的产品（Anthropic 是 Claude、OpenAI Codex 是 Codex，`PiProvider.mark`）；Agent 显示它自己（`AgentKind.mark`）。
 /// 标志是 LobeHub 的单色标志转成的自定义符号（资源目录 Brands 下的 `brand-<名>`，由 design/tools/brand-symbols.py 生成），
 /// 与文字基线对齐、随字号缩放、能嵌进 `Text` 插值，颜色跟着前景色走（界面里是次要墨色，系统菜单里是模板图、随菜单文字着色），不用品牌色。
 nonisolated struct BrandMark: Hashable, Sendable {
@@ -11,17 +11,17 @@ nonisolated struct BrandMark: Hashable, Sendable {
 
     private init(_ asset: String?) { self.asset = asset }
 
-    // 做模型的那家
-    static let anthropic = Self("anthropic")
+    // 模型家族（也是订阅账号与提供方分组的标志）
+    static let claude = Self("claude")
     static let openai = Self("openai")
     static let gemini = Self("gemini")
-    static let xai = Self("xai")
+    static let grok = Self("grok")
     static let deepseek = Self("deepseek")
     static let kimi = Self("kimi")
     static let mimo = Self("mimo")
+    // 转发模型的提供方：认不出家族时退到它
     static let openrouter = Self("openrouter")
-    // 产品：接入的 Agent 与订阅账号
-    static let claude = Self("claude")
+    // 接入的 Agent
     static let claudeCode = Self("claudecode")
     static let codex = Self("codex")
     static let opencode = Self("opencode")

@@ -305,7 +305,7 @@ private struct FactColumns: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            (facts.model.map { Text("\($0.provider.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
+            (facts.model.map { Text("\($0.mark.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
                 .accessibilityLabel(facts.model.map { "模型 \($0.name)" } ?? "")
             if let subagents = facts.subagents { SubagentRoster(summary: subagents) }
             Spacer(minLength: 0)

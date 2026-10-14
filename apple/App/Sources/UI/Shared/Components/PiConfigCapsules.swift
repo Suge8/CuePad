@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 模型胶囊：提供方图标 + 模型短名。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
-/// SwiftUI 在 Mac 上把菜单项里的图片丢掉，分组标题与模型项要带提供方图标）。
-/// 有订阅额度的提供方：图标外一圈细环是卡着的那个窗口用了多少（`ProviderBadge`），菜单的分组标题写各窗口的用量
+/// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
+/// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：按提供方分组，分组标题带提供方的产品标志（Mac），每个模型带它自己的标志。
+/// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口用了多少（`ModelBadge`），菜单的分组标题写各窗口的用量
 /// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`QuotaMoments`）。
 struct PiModelCapsule: View {
     let models: [PiModelOption]
@@ -36,7 +36,7 @@ struct PiModelCapsule: View {
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
                             Text(PiModelLabel.levels(model))
-                            group.provider.image
+                            BrandMark.model(model).image
                         }
                     }
                 }
@@ -54,7 +54,7 @@ struct PiModelCapsule: View {
     private func label(at now: Date) -> some View {
         HStack(spacing: 5) {
             // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
-            ProviderBadge(provider: current.map { PiProvider(id: $0.key.provider) }, binding: binding(at: now))
+            ModelBadge(mark: current.map(BrandMark.model) ?? .unknown, binding: binding(at: now))
                 .modifier(Breathing(active: pending))
                 .accessibilityHidden(true)
             Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
@@ -84,17 +84,17 @@ struct PiModelCapsule: View {
 }
 
 
-/// 胶囊上的提供方图标（次要墨色）；这家有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaArc`，不画匀速刻度），
-/// 没有额度的提供方只有图标、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标（`PiProvider.unknown`）。
-struct ProviderBadge: View {
-    let provider: PiProvider?
+/// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaArc`，不画匀速刻度），
+/// 没有额度的只有标志、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标。
+struct ModelBadge: View {
+    let mark: BrandMark
     let binding: QuotaMeter.Window?
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
 
     var body: some View {
         ZStack {
             if let binding { QuotaArc(window: binding, inset: 0, line: 1.5, showsPace: false) }
-            (provider?.image ?? PiProvider.unknown)
+            mark.image
                 .font(.system(size: side * 0.52))
                 .contentTransition(.opacity)
         }

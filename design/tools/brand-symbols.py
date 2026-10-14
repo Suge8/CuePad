@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["picosvg==0.23.0"]
 # ///
-"""品牌标志（模型的提供方、接入的 Agent、订阅账号）：把 LobeHub 单色图标（npm @lobehub/icons-static-svg，MIT，许可见仓库根目录
+"""品牌标志（模型家族、接入的 Agent、订阅账号与提供方）：把 LobeHub 单色图标（npm @lobehub/icons-static-svg，MIT，许可见仓库根目录
 THIRD-PARTY-NOTICES.md）转成自定义 SF Symbol（brand-<名>），整个重写 App 资源目录的 Brands 下（两端共用）。用法：uv run design/tools/brand-symbols.py
 
 图标按 LobeHub 的 24 格放成边长 SIDE 的方块、竖向居中在大写字母高度的中线上（与系统的圆形符号同高），所以与文字基线对齐、随字号缩放。
@@ -24,18 +24,18 @@ VERSION = "1.95.1"
 OUT = Path(__file__).resolve().parents[2] / "apple/App/Sources/Assets.xcassets/Brands"
 # 资源名（brand-<名>）→ LobeHub 图标名与取哪一块（24 格里的 x, y, 宽, 高；默认整格）
 ICONS = {
-    # 做模型的那家
-    "anthropic": ("anthropic", None),
+    # 模型家族（也是订阅账号与提供方分组的标志）
+    "claude": ("claude", None),
     "openai": ("openai", None),
     "gemini": ("gemini", None),
-    "xai": ("xai", None),
+    "grok": ("grok", None),
     "deepseek": ("deepseek", None),
     "kimi": ("kimi", None),
-    "openrouter": ("openrouter", None),
     # 整个图标是两行字标，小字号读不出；只取下面那一行 MiMo 标
     "mimo": ("xiaomimimo", (0, 13.4, 24, 6.4)),
-    # 产品：接入的 Agent 与订阅账号
-    "claude": ("claude", None),
+    # 转发模型的提供方：认不出家族时退到它
+    "openrouter": ("openrouter", None),
+    # 接入的 Agent
     "claudecode": ("claudecode", None),
     "codex": ("codex", None),
     "opencode": ("opencode", None),
