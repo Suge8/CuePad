@@ -54,6 +54,20 @@ struct CueHostTests {
             model.stop()
         }
 
+        /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下。
+        func settleFollowedTask(titled title: String) async throws {
+            try await say("请建个任务并开工")
+            try await message(.cue, containing: "办好了")
+            try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
+            let session = try #require(app.host.extensions.values.first)
+            let task = try #require(try await store.cueBoard().first?.task)
+            // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
+            try await store.linkCard(task.id, toSession: session.sessionID)
+            try await store.updateCard(task.id) { $0.body = title }
+            session.setState(["kind": "thinking"])
+            session.setState(["kind": "idle"])
+        }
+
         /// 你对 Cue 说一句。
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
@@ -135,45 +149,40 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 自己醒来的一轮出错：出错写成一条 Cue 的消息，基线不前移；隔一会儿再醒一次，那次看到的还是同一处变化。
+    /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，那次看到的还是同一处变化，成了就只有动态。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig()
-        try await rig.say("请建个任务并开工")
-        try await rig.message(.cue, containing: "办好了")
-        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
-        let session = try #require(rig.app.host.extensions.values.first)
-        let task = try #require(try await rig.store.cueBoard().first?.task)
-        try await rig.store.linkCard(task.id, toSession: session.sessionID)
-        try await rig.store.updateCard(task.id) { $0.body = "修好登录页 先出一次错" }  // 标题进信封：假模型据此第一次报错
-        session.setState(["kind": "thinking"])
-        session.setState(["kind": "idle"])
-        try await rig.message(.cue, containing: "bad things happened")
+        try await rig.settleFollowedTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
         try await rig.message(.note, containing: "登录页那边歇下了")
+        #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
+        await rig.stop()
+    }
+
+    /// 重试也出错：这时才写一条 Cue 的消息告诉你，只说一次。
+    @Test func 自己醒来重试也出错才告诉你() async throws {
+        let rig = try await Rig()
+        try await rig.settleFollowedTask(titled: "修好登录页 先出两次错")
+        try await rig.message(.cue, containing: "bad things happened")
+        #expect(rig.model.errors == 2)
+        #expect(try await rig.store.cueMessages().filter { $0.text.contains("bad things happened") }.count == 1)
         await rig.stop()
     }
 
     /// Cue 自己醒来的一轮里已经用 tell 问了你：最后那句回复不再写成灰色的一行（几乎是同一句）。
     @Test func 自己醒来已经说过话就不再写动态() async throws {
         let rig = try await Rig()
-        try await rig.say("请建个任务并开工")
-        try await rig.message(.cue, containing: "办好了")
-        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
-        let session = try #require(rig.app.host.extensions.values.first)
-        let task = try #require(try await rig.store.cueBoard().first?.task)
-        try await rig.store.linkCard(task.id, toSession: session.sessionID)
-        try await rig.store.updateCard(task.id) { $0.body = "修好登录页 请收一下" }  // 标题进信封：假模型据此 tell
-        session.setState(["kind": "thinking"])
-        session.setState(["kind": "idle"])
+        try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 tell
         let asked = try await rig.message(.cue, containing: "收下吗？")
         try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已问用户") }
         #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
         await rig.stop()
     }
 
-    /// 刚启用的那一轮出错（模型一时出错）：隔一会儿再醒一次，照常看一眼。
+    /// 刚启用的那一轮出错（模型一时出错）：先不说，隔一会儿再醒一次，照常看一眼。
     @Test func 刚启用的一轮出错后重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
-        try await rig.message(.cue, containing: "bad things happened")
+        #expect(rig.model.errors == 1)
+        #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })  // 重试成了，不打扰你
         await rig.stop()
     }
 
@@ -242,7 +251,10 @@ nonisolated final class FakeModel: Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "fake-model")
     private let usage: Int
-    private let played = Mutex<Set<String>>([])
+    private let played = Mutex<[String: Int]>([:])
+    private let errorCount = Mutex(0)
+    /// 回过几次错
+    var errors: Int { errorCount.withLock { $0 } }
     private let failingOnce: [String]
     /// 回过最后一句的工具结果（工具调用之后这一轮就结束）
     private let finishedAfter = Mutex<[String]>([])
@@ -331,7 +343,19 @@ nonisolated final class FakeModel: Sendable {
     /// 已就结果含 `fragment` 的工具调用回了这一轮最后一句。
     func answered(_ fragment: String) -> Bool { finishedAfter.withLock { $0.contains { $0.contains(fragment) } } }
 
-    private func once(_ key: String) -> Bool { played.withLock { $0.insert(key).inserted } }
+    /// 这一出还没演满 `times` 次：记一次，返回 true。
+    private func once(_ key: String, times: Int = 1) -> Bool {
+        played.withLock { played in
+            guard played[key, default: 0] < times else { return false }
+            played[key, default: 0] += 1
+            return true
+        }
+    }
+
+    private func fail() -> Reply {
+        errorCount.withLock { $0 += 1 }
+        return .error("bad things happened")
+    }
 
     private func script(_ request: [String: Any]) -> Reply {
         let tools = (request["tools"] as? [[String: Any]] ?? []).compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
@@ -360,12 +384,13 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "先做哪个？", "choices": ["A", "B"]]) }
-        if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return .error("bad things happened") }
+        if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
         if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") { return call("tell", ["text": "收下吗？", "choices": ["收下", "再改改"]]) }
         if text.contains("醒来：跟进的会话有动静") {
-            if text.contains("先出一次错"), once("error") { return .error("bad things happened") }
+            if text.contains("先出一次错"), once("error") { return fail() }
+            if text.contains("先出两次错"), once("error", times: 2) { return fail() }
             return say("登录页那边歇下了")
         }
         if text.contains("醒来：刚启用") { return say("我看了一眼") }

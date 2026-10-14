@@ -44,6 +44,7 @@ nonisolated struct CueTiming: Sendable {
 /// Cue 自己醒来的一轮里已经用 tell 对你说过话的，最后的回复不再写 note（几乎是同一句）。
 /// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
+/// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
 final class CueKeeper {
@@ -269,6 +270,8 @@ final class CueKeeper {
         case .failed(let raw):
             turn?.failure = raw
             let summary = PiErrorSummary(raw)
+            // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
+            if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
             let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
@@ -309,8 +312,7 @@ final class CueKeeper {
     /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
     private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?), as author: CueAuthor) async {
         let latest = try? await setup.store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init)).map(\.at).max()
-        let kind = PiErrorSummary(failure).kind
-        let retry = setback == nil && kind != .quota && kind != .authentication
+        let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
             latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
     }
@@ -521,6 +523,9 @@ final class CueKeeper {
         case .sessionActivity, .idle, .reminder, .renewed: .note
         }
     }
+
+    /// 重试可能好的错：额度、登录类的不算。
+    private static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
 
     private static func answerLine(_ message: CueMessage) -> String {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
