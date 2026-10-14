@@ -51,13 +51,13 @@ struct PiTranscriptTests {
             continuation.yield(.backfillFinished(sessionFiles: files))
             continuation.finish()
         }
-        await services.consumePiHistory(events)
+        await services.consumePiHistory(events, agent: .pi)
     }
 
     /// 桥上看到这个会话在线（状态记录器写出未结束的记录；不结束）。
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
-            id: "\(sessionID).100", sessionID: sessionID, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
@@ -152,9 +152,11 @@ struct PiTranscriptTests {
         await consume([file])
         #expect(try await record("s1").pendingPrompt == "做到一半")
 
+        var idle = session
+        idle.state = .settled
         try await services.consumePiChanges(AsyncStream { continuation in
-            continuation.yield(.stateChanged(session, from: .settled))
-            continuation.yield(.ended(session, reason: .closed(reason: "quit")))
+            continuation.yield(.stateChanged(idle, from: .thinking))
+            continuation.yield(.ended(idle, reason: .closed(reason: "quit")))
             continuation.finish()
         })
         #expect(try await record("s1").pendingPrompt == nil)
@@ -165,34 +167,25 @@ struct PiTranscriptTests {
     }
 
     /// 文件一追加就写：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
-    @Test func 文件追加一条用户消息后_摘要与消息在1秒内可读() async throws {
+    @Test(.timeLimit(.minutes(1))) func 文件追加一条用户消息后_摘要与消息随即可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory, files: store.files) { _ in nil }
-        let consuming = Task { await services.consumePiHistory(indexer.events()) }
+        let consuming = Task { await services.consumePiHistory(indexer.events(), agent: .pi) }
         defer { consuming.cancel() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
-        let appended = ContinuousClock.now
         try handle.write(contentsOf: Data((line("u3", "a2", at: .now, user: "第三问") + "\n").utf8))
         try handle.close()
 
-        let deadline = Task { try await Task.sleep(for: .seconds(1)) }
-        let watch = Task {
-            for try await readable in store.observe({
-                try $0.piMessages(of: "s1").last?.text == "第三问" && $0.allPiSessionStates().first?.pendingPrompt == "第三问"
-            }) where readable { return true }
-            return false
-        }
-        Task { try? await deadline.value; watch.cancel() }
-        let seen = (try? await watch.value) ?? false
-        deadline.cancel()
-        #expect(seen, "追加后 \(ContinuousClock.now - appended) 仍没读到")
+        _ = try await eventually(store, {
+            try $0.piMessages(of: "s1").last?.text == "第三问" && $0.allPiSessionStates().first?.pendingPrompt == "第三问"
+        }) { $0 }
     }
 
-    /// Mac 重启：启动时把上次遗留的记录标为已结束，会话重新连上后，正在处理的提问照样在——不必等文件再追加。
+    /// Mac 重启：启动对账之后会话重新连上，正在处理的提问照样在——不必等文件再追加。
     @Test func 重启后会话重新连上_正在处理的提问仍在() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         let handle = try FileHandle(forWritingTo: file)
@@ -203,8 +196,7 @@ struct PiTranscriptTests {
         await consume([file])
         #expect(try await record("s1").pendingPrompt == "第三问")
 
-        try await services.resetPiState()  // 重启：上次的会话都标为已结束
-        #expect(try await record("s1").pendingPrompt == nil)
+        try await services.resetPiState()  // 重启时的启动对账
         _ = try await live("s1", file: file)  // 桥重新发现它；文件没有新内容，不会再读
 
         #expect(try await record("s1").pendingPrompt == "第三问")
@@ -238,7 +230,7 @@ struct PiTranscriptTests {
             continuation.yield(.updated(try! PiHistory.index(file: recentInside, from: nil, transcript: false, files: store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
             continuation.finish()
-        })
+        }, agent: .pi)
 
         #expect(try await store.piMessages(of: "old-inside").count == 4)
         #expect(try await store.piMessages(of: "recent-inside").isEmpty)

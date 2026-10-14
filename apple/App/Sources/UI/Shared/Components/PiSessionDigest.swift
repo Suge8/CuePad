@@ -13,6 +13,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PiPreview] = []
     /// 没能送达的话有几句（会话列表查询带出的同一个数，`PiSessionListItem.undelivered`）。
     var undelivered = 0
+    /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
+    var cueSent: Set<UUID> = []
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
     var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
@@ -42,24 +44,15 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
         let session = item?.state
         let ref = session?.sessionID ?? sessionID
+        let messages = try ref.map { try store.piMessages(of: $0) } ?? []
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
+            messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
-            undelivered: item?.undelivered ?? 0)
-    }
-}
-
-extension PiThinkingLevel {
-    /// 夹到 `supported` 里（与 Pi 的 clampThinkingLevel 同规则）：支持就是它，否则先往高找最近的一档，没有再往低找；
-    /// 不知道支持哪些时原样。
-    nonisolated func clamped(to supported: [PiThinkingLevel]) -> PiThinkingLevel {
-        guard !supported.isEmpty, !supported.contains(self) else { return self }
-        let all = Self.allCases
-        let index = all.firstIndex(of: self) ?? 0
-        return all[index...].first(where: supported.contains) ?? all[..<index].last(where: supported.contains) ?? supported[0]
+            undelivered: item?.undelivered ?? 0,
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
     }
 }
 
@@ -75,28 +68,38 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
-/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态符号上（等你确认赭黄问号、出错胭脂叹号），正文中性；
-/// `prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
+/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态符号上（问题是 `WaitingMark`、出错是胭脂叹号），正文中性；
+/// 问题的正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
 /// 层级只有两层：对话里的（出错的原因）是纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是玻璃，
 /// 与回复框同属底部玻璃那一层。顶上只有系统玻璃（标题、圆钮），不在对话上另浮卡片。
 struct Callout<Accessory: View>: View {
-    let tint: Color
-    let symbol: String
+    enum Kind { case question, failure }
+
+    let kind: Kind
     let text: String
-    var prominent = false
     var docked = false
     @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
 
+    init(_ kind: Kind, text: String, docked: Bool = false, @ViewBuilder accessory: () -> Accessory) {
+        self.kind = kind
+        self.text = text
+        self.docked = docked
+        self.accessory = accessory()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: symbol).foregroundStyle(tint).accessibilityHidden(true)
+                switch kind {
+                case .question: WaitingMark()
+                case .failure: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityHidden(true)
+                }
                 Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            .font(prominent ? Typography.title : Typography.body)
+            .font(kind == .question ? Typography.title : Typography.body)
             accessory
         }
         .padding(16)
@@ -107,8 +110,8 @@ struct Callout<Accessory: View>: View {
 }
 
 extension Callout where Accessory == EmptyView {
-    init(tint: Color, symbol: String, text: String, prominent: Bool = false, docked: Bool = false) {
-        self.init(tint: tint, symbol: symbol, text: text, prominent: prominent, docked: docked) { EmptyView() }
+    init(_ kind: Kind, text: String, docked: Bool = false) {
+        self.init(kind, text: text, docked: docked) { EmptyView() }
     }
 }
 
@@ -165,7 +168,7 @@ struct QuestionCard: View {
     private var failure: String? { writeError ?? sent?.failure }
 
     var body: some View {
-        Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: question.text, prominent: true, docked: true) {
+        Callout(.question, text: question.text, docked: true) {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {

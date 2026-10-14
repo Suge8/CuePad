@@ -33,10 +33,10 @@ enum CloudKitLimits {
 /// （`awaitedTables`）里要追的记录（`needsCatchUp`）按 ID 分批取整条交给协调器，不被令牌跨过；其余由引擎负责。
 /// 令牌过期时清空重取。同一批变化之后还会经引擎到达，协调器的合并是幂等的。
 actor ZoneChangePuller {
-  /// 主动拉取等的是这些表（理由见 `AppServices.pollingCadence`）：投送请求（Mac 等着执行、手机等着结果）与
-  /// Pi 会话状态（手机看着 Agent 页时要是活的）。Pi 会话状态含全部历史（几千条），所以取令牌时只补取要追的。
-  /// 加新的等待理由时，它等的表要加进来。
-  static let awaitedTables: Set<Table> = [.deliveryRequests, .piSessionStates]
+  /// 主动拉取等的是这些表（理由见 `AppServices.pollingCadence`）：投送请求（Mac 等着执行、手机等着结果）、
+  /// Pi 会话状态（手机看着 Agent 页时要是活的）与 Cue 的对话和设置（Cue 值班的 Mac 等着你在别的设备上说的话和回答、等别的 Mac 接管）。
+  /// Pi 会话状态含全部历史（几千条），所以取令牌时只补取要追的。加新的等待理由时，它等的表要加进来。
+  static let awaitedTables: Set<Table> = [.deliveryRequests, .piSessionStates, .cueMessages, .cueProfile]
 
   /// 取令牌那一遍带回的字段：版本（`modifiedAt`）、Pi 会话的状态与投送请求的状态（都是明文），据此判断要不要补取，不带正文。
   static let versionKeys = ["modifiedAt", "state", "status"]

@@ -15,14 +15,16 @@ struct SessionGroup: Equatable {
     let key: Key
     let sessions: [PiSessionState]
 
-    static func grouped(live: [PiSessionState], ended: [PiSessionState], now: Date, calendar: Calendar = .current) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live))]
+    static func grouped(
+        live: [PiSessionState], ended: [PiSessionState], cueOnDuty: Bool = false, now: Date, calendar: Calendar = .current
+    ) -> [SessionGroup] {
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, cueOnDuty: cueOnDuty))]
         let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }
 
-/// ⌘K 搜什么：卡片或 Pi 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
+/// ⌘K 搜什么：卡片或 Agent 会话。每次打开 ⌘K 从卡片开始；侧栏"全部 N 个"直接进会话。
 enum SearchScope: Hashable {
     case cards, sessions
 }
@@ -77,7 +79,7 @@ struct SessionResultList: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
-                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端运行 pi，会话就会出现在这里")
+                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
                             .font(Typography.secondary).foregroundStyle(.secondary).padding(16)
                     }
                     ForEach(groups, id: \.key) { group in

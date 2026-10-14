@@ -25,7 +25,14 @@ private let temporaryCounter = Atomic(0)
 func makeTempDirectory() throws -> URL {
     let dir = temporaryRoot.appending(path: String(temporaryCounter.add(1, ordering: .relaxed).newValue), directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    AgentTape.current?.register(temporaryDirectory: dir)
     return dir
+}
+
+/// 托管的 Pi 不随测试进程、桥或 `PiHost` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
+/// 它们都连在本用例的临时 socket 目录里，是本用例启动的；只按这些 pid 发，不碰别的进程。
+@MainActor func stopHostedProcesses(_ bridge: PiBridge) {
+    for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
 }
 
 func makeSocketDirectory() throws -> URL {

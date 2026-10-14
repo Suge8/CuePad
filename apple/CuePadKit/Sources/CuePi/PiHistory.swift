@@ -34,6 +34,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
     var recap = PiRecap()
+    /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它。可选：旧检查点没有这一项
+    var excluded: Bool?
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
@@ -43,14 +45,18 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
 
 public struct PiHistoryUpdate: Sendable {
     public var file: URL
+    public var agent: AgentKind
     public var checkpoint: PiHistoryCheckpoint
     public var history: PiSessionHistory
     /// 这次新读到的对话（从头读时是全部）；`includesTranscript` 为 false 时（只读了摘要）为空
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器按文件修改时间——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话 id：会话文件头里的，没有就用文件名（与会话索引的 id 同一规则）
+    /// 会话 id：会话文件头里的；Claude Code 的文件名就是会话 id，文件头还没读到时用它。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    /// 算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
+    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。Claude Code 的文件名就是会话 id，总算。
+    public var isSession: Bool { history.sessionID != nil || agent == .claudeCode }
     public var recap: PiRecap { checkpoint.recap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -61,13 +67,25 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除等）可以丢掉
+    /// `sessionFiles` 是此刻全部会话文件（文件头还没写好的不算）：不在其中的旧索引（文件已删除、按文件名记下的等）可以丢掉
     case backfillFinished(sessionFiles: [URL])
 }
 
-/// Pi 会话文件（JSONL，v3 树结构）的解析。当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，
-/// 与 Pi 加载会话时确定叶子的规则一致。
+/// Agent 会话文件（JSONL）的增量解析：读取、检查点与摘要的规则各家共用，逐行的解码按 Agent 分（`LineParser`；
+/// Pi 的在这里，Claude Code、Codex 的在 `ClaudeHistory`、`CodexHistory`）。OpenCode 的会话在它的数据库里，不经这里。
+/// Pi 的会话文件是 v3 树结构：当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，与 Pi 加载会话时确定叶子的规则一致。
 public enum PiHistory {
+    /// 一行会话文件（不含换行）的解码：更新检查点里的摘要与轮次状态，你的话与每轮的回答加进 `transcript`。损坏或不认识的行跳过。
+    typealias LineParser = (UnsafeRawBufferPointer, inout PiHistoryCheckpoint, inout Transcript) throws -> Void
+
+    static func parser(for agent: AgentKind) -> LineParser {
+        switch agent {
+        case .pi: ingestLine
+        case .claudeCode: ClaudeHistory.ingest
+        case .codex: CodexHistory.ingest
+        case .opencode: preconditionFailure("OpenCode 的会话不在文件里")
+        }
+    }
 
     private static let fingerprintPrefix = 256
     private static let blockSize = 8 * 1024 * 1024
@@ -81,7 +99,7 @@ public enum PiHistory {
     /// `transcript` 为 false 时不要对话（7 天外的会话）：从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
     /// 最近一轮的问答从文件尾往回解码到够用为止；得到的检查点与逐行全读一样，之后增量读接得上。
     public static func index(
-        file: URL, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, files: AttachmentFiles
+        file: URL, agent: AgentKind = .pi, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, files: AttachmentFiles
     ) throws -> PiHistoryUpdate {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
@@ -92,8 +110,10 @@ public enum PiHistory {
         let start = state.offset
         var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: files)
         let consumed: UInt64
-        if wanted || resumed != nil {
-            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try ingest(line, into: &state, transcript: &transcript) }
+        // 只读摘要的快速路径只有 Pi 的（它的会话文件动辄几百 MB）；其余逐行全读、丢掉对话
+        if wanted || resumed != nil || agent != .pi {
+            let parse = parser(for: agent)
+            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try parse(line, &state, &transcript) }
             if !wanted { transcript.messages = [] }
         } else {
             var lines: [Skimmed] = []
@@ -103,7 +123,7 @@ public enum PiHistory {
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
         return PiHistoryUpdate(
-            file: file, checkpoint: state, history: history(of: state), messages: transcript.messages, includesTranscript: wanted,
+            file: file, agent: agent, checkpoint: state, history: history(of: state), messages: transcript.messages, includesTranscript: wanted,
             bytesRead: Int(consumed - start))
     }
 
@@ -265,7 +285,7 @@ public enum PiHistory {
 
     /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。`files` 是你的消息里的图片要存进的附件目录；
     /// nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
-    private struct Transcript {
+    struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
         var messages: [PiChatMessage] = []
@@ -278,6 +298,10 @@ public enum PiHistory {
                 sessionID: cp.sessionID ?? fallbackID, entryID: entryID, seq: seq, role: role, text: text, at: at, tools: tools,
                 roundStartedAt: roundStartedAt, deliveryID: deliveryID.flatMap(UUID.init(uuidString:))))
         }
+    }
+
+    private static func ingestLine(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout Transcript) throws {
+        try ingest(raw, into: &cp, transcript: &transcript)
     }
 
     private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) throws {
@@ -361,13 +385,13 @@ public enum PiHistory {
         return machineMessage.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
     }
 
-    private static func collapsed(_ text: String) -> String {
+    static func collapsed(_ text: String) -> String {
         text.split(whereSeparator: { $0.isWhitespace || $0.unicodeScalars.allSatisfy { CharacterSet.controlCharacters.contains($0) } })
             .joined(separator: " ")
     }
 
     /// 去掉首尾空白后截到 `limit` 个字符（超出的以省略号结尾）；空文字为 nil。
-    private static func clip(_ text: String, _ limit: Int) -> String? {
+    static func clip(_ text: String, _ limit: Int) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit - 1)) + "…"

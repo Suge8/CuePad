@@ -130,7 +130,7 @@ struct AgentPage: View {
 
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let session = item.state
-        let endable = MacDelivery.canEnd(session) && end?.isOpen != true
+        let endable = session.canEnd && end?.isOpen != true
         return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
@@ -155,7 +155,7 @@ struct AgentPage: View {
             }
         case .none(let inProject):
             EmptyState(mascot: .empty, title: inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
-                       message: "在终端运行 pi，或点右上角开一个新会话") { EmptyView() }
+                       message: "在终端里开一个 Agent，或点右上角开新会话") { EmptyView() }
         }
     }
 }

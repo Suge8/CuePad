@@ -7,6 +7,8 @@ struct CuePadApp: App {
     @UIApplicationDelegateAdaptor(IOSAppDelegate.self) private var delegate
     @State private var launch = Launch.make()
 
+    init() { LiteralText.install() }
+
     var body: some Scene {
         WindowGroup {
             switch launch {
@@ -37,7 +39,7 @@ enum Launch {
 
     static func open(_ location: LibraryLocation) -> Launch {
         do {
-            let services = try AppServices(location: location, defaults: location.makeDefaults(), sync: .iCloud)
+            let services = try AppServices(location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource)
             services.start()
             return .ready(services)
         } catch {

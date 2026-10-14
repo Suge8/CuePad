@@ -17,24 +17,26 @@ DEFINE SCHEMA
     );
 
     RECORD TYPE cards (
-        "___recordID"  REFERENCE QUERYABLE,
-        projectID      STRING,
-        body           ENCRYPTED STRING,
-        isPinned       INT64,
-        variableValues ENCRYPTED STRING,
-        sortKey        STRING,
-        deletedAt      INT64,
-        createdAt      INT64,
-        modifiedAt     INT64,
-        conflictOf     STRING,
-        parentID       STRING,
-        todoAt         INT64,
-        startedAt      INT64,
-        completedAt    INT64,
-        piSessionID    STRING,
-        archivedAt     INT64,
-        isFavorite     INT64,
-        numbering      STRING,
+        "___recordID"    REFERENCE QUERYABLE,
+        projectID        STRING,
+        body             ENCRYPTED STRING,
+        isPinned         INT64,
+        variableValues   ENCRYPTED STRING,
+        sortKey          STRING,
+        deletedAt        INT64,
+        createdAt        INT64,
+        modifiedAt       INT64,
+        conflictOf       STRING,
+        parentID         STRING,
+        todoAt           INT64,
+        startedAt        INT64,
+        completedAt      INT64,
+        piSessionID      STRING,
+        archivedAt       INT64,
+        formerSessionIDs STRING,
+        cueFollows       INT64,
+        isFavorite       INT64,
+        numbering        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -48,6 +50,8 @@ DEFINE SCHEMA
         cardID        STRING,
         sentAt        INT64,
         modifiedAt    INT64,
+        deliveryID    STRING,
+        origin        STRING,
         taskID        STRING,
         partIDs       STRING,
         GRANT WRITE TO "_creator",
@@ -92,6 +96,7 @@ DEFINE SCHEMA
         models        ENCRYPTED STRING,
         context       ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
+        agent         STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -111,6 +116,7 @@ DEFINE SCHEMA
         createdAt     INT64,
         completedAt   INT64,
         modifiedAt    INT64,
+        origin        STRING,
         taskID        STRING,
         partIDs       STRING,
         GRANT WRITE TO "_creator",
@@ -165,6 +171,68 @@ DEFINE SCHEMA
         hostID        STRING,
         windows       ENCRYPTED STRING,
         createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueMessages (
+        "___recordID" REFERENCE QUERYABLE,
+        author        STRING,
+        text          ENCRYPTED STRING,
+        choices       ENCRYPTED STRING,
+        urgent        INT64,
+        taskID        STRING,
+        answer        ENCRYPTED STRING,
+        answeredAt    INT64,
+        deliveredAt   INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        notify        STRING QUERYABLE,
+        acceptance    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueLines (
+        "___recordID" REFERENCE QUERYABLE,
+        text          ENCRYPTED STRING,
+        pinned        INT64,
+        source        STRING,
+        remindAt      INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        deletedAt     INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueProfile (
+        "___recordID" REFERENCE QUERYABLE,
+        name          ENCRYPTED STRING,
+        hostID        STRING,
+        runtime       STRING,
+        model         ENCRYPTED STRING,
+        effort        ENCRYPTED STRING,
+        enabledAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueState (
+        "___recordID" REFERENCE QUERYABLE,
+        state         STRING,
+        detail        ENCRYPTED STRING,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE macPresence (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        onlineUntil   INT64,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

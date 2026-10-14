@@ -1,5 +1,6 @@
 import CueStore
 import SwiftUI
+import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -53,6 +54,15 @@ enum DebugHooks {
         #endif
     }()
 
+    /// 同步引擎从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
+    static var syncSource: AppServices.SyncSource {
+        #if DEBUG
+        DebugScene.syncSource
+        #else
+        .iCloud
+        #endif
+    }
+
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 Debug 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
     static var launchArgumentOverrides: [String: Any] {
@@ -60,6 +70,13 @@ enum DebugHooks {
         UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
         #else
         [:]
+        #endif
+    }
+
+    /// 发布版不让启动参数改设置：标准偏好域自带一层启动参数覆盖，Release 里把它去掉；Debug 里留着给视觉验收用。
+    static func dropLaunchArguments(from defaults: UserDefaults) {
+        #if !DEBUG
+        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
         #endif
     }
 
@@ -96,6 +113,13 @@ enum DebugHooks {
         #endif
     }
 
+    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
+    static func previewWebLoaded(_ page: WebPage) {
+        #if DEBUG
+        DebugScene.snapshotWeb(page)
+        #endif
+    }
+
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
@@ -124,6 +148,24 @@ enum DebugHooks {
     /// 显示主窗口或设置窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
     static func present(_ window: NSWindow) {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
+    }
+
+    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
+    static var deliversNotifications: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        #else
+        false
+        #endif
+    }
+
+    /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
+    static var updater: (any AppUpdater)? {
+        #if DEBUG
+        DebugScene.scene == "updatewait" ? DebugScene.DemoUpdater() : nil
+        #else
+        nil
+        #endif
     }
 
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
@@ -194,6 +236,7 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
+            await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -210,6 +253,7 @@ extension View {
             .task {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)
+                await DebugScene.cycleIfAsked(workspace.services)
             }
         #else
         self
@@ -241,6 +285,7 @@ struct DebugStage<Main: View>: View {
         #if DEBUG
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
+        case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
         case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()

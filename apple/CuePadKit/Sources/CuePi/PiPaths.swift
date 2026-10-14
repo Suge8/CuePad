@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// Pi 与 CuePad 桥用到的全部目录，唯一权威来源。
@@ -12,15 +13,27 @@ public struct PiPaths: Sendable, Equatable {
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
     /// skill 与扩展同在 Pi 目录下（Pi 自动发现 `<Pi 目录>/skills`）：App 写的文件不进用户自己维护的 `~/.agents/skills`。
     public var skillsDirectory: URL { agentDirectory.appending(path: "skills", directoryHint: .isDirectory) }
+    /// `cuepad` 命令行链接所在的目录（`CUEPAD_BIN_DIR`，缺省 `~/.local/bin`：不需要管理员权限）
+    public var binDirectory: URL
+    /// Pi 目录与链接目录都是指定的（参数或环境变量），不是缺省的真实位置。隔离运行（开发构建）只在这时接入 Agent，
+    /// 不会把真实 `~/.pi` 与 `~/.local/bin` 里的东西改成指向开发构建。
+    public var isExplicit: Bool
+    /// Agent 钩子转发到 CuePad 的 socket（`AgentHookServer`），与 Pi 会话的 socket 同目录
+    public var hookSocket: URL { AgentHookEnvelope.socketPath(environment: ["CUEPAD_PI_SOCKET_DIR": socketDirectory.path]) }
 
     public init(
         agentDirectory: URL? = nil,
         socketDirectory: URL? = nil,
+        binDirectory: URL? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.agentDirectory = agentDirectory ?? Self.defaultAgentDirectory(environment)
-        self.socketDirectory = socketDirectory
-            ?? URL(filePath: environment["CUEPAD_PI_SOCKET_DIR"] ?? "/tmp/cuepad-\(getuid())", directoryHint: .isDirectory)
+        self.socketDirectory = socketDirectory ?? AgentHookEnvelope.socketDirectory(environment: environment)
+        let binOverride = environment["CUEPAD_BIN_DIR"].flatMap { $0.isEmpty ? nil : URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
+        self.binDirectory = binDirectory ?? binOverride
+            ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin", directoryHint: .isDirectory)
+        let agentGiven = agentDirectory != nil || !(environment["PI_CODING_AGENT_DIR"] ?? "").isEmpty
+        isExplicit = agentGiven && (binDirectory != nil || binOverride != nil)
     }
 
     /// 由 CuePad 启动的 Pi 要带的环境：连接目录总带（桥在这里找它），Pi 目录不是默认的才带（读写同一份会话与扩展）。

@@ -16,7 +16,7 @@ import UIKit
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
-    static let bundleID = "com.sugeh.cuepad"
+    nonisolated static let bundleID = "com.sugeh.cuepad"
     /// 给人看的版本："0.1.0（1）"。
     static let version: String = {
         let info = Bundle.main.infoDictionary
@@ -27,6 +27,8 @@ final class AppServices {
     let store: CueStore
     #if os(macOS)
     let pi: PiBridge
+    /// 总控 Agent Cue（只在 Mac 上值班）。
+    let cue: CueService
     #endif
 
     /// 设备本地偏好（主题、快捷键、当前项目）。
@@ -69,10 +71,14 @@ final class AppServices {
     @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    /// 有还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
+    /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话（`openDeliveries`）。
+    /// 只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
+    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅），
+    /// iOS 顶上的提示横幅也让给 Cue 页自己的。
+    var cueViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -83,19 +89,21 @@ final class AppServices {
     #endif
 
     #if os(macOS)
-    /// Pi 扩展的检测与安装（写入前需征得同意）。
-    let piIntegration: PiIntegrationManager
+    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
+    let agents: AgentIntegrations
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
+    /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
+    @ObservationIgnored weak var alerts: AlertCenter?
 
-    @ObservationIgnored let paths: PiPaths
+    @ObservationIgnored let paths: AgentPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let host: any PiHosting
-    @ObservationIgnored let locatePi: @Sendable () async -> URL?
+    @ObservationIgnored let hooks: AgentHookServer
+    @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
@@ -103,16 +111,20 @@ final class AppServices {
     @ObservationIgnored let hostID: String
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
+    /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
+    @ObservationIgnored let presence: MacPresenceKeeper
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, host: host, hostID: hostID, recorder: piStateRecorder, locatePi: locatePi,
-        uploadResult: { [weak self] id in await self?.upload(id) },
+        store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
+        upload: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
-    @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
-        self?.windowShell?.toggleFromHotkey()
-    }
+    /// "显示或隐藏 CuePad"的全局快捷键。
+    @ObservationIgnored lazy var hotkey = GlobalHotkey(
+        label: "显示或隐藏 CuePad", key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
+        backend: hotkeyBackend
+    ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
     nonisolated enum StartupIssue: Equatable {
@@ -130,28 +142,28 @@ final class AppServices {
         #endif
     }
 
-    /// 发到 Mac：写一条投送请求，交给运行该 Pi 会话的那台 Mac（取自会话的 `hostID`）执行；
-    /// 那台 Mac 执行后写回结果并记发送记录，这里不记。
-    @discardableResult
-    func requestMacDelivery(
-        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        uploaded(try await store.requestDelivery(
-            storedText, to: session.target, on: session.hostID, mode: mode, card: card))
+    /// 撤回一句说出去的话（排队的话、重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
+    /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
+    func withdraw(_ said: Said) async throws {
+        switch said {
+        case .request(let request) where request.status == .known(.failed):
+            try await store.deleteDelivery(request.id)
+        case .request(let request):
+            guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
+        case .cue(let message, _):
+            guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
+        }
+        Task { await upload(said.id, deleted: true) }
     }
 
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（发给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
-    @discardableResult
-    func requestMacDelivery(
-        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
-    }
-
-    /// 撤回还没被 Mac 领取的话（排队的话），立即把删除传上去，免得 Mac 先拉到它；已领取的撤不回，抛出原因。
-    func withdraw(_ request: DeliveryRequest) async throws {
-        guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
-        Task { await upload(request.id, deleted: true) }
+    /// 到 `host` 那台 Mac 的同步此刻通不通（`Speech` 判断超时原因的输入）：本机就是那台 Mac 时不经同步，算通。
+    func reaches(_ host: String?) -> Bool {
+        #if os(macOS)
+        if host == nil || host == hostID { return true }
+        #endif
+        // 演示 Mac 就在本机库里接手，不经同步
+        if DebugHooks.preset.demoMac { return true }
+        return syncStatus.reachesMac
     }
 
     /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
@@ -161,22 +173,26 @@ final class AppServices {
     }
 
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
-    private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
+    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
         return request
     }
 
-    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒），也不排在引擎正在做的事后面（`CloudSync.sendNow`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
-    /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
+    /// 改 Cue 的设置（同步的 `CueProfile`）：两端唯一的写入口——Mac 的设置与启用、停用（`CueService`），两端 Cue 页的模型与思考强度。
+    /// 写库后立即上传这一条，别的设备马上看到；Cue 住的那台 Mac 的管理器读到就按新设置值班。
+    func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
+        try await Self.updateCue(edit, store: store, sync: sync)
+    }
+
+    /// 同上，给拿着库与同步引擎、没有 `AppServices` 的 `CueService`。
+    static func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void, store: CueStore, sync: (any SyncControlling)?) async throws {
+        try await store.updateCueProfile(edit)
+        await sync?.upload(CueProfile.recordID)
+    }
+
+    /// 立即上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
     func upload(_ record: UUID, deleted: Bool = false) async {
-        guard let sync else { return }
-        let began = Date.now
-        do {
-            try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
-            Self.log.info("立即上传 \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
-        } catch {
-            Self.log.notice("立即上传记录失败，等引擎自动上传：\(error.localizedDescription, privacy: .public)")
-        }
+        await sync?.upload(record, deleted: deleted)
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
@@ -191,14 +207,14 @@ final class AppServices {
     }
 
     /// 换会话的模型或思考强度：写一条配置请求给会话所在的 Mac（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
-    /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `outcome(of:)` 等。
+    /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `CueStore.outcome(of:)` 等。
     func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestConfig(
             config, to: session.target, on: session.hostID))
     }
 
     /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
-    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `outcome(of:)` 等。
+    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `CueStore.outcome(of:)` 等。
     func end(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestEnd(
             of: session.target, on: session.hostID))
@@ -206,7 +222,7 @@ final class AppServices {
 
     /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc；与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
     /// 会话随后回到等你下一句（状态记录里是"完成"，被中止）；只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
-    /// 结果用 `outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
+    /// 结果用 `CueStore.outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
     func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestStop(
             of: session.target, on: session.hostID))
@@ -221,7 +237,7 @@ final class AppServices {
     }
 
     /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定），
-    /// 与发送同一条投送通道，写出后立即上传。结果用 `outcome(of:)`；绑好后目录绑定记录随同步回来。
+    /// 与发送同一条投送通道，写出后立即上传。结果用 `CueStore.outcome(of:)`；绑好后目录绑定记录随同步回来。
     func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
@@ -229,15 +245,6 @@ final class AppServices {
     /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用），写出后立即上传。
     func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestTranscript(of: session))
-    }
-
-    /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
-    func outcome(of request: UUID) async throws -> DeliveryRequest {
-        for try await current in store.observe({ try $0.deliveryRequest(request) }) {
-            guard let current else { throw CueStoreError.notFound }
-            if !current.isOpen { return current }
-        }
-        throw CancellationError()
     }
 
     /// 连接测试一次往返的分段。`upload`（写库完成 → 上传完成）与 `total`（开始写库 → 看到结果）用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
@@ -289,7 +296,7 @@ final class AppServices {
     ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
         try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
             group.addTask {
-                let done = try await self.outcome(of: request)
+                let done = try await self.store.outcome(of: request)
                 return (done, (ContinuousClock.now, Date()))
             }
             group.addTask {
@@ -304,7 +311,7 @@ final class AppServices {
 
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let store = try Self.openLibrary(at: location)
+        let store = try Self.openLibrary(at: location, timing: mac.timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -313,17 +320,20 @@ final class AppServices {
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
+        presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
         pi = mac.pi
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
-        locatePi = mac.locatePi
-        host = mac.host
-        piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings)
+        hooks = mac.hooks
+        runtimes = mac.runtimes(store)
+        agents = AgentIntegrations(mac.agents, isEnabled: !location.isIsolated || mac.paths.pi.isExplicit)
         commandLineTool = mac.commandLineTool
-        updates = UpdateService(updater: mac.updater)
+        updates = UpdateService(updater: mac.updater, bridge: mac.pi)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
+        cue = CueService(
+            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {
@@ -339,8 +349,8 @@ final class AppServices {
 
     /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     /// （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
-    static func openLibrary(at location: LibraryLocation) throws -> CueStore {
-        try CueStore(url: location.databaseURL)
+    static func openLibrary(at location: LibraryLocation, timing: Timing = .system) throws -> CueStore {
+        try CueStore(url: location.databaseURL, timing: timing)
     }
 
     /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
@@ -374,7 +384,7 @@ final class AppServices {
     }
 }
 
-extension PiSessionState {
+nonisolated extension PiSessionState {
     /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

@@ -29,6 +29,23 @@ import Testing
     #expect(try await store.handedSessions() == [idea.id: .session("s-idea"), task.id: .session("s-task")])
   }
 
+  /// 正在开会话只认会被认领的那一次：亲手绑定、解绑作废了它，或之后又交给了别的会话，就不再算正在开（Cue 的看板与开工同读这一条）。
+  @Test func 作废或被后来的交给盖过的开会话请求_不算正在开会话() async throws {
+    let project = try await store.createProject(name: "圆桌", color: "#111")
+    try await store.setDirectory("/work", for: project.id)
+    let bound = try await store.createTask("修乱序", in: project.id), handed = try await store.createTask("改文案", in: project.id)
+    for leaf in [bound, handed] {  // 同界面没有草稿时的"开新会话"：请求带着叶子自己
+      _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: UUID().uuidString), title: "圆桌", on: "mac-a", card: leaf.id)
+    }
+    #expect(try await store.launchingLeaves([bound.id, handed.id]) == [bound.id, handed.id])
+
+    try await store.bindSession("s1", to: bound.id)
+    try await store.unbindSession(from: bound.id)
+    try await Task.sleep(for: .milliseconds(5))  // 两次交给落在不同的毫秒（请求按 createdAt 排先后）
+    _ = try await store.requestDelivery("先看看", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", card: handed.id)
+    #expect(try await store.launchingLeaves([bound.id, handed.id]).isEmpty)
+  }
+
   /// 开新会话后又把它交给了别的会话：以后一次为准，新会话开好时不把它抢回去（行上的点跟最后一次交给的走）。
   @Test func 之后又交给了别的会话_新会话开好时不抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")

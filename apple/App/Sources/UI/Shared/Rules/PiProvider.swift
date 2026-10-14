@@ -51,6 +51,8 @@ nonisolated struct PiProvider: Equatable, Identifiable {
         "anthropic": ("Anthropic", "anthropic", "Claude"),
         "openai": ("OpenAI", "openai", nil),
         "openai-codex": ("OpenAI Codex", "openai", "Codex"),
+        // Codex 会话上报的模型（`AgentKind.modelProvider`）
+        "codex": ("Codex", "openai", "Codex"),
         "google": ("Google", "gemini", nil),
         "google-vertex": ("Google Vertex", "gemini", nil),
         "xai": ("xAI", "xai", nil),

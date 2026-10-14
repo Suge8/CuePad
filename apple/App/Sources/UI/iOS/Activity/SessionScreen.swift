@@ -70,7 +70,7 @@ struct SessionScreen: View {
                     if MacDelivery.canRename(session) {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }
-                    if MacDelivery.canEnd(session) {
+                    if session.canEnd {
                         Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
                             .disabled(shownEnd?.isOpen == true)
                     }
@@ -88,7 +88,7 @@ struct SessionScreen: View {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
+                        Callout(.failure, text: "没能结束：\(reason)", docked: true)
                     }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {
@@ -112,7 +112,6 @@ struct SessionScreen: View {
                 .environment(\.composerInk, .solid)
             }
         }
-        .ownsBottomEdge()
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)

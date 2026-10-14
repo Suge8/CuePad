@@ -43,7 +43,7 @@ enum DemoLibrary {
         try await seedQuotas(store)
         let home = demoHome
         for (index, item) in [("cuepad", "规划投送队列的重试边界"), ("atlas", "多 Agent 调度压测"), ("homepage", "首页改版文案")].enumerated() {
-            try await store.upsertPiSession(PiSession(
+            try await store.upsertPiSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
         }
@@ -138,7 +138,7 @@ enum DemoLibrary {
         ("CuePad", "设置页加快捷键冲突提示", false),
         ("CuePad", "首次启动引导绑定文件夹", true),
         ("CuePad", "深色模式下纸色偏灰", true),
-        ("圆桌", "发言轮次在 5 人以上会乱序", false),
+        ("圆桌", "发言轮次乱序", false),
         ("圆桌", "登录回调改走统一网关", false),
         ("圆桌", "房间链接过期后给出提示", false),
         ("圆桌", "主持人可以静音全部", false),

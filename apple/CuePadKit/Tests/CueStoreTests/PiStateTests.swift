@@ -35,7 +35,7 @@ import Testing
     let firstWrite = try #require(try await states()["s1"]).modifiedAt
 
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")
-    try await recorder.update(sessionID: "s1", state: .outputting)
+    try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "edit")
     #expect(try await states()["s1"]?.state == .known(.thinking))  // 最短间隔内不写
     #expect(try await states()["s1"]?.modifiedAt == firstWrite)
@@ -99,8 +99,8 @@ import Testing
 
   // MARK: 历史会话
 
-  private func indexed(_ id: String, title: String = "修好登录", cwd: String = "/work/app", at seconds: TimeInterval = 1_000) -> PiSession {
-    PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd, title: title, lastActivityAt: Date(timeIntervalSince1970: seconds))
+  private func indexed(_ id: String, title: String = "修好登录", cwd: String = "/work/app", at seconds: TimeInterval = 1_000) -> IndexedSession {
+    IndexedSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd, title: title, lastActivityAt: Date(timeIntervalSince1970: seconds))
   }
 
   /// 同一个会话（Pi 重启、恢复后会话 id 不变）始终是同一条记录：在线时由状态写入方负责，索引不覆盖；结束后仍是它。
@@ -143,11 +143,11 @@ import Testing
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
     let mine = recorder(host: "mac-a")
     let other = recorder(host: "mac-b")
-    try await mine.update(sessionID: "s1", state: .thinking)
+    try await mine.update(sessionID: "s1", state: .settled, process: PiProcess(pid: 1, startedAt: 1))
     try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "上次的")))
     try await other.update(sessionID: "s2", state: .thinking)
 
-    try await mine.reset()
+    try await mine.reset { _ in false }
 
     let all = try await states()
     #expect(all["s1"]?.state == .known(.ended) && all["s1"]?.lastPrompt == "上次的")

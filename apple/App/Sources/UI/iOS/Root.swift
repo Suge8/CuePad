@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是两个标签（灵感 / Agent）加底部一行（标签与"写"；任务从书架一行进入），宽 iPad 用分栏。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是三个标签（Cue / Agent / 灵感）加底部一行（标签与"写"），宽 iPad 用分栏。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -10,9 +10,9 @@ struct IOSRoot: View {
     @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    let alerts: PiAlertCenter
+    let alerts: AlertCenter
 
-    init(services: AppServices, alerts: PiAlertCenter) {
+    init(services: AppServices, alerts: AlertCenter) {
         _workspace = State(initialValue: Workspace(services: services))
         _navigation = State(initialValue: Navigation(settings: services.settings))
         self.alerts = alerts
@@ -45,20 +45,19 @@ struct IOSRoot: View {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
-            // 发给 Agent 的输入框；任务浮窗开着时由浮窗自己浮起（浮在浮窗下面会被挡住）
             .overlay {
-                FloatingInput(isPresented: navigation.task == nil && navigation.outbox != nil, close: { navigation.outbox = nil }) {
+                FloatingInput(isPresented: navigation.outbox != nil, close: { navigation.outbox = nil }) {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
         // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
         .measuresStatusBar()
-        .overlay(alignment: .top) { NoticeBanner() }
+        // Cue 页在屏上时提示排在它的页头下面（`CuePage`），不浮在顶上
+        .overlay(alignment: .top) { if workspace.services.cueViewers == 0 { NoticeBanner() } }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
@@ -74,6 +73,7 @@ struct IOSRoot: View {
         .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
         .task { await workspace.observeAgentLinks() }
         .task { await workspace.observeFolderGuide() }
+        .task { await workspace.observeCue() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
@@ -117,8 +117,8 @@ struct RouteView: View {
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
-            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的"独占底部的页有几个"：那个数在推入、返回会话页与纸页时变，
-            // 读它的话两个标签里每一页（包括被盖住的）都要跟着重排一遍
+            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的 `Navigation.ownsBottom`：那个值在推入、返回会话页与纸页时变，
+            // 读它的话每个标签里每一页（包括被盖住的）都要跟着重排一遍
             .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
     }
 
@@ -137,6 +137,7 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .tasks: TasksScreen()
+        case .cue: CuePage().countsAsPiViewer()
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()

@@ -56,7 +56,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking, title: "一号")
     try await recorder.update(sessionID: "s2", state: .settled, title: "二号")
     try await recorder.update(sessionID: "s3", state: .settled, title: "三号")
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/1", cwd: "/work/p/x", lastActivityAt: .now), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/1", cwd: "/work/p/x", lastActivityAt: .now), host: "mac")
     try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "二号", ref: "s2"), on: "mac")
 
     let page = try await store.piSessionPage(PiSessionQuery(limit: .max)).items

@@ -4,9 +4,10 @@ import Darwin
 import Foundation
 import Observation
 
-/// 发现并连接本机所有活着的 Pi 会话（经扩展的 Unix socket），实时状态只在内存。
+/// 本机所有活着的 Agent 会话，实时状态只在内存。每个会话有一条控制通道（`SessionLink`）：Pi 的由这里发现并连接（经扩展的 Unix socket），
+/// 其他 Agent 的由各自的适配接上（`attach`、`update`、`detach`），界面、记录器与执行器只认这一处。
 ///
-/// - 会话出现 = 连上 socket 并收到 hello 快照；会话结束 = 连接断开（无心跳、无轮询）。
+/// - Pi 会话出现 = 连上 socket 并收到 hello 快照；会话结束 = 连接断开（无心跳、无轮询）。
 /// - 目录新增由 FSEvents 触发重扫；启动时全量扫描一次。残留 socket（进程被强杀）按文件名里的 pid 判死后删除。
 /// - 多个客户端（包括多个 `PiBridge`）可同时连同一会话：各自都收到 hello 与全部状态切换，
 ///   命令各走各的连接，`ack` 只回给发送方；扩展不做仲裁，命令按到达顺序交给 Pi。
@@ -20,12 +21,18 @@ public final class PiBridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
+        /// 此刻正在说的这条回答（见 `PiDraft`，刷新节奏见 `PiDraftFeed`）：出字时只有读它的视图重算
+        public var draft: PiDraft? { feed.draft }
+        private let feed = PiDraftFeed()
+
         init(_ session: PiSession) {
             id = session.id
             sessionID = session.sessionID
             cwd = session.cwd
             self.session = session
         }
+
+        func offer(_ next: PiDraft?) { feed.offer(next) }
     }
 
     /// 在线会话的格子，按出现先后。界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
@@ -35,13 +42,18 @@ public final class PiBridge {
     public var sessions: [PiSession] { slots.map(\.session) }
 
     /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
-    public func session(sessionID: String) -> PiSession? { slots.first { $0.sessionID == sessionID }?.session }
+    public func session(sessionID: String) -> PiSession? { slot(sessionID: sessionID)?.session }
+
+    /// 这个会话（`sessionID`）在线的那一格，规则同 `session(sessionID:)`；只随会话出现、消失通知。
+    public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
     /// 这个连接（`PiSession.id`）的会话。
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
+    /// 在线会话的控制通道（Pi 的就是它的 `Link`）
+    @ObservationIgnored private var controls: [PiSession.ID: any SessionLink] = [:]
     /// 没告别就断开的会话：断开可能先于进程退出被确认（强杀后进程还是僵尸），留着它的退出监视，退出时再删残留 socket
     @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     /// 已经重试过一次的"被拒绝"socket：文件还在时不再排重试，之后只在目录事件/重扫时再看
@@ -53,8 +65,8 @@ public final class PiBridge {
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
 
-    /// 一条已连接的 socket 及其未完成的命令。
-    private final class Link {
+    /// 一条已连接的 Pi socket 及其未完成的命令。
+    private final class Link: SessionLink {
         let connection: PiSocketConnection
         /// 连上时的那个 socket 文件
         let file: PiSocketDirectory.FileIdentity
@@ -68,9 +80,69 @@ public final class PiBridge {
             self.connection = connection
             self.file = file
         }
+
+        func send(_ message: PiMessage) async throws -> PiDelivery {
+            let ack = try await request { try PiWire.sendCommand(id: $0, message) }
+            switch ack.delivered {
+            case "steer": return .queued(.steer)
+            case "followUp": return .queued(.followUp)
+            default: return .immediate
+            }
+        }
+
+        func command(_ line: String, whenBusy: PiQueueMode?) async throws {
+            _ = try await request { try PiWire.slashCommand(id: $0, line: line, whenBusy: whenBusy) }
+        }
+
+        func reload() async throws { _ = try await request { try PiWire.reloadCommand(id: $0) } }
+        func end() async throws { _ = try await request { try PiWire.endCommand(id: $0) } }
+        func abort() async throws { _ = try await request { try PiWire.abortCommand(id: $0) } }
+
+        func answer(_ answer: PiAnswerValue, to promptID: String) async throws {
+            _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
+        }
+
+        /// 强度先在这里按目标模型夹好（`PiThinkingLevel.clamped`）：Pi 自己的夹法与之不同，界面按这一条显示。
+        func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
+            let key = model ?? session?.model?.key
+            let levels = session?.availableModels.first { $0.key == key }?.thinkingLevels ?? []
+            let thinking = thinking?.clamped(to: levels)
+            _ = try await request { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
+        }
+
+        func refreshQuota() async throws { _ = try await request { try PiWire.quotaCommand(id: $0) } }
+
+        private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
+            guard let session, !closed else { throw PiBridgeError.sessionEnded }
+            guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
+            nextCommand += 1
+            let commandID = "c\(nextCommand)"
+            let data = try encode(commandID)
+            var timeout: Task<Void, Never>?
+            defer { timeout?.cancel() }
+            let ack: PiWire.Ack = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    pending[commandID] = continuation
+                    connection.write(data)
+                    timeout = Task { [weak self] in
+                        guard (try? await Task.sleep(for: PiBridge.ackTimeout)) != nil else { return }
+                        self?.pending.removeValue(forKey: commandID)?.resume(throwing: PiBridgeError.ackTimeout)
+                    }
+                }
+            } onCancel: {
+                // 调用方取消：不等 ack 或超时，立即以取消结束（命令已发出，扩展照常执行）。切回主线程前 ack 已到的话请求已被取走，
+                // 这里什么都不做，按正常返回
+                Task { @MainActor [weak self] in self?.pending.removeValue(forKey: commandID)?.resume(throwing: CancellationError()) }
+            }
+            guard ack.ok else { throw PiBridgeError.rejected(ack.error ?? "unknown") }
+            return ack
+        }
+
+        /// 连接已收尾：之后的命令不再发
+        var closed = false
     }
 
-    private static let ackTimeout: Duration = .seconds(10)
+    fileprivate static let ackTimeout: Duration = .seconds(10)
     /// 对"进程活着但还没 listen"的 socket 只重试一次；之后由下一次目录事件/重扫再看
     private static let retryDelay: Duration = .milliseconds(200)
 
@@ -98,6 +170,7 @@ public final class PiBridge {
         watcher = nil
         for link in links.values { link.connection.close() }
         links = [:]
+        controls = [:]
         for watcher in orphanExitWatchers.values { watcher.cancel() }
         orphanExitWatchers = [:]
         slots = []
@@ -122,83 +195,94 @@ public final class PiBridge {
 
     // MARK: 命令
 
-    /// 发消息（文字 + 图片）。返回会话受理时的投递方式；`ack` 只表示已受理，不代表模型成功。
+    /// 发消息（文字 + 图片）。返回会话受理时的投递方式；受理只表示已收下，不代表模型成功。
     @discardableResult
     public func send(_ message: PiMessage, to id: PiSession.ID) async throws -> PiDelivery {
-        let ack = try await request(to: id) { try PiWire.sendCommand(id: $0, message) }
-        switch ack.delivered {
-        case "steer": return .queued(.steer)
-        case "followUp": return .queued(.followUp)
-        default: return .immediate
-        }
+        try await control(id).send(message)
     }
 
-    /// 执行一条斜杠命令（整行，以 / 开头）：内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发（模板与 skill 展开成这一轮的提示词，
-    /// 会话正忙时按 `whenBusy` 入队，缺省等它做完再说）。`ack` 只表示已受理，扩展命令自己的输出只出现在 Pi 的界面里；
+    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发（模板与 skill 展开成这一轮的提示词，
+    /// 会话正忙时按 `whenBusy` 入队，缺省等它做完再说）。受理只表示已收下，命令自己的输出只出现在 Agent 的界面里；
     /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, whenBusy: PiQueueMode? = nil, in id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.slashCommand(id: $0, line: line, whenBusy: whenBusy) }
+        try await control(id).command(line, whenBusy: whenBusy)
     }
 
-    /// 把文字粘贴进该会话的输入框（不发送）。
-
-    /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。
+    /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
     public func reload(_ id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.reloadCommand(id: $0) }
+        try await control(id).reload()
     }
 
-    /// 请该会话的扩展让 Pi 正常退出（`ack` 即已受理，退出随后发生，会话结束以 `.ended` 报告）。托管的进程用 `PiHost.end`，它等到真的退出。
+    /// 请该会话正常退出（受理即返回，退出随后发生，会话结束以 `.ended` 报告）。托管的 Pi 进程用 `PiHost.end`，它等到真的退出。
     public func end(_ id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.endCommand(id: $0) }
+        try await control(id).end()
     }
 
-    /// 停止该会话正在跑的这一轮（相当于在 Pi 里按 Esc）：`ack` 即已受理，会话随后歇下（`.settled`），能接着说。
-    /// 指挥官已经空闲时什么也不发生（也成功）；只停指挥官自己这一轮，它派出的子代理照常跑。
+    /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
+    /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     public func abort(_ id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.abortCommand(id: $0) }
+        try await control(id).abort()
     }
 
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
     public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
+        try await control(id).answer(answer, to: promptID)
     }
 
-    /// 换该会话的模型、思考强度（至少给一项）：先换模型再设强度，强度按新模型支持的范围夹取。
-    /// 模型不在 Pi 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
+    /// 换该会话的模型、思考强度或会话名（至少给一项）：先换模型再设强度，强度按新模型支持的范围夹取。
+    /// 模型不在 Agent 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
+        try await control(id).configure(model: model, thinking: thinking, name: name)
     }
 
-    /// 请该会话的扩展查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
-    /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。
+    /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
+    /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。只有 Pi 有。
     public func refreshQuota(in id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.quotaCommand(id: $0) }
+        try await control(id).refreshQuota()
     }
 
-    private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
-        guard let link = links[id], let session = link.session else { throw PiBridgeError.unknownSession(id) }
-        guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
-        link.nextCommand += 1
-        let commandID = "c\(link.nextCommand)"
-        let data = try encode(commandID)
-        var timeout: Task<Void, Never>?
-        defer { timeout?.cancel() }
-        let ack: PiWire.Ack = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                link.pending[commandID] = continuation
-                link.connection.write(data)
-                timeout = Task { [weak link] in
-                    guard (try? await Task.sleep(for: Self.ackTimeout)) != nil else { return }
-                    link?.pending.removeValue(forKey: commandID)?.resume(throwing: PiBridgeError.ackTimeout)
-                }
-            }
-        } onCancel: {
-            // 调用方取消：不等 ack 或超时，立即以取消结束（命令已发出，扩展照常执行）。切回主线程前 ack 已到的话请求已被取走，
-            // 这里什么都不做，按正常返回
-            Task { @MainActor [weak self] in self?.links[id]?.pending.removeValue(forKey: commandID)?.resume(throwing: CancellationError()) }
+    private func control(_ id: PiSession.ID) throws -> any SessionLink {
+        guard let link = controls[id] else { throw PiBridgeError.unknownSession(id) }
+        return link
+    }
+
+    // MARK: 其他 Agent 的适配接入
+
+    /// 一个会话上线（适配发现了它，或 CuePad 刚开了它）：之后的命令交给 `link`。同一 id 已在线时只换通道与快照，不重报出现。
+    public func attach(_ session: PiSession, via link: any SessionLink) {
+        controls[session.id] = link
+        if let slot = slots.first(where: { $0.id == session.id }) {
+            if slot.session != session { slot.session = session }
+            emit(.infoChanged(session))
+            return
         }
-        guard ack.ok else { throw PiBridgeError.rejected(ack.error ?? "unknown") }
-        return ack
+        slots.append(Slot(session))
+        emit(.appeared(session))
+    }
+
+    /// 改一个在线会话的快照：状态变了报 `stateChanged`，否则报 `infoChanged`；没有变化不报。不在线时什么也不做。
+    public func update(_ id: PiSession.ID, _ change: (inout PiSession) -> Void) {
+        guard let slot = slots.first(where: { $0.id == id }) else { return }
+        var session = slot.session
+        change(&session)
+        guard session != slot.session else { return }
+        let previous = slot.session.state
+        slot.session = session
+        emit(session.state == previous ? .infoChanged(session) : .stateChanged(session, from: previous))
+    }
+
+    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由 `PiDraftFeed` 统一定；只改这一格的 `draft`，
+    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做；会话下线时随它的格子一起没了。
+    public func setDraft(_ id: PiSession.ID, _ draft: PiDraft?) {
+        slots.first { $0.id == id }?.offer(draft)
+    }
+
+    /// 一个会话下线（进程退出、会话结束）。
+    public func detach(_ id: PiSession.ID, reason: PiSessionEndReason) {
+        controls[id] = nil
+        guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
+        let session = slots.remove(at: index).session
+        emit(.ended(session, reason: reason))
     }
 
     // MARK: 发现
@@ -269,7 +353,7 @@ public final class PiBridge {
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
             var session = PiSession(
-                id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
+                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
                 extensionVersion: hello.extensionVersion, state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
@@ -281,10 +365,11 @@ public final class PiBridge {
             guard link.session == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
-                id: name, sessionID: hello.sessionId, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
+                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
                 terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
+            session.hosted = hello.hosted
             appear(session, on: link)
         case .state(let wire):
             guard var session = link.session else { throw HandlingError.messageBeforeHello }
@@ -306,6 +391,9 @@ public final class PiBridge {
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let bye):
             link.bye = bye
+        case .draft(let draft):
+            guard let session = link.session else { throw HandlingError.messageBeforeHello }
+            setDraft(session.id, draft)
         case .quota(let report):
             guard link.session != nil else { throw HandlingError.messageBeforeHello }
             emit(.quota(report))
@@ -321,6 +409,7 @@ public final class PiBridge {
         link.exitWatcher = ProcessExitWatcher(pid: session.pid) { [weak self] in
             Task { @MainActor in self?.processExited(session.id) }
         }
+        controls[session.id] = link
         slots.append(Slot(session))
         emit(.appeared(session))
     }
@@ -347,6 +436,7 @@ public final class PiBridge {
 
     private func finish(_ link: Link, name: String) {
         links[name] = nil
+        link.closed = true
         for continuation in link.pending.values { continuation.resume(throwing: PiBridgeError.sessionEnded) }
         link.pending = [:]
         // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
@@ -356,8 +446,7 @@ public final class PiBridge {
             link.exitWatcher?.cancel()
         }
         if let session = link.session {
-            slots.removeAll { $0.id == session.id }
-            emit(.ended(session, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected))
+            detach(session.id, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected)
         }
         // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），
         // 之后不会再有事件，所以收尾时文件还在就当场连一次；还是旧文件（扩展还没删）时连不上，新文件的事件随后会到

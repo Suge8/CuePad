@@ -1,13 +1,14 @@
 import CloudKit
 import CueStore
+import CueText
 import Foundation
 
 extension PiAlert {
   /// 哪个订阅触发的通知（锁屏通知种类就是 `PiAlert`）。
   init?(subscriptionID: String) {
     switch subscriptionID {
-    case PiAlertSubscriptions.waitingID: self = .waitingForUser
-    case PiAlertSubscriptions.settledID: self = .settled
+    case AlertSubscriptions.waitingID: self = .waitingForUser
+    case AlertSubscriptions.settledID: self = .settled
     default: return nil
     }
   }
@@ -62,6 +63,36 @@ public enum PiAlertText {
   }
 }
 
+/// Cue 的手机通知（"等你"与 urgent 的 Cue 消息，值班的 Mac 置位 `cueMessages.notify`）：点开进 Cue 页；文案由通知服务扩展按记录改写。
+public enum CueAlertRoute {
+  /// 本地化文案 key：改写不成时显示的通用句。
+  public static let localizationKey = "cue_alert"
+
+  /// 点开的通知是 Cue 的就给出那条消息的 id；别的通知为 nil。
+  public static func message(from userInfo: [AnyHashable: Any]) -> UUID? {
+    guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
+      notification.subscriptionID == AlertSubscriptions.cueID, let name = notification.recordID?.recordName
+    else { return nil }
+    return UUID(uuidString: name)
+  }
+}
+
+/// 从通知取回的 Cue 消息、设置与关联任务的记录里读出文案的材料，交给 `CueAlert`（文案规则只在那里）。
+public enum CueAlertText {
+  /// "等你"要写关联任务的标题：先取回消息，再按它取这张卡（没有关联任务、不是"等你"时为 nil）。
+  public static func task(of message: CKRecord) -> CKRecord.ID? {
+    guard message.encryptedValues["choices"] != nil, let task = message["taskID"] as? String else { return nil }
+    return CKRecord.ID(recordName: task, zoneID: message.recordID.zoneID)
+  }
+
+  public static func content(message: CKRecord, profile: CKRecord?, task: CKRecord?) -> (title: String, body: String)? {
+    guard let text = message.encryptedValues["text"] as? String else { return nil }
+    let choices = (message.encryptedValues["choices"] as? String).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
+    let heading = (task?.encryptedValues["body"] as? String).map { CueSummary($0).title }
+    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, choices: choices, task: heading)
+  }
+}
+
 /// 一个账号私有数据库里的订阅（真实实现是 CKDatabase）。
 protocol SubscriptionStore: Sendable {
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription]
@@ -69,28 +100,31 @@ protocol SubscriptionStore: Sendable {
   func delete(_ id: CKSubscription.ID) async throws
 }
 
-/// 两个 CloudKit 服务端订阅：Pi 会话状态记录的 `notify` 标志置位时，服务端直接生成可见通知。
+/// CloudKit 服务端订阅：Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成可见通知。
 /// 不依赖静默推送与 App 在后台运行。通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；
 /// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
 /// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
-/// `piSessionStates.notify` 的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
+/// 两张表的 `notify` 可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
 /// 生产环境拒绝客户端创建没部署过的查询订阅（"attempting to create a subscription in a production container"，
 /// 区域与数据库订阅不受限）：订阅类型是 schema 的一部分，不在 .ckdb 里，只能在开发环境用同样的定义建一次，再在控制台
 /// 「Deploy Schema Changes」。所以改订阅定义（谓词、选项、通知文案 key）等于改 schema，要重做这两步。
-struct PiAlertSubscriptions {
+struct AlertSubscriptions {
   /// 通知标志字段（明文、可查询）。
   static let flagField = "notify"
-  static let prefix = "cuepad.pi."
-  static let waitingID = prefix + "waiting"
-  static let settledID = prefix + "settled"
+  /// 本前缀下的订阅都是这里管的（多余的删掉）。
+  static let prefix = "cuepad."
+  static let waitingID = prefix + "pi.waiting"
+  static let settledID = prefix + "pi.settled"
+  static let cueID = prefix + "cue"
 
   let zoneID: CKRecordZone.ID
 
   func desired() -> [CKQuerySubscription] {
     [
-      make(id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey),
-      make(id: Self.settledID, flag: "settled", key: PiAlertRoute.settledLocalizationKey),
+      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey),
+      make(.piSessionStates, id: Self.settledID, flag: "settled", key: PiAlertRoute.settledLocalizationKey),
+      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: CueAlertRoute.localizationKey),
     ]
   }
 
@@ -111,15 +145,15 @@ struct PiAlertSubscriptions {
     }
   }
 
-  private func make(id: String, flag: String, key: String) -> CKQuerySubscription {
+  private func make(_ table: Table, id: String, flag: String, key: String) -> CKQuerySubscription {
     let subscription = CKQuerySubscription(
-      recordType: RecordMapper.recordType(for: .piSessionStates), predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
+      recordType: RecordMapper.recordType(for: table), predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
       subscriptionID: id, options: [.firesOnRecordCreation, .firesOnRecordUpdate])
     subscription.zoneID = zoneID
     let info = CKSubscription.NotificationInfo()
     info.alertLocalizationKey = key
     info.soundName = "default"
-    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题（加密字段只能在设备上读）
+    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题、Cue 说的话（加密字段只能在设备上读）
     info.shouldSendMutableContent = true
     subscription.notificationInfo = info
     return subscription

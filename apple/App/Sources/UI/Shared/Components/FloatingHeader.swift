@@ -13,8 +13,16 @@ extension View {
         _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(
-            title: title, hidden: hidden, reveal: reveal, explanation: explanation, detail: detail(), trailing: trailing()))
+        let label = TitleStack(title: title, detail: detail()).padding(.horizontal, 16)
+        return modifier(FloatingHeader(
+            title: title, hidden: hidden, reveal: reveal, explanation: explanation, label: label, trailing: trailing()))
+    }
+
+    /// 玻璃里不是"标题与一行信息"的页（Cue 页：头像接名字与状态，`CueTitle`）：`label` 是玻璃里的全部内容，边距自己给；`title` 只给读屏与系统。
+    func floatingHeader<Label: View, Trailing: View>(
+        _ title: String, @ViewBuilder label: () -> Label, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, explanation: nil, label: label(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -34,12 +42,12 @@ enum FloatingHeaderLayout {
     static let height: CGFloat = 44
 }
 
-private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
+private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
     let explanation: String?
-    let detail: Detail
+    let label: Label
     let trailing: Trailing
     @Environment(\.palette) private var palette
 
@@ -52,7 +60,7 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
             .toolbar {
                 // 标题要等读库才有的页（卡片纸页）先透明，读到后淡入
                 ToolbarItem(placement: .principal) {
-                    HeaderTitle(title: title, explanation: explanation) { detail }
+                    HeaderTitle(explanation: explanation) { label }
                     .opacity(title.isEmpty || hidden ? 0 : 1)
                     .animation(Motion.quick, value: title.isEmpty || hidden)
                     .allowsHitTesting(!hidden)
@@ -78,22 +86,16 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     }
 }
 
-/// 顶栏中间那块玻璃：标题与一行要紧信息。有说明时整块是一颗按钮，点它弹出说明（状态自己持有：顶栏项推入时就建好，
+/// 顶栏中间那块玻璃（多是标题与一行要紧信息）。有说明时整块是一颗按钮，点它弹出说明（状态自己持有：顶栏项推入时就建好，
 /// 改外面的状态不一定重建它）；没有说明时只是标题。
-private struct HeaderTitle<Detail: View>: View {
-    let title: String
+private struct HeaderTitle<Label: View>: View {
     let explanation: String?
-    @ViewBuilder let detail: Detail
-    @Environment(\.palette) private var palette
+    @ViewBuilder let label: Label
     @State private var explaining = false
 
     var body: some View {
         Button { explaining = true } label: {
-            VStack(spacing: 1) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                detail
-            }
-            .padding(.horizontal, 16)
+            label
             .frame(height: FloatingHeaderLayout.height)
             .glass(in: .capsule, ink: .legible)
             .contentShape(.capsule)
@@ -105,6 +107,20 @@ private struct HeaderTitle<Detail: View>: View {
         .accessibilityHint(explanation == nil ? "" : "看说明")
         .explanationPopover(explanation, isPresented: $explaining)
         .task(id: explanation) { if explanation != nil, DebugHooks.preset.explain { explaining = true } }
+    }
+}
+
+/// 标题，下面一行要紧信息。
+private struct TitleStack<Detail: View>: View {
+    let title: String
+    let detail: Detail
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            detail
+        }
     }
 }
 

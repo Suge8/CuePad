@@ -4,35 +4,12 @@ import Foundation
 /// 任务看板（手机任务页、Mac 任务面板共用）：进行中、待办、最近完成，各自跨项目。进行中与待办按顶层任务的状态分组，
 /// 步骤（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未分类在后，同级手动顺序）。
 /// 最近完成只列顶层任务（与 `counts.done` 同一批，也是"全部归档"动的那批；做完的步骤算在上级的进度里），不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。
-/// 每条带所在项目；交给 Pi 的带那个会话此刻的状态。
+/// 每条带所在项目；交给的会话此刻怎样不在这里读，行取窗口那一份（`AgentLinks`，经 `Workspace.next(for:)`）。
 nonisolated struct TaskBoard: Sendable, Equatable {
     struct Row: Identifiable, Sendable, Equatable {
         var task: Card
         var project: Project?
-        /// 交给 Pi 的任务关联的会话（同步记录）；没交给 Pi 或记录已没有时为 nil。
-        var session: PiSessionState?
-        /// 发给那个会话的最近一条投送请求（显示状态见 `PiDelivery`）。
-        var delivery: DeliveryRequest?
         var id: UUID { task.id }
-
-        /// 书架上排前后的档：0 等你确认或出错，1 正在干活，2 其余。
-        var attention: Int {
-            guard let session else { return 2 }
-            return session.waitsForYou || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
-        }
-
-        /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
-        init(_ task: Card, projects: [UUID: Project], sessions: [String: PiSessionListItem]) {
-            let item = task.piSessionID.flatMap { sessions[$0] }
-            self.init(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
-        }
-
-        init(task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?) {
-            self.task = task
-            self.project = project
-            self.session = session
-            self.delivery = delivery
-        }
     }
 
     /// 最近完成列多少条。
@@ -44,12 +21,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var inProgress: [Row]
     var todo: [Row]
     var done: [Row]
-    /// 没完成的任务（含步骤）各自的项目与会话。
+    /// 没完成的任务（含步骤）各自的项目。
     var rows: [UUID: Row]
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
-    /// 任务下的提示词：每条任务下直接列出。
-    var prompts: [UUID: [Card]]
+    /// 叶子的草稿：行尾的"开始"交出的就是它。
+    var drafts: [UUID: Card]
 
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
@@ -62,14 +39,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
         let done = recentlyDone(all)
-        let sessions = try store.piSessions(sessionIDs: (tree.ordered + done).compactMap(\.piSessionID))
-        func row(_ task: Card) -> Row { Row(task, projects: projects, sessions: sessions) }
+        func row(_ task: Card) -> Row { Row(task: task, project: task.projectID.flatMap { projects[$0] }) }
         let rows = Dictionary(uniqueKeysWithValues: tree.ordered.map { ($0.id, row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
         let inProgress = roots.filter { $0.task.status == .inProgress }, todo = roots.filter { $0.task.status == .todo }
         let finished = done.map(row)
         return TaskBoard(
-            tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, subtasks: try store.subtaskProgress(), prompts: try store.prompts(),
+            tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, subtasks: try store.subtaskProgress(), drafts: try store.drafts(),
             counts: try counts(from: store), order: (inProgress + todo + finished).map(\.id))
     }
 
@@ -82,23 +58,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             .prefix(doneLimit))
     }
 
-    /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。
+    /// 书架"正在推进"：列出的任务，加上放不下的还有几项（纸底写"还有 N 项"）。
     struct Active: Sendable, Equatable {
-        var rows: [Row]
+        var tasks: [Card]
         var more: Int
     }
 
-    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，步骤跟着上级），先看交给的 Agent 在怎样——
-    /// 等你确认、出错的在前，正在干活的其次，别的最后——同档最近开始的在前，再同的按原来的先后；取前 `limit` 条，其余数个数。
-    /// 排序要看每条任务的会话状态，所以会话对全部候选一次读出（进行中的任务不多），不是逐条读。
+    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，步骤跟着上级），最近开始的在前，
+    /// 同刻按原来的先后；取前 `limit` 条，其余数个数。书架不看会话，不读会话。
     static func active(limit: Int, from store: isolated CueStore) throws -> Active {
-        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let started = try store.startedTasks(topLevelOnly: true)
-        let sessions = try store.piSessions(sessionIDs: started.compactMap(\.piSessionID))
-        let rows = started.map { Row($0, projects: projects, sessions: sessions) }
-        // `startedTasks` 已按最近开始排好（同刻按原来的先后）：只按档排，同档保持这个顺序
-        let ordered = rows.enumerated().sorted { ($0.element.attention, $0.offset) < ($1.element.attention, $1.offset) }.map(\.element)
-        return Active(rows: Array(ordered.prefix(limit)), more: max(0, ordered.count - limit))
+        return Active(tasks: Array(started.prefix(limit)), more: max(0, started.count - limit))
     }
 
     /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。

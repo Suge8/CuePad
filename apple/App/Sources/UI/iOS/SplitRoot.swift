@@ -75,31 +75,29 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧 Agent 面板的开关；有会话等你确认时带橙点。
+/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你的时带点（`WaitingDot`）。
 private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
-    @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        let waiting = workspace.cue.digest.waiting
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
-            Label("Agent", systemImage: "waveform.path.ecg")
-                .overlay(alignment: .topTrailing) {
-                    if services.liveSessions.waiting > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
-                }
+            Label(workspace.cue.name, systemImage: "bubble.left.and.text.bubble.right")
+                .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
         }
-        .accessibilityValue(services.liveSessions.waiting > 0 ? "\(services.liveSessions.waiting) 个会话等你确认" : "")
+        .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
     }
 }
 
-/// 右侧 Agent 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
+/// 右侧 Cue 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
 /// 它不经 `RouteView`，沉浸式的那几件自己挂：离顶上那一排的距离让在安全区里（用外边距的话列表停在边距下沿、
 /// 滚上去被一刀切齐），内容一直滚到工具栏的玻璃后面，只在状态栏那一条淡出。
 private struct AgentPanel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        AgentScreen(inPanel: true).countsAsPiViewer()
+        CuePage(inPanel: true).countsAsPiViewer()
             .safeAreaPadding(.top, 8)
             .fadesUnderBars()
             .background(palette.desk.ignoresSafeArea())
@@ -116,16 +114,17 @@ private struct SplitSidebar: View {
 
     var body: some View {
         List {
+            Section { CueSidebarItem() }
             Section {
                 SidebarRow(route: .shelf, title: "灵感", symbol: "lightbulb")
                 SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
-                SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: services.liveSessions.waiting)
+                SidebarRow(route: .agent, title: "会话", symbol: "waveform.path.ecg")
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果；在线会话读到前先留空白（`ProjectNow.byProject`）
                 let now = ProjectNow.byProject(
-                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: services.settings.shown)
+                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: workspace.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }
@@ -158,6 +157,25 @@ private struct SplitSidebar: View {
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
         SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, now: now)
             .projectActions(project, radius: 10, pi: now?.shown)
+    }
+}
+
+/// 侧栏最上面的 Cue：头像、名字、此刻在做什么、"等你 N"，点开 Cue 页。
+private struct CueSidebarItem: View {
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let selected = navigation.splitRoot == .cue
+        Button { navigation.select(.cue) } label: {
+            CueStatusRow(font: .body.weight(selected ? .semibold : .medium)).frame(minHeight: 52).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(selected ? palette.selection : .clear)
+                .padding(.horizontal, 10))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

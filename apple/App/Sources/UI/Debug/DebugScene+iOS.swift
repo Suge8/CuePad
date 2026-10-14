@@ -4,9 +4,9 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开）、cuememory（再打开"Cue 记得什么"）、project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
 /// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
-/// task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
+/// task 在书架上推入"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
@@ -26,13 +26,14 @@ extension DebugScene {
         }
         let split = navigation.layout == .split
         func open(_ route: Route) {
-            if split { navigation.select(route) } else { navigation.projectsPath = [route] }
+            if split { navigation.select(route) } else { navigation.tab = .projects; navigation.projectsPath = [route] }
         }
         func openCard() async {
             if let project { open(.project(project)) }
             if let card = await card(in: project, store: workspace.services.store) { navigation.push(.card(card)) }
         }
         switch scene {
+        case "shelf": if !split { navigation.tab = .projects }
         case "project", "older": if let project { open(.project(project)) }
         case "projectform":
             // 给了项目是编辑它，否则新建
@@ -63,6 +64,14 @@ extension DebugScene {
                     navigation.outbox = outbox
                 }
             }
+        case "cue", "cuememory":
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            navigation.show(.cue)
+            if split { navigation.sidebar = .all }
+            if scene == "cuememory" { workspace.cue.showsMemory = true }
+        case "cuerows":
+            await seedCueRows(workspace.services)
+            navigation.show(.agent)
         case "tasks":
             navigation.show(.tasks)
         case "task":
@@ -70,21 +79,22 @@ extension DebugScene {
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             // 给了 -CuePadTask <标题开头> 打开那一条，否则进行中的第一条
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { navigation.openTask(task.id) }
+            if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { open(.card(task.id)) }
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if defaults.bool(forKey: "CuePadNotify") {
                 navigation.open(alert: PiAlertTap(kind: .settled, sessionState: session.id))  // 点锁屏通知进来：只带记录 id、没有首帧
             } else {
-                if split { navigation.select(.agent) } else { navigation.tab = .agent }
+                navigation.show(.agent)
                 navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             }
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
             if defaults.string(forKey: "CuePadBench") == "chatdepth" { Task { await ChatDepthBench.run() } }
         case "newsession":
-            if split { navigation.select(.agent) } else { navigation.tab = .agent }
+            navigation.show(.agent)
             var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（头部引导选文件夹）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
@@ -114,6 +124,7 @@ extension DebugScene {
         default:
             if let project, split { open(.project(project)) }
         }
+        await presetSpeech(workspace)
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示

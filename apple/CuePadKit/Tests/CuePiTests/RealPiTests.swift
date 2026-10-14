@@ -10,7 +10,7 @@ private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 
 /// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
@@ -143,8 +143,6 @@ struct RealPiTests {
 
             let states = log.states
             #expect(states.first == .thinking)
-            let outputting = try #require(states.firstIndex(of: .outputting))
-            #expect(outputting < states.count - 1, "outputting 在 done 之前")
 
             try await eventually("会话文件写入回复") { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
             #expect(try history(of: s).displayName == "hello")
@@ -197,7 +195,7 @@ struct RealPiTests {
             let working = log.changes.compactMap { change -> PiSession? in
                 guard case .stateChanged(let session, _) = change else { return nil }
                 switch session.state {
-                case .thinking, .outputting, .tool: return session
+                case .thinking, .tool: return session
                 default: return nil
                 }
             }
@@ -227,6 +225,7 @@ struct RealPiTests {
         (cjkCommand, String(cjkCommand.prefix(119)) + "…"),
     ])
     func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
+        AgentTape.variant("\(command.count)")
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:\(command)]]")

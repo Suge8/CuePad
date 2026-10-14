@@ -14,8 +14,13 @@ extension PiSessionState {
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
             pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, models: session.availableModels,
-            context: session.context, commands: session.commands)
+            context: session.context, commands: session.commands, agent: .known(session.agent))
     }
+}
+
+extension CuePi.PiSession {
+    /// 能跳到它所在的终端：开在终端里、知道是哪个终端应用（跳转至少要激活它）。后台托管的与没报终端的（OpenCode 的服务）没有。
+    var canJump: Bool { !hosted && terminal.bundleID != nil }
 }
 
 extension SessionDigest {
@@ -36,7 +41,7 @@ extension SessionDigest {
 }
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
-/// 会话名与状态（`PiSessionSubtitle`，在跑或要你注意时才有）在窗口工具栏居中（与对话的阅读栏同一条中线），绑着任务时同一块玻璃里还有这件事与它的完成圈（`SessionTitleSlot`），
+/// 会话名与状态（`PiSessionSubtitle`，在跑或要你注意时才有）在窗口工具栏居中（与对话的阅读栏同一条中线），绑着任务时同一块玻璃里还有这件事与它的完成圈（`PageTitleSlot`），
 /// "⋯"（完成或绑定任务、重命名、跳到终端、结束会话）在工具栏右上——Mac 的窗口本来就有一条工具栏，页头全在它上面，内容区里不另起一行。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
 /// 看历史时标题让开（"⋯"不让开：工具栏本来就一直在，让开只留一格空位），回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
@@ -62,7 +67,8 @@ struct SessionPage: View {
     private static let readingWidth: CGFloat = 760
 
     var body: some View {
-        let live = services.pi.session(sessionID: sessionID)
+        let slot = services.pi.slot(sessionID: sessionID)
+        let live = slot?.session
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
@@ -71,7 +77,8 @@ struct SessionPage: View {
             if let session = digest.session {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
-                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
+                    SessionChat(
+                        session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
                         .replyNotes(session: session.id, messages: digest.messages)
                         .fadesUnderBars()
                         .frame(maxHeight: .infinity)
@@ -82,7 +89,7 @@ struct SessionPage: View {
                     if secondary {
                         PiQuestionDock(session: session, deliveries: digest.deliveries)
                         if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
+                            Callout(.failure, text: "没能结束：\(reason)", docked: true)
                         }
                         PiReplyBar(
                             session: session, config: digest.config,
@@ -142,18 +149,15 @@ struct SessionPage: View {
         return SessionHeader.State(
             session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
-            liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
+            liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
-    /// 绑着的任务按会话与所在项目读（没绑时能绑的是本项目的任务）。
+    /// 绑着的任务按会话读，还能绑的按所在项目读。
     private struct TaskKey: Equatable {
         var session: String
         var project: UUID?
     }
-
-    /// 窗口右缘系统滚动条（悬浮式）占的宽。
-    private static let scrollerWidth: CGFloat = 16
 
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路）。
     private func askForTranscriptIfNeeded() {
@@ -207,12 +211,16 @@ extension Workspace {
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
-    /// `card`：从这条灵感或任务开的，开好后它关联到新会话。
+    /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
+    /// `agent`：用哪个 Agent 开，记作下次的默认（`AppSettings.lastAgent`）。
     func startSession(
-        in project: UUID, prompt: String?, title: String, card: UUID? = nil, launched: @escaping () -> Void
+        in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
+        launched: @escaping () -> Void
     ) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(PiLaunch(project: project, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
+        services.settings.lastAgent = agent
+        let request = try await services.launch(
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent), title: title, on: host ?? services.hostID, card: card)
         var reported = false
         for try await progress in services.store.observe({
             try LaunchProgress.read(request: request.id, token: token, from: $0)

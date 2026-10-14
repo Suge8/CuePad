@@ -24,6 +24,8 @@ extension EnvironmentValues {
 }
 
 /// 把窗口那一份交给的会话放进环境。单独一层读它：会话状态变化时只重算这一层与读环境的卡和行，不重算外面的根视图。
+/// 浮层（任务面板、任务浮窗）不在页面下，读它的各自挂一层。否决的方案：在窗口根挂一次盖住页面与浮层——
+/// 会话状态每变一次，工具栏与分栏也跟着重算，实测主线程指令数是现在的约 4 倍。
 struct WindowCardAgents: ViewModifier {
     let workspace: Workspace
 
@@ -36,6 +38,7 @@ struct AgentDot: View {
     let card: UUID
     @Environment(\.cardAgents) private var agents
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
@@ -48,7 +51,7 @@ struct AgentDot: View {
                 .accessibilityLabel("正在开会话")
                 .help("正在开会话")
         } else if let item = agents.items[card] {
-            let shown = services.settings.shown(item)
+            let shown = workspace.shown(item)
             #if os(iOS)
             Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                 PiStateDot(shown: shown, size: 8).frame(width: 28, height: 28).contentShape(.rect)

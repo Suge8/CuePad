@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// 永久删除卡片时，回收不再被任何卡片正文（含回收站里的卡）引用的附件：记录与文件一起删。
+/// 永久删除卡片时，回收不再被任何卡片正文（含回收站里的卡）、发送记录快照或 Cue 对话引用的附件：记录与文件一起删。
 @Suite struct AttachmentReclaimTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -66,4 +66,12 @@ import Testing
     #expect(try !exists(unsent))
   }
 
+  /// 你在 Cue 页发的图片：卡片永久删除后，Cue 对话里还引用着就留着。
+  @Test func imageStillInTheCueConversationSurvivesPurgingItsCard() async throws {
+    let hash = try await image(0.1)
+    let card = try await store.createCard(in: nil, body: ref(hash))
+    try await store.addCueMessage(.you, text: ref(hash))
+    try await store.purgeCard(card.id)
+    #expect(try exists(hash))
+  }
 }

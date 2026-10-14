@@ -18,8 +18,14 @@ struct PiToolLog: Codable, Equatable {
     }
 
     mutating func start(id: String, name: String, arguments: PiToolArguments, cwd: String?) {
-        pending[id] = Call(name: name, arguments: arguments, cwd: cwd)
+        let call = Call(name: name, arguments: arguments, cwd: cwd)
+        // `cuepad show` 的结果就是对话里那张预览卡：清单里不再列一遍，也不算进命令数
+        guard call.kind != .command || call.target.prefixMatch(of: Self.preview) == nil else { return }
+        pending[id] = call
     }
+
+    /// 发预览的命令行：`cuepad show …`，cuepad 可以带路径（技能里写的是 App 内的绝对路径，含空格时整段加单引号）。
+    private static var preview: Regex<Substring> { /(?:'[^']*\/|[^\s']*\/)?cuepad'?\s+show(?:\s|$)/ }
 
     mutating func finish(id: String, failed: Bool) {
         guard let call = pending.removeValue(forKey: id) else { return }

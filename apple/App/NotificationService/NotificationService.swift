@@ -4,8 +4,9 @@ import OSLog
 import Synchronization
 import UserNotifications
 
-/// 通知服务扩展：Pi 的锁屏通知到达时，取回触发它的会话状态记录（同一 iCloud 容器，加密字段在设备上解密），
-/// 把通用句改写成"会话名 + 问题首句（或状态）"。取不到（没网、超时、记录已删）就保持通用句。
+/// 通知服务扩展：Pi 与 Cue 的锁屏通知到达时，取回触发它的记录（同一 iCloud 容器，加密字段在设备上解密），
+/// 把通用句改写成"会话名 + 问题首句（或状态）"、"Cue 的名字 + 它说的话"（"等你"是要你定什么与选项，要先取回消息、再取它关联的任务）。
+/// 取不到（没网、超时、记录已删）就保持通用句；任务取不到只是问句里不写任务名。
 /// 系统在任意线程调用 `didReceive` 与 `serviceExtensionTimeWillExpire`，取回记录的回调又在另一条线程：
 /// 手里的内容与交付回调放在一把锁里，只交付一次。
 @objc(NotificationService)
@@ -21,13 +22,34 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     private let pending = Mutex<Pending?>(nil)
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler handler: @escaping (UNNotificationContent) -> Void) {
+        let userInfo = request.content.userInfo
         guard let content = request.content.mutableCopy() as? UNMutableNotificationContent,
-              let notification = CKNotification(fromRemoteNotificationDictionary: request.content.userInfo) as? CKQueryNotification,
-              let tap = PiAlertRoute.tap(from: request.content.userInfo), let recordID = notification.recordID
+              let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
+              let recordID = notification.recordID
         else { return handler(request.content) }
+        let database = CKContainer(identifier: Self.container).privateCloudDatabase
+        if CueAlertRoute.message(from: userInfo) != nil {
+            pending.withLock { $0 = Pending(content: content, deliver: handler) }
+            let profile = CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: recordID.zoneID)
+            database.fetch(withRecordIDs: [recordID, profile]) { result in
+                let records = (try? result.get()) ?? [:]
+                guard let message = try? records[recordID]?.get() else { return self.finish() }
+                let profile = try? records[profile]?.get()
+                guard let taskID = CueAlertText.task(of: message) else {
+                    if let text = CueAlertText.content(message: message, profile: profile, task: nil) { self.apply(text) }
+                    return self.finish()
+                }
+                database.fetch(withRecordID: taskID) { task, _ in
+                    if let text = CueAlertText.content(message: message, profile: profile, task: task) { self.apply(text) }
+                    self.finish()
+                }
+            }
+            return
+        }
+        guard let tap = PiAlertRoute.tap(from: userInfo) else { return handler(request.content) }
         pending.withLock { $0 = Pending(content: content, deliver: handler) }
         let kind = tap.kind
-        CKContainer(identifier: Self.container).privateCloudDatabase.fetch(withRecordID: recordID) { record, _ in
+        database.fetch(withRecordID: recordID) { record, _ in
             if let record, let text = PiAlertText.content(for: record, kind: kind) { self.apply(text) }
             self.finish()
         }
@@ -39,7 +61,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     }
 
     private func apply(_ text: (title: String, body: String)) {
-        Self.log.notice("改写 Pi 通知：标题 \(text.title, privacy: .private)，正文 \(text.body, privacy: .private)")
+        Self.log.notice("改写通知：标题 \(text.title, privacy: .private)，正文 \(text.body, privacy: .private)")
         pending.withLock {
             $0?.content.title = text.title
             $0?.content.body = text.body
