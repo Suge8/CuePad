@@ -46,9 +46,12 @@ enum ClaudeHistory {
                 cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments())
             }
             let text = blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
-            // 一次回答拆成好几行：带文字、不是停下来调工具的那行才结束这一轮
-            guard let stop = message.stopReason, stop != "tool_use", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            cp.answered(text, entry, into: &transcript)
+            // 一次回答拆成好几行：带文字、不是停下来调工具的那行结束这一轮，其余带文字的是中途说的一段
+            if let stop = message.stopReason, stop != "tool_use", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                cp.answered(text, entry, into: &transcript)
+            } else {
+                cp.spoke(text, entry)
+            }
         default:
             break
         }
@@ -74,6 +77,10 @@ enum ClaudeHistory {
         guard let content = line.message?.content else { return }
         if case .blocks(let blocks) = content, blocks.contains(where: { $0.type == "tool_result" }) {
             for result in blocks where result.type == "tool_result" {
+                if result.isError == true, result.content?.plainText.hasPrefix(declinedResult) == true {
+                    cp.toolDeclined(id: result.toolUseID ?? "")
+                    continue
+                }
                 cp.toolFinished(id: result.toolUseID ?? "", failed: result.isError == true)
             }
             return
@@ -112,6 +119,8 @@ enum ClaudeHistory {
     }
 
     private static let interruptedMarker = "[Request interrupted by user"
+    /// 你在终端里对权限确认答"否"时工具结果的开头（2.1.299，后面跟"停下"或你说的怎么做）
+    private static let declinedResult = "The user doesn't want to proceed with this tool use."
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
 
@@ -173,11 +182,13 @@ enum ClaudeHistory {
             var input: PiToolArguments?
             var toolUseID: String?
             var isError: Bool?
+            /// 工具结果的正文
+            var content: Content?
 
             struct Source: Decodable { var data: String? }
 
             enum CodingKeys: String, CodingKey {
-                case type, text, source, id, name, input
+                case type, text, source, id, name, input, content
                 case toolUseID = "tool_use_id"
                 case isError = "is_error"
             }
@@ -186,6 +197,13 @@ enum ClaudeHistory {
         init(from decoder: any Decoder) throws {
             let c = try decoder.singleValueContainer()
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
+        }
+
+        var plainText: String {
+            switch self {
+            case .text(let s): s
+            case .blocks(let blocks): blocks.compactMap(\.text).joined(separator: "\n")
+            }
         }
 
         /// 你说的一句；收件箱送来的（`peer`）剥掉 Claude Code 包的说明。

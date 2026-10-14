@@ -34,6 +34,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var seq: Int64 = 0
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
+    /// 最近你说的那句之后、助手最后说的一段（还没归给那句：等下一句你的话或这一轮结束）
+    var reply: Reply?
     var recap = PiRecap()
     /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
     var excluded = false
@@ -41,6 +43,15 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
         var tools = PiToolLog()
+        /// 这一轮里你拒绝过它要用的工具（这一轮因此停下时写"已拒绝"）
+        var declined = false
+    }
+
+    struct Reply: Sendable, Codable, Equatable {
+        var text: String
+        var id: String
+        var seq: Int64
+        var at: Date
     }
 }
 
@@ -100,14 +111,12 @@ struct SessionFileFormat: Sendable {
     let keepsFilesOpen: Bool
     /// 文件名就是会话 id（Claude Code）：文件头还没读到也算会话
     let nameIsSessionID: Bool
-    /// 只读摘要有快速路径（Pi：会话文件动辄几百 MB，见 `PiHistory.skim`）；没有的逐行全读、丢掉对话
-    let skims: Bool
 
     static func of(_ agent: AgentKind) -> SessionFileFormat? {
         switch agent {
-        case .pi: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: false, skims: true)
-        case .claudeCode: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: true, skims: false)
-        case .codex: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, keepsFilesOpen: true, nameIsSessionID: false, skims: false)
+        case .pi: SessionFileFormat(ingest: PiHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: false)
+        case .claudeCode: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, keepsFilesOpen: false, nameIsSessionID: true)
+        case .codex: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, keepsFilesOpen: true, nameIsSessionID: false)
         case .opencode: nil
         }
     }
@@ -127,8 +136,8 @@ public enum PiHistory {
     /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：会话文件是图片唯一的来源，
     /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
     ///
-    /// `transcript` 为 false 时不要对话（7 天外的会话）：Pi 从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
-    /// 最近一轮的问答从文件尾往回解码到够用为止；得到的检查点与逐行全读一样，之后增量读接得上。
+    /// `transcript` 为 false 时不要对话（7 天外的会话）：照样逐行读出检查点，丢掉对话、不存图片（工具结果行不做 JSON 解码，
+    /// 600 MB 的 Pi 会话文件实测不到 1 秒，不另做只读摘要的快速路径——那会是第二份轮次规则）。
     public static func index(
         file: URL, agent: AgentKind, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, modified: Date? = nil,
         files: AttachmentFiles
@@ -141,16 +150,9 @@ public enum PiHistory {
         let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
         var state = resumed ?? PiHistoryCheckpoint()
         let start = state.offset
-        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: files)
-        let consumed: UInt64
-        if wanted || resumed != nil || !format.skims {
-            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try format.ingest(line, &state, &transcript) }
-            if !wanted { transcript.messages = [] }
-        } else {
-            var lines: [Skimmed] = []
-            consumed = try forEachLine(handle, from: start, size: size) { line, offset in skim(line, at: offset, into: &state, lines: &lines) }
-            try settle(&state, lines: lines, handle: handle)
-        }
+        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: wanted ? files : nil)
+        let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
+        if !wanted { transcript.messages = [] }
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
         let history = PiSessionHistory(
@@ -160,9 +162,9 @@ public enum PiHistory {
             modified: modified, isSession: history.sessionID != nil || format.nameIsSessionID, bytesRead: Int(consumed - start))
     }
 
-    /// 逐个完整行（不含换行）交给 `body`，带行首偏移；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
+    /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
     private static func forEachLine(
-        _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer, UInt64) throws -> Void
+        _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer) throws -> Void
     ) throws -> UInt64 {
         try handle.seek(toOffset: start)
         // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
@@ -185,10 +187,10 @@ public enum PiHistory {
                     let end = base.distance(to: UnsafeRawPointer(hit))
                     let piece = UnsafeRawBufferPointer(start: base + position, count: end - position)
                     if carry.isEmpty {
-                        try body(piece, consumed)
+                        try body(piece)
                     } else {
                         carry.append(contentsOf: piece)
-                        try carry.withUnsafeBytes { try body($0, consumed) }
+                        try carry.withUnsafeBytes { try body($0) }
                     }
                     consumed += UInt64((carry.isEmpty ? piece.count : carry.count) + 1)
                     carry.removeAll(keepingCapacity: true)
@@ -407,9 +409,9 @@ public enum PiHistory {
                 for call in message.content?.toolCalls ?? [] {
                     cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? PiToolArguments())
                 }
-                // 中途调工具时说的话不算回答；被停下（Esc）的一轮没有回答
+                // 中途调工具前说的一段也是说的话（这一句的回答是最后一段）；被停下（Esc）时那半句不算
                 switch message.stopReason {
-                case "toolUse": break
+                case "toolUse": cp.spoke(message.content?.reply ?? "", entry)
                 case "aborted": cp.interrupted(entry, into: &transcript)
                 default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
                 }
@@ -453,124 +455,26 @@ public enum PiHistory {
         guard let end = head[start...].firstIndex(of: 0x22) else { return nil }
         return (String(decoding: head[start..<end], as: UTF8.self), contains(tail, failedMarker))
     }
-
-    // MARK: 只读摘要（Pi）
-
-    /// 只读摘要时记下的一行：行首偏移、长度；元信息行（文件头、改名）已当场读过。
-    private struct Skimmed {
-        var offset: UInt64
-        var length: Int
-        var kind: Kind
-        enum Kind { case meta, toolResult, other }
-    }
-
-    private static let sessionInfoMarker = Data(#""type":"session_info""#.utf8)
-    private static let userMarker = Data(#""role":"user""#.utf8)
-    private static let roleMarker = Data(#""role":"#.utf8)
-
-    /// 只找换行时的一行：文件头与改名当场解码；第一条你的消息找到之前解码像是你说的行（取标题）；其余只记位置。
-    private static func skim(_ raw: UnsafeRawBufferPointer, at offset: UInt64, into cp: inout PiHistoryCheckpoint, lines: inout [Skimmed]) {
-        cp.seq += 1
-        guard !raw.isEmpty else { return }
-        let head = head(raw)
-        if offset == 0 || contains(head, sessionInfoMarker) {
-            if let line = decode(raw), line.type == "session" || line.type == "session_info" {
-                switch line.type {
-                case "session": (cp.sessionID, cp.cwd) = (line.id, line.cwd)
-                default: cp.name = line.name
-                }
-                lines.append(Skimmed(offset: offset, length: raw.count, kind: .meta))
-                return
-            }
-        }
-        if isToolResult(raw) {
-            lines.append(Skimmed(offset: offset, length: raw.count, kind: .toolResult))
-            return
-        }
-        if cp.firstMessage == nil, contains(head, userMarker) || !contains(head, roleMarker),
-           let line = decode(raw), line.type == "message", line.message?.role == "user" {
-            var said = Said(files: nil)
-            try? line.message?.content?.said(into: &said)
-            cp.firstMessage = PiSessionName.firstMessage(said.text)
-        }
-        lines.append(Skimmed(offset: offset, length: raw.count, kind: .other))
-    }
-
-    /// 从文件尾往回解码，得到与逐行全读一样的摘要：最后活动（最后一行的时间）；回答是最后一个做完的一轮的；提问是那一轮的提问，
-    /// 那一轮由机器消息触发（没有你的提问）时沿用再往前做完的一轮的——被停下的一轮里的提问不算（它在停下时就清掉了）。
-    /// 最后一轮结束（做完或被停下）之后的行按逐行读的规则重放，得到还没做完的那一轮：开始时间、已调的工具与进行中的提问。
-    private static func settle(_ cp: inout PiHistoryCheckpoint, lines: [Skimmed], handle: FileHandle) throws {
-        func read(_ line: Skimmed) throws -> Data? {
-            try handle.seek(toOffset: line.offset)
-            return try handle.read(upToCount: line.length)
-        }
-        func decoded(_ line: Skimmed) throws -> Line? {
-            try read(line)?.withUnsafeBytes { decode($0) }
-        }
-        for line in lines.reversed() where line.kind != .toolResult {
-            if let time = try decoded(line)?.time {
-                cp.lastActivity = time
-                break
-            }
-        }
-        enum Event { case prompt(String), answered(String), interrupted }
-        func event(_ line: Line) throws -> Event? {
-            guard line.type == "message", let message = line.message else { return nil }
-            switch message.role {
-            case "user":
-                var said = Said(files: nil)
-                try message.content?.said(into: &said)
-                return PiSessionName.isMachineMessage(said.text) ? nil : .prompt(said.text)
-            case "assistant":
-                switch message.stopReason {
-                case "toolUse": return nil
-                case "aborted": return .interrupted
-                default: return .answered(message.content?.reply ?? "")
-                }
-            default: return nil
-            }
-        }
-        var unfinished: Int? // 最后一轮结束之后的第一行
-        var reply: String?
-        var prompt: String?
-        var skipping = false // 往回越过被停下的一轮：它的提问不算
-        search: for (index, skimmed) in lines.enumerated().reversed() where skimmed.kind == .other {
-            guard let line = try decoded(skimmed), let event = try event(line) else { continue }
-            switch event {
-            case .interrupted, .answered:
-                if unfinished == nil { unfinished = index + 1 }
-                if case .answered(let text) = event, reply == nil { reply = text }
-                guard reply != nil else { continue }
-                if case .interrupted = event { skipping = true } else { skipping = false }
-            case .prompt(let text):
-                guard reply != nil, !skipping else { continue }
-                prompt = text
-                break search
-            }
-        }
-        var rest = cp
-        rest.round = nil
-        rest.recap.pendingPrompt = nil
-        var ignored = Transcript(fallbackID: "", files: nil)
-        for line in lines[(unfinished ?? 0)...] where line.kind != .meta {
-            try read(line)?.withUnsafeBytes { try ingest($0, &rest, &ignored) }
-        }
-        cp.round = rest.round
-        cp.recap = PiRecap(
-            lastPrompt: reply == nil ? nil : prompt.flatMap { clip(collapsed($0), PiRecap.promptLimit) },
-            lastReply: reply.flatMap { clip($0, PiRecap.replyLimit) }, pendingPrompt: rest.recap.pendingPrompt)
-    }
 }
 
 // MARK: - 轮次与摘要的规则（各家共用）
 
+/// 对话里每句你的话，回答是它之后、下一句你的话之前助手说的最后一段：各家的解码把助手说的每一段交给 `spoke`，
+/// 下一句你的话（`said`，含一轮在跑时插进来的）或这一轮结束（`answered`）时，最后那段归给前一句。
+/// 没有回答就结束的一轮按现有规则：被停下留"已停止"（`interrupted`）。
 extension PiHistoryCheckpoint {
     /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮；机器消息（扩展投进来的信封，
     /// `PiSessionName.isMachineMessage`）只开始一轮，其余进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
+    /// 一轮在跑时插进来的话：前一句已有的回答先归给前一句，之后的话与工具活动算这一句的。
     mutating func said(_ said: PiHistory.Said, _ entry: PiHistory.Entry, deliveryID: String?, into transcript: inout PiHistory.Transcript) {
         if firstMessage == nil { firstMessage = PiSessionName.firstMessage(said.text) }
+        let machine = PiSessionName.isMachineMessage(said.text)
+        if !machine, reply != nil {
+            settleReply(into: &transcript)
+            round = Round(startedAt: entry.at)
+        }
         if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
-        guard !PiSessionName.isMachineMessage(said.text) else { return }
+        guard !machine else { return }
         transcript.add(self, entry, role: .user, text: said.stored, deliveryID: deliveryID)
         recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(said.text), PiRecap.promptLimit)
     }
@@ -590,24 +494,37 @@ extension PiHistoryCheckpoint {
         round?.tools.finish(id: id, failed: failed)
     }
 
-    /// 这一轮做完：回答（去掉首尾空白，可以为空——如只调了工具、出错）成一条消息，带这一轮的工具活动；
-    /// 问与答一起更新——提问是这一轮里你说的话，机器消息触发的轮沿用上一次的提问。
+    /// 你拒绝了它要用的工具（权限确认答了"否"）。
+    mutating func toolDeclined(id: String) {
+        round?.tools.finish(id: id, failed: true)
+        round?.declined = true
+    }
+
+    /// 助手说了一段（中途调工具前说的、插话后答的、这一轮最后的回答都是）：空白的不算。
+    mutating func spoke(_ text: String, _ entry: PiHistory.Entry) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        reply = Reply(text: text, id: entry.id, seq: entry.seq, at: entry.at)
+    }
+
+    /// 这一轮做完，`text` 是结束它的那段（可以为空——如只调了工具、出错）：最后说的那段成一条消息，带这一轮的工具活动，
+    /// 问与答一起更新——提问是这一轮里你说的话，机器消息触发的轮沿用上一次的提问。什么都没说、也没有提问的（只压缩了上下文）只结束这一轮。
     mutating func answered(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
-        let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let current = round ?? Round(startedAt: nil)
-        if !reply.isEmpty {
-            transcript.add(self, entry, role: .pi, text: reply, tools: current.tools.summary(), roundStartedAt: current.startedAt)
+        spoke(text, entry)
+        if reply != nil {
+            settleReply(into: &transcript)
+        } else if let prompt = recap.pendingPrompt {
+            recap = PiRecap(lastPrompt: prompt, lastReply: "", pendingPrompt: nil)
         }
-        recap = PiRecap(
-            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply, PiRecap.replyLimit), pendingPrompt: nil)
         round = nil
     }
 
-    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"）：没有回答，问答不变，这一轮的提问不再算进行中；
-    /// 对话里在停下的地方留一行系统行。
+    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"，或你拒绝了它要用的工具）：已经说了的那段照样是回答，
+    /// 没说的问答不变、提问不再算进行中；对话里在停下的地方留一行系统行，因拒绝而停的写"已拒绝"，其余"已停止"。
     mutating func interrupted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
-        guard round != nil else { return }
-        transcript.add(self, entry, role: .system, text: "已停止")
+        guard let current = round else { return }
+        if reply != nil { settleReply(into: &transcript) }
+        transcript.add(self, entry, role: .system, text: current.declined ? "已拒绝" : "已停止")
         round = nil
         recap.pendingPrompt = nil
     }
@@ -615,6 +532,17 @@ extension PiHistoryCheckpoint {
     /// 压缩上下文：一行系统行，不动问答。
     mutating func compacted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
         transcript.add(self, entry, role: .system, text: "已压缩上下文")
+    }
+
+    /// 最后说的那段归给前一句：成一条消息（带到此为止的工具活动），问与答一起更新。
+    private mutating func settleReply(into transcript: inout PiHistory.Transcript) {
+        guard let reply else { return }
+        let current = round ?? Round(startedAt: nil)
+        transcript.add(
+            self, PiHistory.Entry(id: reply.id, seq: reply.seq, at: reply.at), role: .pi, text: reply.text, tools: current.tools.summary(),
+            roundStartedAt: current.startedAt)
+        recap = PiRecap(lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply.text, PiRecap.replyLimit), pendingPrompt: nil)
+        self.reply = nil
     }
 }
 #endif

@@ -282,7 +282,25 @@ struct RealOpenCodeTests {
                 let messages = try await store.piMessages(of: sessionID)
                 return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
             }
-            #expect(try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.isEmpty)
+        }
+    }
+
+    /// 在 CuePad 里拒绝它要跑的命令：OpenCode 随之停下这一轮，对话里写"已拒绝"，不写"已停止"（读起来不像你按了停止）。
+    @Test func aRoundEndedByARejectedPermissionSaysDeclined() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch declined.txt . Then reply DONE."), to: id)
+            try await eventually("在等你确认", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
+            let question = try #require(session(bridge)?.question)
+            try await bridge.answer(.confirmed(false), to: try #require(question.promptID), in: id)
+
+            try await eventually("停下了，对话里写'已拒绝'", timeout: .seconds(60)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已拒绝"]
+            }
+            #expect(!FileManager.default.fileExists(atPath: sandbox.work.appending(path: "declined.txt").path))
         }
     }
 

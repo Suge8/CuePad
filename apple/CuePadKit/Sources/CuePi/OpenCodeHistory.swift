@@ -57,6 +57,7 @@ struct OpenCodeMessage: Decodable, Sendable {
     struct ToolState: Decodable, Sendable {
         var status: String
         var input: OpenCodeToolInput?
+        var error: OpenCodeFailure?
     }
 
     var at: Date { Date(timeIntervalSince1970: time.created / 1000) }
@@ -78,6 +79,9 @@ struct OpenCodeMessage: Decodable, Sendable {
 /// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
+    /// 你拒绝了权限确认时工具的出错原因（2.0.29；那一步随之带着 `aborted` 的错误停下）
+    static let declinedTool = "The user declined this tool call"
+
     /// 检查点：Pi 的那份，加读到哪。先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
     /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比"读过没有"，也不拿 id 当 seq。
     struct Checkpoint: Codable, Sendable {
@@ -142,12 +146,16 @@ enum OpenCodeHistory {
             for tool in message.content ?? [] where tool.type == "tool" {
                 let id = tool.id ?? ""
                 cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? PiToolArguments())
-                if let status = tool.state?.status, status == "completed" || status == "error" { cp.toolFinished(id: id, failed: status == "error") }
+                if tool.state?.error?.message == Self.declinedTool {
+                    cp.toolDeclined(id: id)
+                } else if let status = tool.state?.status, status == "completed" || status == "error" {
+                    cp.toolFinished(id: id, failed: status == "error")
+                }
             }
             // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
             if message.error?.type == "aborted" { return cp.interrupted(entry, into: &transcript) }
-            guard message.finish != "tool-calls" else { return }
-            cp.answered((message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n"), entry, into: &transcript)
+            let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            if message.finish == "tool-calls" { cp.spoke(text, entry) } else { cp.answered(text, entry, into: &transcript) }
         case "compaction" where message.status == "completed":
             cp.compacted(entry, into: &transcript)
         case "idle":
