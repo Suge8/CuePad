@@ -9,15 +9,8 @@ import Testing
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
 struct RealPreviewTests {
-    private func sqlite(_ database: URL, _ query: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/sqlite3")
-        process.arguments = [database.path, query]
-        let out = Pipe()
-        process.standardOutput = out
-        try process.run()
-        process.waitUntilExit()
-        return String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    private func sqlite(_ database: URL, _ query: String) async throws -> String {
+        try #require(await runCapturing(URL(filePath: "/usr/bin/sqlite3"), [database.path, query])).output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
@@ -48,7 +41,7 @@ struct RealPreviewTests {
         #expect(!result.isError)
         let reply = try #require(try JSONSerialization.jsonObject(with: Data(result.text.utf8)) as? [String: Any])
         #expect(reply["session"] as? String == session.sessionID && reply["title"] as? String == "登录页改好了" && reply["name"] as? String == "demo.html")
-        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT sessionID || '|' || title FROM previews") == "\(session.sessionID)|登录页改好了")
+        #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT sessionID || '|' || title FROM previews") == "\(session.sessionID)|登录页改好了")
     }
 
     /// 不在 Pi 的 bash 里（没有 PI_SESSION_ID）时命令失败并说明，不猜是哪个会话。
@@ -56,17 +49,13 @@ struct RealPreviewTests {
         let library = try makeTempDirectory()
         let page = library.appending(path: "demo.html")
         try "<h1>x</h1>".write(to: page, atomically: true, encoding: .utf8)
-        let process = Process()
-        process.executableURL = PiProcess.cuepad
-        process.arguments = ["show", page.path]
-        process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
-        let err = Pipe()
-        process.standardError = err
-        try process.run()
-        process.waitUntilExit()
-        #expect(process.terminationStatus != 0)
-        #expect(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("PI_SESSION_ID"))
-        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
+        // 报错在标准错误里：经 sh 并进标准输出
+        let shown = try #require(await runCapturing(
+            URL(filePath: "/bin/sh"), ["-c", "exec \"$0\" show \"$1\" 2>&1", PiProcess.cuepad.path, page.path],
+            environment: ["CUEPAD_LIBRARY_DIR": library.path]))
+        #expect(shown.status != 0)
+        #expect(shown.output.contains("PI_SESSION_ID"))
+        #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
     }
 }
 #endif

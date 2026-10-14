@@ -1,12 +1,12 @@
 // 真 Agent 的替身进程（见 AgentTape.swift）：CuePad 照常起它、给它写标准输入、给它发信号、等它退出；它把这些都转给测试进程里的录像机，
 // 再把录像机给的标准输出、标准错误与退出原样做出来。录制时录像机背后是真 Agent，回放时是录好的数据。
-// 录像机的 socket 是可执行文件所在目录的上一级的 t.sock（每盘录像带把它复制进自己的 bin/）。
+// 每盘录像带的 bin/ 里放的是指向它的符号链接，CuePad 按链接的路径起它（argv[0]）：录像机的 socket 是链接所在目录的上一级的 t.sock。
+// 不放替身的副本或以它为解释器的脚本：系统对新出现的可执行文件或脚本第一次运行要做检查，同时起几十个时每个要等几百毫秒。
 // 与录像机之间一行一条："i <b64>" 标准输入、"e" 输入结束、"s <信号>" 收到信号；回来 "o <b64>" 标准输出、"r <b64>" 标准错误、
 // "x <退出码>" 退出、"k <信号>" 被这个信号结束、"f" 等写进标准输出的都被读走了再回 "f"（回放时换通道前的同步点）。
 // 用 C：每个用例要起好几个替身，脚本解释器的启动开销会占掉回放的大半时间。
 #include <errno.h>
 #include <libgen.h>
-#include <libproc.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -110,11 +110,13 @@ static void handle(char *line) {
 }
 
 int main(int argc, char **argv) {
-    char exe[PROC_PIDPATHINFO_MAXSIZE];
-    if (proc_pidpath(getpid(), exe, sizeof exe) <= 0) return 127;
-    char directory[PROC_PIDPATHINFO_MAXSIZE], name[PROC_PIDPATHINFO_MAXSIZE];
-    strlcpy(directory, exe, sizeof directory);
-    strlcpy(name, basename(exe), sizeof name);
+    if (argv[0][0] != '/') {
+        fprintf(stderr, "tape-stub: 要按绝对路径起（argv[0] 是 %s）\n", argv[0]);
+        return 127;
+    }
+    char directory[4096], name[4096];
+    strlcpy(directory, argv[0], sizeof directory);
+    strlcpy(name, basename(argv[0]), sizeof name);
     struct sockaddr_un address = {.sun_family = AF_UNIX};
     snprintf(address.sun_path, sizeof address.sun_path, "%s/t.sock", dirname(dirname(directory)));
     sock = socket(AF_UNIX, SOCK_STREAM, 0);

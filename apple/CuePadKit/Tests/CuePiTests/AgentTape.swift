@@ -67,7 +67,7 @@ final class AgentTape: @unchecked Sendable {
                             temporaryDirectories: [Int(directory.lastPathComponent)!], agent: agent))
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let stub = try Self.stub.get()
-        for name in Self.realExecutables.keys { try FileManager.default.copyItem(at: stub, to: bin.appending(path: name)) }
+        for name in Self.realExecutables.keys { try FileManager.default.createSymbolicLink(at: bin.appending(path: name), withDestinationURL: stub) }
         try startControl()
     }
 
@@ -196,7 +196,7 @@ final class AgentTape: @unchecked Sendable {
             wakes.continuation.finish()
             await emitting?.value
             state.withLock { state in
-                for listener in state.listeners.values { listener.cancel() }
+                for listener in state.listeners.values { listener.source.cancel() }
                 for connection in state.connections.values { connection.close() }
             }
             for problem in problems { Issue.record(Comment(rawValue: problem)) }
@@ -230,7 +230,8 @@ final class AgentTape: @unchecked Sendable {
         var stubPids: [String: Int32] = [:]
         var stubs: [String: Stub] = [:]
         var connections: [String: Connection] = [:]
-        var listeners: [String: DispatchSourceRead] = [:]
+        /// 回放时 listen 着的 socket：通道 → 事件源与路径
+        var listeners: [String: (source: DispatchSourceRead, path: String)] = [:]
         // 回放
         var replay: Replay?
     }
@@ -726,9 +727,12 @@ final class AgentTape: @unchecked Sendable {
                 }
                 serve(connection, as: claimed)
             }
-            state.withLock { $0.listeners[channel] = source }
+            state.withLock { $0.listeners[channel] = (source, path) }
         case "unlisten":
-            state.withLock { $0.listeners.removeValue(forKey: channel) }?.cancel()
+            // 录下的 unlisten 就是 socket 文件没了（扩展正常退出时自己删）
+            guard let listener = state.withLock({ $0.listeners.removeValue(forKey: channel) }) else { return }
+            listener.source.cancel()
+            unlink(listener.path)
         case "recv":
             state.withLock { $0.connections[channel] }?.write((event.d ?? "") + "\n")
         case "close":

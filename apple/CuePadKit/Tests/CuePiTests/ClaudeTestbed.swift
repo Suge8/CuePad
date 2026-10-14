@@ -40,7 +40,6 @@ final class ClaudeTestbed {
     /// 桥上从测试台起来以后的全部变化
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
-    private let store: CueStore
 
     var integration: AgentIntegration {
         AgentIntegration(paths: paths, locator: AgentTape.locator("claude"), cuepad: PiProcess.cuepad)
@@ -72,8 +71,7 @@ final class ClaudeTestbed {
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        store = try Fixture().store
-        files = store.files
+        files = scratchFiles
         bridge = PiBridge(socketDirectory: sockets)
         log = ChangeLog(bridge)
         try bridge.start()
