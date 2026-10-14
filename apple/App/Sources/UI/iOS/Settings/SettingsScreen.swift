@@ -47,7 +47,7 @@ struct SettingsScreen: View {
             }
             .listRowBackground(palette.paper)
             Section {} footer: {
-                Text("CuePad \(Self.version)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("CuePad \(AppServices.version)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -59,13 +59,6 @@ struct SettingsScreen: View {
 
     /// 演示模式没有同步引擎：调试参数要看"Pi 通知"各状态时照样显示这一节。
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
-
-    private static var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short)（\(build)）"
-    }
 }
 
 /// Pi 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
@@ -137,7 +130,7 @@ private struct SyncSection: View {
                 if services.syncStatus == .syncing {
                     Spinner(.small)
                 } else {
-                    Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                    Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
                 }
             }
             if services.sync != nil {

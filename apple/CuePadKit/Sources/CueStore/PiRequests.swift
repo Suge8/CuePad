@@ -88,6 +88,8 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   public var token: String
   /// 用哪个 Agent 开；旧版本写的没有，是 Pi
   public var agent: AgentKind?
+  /// 会话名：从任务开的会话叫那个叶子的标题，由 `CueStore.requestLaunch` 按带着的卡定；nil 是 Agent 的默认名（第一句话）。
+  public internal(set) var name: String?
 
   public init(project: UUID, prompt: String?, token: String, agent: AgentKind = .pi) {
     self.project = project

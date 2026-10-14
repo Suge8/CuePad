@@ -9,7 +9,7 @@ import SwiftUI
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
-/// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
+/// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
 /// 发出后清空，请求马上贴到对话末尾。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，在线会话聚焦就展开（已结束的没有工具排，打了字再长），在看历史时收成短胶囊（停止钮在时不收）。
@@ -28,6 +28,8 @@ struct PiReplyBar: View {
     var queued: [DeliveryRequest] = []
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
     var recall: String?
+    /// 点批注一叠里的一条：回到原文（批注只在 Mac 会话页写，见 `ReplyNote`）。
+    var revealNote: (ReplyNote) -> Void = { _ in }
     /// 发出之后（会话页回到最新）。
     let sent: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -98,12 +100,13 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, keepsHeader: !queued.isEmpty,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty {
                         PiQueueStack(requests: queued, folded: Self.foldsQueue && focused, steers: session.capabilities.contains(.steer))
                     }
+                    if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if form == .open || focused, let failure = config?.failure {
                         Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
@@ -289,6 +292,10 @@ struct PiReplyBar: View {
         }
     }
 
+    private func removeNote(_ note: ReplyNote) {
+        services.settings.setReplyNotes(draft.notes.filter { $0.id != note.id }, for: session.id)
+    }
+
     /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说（`MacDelivery.button`）。
     /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
@@ -300,10 +307,12 @@ struct PiReplyBar: View {
             defer { sending = false }
             if mode == .command, let line {
                 _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outgoing.attachments.first?.card)
+                // 命令不是说的话：批注留着，跟下一句发
+                draft = ComposerDraft(notes: outgoing.notes)
             } else {
                 _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
+                draft = ComposerDraft()
             }
-            draft = ComposerDraft()
             didSend()
         }
     }

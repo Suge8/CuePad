@@ -18,6 +18,7 @@ struct PiConversation: View {
     var showEarlier: () -> Void = {}
     @Environment(\.palette) private var palette
     @Environment(\.chatHighlight) private var highlight
+    @Environment(AppServices.self) private var services
     @State private var opened: PiPreview?
     /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
     @State private var sizes: [Int: CGSize] = [:]
@@ -26,6 +27,7 @@ struct PiConversation: View {
 
     var body: some View {
         let all = items
+        let notes = services.settings.replyNotes(for: session.id)
         let first = Self.firstSegment(count: all.count, window: window)
         VStack(alignment: .leading, spacing: Self.spacing) {
             if first > 0 {
@@ -36,7 +38,7 @@ struct PiConversation: View {
             // 系统直接用上次量好的尺寸（整列一起排时，每排开一段都把已排开的全部重量一遍，长对话里一次几百毫秒）
             let last = Self.segments(all.count) - 1
             ForEach(first..<(last + 1), id: \.self) { index in
-                segment(index, of: all, last: last)
+                segment(index, of: all, last: last, notes: notes)
                     .onScrollVisibilityChange(threshold: 0.01) { visible in
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
@@ -66,14 +68,14 @@ struct PiConversation: View {
     /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
     /// 宽度变了（拖窗口、转屏），量过的高按宽度反比估（字一行排得越宽越矮），排成真的时再换成实测：
     /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
-    @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int) -> some View {
+    @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int, notes: [ReplyNote]) -> some View {
         let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
         if let size = sizes[index], width > 0, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
             !items.contains(where: { $0.id == highlight })
         {
             Color.clear.frame(height: (size.height * size.width / width).rounded())
         } else {
-            ChatSegment(items: items, session: session, highlight: highlight, opened: $opened)
+            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, opened: $opened)
                 .equatable()
                 .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
                     sizes[index] = $0
@@ -103,23 +105,26 @@ struct PiConversation: View {
 }
 
 
-/// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条（只看本段里的）、同一个会话就不重算。
+/// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
     let items: [ChatItem]
     let session: PiSessionState
     let highlight: UUID?
+    let notes: [ReplyNote]
     @Binding var opened: PiPreview?
     @Environment(\.palette) private var palette
 
-    init(items: [ChatItem], session: PiSessionState, highlight: UUID?, opened: Binding<PiPreview?>) {
+    init(items: [ChatItem], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], opened: Binding<PiPreview?>) {
         self.items = items
         self.session = session
         self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
+        self.notes = notes.filter { note in items.contains { $0.id == note.entry } }
         _opened = opened
     }
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
+        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes
+            && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
     private static var turnGap: CGFloat { 14 }
@@ -146,7 +151,7 @@ private struct ChatSegment: View, Equatable {
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
-            ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session)
+            ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id })
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
@@ -228,7 +233,7 @@ struct PiSessionSubtitle: View {
                 if shown.isLive, shown.clock != nil {
                     Dot().foregroundStyle(palette.ink3)
                     // 整个 App 只有这一个计时到秒：正看着的这个会话
-                    PiElapsed(shown: shown, font: Self.font, precision: .second)
+                    PiElapsed(shown: shown, font: Self.font, style: .header)
                 }
             }
             .font(Self.font)

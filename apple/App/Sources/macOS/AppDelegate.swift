@@ -141,13 +141,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
         Logger(subsystem: AppServices.bundleID, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
-        let window = failureWindow ?? NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "CuePad"
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }.modifier(PaletteProvider()))
-        if failureWindow == nil { window.center() }
-        failureWindow = window
+        let content = UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }
+            .frame(width: 520, height: 420)
+            .modifier(PaletteProvider())
+        let window: NSWindow
+        if let failureWindow {
+            window = failureWindow
+            window.contentViewController = NSHostingController(rootView: content)
+        } else {
+            window = WindowFactory.utility(title: "CuePad", content: content)
+            window.center()
+            failureWindow = window
+        }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
@@ -163,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> NSWindow {
-        let window = MainWindowFactory.make(content: RootViews.mainWindow(services, workspace: workspace))
+        let window = WindowFactory.main(content: RootViews.mainWindow(services, workspace: workspace))
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
         if DebugHooks.placesOffscreen(window) { return window }
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)

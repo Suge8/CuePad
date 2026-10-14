@@ -43,6 +43,6 @@ log stream --info --predicate 'process == "CuePad" AND subsystem BEGINSWITH "com
 
 引擎日志里的错误详情是 `<private>`，看不到原因。要复现：拿用户库的副本、清掉引擎状态，在带生产签名的最小程序里用真实同步代码跑一遍、读问题列表——它会真的上传副本里的待推送记录，只在确认副本内容就是用户本机那份时做。
 
-同步是否真在跑，以库为准（只读复制出来看，不碰用户的库）：`syncState` 有一行 `engine`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 打开设置的同步分区，先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查上面两张表 → 另一台设备上能看到同一批项目、灵感与任务。
+同步是否真在跑，以库为准（只读复制出来看，不碰用户的库）：`syncState` 有一行 `engine`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 打开设置里的 iCloud 同步那一行，先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查上面两张表 → 另一台设备上能看到同一批项目、灵感与任务。
 
 验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）；开发环境的 Mac 描述文件按 Provisioning UDID 登记设备，不是 Hardware UUID。

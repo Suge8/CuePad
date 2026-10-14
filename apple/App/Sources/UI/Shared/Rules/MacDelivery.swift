@@ -114,7 +114,7 @@ nonisolated extension PiSessionState {
 
 extension PiSessionState {
     /// 输入框能带的：做得到时带图片，卡片总能带（发出去是文字）。
-    var composerKinds: ComposerKinds { capabilities.contains(.images) ? [.images, .cards] : [.cards] }
+    var composerKinds: ComposerKinds { capabilities.contains(.images) ? [.images, .cards, .notes] : [.cards, .notes] }
 }
 
 nonisolated extension DeliveryMode {

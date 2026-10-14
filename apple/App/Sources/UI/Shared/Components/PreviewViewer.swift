@@ -59,22 +59,44 @@ private struct PreviewPresenter: ViewModifier {
     }
 }
 
-/// 网页与 Markdown 的全屏页：一条顶栏（关闭、标题、分享到文件），下面是内容。
+/// 网页与 Markdown 的全屏页：顶上是各端浮层统一的那一行（Mac 是 `PanelHeader`：标题居中、分享与关闭在右上；iOS 是系统顶栏：左关闭、右分享），
+/// 不另画分隔线，内容紧接着铺满。
 private struct PreviewPage: View {
     let preview: PiPreview
     let file: URL?
-    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(\.closePanel) private var close
+    #endif
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Button("关闭") { close() }
-                Text(preview.title).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1).frame(maxWidth: .infinity)
-                if let file { ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") } } else { Color.clear.frame(width: 24) }
+        #if os(iOS)
+        NavigationStack {
+            page
+                .navigationTitle(preview.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    if let file { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) } }
+                }
+        }
+        #else
+        VStack(spacing: 10) {
+            PanelHeader(title: preview.title) {
+                if let file {
+                    ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") }
+                        .buttonStyle(.borderless).foregroundStyle(palette.ink2)
+                }
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            Divider()
+            page
+        }
+        .padding(.top, 14)
+        .background(palette.desk)
+        #endif
+    }
+
+    @ViewBuilder private var page: some View {
+        Group {
             if let file {
                 switch preview.kind {
                 case .markdown: PreviewMarkdown(file: file)

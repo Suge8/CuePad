@@ -169,6 +169,7 @@ final class MacExecutor {
         let directory = try await directory(of: .project(launch.project))
         try requireDirectory(directory)
         let id = try await runtime(launch.agent ?? .pi).open(in: directory, launchToken: launch.token)
+        if let name = launch.name { try await pi.configure(name: name, in: id) }  // 先起名：第一句话不会先当了会话名
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)

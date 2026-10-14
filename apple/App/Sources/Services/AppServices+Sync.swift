@@ -36,7 +36,7 @@ extension AppServices {
 
         var description: String {
             switch self {
-            case .isolated: "隔离模式（CUEPAD_LIBRARY_DIR）不连 iCloud"
+            case .isolated: "开发用的隔离资料库，不连 iCloud"
             case .noEntitlement: "这个构建没有 iCloud 权限（本机开发构建），不会同步"
             }
         }

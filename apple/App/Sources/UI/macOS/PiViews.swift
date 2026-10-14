@@ -4,7 +4,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 键帽：快捷键在界面上只有这一种写法（设置的快捷键一节、⌘K 面板的 esc）。
+/// 键帽：快捷键在界面上只有这一种写法（设置里显示或隐藏 CuePad 的快捷键、⌘K 面板的 esc）。
 struct Keycap: View {
     let text: String
 

@@ -2,91 +2,56 @@
 import AppKit
 import CuePi
 import CueStore
-import CueSync
 import SwiftUI
 
-/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、Pi 扩展、命令行、更新——都是同一种分组卡。操作结果就地显示在对应行下。
+/// 设置窗口的内容：只放会主动去改的（外观、显示/隐藏的快捷键、自动检查更新）与几样连接各一行状态（iCloud、Pi、命令行）。
+/// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
+/// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
-        form
-        .frame(width: 520)
-        // 与主窗口同一种桌面色，不用系统的白底
-        .background(palette.desk)
-    }
-
-    private var form: some View {
         @Bindable var settings = services.settings
-        return Form {
+        Form {
             Section {
-                Picker("主题", selection: $settings.theme) {
-                    Text("跟随系统").tag(AppSettings.Theme.system)
-                    Text("浅色").tag(AppSettings.Theme.light)
-                    Text("深色").tag(AppSettings.Theme.dark)
-                }
-                .pickerStyle(.segmented)
-            } header: {
-                SettingsHeader("外观")
-            }
-            SyncSection()
-            ConflictsSection()
-            Section {
-                LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
-                ForEach(ReplyShortcut.allCases, id: \.self) { key in
-                    LabeledContent {
-                        Keycap(text: key.symbols)
-                    } label: {
-                        Text(key.title)
-                        Text(key.explanation)
+                SettingRow(title: "外观", symbol: "sun.max") {
+                    Picker("外观", selection: $settings.theme) {
+                        Text("跟随系统").tag(AppSettings.Theme.system)
+                        Text("浅色").tag(AppSettings.Theme.light)
+                        Text("深色").tag(AppSettings.Theme.dark)
                     }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
-            } header: {
-                SettingsHeader("快捷键")
+                ShortcutRow()
             }
-            if services.diagnostics.latest != nil { Section { LastCrashRow() } header: { SettingsHeader("诊断") } }
+            Section {
+                SyncRow()
+                if !services.conflicts.isEmpty { ConflictsRow() }
+            }
             Section {
                 AgentRows()
                 CommandLineToolRow()
-            } header: {
-                SettingsHeader("Agent")
             }
-            Section { UpdateRow() } header: { SettingsHeader("更新") }
+            Section {
+                if let report = services.diagnostics.latest { CrashRow(report: report) }
+                UpdateRow()
+            }
         }
         .formStyle(.grouped)
         .font(Typography.body)
         .scrollContentBackground(.hidden)
-        .frame(height: 720)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 520)
+        // 与主窗口同一种桌面色，不用系统的白底
+        .background(palette.desk)
     }
 }
 
-/// 分组标题：比行小一号的次要墨色，行才是这一页的主体（同一号粗体时分不出层级）。
-private struct SettingsHeader: View {
-    let title: String
-    @Environment(\.palette) private var palette
-
-    init(_ title: String) { self.title = title }
-
-    var body: some View {
-        Text(title).font(Typography.label).foregroundStyle(palette.ink3).padding(.top, 6)
-    }
-}
-
-/// 分组下面的说明：元信息字号的次要墨色。
-private struct SettingsFooter: View {
-    let text: String
-    @Environment(\.palette) private var palette
-
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text).font(Typography.meta).foregroundStyle(palette.ink3)
-    }
-}
-
-/// 点击后按下新的组合键；Esc 取消。注册失败时保留原快捷键并显示原因。键帽与其余快捷键同一种，悬停时左边露出"更改"。
-private struct ShortcutRecorder: View {
+/// 显示/隐藏 CuePad 的全局快捷键：点键帽后按下新的组合键，Esc 取消；注册失败时保留原快捷键，原因写在名称下面。悬停时键帽左边露出"更改"。
+private struct ShortcutRow: View {
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var recording = false
@@ -95,7 +60,7 @@ private struct ShortcutRecorder: View {
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        SettingRow(title: "显示/隐藏", symbol: "keyboard", tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -108,7 +73,6 @@ private struct ShortcutRecorder: View {
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: hovering)
             .help("点一下，按下新的组合键（Esc 取消）")
-            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.failure) }
         }
         .onDisappear(perform: stop)
     }
@@ -166,106 +130,62 @@ enum ShortcutText {
     }
 }
 
-/// iCloud 同步：一行状态；暂停等你决定时给出两个选择（替换本机前再确认一次）。没有 iCloud 时只说明状态。
-private struct SyncSection: View {
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var confirmErase = false
-    @State private var working = false
-    @State private var failure: String?
+/// 上次崩溃：要你注意的一行，"查看"弹出摘要与导出（启动参数 `-CuePadCrashSheet` 时一打开就弹）。
+private struct CrashRow: View {
+    let report: CrashReport
+    @State private var showing = DebugHooks.preset.crashSheet
 
     var body: some View {
-        Section {
-            if services.sync == nil {
-                Label("这台 Mac 上的 CuePad 没有开启 iCloud 同步", systemImage: "icloud.slash").foregroundStyle(palette.ink3)
-            } else {
-                let summary = SyncSummary(services.syncStatus)
-                LabeledContent {
-                    if case .needsDecision = services.syncStatus {
-                        EmptyView()
-                    } else {
-                        Button("立即同步") {
-                            working = true
-                            Task {
-                                await services.syncNow()
-                                working = false
-                            }
-                        }
-                        .disabled(working || services.syncStatus == .syncing)
-                    }
-                } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.title)
-                            if let detail = summary.detail { Text(detail).font(Typography.meta).foregroundStyle(palette.ink3) }
-                        }
-                    } icon: {
-                        Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
-                    }
-                }
-                if case .needsDecision = services.syncStatus {
-                    HStack {
-                        Button("上传本机数据") { resolve(.uploadLocal) }
-                        Button("用云端数据替换本机…", role: .destructive) { confirmErase = true }
-                    }
-                    .disabled(working)
-                }
-                if !services.syncIssues.isEmpty {
-                    DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
-                        ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(issue.summary).font(Typography.meta)
-                                Text(issue.message).font(Typography.meta.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
-                            }
-                        }
-                    }
-                }
-                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
-            }
-        } header: {
-            SettingsHeader("iCloud 同步")
-        } footer: {
-            if case .needsDecision = services.syncStatus {
-                SettingsFooter("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
-            }
-        }
-        .dialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, message: "本机的灵感、任务、项目与图片会被删除，无法撤销。", buttons: [
-            DialogButton(title: "用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
-        ])
-    }
-
-    private func resolve(_ resolution: SyncResolution) {
-        working = true
-        failure = nil
-        Task {
-            defer { working = false }
-            do { try await services.resolveSync(resolution) } catch { failure = error.localizedDescription }
+        SettingRow(
+            title: report.kind.label, symbol: "exclamationmark.triangle", tone: .notice,
+            status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
+        ) {
+            EmptyView()
+        } fix: {
+            Button("查看") { showing = true }
+                .settingFix()
+                .popover(isPresented: $showing, arrowEdge: .bottom) { CrashReportView(report: report) }
         }
     }
 }
 
-/// 冲突副本：同一张卡在两台设备上离线改过，两个版本上下并排，选一份保留，另一份删除。
-private struct ConflictsSection: View {
+/// 冲突副本：同一张卡在两台设备上离线改过。行里只说有几条，"处理…"弹出两个版本上下并排，选一份保留、另一份删除。
+private struct ConflictsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @State private var showing = false
     @State private var failure: String?
 
     var body: some View {
-        if !services.conflicts.isEmpty {
-            Section {
-                ForEach(services.conflicts, id: \.copy.id) { conflict in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(CardText(conflict.original.body).label)
-                            .font(Typography.bodyStrong)
-                        version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
-                        version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
+        SettingRow(
+            title: "同步冲突", symbol: "square.on.square", tone: .notice,
+            status: "\(services.conflicts.count) 条灵感或任务有两个版本"
+        ) {
+            EmptyView()
+        } fix: {
+            Button("处理…") { showing = true }
+                .settingFix()
+                .popover(isPresented: $showing, arrowEdge: .bottom) { versions }
+        }
+        .onChange(of: services.conflicts.isEmpty) { _, empty in if empty { showing = false } }
+    }
+
+    private var versions: some View {
+        SettingPopover(title: "选一份保留", width: 420) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(services.conflicts, id: \.copy.id) { conflict in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(CardText(conflict.original.body).label).font(Typography.bodyStrong)
+                            version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
+                            version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
+                        }
                     }
-                    .padding(.vertical, 4)
                 }
-                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
-            } header: {
-                SettingsHeader("\(services.conflicts.count) 条灵感或任务有两个版本")
             }
+            .frame(maxHeight: 480)
+            .fixedSize(horizontal: false, vertical: true)
+            if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
         }
     }
 
@@ -280,7 +200,7 @@ private struct ConflictsSection: View {
                         do { try await services.resolveConflict(copy: copy, keep: choice) } catch { failure = error.localizedDescription }
                     }
                 }
-                .controlSize(.small)
+                .settingButton()
             }
             Text(Outgoing.text(of: card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)

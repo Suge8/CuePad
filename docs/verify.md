@@ -13,6 +13,22 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸（偏好在隔离库里）。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。界面侧的约束见 [ui.md](ui.md)。
 
+## 交互验收（Mac）
+
+点菜单、输入、看状态变化用 `bcu` 操作 `xc.sh run mac` 起的隔离实例：实例在后台，bcu 按无障碍和进程投递动作，不抢用户的前台和指针。改了菜单、输入框、浮窗、提示这类接线就走一遍：流程测试证明不了它们接上了。
+
+```bash
+pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene projectagent -CuePadProject 圆桌)
+bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
+```
+
+- 机器上常开着别的 CuePad（用户的、并行 agent 的）：只按 PID 认根，验完 `kill -TERM $pid`。
+- `projectagent` 场景带演示会话（另一台 Mac 上在线的），任务、步骤与会话的绑定都有。
+- SwiftUI 输入框用 `setText` 只改了无障碍的值、进不了绑定（不保存）：先 `click` 再 `typeText`（状态要 `--image always`）。
+- 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
+- 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
+- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。用自己建的模拟器（`CUEPAD_IOS_DEVICE`）：默认那台常被并行的 agent 装上别的构建。
+
 ## 性能测量
 
 测量只有一个入口：单次交互（`-CuePadBench interact`）。Mac 是 `apple/scripts/perf-mac.sh`，iOS 是 `apple/scripts/perf-ios.sh`（口径与限制见各自头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：

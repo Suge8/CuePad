@@ -23,6 +23,8 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var jumps = 0
     /// 请滚动区跳到的那一条（`jump(to:)`）。
     private(set) var target: Target?
+    /// 请对话把某一条排开、描圈再跳过去（`seek`）：对话（`SessionChat`）看到它变了就照做。
+    private(set) var seeking: Target?
     /// 用户正拖着或甩着滚动区（滚动区写入）。刚开始滚时人已经离开了最新处（读数先到）就在这里解除贴底。
     var scrolling = false {
         didSet {
@@ -77,6 +79,9 @@ nonisolated struct ChatFollow: Equatable {
     mutating func willPrepend() { prepending = true }
 
     mutating func prepended() { prepending = false }
+
+    /// 去读某一条（刻度滑条、回复框上的批注）：它可能还没排开，先由对话排开再 `jump(to:)`。
+    mutating func seek(_ id: UUID) { seeking = Target(id: id) }
 
     /// 跳到某一条去读：不再贴着最新（跳到的就在最新处时，滚到后会重新贴上）。
     mutating func jump(to id: UUID) {
@@ -164,8 +169,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     follow.wrappedValue.scrolled(
                         atNewest: reading.nearNewest, beyondScreen: reading.beyondScreen, nearOldest: reading.nearOldest, byUser: follow.wrappedValue.scrolling)
                     // 底锚只管内容变高；回复框长高、键盘弹出、栏的高度第一次加进内容边距（这一下系统把偏移放回顶上），
-                    // 都会离开底：贴着最新就补滚到底。在读数里补（布局定下来之后）
-                    if reading.offBottom, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
+                    // 都会离开底：贴着最新就补滚到底。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、画面与点按却还停在原处
+                    // （Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以到底的终点一变也补
+                    if reading.offBottom || reading.end != previous.end, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                         settle(end: reading.end)
                     }
                 }

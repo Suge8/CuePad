@@ -16,6 +16,14 @@ nonisolated extension PiSubagentState {
         }
     }
 
+    /// 角色的图标（会话卡片上一个子代理一个）：FireCode 角色表里的角色各一个，认不出的角色是一个人。
+    var roleSymbol: String { Self.roleSymbols[role] ?? "person.fill" }
+
+    private static let roleSymbols = [
+        "调研员": "magnifyingglass", "工程师": "hammer.fill", "批量工": "square.stack.3d.up.fill", "设计师": "paintbrush.pointed.fill",
+        "哨兵": "binoculars.fill",
+    ]
+
     var label: String {
         switch phase.known {
         case .running: "工作中"
@@ -29,11 +37,12 @@ nonisolated extension PiSubagentState {
     }
 }
 
-/// 一行汇总：在跑的个数是主句（第一眼要看到的），共几个是次句，失败的另算。没有子代理是 nil。
+/// 一行汇总：在跑的个数是主句（第一眼要看到的），共几个是次句，失败的另算；`lineup` 是在跑、失败的排前面的名册。没有子代理是 nil。
 nonisolated struct PiSubagentSummary: Equatable {
     let running: Int
     let total: Int
     let failed: Int
+    let lineup: [PiSubagentState]
 
     /// 主句：有在跑的写"2 个在跑"；都停了只写总数"8 个子代理"。
     var lead: String { running > 0 ? "\(running) 个在跑" : "\(total) 个子代理" }
@@ -49,6 +58,7 @@ nonisolated struct PiSubagentSummary: Equatable {
         running = agents.filter(\.isRunning).count
         total = agents.count
         failed = agents.filter { $0.phase == .known(.failed) }.count
+        lineup = agents.filter(\.isRunning) + agents.filter { $0.phase == .known(.failed) } + agents.filter { !$0.isRunning && $0.phase != .known(.failed) }
     }
 }
 
@@ -77,7 +87,7 @@ nonisolated enum PiSubagentClock: Equatable {
 
 }
 
-/// 会话在等子代理时（Agent 列表行的第三行）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；
+/// 会话在等子代理时（`PiProgress` 的那一句）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；
 /// 都停了（结果还没发给 Agent）说已交回。
 nonisolated enum PiSubagentLine {
     static func of(_ agents: [PiSubagentState]) -> String? {

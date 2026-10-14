@@ -21,9 +21,9 @@ struct RealFirecodeTests {
             bridge.sessions.first?.subagents.map(\.name) == ["ui"] || pi.subagentsToolFailed
         }
         try pi.requireSubagentsTool()  // 指挥官没加载时立即带 FireCode 的提示原文失败
-        // 角色与本次运行的开始来自 FireCode 的子代理名册
+        // 角色、模型与本次运行的开始来自 FireCode 的子代理名册
         let ui = try #require(bridge.sessions.first?.subagents.first)
-        #expect(ui.role == "工程师" && ui.startedAt != nil)
+        #expect(ui.role == "工程师" && ui.startedAt != nil && ui.model?.contains("/") == true)
 
         // 指挥官自己这轮已经答完，子代理还在跑：仍是工作中，计时从派活那轮开始不重置
         try await eventually("指挥官歇下、等子代理") {

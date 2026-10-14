@@ -2,33 +2,28 @@
 import AppKit
 import SwiftUI
 
-/// 标准设置窗口（⌘, 与菜单"设置…"）：有标题栏、可关闭、尺寸随内容，关闭只是隐藏，再次打开复用同一个窗口。
-/// 内容视图在第一次打开时才创建。
+/// 设置窗口（⌘, 与菜单"设置…"）：关闭只是隐藏，再次打开复用同一个窗口；窗口与内容在第一次打开时才建。
 final class SettingsWindowController {
-    private let makeContent: () -> AnyView
+    private let makeWindow: () -> NSWindow
     private let settings: AppSettings
     private var window: NSWindow?
     private var frameKeeper: WindowFrameKeeper?
 
     init(settings: AppSettings, content: @escaping () -> some View) {
         self.settings = settings
-        makeContent = { AnyView(content()) }
+        makeWindow = { WindowFactory.utility(title: "设置", content: content()) }
     }
 
     func show() {
-        let window = window ?? makeWindow()
-        self.window = window
-        window.show()
+        DebugHooks.present(window ?? firstWindow())
     }
 
-    private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "设置"
-        window.contentViewController = NSHostingController(rootView: makeContent())
-        window.isReleasedWhenClosed = false
+    private func firstWindow() -> NSWindow {
+        let window = makeWindow()
         let keeper = WindowFrameKeeper(window: window, name: "settings", settings: settings)
         if !keeper.restore() { window.center() }
         frameKeeper = keeper
+        self.window = window
         return window
     }
 }

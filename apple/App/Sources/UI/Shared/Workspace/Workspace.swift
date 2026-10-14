@@ -271,6 +271,8 @@ final class Workspace {
         let cards = [try await store.card(id)].compactMap(\.self) + (try await store.children(of: id))
         let sessions = Set(cards.compactMap(\.piSessionID))
         for state in services.liveSessions.live.map(\.state) where sessions.contains(state.sessionID) && state.state != .known(.ended) {
+            // 一个会话可以绑好几件事：它绑着的都做完了才结束
+            guard try await store.tasks(boundTo: state.sessionID).allSatisfy({ $0.task.status == .done }) else { continue }
             await end(state)
         }
     }
@@ -322,9 +324,27 @@ final class Workspace {
         try await attach(idea, TaskMove(slot: .under(task), after: last))
     }
 
-    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里可撤销。
+    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里可撤销。挂到绑了会话的任务上时不成为提示词，
+    /// 话接进那个会话的回复框（话在会话里说），撤销时回复框一并回到挂之前。
     func attach(_ idea: UUID, _ move: TaskMove) async throws {
-        say("已成为任务的提示词", action: .undo(try await services.store.attaching(idea, move)))
+        let (change, undo) = try await services.store.attaching(idea, move)
+        guard case .handed(let card, let session) = change else { return say("已成为任务的提示词", action: .undo(undo)) }
+        let restore = putInReplyBox(card.body, of: session)
+        say("已放进会话的回复框", link: .session(session), action: .undo {
+            restore()
+            try await undo()
+        })
+    }
+
+    /// 存储格式的话接进会话回复框已写的字后面（图片接进图片条），不自动发；返回把回复框放回接之前的闭包。
+    @discardableResult
+    func putInReplyBox(_ stored: String, of session: String) -> () -> Void {
+        let settings = services.settings, key = PiSessionState.recordID(sessionID: session)
+        let before = settings.replyDraft(for: key)
+        var draft = before
+        draft.append(stored: stored, files: services.store.files)
+        settings.setReplyDraft(draft, for: key)
+        return { settings.setReplyDraft(before, for: key) }
     }
 
     /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。

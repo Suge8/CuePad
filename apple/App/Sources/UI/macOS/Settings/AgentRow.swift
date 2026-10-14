@@ -28,7 +28,7 @@ struct AgentRow: View {
     var body: some View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
-        SettingRow(title: kind.name, symbol: kind.symbol, tone: working ? .busy : tone, status: line, help: help) {
+        SettingRow(title: kind.name, symbol: kind.symbol, tone: tone, busy: working, status: line, help: help) {
             Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -56,16 +56,16 @@ struct AgentRow: View {
         }
     }
 
-    private func describe(_ status: AgentStatus?) -> (SettingTone, Dotted?) {
+    private func describe(_ status: AgentStatus?) -> (StatusTone, Dotted?) {
         if case .failed(let message) = outcome { return (.failure, Dotted(message)) }
         guard let status else { return (.calm, "检测中…") }
         switch (status.presence, status.files) {
-        case (_, .foreign): return (.attention, "\(kind == .pi ? "Pi 目录里" : services.agents.skillPath(kind)) 有别人的同名文件，没有改动")
-        case (.tooOld(let version), _): return (.attention, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
+        case (_, .foreign): return (.failure, "\(kind == .pi ? "Pi 目录里" : services.agents.skillPath(kind)) 有别人的同名文件，没有改动")
+        case (.tooOld(let version), _): return (.notice, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
         case (.notFound, .missing): return (.calm, "没有检测到")
         case (.notFound, _): return (.calm, "已卸载，CuePad 的技能还留着")
         case (.found, .missing): return (.calm, Dotted(kind.writes))
-        case (.found, .outdated): return (.attention, "需要升级")
+        case (.found, .outdated): return (.notice, "需要升级")
         case (.found(let version), .current):
             if case .done(let note) = outcome { return (.calm, Dotted("已接入", note)) }
             return (.calm, Dotted("已接入", version.map { "\(kind.name) \($0)" } ?? services.agents.skillPath(kind)))
@@ -83,7 +83,7 @@ struct AgentRow: View {
         return [
             "接入后，\(kind.name) 的会话出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问，也能让 CuePad 在后台开新会话。",
             kind.limits,
-            "它也学会用 cuepad 记灵感、看和改任务\(kind == .pi ? "，还能把页面和截图发到手机上看" : "")。",
+            "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。",
             kind == .codex ? "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。" : nil,
             "会写入\(files)；关掉即删除。",
         ].compactMap { $0 }.joined()

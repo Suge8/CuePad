@@ -57,9 +57,9 @@ struct AgentScreen: View {
         List {
             if let list = model.list { sessions(list) }
         }
-        .listStyle(.insetGrouped)
+        // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .listSectionSpacing(16)
         // 与书架同一页边距与顶距：顶上不留分组列表默认的空白，只让出搜索那一排下面统一的一小段
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
@@ -129,29 +129,26 @@ struct AgentScreen: View {
         } else {
             Group {
                 if !list.now.isEmpty {
-                    Section {
-                        ForEach(list.nowRows) { nowRow in
-                            switch nowRow {
-                            case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
-                            case .reload(let items):
-                                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                    .padding(.horizontal, 16).padding(.vertical, Self.rowPadding)
-                                    .listRowInsets(.init()).listRowBackground(palette.paper).listRowSeparator(.hidden)
-                                if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
-                            }
+                    header { SectionTitle(text: "现在") }
+                    ForEach(list.nowRows) { nowRow in
+                        switch nowRow {
+                        case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
+                        case .reload(let items):
+                            PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
+                                .sessionCard()
+                                .cardRow()
+                            if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                         }
-                    } header: { SectionTitle(text: "现在").listRowInsets(Self.headerInsets) }
+                    }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
-                    Section {
-                        ForEach(run.items) { row($0, filtered: filtered, end: list.ends[$0.id]) }
-                    } header: {
+                    header {
                         VStack(alignment: .leading, spacing: 10) {
                             if index == 0 { SectionTitle(text: "历史") }
                             Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
                         }
-                        .listRowInsets(Self.headerInsets)
                     }
+                    ForEach(run.items) { row($0, filtered: filtered, end: list.ends[$0.id]) }
                 }
                 if model.hasMore {
                     // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
@@ -167,13 +164,14 @@ struct AgentScreen: View {
         }
     }
 
-    /// 分组标题与纸面左缘对齐（列表默认再缩进一截）。
-    private static let headerInsets = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。
+    private func header(@ViewBuilder _ title: () -> some View) -> some View {
+        title().frame(maxWidth: .infinity, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
+            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+    }
 
-    /// 行的上下留白：行之间不画分隔线，三行字靠留白分开（与 Mac 的 Agent 整页一样）。
-    static let rowPadding: CGFloat = 11
-
-    /// 一行：纸底；长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
+    /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
         let renamable = MacDelivery.canRename(item.state)
@@ -181,9 +179,7 @@ struct AgentScreen: View {
         let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { model.confirmingEnd = item.state }] : [])
             + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
         return SessionRow(item: item, filtered: filtered, end: end)
-            .listRowInsets(.init())
-            .listRowBackground(palette.paper)
-            .listRowSeparator(.hidden)
+            .cardRow()
             .listSwipes(RowSwipes(trailing: trailing))
             .contextMenu {
                 MarkUnreadButton(session: item.state)
@@ -349,7 +345,7 @@ private struct SyncBadge: View {
         Button { open = true } label: {
             Label(summary.title, systemImage: summary.symbol).foregroundStyle(palette.ink2)
                 .overlay(alignment: .topTrailing) {
-                    Circle().fill(summary.color(palette)).frame(width: 6, height: 6).offset(x: 3, y: -1).accessibilityHidden(true)
+                    Circle().fill(palette.color(summary.tone)).frame(width: 6, height: 6).offset(x: 3, y: -1).accessibilityHidden(true)
                 }
         }
             .popover(isPresented: $open) {
@@ -385,12 +381,19 @@ private struct SessionRow: View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
             PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
-                .padding(.horizontal, 16).padding(.vertical, AgentScreen.rowPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
+                .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(PressStyle(.card))
         .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、回复" : "看近况、回复")
+    }
+}
+
+private extension View {
+    /// 会话卡片在列表里的一行：行不画底、不画分隔线，卡片之间留 8 点。
+    func cardRow() -> some View {
+        listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 }
 #endif

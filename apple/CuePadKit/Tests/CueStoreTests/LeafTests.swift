@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 任务 → 步骤 → 会话：叶子（没有步骤的任务）才有草稿与会话，一个会话只绑一个叶子。
+/// 任务 → 步骤 → 会话：叶子（没有步骤的任务）才有草稿与会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
 @Suite struct LeafTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -24,29 +24,42 @@ import Testing
     #expect(try await store.children(of: step.id).map(\.id) == [draft.id])
   }
 
-  @Test func 绑定_只绑叶子_草稿被取走_一个会话只绑一个叶子() async throws {
+  /// 一个会话绑好几个叶子、草稿接进回复框、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
+  @Test func 绑定_只绑叶子_改绑换掉原来的_解绑不改任务状态() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
     let second = try await store.createTask("改文案", in: project.id)
-    let draft = try await store.createCard(body: "先复现\n再改", under: first.id)
+    try await store.bindSession("s1", to: first.id)
+    try await store.bindSession("s1", to: second.id)
+    #expect(try await store.card(second.id)?.status == .inProgress)
 
-    #expect(try await store.bindSession("s1", to: first.id) == "先复现\n再改")
-    #expect(try await store.card(draft.id) == nil)
-    let bound = try #require(try await store.task(boundTo: "s1"))
-    #expect(bound.id == first.id && bound.status == .inProgress)
-    #expect(try await store.bindSession("s2", to: first.id) == nil)  // 没有草稿
-    #expect(try await store.task(boundTo: "s1") == nil)  // s1 没人绑了：第一个任务换成了 s2
+    // 一个叶子最多一个会话：改绑换掉原来的；解绑后会话照常、任务状态不变
+    try await store.bindSession("s2", to: first.id)
+    #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [second.id])
+    try await store.unbindSession(from: second.id)
+    #expect(try await store.tasks(boundTo: "s1").isEmpty)
+    #expect(try await store.card(second.id)?.status == .inProgress)
 
-    // 一个会话只绑一个叶子：绑到新叶子上时从旧的解开
-    try await store.bindSession("s2", to: second.id)
-    #expect(try await store.task(boundTo: "s2")?.id == second.id)
-    #expect(try await store.card(first.id)?.piSessionID == nil)
-
-    let step = try await store.createTask("复现", under: first.id)
-    await #expect(throws: CueStoreError.notALeaf) { try await store.bindSession("s3", to: first.id) }
+    let step = try await store.createTask("复现", under: second.id)
+    await #expect(throws: CueStoreError.notALeaf) { try await store.bindSession("s3", to: second.id) }
     await #expect(throws: CueStoreError.notATask) { try await store.bindSession("s3", to: try await store.createCard(in: nil, body: "灵感").id) }
     try await store.bindSession("s3", to: step.id)
-    #expect(try await store.task(boundTo: "s3")?.id == step.id)
+    #expect(try await store.tasks(boundTo: "s3").map { [$0.task.id, $0.parent?.id] } == [[step.id, second.id]])
+  }
+
+  /// 从任务开了新会话、又亲手改绑：以后一次为准，那个新会话的记录再写（或同步过来）也不把任务抢回去。
+  @Test func 开新会话后又改绑_不被新会话抢回() async throws {
+    let project = try await store.createProject(name: "圆桌", color: "#111")
+    let task = try await store.createTask("修乱序", in: project.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
+    try await recorder.update(sessionID: "s-new", state: .thinking, title: "修乱序", launchToken: "t-new")
+    #expect(try await store.card(task.id)?.piSessionID == "s-new")
+
+    try await store.bindSession("s-old", to: task.id)
+    try await recorder.update(sessionID: "s-new", state: .settled, title: "修乱序", launchToken: "t-new")
+
+    #expect(try await store.card(task.id)?.piSessionID == "s-old")
   }
 
   @Test func 能绑的叶子_没完成_没绑会话_步骤带上级() async throws {

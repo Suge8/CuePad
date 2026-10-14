@@ -138,7 +138,19 @@ extension Workspace {
         }
     }
 
-    /// 在任务所在项目绑定的文件夹开新会话，会话名就是任务名，话作为第一句；开好后任务绑上它。
+    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定已有会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
+    func bind(_ sessionID: String, to leaf: UUID) async throws {
+        guard let draft = try await services.store.bindSession(sessionID, to: leaf) else { return }
+        putInReplyBox(draft, of: sessionID)
+        say("已绑定，写好的话放进了会话的回复框", link: .session(sessionID))
+    }
+
+    /// 用会话名在会话所在的项目里新建一个任务，绑上。
+    func bindNewTask(to session: PiSessionState) async throws {
+        try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
+    }
+
+    /// 在任务所在项目绑定的文件夹开新会话，会话以任务命名（`CueStore.requestLaunch`），话作为第一句；开好后任务绑上它。
     private func startSession(for task: Card, prompt: UUID, text: String) async throws {
         guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }
         if try await services.store.directory(of: project) == nil {

@@ -46,7 +46,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 每个窗口一份项目目录 `ProjectCatalog`；名称、图标、计数、目录、⌘1–9 顺序和所有项目选择器都从它同步取，页面与菜单不各自再读。
 - 目录读到前根视图不显示页面，所以进入项目页、打开菜单的第一帧就是真实值；顶栏的标题与信息在推入时定下，推入后再改会让整页跳一下，不能等页面数据。
 - 项目操作与灵感、任务的操作各只有一份定义（`ProjectActions`、`CardActions`），Mac 右键、iOS 长按与"更多"共用，平台只补各自的发送。
-- Mac 上提示词交给哪个 Agent 会话只有一处规则（`SendState.destination`）：一个任务一个会话，用户为任务挑的去处优先，其次是任务或提示词上次交给的会话，否则在项目文件夹开新会话；编辑页底栏、右键菜单、⌘K、选区菜单都经 `Workspace.handOff`，不各自挑会话。
+- Mac 上提示词交给哪个 Agent 会话只有一处规则（`Workspace.handOff`）：任务绑着会话就发进那个会话，没绑就在项目文件夹开一个以任务命名的新会话（会话名由 `CueStore.requestLaunch` 按带着的卡定，手机发起的同样）；各个入口都经它，不各自挑会话。
 - 绑定文件夹经 `FilePicker`（Mac，非模态，不用 `runModal`）或 `FolderPickerSheet`（手机，经投送请求让 Mac 绑），规则同一份 `ProjectFolders`。
 
 **页面与首次使用（Mac）。**
@@ -76,17 +76,18 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **Pi 桥。** 协议、版本策略、多客户端与已知边界都以 CuePi README 为准。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
 
-**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；接入面板与设置里的开关在 `~/.local/bin/cuepad` 建符号链接（Agent 的技能写的是 App 里的绝对路径，不靠它）。`cuepad --help` 是其唯一文档。资料库只读（Agent 的沙箱挡住写入，如 Codex 默认的 workspace-write）时报 `read_only`，让 Agent 到沙箱外重跑。
+**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；接入面板与设置里的开关在 `~/.local/bin/cuepad` 建符号链接（Agent 的技能写的是 App 里的绝对路径，不靠它）；隔离模式下建在隔离目录的 `bin/` 里，开发构建不会改到指向正式版的那个链接。`cuepad --help` 是其唯一文档。资料库只读（Agent 的沙箱挡住写入，如 Codex 默认的 workspace-write）时报 `read_only`，让 Agent 到沙箱外重跑。
 
 **测试。** Swift Testing。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
+- 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，写在 `App/Tests/UI` 的流程测试里；接线与长相按 [verify.md](verify.md) 的交互验收验。
 - App 测试经 `TestApp`（`TestSupport.swift`）拿服务：临时库、独立 UserDefaults、私有命名剪贴板与内存热键；后台托管 Pi 用记录型替身（`RecordingHost`）。
 - 等待只有一份（`CueTestSupport`，Kit 与 App 的测试共用）：库里的变化按读取订阅着等（`eventually(store, read)`）；没有事件可订阅的系统异步才用有界条件等待（`eventually { }`）；负向断言（"不会发生"）的固定时长只经 `quietPeriod`。
 - iOS 界面级测试把 `IOSRoot` 挂进宿主的窗口，对窗口截图做文字识别来读屏幕上的字：测试里读屏没开，SwiftUI 不生成读屏元素，读不到。
 - 与 Pi 的交互走真 `PiBridge` + 假扩展（`FakeExtension`，socket 上说桥协议；socket 路径有 104 字节上限，所以目录在 /tmp 下），不碰真实资料库、`~/.pi` 和其他应用。
 - 真实 Pi 与本机 FireCode 的端到端测试（`Real*Tests`）读 `~/.pi` 里装的 FireCode 源码，`CUEPAD_FIRECODE_SOURCE` 指向另一份检出时改读它。
 
-**macOS 壳层。** 主窗口在 `MainWindowFactory` 创建时就设好外框，界面不要再在运行时改窗口样式。退出时先等服务收尾再放行，整体最多约 2 秒，卡住的组件不拦着退出、记一条 `shutdown` 日志指出是哪个；收尾的等待不在主线程上（`terminate` 可能在主线程任务里被调用，那时主线程上排队的任务轮不到），所以同步引擎等组件的接口不能隶属主线程。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
+**macOS 壳层。** 窗口（主窗口、设置、资料库读不出的失败页）都在 `WindowFactory` 创建时设好外框：内容铺到透明标题栏下，页面底色通到窗口上沿，不留一条系统色的标题栏；界面不要再在运行时改窗口样式。退出时先等服务收尾再放行，整体最多约 2 秒，卡住的组件不拦着退出、记一条 `shutdown` 日志指出是哪个；收尾的等待不在主线程上（`terminate` 可能在主线程任务里被调用，那时主线程上排队的任务轮不到），所以同步引擎等组件的接口不能隶属主线程。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
 
 **iOS / iPadOS。**
 - 真机需要开发者账号给 App、分享扩展、小组件、通知服务扩展签上 App Group `group.com.sugeh.cuepad`。

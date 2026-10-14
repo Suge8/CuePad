@@ -4,6 +4,7 @@ import CueText
 import SwiftUI
 
 /// 任务的提示词：一张一张卡（内容预览与发没发出去），点开是大编辑区，卡上就地"发给 Agent"；末尾"写一条提示词"新建并进入编辑。
+/// 提示词是开会话时的第一句：任务绑了会话后话都在会话里说，末尾换成"打开会话"（挑来的灵感接进会话的回复框，见 `Workspace.attach`）。
 /// 右上可从本项目的灵感里挑一条挂上来。
 struct PromptList: View {
     let task: Card
@@ -12,6 +13,8 @@ struct PromptList: View {
     let hand: (Card) -> Void
     let write: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
 
@@ -33,8 +36,19 @@ struct PromptList: View {
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            // 一个叶子最多一条草稿：已有就不再给"写一条"
-            if prompts.allSatisfy(\.isPinned) {
+            if let session = task.piSessionID {
+                Button {
+                    navigation.openSession(PiSessionState.recordID(sessionID: session), sessionID: session, store: services.store)
+                } label: {
+                    Label("打开会话", systemImage: "bubble.left.and.text.bubble.right")
+                        .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
+                        .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
+                        .padding(.horizontal, TaskMetrics.cardPadding)
+                        .background(palette.fill, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(.wide))
+            } else if prompts.allSatisfy(\.isPinned) {  // 一个叶子最多一条草稿：已有就不再给"写一条"
                 Button(action: write) {
                     Label("写一条提示词：要 Agent 做什么", systemImage: "plus")
                         .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)

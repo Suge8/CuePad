@@ -115,7 +115,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示主窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
+    /// 显示主窗口或设置窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
     static func present(_ window: NSWindow) {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
     }
@@ -217,7 +217,7 @@ private struct DebugSettling: ViewModifier {
 #endif
 
 #if os(macOS)
-/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、设置、项目表单、新会话）放进主窗口里拍；其余是 `main`。
+/// 主窗口的内容：截图只截主窗口，调试画面要拍的另一扇窗（菜单栏面板、项目表单、新会话）放进主窗口里拍；其余是 `main`。
 struct DebugStage<Main: View>: View {
     let workspace: Workspace
     @ViewBuilder let main: () -> Main
@@ -226,7 +226,6 @@ struct DebugStage<Main: View>: View {
         #if DEBUG
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
-        case "settings": SettingsView().panelHost().frame(maxWidth: .infinity, maxHeight: .infinity)
         case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()
