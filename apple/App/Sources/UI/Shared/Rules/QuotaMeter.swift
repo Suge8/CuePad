@@ -3,7 +3,7 @@ import Foundation
 
 /// 一个订阅账号的额度怎么读（Agent 页顶部与菜单栏面板的仪表、它的明细、回复框的模型胶囊、模型菜单的分组标题共用一份）。
 /// 读数在 `now` 那一刻算定：过了重置时间的窗口按已重置算（0%），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
-/// 倒计时交给系统的计时文字（`Text(_:style: .relative)`）。档位与上下文用量同一个口径（`PiContextMeter.level(of:)`）。
+/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位与上下文用量同一个口径（`PiContextMeter.level(of:)`）。
 nonisolated struct QuotaMeter: Equatable {
     /// 一个窗口此刻的读数。
     struct Window: Equatable, Identifiable {
@@ -76,6 +76,26 @@ nonisolated struct QuotaMeter: Equatable {
         if days > 0 { return hours % 24 == 0 ? "\(days) 天" : "\(days) 天 \(hours % 24) 小时" }
         if hours > 0 { return minutes % 60 == 0 ? "\(hours) 小时" : "\(hours) 小时 \(minutes % 60) 分钟" }
         return "\(minutes) 分钟"
+    }
+
+    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `Text(.currentDate, format:)` 用：系统只在字会变的整分钟换字，
+    /// 不经 TimelineView 或定时器重算视图。过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
+    struct Countdown: DiscreteFormatStyle {
+        let end: Date
+
+        func format(_ now: Date) -> String { QuotaMeter.span(Int(end.timeIntervalSince(now))) }
+
+        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后
+        func discreteInput(after now: Date) -> Date? {
+            let left = end.timeIntervalSince(now)
+            guard left > 60 else { return nil }
+            return end.addingTimeInterval(-((left / 60).rounded(.down) * 60) + 0.001)
+        }
+
+        func discreteInput(before now: Date) -> Date? {
+            let left = end.timeIntervalSince(now)
+            return end.addingTimeInterval(-((left / 60).rounded(.down) + 1) * 60)
+        }
     }
 
     /// 窗口长度的叫法：5 小时、本周（7 天）、其余按天或小时。

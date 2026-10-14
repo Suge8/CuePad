@@ -56,10 +56,6 @@ struct AgentScreen: View {
 
     var body: some View {
         List {
-            if !services.accountQuotas.items.isEmpty {
-                QuotaStrip().padding(.horizontal, 4).padding(.vertical, 2)
-                    .listRowInsets(.init()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-            }
             if let list = model.list { sessions(list) }
         }
         // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
@@ -131,11 +127,12 @@ struct AgentScreen: View {
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         let filtered = list.filter.project != nil
         if list.isEmpty {
+            if !services.accountQuotas.items.isEmpty { header(quotas: true) { EmptyView() } }
             empty.listRowBackground(Color.clear)
         } else {
             Group {
                 if !list.now.isEmpty {
-                    header { SectionTitle(text: "现在") }
+                    header(quotas: true) { SectionTitle(text: "现在") }
                     ForEach(list.nowRows) { nowRow in
                         switch nowRow {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
@@ -148,7 +145,7 @@ struct AgentScreen: View {
                     }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
-                    header {
+                    header(quotas: index == 0 && list.now.isEmpty) {
                         VStack(alignment: .leading, spacing: 10) {
                             if index == 0 { SectionTitle(text: "历史") }
                             Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
@@ -170,11 +167,17 @@ struct AgentScreen: View {
         }
     }
 
-    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。
-    private func header(@ViewBuilder _ title: () -> some View) -> some View {
-        title().frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
-            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。列表的第一个标题（`quotas`）上头挂订阅额度的总览：
+    /// 总览不单独占一行——多一行在第一次换到这页时要多建一个单元格，实测比放进已有的这一行多一两亿条指令。
+    private func header(quotas: Bool = false, @ViewBuilder _ title: () -> some View) -> some View {
+        let strip = quotas && !services.accountQuotas.items.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
+            if strip { QuotaStrip().padding(.horizontal, 4).padding(.bottom, 22) }
+            title()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets(top: strip ? 2 : 14, leading: 0, bottom: 4, trailing: 0))
+        .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 
     /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
