@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 用法：xc.sh check                 快速静态门：lint.sh、CuePadKit 的 swift build、iOS 编译；不跑测试
 #       xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+#       xc.sh rec <ios|ipad> [录屏输出路径.mov] [-- 启动参数…]   同 shot 摆好画面后录屏 CUEPAD_REC_SECONDS 秒（默认 12），看动效与状态切换
 #       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着不退（给 bcu 操作），就绪后打印 PID；下次 run/shot 先结束它
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh clean-sims          删掉产物目录已不在的专用模拟器（见下）
@@ -30,7 +31,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
 TEST_TIME_LIMIT=120
-USAGE="用法：$0 <check|build|test|shot|run|clean-sims|release|device|provision> [mac|ios|ipad] …（见脚本头注释）"
+USAGE="用法：$0 <check|build|test|shot|rec|run|clean-sims|release|device|provision> [mac|ios|ipad] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -49,7 +50,7 @@ case "$cmd" in
   clean-sims) sim_clean; exit 0 ;;
   check) platform=ios ;;
 esac
-out="${3:-$DERIVED/shot-$platform.png}"
+if [ "$cmd" = rec ]; then out="${3:-$DERIVED/rec-$platform.mov}"; else out="${3:-$DERIVED/shot-$platform.png}"; fi
 launch_args=()
 if [ "$#" -gt 3 ] && [ "$4" = "--" ]; then launch_args=("${@:5}"); fi
 if [ "$cmd" = run ] && [ "${3:-}" = "--" ]; then launch_args=("${@:4}"); fi
@@ -162,8 +163,8 @@ shot_mac() {
 sim_booted() { [ "$(sim_state "$device")" = Booted ]; }
 
 # iOS/iPadOS：库与偏好放进隔离目录（每个设备各一个，默认 .derived/library-<ios|ipad>），启动参数原样传给 App。
-# simctl 用 SIMCTL_CHILD_ 前缀把环境变量传给模拟器里的进程。
-shot_sim() {
+# simctl 用 SIMCTL_CHILD_ 前缀把环境变量传给模拟器里的进程。摆好画面后截图（shot）或录屏（rec），再结束 App、关掉本次开的模拟器。
+capture_sim() {
   mkdir -p "$(dirname "$out")"
   local booted_here=0
   if ! sim_booted; then
@@ -176,15 +177,24 @@ shot_sim() {
   SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library-$platform}")" SIMCTL_CHILD_CUEPAD_SHOT_READY="$ready" \
     xcrun simctl launch "$device" "$BUNDLE_ID" ${launch_args[@]+"${launch_args[@]}"} >/dev/null
   wait_ready "$ready" "sim_alive" || { xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null; exit 1; }
-  xcrun simctl io "$device" screenshot "$out" >/dev/null
+  if [ "$cmd" = rec ]; then
+    # recordVideo 收到 SIGINT 才把文件写完整；只结束这里启动的那个 PID。录多久是要录的内容，固定等
+    xcrun simctl io "$device" recordVideo --codec h264 --force "$out" 2>/dev/null &
+    local recorder=$!
+    sleep "${CUEPAD_REC_SECONDS:-12}"
+    kill -INT "$recorder"
+    wait "$recorder" || true
+  else
+    xcrun simctl io "$device" screenshot "$out" >/dev/null
+  fi
   xcrun simctl terminate "$device" "$BUNDLE_ID"
   [ "$booted_here" = 0 ] || xcrun simctl shutdown "$device"
   echo "$out"
 }
 # 先取全文再找：pipefail 下 grep -q 提前退出会让前面的命令吃 SIGPIPE，整条判成失败
 sim_alive() { local list; list="$(xcrun simctl spawn "$device" launchctl list 2>/dev/null)"; [[ "$list" == *"UIKitApplication:$BUNDLE_ID"* ]]; }
-shot_ios() { shot_sim; }
-shot_ipad() { shot_sim; }
+shot_ios() { capture_sim; }
+shot_ipad() { capture_sim; }
 
 case "$cmd" in
   check)
@@ -208,6 +218,7 @@ case "$cmd" in
     fi
     exit $status ;;
   shot) xcb -quiet build; "shot_$platform" ;;
+  rec) [ "$platform" != mac ] || { echo "rec 只有 ios、ipad：Mac 的动效与 iOS 同一份代码，在模拟器里录" >&2; exit 2; }; xcb -quiet build; capture_sim ;;
   run) [ "$platform" = mac ] || { echo "run 只有 mac：iOS 模拟器没有可操作的窗口，用 shot" >&2; exit 2; }; xcb -quiet build; run_mac ;;
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
