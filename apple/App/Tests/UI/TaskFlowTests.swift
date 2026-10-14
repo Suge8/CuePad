@@ -111,7 +111,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("补重连用例", in: project.id)
         _ = try await store.createCard(body: "先复现，别改代码", under: first.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
 
         try await workspace.bind("s1", to: first.id)
         try await workspace.bind("s1", to: second.id)
@@ -137,7 +137,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版", under: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
         try await workspace.bind("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
@@ -338,7 +338,7 @@ struct TaskFlowTests {
     }
 
     private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), now: now, reaches: { _ in true })
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), at: .always(at: now))
     }
 
     private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {

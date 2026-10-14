@@ -116,18 +116,18 @@ struct SessionTaskTests {
         }
         let workspace = Workspace(services: services)
         func shown() async throws -> [String: String] {
-            services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+            services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
             return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
         }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 1)
+        #expect(try await CueWaiting.count(in: store, at: .always()) == 1)
         let states = try await store.piSessions(sessionIDs: ["s1", "s2"])
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
         try await store.updateCueProfile { $0.enabledAt = nil }
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 2)
+        #expect(try await CueWaiting.count(in: store, at: .always()) == 2)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {

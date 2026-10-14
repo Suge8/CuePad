@@ -35,10 +35,10 @@ nonisolated struct PiRowFacts: Equatable {
         var isFailure: Bool { self == .endFailed || self == .renameFailed }
     }
 
-    /// `end` 是此刻要显示的结束请求（`DeliveryRequest.shownEnd`），`renaming`、`renameFailed` 由最近一条改名推出（`PiRename`），
+    /// `end` 是此刻要显示的那次结束到哪了（`DeliveryRequest.shownEnd`），`renaming`、`renameFailed` 由最近一条改名推出（`PiRename`），
     /// `hasDraft` 是回复框里有没发的草稿。
-    init(_ session: PiSessionState, shown: PiShown, end: DeliveryRequest?, renaming: Bool, renameFailed: Bool, hasDraft: Bool) {
-        note = if end?.isOpen == true { .ending }
+    init(_ session: PiSessionState, shown: PiShown, end: Speech.Trip?, renaming: Bool, renameFailed: Bool, hasDraft: Bool) {
+        note = if end == .sending { .ending }
             else if end?.failure != nil { .endFailed }
             else if renameFailed { .renameFailed }
             else if let transit = shown.note { .transit(transit) }
@@ -54,10 +54,10 @@ nonisolated struct PiRowFacts: Equatable {
 
 extension AppSettings {
     /// 这个会话在本机的行上写的读数：显示状态（`shown`）、本机看没看过改名失败、回复框草稿都从本机偏好来。
-    func facts(_ session: PiSessionState, shown: PiShown, end: DeliveryRequest?, rename: DeliveryRequest?) -> PiRowFacts {
+    func facts(_ session: PiSessionState, shown: PiShown, end: Speech.Trip?, rename: DeliveryRequest?, at moment: Speech.Moment) -> PiRowFacts {
         PiRowFacts(
-            session, shown: shown, end: end, renaming: PiRename.isPending(rename),
-            renameFailed: PiRename.failed(rename, seen: sessionSeen[session.sessionID]), hasDraft: draftPreview(for: session.id) != nil)
+            session, shown: shown, end: end, renaming: PiRename.isPending(rename, at: moment),
+            renameFailed: PiRename.failed(rename, seen: sessionSeen[session.sessionID], at: moment), hasDraft: draftPreview(for: session.id) != nil)
     }
 }
 

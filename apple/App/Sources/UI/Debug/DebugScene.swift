@@ -156,6 +156,7 @@ enum DebugScene {
         preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
+        preset.alwaysReachable = preset.demoMac && defaults.string(forKey: "CuePadSync") == nil
         preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }

@@ -44,6 +44,7 @@ extension AppServices {
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
         startCue()
         startSync()
+        startSpeechClock()
         startLiveSessions()
         startAccountQuotas()
         startAlerts()

@@ -6,8 +6,37 @@ import SQLite3
 
 extension DebugScene {
     /// `-CuePadSync stalled`：装上拉取永不返回的同步替身（隔离库本来没有同步引擎），核对下拉刷新的圈有时限、界面不跟着卡。
+    /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
+    /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
     static var syncSource: AppServices.SyncSource {
-        defaults.string(forKey: "CuePadSync") == "stalled" ? .custom(StalledSync()) : .iCloud
+        switch defaults.string(forKey: "CuePadSync") {
+        case "stalled": .custom(StalledSync())
+        case "offline": .custom(OfflineSync(seconds: defaults.object(forKey: "CuePadOfflineSeconds") as? Double ?? 6))
+        default: .iCloud
+        }
+    }
+
+    /// 先报连不上 iCloud，过一会儿报已同步；拉取与上传什么都不做。
+    nonisolated final class OfflineSync: SyncControlling {
+        let seconds: Double
+        init(seconds: Double) { self.seconds = seconds }
+        var stateUpdates: AsyncStream<SyncState> {
+            AsyncStream { [seconds] continuation in
+                continuation.yield(SyncState(status: .offline, issues: []))
+                let task = Task {
+                    try? await Task.sleep(for: .seconds(seconds))
+                    continuation.yield(SyncState(status: .idle, issues: []))
+                }
+                continuation.onTermination = { _ in task.cancel() }
+            }
+        }
+        func start() async throws {}
+        func stop() async {}
+        func syncNow() async throws {}
+        func pullChanges() async throws {}
+        func preparePull() async throws {}
+        func sendNow(recordName: String, deleted: Bool) async throws {}
+        func resolve(_ resolution: SyncResolution) async throws {}
     }
 
     /// 拉取与立即同步都不返回（像网络一直没有回音），其余什么都不做。

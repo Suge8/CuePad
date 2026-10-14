@@ -11,24 +11,19 @@ nonisolated enum PromptDelivery: Equatable, Sendable {
     /// 这一条的请求没能送达，带着它与原因。只有它能重发：重发前先撤回它（没被 Mac 领取的，免得 Mac 回来再发一遍）。
     case failed(DeliveryRequest, Speech.Failure)
 
-    /// `handoff` 是它交给的会话（含发给那个会话的最近一条请求）；`launching` 是正为它开新会话；`reaches` 给出到那台 Mac 的同步通不通（`AppServices.reaches`）。
-    init(_ prompt: UUID, handoff: PiSessionListItem?, launching: Bool, now: Date, reaches: (String) -> Bool) {
+    /// `handoff` 是它交给的会话（含发给那个会话的最近一条请求）；`launching` 是正为它开新会话；`moment` 是此刻（`AppServices.speech`）。
+    init(_ prompt: UUID, handoff: PiSessionListItem?, launching: Bool, at moment: Speech.Moment) {
         if launching { self = .sending; return }
         guard let request = Self.request(of: prompt, handoff: handoff) else { self = .unsent; return }
-        switch Speech.trip(request, now: now, reachable: reaches(request.hostID)) {
+        switch Speech.trip(request, at: moment) {
         case .sending: self = .sending
         case .delivered: self = .unsent
         case .failed(let failure): self = .failed(request, failure)
         }
     }
 
-    init(_ prompt: UUID, agents: AgentLinks, now: Date, reaches: (String) -> Bool) {
-        self.init(prompt, handoff: agents.items[prompt], launching: agents.launching.contains(prompt), now: now, reaches: reaches)
-    }
-
-    /// 这一条还在等回执的请求到这一刻算超时。
-    static func deadline(of prompt: UUID, agents: AgentLinks) -> Date? {
-        request(of: prompt, handoff: agents.items[prompt]).flatMap(Speech.deadline)
+    init(_ prompt: UUID, agents: AgentLinks, at moment: Speech.Moment) {
+        self.init(prompt, handoff: agents.items[prompt], launching: agents.launching.contains(prompt), at: moment)
     }
 
     /// 会话的最近一条请求是这一条的，才看它的结果；别的提示词发到同一会话失败不连累这一条。

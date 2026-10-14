@@ -2,9 +2,12 @@ import CueStore
 import Foundation
 
 nonisolated extension PiSessionListItem {
-    /// 没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
-    static func undelivered(_ items: [PiSessionListItem]) -> [String: Int] {
-        Dictionary(items.filter { $0.undelivered > 0 }.map { ($0.state.sessionID, $0.undelivered) }) { first, _ in first }
+    /// 此刻没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
+    static func undelivered(_ items: [PiSessionListItem], at moment: Speech.Moment) -> [String: Int] {
+        Dictionary(items.compactMap { item in
+            let count = item.undelivered(at: moment)
+            return count > 0 ? (item.state.sessionID, count) : nil
+        }) { first, _ in first }
     }
 }
 
@@ -12,12 +15,14 @@ nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
-    /// `cueOnDuty`：Cue 在值班（`LiveSessions.cueOnDuty`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`）。
-    static func inListOrder(_ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false) -> [PiSessionState] {
+    /// `cueOnDuty`：Cue 在值班（`LiveSessions.cueOnDuty`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`）。`moment`：此刻（话超时就是没能送达）。
+    static func inListOrder(
+        _ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false, at moment: Speech.Moment
+    ) -> [PiSessionState] {
         sessions.enumerated()
             .map { index, session in
                 // 排序只看档位，不读说法：Cue 的名字给空串
-                let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cueOnDuty ? "" : nil)
+                let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cueOnDuty ? "" : nil, at: moment)
                 return (rank: shown.rank, offset: index, session: session)
             }
             .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
@@ -31,47 +36,61 @@ nonisolated extension PiSessionState {
     var hasStarted: Bool { lastPrompt != nil || lastReply != nil || pendingPrompt != nil }
 }
 
-/// 发给会话、还没被它的状态吸收的那条投送请求此刻在哪一步。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
-/// 再同步过来才变；投送请求是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
+/// 发给会话、还没被它的状态吸收的那条话在会话行上的样子。到哪了只读说的话那条规则（`Speech`，含超时与本机同步不通）：
+/// 发送中、已送达、没能送达；发送中怎么说（`Transit`）只是展示。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
+/// 再同步过来才变；话是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
 nonisolated enum PiDelivery: Hashable, Sendable {
-    /// 写出了，Mac 还没接手。
-    case sending
-    /// Mac 正在送达。
-    case delivering
-    /// 发给已结束的会话：Mac 先在后台唤醒它。
-    case waking
+    case inTransit(Transit)
     /// 送到了，会话状态还没跟上。
     case delivered
-    case failed
+    case failed(Speech.Failure)
 
-    /// 还没送到的话此刻怎么说（会话行的小标记、会话页气泡下面同一套）：会话在跑时"等它做完再说"的话是"排队中"，
-    /// 其余 Mac 还没接手是"发送中"、接手了是"送达中"。
-    static func transit(_ request: DeliveryRequest, busy: Bool) -> String {
-        if busy, request.mode == .known(.followUp) { return "排队中" }
-        return request.status == .known(.pending) ? "发送中" : "送达中"
+    /// 还在路上的话此刻怎么说（会话行的小标记、会话页气泡下面、新会话浮框同一套）。
+    enum Transit: Hashable, Sendable {
+        /// Mac 还没接手。
+        case sending
+        /// 会话在跑时"等它做完再说"的。
+        case queued
+        /// Mac 接手了，正在送达。
+        case delivering
+        /// 发给已结束的会话：Mac 先在后台唤醒它。
+        case waking
+
+        var label: String {
+            switch self {
+            case .sending: "发送中"
+            case .queued: "排队中"
+            case .delivering: "送达中"
+            case .waking: "正在唤醒"
+            }
+        }
+
+        /// `session` 是收话的会话；开新会话的请求没有。
+        static func of(_ request: DeliveryRequest, session: PiSessionState?) -> Transit {
+            if session?.state == .known(.ended) { return .waking }
+            let busy = session.map { $0.isWorking || $0.state == .known(.waitingForUser) } ?? false
+            if busy, request.mode == .known(.followUp) { return .queued }
+            return request.isWithdrawable ? .sending : .delivering
+        }
     }
 
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
     /// 送到了的请求过一会儿就被执行它的 Mac 清理，"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
-    static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil) -> PiDelivery? {
+    static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
-        let ended = session.state == .known(.ended)
-        switch request.status.known {
-        case .pending, .executing:
+        switch Speech.trip(request, at: moment) {
+        case .sending:
             // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还在排队）
             if session.isWorking && session.stateSince > request.createdAt { return nil }
-            if ended { return .waking }
-            return request.status == .known(.pending) ? .sending : .delivering
-        case .succeeded:
+            return .inTransit(.of(request, session: session))
+        case .delivered:
             // 等会话状态跟上（进入处理中，或在送达之后变过）就让位
             let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
             return caughtUp ? nil : .delivered
-        case .failed:
-            return (seen ?? .distantPast) > (request.completedAt ?? request.modifiedAt) ? nil : .failed
-        case nil:
-            return nil
+        case .failed(let failure):
+            return (seen ?? .distantPast) > (Speech.failedAt(request, at: moment) ?? moment.now) ? nil : .failed(failure)
         }
     }
 }
@@ -137,19 +156,22 @@ nonisolated struct PiShown: Hashable, Sendable {
 }
 
 nonisolated extension PiShown {
-    /// `cue`：值班的 Cue 的名字（Cue 在值班时给，见 `Workspace.shown`）。
-    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue: String? = nil) {
+    /// `cue`：值班的 Cue 的名字（Cue 在值班时给，见 `Workspace.shown`）；`moment`：此刻（`AppServices.speech`）。
+    init(
+        _ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue: String? = nil,
+        at moment: Speech.Moment
+    ) {
         let onDuty = cue != nil
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.isWorking || session.state == .known(.waitingForUser)
         let reported = Self.status(of: session.state)
         let asked = session.waitsForCue(cueOnDuty: onDuty) ? Status.cueAsking : reported
-        switch PiDelivery.phase(of: delivery, for: session, seen: seen) {
-        case .failed:
-            self.init(status: .delivery(.failed), clock: own, cue: cue)
+        switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
+        case .failed(let failure):
+            self.init(status: .delivery(.failed(failure)), clock: own, cue: cue)
         case let phase? where busy:
-            let transit = delivery.map { PiDelivery.transit($0, busy: true) }
-            self.init(status: asked, note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own, cue: cue)
+            let note = if case .inTransit(let transit) = phase { "你的话\(transit.label)" } else { nil as String? }
+            self.init(status: asked, note: note, clock: own, cue: cue)
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
         case nil where session.state == .known(.settled):
@@ -157,6 +179,11 @@ nonisolated extension PiShown {
         case nil:
             self.init(status: asked, clock: own, cue: cue)
         }
+    }
+
+    /// 没有发给它的话在路上（会话页顶栏、对话里的会话卡）：只按会话自己的状态，不涉及此刻。
+    init(_ session: PiSessionState, cue: String? = nil) {
+        self.init(session, delivery: nil, cue: cue, at: .always())
     }
 
     /// 只有 Pi 报的状态（子代理、样板）：空闲按看过处理。
@@ -179,9 +206,7 @@ nonisolated extension PiShown {
 nonisolated extension PiShown {
     var label: String {
         switch status {
-        case .delivery(.sending): "发送中"
-        case .delivery(.delivering): "送达中"
-        case .delivery(.waking): "正在唤醒"
+        case .delivery(.inTransit(let transit)): transit.label
         case .delivery(.delivered): "已送达"
         case .delivery(.failed): "没能送达"
         case .working(.outputting): "输出中"
@@ -211,7 +236,7 @@ nonisolated extension PiShown {
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
     var presence: String {
         switch status {
-        case .delivery(.waking): "正在唤醒 Agent"
+        case .delivery(.inTransit(.waking)): "正在唤醒 Agent"
         case .delivery(.failed): "没能送达 Agent"
         case .delivery: "正在发给 Agent"
         case .working(.compacting): "Agent 正在压缩上下文"
@@ -233,13 +258,13 @@ nonisolated extension PiShown {
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
 
-    /// 此刻显示为没能送达时就是那条请求（`request` 是算这个状态用的那条），Mac 任务面板据此写原因（`PiProgress.note`）。
-    func undelivered(_ request: DeliveryRequest?) -> DeliveryRequest? { status == .delivery(.failed) ? request : nil }
+    /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、Mac 任务面板写它）。
+    var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
     /// 在动：工作中（心电线）、话在路上（三层上箭头）。
     var isLive: Bool {
         switch status {
-        case .working, .delivery(.sending), .delivery(.delivering), .delivery(.waking), .delivery(.delivered): true
+        case .working, .delivery(.inTransit), .delivery(.delivered): true
         default: false
         }
     }
@@ -284,15 +309,15 @@ nonisolated extension PiShown {
 extension AppSettings {
     /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
     /// `cue`：值班的 Cue 的名字（不在值班为 nil）；界面经 `Workspace.shown` 调，名字从那里来。
-    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: String? = nil) -> PiShown {
-        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cue: cue)
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: String? = nil, at moment: Speech.Moment) -> PiShown {
+        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cue: cue, at: moment)
     }
 }
 
 extension Workspace {
     /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"）。
     func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        services.settings.shown(session, delivery: delivery, cue: cueOnDuty)
+        services.settings.shown(session, delivery: delivery, cue: cueOnDuty, at: services.speech)
     }
 
     /// 值班的 Cue 的名字（`PiShown` 的 `cue`）；Cue 不在值班为 nil。

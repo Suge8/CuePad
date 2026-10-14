@@ -66,19 +66,23 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var delivery: DeliveryRequest?
   /// 发给它的最近一条改名请求（带名字的配置请求）：改名在路上、没改成都由它推出。
   public var rename: DeliveryRequest?
-  /// 发给它、没能送达的话有几句（说话的方式里失败、还没重发或移除的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
-  public var undelivered: Int
+  /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
+  public var unsettled: [DeliveryRequest]
   public var id: UUID { state.id }
 
   public init(
-    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
+    unsettled: [DeliveryRequest] = []
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
-    self.undelivered = undelivered
+    self.unsettled = unsettled
   }
+
+  /// 此刻没能送达的话有几句（`Speech`：失败的与超时的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
+  public func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(unsettled, at: moment) }
 }
 
 /// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。

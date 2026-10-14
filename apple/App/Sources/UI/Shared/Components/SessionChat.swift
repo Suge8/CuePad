@@ -23,14 +23,15 @@ struct SessionChat: View {
     @State private var highlight = ChatHighlight()
     @State private var derived = ChatDerived()
     @State private var pendingJump: UUID?
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         let _ = derived.refresh(digest)
-        let followKey = PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
+        let followKey = PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech)
         ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow) {
             VStack(spacing: 14) {
-                if digest.fetchingTranscript {
+                if digest.fetchingTranscript(at: services.speech) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 conversation

@@ -104,8 +104,8 @@ struct ReplyTests {
         let now = try await app.services.store.requestDelivery("先停下这个", to: live.target, on: live.hostID, mode: .steer)
         let messages = [message(1, "顺便跑一遍", delivery: arrived.id)]
 
-        #expect(PiChat.queued([queued, arrived, now], messages: messages).map(\.id) == [queued.id])
-        #expect(PiChat.outgoing([queued, arrived, now], messages: messages).map(\.id) == [now.id])
+        #expect(PiChat.queued([queued, arrived, now], messages: messages, at: .always()).map(\.id) == [queued.id])
+        #expect(PiChat.outgoing([queued, arrived, now], messages: messages, at: .always()).map(\.id) == [now.id])
     }
 
     /// 撤回与改为马上说只对还没被 Mac 领取的（Pi 扩展收不回已交给 Pi 的话）。

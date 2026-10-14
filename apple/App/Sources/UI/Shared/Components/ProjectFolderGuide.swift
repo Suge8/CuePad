@@ -27,6 +27,7 @@ struct ProjectFolderGuide: View {
     let guide: FolderGuide?
     var style = Style.page
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -40,7 +41,7 @@ struct ProjectFolderGuide: View {
         }
     }
 
-    private var progress: ProjectFolders.BindProgress? { guide.flatMap { ProjectFolders.bindProgress(of: project.id, in: $0.requests) } }
+    private var progress: ProjectFolders.BindProgress? { guide.flatMap { ProjectFolders.bindProgress(of: project.id, in: $0.requests, at: services.speech) } }
     private var suggestions: [ProjectFolders.Candidate] { guide?.suggestions[project.id] ?? [] }
 
     /// 图标 + 一句说明，下面是进度或按钮。
@@ -73,8 +74,8 @@ struct ProjectFolderGuide: View {
                     Text("Mac 正在绑定文件夹…").foregroundStyle(palette.ink3)
                 }
                 .font(Self.noteFont)
-            case .failed(let reason):
-                Text("没绑成：\(reason)").font(Self.noteFont).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
+            case .failed(let failure):
+                Text("没绑成：\(failure.text(sync: services.syncStatus))").font(Self.noteFont).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
             case nil: EmptyView()
             }
             if progress != .binding {
@@ -127,7 +128,7 @@ nonisolated struct FolderGuide: Sendable, Equatable {
     /// 引导在这里出不出现：冲着这个项目的 Agent 来的地方总在；项目页里只在有同名一键建议、或绑定在路上与没绑成时出现——
     /// 读书、装修这类不跑 Agent 的项目不该每次打开都被要求绑文件夹，"绑定文件夹…"在项目的"⋯"里。
     func shows(_ project: UUID, in style: ProjectFolderGuide.Style) -> Bool {
-        style.isSought || suggestions[project] != nil || ProjectFolders.bindProgress(of: project, in: requests) != nil
+        style.isSought || suggestions[project] != nil || ProjectFolders.latestBind(of: project, in: requests) != nil
     }
 
     /// `host` 是 Mac 上本机的标识：Mac 上只建议本机的文件夹；手机传 nil，看全部 Mac 的。

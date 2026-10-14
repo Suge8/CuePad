@@ -3,8 +3,8 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（头像的表情与环、页头的一句、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
-/// 没启用；你最近一句还没交给它时按说的话那条规则（`Speech`，与气泡同一个事实）：还在等回执是话在路上，过了时限、原因是 Mac 没有回应是在睡觉
-/// （它住的那台 Mac 多半没开）；本机同步不通时说不准它在做什么，不说它在睡觉，照它写下的状态；
+/// 没启用；它住的那台 Mac 没回应（`Speech.cueAsleep`，与"值班"同一处）是在睡觉；你最近一句还在等回执是话在路上（与气泡同一条规则）；
+/// 本机同步不通时说不准它在做什么，不说它在睡觉，照它写下的状态；
 /// 其余照值班的 Mac 写下的（`CueState`）：在想、在用工具是在做事，出错是起不来。
 /// 在路上与在做事和 Agent 会话是同一套状态（`shown`：状态标、状态词、颜色、对话末尾那一行都一样）。
 nonisolated enum CuePresence: Equatable, Sendable {
@@ -20,15 +20,13 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 管理器起不来：参数是给你看的原因。
     case unreachable(String)
 
-    /// `reachable`：到 Cue 住的那台 Mac 的同步通不通（`AppServices.reaches`）。
-    static func derive(_ digest: CueDigest, now: Date, reachable: Bool) -> CuePresence {
+    static func derive(_ digest: CueDigest, at moment: Speech.Moment) -> CuePresence {
         guard digest.enabled else { return .disabled }
-        if let pending = digest.pendingYou {
-            switch Speech.trip(said: pending.at, delivered: pending.deliveredAt, now: now, reachable: reachable) {
-            case .sending: return .sending
-            case .failed(.noReply): return .asleep
-            case .delivered, .failed: break
-            }
+        if Speech.cueAsleep(said: digest.unheardSince, host: digest.hostID, at: moment) { return .asleep }
+        if let pending = digest.pendingYou,
+            Speech.trip(said: pending.at, delivered: pending.deliveredAt, host: digest.hostID, at: moment) == .sending
+        {
+            return .sending
         }
         guard let state = digest.state, let work = state.state.known else { return .idle }
         if work == .error { return .unreachable(state.detail ?? "\(digest.name) 起不来了") }
@@ -48,7 +46,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
     var shown: PiShown? {
         switch self {
-        case .sending: PiShown(status: .delivery(.sending))
+        case .sending: PiShown(status: .delivery(.inTransit(.sending)))
         case .working(let state, _): PiShown(status: .working(state))
         case .disabled, .asleep, .idle, .unreachable: nil
         }
@@ -104,6 +102,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastSaidDone: Bool
     /// 你最近一句之后它还没开口：那一句的时刻与交没交给它。
     var pendingYou: Pending?
+    /// 你说了、还没交给它的话里最早那句的时刻（`CueStore.cueUnheardSince`）：它住的那台 Mac 有没有回应看它。
+    var unheardSince: Date?
     /// 值班的 Mac 写下的此刻在做什么（`CueStore.cueState`）。
     var state: CueState?
 
@@ -114,9 +114,10 @@ nonisolated struct CueDigest: Equatable, Sendable {
 
     static let empty = CueDigest(
         name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil,
-        state: nil)
+        unheardSince: nil, state: nil)
 
-    static func read(from store: isolated CueStore) throws -> CueDigest {
+    /// `moment`：此刻（"等你 N"里会话等的回答归不归 Cue 看它在不在值班）。
+    static func read(from store: isolated CueStore, at moment: Speech.Moment) throws -> CueDigest {
         let profile = try store.cueProfile()
         let recent = try store.cueMessages(limit: recentWindow)
         let lastYou = recent.lastIndex { $0.author == .known(.you) }
@@ -128,10 +129,11 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
-            waiting: try CueWaiting.count(in: store),
+            waiting: try CueWaiting.count(in: store, at: moment),
             lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             pendingYou: spoke ? nil : lastYou.map { Pending(at: recent[$0].createdAt, deliveredAt: recent[$0].deliveredAt) },
+            unheardSince: try store.cueUnheardSince(),
             state: try store.cueState())
     }
 
@@ -139,20 +141,20 @@ nonisolated struct CueDigest: Equatable, Sendable {
 }
 
 nonisolated extension CueSnapshot {
-    /// 小组件那一份：表情按写快照这一刻由库推出的状态定（小组件里没有到点翻状态的计时，同步状态也不在这里，按通着算）。
-    init(digest: CueDigest) {
-        let mood = CueMood.of(CuePresence.derive(digest, now: .now, reachable: true), waiting: digest.waiting, justDone: digest.lastSaidDone)
+    /// 小组件那一份：表情按写快照这一刻（`moment`）推出的状态定（小组件里没有到点翻状态的计时）。
+    init(digest: CueDigest, at moment: Speech.Moment) {
+        let mood = CueMood.of(CuePresence.derive(digest, at: moment), waiting: digest.waiting, justDone: digest.lastSaidDone)
         self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
     }
 }
 
 /// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上会话里在等你回答的
-/// （`PiSessionState.asksYou`：等 Cue 回答的由 Cue 去答或转问你，不重复算）。这个数只挂在 Cue 上（Mac 与 iPad 侧栏的 Cue 一行、iPhone 的 Cue 标签、Dock 角标）：
+/// （`PiSessionState.asksYou`：Cue 在值班时等它回答的由它去答或转问你，不重复算；它住的那台 Mac 没回应就不算值班，回到等你）。这个数只挂在 Cue 上（Mac 与 iPad 侧栏的 Cue 一行、iPhone 的 Cue 标签、Dock 角标）：
 /// Cue 是总控，一处说清"有几件在等你"；会话那一份不在 Agent 入口上另挂一个数，免得同一件事报两遍。
 nonisolated enum CueWaiting {
-    static func count(in store: isolated CueStore) throws -> Int {
+    static func count(in store: isolated CueStore, at moment: Speech.Moment) throws -> Int {
         let asked = try store.cueMessagesWaitingForYou().count
-        let onDuty = try store.cueOnDuty()
+        let onDuty = try store.cueOnDuty(at: moment)
         let sessions = try store.piSessionPage(.live).items.count { $0.state.asksYou(cueOnDuty: onDuty) }
         return asked + sessions
     }

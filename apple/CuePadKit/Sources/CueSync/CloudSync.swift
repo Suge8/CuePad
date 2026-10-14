@@ -83,7 +83,14 @@ public actor CloudSync {
 
   /// 直接向服务器拉一次同步区的变化（不经引擎、不推送本机改动）：推送之外的主动拉取，见 `SyncPoller`、`ZoneChangePuller`。
   public func pullChanges() async throws {
-    try await puller?.pull()
+    guard let puller else { return }
+    do {
+      try await puller.pull()
+      await coordinator.reached(nil)
+    } catch {
+      await coordinator.reached(error)
+      throw error
+    }
   }
 
   /// 还没有主动拉取的令牌就先取（见 `ZoneChangePuller.prepare`）。
@@ -102,7 +109,7 @@ public actor CloudSync {
     do {
       result = try await coordinator.sendNow(id, deleted: deleted, via: uploader)
     } catch {
-      engine.state.add(pendingRecordZoneChanges: [change])
+      engine.state.add(pendingRecordZoneChanges: [change])  // 离线时交回引擎：它在网络恢复后自动上传
       throw error
     }
     switch result {

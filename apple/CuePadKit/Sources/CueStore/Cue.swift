@@ -164,8 +164,8 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue
-  /// （`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
+  /// 值班的前两个条件：启用了，大脑也没停在起不来（`state` 不是出错）。第三个——它住的那台 Mac 有回应——要读你的话，
+  /// 完整的规则在 `CueStore.cueOnDuty`。它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
   public func onDuty(_ state: CueState?) -> Bool { activeHost != nil && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"

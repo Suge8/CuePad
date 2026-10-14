@@ -112,13 +112,15 @@ nonisolated enum ProjectFolders {
     /// 正在绑，没成功是原因；解除绑定的请求不算。
     enum BindProgress: Equatable {
         case binding
-        case failed(String)
+        case failed(Speech.Failure)
     }
 
-    static func bindProgress(of project: UUID, in requests: [DeliveryRequest]) -> BindProgress? {
-        guard let latest = requests.filter({ $0.bind?.project == project && $0.bind?.folder != nil }).max(by: { $0.createdAt < $1.createdAt }) else {
-            return nil
-        }
-        return latest.failure.map(BindProgress.failed) ?? .binding
+    static func bindProgress(of project: UUID, in requests: [DeliveryRequest], at moment: Speech.Moment) -> BindProgress? {
+        latestBind(of: project, in: requests).map { Speech.trip($0, at: moment).failure.map(BindProgress.failed) ?? .binding }
+    }
+
+    /// 最近一次给这个项目带文件夹的绑定请求。
+    static func latestBind(of project: UUID, in requests: [DeliveryRequest]) -> DeliveryRequest? {
+        requests.filter { $0.bind?.project == project && $0.bind?.folder != nil }.max { $0.createdAt < $1.createdAt }
     }
 }

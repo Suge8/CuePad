@@ -72,7 +72,7 @@ struct SessionPage: View {
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
-        let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
+        let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)
         VStack(spacing: 0) {
             if let session = digest.session {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
@@ -89,14 +89,14 @@ struct SessionPage: View {
                 VStack(spacing: 8) {
                     if secondary {
                         PiQuestionDock(session: session, deliveries: digest.deliveries)
-                        if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                            Callout(.failure, text: "没能结束：\(reason)", docked: true)
+                        if let failure = shownEnd?.failure, session.state != .known(.ended) {
+                            Callout(.failure, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
                         }
                         PiReplyBar(
-                            session: session, config: digest.config,
-                            stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
-                            commandProgress: MacDelivery.commandProgress(digest.deliveries),
-                            queued: PiChat.queued(digest.deliveries, messages: digest.messages),
+                            session: session, config: digest.config(at: services.speech),
+                            stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
+                            commandProgress: MacDelivery.commandProgress(digest.deliveries, at: services.speech),
+                            queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),
                             recall: PiChat.lastSaid(digest.messages),
                             revealNote: { follow.seek($0.entry) }
                         ) {
@@ -145,11 +145,11 @@ struct SessionPage: View {
     }
 
     /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
+    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: Speech.Trip?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
-            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
-            ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
+            session: session, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
+            ending: shownEnd == .sending, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
@@ -166,7 +166,7 @@ struct SessionPage: View {
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let stored, let session = stored.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: stored.messages), !stored.fetchingTranscript else { return }
+              PiChat.needsTranscript(session, messages: stored.messages), !stored.fetchingTranscript(at: services.speech) else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
@@ -230,8 +230,8 @@ extension Workspace {
             try LaunchProgress.read(request: request.id, token: token, from: $0)
         }) {
             if let claimed = progress.claimed { return claimed.sessionID }
-            switch progress.phase {
-            case .failed(let reason): throw SendError.notDelivered(reason)
+            switch progress.phase(at: services.speech) {
+            case .failed(let failure): throw SendError.notDelivered(failure.text(sync: services.syncStatus))
             case .opening where !reported:
                 reported = true
                 launched()

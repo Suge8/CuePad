@@ -211,7 +211,7 @@ extension CueStore {
     let (status, detail): (DeliveryStatus, String?) =
       switch outcome {
       case .succeeded: (.succeeded, nil)
-      case .failed(let reason): (.failed, reason)
+      case .failed(let reason), .transient(let reason): (.failed, reason)
       }
     try reportingFileFailures {
       try write {
@@ -263,6 +263,7 @@ extension CueStore {
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（等认领的开新会话请求最多留到 `maxAge`，见 `deleteCompletedDeliveries`）。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
+/// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
 /// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，不等同步引擎的调度）：发起的设备据领取知道 Mac 接手了，
@@ -353,8 +354,13 @@ public actor DeliveryExecutor {
     return nil
   }
 
+  /// 执行一条；暂时没成的隔 `Speech.retryDelay` 再执行一次（一条条按先后执行，等的这一下会拖住后面的请求，所以只重试一次）。
   private func run(_ request: DeliveryRequest) async {
-    await finish(request, await handler(request))
+    var outcome = await handler(request)
+    if case .transient = outcome, (try? await timing.sleep(Speech.retryDelay)) != nil {
+      outcome = await handler(request)
+    }
+    await finish(request, outcome)
   }
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {

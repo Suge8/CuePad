@@ -12,7 +12,7 @@ extension CueStore {
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
-      if let alert = notify, !alert.reaches(record, cueOnDuty: try cueOnDuty()) { record.notify = nil }
+      if let alert = notify, !alert.reaches(record, cueOnDuty: try cueOnDuty(at: .always())) { record.notify = nil }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }

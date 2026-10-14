@@ -110,6 +110,8 @@ final class TestApp {
 
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
+    /// 说的话到点翻状态用的钟（`SpeechClock`）；默认真实时间。
+    private let timing: Timing
 
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
@@ -117,15 +119,17 @@ final class TestApp {
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         self.cue = cue
         self.updater = updater
         services = makeServices()
     }
     #else
-    init(sync source: AppServices.SyncSource? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         services = makeServices()
     }
     #endif
@@ -181,7 +185,7 @@ final class TestApp {
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(
                 scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
-        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
+        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac, timing: timing)
         services.windowShell = WindowShell(window: window)
         return services
     }
@@ -189,7 +193,7 @@ final class TestApp {
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
+        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard, timing: timing)
     }
     #endif
 }

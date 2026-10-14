@@ -33,7 +33,8 @@ struct SpeakTests {
     }
 
     private func presence(at now: Date, reachable: Bool = true) async throws -> CuePresence {
-        CuePresence.derive(try await CueDigest.read(from: store), now: now, reachable: reachable)
+        let moment = Speech.Moment(now: now, reachableSince: reachable ? .distantPast : nil)
+        return CuePresence.derive(try await CueDigest.read(from: store, at: moment), at: moment)
     }
 
     /// 让这张表的写入失败（磁盘满、库坏了一类的写库失败）。
@@ -61,12 +62,12 @@ struct SpeakTests {
         let message = try #require(said.first)
         var uploads = app.sync.uploads.stream.makeAsyncIterator()
         #expect(await uploads.next() == message.id.uuidString.lowercased())
-        #expect(Said.cue(message, host: "mac-cue").trip(now: .now, reachable: true) == .sending)
+        #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
         #expect(try await presence(at: .now, reachable: true) == .sending)  // Cue 页头与气泡同一个"在路上"
 
         try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
-        #expect(Said.cue(delivered, host: "mac-cue").trip(now: .now, reachable: true) == .delivered)
+        #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }
 
     /// 回执晚到但在时限内：一直是发送中，Cue 也是话在路上、不在睡觉；过了时限同步通着是 Mac 没有回应、Cue 在睡觉；
@@ -81,19 +82,19 @@ struct SpeakTests {
         let inTime = message.createdAt.addingTimeInterval(Speech.receiptLimit - 1)
         let late = message.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
 
-        #expect(said.trip(now: inTime, reachable: true) == .sending)
+        #expect(said.trip(at: .always(at: inTime)) == .sending)
         #expect(try await presence(at: inTime, reachable: true) == .sending)
 
-        #expect(said.trip(now: late, reachable: true) == .failed(.noReply))
+        #expect(said.trip(at: .always(at: late)) == .failed(.noReply))
         #expect(try await presence(at: late, reachable: true) == .asleep)
         #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
 
-        #expect(said.trip(now: late, reachable: false) == .failed(.offline))
+        #expect(said.trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         #expect(try await presence(at: late, reachable: false) == .idle)
 
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking)  // 值班的 Mac 交给它后写下它在想
-        #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(now: late, reachable: true) == .delivered)
+        #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(at: .always(at: late)) == .delivered)
         #expect(try await presence(at: late, reachable: true) == .working(.thinking, detail: nil))
     }
 
@@ -170,14 +171,14 @@ struct SpeakTests {
         let requests = try await store.deliveryRequests()
         #expect(requests.map(\.content) == ["把断言也改了"] && requests.first?.hostID == "mac-b")
         let request = try #require(requests.first)
-        #expect(PiChat.outgoing(requests, messages: []).map(\.id) == [request.id])
-        #expect(Said.request(request).trip(now: .now, reachable: true) == .sending)
+        #expect(PiChat.outgoing(requests, messages: [], at: .always()).map(\.id) == [request.id])
+        #expect(Said.request(request).trip(at: .always(at: .now)) == .sending)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
         let done = try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0?.isOpen == false }
         await executor.stop()
-        #expect(Said.request(try #require(done)).trip(now: .now, reachable: true) == .delivered)
+        #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
     }
 
     /// Mac 报的失败写它的原因；没被领取、过了时限是 Mac 没有回应（领取了在执行的不算超时）；重发撤回旧的、写同样内容与方式的新的。
@@ -193,7 +194,7 @@ struct SpeakTests {
         try await executor.start()
         let failed = try #require(try await eventually(store, { try $0.deliveryRequest(lost.id) }) { $0?.isOpen == false })
         await executor.stop()
-        #expect(Said.request(failed).trip(now: .now, reachable: true) == .failed(.reported("Pi 已经退出")))
+        #expect(Said.request(failed).trip(at: .always(at: .now)) == .failed(.reported("Pi 已经退出")))
 
         workspace.resend(.request(failed), restoringInto: box)
         let retried = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != lost.id }
@@ -202,12 +203,12 @@ struct SpeakTests {
 
         // Mac 一直没领取：过了时限是 Mac 没有回应，本机同步不通时写同步的原因
         let late = retried[0].createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Said.request(retried[0]).trip(now: late, reachable: true) == .failed(.noReply))
-        #expect(Said.request(retried[0]).trip(now: late, reachable: false) == .failed(.offline))
+        #expect(Said.request(retried[0]).trip(at: .always(at: late)) == .failed(.noReply))
+        #expect(Said.request(retried[0]).trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         // 领取了在执行（如正在唤醒已结束的会话）：还是发送中
         var claimed = retried[0]
         claimed.status = .known(.executing)
-        #expect(Said.request(claimed).trip(now: late, reachable: true) == .sending)
+        #expect(Said.request(claimed).trip(at: .always(at: late)) == .sending)
 
         workspace.resend(.request(retried[0]), restoringInto: box)
         let again = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 && $0[0].id != retried[0].id }

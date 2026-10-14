@@ -1,26 +1,28 @@
 import Foundation
 
-/// 说出去的一句话此刻到哪了：对 Cue 说的（你的 `CueMessage`）与发给会话的（说话、作答、命令的投送请求）同一条规则，
-/// 只由记录与此刻推出、不另存。App 的气泡、提示词、Cue 在不在与 Cue 的说话工具（`CueTools`）都读这里；
-/// 调用方只补一个输入：到接收方那台 Mac 的同步此刻通不通（`reachable`，本机就是接收方算通）。
+/// 说出去的一句话此刻到哪了：对 Cue 说的（你的 `CueMessage`）与发给会话的（说话、作答、命令等投送请求）同一条规则，
+/// 只由记录与此刻（`Moment`）推出、不另存。App 的气泡、会话行与计数、提示词、Cue 在不在、Cue 在不在值班，与 Cue 的说话工具都读这里。
 /// - 发送中：记录在，接收方还没回执。
-/// - 已送达：会话请求成功；Cue 消息有 `deliveredAt`。
-/// - 没能送达：会话请求失败（原因读 `DeliveryRequest.failure`）；或过了 `receiptLimit` 还没回执——Cue 消息没有 `deliveredAt`，
-///   会话请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话）。超时的原因只有两种：本机同步不通，或 Mac 没有回应。
-///   超时后记录仍在，回执来了就是已送达；到点翻状态由界面的睡眠任务刷新"此刻"（`deadline`），不轮询。
+/// - 已送达：请求成功；Cue 消息有 `deliveredAt`。
+/// - 没能送达：请求失败（原因读 `DeliveryRequest.failure`）；本机同步此刻不通（话出不去、回执也回不来）；或同步通着满 `receiptLimit`
+///   还没回执——Cue 消息没有 `deliveredAt`，请求还没被 Mac 领取（领取了在执行的不算超时，如唤醒已结束的会话），这是 Mac 没有回应。
+///   时限从写下与本机同步恢复两者里晚的那一刻算：断网时写下的话，恢复后有一整个时限等它传出去、回执回来。
+///   记录仍在，回执来了就是已送达；同步恢复了就回到发送中。到点翻状态由 App 一处刷新"此刻"（`SpeechClock`），不轮询。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
     case delivered
     case failed(Failure)
+
+    public var failure: Failure? { if case .failed(let failure) = self { failure } else { nil } }
   }
 
-  public enum Failure: Equatable, Sendable {
+  public enum Failure: Hashable, Sendable {
     /// 接收方说没送到（`DeliveryRequest.failure`）
     case reported(String)
-    /// 过了时限没回执，本机同步不通：话还没离开这台设备，或回执回不来
+    /// 本机同步此刻不通：话还没离开这台设备，或回执回不来
     case offline
-    /// 过了时限没回执，同步是通的：接收方那台 Mac 没有回应（睡着了、没开 CuePad）
+    /// 同步通着过了时限没回执：接收方那台 Mac 没有回应（睡着了、没开 CuePad）
     case noReply
   }
 
@@ -44,31 +46,76 @@ public enum Speech {
 
   // MARK: 规则
 
-  /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻。
-  public static func trip(said: Date, delivered: Date?, now: Date, reachable: Bool) -> Trip {
-    delivered != nil ? .delivered : waiting(since: said, now: now, reachable: reachable)
+  /// 推出到哪了的外部输入：此刻，与本机同步从什么时候起通着（nil：此刻不通）。接收方就是本机（`localHost`）时不经同步，一直算通；
+  /// 命令行里的 Cue 工具与它的 Mac 在一起，同样按一直通着算（`always`）。
+  public struct Moment: Equatable, Sendable {
+    public var now: Date
+    public var reachableSince: Date?
+    public var localHost: String?
+
+    public init(now: Date, reachableSince: Date?, localHost: String? = nil) {
+      self.now = now
+      self.reachableSince = reachableSince
+      self.localHost = localHost
+    }
+
+    /// 同步一直通着。
+    public static func always(at now: Date = .now) -> Moment { Moment(now: now, reachableSince: .distantPast) }
+
+    /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。
+    public func reachableSince(_ host: String?) -> Date? {
+      host != nil && host == localHost ? .distantPast : reachableSince
+    }
   }
 
-  public static func trip(_ request: DeliveryRequest, now: Date, reachable: Bool) -> Trip {
+  /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻，`host` 是 Cue 住的那台 Mac。
+  public static func trip(said: Date, delivered: Date?, host: String?, at moment: Moment) -> Trip {
+    delivered != nil ? .delivered : waiting(since: said, host: host, at: moment)
+  }
+
+  public static func trip(_ request: DeliveryRequest, at moment: Moment) -> Trip {
     switch request.status.known {
-    case .pending: waiting(since: request.createdAt, now: now, reachable: reachable)
+    case .pending: waiting(since: request.createdAt, host: request.hostID, at: moment)
     case .executing: .sending
     case .succeeded: .delivered
     case .failed, nil: .failed(.reported(request.failure ?? DeliveryRequest.unexplainedFailure))
     }
   }
 
-  /// 还在等回执的话到这一刻就算超时；已有回执（或已被领取）为 nil。
-  public static func deadline(said: Date, delivered: Date?) -> Date? {
-    delivered == nil ? said.addingTimeInterval(receiptLimit) : nil
+  /// 还在等回执的话到这一刻就算超时；已有回执、已被领取或此刻同步不通（不会到点，恢复时输入本身就变了）为 nil。
+  public static func deadline(said: Date, delivered: Date?, host: String?, at moment: Moment) -> Date? {
+    guard delivered == nil, let since = moment.reachableSince(host) else { return nil }
+    return max(said, since).addingTimeInterval(receiptLimit)
   }
 
-  public static func deadline(_ request: DeliveryRequest) -> Date? {
-    request.status == .known(.pending) ? request.createdAt.addingTimeInterval(receiptLimit) : nil
+  public static func deadline(_ request: DeliveryRequest, at moment: Moment) -> Date? {
+    request.status == .known(.pending) ? deadline(said: request.createdAt, delivered: nil, host: request.hostID, at: moment) : nil
   }
 
-  private static func waiting(since said: Date, now: Date, reachable: Bool) -> Trip {
-    guard now.timeIntervalSince(said) >= receiptLimit else { return .sending }
-    return .failed(reachable ? .noReply : .offline)
+  /// 没能送达的那一刻（会话行"你看过之后不再标没能送达"据此比较）：失败写回的时刻，或超时的那一刻；还没失败为 nil。
+  public static func failedAt(_ request: DeliveryRequest, at moment: Moment) -> Date? {
+    guard case .failed = trip(request, at: moment) else { return nil }
+    return request.completedAt ?? deadline(request, at: moment) ?? moment.now
+  }
+
+  /// 这些请求里此刻没能送达的话有几句：说的话（`DeliveryMode.talk`）里失败的与超时的（会话行与会话页顶栏的"N 句没送到"）。
+  public static func undelivered(_ requests: [DeliveryRequest], at moment: Moment) -> Int {
+    requests.count { request in
+      guard let mode = request.mode.known, DeliveryMode.talk.contains(mode) else { return false }
+      if case .failed = trip(request, at: moment) { return true } else { return false }
+    }
+  }
+
+  /// Cue 住的那台 Mac 没有回应：你最近对它说的、还没交给它的一句（`said`）按这条规则没能送达，原因是同步通着却没回执（`Failure.noReply`）。
+  /// Cue 在不在（`CuePresence`）与值班（`CueStore.cueOnDuty`）都只读这一处。局限：只有你对 Cue 说了话才知道——
+  /// 你一直没对它说，它那台 Mac 关了也无从得知；不为此加心跳轮询（Mac 主动拉取已是每 2 秒一次，再加一份心跳记录只为这一点不值）。
+  public static func cueAsleep(said: Date?, host: String?, at moment: Moment) -> Bool {
+    guard let said else { return false }
+    return trip(said: said, delivered: nil, host: host, at: moment) == .failed(.noReply)
+  }
+
+  private static func waiting(since said: Date, host: String?, at moment: Moment) -> Trip {
+    guard let since = moment.reachableSince(host) else { return .failed(.offline) }
+    return moment.now >= max(said, since).addingTimeInterval(receiptLimit) ? .failed(.noReply) : .sending
   }
 }
