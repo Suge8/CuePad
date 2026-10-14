@@ -52,6 +52,15 @@ enum IOSInteractionBench {
             await step("书架点项目") { navigation.projectsPath.append(.project(id)) }
             await step("返回书架") { navigation.projectsPath.removeAll() }
         }
+        // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
+        guard let busiest = workspace.catalog?.openTasks.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
+        navigation.projectsPath.append(.project(busiest))
+        try? await Task.sleep(for: .seconds(2))
+        for _ in 0..<2 {
+            await step("展开任务") { DebugScene.toggleTaskFold() }
+            await step("收起任务") { DebugScene.toggleTaskFold() }
+        }
+        navigation.projectsPath.removeAll()
         // 底部栏换标签（含推移）
         for _ in 0..<2 {
             await step("换到 Agent") { DebugScene.selectTab(.agent) }

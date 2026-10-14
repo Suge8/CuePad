@@ -61,10 +61,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         // 层级限制按库里全部任务（含已完成）算：与 Store 写入时的校验同一口径
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
-        let listed = Set(all.map(\.id))
-        let done = all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
-            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-            .prefix(doneLimit)
+        let done = recentlyDone(all)
         let sessions = try store.piSessions(sessionIDs: (tree.ordered + done).compactMap(\.piSessionID))
         func row(_ task: Card) -> Row { Row(task, projects: projects, sessions: sessions) }
         let rows = Dictionary(uniqueKeysWithValues: tree.ordered.map { ($0.id, row($0)) })
@@ -74,6 +71,15 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskBoard(
             tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, subtasks: try store.subtaskProgress(), prompts: try store.prompts(),
             counts: try counts(from: store), order: (inProgress + todo + finished).map(\.id))
+    }
+
+    /// 最近完成的顶层任务：`all`（同一范围里库中的全部任务）里完成了、上级不在其中的（与 `counts.done` 同一批），按完成时间从新到旧取前 `doneLimit` 条。
+    /// 看板与项目页任务纸的"已完成"同一规则。
+    static func recentlyDone(_ all: [Card]) -> [Card] {
+        let listed = Set(all.map(\.id))
+        return Array(all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+            .prefix(doneLimit))
     }
 
     /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。
