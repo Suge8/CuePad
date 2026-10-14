@@ -313,7 +313,7 @@ import Testing
     }
     #expect(try await store.deliveryRequests().isEmpty)
 
-    let since = Date()
+    let since = CueMarks(try await store.lastWrite())
     _ = try await server.call("task", ["action": "start", "task": task.id.uuidString, "agent": "codex", "model": "gpt-5.1", "effort": "high"])
     let launch = try #require(try await store.deliveryRequests().first)
     #expect(launch.isFromCue && launch.mode == .known(.start))
@@ -323,7 +323,7 @@ import Testing
     let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上没有找到 Codex") }
     try await executor.start()
     defer { Task { await executor.stop() } }
-    let changes = try await eventually(store, { try $0.cueChanges(since: since) }) { !$0.isEmpty }
+    let changes = try await eventually(store, { try $0.cueChanges(after: since) }) { !$0.isEmpty }
     #expect(changes.map(\.kind) == [.failed] && changes.map(\.detail) == ["开工：这台 Mac 上没有找到 Codex"])
     #expect(changes.first?.taskID == task.id)
   }

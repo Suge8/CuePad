@@ -670,9 +670,7 @@ public final class CodexRuntime: AgentRuntime {
 
     fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws -> PiDelivery {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        var input: [CodexRPC.Object] = message.text.isEmpty ? [] : [["type": "text", "text": message.text, "text_elements": []]]
-        input += message.images.map { ["type": "image", "url": "data:\($0.mimeType);base64,\($0.data.base64EncodedString())"] }
-        return try await deliver(input, clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
+        return try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
     }
 
     /// 马上说：插进在跑的这一轮；刚好歇下（没有这一轮了）就排进队列。等它做完再说、空闲时都进队列，空闲时再让队列里的这一条开始：
@@ -805,6 +803,8 @@ struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
+    /// 能看图（`inputModalities` 里有 image）
+    let seesImages: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
@@ -823,12 +823,15 @@ struct CodexModel {
         return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
     }
 
-    @MainActor static func list(_ rpc: CodexRPC) async throws -> [CodexModel] {
-        let listed = try await rpc.call("model/list", [:])
+    /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。
+    @MainActor static func list(_ rpc: CodexRPC, hidden: Bool = false) async throws -> [CodexModel] {
+        let listed = try await rpc.call("model/list", hidden ? ["includeHidden": true, "limit": 500] : [:])
         return (listed["data"] as? [CodexRPC.Object] ?? []).compactMap { entry in
-            guard entry["hidden"] as? Bool != true, let id = entry["id"] as? String else { return nil }
+            guard hidden || entry["hidden"] as? Bool != true, let id = entry["id"] as? String else { return nil }
             let efforts = (entry["supportedReasoningEfforts"] as? [CodexRPC.Object] ?? []).compactMap { $0["reasoningEffort"] as? String }
-            return CodexModel(id: id, name: entry["displayName"] as? String ?? id, efforts: efforts.compactMap { thinking($0).known })
+            return CodexModel(
+                id: id, name: entry["displayName"] as? String ?? id, efforts: efforts.compactMap { thinking($0).known },
+                seesImages: (entry["inputModalities"] as? [String])?.contains("image") == true)
         }
     }
 }

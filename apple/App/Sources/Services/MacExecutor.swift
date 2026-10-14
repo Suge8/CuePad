@@ -97,7 +97,7 @@ final class MacExecutor {
         if whenBusy == nil, session.state.isTurnRunning { throw SendError.piSessionBusy }
         let content = SendContent(stored: request.content)
         try await pi.send(
-            PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)
+            PiMessage(text: content.plainText, images: try content.piImages(from: store.files), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)
         do {
             try await store.recordSend(request.content, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
         } catch {
@@ -179,7 +179,7 @@ final class MacExecutor {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)
             let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            try await pi.send(PiMessage(text: text, images: try piImages(in: content), deliveryID: request.id.uuidString), to: id)
+            try await pi.send(PiMessage(text: text, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
             guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
             do {
                 try await store.recordSend(opening, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
@@ -223,16 +223,6 @@ final class MacExecutor {
             if let live = pi.session(sessionID: sessionID) { return live.cwd }
             guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
             return URL(filePath: indexed.cwd, directoryHint: .isDirectory)
-        }
-    }
-
-    /// 正文里的图片按原顺序取原图与类型，交给 Agent 自行缩放。
-    private func piImages(in content: SendContent) throws -> [PiImage] {
-        try content.segments.compactMap { segment -> PiImage? in
-            guard case .image(let hash) = segment else { return nil }
-            let data = try store.files.original(hash)
-            guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
-            return PiImage(mimeType: mimeType, data: data)
         }
     }
 }
