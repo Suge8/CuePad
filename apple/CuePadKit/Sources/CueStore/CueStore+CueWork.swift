@@ -163,6 +163,14 @@ extension CueStore {
     _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest? {
+    let request = try start(leaf, agent: agent, fresh: fresh, model: model, thinking: thinking, host: host, cue: cue)
+    if cue { try withdrawAcceptance(of: leaf) }
+    return request
+  }
+
+  private func start(
+    _ leaf: UUID, agent: AgentKind?, fresh: Bool, model: PiModelKey?, thinking: PiThinkingLevel?, host: String, cue: Bool
+  ) throws -> DeliveryRequest? {
     var plan = try handOffPlan(leaf, host: host)
     if fresh { plan.destination = try destination(of: try requireLeaf(plan.leaf), host: host, fresh: true) }
     let draft = try draft(of: plan.leaf)
@@ -206,8 +214,24 @@ extension CueStore {
   ) throws -> DeliveryRequest {
     let (card, session) = try requireSession(of: leaf)
     try requestConfig(config, of: card, in: session, host: host, cue: cue)
-    return try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
+    let request = try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
+    if cue { try withdrawAcceptance(of: leaf) }
+    return request
   }
+
+  /// Cue 又对一件事开工、说话或作答（返工）：这件事还没答的验收（`askToAccept`）作废——去掉选项，留在对话里当一句话，
+  /// 不再算等你；返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
+  private func withdrawAcceptance(of leaf: UUID) throws {
+    let task = try topTask(of: leaf)
+    try write {
+      try db.run(
+        "UPDATE cueMessages SET choices = NULL, modifiedAt = ? WHERE \(Self.pendingAcceptance)",
+        [Date.stamp, task, JSONColumn.encode(CueAcceptance.choices)])
+    }
+  }
+
+  /// 这件事（参数一）还没答的验收（参数二是验收的选项）。
+  private static let pendingAcceptance = "author = 'cue' AND taskID = ? AND answeredAt IS NULL AND choices = ?"
 
   /// 说话、作答之前先请会话换上 `config`（与界面换模型同一种请求，执行器按先后执行）；换不了模型
   /// （`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`。调用方先做完别的检查：抛错时什么都没写。
@@ -260,7 +284,9 @@ extension CueStore {
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
     try requestConfig(config, of: card, in: session, host: host, cue: cue)
-    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
+    let request = try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
+    if cue { try withdrawAcceptance(of: leaf) }
+    return request
   }
 
   private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String]) throws -> PiAnswerValue {
@@ -319,8 +345,7 @@ extension CueStore {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let pending = try select(
-        CueMessage.self, where: "author = 'cue' AND taskID = ? AND answeredAt IS NULL AND choices = ?",
-        [task, JSONColumn.encode(CueAcceptance.choices)], orderBy: "createdAt, rowid")
+        CueMessage.self, where: Self.pendingAcceptance, [task, JSONColumn.encode(CueAcceptance.choices)], orderBy: "createdAt, rowid")
       if let pending = pending.last { return (pending, false) }
       let now = Date.stamp
       let message = CueMessage(

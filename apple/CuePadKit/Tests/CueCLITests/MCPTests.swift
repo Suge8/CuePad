@@ -324,6 +324,37 @@ import Testing
     #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) == ["s1"])
   }
 
+  /// 验收挂着时 Cue 又对这件事的会话说话（返工）：那条验收作废——去掉选项，留在对话里当一句话，不再算等你；
+  /// 返工完再收尾写一条新的验收、带新证据。Cue 别的提问不动。
+  @Test(.timeLimit(.minutes(1))) func reworkWithdrawsThePendingAcceptance() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let task = try await store.createTask("加语言参数", in: nil)
+    try await store.setCueFollows(task.id, true)
+    try await store.linkCard(task.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 旧证据"])
+    _ = try await server.call("tell", ["text": "README 要不要中文？", "choices": ["要", "不要"], "task": task.id.uuidString])
+    let stale = try #require(try await store.cueMessagesWaitingForYou().first { $0.choices == CueAcceptance.choices })
+
+    _ = try await server.call("task", ["action": "say", "task": task.id.uuidString, "text": "换模型再查一遍"])
+    #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["README 要不要中文？"])
+    let withdrawn = try #require(try await store.cueMessages().first { $0.id == stale.id })
+    #expect(withdrawn.choices == nil && withdrawn.text.contains("旧证据"))
+
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 新证据"])
+    let fresh = try await store.cueMessagesWaitingForYou().filter { $0.choices == CueAcceptance.choices }
+    #expect(fresh.count == 1 && fresh.first?.id != stale.id && fresh.first?.text.contains("新证据") == true)
+  }
+
   /// 看板上一件事的近况取在做的那一步；步骤都做完、等你收下时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
   @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
