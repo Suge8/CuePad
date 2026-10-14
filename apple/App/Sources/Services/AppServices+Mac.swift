@@ -66,7 +66,7 @@ extension AppServices {
     }
 
     /// 退出收尾。主线程上的部分（后台任务、Pi 连接、全局快捷键）在这里同步做完；返回的等待只涉及不在主线程上的组件
-    /// （远程投送执行器、同步引擎），依次停止、整体最多等 `limit`，自身不需要主线程：退出可能发生在主线程被占住时
+    /// （远程投送执行器、同步），依次停止、整体最多等 `limit`，自身不需要主线程：退出可能发生在主线程被占住时
     /// （在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等回复，主线程上排队的任务轮不到）。
     /// 卡住的组件不拦着退出，记一条日志指出是哪个；等待的结果是它的名字，按时结束为 nil。
     func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
@@ -82,7 +82,7 @@ extension AppServices {
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
                 ("Cue", stopCue),
-                ("同步引擎", { await sync?.stop() }),
+                ("同步", { await sync?.stop() }),
                 ("后台托管的 Agent", hostedExit),
             ], within: limit)
             if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }

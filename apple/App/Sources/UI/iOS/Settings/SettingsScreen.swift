@@ -57,7 +57,7 @@ struct SettingsScreen: View {
         .floatingHeader("设置")
     }
 
-    /// 演示模式没有同步引擎：调试参数要看"Pi 通知"各状态时照样显示这一节。
+    /// 演示模式没有同步：调试参数要看"Pi 通知"各状态时照样显示这一节。
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
@@ -114,7 +114,6 @@ private struct SyncSection: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var confirmErase = false
-    @State private var syncing = false
 
     var body: some View {
         Section {
@@ -127,7 +126,7 @@ private struct SyncSection: View {
                     }
                 }
             } icon: {
-                if services.syncStatus == .syncing {
+                if services.isSyncBusy {
                     Spinner(.small)
                 } else {
                     Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
@@ -138,14 +137,8 @@ private struct SyncSection: View {
                     Button("上传本机数据", systemImage: "icloud.and.arrow.up") { resolve(.uploadLocal) }
                     Button("用云端数据替换本机…", systemImage: "icloud.and.arrow.down", role: .destructive) { confirmErase = true }
                 } else {
-                    Button("立即同步", systemImage: "arrow.triangle.2.circlepath") {
-                        syncing = true
-                        Task {
-                            await services.syncNow()
-                            syncing = false
-                        }
-                    }
-                    .disabled(syncing || services.syncStatus == .syncing)
+                    Button("立即同步", systemImage: "arrow.triangle.2.circlepath") { Task { await services.syncNow() } }
+                        .disabled(!services.canSyncNow)
                     MacConnectionTest()
                 }
                 if !services.syncIssues.isEmpty {

@@ -5,7 +5,7 @@ import Testing
 
 @testable import CueSync
 
-/// Mac 上的主动拉取是别的设备写来的请求到达的主通路：请求一经拉到，执行器必须马上领取并执行，
+/// Mac 上的拉取是别的设备写来的请求到达的唯一通路：请求一经拉到，执行器必须马上领取并执行，
 /// 执行器正忙于上一条时新来的也不能被漏掉或拖着。
 @Suite struct DeliveryArrivalTests {
   private static let target = SendTarget(kind: .piSession, name: "video", ref: "s1")
@@ -50,8 +50,9 @@ import Testing
     return (made.id, try #require(await phone.coordinator.record(for: phone.recordID(made.id))))
   }
 
-  private func batch(_ token: String, _ records: [CKRecord] = []) -> Result<ZoneChangeBatch, any Error> {
-    .success(ZoneChangeBatch(modifications: records, deletions: [], token: Data(token.utf8), moreComing: false))
+  /// 一次拉取带回这些记录（`ZonePuller` 交给协调器的同一个入口）。
+  private func pulled(_ records: [CKRecord]) async {
+    await mac.coordinator.handle(.fetched(modifications: records, deletions: []))
   }
 
   private func finished(_ id: UUID) async throws {
@@ -62,10 +63,9 @@ import Testing
   func aRequestPulledForThisMacIsExecutedWithinASecond() async throws {
     let (executor, handler, _) = try await start()
     let (id, record) = try await sentByPhone("继续")
-    let puller = ZoneChangePuller(source: FakeZone([batch("t1"), batch("t2", [record])]), coordinator: mac.coordinator)
 
     let began = ContinuousClock.now
-    try await puller.pull()
+    await pulled([record])
     try await finished(id)
 
     #expect(ContinuousClock.now - began < Self.promptly)
@@ -78,13 +78,11 @@ import Testing
     let (executor, handler, started) = try await start(holdingFirst: true)
     let (first, firstRecord) = try await sentByPhone("第一条")
     let (second, secondRecord) = try await sentByPhone("第二条")
-    let puller = ZoneChangePuller(
-      source: FakeZone([batch("t1"), batch("t2", [firstRecord]), batch("t3", [secondRecord])]), coordinator: mac.coordinator)
 
-    try await puller.pull()
+    await pulled([firstRecord])
     var running = started.makeAsyncIterator()
     #expect(await running.next() == first)  // 第一条在执行中，被挂住
-    try await puller.pull()
+    await pulled([secondRecord])
     _ = try await eventually(mac.store, { try $0.deliveryRequest(second)?.status }) { $0 == .known(.pending) }  // 第二条已到本机，排着
 
     let released = ContinuousClock.now

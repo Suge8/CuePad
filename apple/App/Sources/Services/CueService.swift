@@ -36,7 +36,7 @@ protocol CueNotifying: AnyObject {
 ///   免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
 @Observable
 final class CueService {
-    /// Cue 在这台 Mac 值班（同步据此保持主动拉取，见 `AppServices.pollingCadence`）。
+    /// Cue 在这台 Mac 值班（同步据此按节奏拉取，见 `AppServices.pollingCadence`）。
     var onDuty: Bool { duty != nil }
     /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
     var keeper: CueKeeper? { duty?.keeper }

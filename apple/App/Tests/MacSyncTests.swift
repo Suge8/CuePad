@@ -66,11 +66,11 @@ struct MacSyncTests {
 
         let late = await services.stop(within: .milliseconds(200))
 
-        #expect(late == "同步引擎")
+        #expect(late == "同步")
         #expect(rig.sync.stopped == 1)
     }
 
-    @Test func 退出时停止同步引擎与远程投送执行器() async throws {
+    @Test func 退出时停止同步与远程投送执行器() async throws {
         services.startSync()
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }

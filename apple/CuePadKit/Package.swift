@@ -24,7 +24,7 @@ let package = Package(
         .target(name: "CueEditor", dependencies: ["CueText"]),
         // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。
         .target(name: "CuePi", dependencies: ["CueStore", "CueText"], exclude: ["README.md"], resources: [.copy("Extension")]),
-        // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
+        // iCloud 同步：CueStore ↔ CloudKit 的拉取、上传、记录映射、待推送变更、冲突与附件。
         .target(name: "CueSync", dependencies: ["CueStore", "CueText"]),
         // 总控 Agent Cue：MCP 工具与 stdio 服务（`cuepad mcp`）、交给大脑的信封、记忆视图。
         .target(name: "CueAgent", dependencies: ["CueStore", "CueText"]),

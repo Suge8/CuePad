@@ -12,46 +12,7 @@ import UniformTypeIdentifiers
 
 
 
-/// 记录同步逻辑向引擎登记了什么；替代真实 CKSyncEngine 的待办状态。
-actor FakeQueue: ChangeQueue {
-  private(set) var saves: [String] = []
-  private(set) var deletes: [String] = []
-  private var waiters: [(check: @Sendable ([String], [String]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
-
-  func enqueue(saves: [CKRecord.ID], deletes: [CKRecord.ID]) {
-    self.saves += saves.map(\.recordName)
-    self.deletes += deletes.map(\.recordName)
-    let ready = waiters.filter { $0.check(self.saves, self.deletes) }
-    waiters = waiters.filter { !$0.check(self.saves, self.deletes) }
-    for waiter in ready { waiter.continuation.resume() }
-  }
-
-  func ensureZone(_ zoneID: CKRecordZone.ID) {}
-
-  func clear() {
-    saves = []
-    deletes = []
-  }
-
-  /// 原子地取走当前全部待办（取和清之间不会漏掉新登记的）。
-  func take() -> (saves: Set<String>, deletes: Set<String>) {
-    defer { clear() }
-    return (Set(saves), Set(deletes))
-  }
-
-  /// 只丢弃指定的待办：模拟服务器已确认这些记录，之前重复登记的一并去掉。
-  func discard(saves discarded: Set<String>, deletes gone: Set<String>) {
-    saves.removeAll { discarded.contains($0) }
-    deletes.removeAll { gone.contains($0) }
-  }
-
-  func waitUntil(_ check: @escaping @Sendable ([String], [String]) -> Bool) async {
-    if check(saves, deletes) { return }
-    await withCheckedContinuation { waiters.append((check, $0)) }
-  }
-}
-
-/// 按顺序回放的数据库替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
+/// 按顺序回放的同步区替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
 actor FakeZone: ZoneChangeSource {
   private(set) var calls: [(token: Data?, keys: [String]?)] = []
   private(set) var fetches: [[CKRecord.ID]] = []
@@ -75,39 +36,71 @@ actor FakeZone: ZoneChangeSource {
   }
 }
 
+/// 收下一切的服务器替身：记下每批上传了什么；`holding` 时第一批挂住，直到 `release`。
+actor FakeUploader: RecordUploader {
+  private(set) var batches: [(saves: [String], deletes: [String])] = []
+  private var gate: CheckedContinuation<Void, Never>?
+  private var holding: Bool
+  private var watchers: [(check: @Sendable ([(saves: [String], deletes: [String])]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
+
+  init(holding: Bool = false) { self.holding = holding }
+
+  func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    batches.append((saving.map(\.recordID.recordName), deleting.map(\.recordName)))
+    let ready = watchers.filter { $0.check(batches) }
+    watchers.removeAll { $0.check(batches) }
+    for watcher in ready { watcher.continuation.resume() }
+    if holding {
+      holding = false
+      await withCheckedContinuation { gate = $0 }
+    }
+    return SentRecords(saved: saving, deleted: deleting)
+  }
+
+  func saveZone() async throws {}
+
+  func release() {
+    gate?.resume()
+    gate = nil
+  }
+
+  /// 等到上传过的批次满足条件。
+  func waitUntil(_ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async {
+    if check(batches) { return }
+    await withCheckedContinuation { watchers.append((check, $0)) }
+  }
+
+  func uploaded(_ name: String) async { await waitUntil { $0.contains { $0.saves.contains(name) } } }
+  func deleted(_ name: String) async { await waitUntil { $0.contains { $0.deletes.contains(name) } } }
+}
+
 let testZone = CKRecordZone.ID(zoneName: "CuePadTest", ownerName: CKCurrentUserDefaultName)
 
-/// 一套 store + 同步协调器 + 假队列。
+/// 一套 store + 同步协调器。待推送就是库里推导的那一份（`pendingSync`）。
 struct Rig {
   let fixture: Fixture
-  let queue: FakeQueue
   let coordinator: SyncCoordinator
   var store: CueStore { fixture.store }
 
   init() throws {
     fixture = try Fixture()
-    queue = FakeQueue()
-    coordinator = SyncCoordinator(store: fixture.store, queue: queue, zoneID: testZone)
+    coordinator = SyncCoordinator(store: fixture.store, zoneID: testZone)
   }
 
   func recordID(_ id: UUID) -> CKRecord.ID { CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: testZone) }
 
-  /// 模拟服务器接受了所有已登记的保存与删除。
-  func simulatePush() async throws {
-    var saved: [CKRecord] = []
-    for name in Set(await queue.saves) {
-      if let record = await coordinator.record(for: CKRecord.ID(recordName: name, zoneID: testZone)) { saved.append(record) }
-    }
-    let deleted = Set(await queue.deletes).map { CKRecord.ID(recordName: $0, zoneID: testZone) }
-    await queue.clear()
-    await coordinator.handle(.sent(saved: saved, failedSaves: [], deleted: deleted, failedDeletes: []))
+  /// 模拟服务器接受了此刻所有待推送的保存与删除，返回上传的记录。
+  @discardableResult
+  func simulatePush() async throws -> [CKRecord] {
+    guard let batch = await coordinator.nextBatch(first: [], limit: .max) else { return [] }
+    await coordinator.handle(.sent(SentRecords(saved: batch.saves, deleted: batch.deletes)))
+    return batch.saves
   }
 
-  /// 重新对账，返回新登记的 (保存, 删除) 记录名。
+  /// 此刻待推送的 (保存, 删除) 记录名。
   func reconcileDelta() async throws -> (saves: Set<String>, deletes: Set<String>) {
-    await queue.clear()
-    try await coordinator.reconcile()
-    return (Set(await queue.saves), Set(await queue.deletes))
+    let pending = try await store.pendingSync()
+    return (Set(pending.saves.map(\.id)), Set(pending.deletes))
   }
 
   func id(_ uuid: UUID) -> String { uuid.uuidString.lowercased() }
@@ -149,53 +142,32 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
 
 
 
-/// 假云上服务器端的记录：上传可以只带改动的字段，服务器把它并进已有的整条记录再交给别的设备（真实的 CloudKit 就是这样）。
-final class CloudRecords: @unchecked Sendable {
-  private var records: [String: CKRecord] = [:]
-
-  func merge(_ sent: CKRecord) -> CKRecord {
-    guard let table = Table(rawValue: sent.recordType), let previous = records[sent.recordID.recordName] else {
-      records[sent.recordID.recordName] = sent
-      return sent
-    }
-    let encrypted = RecordMapper.encryptedColumns[table] ?? []
-    let merged = sent.copy() as! CKRecord
-    for column in table.columns where column != "id" && !sent.changedKeys().contains(column) {
-      if encrypted.contains(column) { merged.encryptedValues[column] = previous.encryptedValues[column] } else { merged[column] = previous[column] }
-    }
-    records[sent.recordID.recordName] = merged
-    return merged
-  }
-}
-
-/// 两台"设备"之间的假云：把一端已登记的保存与删除交给另一端（`fetched`），并回报发送成功。
+/// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`fetched`），并回报发送成功。
 struct Loopback {
   let a: Rig
   let b: Rig
-  let cloud = CloudRecords()
 
-  /// 一来一回：a 的待办到 b，再 b 的到 a。
+  /// 一来一回：a 的待推送到 b，再 b 的到 a。
   func exchange() async throws {
     try await deliver(from: a, to: b)
     try await deliver(from: b, to: a)
   }
 
   func deliver(from: Rig, to: Rig) async throws {
-    try await from.coordinator.reconcile()
-    let (saves, deletes) = await from.queue.take()
-    guard !saves.isEmpty || !deletes.isEmpty else { return }
+    guard let batch = await from.coordinator.nextBatch(first: [], limit: .max) else { return }
+    let deletions: [(id: CKRecord.ID, recordType: String)] = try batch.deletes.compactMap { id in
+      let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(id.recordName)'").first?[0]
+      return type.map { (id, $0) }
+    }
+    await from.coordinator.handle(.sent(SentRecords(saved: batch.saves, deleted: batch.deletes)))
+    await to.coordinator.handle(.fetched(modifications: batch.saves, deletions: deletions))
+  }
+}
 
-    var records: [CKRecord] = []
-    for name in saves.sorted() {
-      if let record = await from.coordinator.record(for: CKRecord.ID(recordName: name, zoneID: testZone)) { records.append(record) }
-    }
-    let deletions: [(id: CKRecord.ID, recordType: String)] = try deletes.sorted().compactMap { name in
-      let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(name)'").first?[0]
-      return type.map { (CKRecord.ID(recordName: name, zoneID: testZone), $0) }
-    }
-    await from.coordinator.handle(.sent(
-      saved: records, failedSaves: [], deleted: deletions.map(\.id), failedDeletes: []))
-    await from.queue.discard(saves: saves, deletes: deletes)  // .sent 之前对账可能重复登记过
-    await to.coordinator.handle(.fetched(modifications: records.map(cloud.merge), deletions: deletions))
+extension CloudEvent {
+  static func sent(
+    saved: [CKRecord], failedSaves: [(record: CKRecord, error: CKError)], deleted: [CKRecord.ID], failedDeletes: [(id: CKRecord.ID, error: CKError)]
+  ) -> CloudEvent {
+    .sent(SentRecords(saved: saved, failedSaves: failedSaves, deleted: deleted, failedDeletes: failedDeletes))
   }
 }

@@ -1,0 +1,103 @@
+import CloudKit
+import CueStore
+import Foundation
+
+/// 拉：从同步区的令牌起拉变化，交给协调器的合并入口（`.fetched`）。令牌只有一份，存在库里（`syncState` 的 `zoneToken`），
+/// 每页应用完才前移：中途失败或退出，下次从上一页接着拉，不会跨过没应用的变化。
+///
+/// 没有令牌（新装、从 CKSyncEngine 的版本升上来、令牌过期、换账号后）按版本对一遍账，不把整个同步区的正文与附件下载一遍：
+/// 先只带 `modifiedAt` 翻完同步区，再按 ID 分批取本机没有或服务器较新的整条；翻完时本机推送过、服务器上却没出现的，
+/// 按在别处删掉处理（翻的那段时间里本机又推送过的不算，它们的推送时间变了）。之后每次只从令牌增量拉。
+///
+/// actor 串行：同时来的两次拉取依次进行，不会用同一个令牌拉两遍。
+actor ZonePuller {
+  static let tokenKey = "zoneToken"
+  /// 对账那一遍带回的字段。
+  static let versionKeys = ["modifiedAt"]
+
+  private let source: any ZoneChangeSource
+  private let coordinator: SyncCoordinator
+
+  init(source: any ZoneChangeSource, coordinator: SyncCoordinator) {
+    self.source = source
+    self.coordinator = coordinator
+  }
+
+  private var store: CueStore { coordinator.store }
+
+  /// 拉到没有更多为止。同步区不在（被删、被重置）交给协调器判断要不要请你决定。
+  func pull() async throws {
+    do {
+      try await drain()
+    } catch let error as CKError where error.code == .changeTokenExpired {
+      try await store.setSyncState(Self.tokenKey, nil)
+      try await drain()
+    } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
+      await coordinator.handle(.zoneMissing(deletedByUser: error.code == .userDeletedZone))
+    }
+  }
+
+  private func drain() async throws {
+    guard await coordinator.canSync else { return }
+    var token = try await store.syncState(Self.tokenKey)
+    if token == nil {
+      await coordinator.handle(.catchingUp(true))
+      do {
+        token = try await catchUp()
+      } catch {
+        await coordinator.handle(.catchingUp(false))
+        throw error
+      }
+      await coordinator.handle(.catchingUp(false))
+    }
+    var batch: ZoneChangeBatch
+    repeat {
+      batch = try await source.changes(since: token, keys: nil)
+      if !batch.modifications.isEmpty || !batch.deletions.isEmpty {
+        await coordinator.handle(.fetched(modifications: batch.modifications, deletions: batch.deletions))
+      }
+      token = batch.token
+      try await store.setSyncState(Self.tokenKey, batch.token)
+    } while batch.moreComing
+  }
+
+  /// 按版本对账（见类型注释），返回翻完时的令牌；令牌在补取、删除都应用完之后才由调用方存下。
+  private func catchUp() async throws -> Data {
+    let before = try await store.syncedRecords()
+    var seen: [CKRecord.ID: Int64] = [:]
+    var batch: ZoneChangeBatch
+    var token: Data?
+    repeat {
+      batch = try await source.changes(since: token, keys: Self.versionKeys)
+      for record in batch.modifications where RecordMapper.table(named: record.recordType) != nil {
+        seen[record.recordID] = (record["modifiedAt"] as? NSNumber)?.int64Value ?? .max
+      }
+      token = batch.token
+    } while batch.moreComing
+
+    let wanted = try await newerOnServer(seen, synced: before)
+    for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
+      let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
+      await coordinator.handle(.fetched(modifications: try await source.records(ids), deletions: []))
+    }
+
+    let names = Set(seen.keys.map(\.recordName))
+    let after = try await store.syncedRecords()
+    let gone = before.filter { name, version in !names.contains(name) && after[name]?.pushed == version.pushed }
+    if !gone.isEmpty {
+      await coordinator.handle(.fetched(
+        modifications: [], deletions: gone.map { (CKRecord.ID(recordName: $0.key, zoneID: coordinator.zoneID), $0.value.table.rawValue) }))
+    }
+    return batch.token
+  }
+
+  /// 本机没有（也没推送过）或服务器上较新的记录。
+  private func newerOnServer(_ seen: [CKRecord.ID: Int64], synced: [String: (table: Table, pushed: Int64)]) async throws -> [CKRecord.ID] {
+    var local: [String: Int64] = [:]
+    for table in Table.synced { local.merge(try await store.modifiedAts(in: table)) { $1 } }
+    return seen.compactMap { id, server in
+      guard let mine = local[id.recordName] else { return synced[id.recordName] == nil ? id : nil }  // 推送过、本机已删的不取
+      return server > mine ? id : nil
+    }
+  }
+}

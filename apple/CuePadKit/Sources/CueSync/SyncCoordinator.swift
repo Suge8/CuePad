@@ -2,24 +2,20 @@ import CloudKit
 import Foundation
 import os
 
-/// 同步逻辑：待推送对账、远端变更应用、发送结果处理、账号与状态。
-/// 不接触 CKSyncEngine；与引擎之间只有 `CloudEvent`（进）和 `ChangeQueue`、`record(for:)`（出）。
+/// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller`）与发送者（`RecordSender`）
+/// 把服务器给的交进来（`CloudEvent`），发送者从这里取下一批（`nextBatch`）。待推送只有库里推导的一份（`CueStore.pendingSync`）。
 actor SyncCoordinator {
   private static let issueLimit = 50
-  private static let sendNowAttempts = 3
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
+  static let accountKey = "account"
 
   let store: CueStore
-  private let queue: any ChangeQueue
-  private let zoneID: CKRecordZone.ID
-  private var watcher: Task<Void, Never>?
-  /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
-  private var needsFullReconcile = false
-  /// 服务器上的大字段（见 `ServerValues`）。已交出去、还没有结果的上传版本记在库里（`CueStore.noteSent`）：结果回来时用它记账，
-  /// 不读服务器返回的记录（返回的记录只带发出去的字段）；引擎的上传与立即上传可以重叠，同一条记录会有几个版本在路上，
-  /// 按修改时间区分，结果回来时取它自己那一版。
-  private var serverValues = ServerValues()
+  nonisolated let zoneID: CKRecordZone.ID
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
+  /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
+  private var unsendable: [String: Int64] = [:]
+  private var sending = false
+  private var catchingUp = false
 
   private(set) var state = SyncState(status: .starting, issues: []) {
     didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
@@ -30,9 +26,8 @@ actor SyncCoordinator {
   }
   var issues: [SyncIssue] { state.issues }
 
-  init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID) {
+  init(store: CueStore, zoneID: CKRecordZone.ID) {
     self.store = store
-    self.queue = queue
     self.zoneID = zoneID
   }
 
@@ -56,122 +51,65 @@ actor SyncCoordinator {
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 
-  // MARK: 生命周期
-
-  /// 登记同步区、全量对账一次，之后每次本机提交只登记它改动的记录。
-  func start() async throws {
-    await queue.ensureZone(zoneID)
-    let changes = await store.syncChanges()  // 先订阅再对账：两者之间的写入不会漏
-    try await reconcile()
-    watcher = Task {
-      for await change in changes {
-        do { try await self.register(change) } catch { self.report(error, recordName: nil) }
-      }
-    }
-  }
-
-  func stop() {
-    watcher?.cancel()
-    watcher = nil
-  }
-
-  /// 全量对账。待推送 = 数据库推导：从未推送过或推送后又改过的记录；服务器有而本机已不在的记录（删除）。
-  /// 本次尚未成功的推送在引擎里丢了也没关系，下一次对账会重新登记。
-  func reconcile() async throws {
-    guard needsDecision == nil else { return }
-    needsFullReconcile = false
-    await enqueue(try await store.pendingSync())
-  }
-
-  /// 一次本机提交的增量；nil（改动范围未知）或此前有搁置的登记时全量对账。
-  private func register(_ change: PendingSync?) async throws {
-    guard needsDecision == nil else { return }
-    guard let change, !needsFullReconcile else { return try await reconcile() }
-    await enqueue(change)
-  }
-
-  private func enqueue(_ pending: PendingSync) async {
-    guard !pending.saves.isEmpty || !pending.deletes.isEmpty else { return }
-    await queue.enqueue(saves: pending.saves.map { recordID($0.id) }, deletes: pending.deletes.map(recordID))
-  }
-
-  /// 引擎要发送某条记录时构造它：以上次服务器记录的系统字段为底，写入当前行的字段；行已不在则返回 nil（引擎丢弃该待办）。
-  func record(for id: CKRecord.ID) async -> CKRecord? {
-    do {
-      guard let row = try await store.syncRow(recordName: id.recordName) else { return nil }
-      let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
-      let values = serverValues
-      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base, isCurrent: { base != nil && values.isCurrent($0, in: row) })
-      if row.table == .attachments {
-        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
-          report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
-          return nil
-        }
-        record["file"] = CKAsset(fileURL: file)
-      }
-      try await store.noteSent(row)  // 取了没发出去的版本不会有结果，留到这条记录下一次落账时清掉
-      return record
-    } catch {
-      report(error, recordName: id.recordName)
-      return nil
-    }
-  }
-
-  /// 立即把一条记录直接存到服务器（不经引擎的队列，见 `RecordUploader`）；结果与引擎发送的结果同一个入口处理。
-  /// 整个请求失败（离线）时抛出；返回服务器是否收下了这一条（没收下的，调用方要把它交回引擎重试）。
-  /// 上传期间本机又改过这条记录的话，结果入口已为更新的版本登记待办，调用方不能把它清掉。
-  /// 引擎可能刚把这条记录的上一版传上去、结果还在路上，本机带的版本标签就是旧的，服务器以 `serverRecordChanged` 拒绝：
-  /// 结果入口已经记下服务器的版本与新标签，这里马上带着它重传（回落引擎要多等一轮调度），本机版本比服务器的旧就不用传了。
-  func sendNow(_ id: CKRecord.ID, deleted: Bool, via uploader: any RecordUploader) async throws -> SendNowResult {
-    for _ in 0..<Self.sendNowAttempts {
-      guard needsDecision == nil else { return .received }
-      let saving = deleted ? nil : await record(for: id)
-      guard deleted || saving != nil else { return .received }  // 行已不在：没有可传的
-      let sent = try await attempt(saving.map { [$0] } ?? [], deleting: deleted ? [id] : [], via: uploader)
-      await handle(.sent(saved: sent.saved, failedSaves: sent.failedSaves, deleted: sent.deleted, failedDeletes: sent.failedDeletes))
-      if sent.saved.contains(where: { $0.recordID == id }) || sent.deleted.contains(id) {
-        return try await store.isPending(id.recordName) ? .receivedWithNewerVersionPending : .received
-      }
-      let superseded = sent.failedSaves.contains { $0.record.recordID == id && $0.error.code == .serverRecordChanged }
-      guard superseded else { return .rejected }
-      if try await !store.isPending(id.recordName) { return .received }  // 服务器的版本更新，已留下
-    }
-    return .rejected
-  }
-
-  /// 一次直接上传；没收下的与整个请求的失败都带着服务器给的原因记日志（错误码与说明不含个人内容）。
-  private func attempt(_ saving: [CKRecord], deleting: [CKRecord.ID], via uploader: any RecordUploader) async throws -> SentRecords {
-    do {
-      let sent = try await uploader.upload(saving: saving, deleting: deleting)
-      for (record, error) in sent.failedSaves { Self.logRejected(record.recordID, error) }
-      for (id, error) in sent.failedDeletes { Self.logRejected(id, error) }
-      return sent
-    } catch {
-      Self.log.notice("立即上传整个请求失败：\(error.brief, privacy: .public)")
-      throw error
-    }
-  }
-
-  private static func logRejected(_ id: CKRecord.ID, _ error: CKError) {
-    log.notice("立即上传被服务器拒绝 \(id.recordName.prefix(8), privacy: .public)：\(error.brief, privacy: .public)")
+  /// 能不能和服务器同步：有可用的账号，也没有停下来等你决定。
+  var canSync: Bool {
+    needsDecision == nil && ![.noAccount, .accountRestricted].contains(status)
   }
 
   var alertSubscription: PiAlertSubscriptionStatus { state.alerts }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { state.alerts = alerts }
 
-  func savedEngineState() async throws -> Data? { try await store.engineState() }
-
-  /// 用户对 `needsDecision` 的选择。之后需要重建引擎（引擎状态属于旧账号或已失效的云端数据，这里已清掉）。
+  /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。
   func resolve(_ resolution: SyncResolution) async throws {
     guard needsDecision != nil else { throw SyncError.nothingToResolve }
-    serverValues.removeAll()
     switch resolution {
     case .uploadLocal: try await store.resetSyncMetadata()
     case .eraseLocal: try await store.eraseSyncedData()
     }
+    unsendable = [:]
     status = .idle
-    await queue.ensureZone(zoneID)
-    try await reconcile()
+  }
+
+  // MARK: 上传批次
+
+  /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
+  func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
+    guard canSync else { return nil }
+    let pending: PendingSync
+    do { pending = try await store.pendingSync() } catch {
+      report(error, recordName: nil)
+      return nil
+    }
+    let names = pending.saves.map(\.id).filter { unsendable[$0] == nil }
+    let ordered = names.filter(first.contains) + names.filter { !first.contains($0) }
+    let deletes = pending.deletes.filter(first.contains) + pending.deletes.filter { !first.contains($0) }
+    var saves: [CKRecord] = []
+    for name in ordered where saves.count < limit {
+      if let record = await record(for: recordID(name)) { saves.append(record) }
+    }
+    let batch = (saves: saves, deletes: Array(deletes.prefix(limit - saves.count)).map(recordID))
+    return batch.saves.isEmpty && batch.deletes.isEmpty ? nil : batch
+  }
+
+  /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段；行已不在则返回 nil。
+  func record(for id: CKRecord.ID) async -> CKRecord? {
+    do {
+      guard let row = try await store.syncRow(recordName: id.recordName) else { return nil }
+      let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
+      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
+      if row.table == .attachments {
+        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
+          unsendable[id.recordName] = row.modifiedAt
+          report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
+          return nil
+        }
+        record["file"] = CKAsset(fileURL: file)
+      }
+      return record
+    } catch {
+      report(error, recordName: id.recordName)
+      return nil
+    }
   }
 
   // MARK: 事件
@@ -182,27 +120,48 @@ actor SyncCoordinator {
 
   private func process(_ event: CloudEvent) async throws {
     switch event {
-    case .stateUpdate(let data):
-      try await store.setEngineState(data)
     case .accountStatus(let account):
       accountStatus(account)
-    case .accountChange(let change):
-      try await accountChange(change)
-    case .cloudDataLost(let loss):
-      status = .needsDecision(loss == .deleted ? .cloudDataDeleted : .cloudDataReset)
-    case .syncing(let busy):
-      if busy, status == .idle { status = .syncing }
-      if !busy, status == .syncing { status = .idle }
+    case .account(let name):
+      try await account(name)
+    case .zoneMissing(let deletedByUser):
+      try await zoneMissing(deletedByUser: deletedByUser)
+    case .sending(let busy):
+      sending = busy
+      showActivity()
+    case .catchingUp(let busy):
+      catchingUp = busy
+      showActivity()
     case .fetched(let modifications, let deletions):
       guard needsDecision == nil else { return }
-      try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）经提交增量登记
+      try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）留在库里待推送
       if case .failed = status { status = .idle }
-    case .sent(let saved, let failedSaves, let deleted, let failedDeletes):
+    case .sent(let sent):
       guard needsDecision == nil else { return }
-      try await processSent(saved, failedSaves, deleted, failedDeletes)
-    case .zoneSaveFailed(let error):
-      classify(error, recordName: nil)
+      _ = try await processSent(sent)
     }
+  }
+
+  /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
+  func sent(_ sent: SentRecords) async -> SendOutcome {
+    guard needsDecision == nil else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
+    do {
+      return try await processSent(sent)
+    } catch {
+      report(error, recordName: nil)
+      return SendOutcome(progressed: false, blocked: true, zoneMissing: false)
+    }
+  }
+
+  /// 整个上传请求失败（不是单条记录被拒）且不会自己好起来：记下原因与状态。
+  func uploadFailed(_ error: CKError) {
+    classify(error, recordName: nil)
+  }
+
+  private func showActivity() {
+    let busy = sending || catchingUp
+    if busy, status == .idle { status = .syncing }
+    if !busy, status == .syncing { status = .idle }
   }
 
   private var needsDecision: SyncDecision? {
@@ -221,19 +180,23 @@ actor SyncCoordinator {
     }
   }
 
-  private func accountChange(_ change: AccountChange) async throws {
-    switch change {
-    case .signedOut:
-      status = .noAccount
-    case .signedIn:
-      // 新登录的账号：云端记录与本机记录的对应关系从零开始，本机全部重新上传。
-      serverValues.removeAll()
-      try await store.resetSyncMetadata()
-      status = .idle
-      try await reconcile()
-    case .switched:
-      status = .needsDecision(.accountSwitched)
-    }
+  /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步（含从 CKSyncEngine 的版本升上来）记下；和上次同步的不是同一个时，
+  /// 本机数据属于上一个账号，停下来等你决定。
+  private func account(_ name: String) async throws {
+    guard needsDecision == nil else { return }
+    let current = Data(name.utf8)
+    guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
+    if last != current { status = .needsDecision(.accountSwitched) }
+  }
+
+  /// 同步区不在了：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，停下来等你决定；从没同步过的不用管，第一次上传时建区。
+  private func zoneMissing(deletedByUser: Bool) async throws {
+    guard needsDecision == nil else { return }
+    let hadToken = try await store.syncState(ZonePuller.tokenKey) != nil
+    let pushedAny = try await !store.syncedRecords().isEmpty
+    let synced = hadToken || pushedAny
+    try await store.setSyncState(ZonePuller.tokenKey, nil)
+    if synced { status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
   }
 
   // MARK: 远端变更
@@ -245,7 +208,6 @@ actor SyncCoordinator {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
       }
-      serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
       if row.table == .deliveryRequests { traceArrival(of: record, row) }
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
@@ -255,7 +217,6 @@ actor SyncCoordinator {
         report("未知的记录类型「\(recordType)」的删除，已跳过", recordType: recordType, recordName: id.recordName)
         continue
       }
-      serverValues.forget(id.recordName)
       changes.append(.delete(SyncKey(table: table, id: id.recordName)))
     }
     for failure in try await store.applyRemote(changes) {
@@ -291,72 +252,56 @@ actor SyncCoordinator {
 
   // MARK: 发送结果
 
-  /// 这条记录发出去的那一版（发出去的记录和服务器返回的记录都带着当时的 `modifiedAt`）；落账时才从库里清掉。
-  private func sentRow(_ record: CKRecord) async throws -> SyncRow? {
-    guard let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
-    return try await store.sentRow(recordName: record.recordID.recordName, modifiedAt: stamp)
-  }
-
-  private func processSent(
-    _ saved: [CKRecord], _ failedSaves: [(record: CKRecord, error: CKError)], _ deleted: [CKRecord.ID],
-    _ failedDeletes: [(id: CKRecord.ID, error: CKError)]
-  ) async throws {
-    var changedSince: [CKRecord.ID] = []
-    for record in saved {
-      // 每一版发出前都记进了 syncSent，读不到只会是更新的一版已经落账、把它清掉了：这条结果已过时，不记账
-      guard let row = try await sentRow(record) else { continue }
-      serverValues.learn(row)
-      // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
-      if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
+  private func processSent(_ sent: SentRecords) async throws -> SendOutcome {
+    var outcome = SendOutcome(progressed: !sent.saved.isEmpty || !sent.deleted.isEmpty, blocked: false, zoneMissing: false)
+    for record in sent.saved {
+      guard let row = RecordMapper.row(from: record) else { continue }
+      try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record))
     }
-    var resend = changedSince
-    var resendDeletes: [CKRecord.ID] = []
-    for id in deleted {
-      serverValues.forget(id.recordName)
-      try await store.dropSyncMetadata(id.recordName)
-    }
+    for id in sent.deleted { try await store.dropSyncMetadata(id.recordName) }
 
-    var blocked = false
-    for (record, error) in failedSaves {
+    // 没收下的仍是待推送（库里推导），下一批自然带上；这里只处理要先改本机状态才能成功的
+    for (record, error) in sent.failedSaves {
+      let name = record.recordID.recordName
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {
-          try await applyFetched([server], [])
-          // 本机版本胜出时它仍是待推送，引擎已移除它的待办
-          if try await store.isPending(record.recordID.recordName) { resend.append(record.recordID) }
+          try await applyFetched([server], [])  // 带上服务器的版本标签；本机版本胜出的话下一批重传
+          outcome.progressed = true
         } else {
-          report("保存冲突但没有服务器版本：\(error)", recordType: record.recordType, recordName: record.recordID.recordName)
+          report("保存冲突但没有服务器版本：\(error)", recordType: record.recordType, recordName: name)
         }
       case .batchRequestFailed:
-        // 同批里别的记录被拒，这条自己没问题；引擎不会替它重试
-        resend.append(record.recordID)
+        outcome.progressed = true  // 同批里别的记录被拒，这条自己没问题
       case .unknownItem, .zoneNotFound:
-        // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传。
-        if error.code == .zoneNotFound { await queue.ensureZone(zoneID) }
-        serverValues.forget(record.recordID.recordName)
-        try await store.dropSyncMetadata(record.recordID.recordName)
-        resend.append(record.recordID)
+        // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传
+        if error.code == .zoneNotFound { outcome.zoneMissing = true }
+        try await store.dropSyncMetadata(name)
+        outcome.progressed = true
       default:
-        blocked = classify(error, recordType: record.recordType, recordName: record.recordID.recordName) || blocked
+        outcome.blocked = classify(error, recordType: record.recordType, recordName: name) || outcome.blocked
       }
     }
-    for (id, error) in failedDeletes {
-      if error.code == .unknownItem {
+    for (id, error) in sent.failedDeletes {
+      switch error.code {
+      case .unknownItem:
         try await store.dropSyncMetadata(id.recordName)
-      } else if error.code == .batchRequestFailed {
-        resendDeletes.append(id)
-      } else {
-        blocked = classify(error, recordName: id.recordName) || blocked
+        outcome.progressed = true
+      case .batchRequestFailed: outcome.progressed = true
+      case .zoneNotFound:
+        try await store.dropSyncMetadata(id.recordName)
+        outcome.progressed = true
+      default: outcome.blocked = classify(error, recordName: id.recordName) || outcome.blocked
       }
     }
-
-    if !saved.isEmpty, failedSaves.isEmpty, failedDeletes.isEmpty, needsDecision == nil { status = .idle }
-    // 停在配额或未预期失败时不立刻重新登记（会空转）；下一次本机写入时全量对账重试。
-    if blocked { needsFullReconcile = true }
-    if !resend.isEmpty || !resendDeletes.isEmpty { await queue.enqueue(saves: resend, deletes: resendDeletes) }
+    // 收下了：之前的失败与空间不足都过去了
+    if !sent.saved.isEmpty || !sent.deleted.isEmpty, sent.failedSaves.isEmpty, sent.failedDeletes.isEmpty, status.isSettledFailure {
+      status = sending ? .syncing : .idle
+    }
+    return outcome
   }
 
-  /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误交给引擎自己重试。
+  /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误由发送者退避重试（RecordSender）。
   @discardableResult
   private func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
     switch error.code {
@@ -366,7 +311,8 @@ actor SyncCoordinator {
     case .notAuthenticated:
       status = .noAccount
       return true
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited, .operationCancelled:
+    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited, .operationCancelled,
+      .serverResponseLost, .accountTemporarilyUnavailable, .limitExceeded:
       return false
     default:
       report(error, recordType: recordType, recordName: recordName)
@@ -389,4 +335,14 @@ actor SyncCoordinator {
   }
 
   private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
+}
+
+extension SyncStatus {
+  /// 一次成功的上传就能清掉的状态。
+  fileprivate var isSettledFailure: Bool {
+    switch self {
+    case .failed, .quotaExceeded: true
+    default: false
+    }
+  }
 }

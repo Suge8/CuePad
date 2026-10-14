@@ -254,7 +254,7 @@ extension CueStore {
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
-/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，不等同步引擎的调度）。
+/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，排在其余待推送前面）。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
