@@ -99,7 +99,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         guard !enabled else { return }
         enabled = true
         await refresh()
-        if authorization == .notDetermined { await requestAuthorization() }
+        if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
         // 无论是否授权都注册：CloudKit 同步本身也靠推送
         UIApplication.shared.registerForRemoteNotifications()
     }

@@ -126,10 +126,10 @@ struct SessionScreen: View {
     }
 
     /// 请会话所在的 Mac 结束它；进度与失败都从发给它的结束请求推出（`shownEnd`）。
-    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
+    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: digest.messages), !digest.fetchingTranscript(at: services.speech) else { return }
+              PiChat.needsTranscript(session, messages: digest.messages) else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }

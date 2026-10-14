@@ -163,10 +163,10 @@ struct SessionPage: View {
     /// 窗口右缘系统滚动条（悬浮式）占的宽。
     private static let scrollerWidth: CGFloat = 16
 
-    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路）。
+    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let stored, let session = stored.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: stored.messages), !stored.fetchingTranscript(at: services.speech) else { return }
+              PiChat.needsTranscript(session, messages: stored.messages) else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }

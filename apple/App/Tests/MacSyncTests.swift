@@ -422,17 +422,20 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机据领取知道 Mac 接手了，据结果尽早知道到哪了。
+    /// 两次上传都是事件：第二次在结果写下之后才发生。
     @Test(.timeLimit(.minutes(1)))
-    func 执行器写回结果后立即上传这一条() async throws {
+    func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+        let name = request.id.uuidString.lowercased()
 
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
-        #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
+        #expect(await uploads.next() == name)  // 领取
+        #expect(await uploads.next() == name)  // 写回结果
+        #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.succeeded))
     }
 
     // MARK: 后台恢复、开新会话
