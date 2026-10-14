@@ -7,7 +7,7 @@ import Foundation
 ///
 /// 一行是 `{timestamp, type, payload}`。只认 `session_meta`（会话 id、工作目录）与 `event_msg`：
 /// `task_started` 开始一轮；`item_completed` 里 `UserMessage` 是你的话（`client_id` 是 CuePad 发的那条的投送请求，见 `clientID`）、
-/// `AgentMessage` 且 `phase == final_answer` 是这一轮的回答、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
+/// `AgentMessage` 是说的一段（中途的 `commentary` 与最后的 `final_answer` 都是，`task_complete` 结束这一轮）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
 /// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。`response_item` 里同一条你的话没有 `client_id`，不读。
 /// 会话名只在 `<CODEX_HOME>/session_index.jsonl` 里，会话文件没有：历史会话的名字退回首条消息。
 enum CodexHistory {
@@ -37,8 +37,7 @@ enum CodexHistory {
         case ("event_msg", "turn_aborted"):
             cp.interrupted(PiHistory.Entry(id: "aborted-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "task_complete"):
-            // 回答已在 final_answer 那条收下；没有回答的（只压缩了上下文）只结束这一轮
-            cp.round = nil
+            cp.answered("", PiHistory.Entry(id: "complete-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "item_completed"):
             guard let item = line.payload.item else { return }
             try completed(item, PiHistory.Entry(id: item.id ?? "\(cp.seq)", seq: cp.seq, at: at), into: &cp, transcript: &transcript)
@@ -60,8 +59,8 @@ enum CodexHistory {
             }
             let delivery = item.clientID.flatMap { $0.hasPrefix(clientIDPrefix) ? String($0.dropFirst(clientIDPrefix.count)) : nil }
             cp.said(said, entry, deliveryID: delivery, into: &transcript)
-        case "AgentMessage" where item.phase == "final_answer":
-            cp.answered((item.content ?? []).compactMap(\.text).joined(separator: "\n"), entry, into: &transcript)
+        case "AgentMessage":
+            cp.spoke((item.content ?? []).compactMap(\.text).joined(separator: "\n"), entry)
         case "ContextCompaction":
             cp.compacted(entry, into: &transcript)
         default:
@@ -69,7 +68,7 @@ enum CodexHistory {
             guard cp.round != nil else { return }
             for call in toolCalls(item) {
                 cp.toolStarted(id: call.id, name: call.name, arguments: call.arguments)
-                cp.toolFinished(id: call.id, failed: call.failed)
+                if item.status == "declined" { cp.toolDeclined(id: call.id) } else { cp.toolFinished(id: call.id, failed: call.failed) }
             }
         }
     }
@@ -138,7 +137,6 @@ enum CodexHistory {
         var id: String?
         var clientID: String?
         var content: [Content]?
-        var phase: String?
         var command: [String]?
         var status: String?
         var exitCode: Int?
@@ -147,7 +145,7 @@ enum CodexHistory {
         var query: String?
 
         private enum CodingKeys: String, CodingKey {
-            case type, id, content, phase, command, status, changes, tool, query
+            case type, id, content, command, status, changes, tool, query
             case clientID = "client_id"
             case exitCode = "exit_code"
         }

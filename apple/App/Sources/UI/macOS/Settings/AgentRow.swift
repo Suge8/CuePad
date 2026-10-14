@@ -10,8 +10,8 @@ struct AgentRows: View {
     }
 }
 
-/// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接、写在哪；
-/// 没装的给"安装方法"。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。怎么用、会写什么放在悬停提示里。
+/// 一个 Agent 一行：开关即接入（写技能；Pi 另写扩展，Claude Code、Codex 另写钩子，OpenCode 直连它的后台服务）或删除（CuePad 写的文件与因此空出的目录）。状态写它在不在、接没接（`AgentLine`）；
+/// 没装的给"安装方法"。正常的行是安静的，只有要你动手的（别人的同名文件、Pi 太旧）变色。怎么用、会写在哪、何时生效放在悬停提示里。
 /// 出现时重新检测它（用户可能刚在终端里装好）。
 struct AgentRow: View {
     let kind: AgentKind
@@ -21,13 +21,13 @@ struct AgentRow: View {
     @State private var showsGuide = false
 
     private enum Outcome: Equatable {
-        case done(String)
         case failed(String)
     }
 
     var body: some View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
+
         SettingRow(title: kind.name, icon: kind.icon, tone: tone, busy: working, status: line, help: help) {
             // 开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）不给开关，免得像是能点
             if let status, canToggle(status) {
@@ -63,20 +63,7 @@ struct AgentRow: View {
 
     private func describe(_ status: AgentStatus?) -> (StatusTone, Dotted?) {
         if case .failed(let message) = outcome { return (.failure, Dotted(message)) }
-        guard let status else { return (.calm, "检测中…") }
-        guard services.agents.isWritable(kind) else { return (.calm, Dotted("开发构建", "先用 \(kind.homeVariable) 指定目录")) }
-        switch (status.presence, status.files) {
-        case (_, .foreign(let path)): return (.failure, "\(path) 是别人的同名文件，没有改动")
-        case (.tooOld(let version), _) where kind == .opencode: return (.notice, "需要 OpenCode 2，现在是 \(version)")
-        case (.tooOld(let version), _): return (.notice, "\(version) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新")
-        case (.notFound, .missing): return (.calm, "没有检测到")
-        case (.notFound, _): return (.calm, "已卸载，CuePad 的技能还留着")
-        case (.found, .missing): return (.calm, Dotted(kind.writes))
-        case (.found, .outdated): return (.notice, "需要升级")
-        case (.found(let version), .current):
-            if case .done(let note) = outcome { return (.calm, Dotted("已接入", note)) }
-            return (.calm, Dotted("已接入", version.map { "\(kind.name) \($0)" } ?? services.agents.writtenFiles(kind)[0]))
-        }
+        return AgentLine.of(kind, status, writable: services.agents.isWritable(kind))
     }
 
     private var help: String {
@@ -88,6 +75,7 @@ struct AgentRow: View {
             kind == .codex ? "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。" : nil,
             kind == .opencode ? "会话直连 OpenCode 的后台服务，不用另装。" : nil,
             "会写入 \(files)（配置文件里只加 CuePad 自己的条目）；关掉即删除。",
+            kind == .pi ? "接入后运行中的会话 /reload 后生效。" : "接入后新开的会话里生效。",
         ].compactMap { $0 }.joined()
     }
 
@@ -100,13 +88,30 @@ struct AgentRow: View {
             do {
                 if on {
                     try await agents.install(kind)
-                    outcome = .done(kind == .pi ? "运行中的会话 /reload 后生效" : "新开的会话里生效")
                 } else {
                     try await agents.uninstall(kind)
                 }
             } catch {
                 outcome = .failed(error.localizedDescription)
             }
+        }
+    }
+}
+
+/// 设置与首次接入面板里一个 Agent 那一行的状态（`AgentRow`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
+enum AgentLine {
+    static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
+        guard let status else { return (.calm, "检测中…") }
+        guard writable else { return (.calm, Dotted("开发构建", "先用 \(kind.homeVariable) 指定目录")) }
+        switch (status.presence, status.files) {
+        case (_, .foreign(let path)): return (.failure, "\(path) 是别人的同名文件，没有改动")
+        case (.tooOld(let version), _) where kind == .opencode: return (.notice, "需要 OpenCode 2，现在是 \(version)")
+        case (.tooOld(let version), _): return (.notice, "\(version) 太旧，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新")
+        case (.notFound, .missing): return (.calm, "没有检测到")
+        case (.notFound, _): return (.calm, "已卸载，CuePad 的技能还留着")
+        case (.found, .missing): return (.calm, Dotted(kind.writes))
+        case (.found, .outdated): return (.notice, "需要升级")
+        case (.found(let version), .current): return (.calm, Dotted("已接入", version.map { "\(kind.name) \($0)" }))
         }
     }
 }

@@ -228,20 +228,19 @@ public struct AgentIntegration: Sendable {
         (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil && read(file) == nil
     }
 
-    /// 有版本要求的（Pi、OpenCode）问它的 `--version`：Pi 要报得出够新的版本；OpenCode 报的版本太旧是 v1，报不出版本照常算在。
-    /// 其余有可执行文件或配置目录（用过它，含各家的桌面版）就算在；OpenCode 没有可执行文件时也按配置目录算（桌面版）。
+    /// 问每家的 `--version`（设置里写出版本）：有版本要求的（Pi、OpenCode）要报得出够新的版本，OpenCode 报的版本太旧是 v1；
+    /// 报不出版本的照常算在，只是没有版本。没有可执行文件时，除了 Pi，有配置目录（用过它，含各家的桌面版）也算在。
     private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
         let locator = await locate()
         let used = FileManager.default.fileExists(atPath: home(of: kind).path)
-        guard let minimum = kind.minimumVersion else {
-            let executable = locator.executable(kind)
-            return (used || executable != nil ? .found(nil) : .notFound, executable)
-        }
-        for executable in locator.candidates(kind.command) {
+        let candidates = locator.candidates(kind.command)
+        for executable in candidates {
             guard let output = await Self.capture(executable, ["--version"], locator: locator),
                   let version = AgentVersion(parsing: output) else { continue }
-            return (version >= minimum ? .found(version) : .tooOld(version), executable)
+            let tooOld = kind.minimumVersion.map { version < $0 } ?? false
+            return (tooOld ? .tooOld(version) : .found(version), executable)
         }
+        if kind.minimumVersion == nil, let executable = candidates.first { return (.found(nil), executable) }
         return (kind != .pi && used ? .found(nil) : .notFound, nil)
     }
 

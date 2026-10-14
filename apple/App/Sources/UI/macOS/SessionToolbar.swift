@@ -54,8 +54,8 @@ extension Workspace {
 }
 
 /// 工具栏居中的标题位（`.principal`，在详情区里居中，侧栏开合都与对话的阅读栏对齐）：一块玻璃，第一行会话名接状态（`PiSessionSubtitle`，只有着色的字、不画状态圆点：玻璃里唯一的圆是任务圈；只在在跑或要你注意时有；所在写在"⋯"菜单最上面）。
-/// 绑着任务时玻璃里是提醒事项那样的一条：左边是这件事的完成圈（点它完成；会话绑着的事都做完了才结束），会话名下面一行小字写"任务 · 步骤"，
-/// 点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
+/// 绑着任务时玻璃里是提醒事项那样的一条：左边是这件事的完成圈（点它完成；会话绑着的事都做完了才结束），会话名下面一行小字写"任务 · 步骤"
+/// （与会话名重复的一段不写，见 `SessionTaskLink.path`），点它回到这件事。一个会话绑着好几件时写还没做完的第一件，后面跟"等 N 件"，其余在"⋯"里。
 /// 两行与一行同高（工具栏控件的高度）；会话的事都归档了或在回收站里时只有一行。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
 /// 玻璃只包住内容、在标题位里居中（最宽 `width`，名字再长就截断）。标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：
@@ -103,7 +103,7 @@ struct PageTitleSlot: View {
                         PiSessionSubtitle(session: session, undelivered: state.undelivered, cueFollows: state.cueFollows)
                     }
                 }
-                if let primary { path(primary, count: state.task?.tasks.count ?? 1) }
+                if let primary, let line = state.task?.path(below: state.title) { path(primary, line) }
             }
         }
         .padding(.leading, task == nil ? 12 : 4).padding(.trailing, task == nil ? 12 : 14)
@@ -146,9 +146,9 @@ struct PageTitleSlot: View {
     }
 
     /// 会话名下面的"任务 · 步骤"（绑着好几件时后面"等 N 件"）：点它回到这件事（项目页，任务浮窗停在这一步）。
-    private func path(_ item: LeafTask, count: Int) -> some View {
+    private func path(_ item: LeafTask, _ line: Dotted) -> some View {
         Button { workspace.showTask(item.task) } label: {
-            Text(Dotted(item.parent?.title, item.task.title, count > 1 ? "等 \(count) 件" : nil))
+            Text(line)
                 .font(Typography.toolbarPath).foregroundStyle(palette.ink3).lineLimit(1)
         }
         .buttonStyle(PressStyle())
@@ -210,6 +210,14 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
 
     /// 标题里写的那一件：还没做完的第一件，都做完了是第一件。
     var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
+
+    /// 会话名下面那一行"任务 · 步骤"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（不经任务开的会话挂的是同名任务，
+    /// 改名时跟着改），什么都不剩时没有这一行。
+    func path(below title: String) -> Dotted? {
+        guard let primary else { return nil }
+        let named = [primary.parent?.title, primary.task.title].filter { $0 != title }
+        return Dotted(named + [tasks.count > 1 ? "等 \(tasks.count) 件" : nil]).nonEmpty
+    }
 
     static func read(sessionID: String, project: UUID?, from store: isolated CueStore) throws -> SessionTaskLink {
         SessionTaskLink(tasks: try store.tasks(boundTo: sessionID), bindable: try store.bindableTasks(in: project))
