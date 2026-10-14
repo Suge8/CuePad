@@ -72,9 +72,9 @@ private struct CueContextCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("上下文").font(Typography.label).foregroundStyle(palette.ink3)
                 Spacer()
-                Text(context.map { CueRunFormat.tokens($0.used) } ?? "—")
+                Text(context.map { CueEnvelope.tokens($0.used) } ?? "—")
                     .font(.system(size: 22, weight: .semibold, design: .rounded).monospacedDigit()).foregroundStyle(palette.ink)
-                Text("/ \(CueRunFormat.tokens(renewAt))").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("/ \(CueEnvelope.tokens(renewAt))").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
             }
             RenewRuler(used: context?.used ?? 0, renewAt: renewAt, window: context?.window)
             Text(distance).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
@@ -90,9 +90,9 @@ private struct CueContextCard: View {
 
     private var distance: Dotted {
         guard let used = context?.used else { return "这个班次还没请求过模型" }
-        let window = context?.window.map { "窗口 \(CueRunFormat.tokens($0))" }
+        let window = context?.window.map { "窗口 \(CueEnvelope.tokens($0))" }
         let left = used < renewAt
-            ? "离换新线还差 \(CueRunFormat.tokens(renewAt - used))" : "过了换新线 \(CueRunFormat.tokens(used - renewAt))，下一次醒来先写交接"
+            ? "离换新线还差 \(CueEnvelope.tokens(renewAt - used))" : "过了换新线 \(CueEnvelope.tokens(used - renewAt))，下一次醒来先写交接"
         return Dotted(left, window)
     }
 
@@ -113,7 +113,7 @@ private struct CueContextCard: View {
                         Text(Dotted(CueRunFormat.clock(handoff.createdAt), handoff.createdAt.formatted(.relative(presentation: .named))))
                             .foregroundStyle(palette.ink2)
                         Spacer(minLength: 0)
-                        Chevron(open: showsHandoff)
+                        DisclosureChevron(open: showsHandoff)
                     }
                     .font(Typography.meta.monospacedDigit())
                     .frame(minHeight: 20).contentShape(.rect)
@@ -163,7 +163,7 @@ private struct RenewRuler: View {
         .frame(height: 30)
         .accessibilityElement()
         .accessibilityLabel("上下文")
-        .accessibilityValue("已用 \(CueRunFormat.tokens(used))，换新线 \(CueRunFormat.tokens(renewAt))")
+        .accessibilityValue("已用 \(CueEnvelope.tokens(used))，换新线 \(CueEnvelope.tokens(renewAt))")
     }
 }
 
@@ -200,7 +200,7 @@ private struct CueRoundRow: View {
                 }
                 Spacer(minLength: 4)
                 Text(CueRunFormat.clock(round.startedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
-                Chevron(open: expanded)
+                DisclosureChevron(open: expanded)
             }
             HStack(spacing: 6) {
                 if round.finishedAt == nil { Spinner(.mini) }
@@ -216,7 +216,7 @@ private struct CueRoundRow: View {
         Dotted(
             round.finishedAt.map { CueRunFormat.took($0.timeIntervalSince(round.startedAt)) } ?? "进行中",
             round.calls.isEmpty ? "没调工具" : "\(round.calls.count) 次工具",
-            round.context.map { "上下文 \(CueRunFormat.tokens($0))" })
+            round.context.map { "上下文 \(CueEnvelope.tokens($0))" })
     }
 
     private var detail: some View {
@@ -228,7 +228,7 @@ private struct CueRoundRow: View {
                         Text("交给 Cue 的话")
                         Text(CueRunFormat.preview(round.sent[0])).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 4)
-                        Chevron(open: showsSent)
+                        DisclosureChevron(open: showsSent)
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink2)
                     .frame(minHeight: 22).contentShape(.rect)
@@ -318,28 +318,8 @@ private struct TraceText: View {
     }
 }
 
-private struct Chevron: View {
-    let open: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-            .rotationEffect(.degrees(open ? 180 : 0))
-            .accessibilityHidden(true)
-    }
-}
-
 /// 运行情况里的写法。
 private enum CueRunFormat {
-    /// token 数：不到一千写原数，往上写 31.2k、128k。
-    static func tokens(_ count: Int) -> String {
-        switch count {
-        case ..<1000: "\(count)"
-        case ..<100_000: String(format: "%.1fk", Double(count) / 1000)
-        default: "\(count / 1000)k"
-        }
-    }
-
     /// 24 小时制到秒：排查时要对得上日志。
     static func clock(_ date: Date) -> String {
         date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))

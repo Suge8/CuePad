@@ -217,7 +217,7 @@ final class CueKeeper {
 
     private func archive(_ round: CueRound) {
         var round = round
-        round.finishedAt = round.finishedAt ?? .now
+        round.finishedAt = .now
         round.context = shift?.context?.used
         history.append(round)
         if history.count > Self.roundsKept { history.removeFirst(history.count - Self.roundsKept) }

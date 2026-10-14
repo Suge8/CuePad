@@ -16,6 +16,7 @@ enum CloudKitSchema {
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
     "piMessages": [("toolCount", "INT64")],
+    "cueMessages": [("acceptance", "INT64")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),

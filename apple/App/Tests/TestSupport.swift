@@ -64,13 +64,12 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    /// 为 true 时 `syncNow()` 一直不返回（像网络没有回音），直到 `release` 结束。
+    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
     let syncNowHangs = Mutex(false)
-    let release = AsyncStream<Void>.makeStream()
 
     func syncNow() async throws {
         state.withLock { $0.syncNows += 1 }
-        if syncNowHangs.withLock({ $0 }) { for await _ in release.stream {} }
+        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     func pullChanges() async throws {}
     func preparePull() async throws {}

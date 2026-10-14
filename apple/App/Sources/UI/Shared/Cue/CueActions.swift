@@ -26,11 +26,11 @@ extension Workspace {
         await services.upload(message.id)
     }
 
-    /// 结束 Cue 的一条"等你"：选一项或关掉。对验收答"收下"就是收下：Store 同时完成任务，结束做完了的会话的请求写下就上传（同点圆圈）。
+    /// 结束 Cue 的一条"等你"：选一项或关掉。选"以后……都不用问"时 Store 同时记下这条规矩，一起上传。
     func endCueQuestion(_ message: CueMessage, _ end: CueQuestionEnd) async throws {
-        let ended = try await services.store.endCueQuestion(message.id, end)
-        for request in ended { _ = services.uploaded(request) }
+        let rule = try await services.store.endCueQuestion(message.id, end)
         await services.upload(message.id)
+        if let rule { await services.upload(rule.id) }
     }
 
     /// 交给 Cue 跟进，或收回自己做（记在顶层任务上）。

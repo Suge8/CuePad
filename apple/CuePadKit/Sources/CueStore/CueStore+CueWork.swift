@@ -184,14 +184,6 @@ extension CueStore {
     _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
-    let request = try start(leaf, agent: agent, fresh: fresh, model: model, thinking: thinking, host: host, cue: cue)
-    if cue { try withdrawAcceptance(of: leaf) }
-    return request
-  }
-
-  private func start(
-    _ leaf: UUID, agent: AgentKind?, fresh: Bool, model: PiModelKey?, thinking: PiThinkingLevel?, host: String, cue: Bool
-  ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
     let card = try requireLeaf(plan.leaf)
     guard let draft = try draft(of: plan.leaf) else {
@@ -233,20 +225,8 @@ extension CueStore {
   ) throws -> DeliveryRequest {
     let (card, session) = try requireSession(of: leaf)
     try requestConfig(config, of: card, in: session, host: host, cue: cue)
-    let request = try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
-    if cue { try withdrawAcceptance(of: leaf) }
-    return request
+    return try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
   }
-
-  /// Cue 又对一件事开工、说话或作答（返工）：这件事还开着的验收（`askToAccept`）撤回（同 Cue 撤回提问），回到对话里当一句话；
-  /// 返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
-  private func withdrawAcceptance(of leaf: UUID) throws {
-    let task = try topTask(of: leaf)
-    try write { _ = try endQuestions(.withdrawn, where: Self.pendingAcceptance, [task]) }
-  }
-
-  /// 这件事（参数）还开着的验收（与 `openQuestion` 连用）。
-  private static let pendingAcceptance = "acceptance = 1 AND taskID = ?"
 
   /// 说话、作答之前先请会话换上 `config`（与界面换模型同一种请求，执行器按先后执行）；换不了模型
   /// （`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`。调用方先做完别的检查：抛错时什么都没写。
@@ -313,9 +293,7 @@ extension CueStore {
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
     try requestConfig(config, of: card, in: session, host: host, cue: cue)
-    let request = try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
-    if cue { try withdrawAcceptance(of: leaf) }
-    return request
+    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
   }
 
   private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String]) throws -> PiAnswerValue {
@@ -343,15 +321,18 @@ extension CueStore {
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
-  /// 完成一件事（连同它还没做完的步骤）并结束做完了的会话（`endFinishedSessions`，写结束请求），返回结束请求。
-  /// 界面点完成走 `toggleDone`、你收下走 `endCueQuestion`，同一条规则。`requireStepsDone` 为真时还有没完成的步骤就抛
-  /// `stepsRemaining`、什么都不改（Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
+  /// Cue 收尾一件事：验收由 Cue 按证据自己定，不请你收下。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
+  /// 结束做完了的会话（`endFinishedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
+  /// （标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。返回这条结果（步骤为 nil）与结束请求。
   @discardableResult
-  public func completeTask(_ task: UUID, requireStepsDone: Bool = false, cue: Bool = false) throws -> [DeliveryRequest] {
+  public func finishTask(_ task: UUID, evidence: String) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
-      if requireStepsDone { try checkStepsDone(task) }
+      try checkStepsDone(task)
+      guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       _ = try applyStatus(task, .done)
-      return try endFinishedSessions(of: task, cue: cue)
+      let ended = try endFinishedSessions(of: task, cue: true)
+      guard card.parentID == nil else { return (nil, ended) }
+      return (try insertCueMessage(.cue, text: "「\(card.heading)」做完了。\n\(evidence)", task: task), ended)
     }
   }
 
@@ -363,26 +344,7 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// Cue 收尾一件顶层任务：不直接完成，写一条"等你"请你收下（标成验收 `CueMessage.isAcceptance`、显示选项 `CueAcceptance.choices`、
-  /// 关联任务、正文是标题加证据要点）。
-  /// 这件事已有没答的验收就不再写，返回那一条，`asked` 为假。步骤没做完抛 `stepsRemaining`。
-  public func askToAccept(_ task: UUID, evidence: String) throws -> (message: CueMessage, asked: Bool) {
-    try write {
-      try checkStepsDone(task)
-      guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
-      let pending = try select(
-        CueMessage.self, where: "\(Self.openQuestion) AND \(Self.pendingAcceptance)", [task], orderBy: "createdAt, rowid")
-      if let pending = pending.last { return (pending, false) }
-      let now = Date.stamp
-      let message = CueMessage(
-        id: UUID(), author: .known(.cue), text: "「\(card.heading)」做好了，收下吗？\n\(evidence)", choices: CueAcceptance.choices, urgent: false,
-        taskID: task, answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, isAcceptance: true)
-      try insert(message)
-      return (message, true)
-    }
-  }
-
-  /// 点任务的圆圈：待办与进行中都变完成（同 `completeTask`，连同结束做完了的会话），完成的回到待办。下一个状态按库里此刻的值决定，
+  /// 点任务的圆圈：待办与进行中都变完成（连同结束做完了的会话，同 `finishTask`），完成的回到待办。下一个状态按库里此刻的值决定，
   /// 读与改在一个事务里——界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
   public func toggleDone(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
     try write {

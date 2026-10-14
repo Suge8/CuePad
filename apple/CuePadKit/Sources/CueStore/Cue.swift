@@ -23,7 +23,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var author: Open<CueAuthor>
   /// 正文（`CueFormat`）；你的消息可带图片引用。
   public var text: String
-  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。只用来显示，不用来认是哪种问题。
+  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk` 给出、Cue 不能自拟，
+  /// 所以你选的那一项就说明了是哪类事（`CueAsk.always`）。
   public var choices: [String]?
   /// 要推送到手机。
   public var urgent: Bool
@@ -41,22 +42,19 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
-  /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，Cue 返工时撤回。
-  public var isAcceptance: Bool = false
 }
 
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify",
-    "acceptance",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, isAcceptance,
+      notify ? Self.notifyFlag : nil,
     ]
   }
   init(row: Row) {
@@ -64,7 +62,7 @@ extension CueMessage: Record {
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil, isAcceptance: row.bool(12))
+      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil)
   }
 }
 
@@ -221,12 +219,38 @@ extension CueState: Record {
   init(row: Row) { self.init(state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), modifiedAt: row.date(3)) }
 }
 
-/// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`，消息标着 `CueMessage.isAcceptance`），
-/// 你答 `accept` 就是收下（`CueStore.endCueQuestion` 完成任务）。选项只是显示的文字。
-public enum CueAcceptance {
-  public static let accept = "收下"
-  public static let revise = "再改改"
-  public static let choices = [accept, revise]
+/// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
+/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事的验收，Cue 按你的规矩与最佳实践自己定，做完告诉你。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认。
+public enum CueAsk: String, CaseIterable, Sendable {
+  case push, merge, release, delete, outside, budget, rule
+
+  /// 这类事的说法（"以后推送都不用问"；改规矩那一类只给 Cue 看）。
+  public var name: String {
+    switch self {
+    case .push: "推送"
+    case .merge: "合并到共享分支"
+    case .release: "发布或部署"
+    case .delete: "删除"
+    case .outside: "动项目以外的东西"
+    case .budget: "超出预算"
+    case .rule: "违反或改动用户的规矩，或他的规矩要你先问的事"
+    }
+  }
+
+  public static let once = "允许一次"
+  public static let deny = "拒绝"
+
+  /// 选了它，这类事以后就不再问：`CueStore.endCueQuestion` 记一条你的、一直记着的规矩（`rule(project:)`）。
+  /// 规矩那一类没有这一项：一律放行等于没有规矩。
+  public var always: String? { self == .rule ? nil : "以后\(name)都不用问" }
+
+  public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
+
+  /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
+  public func rule(project: String?) -> String? {
+    always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
+  }
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
