@@ -1,10 +1,13 @@
 import CueStore
 import SwiftUI
+#if os(macOS)
+import CuePi
+#endif
 
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`），它在做事时末尾一行进展（`LiveLine`，同会话页）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 连着的动态折成一行灰字（`CueNotes`），末尾是它此刻在做什么（`CueEnding`）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 跟进的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
@@ -121,9 +124,7 @@ struct CuePage: View {
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
                 ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
-                if let shown = cue.presence.shown, let progress = cue.presence.progress {
-                    LiveLine(shown: shown, text: progress).transition(.entry)
-                }
+                CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             .animation(Motion.quick, value: cue.presence.progress)
         }
@@ -136,12 +137,21 @@ struct CuePage: View {
             UserBubble(stored: message.text).padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
-                CueSays(message: message)
+                CueSays(message: message, fadesIn: !swapsInPlace)
                 if let task, let ref = tasks[task] { CueTaskLine(ref: ref) }
             }
         case .notes(let notes):
             CueNotes(notes: notes)
         }
+    }
+
+    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        services.cue.keeper != nil
+        #else
+        false
+        #endif
     }
 
     private func showEarlier() {
@@ -179,6 +189,38 @@ struct CuePage: View {
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.presence == .disabled)
+    }
+}
+
+/// Cue 页对话的末尾：它在做事时一行进展（`LiveLine`，同会话页）。Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
+/// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
+/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
+/// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+private struct CueEnding: View {
+    /// 对话里最近一条 Cue 的话的时刻
+    let newestSaid: Date?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        #if os(macOS)
+        let draft = services.cue.keeper?.speech.draft
+        let landed = draft?.landed(newestReply: newestSaid) ?? false
+        if let draft, !landed {
+            DraftReply(text: draft.text) { EmptyView() }
+        } else if !landed {
+            live
+        }
+        #else
+        live
+        #endif
+    }
+
+    @ViewBuilder private var live: some View {
+        let presence = workspace.cue.presence
+        if let shown = presence.shown, let progress = presence.progress {
+            LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
     }
 }
 

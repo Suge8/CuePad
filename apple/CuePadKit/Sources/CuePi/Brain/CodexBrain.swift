@@ -11,7 +11,8 @@ import Foundation
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
-/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
+/// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
+/// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`，停下与失败的一轮它已清掉）；过程中的说明（commentary）说完就清掉。
 @MainActor
 final class CodexBrain: CueBrain {
     private let session = BrainSession()
@@ -25,7 +26,6 @@ final class CodexBrain: CueBrain {
     private var turn: Turn?
     private struct Turn {
         let id: String
-        var reply: String?
     }
 
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
@@ -39,6 +39,10 @@ final class CodexBrain: CueBrain {
                 environment: BrainSession.environment(config), directory: config.workingDirectory)
             self.rpc = rpc
             rpc.onNotification = { [weak self] in self?.notification($0, $1) }
+            rpc.onDraft = { [weak self] thread, draft in
+                guard let self, thread == self.thread else { return }
+                session.emit(.speaking(draft))
+            }
             let process = rpc.process
             rpc.onClose = { [weak self] in
                 Task { self?.session.exited(await process?.exited()) }
@@ -127,10 +131,9 @@ final class CodexBrain: CueBrain {
                 session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
             case "commandExecution" where turn != nil:
                 session.emit(.toolDone(id: id, result: item["aggregatedOutput"] as? String ?? "", failed: failed))
-            // 只认给你看的回答，过程中的说明（commentary）不算
-            case "agentMessage" where item["phase"] as? String != "commentary":
-                let reply = (item["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !reply.isEmpty { turn?.reply = reply }
+            // 过程中的说明（commentary）说完就清掉：只有给你看的回答算这一轮的回答
+            case "agentMessage" where item["phase"] as? String == "commentary":
+                session.emit(.speaking(nil))
             default: break
             }
         case "thread/tokenUsage/updated":
@@ -140,11 +143,8 @@ final class CodexBrain: CueBrain {
             session.emit(.context(used: input, window: usage["modelContextWindow"] as? Int))
         case "turn/completed":
             let completed = params["turn"] as? [String: Any]
-            let finished = turn
             turn = nil
-            let status = completed?["status"] as? String
-            if status != "interrupted", let reply = finished?.reply { session.emit(.reply(reply)) }
-            if status == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
+            if completed?["status"] as? String == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
             session.emit(.turnFinished)
         default:
             break

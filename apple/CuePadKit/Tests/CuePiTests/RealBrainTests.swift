@@ -67,7 +67,20 @@ struct RealBrainTests {
             try await eventually("第 \(n) 轮开始", timeout: .seconds(60)) { self.count(.turnStarted) >= n }
         }
 
-        var replies: [String] { events.compactMap { if case .reply(let text) = $0 { text } else { nil } } }
+        /// 每轮的回答：做完时还留着的正在说的话
+        var replies: [String] {
+            var speaking: PiDraft?, replies: [String] = []
+            for event in events {
+                switch event {
+                case .speaking(let draft): speaking = draft
+                case .turnFinished:
+                    if let text = speaking?.text { replies.append(text) }
+                    speaking = nil
+                default: break
+                }
+            }
+            return replies
+        }
         var failures: [String] { events.compactMap { if case .failed(let text) = $0 { text } else { nil } } }
         var contexts: [(used: Int, window: Int?)] { events.compactMap { if case .context(let used, let window) = $0 { (used, window) } else { nil } } }
         var echoed: [String] { ((try? String(contentsOf: echoLog, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) }

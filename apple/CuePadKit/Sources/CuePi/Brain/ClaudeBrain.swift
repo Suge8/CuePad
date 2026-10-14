@@ -11,7 +11,8 @@ import Foundation
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；
-/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`。
+/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
+/// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
 final class ClaudeBrain: CueBrain {
     private let session = BrainSession()
@@ -43,6 +44,7 @@ final class ClaudeBrain: CueBrain {
                 executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
             self.stream = stream
             stream.onMessage = { [weak self] in self?.received($0) }
+            stream.onDraft = { [weak self] in self?.session.emit(.speaking($0)) }
             let process = stream.process
             stream.onClose = { [weak self] in
                 Task { self?.session.exited(await process.exited()) }
@@ -112,11 +114,11 @@ final class ClaudeBrain: CueBrain {
         turn = nil
         let windows = (result["modelUsage"]?.object ?? [:]).values.compactMap { $0["contextWindow"]?.number }
         if let used = finished.used, let window = windows.max() { session.emit(.context(used: used, window: Int(window))) }
-        let text = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if result["is_error"]?.bool == true {
-            if !finished.aborted { session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? "未知错误") : text)) }
-        } else if !finished.aborted, !text.isEmpty {
-            session.emit(.reply(text))
+        if finished.aborted {
+            session.emit(.speaking(nil))
+        } else if result["is_error"]?.bool == true {
+            let text = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            session.emit(.failed(text.isEmpty ? (result["subtype"]?.string ?? "未知错误") : text))
         }
         session.emit(.turnFinished)
     }

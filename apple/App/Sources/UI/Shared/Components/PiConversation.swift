@@ -162,7 +162,7 @@ struct SessionDraft: View {
 
 extension PiDraft {
     /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它开始出字——回答说完才写进会话文件，
-    /// 时刻是写入的那一刻。按时刻认、不按文字认：两轮说了一样的话也认得开。
+    /// Cue 的话一轮做完才写进对话，时刻都是写入的那一刻。按时刻认、不按文字认：两轮说了一样的话也认得开。
     func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
 }
 #endif
