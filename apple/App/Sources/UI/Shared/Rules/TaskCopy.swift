@@ -18,9 +18,9 @@ nonisolated struct TaskFold: Equatable, Sendable {
         showsAll || Self.hidden(roots.count, limit: limit) == 0 ? roots : Array(roots.prefix(limit))
     }
 
-    /// 折起时列出的最后一行（前几条顶层任务连同步骤）：收起后纸底那一行接在它下面。
-    static func lastFolded(_ tree: TaskTree, limit: Int) -> UUID? {
-        tree.rows(of: Array(tree.roots.prefix(limit))).last?.id
+    /// 折起时列出几行（前几条顶层任务连同步骤）。
+    static func foldedRows(_ tree: TaskTree, limit: Int) -> Int {
+        tree.rows(of: Array(tree.roots.prefix(limit))).count
     }
 }
 

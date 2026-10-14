@@ -97,7 +97,8 @@ private struct StepRow: View {
         let done = step.status == .done
         let shown = done ? nil : agents.items[step.id].map { services.settings.shown(workspace.withLiveState($0.state), delivery: $0.delivery) }
         HStack(spacing: TaskRow.columnGap) {
-            TaskCompletionRing(task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14)
+            TaskCompletionRing(
+                task: step, agentBusy: shown.flatMap { TaskNext(shown: $0, sessionID: "", hasDraft: false) }?.agentBusy ?? false, size: 14, rowTap: select)
             if selected {
                 TaskHeading(task: step, font: Typography.body).id(step.id)
             } else {
@@ -110,9 +111,11 @@ private struct StepRow: View {
         .background(selected ? palette.paperLit.opacity(0.8) : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture { workspace.openTask?.step = step.id }
+        .onTapGesture(perform: select)
         .contextMenu { CardActions(card: step, leaf: true) }
     }
+
+    private func select() { workspace.openTask?.step = step.id }
 }
 
 /// 右边：一个叶子任务此刻的样子。完成了是笑着的吉祥物；交给了会话是随状态换的吉祥物（在做时轻轻浮动）、一句话与"打开会话"；

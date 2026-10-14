@@ -100,7 +100,7 @@ struct TasksPanel: View {
             .font(Typography.label).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-            TaskOutline(tree: board.tree, roots: items.map(\.id), lazy: lazy) { row in
+            TaskOutline(tree: board.tree, roots: items.map(\.id), lazyAfter: lazy ? 0 : nil) { row in
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, project: info?.project,

@@ -64,7 +64,7 @@ struct ProjectScreen: View {
     @ViewBuilder
     private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
         let data = page.data, lastTarget = data.lastTarget
-        // 任务纸不进懒加载栈：收起时与之同一个事务的滚动在懒加载栈里会被丢掉（`TaskFoldAnchor`）
+        // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
             if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
@@ -108,7 +108,6 @@ struct ProjectScreen: View {
                 }
             }
         }
-        .taskFoldContent()
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
     }
@@ -187,7 +186,7 @@ private struct FocusCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleTasks = 3
-    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
+    /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
     private static let lazyFrom = 20
     /// 收起后纸上留下的那几行淡入多久（同 `Motion.quick`）。
@@ -225,12 +224,11 @@ private struct FocusCard: View {
                     Group {
                         SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
                         TaskOutline(
-                            tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom,
-                            onRowFrame: anchor.rowFrame
+                            tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks),
+                            lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
                         ) { row in
                             TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
                         }
-                        .taskFoldOutline(anchor)
                     }
                     .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
                         MoveKeyframe(0.0)
@@ -284,7 +282,7 @@ private struct FocusCard: View {
         if key == \.showsAll, fold.showsAll {
             // 收起是一步到位的（`TaskFoldAnchor`：纸底那一行留在原处，没有能跟着弹簧走的位移），换上来的那几行淡入；减弱动态效果时同样
             collapses += 1
-            return anchor.collapse($fold, boundary: TaskFold.lastFolded(data.tasks, limit: Self.visibleTasks), scrolling: $position)
+            return anchor.collapse($fold, scrolling: $position)
         }
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
     }

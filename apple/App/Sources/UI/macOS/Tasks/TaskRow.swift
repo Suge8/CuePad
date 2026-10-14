@@ -40,7 +40,7 @@ struct TaskRow: View {
     var body: some View {
         let next = next
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
-            TaskCompletionRing(task: task, subtasks: subtasks, agentBusy: next.map(\.agentBusy) ?? false)
+            TaskCompletionRing(task: task, subtasks: subtasks, agentBusy: next.map(\.agentBusy) ?? false, rowTap: open)
             Text(task.title)
                 .font(Typography.body.weight(.medium))
                 .strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
@@ -141,17 +141,22 @@ private struct NextStep: View {
 /// 完成圈（任务行、任务浮窗左栏的步骤）：点它完成，完成的回到待办。还有没勾的步骤时先问一起完成；它的 Agent 还在做或在等你时先问一句——
 /// 完成就是做完了，它（和它的步骤）的会话随之结束（`Workspace.toggle`）。
 /// 不用 Button：Mac 上每颗 Button 带一套焦点、按键与读屏的机器，一行一颗时建行贵出一截（150 条任务点开"还有 N 条"多约 55M 指令、
-/// 收起多约 28M）。按下的样子同 `PressStyle(.button)`（`PressFeedback`），抬起时才算点、拖出圈外再松手不算（同按钮），读屏仍是一颗按钮。
+/// 收起多约 28M）。与按钮一致：按下的样子同 `PressStyle(.button)`（`PressFeedback`），抬起时才算点、拖出圈外再松手不算；
+/// 点进没激活的窗口的那一下（`FirstClick`）不完成，当作点在行上（`rowTap`）；读屏是一颗按钮；全键盘访问时能 Tab 到、空格按下。
 struct TaskCompletionRing: View {
     let task: Card
     var subtasks: TaskProgress?
     /// 它交给的会话此刻在做或在等你。
     var agentBusy = false
     var size: CGFloat = 15
+    /// 点在行上做的事：首击交给它。
+    var rowTap: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @State private var confirmsSteps = false
     @State private var confirmsAgent = false
     @GestureState private var pressed = false
+    /// 这次按下是首击（按下时定，抬起时用）。
+    @State private var firstClick: Bool?
 
     private var done: Bool { task.status == .done }
 
@@ -159,9 +164,16 @@ struct TaskCompletionRing: View {
         TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: size).frame(width: TaskRow.ringColumn)
             .contentShape(.rect)
             .modifier(PressFeedback(pressed: pressed, kind: .button))
-            .gesture(DragGesture(minimumDistance: 0).updating($pressed) { _, pressed, _ in pressed = true }.onEnded { drag in
-                if abs(drag.translation.width) <= TaskRow.ringColumn, abs(drag.translation.height) <= TaskRow.ringColumn { tap() }
-            })
+            .gesture(DragGesture(minimumDistance: 0)
+                .updating($pressed) { _, pressed, _ in pressed = true }
+                .onChanged { _ in if firstClick == nil { firstClick = FirstClick.isCurrent } }
+                .onEnded { drag in
+                    let first = firstClick ?? false
+                    firstClick = nil
+                    guard abs(drag.translation.width) <= TaskRow.ringColumn, abs(drag.translation.height) <= TaskRow.ringColumn else { return }
+                    if first { rowTap() } else { tap() }
+                })
+            .modifier(KeyboardPress(action: tap))
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(TaskSpeech.toggle(done: done))
@@ -253,6 +265,20 @@ struct NewTaskField: View {
         } else {
             let project = target
             workspace.attempt { _ = try await workspace.createTask(content, in: project) }
+        }
+    }
+}
+
+/// 全键盘访问打开时（系统设置的"键盘导航"）能 Tab 到、空格按下，同系统按钮；关着时不挂：每行一份焦点机器，150 条展开要多约 24M 指令。
+/// 开关在建行时读，App 开着时改了设置，之后新建的行才跟上。
+private struct KeyboardPress: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if NSApp.isFullKeyboardAccessEnabled {
+            content.focusable(interactions: .activate).onKeyPress(.space) { action(); return .handled }
+        } else {
+            content
         }
     }
 }

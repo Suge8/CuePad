@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationDidFinishLaunching(_ notification: Notification) {
         sigterm = TerminationSignal.install()
         MainMenu.install()
+        FirstClick.install()
         launch()
     }
 

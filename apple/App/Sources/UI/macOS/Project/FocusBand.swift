@@ -21,7 +21,7 @@ struct FocusBand: View {
     @State private var fold = DebugHooks.preset.taskFold
 
     private static let visibleTasks = 4
-    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
+    /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建。
     private static let lazyFrom = 20
     private static let readingWidth: CGFloat = 720
@@ -49,15 +49,14 @@ struct FocusBand: View {
         // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
             TaskOutline(
-                tree: data.tasks, roots: shown, lazy: data.tasks.ordered.count >= Self.lazyFrom,
-                onRowFrame: anchor.rowFrame
+                tree: data.tasks, roots: shown,
+                lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
             ) { row in
                 let agent = cardAgents.items[row.id]
                 TaskRow(
                     task: row.task, session: agent?.state, delivery: agent?.delivery,
                     subtasks: data.subtasks[row.id], hasDraft: data.prompts[row.id] != nil)
             }
-            .taskFoldOutline(anchor)
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {
                     if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
@@ -77,9 +76,9 @@ struct FocusBand: View {
         .padding(.horizontal, -TaskRow.inset)
     }
 
-    /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时滚动在同一步里把纸底这一行留在原处。
+    /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时把纸底这一行留在原处（`TaskFoldAnchor`）。
     private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
-        if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, boundary: TaskFold.lastFolded(data.tasks, limit: Self.visibleTasks), scrolling: $position) }
+        if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, scrolling: $position) }
         withTransaction(\.disablesAnimations, true) { fold[keyPath: key].toggle() }
     }
 
