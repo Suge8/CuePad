@@ -13,7 +13,7 @@ struct LastCrashRow: View {
                 LabeledContent {
                     Text(report.date.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(palette.ink3)
                 } label: {
-                    Label(report.kind.label, systemImage: "exclamationmark.triangle").foregroundStyle(palette.ink)
+                    Label { Text(report.kind.label) } icon: { FailureMark() }.foregroundStyle(palette.ink)
                 }
             }
             .buttonStyle(.plain)

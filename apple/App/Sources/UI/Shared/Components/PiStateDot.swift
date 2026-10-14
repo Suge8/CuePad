@@ -43,8 +43,8 @@ extension PiShown {
         case .asking: Waiting.symbol
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: "questionmark.bubble"
-        // 胭脂圆叹号：与等你确认的赭黄问号圆靠颜色与里面的字分开
-        case .failed: "exclamationmark.circle.fill"
+        // 胭脂圆叹号（`Failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
+        case .failed: Failure.symbol
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
         case .restart: "arrow.clockwise.circle"
         case .delivery: "chevron.up.2"

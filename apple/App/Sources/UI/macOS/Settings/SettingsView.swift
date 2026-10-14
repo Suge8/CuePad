@@ -206,7 +206,7 @@ private struct CrashRow: View {
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, icon: Image(systemName: "exclamationmark.triangle"), tone: .notice,
+            title: report.kind.label, icon: Image(systemName: Failure.symbol), tone: .failure,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()
