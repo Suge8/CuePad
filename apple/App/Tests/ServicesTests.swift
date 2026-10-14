@@ -146,27 +146,6 @@ struct AgentUpgradeTests {
     }
 }
 
-/// 查本机运行时的登录状态很慢（三家命令各最多 15 秒），只在启用、换运行时与大脑起不来时查。
-struct CueRuntimeScanTests {
-    @Test func 启动时Cue已在本机值班_不查运行时() async throws {
-        let scans = Mutex(0)
-        // 大脑一直在起：不走到"起不来"那条会查的路
-        let app = TestApp(cue: CueDependencies(
-            scan: { scans.withLock { $0 += 1 }; return [] }, launch: { _, _ in try? await Task.sleep(for: .seconds(2)); return nil },
-            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
-        try await app.services.store.updateCueProfile { [hostID = TestApp.hostID] in
-            $0.hostID = hostID
-            $0.enabledAt = .now
-        }
-        app.services.start()
-        try await eventually("开始值班") { app.services.cue.onDuty }
-        try await Task.sleep(for: .milliseconds(500))
-        #expect(scans.withLock { $0 } == 0)
-        #expect(app.services.cue.runtimes == nil)
-        app.services.cancelBackgroundWork()
-    }
-}
-
 /// 启用只是"住到这台、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了才换成第一家能用的，
 /// 模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
 struct CueEnableTests {

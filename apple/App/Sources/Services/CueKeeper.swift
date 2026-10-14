@@ -93,8 +93,6 @@ final class CueKeeper {
         var store: CueStore
         /// 找起大脑要的可执行文件等（不问登录）
         var launch: @Sendable (AgentKind) async -> CueLaunch?
-        /// 大脑起不来：请 `CueService` 重新查一遍本机的运行时
-        var startFailed: () -> Void
         /// `cuepad` 命令行（MCP 服务）
         var helper: URL
         /// App 正在用的资料库目录：MCP 服务经 `CUEPAD_LIBRARY_DIR` 打开同一个库
@@ -358,7 +356,6 @@ final class CueKeeper {
             let profile = try await setup.store.cueProfile() ?? CueProfile()
             brainSettings = BrainSettings(profile)
             guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
-                setup.startFailed()
                 return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
             }
             let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
@@ -377,7 +374,6 @@ final class CueKeeper {
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
             if let wake { _ = try await wakeUp(wake, as: author) }
         } catch {
-            setup.startFailed()
             await broke(error.localizedDescription)
         }
     }

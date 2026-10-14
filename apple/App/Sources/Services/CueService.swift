@@ -30,7 +30,7 @@ protocol CueNotifying: AnyObject {
 ///   `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
-/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时查（状态命令慢）；还没查过为 nil。
+/// - 本机哪几家装了且登录了（`CueDependencies.scan`，状态命令慢）只在启用时查。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
 ///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 ///   免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
@@ -40,9 +40,6 @@ final class CueService {
     var onDuty: Bool { duty != nil }
     /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
     var keeper: CueKeeper? { duty?.keeper }
-    /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
-    private(set) var runtimes: [AgentKind]?
-
     @ObservationIgnored private let store: CueStore
     @ObservationIgnored private let sync: (any SyncControlling)?
     @ObservationIgnored private let hostID: String
@@ -50,8 +47,6 @@ final class CueService {
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
     private var duty: (keeper: CueKeeper, task: Task<Void, Never>)?
-    /// 上次看到的设置里的运行时：变了就重新查本机的运行时
-    @ObservationIgnored private var lastRuntime: Open<AgentKind>?
     private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     init(store: CueStore, sync: (any SyncControlling)?, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
@@ -71,7 +66,7 @@ final class CueService {
     /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）：只改住在哪、启用时刻。选的 Agent 这台用不了才换成第一家能用的，
     /// 模型属于原来那家，一并清掉；强度留着（运行时自己取档）。
     func enable() async throws {
-        let available = await refreshRuntimes()
+        let available = await dependencies.scan()
         guard let first = available.first else { throw EnableError.noRuntime }
         try await update { [hostID] profile in
             profile.hostID = hostID
@@ -89,13 +84,6 @@ final class CueService {
 
     private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
         try await AppServices.updateCue(edit, store: store, sync: sync)
-    }
-
-    @discardableResult
-    func refreshRuntimes() async -> [AgentKind] {
-        let found = await dependencies.scan()
-        runtimes = found
-        return found
     }
 
     /// 跟着设置值班，直到任务取消。
@@ -123,16 +111,12 @@ final class CueService {
     }
 
     private func apply(_ profile: CueProfile?) async {
-        if let runtime = profile?.runtime, let last = lastRuntime, runtime != last {
-            Task { await refreshRuntimes() }
-        }
-        lastRuntime = profile?.runtime ?? lastRuntime
         guard profile?.activeHost == hostID else { return await endDuty() }
         guard duty == nil else { return }
         let keeper = CueKeeper(
             CueKeeper.Setup(
                 store: store, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
-                startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
+                helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
                 upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
         duty = (keeper, Task { await keeper.run() })
