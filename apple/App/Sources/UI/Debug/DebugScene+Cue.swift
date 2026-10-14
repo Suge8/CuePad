@@ -119,7 +119,7 @@ extension DebugScene {
     private static func seedEvidence(_ store: CueStore) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-staging.png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreview(fileAt: file, title: "预发上的发言顺序", sessionID: "deploy")
+        _ = try? await store.addPreviews(filesAt: [file], title: "预发上的发言顺序", sessionID: "deploy")
     }
 
     /// 一张像截图的演示图：浅底上一列名单。

@@ -35,6 +35,8 @@ protocol CueNotifying: AnyObject {
 ///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
 final class CueService {
+    /// Cue 在这台 Mac 值班（同步据此保持主动拉取，见 `AppServices.pollingCadence`）。
+    var onDuty: Bool { duty != nil }
     /// 本机能当大脑的运行时（装了且登录了），按启用时的挑选顺序；`refreshRuntimes()` 刷新。
     private(set) var runtimes: [AgentKind]?
 
@@ -44,7 +46,7 @@ final class CueService {
     @ObservationIgnored private let library: URL
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
-    @ObservationIgnored private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
+    private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
     /// 上次看到的设置里的运行时：变了就重新查本机的运行时
     @ObservationIgnored private var lastRuntime: Open<AgentKind>?
     private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
