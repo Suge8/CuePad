@@ -204,5 +204,46 @@ import Testing
     let shown = lines.filter { $0.hasPrefix("- ") }.count
     #expect(lines.last.map(String.init) == "还有 \(72 - shown) 件")
   }
+
+  /// 会话交了结果、Cue 收尾（task done 带证据）：顶层任务不直接完成，写一条"等你"请用户收下——选项是收下 / 再改改、关联任务、正文带证据要点；
+  /// 再调一次不重复写。用户答"收下"就是收下：任务完成、做完了的会话请它结束（算用户发起），这条回答照常交给 Cue。
+  /// 用户用话说了收下，Cue 带 accepted 直接完成。
+  @Test(.timeLimit(.minutes(1))) func aTopTaskWaitsForTheUserToAcceptIt() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("演示")
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let task = try await store.createTask("修好登录页", in: project.id)
+    try await store.setCueFollows(task.id, true)
+    try await store.linkCard(task.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页")
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    let evidence = "- 登录测试 12 个全过\n- 截图里错误提示对上了"
+    for _ in 0..<2 { _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": evidence]) }
+    let asked = try await store.cueMessagesWaitingForYou()
+    #expect(asked.count == 1)
+    let question = try #require(asked.first)
+    #expect(question.author == .known(.cue) && question.choices == CueAcceptance.choices && question.taskID == task.id)
+    #expect(question.text.contains("登录测试 12 个全过") && question.text.contains("错误提示对上了"))
+    #expect(try await store.card(task.id)?.status != .done)
+    #expect(try await store.deliveryRequests().isEmpty)
+
+    try await store.answerCueMessage(question.id, answer: CueAcceptance.accept)
+    #expect(try await store.card(task.id)?.status == .done)
+    let ends = try await store.deliveryRequests().filter { $0.mode == .known(.end) }
+    #expect(ends.compactMap(\.target.ref) == ["s1"] && ends.allSatisfy { !$0.isFromCue && $0.hostID == "mac-a" })
+    #expect(try await store.cueMessagesToDeliver().map(\.id) == [question.id])
+
+    let spoken = try await store.createTask("改文案", in: project.id)
+    _ = try await server.call("task", ["action": "done", "task": spoken.id.uuidString, "evidence": "- 文案改好了", "accepted": true])
+    #expect(try await store.card(spoken.id)?.status == .done)
+    #expect(try await store.cueMessagesWaitingForYou().isEmpty)
+  }
 }
 #endif

@@ -36,7 +36,8 @@ public struct CueTools: Sendable {
           start{task,agent?,model?,effort?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹开新会话；
           say{task,text,when:now|after|answer,value?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
-          stop{task} 停下这一轮；done{task} 完成并结束会话（有步骤的要步骤都完成）；follow{task,who:cue|you} 换人跟进。
+          stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
+          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成并结束会话；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
           """,
         "inputSchema": schema(
           [
@@ -45,7 +46,7 @@ public struct CueTools: Sendable {
             "agent": ["type": "string", "enum": ["pi"]], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "when": ["type": "string", "enum": ["now", "after", "answer"]], "value": string,
-            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"],
+            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "accepted": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],
@@ -116,13 +117,7 @@ public struct CueTools: Sendable {
       let leaf = try await workingLeaf(try args.required("task"))
       let request = try await store.stopLeaf(leaf.id, host: try await host(), cue: true)
       return .ok("已请会话停下这一轮：「\(leaf.heading)」（\(leaf.id.shortID)）。", ["task": id(leaf.id), "request": id(request.id)])
-    case "done":
-      let card = try await task(args.required("task"))
-      _ = try await host()  // 停用后不能再收尾
-      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
-      return .ok(
-        "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
-        ["task": id(card.id), "requests": ends.map { id($0.id) }])
+    case "done": return try await done(args)
     case "follow":
       let who = try args.required("who")
       guard ["cue", "you"].contains(who) else { throw Failure("who 只能是 cue 或 you") }
@@ -130,6 +125,23 @@ public struct CueTools: Sendable {
       return .ok("「\(top.heading)」（\(top.id.shortID)）" + (who == "cue" ? "由你跟进。" : "交还给用户，不再跟进。"), ["task": id(top.id), "follows": who == "cue"])
     case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done / follow")
     }
+  }
+
+  /// 收尾：步骤直接完成；顶层任务由用户收——写一条验收的"等你"（`askToAccept`），他用话说了收下才带 accepted 直接完成。
+  private func done(_ args: Args) async throws -> Result {
+    let card = try await task(args.required("task"))
+    _ = try await host()  // 停用后不能再收尾
+    if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
+    guard card.parentID == nil, args.bool("accepted") != true else {
+      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
+      return .ok(
+        "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
+        ["task": id(card.id), "requests": ends.map { id($0.id) }])
+    }
+    let (message, asked) = try await store.askToAccept(card.id, evidence: try args.required("evidence"))
+    return .ok(
+      (asked ? "已请他收下「\(card.heading)」" : "「\(card.heading)」已在等他收下") + "，这件事由他答了再算完成。（\(message.id.shortID)）",
+      ["task": id(card.id), "message": id(message.id), "waiting": true])
   }
 
   private func add(_ args: Args) async throws -> Result {

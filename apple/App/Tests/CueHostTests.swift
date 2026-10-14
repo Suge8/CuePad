@@ -171,12 +171,16 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 自己醒来的一轮里已经用 tell 问了你：最后那句回复不再写成灰色的一行（几乎是同一句）。
-    @Test func 自己醒来已经说过话就不再写动态() async throws {
+    /// 会话交了结果，Cue 自己醒来收尾（task done）：顶层任务不直接完成，写一条请你收下的"等你"；这就是对你说过话了，
+    /// 最后那句回复不再写成灰色的一行（几乎是同一句）。
+    @Test func 自己醒来收尾请你收下_不再写动态() async throws {
         let rig = try await Rig()
-        try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 tell
+        try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let asked = try await rig.message(.cue, containing: "收下吗？")
-        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已问用户") }
+        #expect(asked.choices == CueAcceptance.choices && asked.taskID != nil)
+        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已请他收下") }
+        #expect(try await rig.store.card(asked.taskID!)?.status != .done)
+        #expect(try await rig.store.cueMessagesWaitingForYou().map(\.id) == [asked.id])
         #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= asked.createdAt }.isEmpty)
         await rig.stop()
     }
@@ -356,7 +360,9 @@ nonisolated final class FakeModel: Sendable {
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
-        if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") { return call("tell", ["text": "收下吗？", "choices": ["收下", "再改改"]]) }
+        if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") {
+            return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": "- 登录测试全过"])
+        }
         if text.contains("醒来：跟进的会话有动静") {
             if text.contains("先出一次错"), once("error") { return fail() }
             if text.contains("先出两次错"), once("error", times: 2) { return fail() }

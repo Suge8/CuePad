@@ -11,20 +11,25 @@ extension CueStore {
   public func requestDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
   ) throws -> DeliveryRequest {
+    try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
+  }
+
+  /// `requestDelivery` 的事务内部分：必须在写事务内调用。
+  private func insertDelivery(
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
+  ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
-    return try write {
-      let now = Date.stamp
-      if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
-        try takeOver(session: session, at: now)
-      }
-      let request = DeliveryRequest(
-        id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
-        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
-        resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
-      try insert(request)
-      try registerImages(in: content)
-      return request
+    let now = Date.stamp
+    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
+      try takeOver(session: session, at: now)
     }
+    let request = DeliveryRequest(
+      id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
+      status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+      resultReceivedAt: nil, origin: cue ? .known(.cue) : nil)
+    try insert(request)
+    try registerImages(in: content)
+    return request
   }
 
   /// 绑着这个会话的叶子所在的顶层任务由 Cue 跟进的话，收回给你。必须在写事务内调用。
@@ -47,20 +52,20 @@ extension CueStore {
   /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
   /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
   public func requestEnd(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
-    try requestControl(.end, of: target, on: host, cue: cue)
+    try write { try requestControl(.end, of: target, on: host, cue: cue) }
   }
 
   /// 请 `host` 那台 Mac 停止 `target` 会话正在跑的这一轮：方式是 `stop`；同样复用还在路上的那一条。
   public func requestStop(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
-    try requestControl(.stop, of: target, on: host, cue: cue)
+    try write { try requestControl(.stop, of: target, on: host, cue: cue) }
   }
 
-  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。
-  private func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
+  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。必须在写事务内调用。
+  func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String, cue: Bool) throws -> DeliveryRequest {
     if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
       return open
     }
-    return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
+    return try insertDelivery(mode.rawValue, to: target, on: host, mode: mode, cue: cue)
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
