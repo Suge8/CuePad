@@ -154,6 +154,24 @@ extension AppServices {
         }
     }
 
+    /// 下拉刷新与"立即同步"按钮：立即同步，最多等 `refreshLimit` 就返回（圈随之停下）；没做完的在后台接着做，拉到的照常经资料库出现在界面上。
+    /// 圈的时长不跟着网络走：同步引擎的手动拉取排在它正在做的事后面，可能十几秒到几分钟都不返回。
+    func refresh() async {
+        let (settled, settle) = AsyncStream<Void>.makeStream()
+        Task {
+            await syncNow()
+            settle.finish()
+        }
+        let deadline = Task {
+            try? await Task.sleep(for: Self.refreshLimit)
+            settle.finish()
+        }
+        for await _ in settled {}
+        deadline.cancel()
+    }
+
+    static let refreshLimit = Duration.seconds(5)
+
     /// 处理 `syncStatus == .needsDecision`：用户选择后引擎重新开始。
     func resolveSync(_ resolution: SyncResolution) async throws {
         try await sync?.resolve(resolution)

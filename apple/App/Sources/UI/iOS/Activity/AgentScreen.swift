@@ -74,7 +74,7 @@ struct AgentScreen: View {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }
         .modifier(Header(pushed: project != nil, count: model.list.map { $0.now.count + $0.total }, filter: filter))
-        .refreshable { await services.syncNow() }
+        .refreshable { await services.refresh() }
         .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .agentList(model, filter: filter)
         .refreshesQuota()

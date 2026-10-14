@@ -141,7 +141,7 @@ private struct SyncSection: View {
                     Button("立即同步", systemImage: "arrow.triangle.2.circlepath") {
                         syncing = true
                         Task {
-                            await services.syncNow()
+                            await services.refresh()
                             syncing = false
                         }
                     }
