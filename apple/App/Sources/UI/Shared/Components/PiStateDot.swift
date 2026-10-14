@@ -111,7 +111,7 @@ struct PiStateDot: View {
         case .working where !reduceMotion:
             // 圈点的圈换成转着的一段弧：静止的列表里只有渲染服务在动
             ZStack {
-                LoopLayer(kind: .orbit, color: tint).padding(box * 0.1)
+                LoopLayer(kind: .orbit(), color: tint).padding(box * 0.1)
                 Circle().fill(tint).frame(width: box * 0.36, height: box * 0.36)
             }
         case .unread:

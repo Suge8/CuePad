@@ -34,7 +34,7 @@ struct TaskRow: View {
     private var next: TaskNext? {
         guard !done else { return nil }
         let live = session.map(workspace.withLiveState)
-        return TaskNext(shown: live.map { services.settings.shown($0, delivery: delivery, cueFollows: task.cueFollows) }, sessionID: live?.sessionID, hasDraft: hasDraft)
+        return TaskNext(shown: live.map { workspace.shown($0, delivery: delivery, cueFollows: task.cueFollows) }, sessionID: live?.sessionID, hasDraft: hasDraft)
     }
 
     var body: some View {

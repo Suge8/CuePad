@@ -37,12 +37,7 @@ struct CueHead: View {
         VStack(spacing: 8) {
             CueAvatar(mood: cue.mood(composing: composing), presence: cue.presence, size: .head)
             Text(cue.name).font(Typography.emptyTitle).foregroundStyle(palette.ink)
-            if let line = cue.presence.line(name: cue.name) {
-                Text(line)
-                    .font(Typography.secondary).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
-            }
+            CueStatusLine(font: Typography.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -95,12 +90,11 @@ struct CueEnableCard: View {
     private func enable() {
         enabling = true
         failure = nil
-        let cue = services.cue, services = services
+        let cue = services.cue
         Task {
             defer { enabling = false }
             do {
                 try await cue.enable()
-                await services.upload(CueProfile.recordID)
             } catch {
                 failure = error.localizedDescription
             }
@@ -199,16 +193,18 @@ struct CueTrayCard: View {
         .accessibilityHint("打开任务")
     }
 
-    /// 在做那一步的状态点与一句近况（步骤名、提问、出错原因、动作、上一轮的回答）。
+    /// 在做那一步的状态点与一句近况（步骤名、提问、出错原因、动作、上一轮的回答）。颜色跟状态点同一个判定（`PiShown`）：
+    /// 等的是 Cue 时中性墨色，只有出错、没能送达带色。
     private var status: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if let session {
-                PiStateDot(shown: services.settings.shown(session, delivery: nil, cueFollows: true), size: 6)
+        let shown = session.map { workspace.shown($0, delivery: nil, cueFollows: true) }
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if let shown {
+                PiStateDot(shown: shown, size: 6)
             } else if item.launching {
                 Spinner(.mini)
             }
             Text(Dotted(item.leaf.id == item.task.id ? nil : item.leaf.title, note)).lineLimit(1)
-                .foregroundStyle(session?.waitsForYou == true ? palette.attention : session?.state == .known(.error) ? palette.failure : palette.ink2)
+                .foregroundStyle(shown.map { $0.needsYou ? $0.tint(palette) : palette.ink2 } ?? palette.ink2)
         }
         .font(Typography.meta)
     }
@@ -224,9 +220,9 @@ struct CueTrayCard: View {
     private var note: String {
         if item.launching { return "正在开会话" }
         guard let session else { return "还没开始" }
-        let shown = services.settings.shown(session, delivery: nil, cueFollows: true)
-        if session.waitsForYou { return session.question?.text.firstLine ?? shown.label }
-        if session.state == .known(.error) { return session.detail?.firstLine ?? shown.label }
+        let shown = workspace.shown(session, delivery: nil, cueFollows: true)
+        if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }
+        if session.state == .known(.error) { return PiProgress.firstLine(session.detail) ?? shown.label }
         if shown.isLive { return session.detail.flatMap(PiProgress.action) ?? shown.label }
         return session.lastReply.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0)) } ?? shown.label
     }
@@ -292,13 +288,6 @@ struct CuePreviewThumb: View {
     }
 }
 
-nonisolated extension String {
-    /// 第一行非空的字（近况、提问只占一行）。
-    var firstLine: String {
-        split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
-    }
-}
-
 /// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字，点开看全。
 struct CueNotes: View {
     let notes: [CueMessage]
@@ -311,7 +300,7 @@ struct CueNotes: View {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Text(Dotted(CueFormat.plainText(notes.last?.text ?? "").firstLine, notes.count > 1 ? "\(notes.count) 条" : nil))
+                    Text(Dotted(PiProgress.firstLine(CueFormat.plainText(notes.last?.text ?? "")), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
@@ -355,16 +344,18 @@ struct CueSays: View {
 
 /// "等你"：固定在输入框上方，最早的那一条。问题（Markdown，同对话里的渲染；长了限高、点"展开"看全）、关联任务发来看的文件
 /// （缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮、其余选项、关联的任务；还有别的在等时写一句。
+/// 列表与数量只来自 `cueMessagesWaitingForYou()`：答出去后等库里那条答上才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再答。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
     let open: (PiPreview) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var answered: Set<UUID> = []
+    /// 正在写的那条回答（写成后它从 `waiting` 里消失，写不成就清掉）。
+    @State private var answering: UUID?
 
     var body: some View {
-        if let message = waiting.first(where: { !answered.contains($0.id) }) {
+        if let message = waiting.first {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -381,7 +372,7 @@ struct CueWaitingDock: View {
                 HStack(spacing: 10) {
                     if let ref { CueTaskLine(ref: ref) }
                     Spacer(minLength: 0)
-                    let others = waiting.count - answered.count - 1
+                    let others = waiting.count - 1
                     if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
                 }
             }
@@ -406,12 +397,16 @@ struct CueWaitingDock: View {
             Button(option) { answer(message, option) }
                 .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary))
                 .lineLimit(2)
+                .disabled(answering == message.id)
         }
     }
 
     private func answer(_ message: CueMessage, _ option: String) {
-        withAnimation(Motion.quick) { _ = answered.insert(message.id) }
-        workspace.answerCue(message, option)
+        answering = message.id
+        workspace.attempt {
+            defer { answering = nil }
+            try await workspace.answerCue(message, option)
+        }
     }
 }
 

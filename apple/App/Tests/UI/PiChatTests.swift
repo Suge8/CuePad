@@ -69,7 +69,7 @@ struct PiChatTests {
         #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
 
         app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
-        #expect(app.services.settings.shown(try await item()).status != .delivery(.failed))
+        #expect(Workspace(services: app.services).shown(try await item()).status != .delivery(.failed))
         #expect(try await item().undelivered == 1)
     }
 

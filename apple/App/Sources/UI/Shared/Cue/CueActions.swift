@@ -17,24 +17,22 @@ extension Workspace {
         }
     }
 
-    /// 对 Cue 说一句（文字可带图片，存储格式）。
-    func sayToCue(_ stored: String) async throws {
-        let message = try await services.store.addCueMessage(.you, text: stored)
+    /// 把 Cue 的草稿（`CueWatch.draft`，文字可带图片）说给它：图片写进图片库，写一条你的消息并上传；说出去了草稿清空。
+    func sayToCue() async throws {
+        try await sayToCue(cue.draft)
+        cue.draft = ComposerDraft()
+    }
+
+    /// 把一份别处的草稿说给 Cue（菜单栏的随手记直接交给它）。
+    func sayToCue(_ draft: ComposerDraft) async throws {
+        let message = try await services.store.addCueMessage(.you, text: try draft.stored(in: services.store.files))
         await services.upload(message.id)
     }
 
-    /// 把输入框里的草稿说给 Cue：图片在这里写进图片库。
-    func sayToCue(_ draft: ComposerDraft) async throws {
-        try await sayToCue(try draft.stored(in: services.store.files))
-    }
-
     /// 回答 Cue 的一条"等你"。
-    func answerCue(_ message: CueMessage, _ answer: String) {
-        let store = services.store, services = services, id = message.id
-        attempt {
-            try await store.answerCueMessage(id, answer: answer)
-            await services.upload(id)
-        }
+    func answerCue(_ message: CueMessage, _ answer: String) async throws {
+        try await services.store.answerCueMessage(message.id, answer: answer)
+        await services.upload(message.id)
     }
 
     /// 交给 Cue 跟进，或收回自己做（记在顶层任务上）。
@@ -45,12 +43,6 @@ extension Workspace {
             await services.upload(top.id)
             self.say(on ? "已交给 \(name)" : "已收回，你自己做")
         }
-    }
-
-    /// 这个会话（记录 id）绑着的任务由 Cue 跟进。
-    func cueFollows(sessionRecord: UUID) async throws -> Bool {
-        guard let sessionID = services.liveSessions.items?.first(where: { $0.state.id == sessionRecord })?.state.sessionID else { return false }
-        return try await CueWaiting.followed(sessionID, in: services.store)
     }
 
     // MARK: 记忆

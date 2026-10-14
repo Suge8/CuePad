@@ -6,42 +6,15 @@ import SwiftUI
 struct CueBarView: View {
     /// 调试画面里放在桌面图上拍时没有宿主。
     let bar: CueBar?
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @FocusState private var focused: Bool
-    @State private var sending = false
 
     var body: some View {
-        let cue = workspace.cue
         VStack(alignment: .leading, spacing: 8) {
             CueStatusRow()
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .glass(in: .rect(cornerRadius: 22))
-            Composer(
-                draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "启用后才能对 \(cue.name) 说", label: "对 \(cue.name) 说", focus: $focused, accepts: .images,
-                form: .open, shortcuts: [.send: send],
-                header: { EmptyView() }, tools: { EmptyView() },
-                send: {
-                    Button(action: send) { SubmitGlyph(.send, enabled: !sending && cue.canHear) }
-                        .buttonStyle(.plain).disabled(sending || !cue.canHear)
-                        .accessibilityLabel("发送")
-                        .help("发送（\(ReplyShortcut.send.symbols)）")
-                })
+            CueComposer(style: .bar(opens: bar?.opens ?? 0)) { bar?.hide() }
         }
         .frame(width: 560)
-        .onChange(of: bar?.opens, initial: true) { focused = true }
-    }
-
-    private func send() {
-        let draft = workspace.cue.draft
-        guard !sending, workspace.cue.canHear, !draft.isEmpty(accepting: .images) else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            try await workspace.sayToCue(draft)
-            workspace.cue.draft = ComposerDraft()
-            bar?.hide()
-        }
     }
 }
 
@@ -62,15 +35,29 @@ struct CueStatusRow<Trailing: View>: View {
             CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
-                if let line = cue.presence.line(name: cue.name) ?? cue.digest.lastSaid {
-                    Text(line).font(Typography.meta).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).lineLimit(1)
-                }
+                CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
             }
             Spacer(minLength: 6)
             CueWaitingBadge(count: cue.digest.waiting)
             trailing
         }
         .animation(Motion.quick, value: cue.digest)
+    }
+}
+
+/// Cue 此刻在做什么的那一句（`CuePresence.line`；没有时是 `fallback`）：起不来是失败色，其余次要灰。页头、状态行、Cue 页底部同用。
+struct CueStatusLine: View {
+    var fallback: String?
+    var font = Typography.meta
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue
+        if let line = cue.presence.line(name: cue.name) ?? fallback {
+            Text(line).font(font).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
+                .transition(.opacity)
+        }
     }
 }
 

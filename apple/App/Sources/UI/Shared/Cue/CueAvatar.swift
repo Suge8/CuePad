@@ -66,7 +66,7 @@ struct CueAvatar: View {
         let inset = size.line / 2
         switch presence {
         case .thinking where !reduceMotion:
-            LoopLayer(kind: .halo(lineWidth: size.line), color: palette.ink)
+            LoopLayer(kind: .orbit(lineWidth: size.line), color: palette.ink)
         case .thinking:
             Circle().trim(from: 0, to: 0.3).stroke(palette.ink, style: StrokeStyle(lineWidth: size.line, lineCap: .round)).padding(inset)
                 .background { Circle().stroke(palette.ink.opacity(0.22), lineWidth: size.line).padding(inset) }
@@ -77,22 +77,6 @@ struct CueAvatar: View {
 
     private var ringTint: Color {
         mood == .waiting && !dimmed ? palette.attention : palette.ink.opacity(0.22)
-    }
-}
-
-/// 会话标题旁的跟进标记（iOS 会话页顶栏）：会话绑着的任务由 Cue 跟进时才有。Mac 的标题自己有绑着的任务（`SessionTaskLink`），直接放 `CueFollowMark`。
-struct CueSessionMark: View {
-    let sessionID: String
-    @Environment(AppServices.self) private var services
-    @State private var followed: Bool?
-
-    var body: some View {
-        // 读库前也要有一个真的视图：读库挂在它上面，什么都不排就永远不读
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 0, height: 0)
-            if followed == true { CueFollowMark() }
-        }
-        .observing(services.store, id: sessionID, into: $followed) { [sessionID] in try CueWaiting.followed(sessionID, in: $0) }
     }
 }
 
@@ -112,7 +96,7 @@ struct CueByline: View {
     }
 }
 
-/// 由 Cue 跟进的标记（任务行、会话标题旁）：行内的小头像，读屏读"由 Cue 跟进"。
+/// 由 Cue 跟进的标记（任务行、会话行、会话标题旁）：行内的小头像，读屏读"由 Cue 跟进"。
 struct CueFollowMark: View {
     @Environment(Workspace.self) private var workspace
 

@@ -33,7 +33,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries).enumerated().map { ($1.id, $0) })
+        let followed = Set(live.filter(\.cueFollows).map(\.state.sessionID))
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, followed: followed).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)),
@@ -64,6 +65,7 @@ struct PiSessionRow: View {
     var cueFollows = false
     var style = Style.compact
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.searchHighlight) private var highlight
 
@@ -90,7 +92,7 @@ struct PiSessionRow: View {
     }
 
     var body: some View {
-        let shown = services.settings.shown(session, delivery: delivery, cueFollows: cueFollows)
+        let shown = workspace.shown(session, delivery: delivery, cueFollows: cueFollows)
         let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
         let draft = services.settings.draftPreview(for: session.id)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)

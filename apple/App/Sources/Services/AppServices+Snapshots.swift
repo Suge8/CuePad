@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import Foundation
 #if os(iOS)
 import WidgetKit
@@ -62,7 +61,7 @@ extension CueStore {
             }),
             unfiled: UnfiledSnapshot(
                 cards: latest.map {
-                    UnfiledSnapshot.Card(id: $0.id, title: CueSummary($0.body).title, modifiedAt: $0.modifiedAt)
+                    UnfiledSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count),
             cue: CueSnapshot(digest: try CueDigest.read(from: self)))

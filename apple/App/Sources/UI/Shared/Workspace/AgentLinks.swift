@@ -36,6 +36,7 @@ struct AgentDot: View {
     let card: UUID
     @Environment(\.cardAgents) private var agents
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
@@ -48,7 +49,7 @@ struct AgentDot: View {
                 .accessibilityLabel("正在开会话")
                 .help("正在开会话")
         } else if let item = agents.items[card] {
-            let shown = services.settings.shown(item)
+            let shown = workspace.shown(item)
             #if os(iOS)
             Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                 PiStateDot(shown: shown, size: 8).frame(width: 28, height: 28).contentShape(.rect)

@@ -4,7 +4,7 @@ import SwiftUI
 /// Cue 页（Mac 内容区的一页、iPhone Agent 标签的第一屏、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 最上面是页头（大头像、名字、此刻在做什么），离开期间有变化时下面一张"你不在时"（`CueAwayCard`）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`）；底部从上到下是跟进中的托盘（`CueTray`）、"等你"（`CueWaitingDock`）与输入框（`Composer`，可带图片）。
+/// 连着的动态折成一行灰字（`CueNotes`）；底部从上到下是跟进中的托盘（`CueTray`）、"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）。
 struct CuePage: View {
     /// iPad 右侧面板里：没有自己的顶栏，"会话"换到侧栏的 Agent 页。
@@ -22,8 +22,6 @@ struct CuePage: View {
     @State private var follow = ChatFollow()
     @State private var window = Self.firstWindow
     @State private var opened: PiPreview?
-    @State private var sending = false
-    @FocusState private var focused: Bool
 
     /// 最初排开最近几格，往上翻快到头时再排开一段（同 `SessionChat`）。
     private static let firstWindow = 40
@@ -36,7 +34,8 @@ struct CuePage: View {
     #endif
 
     private var cue: CueWatch { workspace.cue }
-    private var composing: Bool { focused || !cue.draft.isEmpty(accepting: .images) }
+    /// 头像露"在听"：输入框里有没说出去的话。
+    private var composing: Bool { !cue.draft.isEmpty(accepting: .images) }
 
     var body: some View {
         page
@@ -76,21 +75,22 @@ struct CuePage: View {
                     .frame(maxWidth: .infinity)
                     .environment(\.composerInk, .solid)
             }
+            // Cue 页在屏上（整页或 iPad 右侧面板）就由它显示提示（操作结果、别的会话做完了）：排在页头下面、占自己的位置，
+            // 顶部的提示横幅这时不出现（`AppServices.cueViewers`）
+            .safeAreaBar(edge: .top, spacing: 0) {
+                if let notice = workspace.notice {
+                    NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
+                        .frame(maxWidth: Self.readingWidth)
+                        .transition(.opacity)
+                        .id(notice.id)
+                }
+            }
+            .animation(Motion.quick, value: workspace.notice)
+            .modifier(NoticeFeedback(notice: workspace.notice))
         if inPanel {
             body
         } else {
             body.floatingHeader(cue.name, detail: Dotted(cue.presence.line(name: cue.name) ?? "")) { trailing }
-                // 提示（操作结果、别的会话做完了）排在页头下面、占自己的位置，不浮在页头上（`NoticeBanner` 这时不出现）
-                .safeAreaBar(edge: .top, spacing: 0) {
-                    if let notice = workspace.notice {
-                        NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
-                            .frame(maxWidth: Self.readingWidth)
-                            .transition(.opacity)
-                            .id(notice.id)
-                    }
-                }
-                .animation(Motion.quick, value: workspace.notice)
-                .modifier(NoticeFeedback(notice: workspace.notice))
         }
     }
 
@@ -170,50 +170,15 @@ struct CuePage: View {
             }
             if cue.presence == .disabled {
                 CueEnableCard().transition(.opacity)
-            } else if cue.presence == .asleep || cue.presence.isUnreachable, let line = cue.presence.line(name: cue.name) {
-                Label(line, systemImage: "moon.zzz").font(Typography.meta)
-                    .foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18)
-                    .transition(.opacity)
+            } else if cue.presence.isAway {
+                // 页头翻出屏幕之后，输入框上方仍看得到它为什么不接话
+                CueStatusLine().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18)
             }
-            Composer(
-                draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "启用后才能对 \(cue.name) 说", label: "对 \(cue.name) 说",
-                focus: $focused, accepts: .images,
-                form: Self.form, shortcuts: [.send: send],
-                header: { EmptyView() }, tools: { EmptyView() },
-                send: {
-                    Button(action: send) { SubmitGlyph(.send, enabled: !sending && cue.canHear) }
-                        .buttonStyle(.plain).disabled(sending || !cue.canHear)
-                        .accessibilityLabel("发送")
-                        #if os(macOS)
-                        .help("发送（\(ReplyShortcut.send.symbols)）")
-                        #endif
-                })
+            CueComposer(style: .page) { follow.jumpToNewest() }
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: thread?.board.map(\.id))
         .animation(Motion.quick, value: cue.presence)
-    }
-
-    #if os(macOS)
-    private static let form = ComposerForm.open
-    #else
-    private static let form = ComposerForm.line(opensOnFocus: false)
-    #endif
-
-    private func send() {
-        let draft = cue.draft
-        guard !sending, cue.canHear, !draft.isEmpty(accepting: .images) else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            try await workspace.sayToCue(draft)
-            cue.draft = ComposerDraft()
-            follow.jumpToNewest()
-            #if os(iOS)
-            focused = false
-            #endif
-        }
     }
 
     // MARK: 你不在时

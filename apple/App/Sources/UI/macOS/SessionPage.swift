@@ -138,7 +138,7 @@ struct SessionPage: View {
     private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
-            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
+            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered), cueFollows: digest.cueFollows,
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)

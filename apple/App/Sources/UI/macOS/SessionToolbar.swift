@@ -13,6 +13,8 @@ final class SessionHeader {
         var session: PiSessionState
         var title: String
         var undelivered: String?
+        /// 由 Cue 跟进（`SessionDigest.cueFollows`）。
+        var cueFollows: Bool
         var ending: Bool
         /// "⋯"最上面写的所在。
         var place: Dotted?
@@ -89,7 +91,7 @@ struct SessionTitleSlot: View {
                     if state.ending {
                         Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
                     } else {
-                        PiSessionSubtitle(session: session, undelivered: state.undelivered)
+                        PiSessionSubtitle(session: session, undelivered: state.undelivered, cueFollows: state.cueFollows)
                     }
                 }
                 if let task { path(task, parent: state.task?.parent) }
