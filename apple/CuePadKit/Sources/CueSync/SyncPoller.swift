@@ -69,12 +69,10 @@ public struct SyncPoller: Sendable {
 }
 
 extension SyncPoller.Cadence {
-  /// Mac：Cue 在这台值班时每 1 秒——你在手机上对它说的话、"等你"的回答只经这一拉才到（推送到不了 Mac），要约 1 秒内交给它；
-  /// 会话都关着时它也在等。否则桥上有连着的 Pi 会话（手机可能随时发来请求），或有还没结果的投送请求（发给本机的，或本机发给别的
-  /// Mac 上会话的）时每 2 秒。Mac 上会话一连几天，2 秒是一天四万多次、1 秒翻倍；实测推送到不了 Mac，所以不放慢（docs/sync.md「拉取节奏」）。
-  public static func mac(hasOpenDeliveries: Bool, hasSessions: Bool, hostsCue: Bool) -> Self? {
-    if hostsCue { return Self(.every(.seconds(1))) }
-    return hasOpenDeliveries || hasSessions ? Self(.every(.seconds(2))) : nil
+  /// Mac：在等（等什么见 `AppServices.pollingCadence`）时每 2 秒，别的设备写来的东西平均约 1 秒、最坏约 2 秒到。
+  /// Mac 上会话一连几天，这是一天四万多次；实测推送到不了 Mac，所以不放慢（docs/sync.md「拉取节奏」）。
+  public static func mac(waiting: Bool) -> Self? {
+    waiting ? Self(.every(.seconds(2))) : nil
   }
 
   /// 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，

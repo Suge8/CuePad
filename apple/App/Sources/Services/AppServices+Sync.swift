@@ -87,12 +87,15 @@ extension AppServices {
         }
     }
 
-    /// 此刻该按什么节奏主动拉（nil：不拉）。在等什么只在这里取；节奏规则见 `SyncPoller.Cadence.mac`、`.phone`，
-    /// 等的对象所在的表见 `ZoneChangePuller.awaitedTables`，加新的等待理由时一并更新。
-    /// Mac 上的会话以桥为准：资料库里的状态记录可能是没来得及标为结束的旧会话。iOS 进入后台整体停掉（见 `stopPolling`）。
+    /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`；
+    /// 等的对象所在的表见 `ZoneChangePuller.awaitedTables`，加新的等待理由时一并更新：
+    /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
+    ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
+    ///   "等你"的回答只经这一拉才到，会话都关着时它也在等）；
+    /// - 手机：有发往 Mac 还没结果的请求，或正在看 Agent 页、会话近况。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(hasOpenDeliveries: hasOpenDeliveries, hasSessions: !pi.slots.isEmpty, hostsCue: cue.state != nil)
+        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.state != nil)
         #else
         .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
         #endif
