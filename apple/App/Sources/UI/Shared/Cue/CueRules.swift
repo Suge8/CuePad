@@ -130,16 +130,12 @@ nonisolated extension CueSnapshot {
 nonisolated enum CueWaiting {
     static func count(in store: isolated CueStore) throws -> Int {
         let asked = try store.cueMessagesWaitingForYou().count
-        var sessions = 0
-        for item in try store.piSessionPage(.live).items where item.state.waitsForYou {
-            if try !followed(item.state.sessionID, in: store) { sessions += 1 }
-        }
+        let sessions = try store.piSessionPage(.live).items.count { $0.state.waitsForYou && !$0.cueFollows }
         return asked + sessions
     }
 
-    /// 会话绑着的任务由 Cue 跟进。
+    /// 会话绑着的任务由 Cue 跟进（`cueFollowedSessions`，会话列表的 `cueFollows` 同一条）。
     static func followed(_ sessionID: String, in store: isolated CueStore) throws -> Bool {
-        guard let leaf = try store.task(boundTo: sessionID) else { return false }
-        return try store.card(try store.topTask(of: leaf.id))?.cueFollows ?? false
+        try !store.cueFollowedSessions([sessionID]).isEmpty
     }
 }

@@ -10,7 +10,7 @@ extension PiShown {
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery, .unread: palette.ink
         case .restart: palette.ink2
-        case .idle, .fresh, .unknown: palette.ink3
+        case .idle, .resting, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
@@ -34,6 +34,8 @@ extension PiShown {
         case .unread: "circle.fill"
         // 轮到你说话：空的对话气泡。不用对勾——对勾只表示完成与记下，"该你了"读成"做完了"正好相反
         case .idle: "bubble.left"
+        // 歇着、轮不到你：圈里一道短横（不是气泡，不读成"该你说了"）
+        case .resting: "minus.circle"
         case .fresh: "circle.dashed"
         // 不用空心圈：待办任务的圆圈就是它，任务行旁挨着会话状态时分不清
         case .ended: "circle.slash"

@@ -49,6 +49,8 @@ DEFINE SCHEMA
         cardID        STRING,
         sentAt        INT64,
         modifiedAt    INT64,
+        deliveryID    STRING,
+        origin        STRING,
         taskID        STRING,
         partIDs       STRING,
         GRANT WRITE TO "_creator",

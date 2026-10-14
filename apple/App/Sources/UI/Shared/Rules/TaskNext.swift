@@ -21,7 +21,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
     static func wantsLook(_ shown: PiShown) -> Bool {
         switch shown.status {
         case .delivery, .working, .asking, .failed, .restart, .unread: true
-        case .idle, .fresh, .ended, .unknown: false
+        case .idle, .resting, .fresh, .ended, .unknown: false
         }
     }
 }

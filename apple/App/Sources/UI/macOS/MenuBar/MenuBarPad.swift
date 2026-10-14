@@ -29,7 +29,8 @@ struct MenuBarPad: View {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
+                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0,
+                            cueFollows: services.liveSessions.cueFollowed.contains(session.sessionID)).equatable()
                             .contentShape(.rect)
                             .onTapGesture { open(.session(session.sessionID)) }
                             .accessibilityAddTraits(.isButton)

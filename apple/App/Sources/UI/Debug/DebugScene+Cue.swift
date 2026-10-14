@@ -24,7 +24,11 @@ extension DebugScene {
             let order = task("发言轮次"), importing = task("导入旧数据"), panel = task("README 截图")
             for card in [order, importing, panel].compactMap(\.self) { _ = try await store.setCueFollows(card.id, true) }
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
-            if let panel { try await store.setStatus(panel.id, .done) }
+            if let panel {
+                // 截图是 notes 会话做的（歇着、有新回复）：侧栏与会话列表里它只说"歇着"，带 Cue 的小头像
+                try await store.linkCard(panel.id, toSession: "notes")
+                try await store.setStatus(panel.id, .done)
+            }
             await seedEvidence(store)
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(

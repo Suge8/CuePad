@@ -39,7 +39,7 @@ nonisolated enum PiChat {
     /// 对话只来自 Pi 的会话文件（唯一事实源），与终端里看到的一致。
     /// 预览卡不是会话文件里的内容（文件在 Agent 的命令行里发出，不留对话条），按创建时间插进对话：排在它创建之前最近的那条之后，
     /// 一轮里发的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
-    /// `cueSent` 是 Cue 写的投送请求的 id（`DeliveryRequest.isFromCue`）：带着其中之一的用户消息标成 Cue 说的。
+    /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
     static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = [], cueSent: Set<UUID> = []) -> [PiChatEntry] {
         var waiting = previews.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }[...]
         var entries: [PiChatEntry] = []

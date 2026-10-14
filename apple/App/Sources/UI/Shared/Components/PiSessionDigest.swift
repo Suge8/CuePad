@@ -13,6 +13,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PiPreview] = []
     /// 没能送达的话有几句（会话列表查询带出的同一个数，`PiSessionListItem.undelivered`）。
     var undelivered = 0
+    /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
+    var cueSent: Set<UUID> = []
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
     var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
@@ -42,13 +44,15 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
         let session = item?.state
         let ref = session?.sessionID ?? sessionID
+        let messages = try ref.map { try store.piMessages(of: $0) } ?? []
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
+            messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
-            undelivered: item?.undelivered ?? 0)
+            undelivered: item?.undelivered ?? 0,
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
     }
 }
 

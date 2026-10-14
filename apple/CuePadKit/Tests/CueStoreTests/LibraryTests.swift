@@ -132,6 +132,7 @@ import Testing
     DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
+    DROP INDEX sendRecords_deliveryID; ALTER TABLE sendRecords DROP COLUMN deliveryID; ALTER TABLE sendRecords DROP COLUMN origin;
     """
 
   /// 结构 29 的库升到 30：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。

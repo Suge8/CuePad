@@ -94,14 +94,17 @@ struct CuePage: View {
         }
     }
 
+    /// 右上角：会话列表是常用入口，单独一颗圆钮（角标是在跑的会话数）；"⋯"里只留次要的（记忆）。
     private var trailing: some View {
-        Menu {
-            Button("会话", systemImage: "rectangle.stack") { navigation.push(.agent) }
-            Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
-        } label: {
-            Image(systemName: "ellipsis")
+        HStack(spacing: 4) {
+            SessionsButton { navigation.push(.agent) }
+            Menu {
+                Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .accessibilityLabel("更多")
         }
-        .accessibilityLabel("更多")
     }
     #endif
 
@@ -227,6 +230,36 @@ struct CuePage: View {
 
     private func markSeen() { services.settings.cueSeenAt = .now }
 }
+
+#if os(iOS)
+/// Cue 页顶栏的会话钮：图标右上一个墨色小角标写在跑的会话数（没有在跑的不画；墨色不是注意色：在跑不用你管）。
+private struct SessionsButton: View {
+    let action: () -> Void
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 9
+    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 15
+
+    var body: some View {
+        let running = services.liveSessions.live.count { $0.state.isWorking }
+        Button(action: action) {
+            Image(systemName: "rectangle.stack")
+                .overlay(alignment: .topTrailing) {
+                    if running > 0 {
+                        Text("\(running)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(palette.paper)
+                            .padding(.horizontal, 3).frame(minWidth: diameter, minHeight: diameter)
+                            .background(palette.ink, in: .capsule)
+                            .offset(x: diameter * 0.6, y: -diameter * 0.45)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(Motion.quick, value: running)
+        }
+        .accessibilityLabel("会话")
+        .accessibilityValue(running > 0 ? "\(running) 个在跑" : "")
+    }
+}
+#endif
 
 /// Cue 页在前台时算一个在看的：大于 0 时不推 Cue 的通知（Mac 是 `CueService.pageViewers`，iPhone 与 iPad 是 `PiAlertCenter.cuePageViewers`）。
 /// Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。

@@ -96,7 +96,8 @@ nonisolated enum PiUnread {
 /// Mac 侧栏与菜单栏、发送目标都经它。说法、颜色、状态标、动效、排序也都只按 `status` 分。
 /// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
-/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）。计时读哪一种（`clock`）也在这里定。
+/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）；
+/// 由 Cue 跟进的会话（`PiSessionListItem.cueFollows`）这时该看的是 Cue，只说"歇着"。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
@@ -108,6 +109,8 @@ nonisolated struct PiShown: Hashable, Sendable {
         case restart
         case unread
         case idle
+        /// 由 Cue 跟进、歇着：不催你（没有"有新回复""该你了"）。
+        case resting
         case fresh
         case ended
         /// 其他版本写入、本版本不认识的状态。
@@ -122,7 +125,7 @@ nonisolated struct PiShown: Hashable, Sendable {
 }
 
 nonisolated extension PiShown {
-    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil) {
+    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cueFollows: Bool = false) {
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.isWorking || session.state == .known(.waitingForUser)
         switch PiDelivery.phase(of: delivery, for: session, seen: seen) {
@@ -134,7 +137,7 @@ nonisolated extension PiShown {
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) })
         case nil where session.state == .known(.settled):
-            self.init(status: unread ? .unread : session.hasStarted ? .idle : .fresh, clock: own)
+            self.init(status: !session.hasStarted ? .fresh : cueFollows ? .resting : unread ? .unread : .idle, clock: own)
         case nil:
             self.init(status: Self.status(of: session.state), clock: own)
         }
@@ -174,6 +177,7 @@ nonisolated extension PiShown {
         case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
         case .idle: "该你了"
+        case .resting: "歇着"
         case .fresh: "新会话"
         case .ended: "已结束"
         case .unknown: "未知状态"
@@ -198,6 +202,7 @@ nonisolated extension PiShown {
         case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
         case .idle: "Agent 在等你说下一句"
+        case .resting: "Agent 歇着"
         case .fresh: "Agent 新会话"
         case .ended: "Agent 会话已结束"
         case .unknown: "Agent 状态未知"
@@ -226,7 +231,7 @@ nonisolated extension PiShown {
         case .working, .delivery: 2
         // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
         case .restart: 3
-        case .unread, .idle, .fresh, .unknown: 4
+        case .unread, .idle, .resting, .fresh, .unknown: 4
         case .ended: 5
         }
     }
@@ -239,7 +244,7 @@ nonisolated extension PiShown {
         case .unread: 4
         case .working, .delivery: 3
         case .restart: 2
-        case .idle, .fresh, .unknown: 1
+        case .idle, .resting, .fresh, .unknown: 1
         case .ended: 0
         }
     }
@@ -257,11 +262,12 @@ nonisolated extension PiShown {
 
 extension AppSettings {
     /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
-    func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID])
+    /// `cueFollows`：这个会话由 Cue 跟进（`PiSessionListItem.cueFollows`）。
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cueFollows: Bool = false) -> PiShown {
+        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cueFollows: cueFollows)
     }
 
-    func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery) }
+    func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery, cueFollows: item.cueFollows) }
 }
 
 nonisolated extension PiQuestion {

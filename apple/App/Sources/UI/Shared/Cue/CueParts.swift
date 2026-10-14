@@ -203,7 +203,7 @@ struct CueTrayCard: View {
     private var status: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let session {
-                PiStateDot(shown: services.settings.shown(session, delivery: nil), size: 6)
+                PiStateDot(shown: services.settings.shown(session, delivery: nil, cueFollows: true), size: 6)
             } else if item.launching {
                 Spinner(.mini)
             }
@@ -224,7 +224,7 @@ struct CueTrayCard: View {
     private var note: String {
         if item.launching { return "正在开会话" }
         guard let session else { return "还没开始" }
-        let shown = services.settings.shown(session, delivery: nil)
+        let shown = services.settings.shown(session, delivery: nil, cueFollows: true)
         if session.waitsForYou { return session.question?.text.firstLine ?? shown.label }
         if session.state == .known(.error) { return session.detail?.firstLine ?? shown.label }
         if shown.isLive { return session.detail.flatMap(PiProgress.action) ?? shown.label }

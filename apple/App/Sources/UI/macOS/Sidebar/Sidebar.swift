@@ -434,7 +434,8 @@ private struct PiSection: View {
         let bridge = live.first { $0.sessionID == session.sessionID }
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
+            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0,
+            cueFollows: services.liveSessions.cueFollowed.contains(session.sessionID), style: SidebarMetrics.session)
             .equatable()
             .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
             .frame(height: Spacing.sidebarProjectRow)

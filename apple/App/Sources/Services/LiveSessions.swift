@@ -20,6 +20,8 @@ final class LiveSessions {
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
+    /// 由 Cue 跟进的在线会话（`PiSessionListItem.cueFollows`）。
+    private(set) var cueFollowed: Set<String> = []
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
     /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
     private(set) var recentlyEnded: [PiSessionState] = []
@@ -64,6 +66,7 @@ final class LiveSessions {
         set(\.deliveries, Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(live.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live))
+        set(\.cueFollowed, Set(live.filter(\.cueFollows).map(\.state.sessionID)))
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<LiveSessions, Value>, _ value: Value) {

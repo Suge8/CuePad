@@ -47,6 +47,8 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     var deliveries: [String: DeliveryRequest]
     /// 没能送达的话有几句（会话行的小标记）。
     var undelivered: [String: Int]
+    /// 由 Cue 跟进的（`PiSessionListItem.cueFollows`）。
+    var cueFollowed: Set<String>
 
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
@@ -54,7 +56,8 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-            undelivered: PiSessionListItem.undelivered(live.items + ended.items))
+            undelivered: PiSessionListItem.undelivered(live.items + ended.items),
+            cueFollowed: Set((live.items + ended.items).filter(\.cueFollows).map(\.state.sessionID)))
     }
 }
 
@@ -63,6 +66,7 @@ struct SessionResultList: View {
     let groups: [SessionGroup]
     let deliveries: [String: DeliveryRequest]
     let undelivered: [String: Int]
+    let cueFollowed: Set<String>
     /// 还没读到的已结束会话有多少（"显示更多"）。
     let more: Int
     let isFiltered: Bool
@@ -112,7 +116,7 @@ struct SessionResultList: View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            undelivered: undelivered[session.sessionID] ?? 0).equatable()
+            undelivered: undelivered[session.sessionID] ?? 0, cueFollows: cueFollowed.contains(session.sessionID)).equatable()
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)
