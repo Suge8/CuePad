@@ -55,6 +55,27 @@ struct SyncWiringTests {
         #expect(reason.contains("没能启动"))
     }
 
+    /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，转着的时候主线程照常响应。
+    @Test(.timeLimit(.minutes(1)))
+    func 同步一直不返回时_下拉刷新到时限就停_主线程照常响应() async throws {
+        app.sync.syncNowHangs.withLock { $0 = true }
+        defer { app.sync.release.continuation.finish() }
+        let began = ContinuousClock.now
+        let refresh = Task { await services.refresh() }
+
+        var worstDelay = Duration.zero
+        while began.duration(to: .now) < .seconds(3) {
+            let asked = ContinuousClock.now
+            try await Task.sleep(for: .milliseconds(50))
+            worstDelay = max(worstDelay, asked.duration(to: .now) - .milliseconds(50))
+        }
+        await refresh.value
+
+        #expect(app.sync.syncNows == 1)
+        #expect(began.duration(to: .now) < AppServices.refreshLimit + .seconds(1))
+        #expect(worstDelay < .milliseconds(200))
+    }
+
     @Test func 应用激活时立即同步() async {
         await services.handleActivation()
         #expect(app.sync.syncNows == 1)

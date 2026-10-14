@@ -38,14 +38,15 @@ extension DebugScene {
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-        case "cue", "cuememory":
-            // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"
+        case "cue", "cuememory", "cuerun":
+            // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+            if scene == "cuerun" { workspace.cue.showsRun = true }
         case "cuerows":
             await connectAgents(workspace.services)
             await seedCueRows(workspace.services)

@@ -110,17 +110,30 @@ final class CodexBrain: CueBrain {
         case "item/started":
             guard turn != nil, let item = params["item"] as? [String: Any] else { return }
             switch item["type"] as? String {
-            case "mcpToolCall": session.emit(.tool(name: brainToolName(item["tool"] as? String ?? "?"), arguments: jsonString(item["arguments"] ?? [:])))
-            case "commandExecution": session.emit(.tool(name: "bash", arguments: jsonString(["command": item["command"] as? String ?? ""])))
+            case "mcpToolCall":
+                let name = brainToolName(item["tool"] as? String ?? "?")
+                session.emit(.tool(id: item["id"] as? String ?? "", name: name, arguments: jsonString(item["arguments"] ?? [:])))
+            case "commandExecution":
+                let command = jsonString(["command": item["command"] as? String ?? ""])
+                session.emit(.tool(id: item["id"] as? String ?? "", name: "bash", arguments: command))
             default: break
             }
         case "item/completed":
-            if turn != nil, ["mcpToolCall", "commandExecution"].contains((params["item"] as? [String: Any])?["type"] as? String) { session.emit(.toolDone) }
+            guard let item = params["item"] as? [String: Any] else { return }
+            let id = item["id"] as? String ?? "", failed = ["failed", "declined"].contains(item["status"] as? String)
+            switch item["type"] as? String {
+            case "mcpToolCall" where turn != nil:
+                let error = (item["error"] as? [String: Any])?["message"] as? String
+                let result = error ?? brainText((item["result"] as? [String: Any])?["content"])
+                session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
+            case "commandExecution" where turn != nil:
+                session.emit(.toolDone(id: id, result: item["aggregatedOutput"] as? String ?? "", failed: failed))
             // 只认给你看的回答，过程中的说明（commentary）不算
-            guard let item = params["item"] as? [String: Any], item["type"] as? String == "agentMessage",
-                  item["phase"] as? String != "commentary", let text = item["text"] as? String else { return }
-            let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !reply.isEmpty { turn?.reply = reply }
+            case "agentMessage" where item["phase"] as? String != "commentary":
+                let reply = (item["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !reply.isEmpty { turn?.reply = reply }
+            default: break
+            }
         case "thread/tokenUsage/updated":
             guard let usage = params["tokenUsage"] as? [String: Any], let last = usage["last"] as? [String: Any],
                   let input = last["inputTokens"] as? Int else { return }
