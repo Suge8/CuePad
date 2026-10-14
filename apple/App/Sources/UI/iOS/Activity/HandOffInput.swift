@@ -116,9 +116,8 @@ struct HandOffInput: View {
     private func send() {
         guard canSend else { return }
         guard let session = chosen?.state else {
-            // 默认目标就是交到哪的决定：未分类的开不了会话（与 Mac 上发给 Agent 同一句）；要在别的项目开，从菜单选"新会话…"
-            if choice == nil, planned?.plan?.destination == .unfiled { return workspace.say("未分类的任务没有文件夹，开不了会话", isError: true) }
-            return newSession()
+            guard choice == nil else { return newSession() }
+            return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, workspace: workspace, navigation: navigation)
         }
         let sent = draft, mode = MacDelivery.modes(for: session).first ?? .send
         let line = PiSlash.line(of: sent, in: session.commands)
@@ -134,6 +133,13 @@ struct HandOffInput: View {
             navigation.outbox = nil
             workspace.say("已交给 \(session.title)")
         }
+    }
+
+    /// 默认目标是新会话时点发送，按交到哪的决定：未分类的开不了会话，说一句（与 Mac 上发给 Agent 同一句）、什么都不开；
+    /// 其余换成新会话的输入框，项目、由哪台 Mac 开、会话名都取自决定。要在别的项目开，从菜单选"新会话…"。
+    static func startDefault(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, workspace: Workspace, navigation: Navigation) {
+        if plan?.destination == .unfiled { return workspace.say("未分类的任务没有文件夹，开不了会话", isError: true) }
+        navigation.handOffToNewSession(draft, card: card, plan: plan)
     }
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。

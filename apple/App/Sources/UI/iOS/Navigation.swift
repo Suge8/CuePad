@@ -47,6 +47,25 @@ final class Navigation {
         var name: String?
         /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
         var host: String?
+
+        /// 默认在哪开：先选中的项目（有 `host` 时是它在那台 Mac 上的绑定），没有就是第一处。
+        func place(among places: [ProjectFolders.LaunchPlace]) -> ProjectFolders.LaunchPlace? {
+            project.flatMap { project in
+                let own = places.filter { $0.project.id == project }
+                return own.first { host != nil && $0.binding?.hostID == host } ?? own.first
+            } ?? places.first
+        }
+
+        /// 在 `binding` 那台 Mac、它绑的文件夹开新会话，`draft` 作开场：为提示词开的以 `name` 命名，开好后关联 `card`
+        /// （没有就是带上的第一张）。返回这一次的请求与认领标识。
+        func launch(in project: Project, binding: DirectoryBinding, draft: ComposerDraft, services: AppServices) async throws -> Launched {
+            let token = UUID().uuidString
+            let opening = try draft.stored(in: services.store.files).nonEmpty
+            let request = try await services.launch(
+                PiLaunch(project: project.id, prompt: opening, token: token, name: name), title: name ?? project.name, on: binding.hostID,
+                card: card ?? draft.attachments.first?.card)
+            return Launched(request: request.id, token: token)
+        }
     }
 
     var layout: Layout = .tabs
