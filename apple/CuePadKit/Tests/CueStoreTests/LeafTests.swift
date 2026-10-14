@@ -66,7 +66,7 @@ import Testing
     try await store.linkCard(accepted.id, toSession: "codex-2")
     try await recorder.update(sessionID: "codex-2", state: .settled, agent: .codex)
     let question = try await store.askToAccept(accepted.id, evidence: "- 样式对上了").message
-    #expect(try await store.answerCueMessage(question.id, answer: CueAcceptance.accept).isEmpty)
+    #expect(try await store.endCueQuestion(question.id, .answered(CueAcceptance.accept)).isEmpty)
     #expect(try await store.card(accepted.id)?.status == .done)
   }
 

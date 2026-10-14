@@ -23,16 +23,16 @@ extension CueStore {
     }
   }
 
-  /// 回答 Cue 的一条消息（"等你"的那种）。已答过的改成新的回答。回答照常交给 Cue（`toDeliver`）。
+  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。结局照常交给 Cue（`toDeliver`），撤回的不交。
   /// 对关联了任务的验收（`CueMessage.isAcceptance`）答 `accept` 就是收下：同一个事务里完成任务，同你点圆圈
   /// （连同结束做完了的会话，请求算你发起的）；返回结束请求，调用方上传。
   @discardableResult
-  public func answerCueMessage(_ id: UUID, answer: String) throws -> [DeliveryRequest] {
+  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> [DeliveryRequest] {
     try write {
-      let now = Date.stamp
-      try db.run("UPDATE cueMessages SET answer = ?, answeredAt = ?, modifiedAt = ? WHERE id = ?", [answer, now, now, id])
-      guard db.changes > 0, let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
-      guard answer == CueAcceptance.accept, message.isAcceptance,
+      guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
+        throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
+      }
+      guard end == .answered(CueAcceptance.accept), let message = try find(CueMessage.self, id), message.isAcceptance,
         let task = message.taskID, let card = try find(Card.self, task), card.status != nil, card.status != .done
       else { return [] }
       _ = try applyStatus(task, .done)
@@ -40,7 +40,23 @@ extension CueStore {
     }
   }
 
-  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与"等你"上还没交、或交过之后又改了的回答。
+  /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
+  static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
+
+  /// 结束提问只在这里写：结束的时刻与选的那一项；撤回同时记送达。只动 `predicate` 选中的还开着的提问，返回结束了几条。必须在写事务内调用。
+  func endQuestions(_ end: CueQuestionEnd, where predicate: String, _ bindings: [any SQLBindable]) throws -> Int {
+    let now = Date.stamp
+    let answer: String? = if case .answered(let option) = end { option } else { nil }
+    let delivered: Date? = end == .withdrawn ? now : nil
+    let values: [any SQLBindable] = [answer, now, delivered, now]
+    try db.run(
+      "UPDATE cueMessages SET answer = ?, answeredAt = ?, deliveredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)",
+      values + bindings)
+    return db.changes
+  }
+
+  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个结局的提问结局（撤回的结束时就记了送达）。
+  /// 哪些叫醒 Cue 见 `CueMessage.wakesCue`。
   private static let toDeliver = """
     ((author = 'you' AND deliveredAt IS NULL)
       OR (author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
@@ -84,13 +100,13 @@ extension CueStore {
     try select(CueMessage.self, orderBy: "createdAt DESC, rowid DESC", limit: limit).reversed()
   }
 
-  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：Cue 带选项问的、还没答，
+  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：还开着的提问（`openQuestion`），
   /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
     try select(
       CueMessage.self,
       where: """
-        author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL AND (taskID IS NULL OR EXISTS (
+        \(Self.openQuestion) AND (taskID IS NULL OR EXISTS (
           SELECT 1 FROM cards c LEFT JOIN projects p ON p.id = c.projectID
           WHERE c.id = cueMessages.taskID AND c.completedAt IS NULL AND c.archivedAt IS NULL AND c.deletedAt IS NULL AND p.deletedAt IS NULL))
         """,

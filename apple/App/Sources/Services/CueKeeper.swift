@@ -45,6 +45,7 @@ nonisolated struct CueTiming: Sendable {
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
 /// 1. 你的消息与"等你"的回答：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
+///    你关掉的提问不叫醒 Cue（`CueMessage.wakesCue`），随下一次醒来的信封写在变化里、记下送达。
 /// 2. 这一轮还没完就等。
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，第一轮醒来带上交接。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
@@ -130,7 +131,7 @@ final class CueKeeper {
         var startedAt = Date.now
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: (wake: CueWake, extra: String?)?
-        /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达
+        /// 这一轮里交出去的你的消息、回答与关掉的提问：大脑中途退出时清掉送达
         var delivered: [UUID] = []
         /// 醒来时的基线候选：这一轮做完且没出错才前移到它
         var baseline: (since: Date, followed: [UUID])?
@@ -386,7 +387,7 @@ final class CueKeeper {
         timer = nil
         do {
             let store = setup.store, now = Date.now
-            let pending = try await store.cueMessagesToDeliver()
+            let pending = try await store.cueMessagesToDeliver().filter(\.wakesCue)
             if !pending.isEmpty {
                 if case .stuck = phase { await startShift() }
                 guard let shift else { return }
@@ -402,10 +403,10 @@ final class CueKeeper {
                         $0.turn?.author = .cue
                         $0.turn?.delivered += ids
                     }
+                    try await store.markCueMessagesDelivered(ids)
                 } else {
-                    guard try await wakeUp(.message, said: said, delivering: ids) else { return }
+                    _ = try await wakeUp(.message, said: said, delivering: ids)
                 }
-                try await store.markCueMessagesDelivered(ids)
                 return
             }
             guard let shift, shift.turn == nil else { return }
@@ -505,8 +506,8 @@ final class CueKeeper {
         return setup.timing.awake(from: earliest)
     }
 
-    /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`delivering` 是随信封交出去的你的消息与回答。
-    /// 发不进去时按大脑出了问题处理，返回 false。
+    /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`delivering` 是随信封交出去的你的消息与回答，
+    /// 连同信封变化里你关掉的提问，发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     private func wakeUp(
         _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
     ) async throws -> Bool {
@@ -514,9 +515,11 @@ final class CueKeeper {
         let author = chosen ?? Self.author(of: wake)
         let store = setup.store, now = Date.now
         let board = try await store.cueBoard()
+        let dismissed = try await store.cueMessagesToDeliver().filter { !$0.wakesCue }
+        let delivering = delivering + dismissed.map(\.id)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.contextUsed, renewAt: Self.renewAt, since: progress.since, projects: try await store.cueProjects(),
-            changes: try await changes(), board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
+            changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
         var parts = [envelope]
         if let used = shift.contextUsed, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
@@ -533,6 +536,7 @@ final class CueKeeper {
                 author: author, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, baseline: (now, board.map(\.task.id)))
         }
         save()
+        try await store.markCueMessagesDelivered(delivering)
         return true
     }
 

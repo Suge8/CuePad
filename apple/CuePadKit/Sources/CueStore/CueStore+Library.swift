@@ -347,12 +347,22 @@ extension CueStore {
   /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级；`.fold`、`.handed` 还原灵感与草稿原文）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
-    try write { try relocate(id, to: slot, after: previous, handing: true) }
+    try write { try handing(id, to: slot) ?? relocate(id, to: slot, after: previous) }
   }
 
-  /// `handing`：挂到绑了会话的叶子上时交给回复框（`.handed`）；撤销与下级归位是把卡放回原处，不交。
+  /// 灵感挂到绑了会话的叶子上：不留提示词，交出去（`.handed`）；别的情况为 nil，照常挪。
+  /// 只在用户挪卡时判断：撤销与下级归位（`relocate`）是把卡放回原处，不交。
+  private func handing(_ id: UUID, to slot: CardSlot) throws -> CardChange? {
+    guard case .under(let parent) = slot, let card = try link(of: id), !card.isTask, !card.isPinned,
+      try link(of: parent)?.isTask == true
+    else { return nil }
+    let home = try promptHome(parent)
+    guard card.parent != home, let session = try session(of: home) else { return nil }
+    return .handed(idea: try handOut(id), session: session)
+  }
+
   @discardableResult
-  private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?, handing: Bool = false) throws -> CardChange {
+  private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
       guard let current = try link(of: id) else { throw CueStoreError.notFound }
       let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
       let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
@@ -375,9 +385,6 @@ extension CueStore {
           destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
         } else {
           let home = try promptHome(parent)
-          if handing, current.parent != home, let session = try session(of: home) {
-            return .handed(idea: try handOut(id), session: session)
-          }
           if home != parent { previous = try db.first("SELECT id FROM cards WHERE parentID = ? AND id != ? ORDER BY sortKey DESC, id DESC LIMIT 1", [home, id]) { $0.uuid(0) } }
           absorbing = try Self.draft(of: home, in: db).flatMap { $0 == id ? nil : $0 }
           destination = CardLinks.Link(parent: home, project: target.project, isTask: false)
