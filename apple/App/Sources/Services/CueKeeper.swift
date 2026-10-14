@@ -70,7 +70,7 @@ final class CueKeeper {
         var store: CueStore
         var profile: CueProfile
         /// 找起大脑要的可执行文件等（不问登录）
-        var launch: @Sendable (CueRuntime) async -> CueLaunch?
+        var launch: @Sendable (AgentKind) async -> CueLaunch?
         /// 大脑起不来：请 `CueService` 重新查一遍本机的运行时
         var startFailed: () -> Void
         /// `cuepad` 命令行（MCP 服务）
@@ -219,15 +219,15 @@ final class CueKeeper {
             group.cancelAll()
         }
         timer?.cancel()
-        await shift?.brain.stop()
+        await shift?.brain.stop()()
     }
 
     /// 不再值班；返回的过程等大脑退出（不需要主线程，退出收尾时在主线程之外等）。
     @discardableResult
     func stop() -> @Sendable () async -> Void {
         input.yield(.stop)
-        let brain = shift?.brain
-        return { await brain?.stop() }
+        let wait = shift?.brain.stop()
+        return { await wait?() }
     }
 
     // MARK: 班次
@@ -282,7 +282,7 @@ final class CueKeeper {
         switch phase {
         case .starting(let before): failures = before + 1
         case .running(let shift):
-            await shift.brain.stop()
+            await shift.brain.stop()()
             if let delivered = shift.turn?.delivered, !delivered.isEmpty {
                 do {
                     try await setup.store.unmarkCueMessagesDelivered(delivered)
@@ -407,7 +407,7 @@ final class CueKeeper {
 
             let messages = try await store.cueMessages(limit: 50)
             if let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shift.startedAt }) {
-                await shift.brain.stop()
+                await shift.brain.stop()()
                 // 换新后的第一轮接着写下交接的那一轮：那一轮是你发起的，回复照样给你看
                 await startShift(wake: .renewed(handoff: handoff.text), author: lastTurnAuthor)
                 return

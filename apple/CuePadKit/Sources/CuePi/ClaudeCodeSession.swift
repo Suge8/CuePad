@@ -5,19 +5,23 @@ import Foundation
 
 // 终端会话（钩子）与托管会话（stream-json）共用的规则：状态怎么切、工具怎么写成一句话、权限确认与提问怎么问怎么答。
 
+extension PiWorkState {
+    /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
+    var phase: Int {
+        if isWorking { return 0 }
+        switch self {
+        case .waitingForUser: return 1
+        case .error: return 2
+        default: return 3
+        }
+    }
+}
+
 extension PiSession {
-    /// 进入 `next`：粗状态（工作中、等你确认、出错、空闲）变了才换 `stateSince`；离开空闲起记 `busySince`，
+    /// 进入 `next`：粗状态（`PiWorkState.phase`）变了才换 `stateSince`；离开空闲起记 `busySince`，
     /// 中间等你确认不断，歇下、出错时清掉。与 Pi 扩展的计时同一规则。
     mutating func enter(_ next: PiWorkState, detail: String? = nil, at now: Date = .now) {
-        func phase(_ state: PiWorkState) -> Int {
-            if state.isWorking { return 0 }
-            switch state {
-            case .waitingForUser: return 1
-            case .error: return 2
-            default: return 3
-            }
-        }
-        if phase(next) != phase(state) { stateSince = now }
+        if next.phase != state.phase { stateSince = now }
         busySince = next.isWorking || next == .waitingForUser ? busySince ?? now : nil
         if next != .error { errorMessage = nil }
         state = next
@@ -49,22 +53,16 @@ extension PiSession {
 
 enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`mimo-v2.5`）在它自己的命名空间里
-    static let provider = AgentKind.claudeCode.rawValue
+    static let provider = AgentKind.claudeCode.modelProvider!
 
     static func model(_ id: String, name: String? = nil, levels: [PiThinkingLevel] = []) -> PiModelOption {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
     }
 
-    /// Claude Code 的强度只有 low…max；更低的按 low。
-    static func effort(_ level: PiThinkingLevel) -> String {
-        switch level {
-        case .off, .minimal, .low: "low"
-        case .medium: "medium"
-        case .high: "high"
-        case .xhigh: "xhigh"
-        case .max: "max"
-        }
-    }
+    /// Claude Code 的强度档（`--effort`、`effortLevel`）：没有关掉思考的档，更低的夹到 low。
+    static let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+
+    static func effort(_ level: PiThinkingLevel) -> String { level.clamped(to: efforts).rawValue }
 
     /// 会话文件：`<配置目录>/projects/<工作目录的真实路径，非字母数字换成 ->/<会话 id>.jsonl`。
     static func sessionFile(home: URL, cwd: URL, sessionID: String) -> URL {

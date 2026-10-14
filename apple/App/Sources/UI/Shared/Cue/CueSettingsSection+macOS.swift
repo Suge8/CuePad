@@ -73,8 +73,8 @@ struct CueSettingsSection: View {
         }
         SettingRow(title: "用哪个 Agent", icon: Image(systemName: "cpu")) {
             Picker("用哪个 Agent", selection: Binding(get: { profile.runtime.known ?? .pi }, set: { runtime in update { $0.runtime = .known(runtime) } })) {
-                ForEach(CueRuntime.allCases, id: \.self) { runtime in
-                    Text(runtime.label).tag(runtime).selectionDisabled(here && services.cue.runtimes?.contains(runtime) == false)
+                ForEach(CueRuntimes.order, id: \.self) { runtime in
+                    Text(runtime.name).tag(runtime).selectionDisabled(here && services.cue.runtimes?.contains(runtime) == false)
                 }
             }
             .labelsHidden().fixedSize()
@@ -101,7 +101,7 @@ struct CueSettingsSection: View {
     private func status(_ profile: CueProfile, _ data: Data) -> Dotted {
         if let failure { return Dotted(failure) }
         guard let active = profile.activeHost else { return "没启用" }
-        if active == services.hostID { return Dotted("住在这台 Mac", profile.runtime.known?.label) }
+        if active == services.hostID { return Dotted("住在这台 Mac", profile.runtime.known?.name) }
         let host = data.hosts.first { $0.id == active }?.name ?? "别的 Mac"
         return Dotted("住在\(host)上，在这里启用就搬过来")
     }
@@ -145,13 +145,4 @@ struct CueSettingsSection: View {
     }
 }
 
-extension CueRuntime {
-    var label: String {
-        switch self {
-        case .pi: "Pi"
-        case .codex: "Codex"
-        case .claude: "Claude Code"
-        }
-    }
-}
 #endif

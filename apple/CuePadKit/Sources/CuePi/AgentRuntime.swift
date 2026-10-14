@@ -57,7 +57,8 @@ public protocol AgentRuntime: AnyObject {
     /// 关掉托管的会话与连接；返回的等待在它们都结束后结束，不需要主线程（App 退出时限时等）。
     func stop() -> @concurrent @Sendable () async -> Void
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识（`PiSession.launchToken`）；等它上了桥，返回桥上的 id。
-    /// 会话名在开场的话之前生效（第一句话不会先当了会话名）：Pi 连同模型、思考强度作为启动参数一步生效，其余上桥后起名、不带模型与强度。
+    /// 会话名、模型、思考强度在开场的话之前一起生效（第一句话不会先当了会话名）：Pi 作为启动参数，其余上桥后一次配好
+    /// （`configure(opened:…)`）；模型不对等配不上时会话结束、整体失败，不留会话。
     func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID
@@ -70,6 +71,20 @@ public protocol AgentRuntime: AnyObject {
 }
 
 extension AgentRuntime {
+    /// 后台开出的会话按开工的要求一次配好会话名、模型与强度；配不上就结束它再抛：开工整体失败，不留会话。
+    func configure(
+        opened id: PiSession.ID, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, on bridge: PiBridge
+    ) async throws -> PiSession.ID {
+        guard name != nil || model != nil || thinking != nil else { return id }
+        do {
+            try await bridge.configure(model: model, thinking: thinking, name: name, in: id)
+        } catch {
+            try? await end(id)
+            throw error
+        }
+        return id
+    }
+
     /// 会话文件里的：从头读一遍。
     public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript {
         try PiHistory.index(file: URL(filePath: session.path), agent: session.agent, from: nil, files: files).transcript

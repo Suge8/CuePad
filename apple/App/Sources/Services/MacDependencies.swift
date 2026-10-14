@@ -58,8 +58,10 @@ struct MacDependencies {
             ] },
             pasteboard: .general,
             cue: CueDependencies(
-                scan: { [runtimes = CueRuntimes(piAgentDirectory: paths.pi.agentDirectory)] in await runtimes.scan() },
-                launch: { [runtimes = CueRuntimes(piAgentDirectory: paths.pi.agentDirectory)] in await runtimes.launch($0) },
+                scan: { [runtimes = CueRuntimes(integration: agents, piAgentDirectory: paths.pi.agentDirectory, hostID: hostID)] in await runtimes.scan() },
+                launch: { [runtimes = CueRuntimes(integration: agents, piAgentDirectory: paths.pi.agentDirectory, hostID: hostID)] in
+                    await runtimes.launch($0, store: $1)
+                },
                 helper: commandLineTool.helper,
                 notifier: location.isIsolated ? LoggedCueNotifier() : SystemCueNotifier()))
     }

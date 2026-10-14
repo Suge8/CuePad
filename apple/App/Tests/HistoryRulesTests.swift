@@ -55,7 +55,7 @@ struct HistoryRulesTests {
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
                 updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
                 runtimes: { [host] _ in [.pi: PiRuntime(host: host, locate: { realPi })] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
-                cue: CueDependencies(scan: { [] }, launch: { _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
+                cue: CueDependencies(scan: { [] }, launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()

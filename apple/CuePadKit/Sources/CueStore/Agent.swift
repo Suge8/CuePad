@@ -18,6 +18,15 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .opencode: "OpenCode"
     }
   }
+
+  /// 这家模型的提供方（`PiModelKey.provider`），唯一的一处：Claude Code、Codex 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`），
+  /// 提供方就写成这家；Pi、OpenCode 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
+  public var modelProvider: String? {
+    switch self {
+    case .claudeCode, .codex: rawValue
+    case .pi, .opencode: nil
+    }
+  }
 }
 
 /// 从 CuePad 能对一个会话做什么（发文字总能做，不在其中）。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，

@@ -1,6 +1,5 @@
 #if os(macOS)
 import CueStore
-import Darwin
 import Foundation
 
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
@@ -13,31 +12,18 @@ import Foundation
 @MainActor
 final class ClaudeHostedSession: SessionLink {
     let sessionID: String
-    let process: Process
-    private let stdin: FileHandle
-    private let writes = DispatchQueue(label: "cuepi.claude.stdin")
+    private let stream: ClaudeStream
     private weak var bridge: PiBridge?
     private let idleLimit: Duration
     /// 上了桥之后的 id（`initialize` 回来之前为 nil）
     private(set) var id: PiSession.ID?
-    private var requests: [String: CheckedContinuation<ClaudeJSON, any Error>] = [:]
     private var permission: (request: String, permission: ClaudePermission)?
     private var commands: Set<String> = []
     private var stopping = false
-    /// 输出读完了（进程退出）：之后的请求不再等
-    private var finished = false
-    private var inputClosed = false
     private var yielding = false
     private var idleTimer: Task<Void, Never>?
     private var subagents: [(id: String, state: PiSubagentState)] = []
     private var contextWindow: Int?
-    /// 进程退出时结束（可以被多处等）
-    let exited: Task<Void, Never>
-    /// 标准错误的末尾（没连上就退出时报给用户）
-    private var stderr = Data()
-
-    private static let requestTimeout: Duration = .seconds(30)
-    private static let stderrLimit = 4096
 
     /// 启动进程（`arguments` 接在 stream-json 的参数后面），开始读它的输出。
     init(
@@ -47,47 +33,19 @@ final class ClaudeHostedSession: SessionLink {
         self.sessionID = sessionID
         self.bridge = bridge
         self.idleLimit = idleLimit
-        let process = Process()
-        let input = Pipe(), output = Pipe(), errors = Pipe()
-        process.executableURL = executable
-        process.arguments = [
-            "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-            "--permission-prompt-tool", "stdio", "--permission-mode", "default",
-        ] + arguments
-        process.currentDirectoryURL = directory
-        process.environment = environment.merging(["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1"]) { $1 }
-        process.standardInput = input
-        process.standardOutput = output
-        process.standardError = errors
-        let (gone, finish) = AsyncStream<Void>.makeStream()
-        process.terminationHandler = { _ in finish.finish() }
-        exited = Self.watch(gone)
-        // 进程先退出时写标准输入得 EPIPE，不要 SIGPIPE
-        _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
-        self.process = process
-        stdin = input.fileHandleForWriting
-        try process.run()
-        let lines = ClaudeLines.stream(output.fileHandleForReading)
-        let errorLines = ClaudeLines.stream(errors.fileHandleForReading)
-        Task { [weak self] in
-            for await line in lines { self?.received(line) }
-            self?.ended()
-        }
-        Task { [weak self] in
-            for await line in errorLines { self?.stderr.append(line + Data([0x0A])); self?.trimStderr() }
-        }
+        stream = try ClaudeStream(
+            executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "default"] + arguments,
+            directory: directory, environment: environment.merging(["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1"]) { $1 })
+        stream.onMessage = { [weak self] in self?.received($0) }
+        stream.onClose = { [weak self] in self?.ended() }
     }
 
-    /// 不在主线程隔离里建：退出时主线程可能被占住，等进程退出的任务不能排在它后面。
-    private nonisolated static func watch(_ gone: AsyncStream<Void>) -> Task<Void, Never> { Task { for await _ in gone {} } }
-
-    private func trimStderr() { if stderr.count > Self.stderrLimit { stderr = stderr.suffix(Self.stderrLimit) } }
-
-    var stderrText: String { String(decoding: stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// 托管的进程（退出原因、进程号）
+    var process: LineProcess { stream.process }
 
     /// 握手（`initialize` 拿到可换的模型与命令）并上桥。
     func connect(cwd: URL, sessionFile: URL, launchToken: String?) async throws -> PiSession {
-        let info = try await request(["subtype": "initialize"])
+        let info = try await stream.request(["subtype": "initialize"])
         let models = (info["models"]?.array ?? []).compactMap { model -> PiModelOption? in
             guard let value = model["value"]?.string else { return nil }
             let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
@@ -100,7 +58,7 @@ final class ClaudeHostedSession: SessionLink {
                 name: name, summary: command["description"]?.string.map { ClaudeCode.clip($0, 120) }, source: .known(.builtin), hint: hint)
         }
         commands = Set(listed.map(\.name))
-        let pid = process.processIdentifier
+        let pid = process.pid
         var session = PiSession(
             id: PiSession.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
             cwd: cwd, terminal: PiTerminal(), extensionVersion: 0, state: .settled, stateSince: .now)
@@ -120,18 +78,9 @@ final class ClaudeHostedSession: SessionLink {
 
     // MARK: 输出
 
-    private func received(_ line: Data) {
-        guard let message = ClaudeJSON.parse(line) else { return }
+    private func received(_ message: ClaudeJSON) {
         let now = Date.now
         switch message["type"]?.string {
-        case "control_response":
-            let response = message["response"]
-            guard let request = response?["request_id"]?.string, let waiting = requests.removeValue(forKey: request) else { return }
-            if response?["subtype"]?.string == "success" {
-                waiting.resume(returning: response?["response"] ?? .object([:]))
-            } else {
-                waiting.resume(throwing: PiBridgeError.rejected(response?["error"]?.string ?? "failed"))
-            }
         case "control_request":
             guard message["request"]?["subtype"]?.string == "can_use_tool", let request = message["request_id"]?.string else { return }
             let ask = ClaudePermission(tool: message["request"]?["tool_name"]?.string ?? "?", input: message["request"]?["input"] ?? .object([:]))
@@ -278,60 +227,21 @@ final class ClaudeHostedSession: SessionLink {
         if let id, bridge?.session(id: id)?.state.hasPendingWork != true { close() }
     }
 
-    /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。排在已发出的写入之后关，关了的描述符不会再被写（它的号可能已被别的文件复用）。
+    /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
     func close() {
         idleTimer?.cancel()
         idleTimer = nil
-        guard !inputClosed else { return }
-        inputClosed = true
-        writes.async { [stdin] in try? stdin.close() }
+        stream.closeInput()
     }
 
-    /// 输出读完了（进程退出）：没答的请求以会话结束收尾，下桥。
+    /// 输出读完了（进程退出）：下桥（没答的请求 `ClaudeStream` 已以会话结束收尾）。
     private func ended() {
-        finished = true
         idleTimer?.cancel()
-        for waiting in requests.values { waiting.resume(throwing: PiBridgeError.sessionEnded) }
-        requests = [:]
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
-    // MARK: 输入
-
-    private func write(_ message: ClaudeJSON) throws {
-        guard !inputClosed, !finished else { throw PiBridgeError.sessionEnded }
-        let line = message.data + Data([0x0A])
-        let fd = stdin.fileDescriptor
-        writes.async {
-            line.withUnsafeBytes { raw in
-                var offset = 0
-                while offset < raw.count {
-                    let n = Darwin.write(fd, raw.baseAddress! + offset, raw.count - offset)
-                    if n <= 0 { return }  // 进程已退出：读端随即结束，等着的请求在那里收尾
-                    offset += n
-                }
-            }
-        }
-    }
-
-    private func request(_ body: ClaudeJSON) async throws -> ClaudeJSON {
-        guard !finished else { throw PiBridgeError.sessionEnded }
-        let requestID = UUID().uuidString
-        var timeout: Task<Void, Never>?
-        defer { timeout?.cancel() }
-        return try await withCheckedThrowingContinuation { continuation in
-            do {
-                try write(["type": "control_request", "request_id": .string(requestID), "request": body])
-            } catch {
-                return continuation.resume(throwing: error)
-            }
-            requests[requestID] = continuation
-            timeout = Task { [weak self] in
-                guard (try? await Task.sleep(for: Self.requestTimeout)) != nil else { return }
-                self?.requests.removeValue(forKey: requestID)?.resume(throwing: PiBridgeError.ackTimeout)
-            }
-        }
-    }
+    private func write(_ message: ClaudeJSON) throws { try stream.write(message) }
+    private func request(_ body: ClaudeJSON) async throws -> ClaudeJSON { try await stream.request(body) }
 
     private var busy: Bool { id.flatMap { bridge?.session(id: $0) }?.state.isTurnRunning == true }
 
@@ -414,30 +324,5 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     func end() async throws { close() }
-}
-
-/// 子进程输出按行（`\n`）切开。不用 `FileHandle.bytes.lines`：它也在 U+2028 等字符处断行，而 JSON 字符串里可以原样出现它们。
-enum ClaudeLines {
-    static func stream(_ handle: FileHandle) -> AsyncStream<Data> {
-        let (lines, continuation) = AsyncStream<Data>.makeStream()
-        let fd = handle.fileDescriptor
-        Thread.detachNewThread {
-            var buffer = [UInt8](repeating: 0, count: 64 * 1024)
-            var pending = Data()
-            while true {
-                let n = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
-                if n <= 0 { break }
-                pending.append(contentsOf: buffer[0..<n])
-                while let newline = pending.firstIndex(of: 0x0A) {
-                    let line = pending[pending.startIndex..<newline]
-                    if !line.isEmpty { continuation.yield(Data(line)) }
-                    pending.removeSubrange(pending.startIndex...newline)
-                }
-            }
-            continuation.finish()
-            try? handle.close()
-        }
-        return lines
-    }
 }
 #endif

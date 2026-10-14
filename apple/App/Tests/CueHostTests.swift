@@ -33,7 +33,7 @@ struct CueHostTests {
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
-                scan: { [.pi] }, launch: { $0 == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                scan: { [.pi] }, launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000}]}}}"#.utf8)

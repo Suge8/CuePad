@@ -25,7 +25,7 @@ public final class PiHost {
     private let idleLimit: Duration
     private let connectTimeout: Duration
     private let endTimeout: Duration
-    private let searchPath: [URL]
+    private let locator: ExecutableLocator
     private let extraArguments: [String]
     private var watcher: Task<Void, Never>?
     /// 已经发过 SIGTERM 的进程：同一个只发一次（Pi 收尾中再收到一次会跳过收尾直接退出）。随它结束清掉。
@@ -35,14 +35,14 @@ public final class PiHost {
     /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(
         bridge: PiBridge, paths: PiPaths, idleLimit: Duration = .seconds(30 * 60), connectTimeout: Duration = .seconds(30),
-        endTimeout: Duration = .seconds(10), searchPath: [URL] = ExecutableLocator.standard.searchDirectories, extraArguments: [String] = []
+        endTimeout: Duration = .seconds(10), locator: ExecutableLocator = .standard, extraArguments: [String] = []
     ) {
         self.bridge = bridge
         self.paths = paths
         self.idleLimit = idleLimit
         self.connectTimeout = connectTimeout
         self.endTimeout = endTimeout
-        self.searchPath = searchPath
+        self.locator = locator
         self.extraArguments = extraArguments
     }
 
@@ -118,7 +118,7 @@ public final class PiHost {
             environment: ProcessInfo.processInfo.environment
                 .merging(paths.launchEnvironment) { $1 }
                 .merging(environment) { $1 }
-                .merging([Self.hostedVariable: String(idleLimit.components.seconds), "PATH": Self.path(executable, searchPath)]) { $1 }
+                .merging([Self.hostedVariable: String(idleLimit.components.seconds), "PATH": Self.path(executable, locator)]) { $1 }
         ) {
             exit.yield()
             exit.finish()
@@ -162,8 +162,8 @@ public final class PiHost {
     static let hostedVariable = "CUEPAD_HOSTED"
 
     /// `pi` 是 node 脚本：App 的环境里没有用户 shell 的 PATH，按找 Pi 时的同一组目录补上（node 多半与 pi 装在一起）。
-    private static func path(_ executable: URL, _ searchPath: [URL]) -> String {
-        ([executable.deletingLastPathComponent()] + searchPath).map(\.path).joined(separator: ":")
+    private static func path(_ executable: URL, _ locator: ExecutableLocator) -> String {
+        ExecutableLocator(searchDirectories: [executable.deletingLastPathComponent()] + locator.searchDirectories).path
     }
 
     /// 启动一个脱离本进程的 Pi，返回它的 pid；它退出时调 `onExit`（在 App 还活着时回收，App 不在了就归 launchd）。

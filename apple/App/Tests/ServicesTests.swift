@@ -152,7 +152,7 @@ struct CueRuntimeScanTests {
         let scans = Mutex(0)
         // 大脑一直在起：不走到"起不来"那条会查的路
         let app = TestApp(cue: CueDependencies(
-            scan: { scans.withLock { $0 += 1 }; return [] }, launch: { _ in try? await Task.sleep(for: .seconds(2)); return nil },
+            scan: { scans.withLock { $0 += 1 }; return [] }, launch: { _, _ in try? await Task.sleep(for: .seconds(2)); return nil },
             helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
         try await app.services.store.updateCueProfile { [hostID = TestApp.hostID] in
             $0.hostID = hostID
