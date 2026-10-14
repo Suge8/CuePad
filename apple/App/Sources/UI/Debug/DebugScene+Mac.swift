@@ -10,6 +10,8 @@ extension DebugScene {
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
         _ = await prepareLibrary(workspace)
+        let sampleCue = defaults.double(forKey: "CuePadSampleCue")
+        if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.pages.sidebar = .detailOnly }
         switch scene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
@@ -103,6 +105,16 @@ extension DebugScene {
         case "chatscroll": Task { await ChatScrollBench.run() }
         default: break
         }
+    }
+
+    /// `-CuePadSampleCue`：Cue 带选项来问（算进"等你"），走 `CueService.followNotifications` 同一个出口。
+    private static func askSample(after delay: Duration, services: AppServices) async {
+        try? await Task.sleep(for: delay)
+        guard let message = try? await services.store.addCueMessage(.cue, text: "要先修登录页吗？", choices: ["先修", "再等等"]),
+              let alerts = services.alerts else { return }
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices)
+        guard !alerts.isWatchingCue else { return }
+        await alerts.post(title: content.title, body: content.body)
     }
 
     /// connected：把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下），看接入后的侧栏、设置与 + 的新会话（选 Agent）。

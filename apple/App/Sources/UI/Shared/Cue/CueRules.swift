@@ -119,7 +119,7 @@ nonisolated extension CueSnapshot {
 nonisolated enum CueWaiting {
     static func count(in store: isolated CueStore) throws -> Int {
         let asked = try store.cueMessagesWaitingForYou().count
-        let sessions = try store.piSessionPage(.live).items.count { $0.state.waitsForYou && !$0.cueFollows }
+        let sessions = try store.piSessionPage(.live).items.count(where: \.asksYou)
         return asked + sessions
     }
 }

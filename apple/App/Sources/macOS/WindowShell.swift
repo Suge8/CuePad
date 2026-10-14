@@ -16,6 +16,9 @@ final class WindowShell {
         self.window = window
     }
 
+    /// 主窗口在屏幕上（没隐藏、没缩进程序坞）。
+    var isVisible: Bool { window.isVisible }
+
     func show() {
         window.show()
     }

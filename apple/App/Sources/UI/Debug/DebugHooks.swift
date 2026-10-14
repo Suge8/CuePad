@@ -141,6 +141,15 @@ enum DebugHooks {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
     }
 
+    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
+    static var deliversNotifications: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        #else
+        false
+        #endif
+    }
+
     /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
     static var updater: (any AppUpdater)? {
         #if DEBUG

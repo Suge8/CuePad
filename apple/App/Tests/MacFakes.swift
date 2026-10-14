@@ -117,10 +117,10 @@ final class FakeUpdater: AppUpdater {
 
 /// 记下 Cue 推了哪些通知，不碰系统通知中心。
 final class RecordingCueNotifier: CueNotifying {
-    var onOpen: (() -> Void)?
+    var isWatchingCue = false
     private(set) var posted: [(title: String, body: String)] = []
 
-    func post(id: UUID, title: String, body: String) async { posted.append((title, body)) }
+    func post(title: String, body: String) async { posted.append((title, body)) }
 }
 
 final class RecordingWindow: ShellWindow {

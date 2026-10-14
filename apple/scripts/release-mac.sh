@@ -41,7 +41,7 @@ $dry_run || gh release view "$TAG" -R "$REPO" --json tagName >/dev/null
 
 if [ -z "$resume" ]; then
 rm -rf "$OUT"; mkdir -p "$OUT"
-# Developer ID 证书在专用钥匙串里；描述文件（含 iCloud、推送）由 API 创建并安装。
+# Developer ID 证书在专用钥匙串里；描述文件（含 iCloud）由 API 创建并安装。
 # 手动签名：Xcode 的自动签名用 API 密钥时管不了 iCloud 容器，工程的 Release 配置已指定证书与描述文件名。
 python3 "$APPLE_DIR/scripts/provision.py" unlock
 python3 "$APPLE_DIR/scripts/provision.py" profiles

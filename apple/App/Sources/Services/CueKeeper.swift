@@ -22,7 +22,7 @@ nonisolated struct CueTiming: Sendable {
     var restarts: [Duration] = [.seconds(2), .seconds(10), .seconds(60)]
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
     var retryWake: Duration = .seconds(120)
-    /// 打扰时段（本地钟点）：不推通知、不巡视。
+    /// 打扰时段（本地钟点）：不巡视。通知不看它，免打扰只认系统的专注模式。
     var quietHours: Set<Int> = [23, 0, 1, 2, 3, 4, 5, 6, 7]
 
     func isQuiet(_ date: Date) -> Bool { quietHours.contains(Calendar.current.component(.hour, from: date)) }

@@ -4,7 +4,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置窗口的内容：只放会主动去改的（外观、Cue、显示/隐藏与"对 Cue 说"的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Agent、命令行）。
+/// 设置窗口的内容：只放会主动去改的（外观、Cue、通知、显示/隐藏与"对 Cue 说"的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Agent、命令行）。
 /// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
 /// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
@@ -33,6 +33,7 @@ struct SettingsView: View {
                 }
             }
             CueSettingsSection()
+            if let alerts = services.alerts { NotificationSection(alerts: alerts) }
             Section {
                 SyncRow()
                 if !services.conflicts.isEmpty { ConflictsRow() }
@@ -125,6 +126,62 @@ private struct ShortcutRow: View {
         } catch {
             self.error = "无法注册：\(error)"
         }
+    }
+}
+
+/// 通知：先一行系统权限（没决定过给"开启"，拒绝了给"打开系统设置"，开着时说横幅与专注模式在系统设置里调），
+/// 再是两种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
+private struct NotificationSection: View {
+    let alerts: AlertCenter
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        Section {
+            permission
+            row("等你", symbol: "questionmark.bubble", kind: .waitingForUser, help: "Agent 在等你回答或确认，Cue 带选项来问你或有急事")
+            row("做完了", symbol: "checkmark.circle", kind: .settled, help: "Agent 做完了一轮")
+        }
+        .task { await alerts.refresh() }
+    }
+
+    @ViewBuilder private var permission: some View {
+        let icon = Image(systemName: "bell")
+        switch alerts.authorization {
+        case .notDetermined:
+            SettingRow(title: "系统通知", icon: icon, tone: .notice, status: "还没开启") { EmptyView() } fix: {
+                Button("开启") { Task { await alerts.requestAuthorization() } }.settingFix()
+            }
+        case .denied:
+            SettingRow(title: "系统通知", icon: Image(systemName: "bell.slash"), tone: .notice, status: "已关闭，收不到提示") { EmptyView() } fix: {
+                Button("打开系统设置", action: openSystemSettings).settingFix()
+            }
+        default:
+            SettingRow(title: "系统通知", icon: icon, status: "横幅样式与专注模式在系统设置里调") { EmptyView() }
+        }
+    }
+
+    private func row(_ title: String, symbol: String, kind: PiAlert, help: String) -> some View {
+        @Bindable var settings = services.settings
+        return SettingRow(title: title, icon: Image(systemName: symbol), help: help) {
+            HStack(spacing: 12) {
+                Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
+                    settings.alerts[kind].sound = sound
+                    sound?.preview()
+                })) {
+                    Text("无").tag(AlertSound?.none)
+                    Divider()
+                    ForEach(AlertSound.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+                }
+                .labelsHidden()
+                .fixedSize()
+                .disabled(!settings.alerts[kind].isOn)
+                Toggle(title, isOn: $settings.alerts[kind].isOn).labelsHidden().toggleStyle(.switch)
+            }
+        }
+    }
+
+    private func openSystemSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(Bundle.main.bundleIdentifier ?? AppServices.bundleID)")!)
     }
 }
 

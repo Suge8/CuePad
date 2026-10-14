@@ -3,7 +3,7 @@
 所以 iOS 走手动签名：证书与描述文件都由这里创建）。幂等，可重复运行。
 
 用法：provision.py <ids|identity|profiles|device|devid-csr|devid-import|unlock|all> ...
-  ids                           创建 App ID（主 App、分享扩展、小组件）并开启能力（App Groups、iCloud、推送）
+  ids                           创建 App ID（主 App、分享扩展、小组件）并开启能力（App Groups、iCloud、推送；推送只有 iOS 用）
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
   profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID）
   device <UDID> <名称>          登记一台真机
