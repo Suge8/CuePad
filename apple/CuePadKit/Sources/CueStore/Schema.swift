@@ -12,7 +12,7 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt；piSessionStates、cards、deliveryRequests、
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到，见 40）；piSessionStates、cards、deliveryRequests、
 /// piMessages 的 writeSeq（本机写入序号，见 38）。
 ///
 /// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
@@ -157,6 +157,8 @@ enum Schema {
     ALTER TABLE cards DROP COLUMN cueFollows;
     \(stampOnChange("cards", cardChanges))
     """,
+    // 40：Cue 已经知道没送到的请求（本机）：说话工具当场报给它、那一轮好好做完时记下；没记下的失败写进它下一轮的变化
+    "ALTER TABLE deliveryRequests ADD COLUMN cueToldAt INTEGER;",
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -326,7 +328,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 

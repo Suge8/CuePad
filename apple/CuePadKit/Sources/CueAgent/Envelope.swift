@@ -104,6 +104,7 @@ public enum CueEnvelope {
       case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
       case .waitingForUser: "等回答"
       case .failed: "出错"
+      case .undelivered: "发送失败"
       case .done: "完成"
       }
     var text = "[\(label)] \(where_(change))"

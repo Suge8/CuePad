@@ -24,6 +24,7 @@ public struct HandOffPlan: Equatable, Sendable {
 }
 
 /// 对会话说话的时机（`CueStore.sayToLeaf`）：会话正忙时马上说（插进这一轮）还是等它做完再说；歇着时两种都是直接说。
+/// 忙不忙由 Mac 执行时的会话定，不看库里的记录（记录可能过时）。
 public enum SayTiming: Sendable {
   case now, after
 }
@@ -78,8 +79,11 @@ public struct CueChange: Equatable, Sendable {
     case settled
     /// 会话在等回答
     case waitingForUser
-    /// 会话出错，或 Cue 发起的请求（开工、说话、作答、停下、结束）没能执行（`detail` 是"动作：Mac 报的原因"；你发起的失败界面上看得见，不报）
+    /// 会话出错，或 Cue 发起的请求（开工、停下、结束、换模型）没能执行（`detail` 是"动作：Mac 报的原因"；你发起的失败界面上看得见，不报）
     case failed
+    /// Cue 说的话（说话、作答，`DeliveryMode.toSession`）没送到，而它还不知道：工具等结果超时、收到报告的那一轮半路断了都算；
+    /// 记下已知道的（`CueStore.markCueTold`）不再报（`detail` 是 Mac 报的原因）。会话那边在等它接着说，所以与等回答一样立即叫醒它
+    case undelivered
     /// 叶子或任务完成
     case done
   }
@@ -242,7 +246,7 @@ extension CueStore {
       .max { $0.stateSince < $1.stateSince }
   }
 
-  /// 对叶子已有的会话说话。方式由会话此刻的状态定：歇着就直接说；正在跑一轮时 `now` 马上说、`after` 等它做完再说。
+  /// 对叶子已有的会话说话：`now` 马上说、`after` 等它做完再说（会话歇着时两种都是直接说，见 `say`）。
   /// 没有会话抛 `noSession`（正在开会话抛 `launching`）。
   /// 带 `config`（模型、思考强度）时先请会话换上（与界面换模型同一种请求），再说这句，两条按先后执行；
   /// 会话换不了模型（`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`，什么都不写。
@@ -262,15 +266,16 @@ extension CueStore {
     try requestDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  /// 交给会话一句话，按会话此刻做得到的（与界面同一组规则，`PiSessionState.deliveryModes`、`AgentCapabilities.images`）：
-  /// 正在跑一轮时 `now` 马上说（做不到就等它做完再说），收不了图片的只发文字。记录还没到时直接说、原样发。
+  /// 交给会话一句话：方式只按意图与这家做得到的写（`AgentCapabilities.steer`），会话忙不忙由 Mac 执行时定——
+  /// `now` 写马上说（会话歇着时就是直接说；做不到马上说的写等它做完再说），`after` 写等它做完再说（歇着时也是直接说）。
   /// Cue 说的话在用户发起的那一轮里（`inUserTurn`）不插嘴，一律等这一轮做完再说。
+  /// 收不了图片的只发文字（`AgentCapabilities.images`）。记录还没到时不知道做不做得到马上说，按做不到写。
   private func say(
     _ content: String, to session: SessionTarget, when: SayTiming, card: UUID, host: String, cue: Bool
   ) throws -> DeliveryRequest {
-    let modes = session.state?.deliveryModes ?? [.send]
-    let interrupts = try when == .now && modes.contains(.steer) && !(cue && inUserTurn(session.target.ref))
-    let mode = interrupts ? DeliveryMode.steer : modes[0]
+    let canSteer = session.state?.capabilities.contains(.steer) == true
+    let interrupts = try when == .now && canSteer && !(cue && inUserTurn(session.target.ref))
+    let mode: DeliveryMode = interrupts ? .steer : .followUp
     let content = session.state?.capabilities.contains(.images) == false ? CueFormat.withoutImages(content) : content
     return try requestDelivery(content, to: session.target, on: session.host(or: host), mode: mode, card: card, cue: cue)
   }
@@ -594,15 +599,17 @@ extension CueStore {
     let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
       .mapValues { pairs in pairs.filter { pair in pairs.first { $0.task.id == pair.task.id }!.leaf.id == pair.leaf.id } }
     let failed = try selectWritten(
-      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND writeSeq > ?", [marks.sessions],
-      orderBy: "writeSeq")
+      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND cueToldAt IS NULL AND writeSeq > ?",
+      [marks.sessions], orderBy: "writeSeq")
     for (request, written) in failed {
       let pairs = try request.cardID.map(failedLeaf) ?? request.target.ref.flatMap { bySession[$0] } ?? []
       let at = request.resultReceivedAt ?? request.completedAt ?? request.createdAt
-      let detail = "\(Self.action(request.mode))：\(request.failure ?? "")"
+      let spoken = request.mode.known.map(DeliveryMode.toSession.contains) == true
+      let reason = request.failure ?? DeliveryRequest.unexplainedFailure
       for pair in pairs {
         changes.append(CueChange(
-          kind: .failed, task: pair.task, leaf: pair.leaf, at: at, seq: written, detail: detail,
+          kind: spoken ? .undelivered : .failed, task: pair.task, leaf: pair.leaf, at: at, seq: written,
+          detail: spoken ? reason : "\(Self.action(request.mode))：\(reason)",
           recap: try pair.leaf.piSessionID.flatMap(sessionState)?.recap))
       }
     }
@@ -622,15 +629,25 @@ extension CueStore {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
   }
 
-  /// 请求的动作在变化里的说法。
+  /// 请求的动作在变化里的说法（说的话没送到另报 `undelivered`，不经这里）。
   private static func action(_ mode: Open<DeliveryMode>) -> String {
     switch mode.known {
     case .start: "开工"
-    case .send, .steer, .followUp: "说话"
-    case .answer: "作答"
+    case .config: "换模型"
     case .stop: "停下"
     case .end: "结束"
     default: mode.rawValue
+    }
+  }
+
+  /// Cue 已经知道这些请求没送到：说话工具当场报给了它，且收到报告的那一轮好好做完了（值班的管理器记下，`CueKeeper`）。
+  /// 之后不再作为变化报给它（`CueChange.Kind.undelivered`）。本机列：管理器与它的工具在同一台 Mac 上。
+  public func markCueTold(_ requests: [UUID]) throws {
+    guard !requests.isEmpty else { return }
+    try write {
+      try db.run(
+        "UPDATE deliveryRequests SET cueToldAt = ? WHERE id IN (SELECT value FROM json_each(?)) AND status = 'failed'",
+        [Date.stamp, Self.idList(requests)])
     }
   }
 

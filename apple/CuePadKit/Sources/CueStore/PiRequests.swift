@@ -22,6 +22,9 @@ public struct PiAnswer: Sendable, Equatable, StoredJSON {
     self.value = value
   }
 
+  /// 作答请求的正文（App 的回复框作答经发消息的那条路写出）。
+  public var stored: String { JSONColumn.encode(self) }
+
   private enum CodingKeys: String, CodingKey { case promptID, option, confirmed, text }
 
   public init(from decoder: any Decoder) throws {

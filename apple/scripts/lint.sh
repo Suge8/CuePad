@@ -49,6 +49,10 @@ forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种�
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
 forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里的 Waiting.tint 或现成的几件；要你处理的其他状态（同步、连接、崩溃）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
   '(?i:A8740A|EDBD57)' 'App/AppGroup/Waiting.swift'
+forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
+  '(\baddCueMessage\(\s*\.you\b|\bstore\.requestDelivery\()' '**/Workspace/Speaking.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
+  '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
 
 # 调试目录与产品同一个 target：文件不整个包在 DEBUG 里，Debug 构建与测试照过，Release 编不过或把调试代码发出去（350b9a47）。
 # DebugHooks.swift 是两种构建共用的入口，例外

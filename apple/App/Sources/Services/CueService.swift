@@ -145,7 +145,8 @@ final class CueService {
             CueKeeper.Setup(
                 store: store, profile: profile, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
                 startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
-                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing))
+                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
+                upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
         duty = (shift, keeper, Task { await keeper.run() })
     }
 

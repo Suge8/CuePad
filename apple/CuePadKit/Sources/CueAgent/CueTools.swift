@@ -6,8 +6,13 @@ import Foundation
 /// 返回一两句人话加 id，`structuredContent` 放 id 等字段；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
+  /// 说话类请求写下后等结果多久（`Speech.cueWait`；测试给短的）。
+  let wait: TimeInterval
 
-  public init(store: CueStore) { self.store = store }
+  public init(store: CueStore, wait: TimeInterval = Speech.cueWait) {
+    self.store = store
+    self.wait = wait
+  }
 
   /// 一次调用的结果（MCP 的 `CallToolResult`）。
   public struct Result: @unchecked Sendable {
@@ -35,6 +40,7 @@ public struct CueTools: Sendable {
           add{title,project?,steps?,prompt?} 建任务；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
           start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true（上一步的会话随之结束）；
           say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说；他发起的那一轮还没完时 now 也等它做完）；
+          say 与把草稿发进已有会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?} 只读：不带 task 看所有没做完的事（"在做"的归你管），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与预览；
           stop{task} 停下这一轮；
           done{task,evidence?} 收尾：你按证据验收过就完成，不请用户收下。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；
@@ -243,14 +249,10 @@ public struct CueTools: Sendable {
     let request = try await store.startLeaf(
       leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: model, thinking: effort, host: try await host(), cue: true)
     let started = request.mode == .known(.start), continued = leaf.piSessionID == nil && !started
-    let text =
-      started
-      ? "已请 Mac 为「\(leaf.heading)」开新会话，草稿作为第一句。"
-      : continued
-        ? "「\(leaf.heading)」接着用上一步的会话，草稿作为下一句发出去了（送到后这一步绑上它）。"
-        : "草稿已发进「\(leaf.heading)」的会话。"
-    return .ok(
-      text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "started": started, "continued": continued])
+    let structured: [String: Any] = ["task": id(leaf.id), "request": id(request.id), "started": started, "continued": continued]
+    if started { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，草稿作为第一句。（\(leaf.id.shortID)）", structured) }
+    let what = continued ? "「\(leaf.heading)」接着用上一步的会话，草稿作为下一句（送到后这一步绑上它）" : "「\(leaf.heading)」的草稿发进它的会话"
+    return try await spoken(request, what, of: leaf, structured)
   }
 
   private static func effort(_ args: Args) throws -> PiThinkingLevel? {
@@ -279,11 +281,11 @@ public struct CueTools: Sendable {
     let host = try await host()
     let when = args.string("when") ?? "now"
     let config = try await config(args, of: leaf)
-    let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? "已"
+    let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? ""
     if when == "answer" {
       guard let value = args.string("value") ?? args.string("text") else { throw Failure("answer 要给 value（选项原文、序号或 yes/no）") }
       let request = try await store.answerLeaf(leaf.id, value, config: config, host: host, cue: true)
-      return .ok("\(switched)回答「\(leaf.heading)」的提问：\(value)", ["task": id(leaf.id), "request": id(request.id)])
+      return try await spoken(request, "\(switched)回答「\(leaf.heading)」的提问：\(value)", of: leaf, ["task": id(leaf.id)])
     }
     let timing: SayTiming
     switch when {
@@ -292,8 +294,56 @@ public struct CueTools: Sendable {
     default: throw Failure("when 只能是 now、after 或 answer")
     }
     let request = try await store.sayToLeaf(leaf.id, text: try args.required("text"), when: timing, config: config, host: host, cue: true)
-    let how = request.mode == .known(.steer) ? "（会话正忙，马上说）" : request.mode == .known(.followUp) ? "（会话正忙，等它做完再说）" : ""
-    return .ok("\(switched)对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
+    let how = request.mode == .known(.steer) ? "马上说" : "等它做完再说"
+    return try await spoken(
+      request, "\(switched)对「\(leaf.heading)」的会话说（\(how)）", of: leaf, ["task": id(leaf.id), "mode": request.mode.rawValue])
+  }
+
+  /// 说的话写下后等结果，至多到写下后 `wait`：结果按说的话那条规则（`Speech`）读——已送达、没送到（工具结果标成出错，带 Mac 报的原因），
+  /// 或还在路上（如实说还没送达；之后没送到会写进下一轮的变化，见 `CueChange.Kind.undelivered`）。`what` 是做了什么。
+  private func spoken(_ request: DeliveryRequest, _ what: String, of leaf: Card, _ structured: [String: Any]) async throws -> Result {
+    let latest = try await settled(request)
+    var structured = structured
+    structured["request"] = id(request.id)
+    let tail = "（\(leaf.id.shortID)）"
+    switch Speech.trip(latest, now: .now, reachable: true) {
+    case .delivered:
+      structured["status"] = "delivered"
+      return .ok("\(what)：已送达。\(tail)", structured)
+    case .failed(let failure):
+      structured["status"] = "failed"
+      let reason = if case .reported(let reason) = failure { reason } else { DeliveryRequest.unexplainedFailure }
+      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", structured: structured, isError: true)
+    case .sending:
+      structured["status"] = "sending"
+      return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)", structured)
+    }
+  }
+
+  /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
+  /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
+  static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
+
+  /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。
+  public static func undeliveredRequests(in result: String) -> [UUID] {
+    result.matches(of: /\[请求 ([0-9a-f-]{36})\]/).compactMap { UUID(uuidString: String($0.1)) }
+  }
+
+  /// 等请求有结果，至多到写下后 `wait`；到点还没结果返回此刻的记录。等的是别的进程（执行它的 Mac 上的 App）写回的结果：
+  /// 库的变化订阅跨进程（`CueStore.outcome`），不轮询；到点用一次可取消的睡眠——等多久本身就是这里的规则。
+  private func settled(_ request: DeliveryRequest) async throws -> DeliveryRequest {
+    let left = request.createdAt.addingTimeInterval(wait).timeIntervalSinceNow
+    let done = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in
+      group.addTask { [store] in try await store.outcome(of: request.id) }
+      group.addTask {
+        if left > 0 { try await Task.sleep(for: .seconds(left)) }
+        return nil
+      }
+      defer { group.cancelAll() }
+      return try await group.next() ?? nil
+    }
+    if let done { return done }
+    return try await store.deliveryRequest(request.id) ?? request
   }
 
   /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补。都没带为 nil。
