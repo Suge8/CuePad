@@ -55,7 +55,14 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public static let all: AgentCapabilities = [.images, .steer, .abort, .model, .rename, .commands, .answer, .end]
 
   /// `hosted`：会话在 CuePad 托管的进程里（没有终端界面），CuePad 掌握它的全部输入输出。
-  public static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
+  /// 当前模型报了不能看图就不能发图片（没报的照 Agent 的能力）。
+  public static func of(_ agent: AgentKind, hosted: Bool, model: PiModelOption?) -> AgentCapabilities {
+    var capabilities = of(agent, hosted: hosted)
+    if model?.acceptsImages == false { capabilities.remove(.images) }
+    return capabilities
+  }
+
+  private static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
     if hosted { return .all }
     switch agent {
     case .pi, .opencode: return .all

@@ -86,23 +86,25 @@ public struct PiModelKey: Sendable, Hashable, Codable {
   }
 }
 
-/// 会话可选的一个模型：标识、显示名，以及它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉）。
-/// JSON 里 provider、id 与 name 平铺，强度叫 `thinking`（Pi 桥上报的格式同此）。
+/// 会话可选的一个模型：标识、显示名，它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉），以及能不能看图
+/// （`nil` 是 Agent 没报，当作能）。JSON 里 provider、id 与 name 平铺，强度叫 `thinking`、看图叫 `images`（Pi 桥上报的格式同此）。
 public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
   public var key: PiModelKey
   public var name: String
   public var thinkingLevels: [PiThinkingLevel]
+  public var acceptsImages: Bool?
   public var id: PiModelKey { key }
 
-  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel]) {
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel], acceptsImages: Bool? = nil) {
     self.key = key
     self.name = name
     self.thinkingLevels = thinkingLevels
+    self.acceptsImages = acceptsImages
   }
 
   private enum CodingKeys: String, CodingKey {
     case provider, id, name
-    case thinking
+    case thinking, images
   }
 
   public init(from decoder: any Decoder) throws {
@@ -110,7 +112,8 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     self.init(
       key: PiModelKey(provider: try c.decode(String.self, forKey: .provider), id: try c.decode(String.self, forKey: .id)),
       name: try c.decode(String.self, forKey: .name),
-      thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)))
+      thinkingLevels: try c.decode([String].self, forKey: .thinking).compactMap(PiThinkingLevel.init(rawValue:)),
+      acceptsImages: try c.decodeIfPresent(Bool.self, forKey: .images))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -119,6 +122,7 @@ public struct PiModelOption: Sendable, Equatable, Identifiable, Codable {
     try c.encode(key.id, forKey: .id)
     try c.encode(name, forKey: .name)
     try c.encode(thinkingLevels.map(\.rawValue), forKey: .thinking)
+    try c.encodeIfPresent(acceptsImages, forKey: .images)
   }
 }
 

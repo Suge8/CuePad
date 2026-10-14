@@ -123,7 +123,7 @@ extension AgentKind {
 
     /// 悬停提示里的一句：终端里开的会话从 CuePad 做不到的（由 `AgentCapabilities.of` 推出；CuePad 在后台开的什么都能做）
     var limits: String? {
-        let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false))
+        let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false, model: nil))
         let names: [(AgentCapabilities, String)] = [
             (.images, "发图片"), (.steer, "马上说"), (.abort, "停止"), (.model, "换模型"), (.rename, "改名"),
             (.commands, "用斜杠命令"), (.answer, "作答"), (.end, "结束会话"),

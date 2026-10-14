@@ -79,7 +79,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }
 
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
-    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted) }
+    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
 
     /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
     public var spoke: Bool {

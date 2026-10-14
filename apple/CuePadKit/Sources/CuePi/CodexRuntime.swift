@@ -759,12 +759,13 @@ struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
+    let images: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
 
     var option: PiModelOption {
-        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts)
+        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: images)
     }
 
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
@@ -781,7 +782,9 @@ struct CodexModel {
         return (listed["data"]?.array ?? []).compactMap { entry in
             guard entry["hidden"]?.bool != true, let id = entry["id"]?.string else { return nil }
             let efforts = (entry["supportedReasoningEfforts"]?.array ?? []).compactMap { $0["reasoningEffort"]?.string }
-            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known })
+            // 没写 inputModalities 的按协议缺省（文字与图片）
+            let images = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
+            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, images: images)
         }
     }
 }

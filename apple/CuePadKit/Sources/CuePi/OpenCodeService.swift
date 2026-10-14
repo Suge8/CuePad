@@ -255,16 +255,18 @@ struct OpenCodeData<Item: Decodable & Sendable>: Decodable, Sendable {
     var data: Item
 }
 
-/// 可选的模型（`GET /api/model`）：`variants` 是它的思考强度。
+/// 可选的模型（`GET /api/model`）：`variants` 是它的思考强度，`capabilities.input` 是它收得下的输入（`text`、`image` 等）。
 struct OpenCodeModel: Decodable, Sendable {
     var id: String
     var providerID: String
     var name: String
     var variants: [Variant]?
     var limit: Limit?
+    var capabilities: Capabilities?
 
     struct Variant: Decodable, Sendable { var id: String }
     struct Limit: Decodable, Sendable { var context: Int? }
+    struct Capabilities: Decodable, Sendable { var input: [String]? }
 
     var key: PiModelKey { PiModelKey(provider: providerID, id: id) }
 
@@ -274,7 +276,9 @@ struct OpenCodeModel: Decodable, Sendable {
         return levels.isEmpty ? [.off] : levels
     }
 
-    var option: PiModelOption { PiModelOption(key: key, name: name, thinkingLevels: thinkingLevels) }
+    var option: PiModelOption {
+        PiModelOption(key: key, name: name, thinkingLevels: thinkingLevels, acceptsImages: capabilities?.input.map { $0.contains("image") })
+    }
 }
 
 /// 斜杠命令（`GET /api/command`）。

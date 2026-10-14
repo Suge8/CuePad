@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 27;
+const EXTENSION_VERSION = 28;
 const PROTOCOL_VERSION = 13;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -342,7 +342,7 @@ function thinkingLevels(model: Model): ThinkingLevel[] {
 }
 
 function describeModel(model: Model) {
-	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model) };
+	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
 }
 
 function readTTY(): Promise<string | null> {

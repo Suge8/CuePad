@@ -75,6 +75,16 @@ struct RealPiTests {
                 try await bridge.configure(model: PiModelKey(provider: "fake", id: "nope"), in: s.id)
             }
 
+            // 换到不能看图的模型：不能再发图片（界面的"图片文件…"跟着能力表收起），换回来又能
+            #expect(bridge.sessions.first?.capabilities.contains(.images) == true)
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo-b"), in: s.id)
+            try await eventually("不能看图") { bridge.sessions.first?.capabilities.contains(.images) == false }
+            await #expect(throws: PiBridgeError.unsupported) {
+                try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: Data([0x89]))]), to: s.id)
+            }
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), in: s.id)
+            try await eventually("又能看图") { bridge.sessions.first?.capabilities.contains(.images) == true }
+
             // 改名同一条路（Pi 设置会话名的接口），会话名随即上报；空名拒绝
             try await bridge.configure(name: "登录修复", in: s.id)
             try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
