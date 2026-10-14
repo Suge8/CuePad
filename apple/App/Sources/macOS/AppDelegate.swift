@@ -110,6 +110,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services?.updates.checkForUpdates()
     }
 
+    @objc func installUpdateNow(_ sender: Any?) {
+        services?.updates.installNow()
+    }
+
+    /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
+    static let updateNoteTag = 1
+
     /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌃⌘S）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
     /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
@@ -120,11 +127,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
+        case #selector(installUpdateNow(_:)): showsUpdateWait(item)
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
         case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === mainWindow
         default: true
         }
+    }
+
+    /// 更新在等后台会话做完时才显示这两行；说明那一行跟着等几个改字、一直停用。
+    private func showsUpdateWait(_ item: NSMenuItem) -> Bool {
+        let note = services?.updates.waitingNote
+        item.isHidden = note == nil
+        guard item.tag == Self.updateNoteTag else { return note != nil }
+        item.title = note ?? ""
+        return false
     }
 
     @objc func showSettings(_ sender: Any?) {

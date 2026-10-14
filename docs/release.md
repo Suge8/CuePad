@@ -30,6 +30,8 @@
 
 Sparkle 2（EdDSA 校验，只发完整包、不做增量），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源（`SUFeedURL`，即下面固定 Release 里的 `appcast.xml`）与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
 
+装更新要重启 CuePad，会结束它在后台托管的会话；还有托管的会话在干活或等你确认时，重启推迟到它们都空下来（规则在 `UpdateService`，接的是 Sparkle 的 `shouldPostponeRelaunchForUpdate`）。验收用 `-CuePadScene updatewait`：演示更新器，托管会话由隔离 socket 目录里的替身扩展扮。
+
 EdDSA 私钥在专用钥匙串（`cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。
 
 下载位置只有一处：GitHub 仓库 `Suge8/CuePad` 里一个固定的 Release（标签 `v0.1.0`，标题 "CuePad for Mac"）。发布不新建版本或标签，`release mac` 每次原地替换它的资产，都经 `releases/latest/download/<文件名>` 访问。资产固定是三个：

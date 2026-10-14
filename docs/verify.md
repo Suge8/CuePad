@@ -10,7 +10,10 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 - Debug 构建认的启动参数只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里。调试键不写进偏好域（`UserDefaults.standard` 是真实的 `com.sugeh.cuepad`）：预填的搜索词只认启动参数。
 - 截图与 App 测试以后台 App 运行，不抢前台（`DebugHooks.staysInBackground`）。要前台的只有量交互与动画（见"性能测量"），它会抢焦点、动指针，跑之前先确认用户此刻不在用这台 Mac。
+- 后台窗口里的网页截图不可信：同一次运行里先有内容、过几秒就成了空白，WebKit 自己的快照却一直有内容。看网页预览用快照：`-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview` 打开那一页，载入完存成 PNG）。
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸。
+- 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
+- 裁图、缩放用系统自带的 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 模拟器（选哪台、启停、隔离库）只经 `xc.sh`，规则见它的头注释。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。
 - 验收用户装着的版本前，核对装着的 App 构建号（`defaults read ~/Applications/CuePad.app/Contents/Info CFBundleVersion`）与 `~/.pi/agent/extensions/cuepad-bridge.ts` 里的 `EXTENSION_VERSION` 是否就是要验的那一版：旧包或旧扩展上验出的结论不算数。
@@ -58,7 +61,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
-- 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用模拟器录屏逐帧或应用内每帧探针。
+- 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
 - Instruments 用 Release 优化构建并保留测量代码（`xcodebuild -configuration Release … 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG'`）。
 - `xctrace record --template 'Time Profiler' --attach <pid>`；`--launch` 按 bundle id 找进程，机器上有别的 CuePad 时报 ambiguous。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。

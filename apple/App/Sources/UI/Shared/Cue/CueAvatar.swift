@@ -76,7 +76,7 @@ struct CueAvatar: View {
     }
 
     private var ringTint: Color {
-        mood == .waiting && !dimmed ? palette.attention : palette.ink.opacity(0.22)
+        mood == .waiting && !dimmed ? Waiting.tint(dark: palette.dark) : palette.ink.opacity(0.22)
     }
 }
 

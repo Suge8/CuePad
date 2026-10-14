@@ -47,9 +47,8 @@ forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regula
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
-forbid "赭黄（palette.attention）只给 Agent 等你确认：要你处理的其他状态（同步、连接、崩溃）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
-  '\bpalette\.attention\b' '**/StyleBoard.swift' '**/BottomBar.swift' '**/SplitRoot.swift' '**/PiConversation.swift' \
-  '**/PiStateDot.swift' '**/PiSessionDigest.swift' '**/Cue/CueParts.swift' '**/Cue/CueAvatar.swift' '**/Cue/CueBarView.swift'
+forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里的 Waiting.tint 或现成的几件；要你处理的其他状态（同步、连接、崩溃）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
+  '(?i:A8740A|EDBD57)' 'App/AppGroup/Waiting.swift'
 
 # 调试目录与产品同一个 target：文件不整个包在 DEBUG 里，Debug 构建与测试照过，Release 编不过或把调试代码发出去（350b9a47）。
 # DebugHooks.swift 是两种构建共用的入口，例外

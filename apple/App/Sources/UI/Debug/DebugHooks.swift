@@ -1,5 +1,6 @@
 import CueStore
 import SwiftUI
+import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -103,6 +104,13 @@ enum DebugHooks {
         #endif
     }
 
+    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
+    static func previewWebLoaded(_ page: WebPage) {
+        #if DEBUG
+        DebugScene.snapshotWeb(page)
+        #endif
+    }
+
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
@@ -139,6 +147,15 @@ enum DebugHooks {
         DebugScene.defaults.bool(forKey: "CuePadNotifications")
         #else
         false
+        #endif
+    }
+
+    /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
+    static var updater: (any AppUpdater)? {
+        #if DEBUG
+        DebugScene.scene == "updatewait" ? DebugScene.DemoUpdater() : nil
+        #else
+        nil
         #endif
     }
 
@@ -210,6 +227,7 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
+            await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -226,6 +244,7 @@ extension View {
             .task {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)
+                await DebugScene.cycleIfAsked(workspace.services)
             }
         #else
         self

@@ -97,6 +97,34 @@ struct CueHostTests {
         }
     }
 
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样马上交给 Cue。
+    /// （别的设备上说的话经主动拉取到达这台 Mac，那一段见 CueSync 的 `CueMessageArrivalTests`。）
+    @Test func 库正忙时你的话马上送进Cue() async throws {
+        let rig = try await Rig()
+        let store = rig.store
+        let busy = Task {
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            var round = 0
+            while !Task.isCancelled {
+                round += 1
+                for index in 0..<10 {
+                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        defer { busy.cancel() }
+        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
+        let start = ContinuousClock.now
+        try await rig.say("库正忙时说的")
+        try await eventually("交给 Cue", timeout: .milliseconds(500)) {
+            try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
+        }
+        print("送进 Cue：\(ContinuousClock.now - start)")
+        busy.cancel()
+        await rig.stop()
+    }
+
     /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
@@ -189,10 +217,21 @@ struct CueHostTests {
         #expect(question.choices == ["A", "B"])
         try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["先做哪个？\nA / B"] }
         try await rig.message(.cue, containing: "办好了")
-        try await rig.store.answerCueMessage(question.id, answer: "B")
+        try await rig.store.endCueQuestion(question.id, .answered("B"))
         try await rig.message(.cue, containing: "知道了：B")
-        try await rig.store.answerCueMessage(question.id, answer: "A")  // 改了主意
-        try await rig.message(.cue, containing: "知道了：A")
+        await rig.stop()
+    }
+
+    /// 你在"等你"上关掉 Cue 的提问：它不再等你，也不为此叫醒 Cue；Cue 下次醒来（这里是你说了一句）在变化里看到你关掉了它。
+    @Test func 关掉提问_Cue下次醒来在变化里看到() async throws {
+        let rig = try await Rig()
+        try await rig.say("请问我一个问题")
+        let question = try await rig.message(.cue, containing: "先做哪个？")
+        try await rig.message(.cue, containing: "办好了")
+        try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
+        #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
+        try await rig.say("还在吗")
+        try await rig.message(.cue, containing: "看到你关掉了：先做哪个？；还在吗")
         await rig.stop()
     }
 
@@ -400,6 +439,9 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
+        if let closed = text.firstMatch(of: /\[关掉提问\] 他没选就关掉了「(.+?)」/)?.1 {
+            return say("看到你关掉了：\(closed)；" + (text.split(separator: "\n").last.map(String.init) ?? ""))
+        }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }

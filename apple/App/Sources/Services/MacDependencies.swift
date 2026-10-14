@@ -17,7 +17,7 @@ struct MacDependencies {
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。
-    var updater: SparkleUpdater?
+    var updater: (any AppUpdater)?
     /// Agent 钩子转发到 CuePad 的监听端（Claude Code、Codex 的接入用它）。
     var hooks: AgentHookServer
     /// 各 Agent 的接入：发现会话、后台开新会话与接着已结束的会话、结束会话。OpenCode 的会话索引由它的接入直接写进资料库，
@@ -47,7 +47,7 @@ struct MacDependencies {
             hostID: hostID,
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
-            updater: location.isIsolated ? nil : SparkleUpdater(),
+            updater: location.isIsolated ? DebugHooks.updater : SparkleUpdater(),
             hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(host: PiHost(bridge: pi, paths: paths.pi), locate: { await agents.locatePi() }),

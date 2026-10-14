@@ -20,7 +20,11 @@ struct PreviewWeb: View {
             }
         }
         .task {
-            do { page = try await PreviewWebGuard.page(for: file) } catch { failure = error.localizedDescription }
+            do {
+                let page = try await PreviewWebGuard.page(for: file)
+                self.page = page
+                DebugHooks.previewWebLoaded(page)
+            } catch { failure = error.localizedDescription }
         }
     }
 }

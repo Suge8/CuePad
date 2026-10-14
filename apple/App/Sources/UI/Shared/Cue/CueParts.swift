@@ -326,7 +326,8 @@ struct CueNotes: View {
     }
 }
 
-/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、答了的下面一行写你选的那一项（还在等的不在对话里，见 `CueThread.rows`）。
+/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、你选了的下面一行写你选的那一项（还在等的不在对话里，见 `CueThread.rows`；
+/// 关掉或撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
     @Environment(\.palette) private var palette
@@ -343,25 +344,32 @@ struct CueSays: View {
     }
 }
 
-/// "等你"：固定在输入框上方，最早的那一条。问题（Markdown，同对话里的渲染；长了限高、点"展开"看全）、关联任务发来看的文件
+/// "等你"：固定在输入框上方，最早的那一条。问题（Markdown，同对话里的渲染；长了限高、点"展开"看全）与右上角的关掉、关联任务发来看的文件
 /// （缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮、其余选项、关联的任务；还有别的在等时写一句。
-/// 列表与数量只来自 `cueMessagesWaitingForYou()`：答出去后等库里那条答上才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再答。
+/// 列表与数量只来自 `cueMessagesWaitingForYou()`：选了或关掉后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
     let open: (PiPreview) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    /// 正在写的那条回答（写成后它从 `waiting` 里消失，写不成就清掉）。
-    @State private var answering: UUID?
+    /// 正在结束的那条（写成后它从 `waiting` 里消失，写不成就清掉）。
+    @State private var ending: UUID?
 
     var body: some View {
         if let message = waiting.first {
             let ref = message.taskID.flatMap { tasks[$0] }
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "questionmark.circle.fill").foregroundStyle(palette.attention).accessibilityHidden(true)
+                    WaitingMark()
                     FoldedMarkdown(source: message.text).id(message.id)
+                    Spacer(minLength: 0)
+                    Button("关掉", systemImage: "xmark") { end(message, .dismissed) }
+                        .labelStyle(.iconOnly).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink3)
+                        .frame(width: 28, height: 28).contentShape(.rect)
+                        .buttonStyle(PressStyle(.button))
+                        .disabled(ending == message.id)
+                        .help("不选，关掉这条")
                 }
                 // 关联任务发来看的文件就是证据：在手机上看完图再点答案，验收就做完了
                 if let previews = ref?.previews, !previews.isEmpty {
@@ -395,18 +403,18 @@ struct CueWaitingDock: View {
 
     @ViewBuilder private func buttons(_ message: CueMessage, _ options: [String]) -> some View {
         ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-            Button(option) { answer(message, option) }
+            Button(option) { end(message, .answered(option)) }
                 .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary))
                 .lineLimit(2)
-                .disabled(answering == message.id)
+                .disabled(ending == message.id)
         }
     }
 
-    private func answer(_ message: CueMessage, _ option: String) {
-        answering = message.id
+    private func end(_ message: CueMessage, _ end: CueQuestionEnd) {
+        ending = message.id
         workspace.attempt {
-            defer { answering = nil }
-            try await workspace.answerCue(message, option)
+            defer { ending = nil }
+            try await workspace.endCueQuestion(message, end)
         }
     }
 }

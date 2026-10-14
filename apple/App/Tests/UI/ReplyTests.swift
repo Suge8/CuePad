@@ -49,15 +49,15 @@ struct ReplyTests {
         }
 
         #expect(settings.replyDraft(for: session).text.count == 200)
-        #expect(defaults.writes["replyTexts"] == nil)
-        try await eventually("defaults.writes[\"replyTexts\"] != nil") { defaults.writes["replyTexts"] != nil }
+        #expect(defaults.writes["replyDrafts"] == nil)
+        try await eventually("defaults.writes[\"replyDrafts\"] != nil") { defaults.writes["replyDrafts"] != nil }
         await quietPeriod(.milliseconds(600))
-        #expect(defaults.writes["replyTexts"] == 1)
+        #expect(defaults.writes["replyDrafts"] == 1)
 
         settings.setReplyDraft(ComposerDraft(text: "没写完"), for: session)
         settings.flush()
         settings.flush()
-        #expect(defaults.writes["replyTexts"] == 2)
+        #expect(defaults.writes["replyDrafts"] == 2)
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).replyDraft(for: session).text == "没写完")
     }
 

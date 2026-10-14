@@ -8,18 +8,17 @@ import SwiftUI
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
-    /// 对话里的每一格（`ChatDerived` 按对话数据推好的）。
-    let items: [ChatItem]
+    /// 对话里的每一条（`ChatDerived` 按对话数据推好的）。
+    let items: [PiChatEntry]
     /// 发出还没进对话的话要对着已有的消息认。
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
     /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
     var showEarlier: () -> Void = {}
-    @Environment(\.palette) private var palette
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
-    @State private var opened: PiPreview?
+    @State private var opened: PreviewOpening?
     /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
     @State private var sizes: [Int: CGSize] = [:]
     @State private var onScreen: Set<Int> = []
@@ -58,8 +57,8 @@ struct PiConversation: View {
         .previewPresenter($opened)
         .task(id: items.count) {
             guard let title = DebugHooks.preset.openPreview else { return }
-            opened = items.flatMap { item -> [PiPreview] in if case .previews(let group) = item { group.compactMap(\.preview) } else { [] } }
-                .first { $0.title == title }
+            opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews) } }
+                .first { $0.preview.title == title }
         }
     }
 
@@ -68,7 +67,7 @@ struct PiConversation: View {
     /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
     /// 宽度变了（拖窗口、转屏），量过的高按宽度反比估（字一行排得越宽越矮），排成真的时再换成实测：
     /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
-    @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int, notes: [ReplyNote]) -> some View {
+    @ViewBuilder private func segment(_ index: Int, of all: [PiChatEntry], last: Int, notes: [ReplyNote]) -> some View {
         let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
         if let size = sizes[index], width > 0, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
             !items.contains(where: { $0.id == highlight })
@@ -99,7 +98,7 @@ struct PiConversation: View {
     @ViewBuilder private var ending: some View {
         if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
         if session.state == .known(.error) {
-            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 }
@@ -107,14 +106,14 @@ struct PiConversation: View {
 
 /// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
-    let items: [ChatItem]
+    let items: [PiChatEntry]
     let session: PiSessionState
     let highlight: UUID?
     let notes: [ReplyNote]
-    @Binding var opened: PiPreview?
+    @Binding var opened: PreviewOpening?
     @Environment(\.palette) private var palette
 
-    init(items: [ChatItem], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], opened: Binding<PiPreview?>) {
+    init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], opened: Binding<PreviewOpening?>) {
         self.items = items
         self.session = session
         self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
@@ -135,13 +134,6 @@ private struct ChatSegment: View, Equatable {
         }
     }
 
-    @ViewBuilder private func row(_ item: ChatItem) -> some View {
-        switch item {
-        case .previews(let group): PreviewGroup(previews: group.compactMap(\.preview)) { opened = $0 }
-        case .entry(let entry): row(entry)
-        }
-    }
-
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
@@ -157,7 +149,7 @@ private struct ChatSegment: View, Equatable {
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
-            if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }
+            PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
     }
 }
@@ -180,7 +172,7 @@ struct EarlierRow: View {
 
 extension PiConversation {
     /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
-    static func window(reaching id: UUID, in items: [ChatItem]) -> Int? {
+    static func window(reaching id: UUID, in items: [PiChatEntry]) -> Int? {
         items.firstIndex { $0.id == id }.map { items.count - $0 }
     }
 
@@ -254,7 +246,6 @@ struct PiSessionSubtitle: View {
 struct PiQuestionDock: View {
     let session: PiSessionState
     var deliveries: [DeliveryRequest] = []
-    @Environment(\.palette) private var palette
 
     var body: some View {
         if session.state == .known(.waitingForUser) {
@@ -262,29 +253,8 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: session.question?.displayText ?? session.detail ?? "", prominent: true, docked: true)
+                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
-        }
-    }
-}
-
-
-/// 对话里的一格：一条（你的话、回答、系统行），或连着的几张预览收成的一组（同一处连着发的文件放在一张纸上）。
-nonisolated enum ChatItem: Identifiable, Equatable {
-    case entry(PiChatEntry)
-    case previews([PiChatEntry])
-
-    var id: UUID {
-        switch self {
-        case .entry(let entry): entry.id
-        case .previews(let group): group[0].id
-        }
-    }
-
-    static func of(_ entries: [PiChatEntry]) -> [ChatItem] {
-        entries.reduce(into: []) { items, entry in
-            guard entry.role == .preview else { return items.append(.entry(entry)) }
-            if case .previews(let group) = items.last { items[items.count - 1] = .previews(group + [entry]) } else { items.append(.previews([entry])) }
         }
     }
 }

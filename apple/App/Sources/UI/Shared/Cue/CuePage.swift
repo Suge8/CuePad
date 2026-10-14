@@ -21,7 +21,7 @@ struct CuePage: View {
     @State private var away: CueAway?
     @State private var follow = ChatFollow()
     @State private var window = Self.firstWindow
-    @State private var opened: PiPreview?
+    @State private var opened: PreviewOpening?
 
     /// 最初排开最近几格，往上翻快到头时再排开一段（同 `SessionChat`）。
     private static let firstWindow = 40
@@ -165,8 +165,8 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 8) {
             if let thread {
-                CueTray(board: thread.board, startsCollapsed: !thread.waiting.isEmpty) { opened = $0 }
-                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 }
+                CueTray(board: thread.board, startsCollapsed: !thread.waiting.isEmpty) { opened = PreviewOpening(preview: $0) }
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = PreviewOpening(preview: $0) }
             }
             if cue.presence == .disabled {
                 CueEnableCard().transition(.opacity)
