@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进，同任务面板）；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、
-/// 各自开合（规则见 `TaskFold`）。按 ui.md 开合不逐帧挪位置：一步到位、新出现的行淡入（`UnfoldVeil`：一块纸盖住再淡开，不逐行做动画）。
+/// 各自开合（规则见 `TaskFold`）。按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
 /// 每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了还没开始；要 Agent 做什么在任务浮窗里写。
 /// 会话的全部列表在侧栏，这里不另开一栏。
@@ -19,8 +19,6 @@ struct FocusBand: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @State private var fold = DebugHooks.preset.taskFold
-    /// 折起时纸底那一行的上沿（纸里的坐标）：展开后从这里往下是新出现的行。只在折起时、它挪了才写。
-    @State private var foldedTop: CGFloat = 0
 
     private static let visibleTasks = 4
     /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
@@ -40,13 +38,8 @@ struct FocusBand: View {
         .frame(maxWidth: Self.readingWidth, alignment: .leading)
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .coordinateSpace(.named(Self.band))
-        .overlay { if fold.showsAll { UnfoldVeil(top: foldedTop).clipShape(.rect(cornerRadius: Self.radius, style: .continuous)) } }
-        .paper(radius: Self.radius)
+        .paper(radius: 18)
     }
-
-    private static let band = "taskBand"
-    private static let radius: CGFloat = 18
 
     @ViewBuilder private var taskRows: some View {
         let roots = data.tasks.roots
@@ -70,21 +63,17 @@ struct FocusBand: View {
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 .padding(.horizontal, TaskRow.inset + TaskRow.ringColumn + TaskRow.columnGap).padding(.vertical, 6)
                 .taskFoldBar(anchor, folded: !fold.showsAll)
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.band)).minY } action: { if !fold.showsAll { foldedTop = $0 } }
             }
             if fold.showsDone {
                 // 同任务面板里已完成的行：淡一档，点圆圈回到待办
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(data.done) { TaskRow(task: $0) }
-                }
-                .modifier(FadesIn())
+                ForEach(data.done) { TaskRow(task: $0) }
             }
             NewTaskField(project: data.project?.id).padding(.top, 2)
         }
         .padding(.horizontal, -TaskRow.inset)
     }
 
-    /// 展开或收起：位置一步到位（不让大纲自己的挪位动画接手），新出现的行由 `UnfoldVeil` 淡入；收起其余任务时滚动在同一步里把纸底这一行留在原处。
+    /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时滚动在同一步里把纸底这一行留在原处。
     private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
         if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, scrolling: $position) }
         withTransaction(\.disablesAnimations, true) { fold[keyPath: key].toggle() }
@@ -100,43 +89,6 @@ struct FocusBand: View {
         }
         .buttonStyle(.plain)
         .accessibilityValue(open ? "已展开" : "已折叠")
-    }
-}
-
-/// 展开其余任务时盖住新出现的那一截（`top` 往下，同纸面的底），出现即淡开：新行一步到位、看上去淡入。一块盖板一个动画，
-/// 不逐行挂淡入——逐行在出现时起动画，点开后那一圈要多排一遍几十行的透明度（150 条时多出一圈约 60ms），懒加载的行滚进来时也会再淡一遍。
-private struct UnfoldVeil: View {
-    let top: CGFloat
-    @Environment(\.palette) private var palette
-    @State private var shown = true
-
-    var body: some View {
-        Rectangle().fill(palette.paperFill)
-            .clipShape(Below(top: top))
-            .opacity(shown ? 1 : 0)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .onAppear { withAnimation(Motion.quick) { shown = false } }
-    }
-}
-
-/// `top` 往下的那一截。
-nonisolated private struct Below: Shape {
-    let top: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: rect.minX, y: rect.minY + top, width: rect.width, height: max(rect.height - top, 0)))
-    }
-}
-
-/// 出现时淡入（位置已在终点）；减弱动态效果时同样只是淡入。
-private struct FadesIn: ViewModifier {
-    @State private var shown = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .onAppear { withAnimation(Motion.quick) { shown = true } }
     }
 }
 

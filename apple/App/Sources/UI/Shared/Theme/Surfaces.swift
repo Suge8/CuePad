@@ -49,7 +49,7 @@ private struct PaperSurface: ViewModifier {
 }
 
 extension Palette {
-    /// 纸面的底：从上沿极轻地亮到纸色。纸上要盖住一块再淡开时（Mac 任务纸展开的新行）用同一份，盖的那块与纸分不出来。
+    /// 纸面的底：从上沿极轻地亮到纸色。
     var paperFill: LinearGradient {
         LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
     }
