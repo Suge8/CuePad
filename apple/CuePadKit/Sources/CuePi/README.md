@@ -15,7 +15,7 @@
 
 常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 空闲时开始一轮、正忙时插进当前这一轮；`abort`；`stop` 等进程连同子进程退出）与同形的事件 `CueBrainEvent`（规则在类型的头注释里）。系统提示整份替换，原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
 
-端到端测试 `RealBrainTests` 用真实运行时与用户自己的账号，要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude swift test --filter RealBrainTests`，模型用 `CUEPAD_BRAIN_MODEL_PI` 等换；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。
+端到端测试 `RealBrainTests` 用真实运行时与用户自己的账号，要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude swift test --filter RealBrainTests`，模型用 `CUEPAD_BRAIN_MODEL_PI` 等换、强度用 `CUEPAD_BRAIN_EFFORT` 换；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着，不花钱，默认跑。
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录、命令行链接目录 `CUEPAD_BIN_DIR`）。
 

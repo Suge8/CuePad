@@ -7,12 +7,14 @@ import Testing
 @testable import CuePi
 
 /// 端到端：真实的 Pi / Codex / Claude Code 当 Cue 的大脑，用本机用户自己登录的账号与便宜的模型，MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude` 开启列出的运行时；模型用 `CUEPAD_BRAIN_MODEL_PI` 等换。
+/// 要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude` 开启列出的运行时；模型用 `CUEPAD_BRAIN_MODEL_PI` 等换，强度用 `CUEPAD_BRAIN_EFFORT` 换（缺省 off）。
 private let environment = ProcessInfo.processInfo.environment
 private let enabledRuntimes: [CueRuntime] = (environment["CUEPAD_BRAIN_TESTS"] ?? "").split(separator: ",").compactMap { CueRuntime(rawValue: String($0)) }
 private let cheapModels: [CueRuntime: String] = [.pi: "anthropic/claude-haiku-4-5", .codex: "gpt-5.6-luna", .claude: "haiku"]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 private let home = FileManager.default.homeDirectoryForCurrentUser
+/// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
+private let effort = environment["CUEPAD_BRAIN_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .off
 
 private func executable(_ name: String) -> URL? {
     let directories = (environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0)) } + [home.appending(path: ".local/bin")]
@@ -42,7 +44,7 @@ struct RealBrainTests {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let config = CueBrainConfig(
                 runtime: runtime, executable: try #require(executable(runtime.rawValue)),
-                model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: .off,  // 最便宜；Codex、Claude Code 走夹取
+                model: environment["CUEPAD_BRAIN_MODEL_\(runtime.rawValue.uppercased())"] ?? cheapModels[runtime], effort: effort,
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
                 mcp: [try #require(executable("node")).path, echoServer.path, marker],
