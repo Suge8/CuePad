@@ -149,7 +149,7 @@ import Testing
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.cueMessages().map { [$0.id: $0.isAcceptance] } == [[said.id: false]])
     let asked = try await upgraded.askToAccept(task.id, evidence: "- 测试全过").message
-    try await upgraded.answerCueMessage(asked.id, answer: CueAcceptance.accept)
+    try await upgraded.endCueQuestion(asked.id, .answered(CueAcceptance.accept))
     #expect(try await upgraded.card(task.id)?.status == .done)
   }
 

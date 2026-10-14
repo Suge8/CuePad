@@ -16,7 +16,8 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case handoff
 }
 
-/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有回答（`answer`、`answeredAt`）与送达（`deliveredAt`）会变。
+/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变。
+/// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueStore.endCueQuestion`，结束了不再变）。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var author: Open<CueAuthor>
@@ -28,16 +29,19 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
+  /// 你选的那一项；没选就结束的（你关掉、Cue 撤回）为 nil。
   public var answer: String?
+  /// 提问结束的时刻。
   public var answeredAt: Date?
-  /// 你的消息（或 Cue 的"等你"上你的回答）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答改过、晚于它时要再交一次。
+  /// 你的消息（或 Cue 的提问怎么结束的）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；结束晚于它时（别的设备同步来的另一个结局）要再交一次。
+  /// Cue 撤回的结束时同时写上：它自己撤的，不用再告诉它。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
   var notify: Bool = false
-  /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，返工时作废（变回普通的话）。
+  /// 这是请你收下一件事的验收（`CueStore.askToAccept` 写入时定下）：答 `CueAcceptance.accept` 就是收下，Cue 返工时撤回。
   public var isAcceptance: Bool = false
 }
 
@@ -62,6 +66,22 @@ extension CueMessage: Record {
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), notify: row.textOrNil(11) != nil, isAcceptance: row.bool(12))
   }
+}
+
+extension CueMessage {
+  /// 待交给 Cue 的这一条（`CueStore.cueMessagesToDeliver`）要不要叫醒它：你的话与选了的回答要；你关掉的提问不用，随下一次醒来的信封交。
+  public var wakesCue: Bool { author == .known(.you) || answer != nil }
+}
+
+/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`）。答了的记下选的那一项，
+/// 关掉与撤回都没选（`answer` 为 nil），撤回的同时记送达。
+public enum CueQuestionEnd: Equatable, Sendable {
+  /// 你选了一项
+  case answered(String)
+  /// 你关掉了：不叫醒 Cue，它下次醒来在信封的变化里看到
+  case dismissed
+  /// Cue 撤回了（拿了主意或情况变了）
+  case withdrawn
 }
 
 /// 一条记忆是谁记的。
@@ -178,7 +198,7 @@ extension CueProfile: Record {
 }
 
 /// 顶层任务的验收：Cue 收尾时写一条"等你"请你收下（`CueStore.askToAccept`，消息标着 `CueMessage.isAcceptance`），
-/// 你答 `accept` 就是收下（`CueStore.answerCueMessage` 完成任务）。选项只是显示的文字。
+/// 你答 `accept` 就是收下（`CueStore.endCueQuestion` 完成任务）。选项只是显示的文字。
 public enum CueAcceptance {
   public static let accept = "收下"
   public static let revise = "再改改"
