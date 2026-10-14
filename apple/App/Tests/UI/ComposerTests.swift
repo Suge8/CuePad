@@ -24,7 +24,7 @@ struct ComposerTests {
             text: "  照这个改  ", images: [PickedImage(data: photo)],
             attachments: [Outbox(content: card.body, card: card.id, project: nil)])
 
-        let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send)
+        let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
 
         let photoHash = try #require(CueFormat.imageHashes(in: request.content).last)
         #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://img/\(photoHash))")
@@ -51,7 +51,7 @@ struct ComposerTests {
         var draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: prompt), card: prompt.id, project: project.id)])
         draft.attach(try #require(try await store.card(reference.id)))
         draft.attach(try #require(try await store.card(reference.id)))  // 同一张不重复带
-        let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send)
+        let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
 
         #expect(request.content == "先复现\n\n接口约定\n队列按首次加入时间排")
         #expect(request.cardID == prompt.id)
@@ -72,7 +72,7 @@ struct ComposerTests {
 
         var draft = ComposerDraft()
         draft.attach(try #require(try await store.card(reference.id)))
-        let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send, card: prompt.id)
+        let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send, card: prompt.id)
         #expect(request.cardID == prompt.id)
         var handed = try await store.handedSessions()
         #expect(handed[prompt.id] == .session("atlas") && handed[reference.id] == nil)
@@ -83,16 +83,11 @@ struct ComposerTests {
         #expect(try await store.card(reference.id)?.piSessionID == nil)
     }
 
-    @Test func 草稿只有一张图片也能发_什么都没有的不能发() async throws {
+    @Test func 草稿只有一张图片也能发() async throws {
         let target = try await session()
 
-        let request = try await app.services.requestMacDelivery(
-            ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
+        let request = try await Workspace(services: app.services).said(ComposerDraft(images: [PickedImage(data: pngData())]), to: target, mode: .send)
         #expect(CueFormat.imageHashes(in: request.content).count == 1 && !request.content.contains("\n"))
-
-        await #expect(throws: CueStoreError.blankDeliveryContent) {
-            try await app.services.requestMacDelivery(ComposerDraft(text: "  "), to: target, mode: .send)
-        }
     }
 
     @Test func 回答存为卡片_进会话所属项目_没有项目进未分类_提示落点并可点过去() async throws {

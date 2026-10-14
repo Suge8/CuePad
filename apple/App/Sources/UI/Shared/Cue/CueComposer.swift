@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// "对 Cue 说"的输入框（全 App 只此一个）：草稿是 Cue 的那一份（`CueWatch.draft`），可带图片；没启用时发不出去。
-/// 发出与清空草稿在 `Workspace.sayToCue`，这里只管输入与发完之后做什么（`sent`）。
+/// 发出走 `Workspace.speak`（按下就清空输入框，不等上传），这里只管输入与发完之后做什么（`sent`）。
 struct CueComposer: View {
     enum Style: Equatable {
         /// Cue 页底部：Mac 一直展开，手机一行、点了才展开，发完收起键盘。
@@ -14,7 +14,6 @@ struct CueComposer: View {
     var sent: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @FocusState private var focused: Bool
-    @State private var sending = false
 
     var body: some View {
         let cue = workspace.cue
@@ -24,8 +23,8 @@ struct CueComposer: View {
             form: form, shortcuts: [.send: send],
             header: { EmptyView() }, tools: { EmptyView() },
             send: {
-                Button(action: send) { SubmitGlyph(.send, enabled: !sending && cue.canHear) }
-                    .buttonStyle(.plain).disabled(sending || !cue.canHear)
+                Button(action: send) { SubmitGlyph(.send, enabled: cue.canHear) }
+                    .buttonStyle(.plain).disabled(!cue.canHear)
                     .accessibilityLabel("发送")
                     #if os(macOS)
                     .help("发送（\(ReplyShortcut.send.symbols)）")
@@ -44,15 +43,12 @@ struct CueComposer: View {
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 
     private func send() {
-        guard !sending, workspace.cue.canHear, !workspace.cue.draft.isEmpty(accepting: .images) else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            try await workspace.sayToCue()
-            #if os(iOS)
-            focused = false
-            #endif
-            sent()
-        }
+        let cue = workspace.cue, files = workspace.services.store.files
+        guard cue.canHear, !cue.draft.isEmpty(accepting: .images) else { return }
+        workspace.speak(to: .cue, from: Bindable(cue).draft) { try $0.stored(in: files) }
+        #if os(iOS)
+        focused = false
+        #endif
+        sent()
     }
 }

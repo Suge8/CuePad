@@ -81,7 +81,11 @@ final class Navigation {
 
     /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent；任务浮窗开着时发给 Agent 由浮窗自己浮起）。
     var floating: Bool { capturing || newSession != nil || (task == nil && outbox != nil) }
-    var outbox: Outbox?
+    var outbox: Outbox? {
+        didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
+    }
+    /// 发给 Agent 输入框的草稿（换了一条提示词就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
+    var handOffDraft = ComposerDraft()
     /// 浮起的任务（`TaskSheet`）。
     var task: OpenTask?
     var projectForm: ProjectForm?

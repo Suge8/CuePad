@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `AppServices.requestMacDelivery` 写出。
+/// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
 nonisolated enum MacDelivery {}
 
 /// 回复框此刻该做什么：发消息（可用的方式，第一个是默认）、就是作答框（文字型问题）、

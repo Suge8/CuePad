@@ -78,6 +78,6 @@ struct PiContextGauge: View {
 
     private func compact() {
         showsDetail = false
-        workspace.attempt { _ = try await services.requestMacDelivery("/compact", to: session, mode: .command) }
+        workspace.speak("/compact", to: .session(session, mode: .command))
     }
 }

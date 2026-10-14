@@ -128,6 +128,7 @@ extension DebugScene {
         default:
             if let project, split { open(.project(project)) }
         }
+        await presetSpeech(workspace)
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示

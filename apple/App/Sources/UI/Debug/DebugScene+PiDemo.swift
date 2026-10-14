@@ -298,7 +298,7 @@ extension DebugScene {
             sessionID: "scratch", messages: [], recap: PiRecap(lastPrompt: "先跑一遍测试", lastReply: "全部通过。")))
         while !Task.isCancelled {
             guard let session = try? await store.piSessionPage(query).items.first?.state,
-                  (try? await services.requestMacDelivery("再跑一遍测试", to: session, mode: .send)) != nil else { return }
+                  (try? await store.requestDelivery("再跑一遍测试", to: session.target, on: session.hostID, mode: .send)) != nil else { return }
             // 等演示 Mac 走完这一轮：干过活、又歇下
             var worked = false
             do {
@@ -484,20 +484,19 @@ extension DebugScene {
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
         if defaults.bool(forKey: "CuePadCommand"), let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("/compact", to: atlas, mode: .command)
+            _ = try? await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
         }
         await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try? await services.requestMacDelivery(
-                "先把迁移脚本在测试库上跑一遍，报错长这样" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay, mode: .send)
-            _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
+            _ = try? await services.store.requestDelivery("先把迁移脚本在测试库上跑一遍，报错长这样" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay.target, on: relay.hostID, mode: .send)
+            _ = try? await services.store.requestDelivery("顺便备份一下线上数据库", to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
             _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
             try? await mini.end(sessionID: "quote")
             if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
-                _ = try? await services.requestMacDelivery("把报价单备份到网盘", to: quote, mode: .send)
+                _ = try? await services.store.requestDelivery("把报价单备份到网盘", to: quote.target, on: quote.hostID, mode: .send)
             }
             relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
                 request.content.contains("备份") ? .failed("那台 Mac 上的 Pi 已经退出，没能送进去") : .succeeded
@@ -505,11 +504,11 @@ extension DebugScene {
             try? await relayExecutor?.start()
         }
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("改完再看看登录回调那个超时", to: atlas, mode: .followUp)
+            _ = try? await services.store.requestDelivery("改完再看看登录回调那个超时", to: atlas.target, on: atlas.hostID, mode: .followUp)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
-            _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
+            _ = try? await services.store.requestDelivery("标题再短一点", to: landing.target, on: landing.hostID, mode: .send)
         }
         if let notes = states.first(where: { $0.sessionID == "notes" }) {
             // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）
@@ -520,7 +519,7 @@ extension DebugScene {
             ]), for: notes.id)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
-            _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)
+            _ = try? await services.store.requestDelivery("超时后先重试一次，还失败再报错", to: cuepad.target, on: cuepad.hostID, mode: .steer)
         }
     }
 }

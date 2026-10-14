@@ -117,9 +117,12 @@ extension AppServices {
         }
     }
 
-    /// 有没有还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
+    /// 有没有在等回执的话：还没结果的投送请求，或你对 Cue 说了、还没交给它的话（等 Cue 住的那台 Mac 写回送达，见 `Speech`）；
+    /// 请求表或对话变化时重算。读失败时报告并结束（不再主动拉，推送与切前台照常）。
     private func openDeliveries() -> AsyncStream<Bool> {
-        let changes = store.observe { store in try store.deliveryRequests().contains { $0.isOpen } }
+        let changes = store.observe { store in
+            try store.deliveryRequests().contains { $0.isOpen } || store.cueMessagesToDeliver().contains { $0.author == .known(.you) }
+        }
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 do {

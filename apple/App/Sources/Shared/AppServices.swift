@@ -71,7 +71,8 @@ final class AppServices {
     @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    /// 有还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
+    /// 有在等回执的话：还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的），或对 Cue 说了还没交给它的话（`openDeliveries`）。
+    /// 只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
@@ -110,7 +111,7 @@ final class AppServices {
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
-        uploadResult: { [weak self] id in await self?.upload(id) },
+        upload: { [weak self] id in await self?.upload(id) },
         refreshQuota: { [weak self] in try await self?.refreshQuotaForRequest() },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
@@ -136,28 +137,29 @@ final class AppServices {
         #endif
     }
 
-    /// 发到 Mac：写一条投送请求，交给运行该 Pi 会话的那台 Mac（取自会话的 `hostID`）执行；
-    /// 那台 Mac 执行后写回结果并记发送记录，这里不记。
-    @discardableResult
-    func requestMacDelivery(
-        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        uploaded(try await store.requestDelivery(
-            storedText, to: session.target, on: session.hostID, mode: mode, card: card))
+    /// 撤回一句说出去的话（排队的话、重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
+    /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
+    func withdraw(_ said: Said) async throws {
+        switch said {
+        case .request(let request) where request.status == .known(.failed):
+            try await store.deleteDelivery(request.id)
+        case .request(let request):
+            guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
+        case .cue(let message, _):
+            guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
+        }
+        Task { await upload(said.id, deleted: true) }
     }
 
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（发给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
-    @discardableResult
-    func requestMacDelivery(
-        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
-    }
-
-    /// 撤回还没被 Mac 领取的话（排队的话），立即把删除传上去，免得 Mac 先拉到它；已领取的撤不回，抛出原因。
-    func withdraw(_ request: DeliveryRequest) async throws {
-        guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
-        Task { await upload(request.id, deleted: true) }
+    /// 到 `host` 那台 Mac 要经过的同步（`Speech` 判断超时原因用）：本机就是那台 Mac 时为 nil（不经同步）。
+    func relay(to host: String?) -> SyncStatus? {
+        #if os(macOS)
+        if host == nil || host == hostID { return nil }
+        #else
+        // 演示 Mac 就在本机库里接手，不经同步
+        if DebugHooks.preset.demoMac { return nil }
+        #endif
+        return syncStatus
     }
 
     /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
@@ -374,7 +376,7 @@ final class AppServices {
     }
 }
 
-extension PiSessionState {
+nonisolated extension PiSessionState {
     /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

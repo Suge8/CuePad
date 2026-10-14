@@ -10,8 +10,8 @@ import SwiftUI
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
-/// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
-/// 发出后清空，请求马上贴到对话末尾。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
+/// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
+/// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，在线会话聚焦就展开（已结束的没有工具排，打了字再长），在看历史时收成短胶囊（停止钮在时不收）。
 /// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
@@ -36,7 +36,6 @@ struct PiReplyBar: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
-    @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
@@ -73,7 +72,7 @@ struct PiReplyBar: View {
     private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands : [] }
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
-    private var canSend: Bool { hasDraft && reachable && !sending }
+    private var canSend: Bool { hasDraft && reachable }
     private var canStop: Bool { session.canStop }
     /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
     private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
@@ -271,17 +270,16 @@ struct PiReplyBar: View {
         session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
+    /// 作答框只收文字：答完文字清空，其余（别处带进草稿的卡片、图片）留着。
     private func answer() {
-        let value = PiAnswerValue.text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard canSend else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            _ = try await services.answer(value, to: session)
-            draft.text = ""
-            didSend()
+        guard canSend, let promptID = answering?.promptID else { return }
+        workspace.speak(to: .session(session, mode: .answer), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+            PiAnswer(promptID: promptID, value: .text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))).stored
         }
+        didSend()
     }
+
+    private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
 
     /// 停止这一轮：写一条停止请求，等 Mac 受理；没受理（不在线、出错）时提示原因。受理之后转圈到这一轮歇下（看状态）。
     private func stop() {
@@ -300,21 +298,16 @@ struct PiReplyBar: View {
     /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
-        let outgoing = draft.accepting(accepts), line = commandLine
         guard canSend else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            if mode == .command, let line {
-                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outgoing.attachments.first?.card)
-                // 命令不是说的话：批注留着，跟下一句发
-                draft = ComposerDraft(notes: outgoing.notes)
-            } else {
-                _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
-                draft = ComposerDraft()
-            }
-            didSend()
+        let accepts = accepts, files = services.store.files
+        let card = draft.attachments.first?.card
+        if mode == .command, let line = commandLine {
+            // 命令不是说的话：批注留着，跟下一句发
+            workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
+        } else {
+            workspace.speak(to: .session(session, mode: mode, card: card), from: box) { try $0.accepting(accepts).stored(in: files) }
         }
+        didSend()
     }
 }
 

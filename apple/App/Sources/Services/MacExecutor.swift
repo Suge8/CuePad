@@ -11,14 +11,14 @@ final class MacExecutor {
     private let runtimes: [AgentKind: any AgentRuntime]
     private let hostID: String
     private let recorder: PiStateRecorder
-    private let uploadResult: @Sendable (UUID) async -> Void
+    private let upload: @Sendable (UUID) async -> Void
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
-        uploadResult: @escaping @Sendable (UUID) async -> Void,
+        upload: @escaping @Sendable (UUID) async -> Void,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -27,7 +27,7 @@ final class MacExecutor {
         self.runtimes = runtimes
         self.hostID = hostID
         self.recorder = recorder
-        self.uploadResult = uploadResult
+        self.upload = upload
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
@@ -38,7 +38,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
             Task { @MainActor in reportIssue(message) }
-        }, onFinished: uploadResult) { [weak self] request in
+        }, onWritten: upload) { [weak self] request in
             guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
             return await self.run(request)
         }

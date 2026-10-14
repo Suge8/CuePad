@@ -77,6 +77,14 @@ extension CueStore {
     }
   }
 
+  /// 撤回你说的、还没交给 Cue 的一句（重发或移除没回执的话）；返回是否撤回了。已交出去的撤不回（Cue 已经读到）。
+  public func withdrawCueMessage(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
+      return db.changes > 0
+    }
+  }
+
   /// 交出去的这些没被 Cue 读完（大脑在那一轮中途退出）：清掉送达，下一个大脑重新交。
   public func unmarkCueMessagesDelivered(_ ids: [UUID]) throws {
     guard !ids.isEmpty else { return }

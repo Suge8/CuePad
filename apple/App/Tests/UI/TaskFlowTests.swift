@@ -46,9 +46,14 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
         #expect(try await delivery(of: first) == .sending)
+        // Mac 一直没领取：过了等回执的时限是"Mac 没有回应"，可以重发（issue #5）
+        let late = request.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
+        let timedOut = try await delivery(of: first, at: late)
+        #expect(timedOut.canSend)
+        #expect(try await failure(of: first, at: late) == .noReply)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
-        #expect(try await delivery(of: first) == .failed("会话在送达前关掉了"))
+        #expect(try await failure(of: first) == .reported("会话在送达前关掉了"))
         #expect(try await delivery(of: waiting) == .unsent)
         #expect(try await primary(neighbour) == waiting.id)
 
@@ -330,7 +335,11 @@ struct TaskFlowTests {
         try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store))
     }
 
-    private func delivery(of prompt: Card) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store))
+    private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), now: now, relay: { _ in .idle })
+    }
+
+    private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {
+        if case .failed(_, let failure) = try await delivery(of: prompt, at: now) { failure } else { nil }
     }
 }

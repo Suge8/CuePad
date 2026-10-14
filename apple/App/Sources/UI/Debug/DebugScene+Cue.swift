@@ -7,7 +7,8 @@ import SwiftUI
 /// 部署那一步发来一张截图、在等你收下）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；记忆有钉住的与其他，还有一条忘掉的。
 /// 上次离开 Cue 页记在两小时前，回到页里有"你不在时"。
-/// `-CuePadCuePresence <thinking|asleep|disabled>`：你的最后一句已交给 Cue 还没回（在想）、没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。
+/// `-CuePadCuePresence <thinking|asleep|disabled>`：你的最后一句已交给 Cue 还没回（在想，气泡下"已送达"）、
+/// 两分钟前说的一直没交出去（过了等回执的时限，气泡没能送达可重发；Mac 没有回应时它在睡觉，隔离库在 Mac 上没有同步，写本机同步不通）、没启用。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
@@ -71,8 +72,10 @@ extension DebugScene {
             switch presence {
             case "thinking": try await you("顺便看看登录回调那个超时")
             case "asleep":
-                // 两分钟前说的、一直没交出去
+                // 两分钟前说的、一直没交出去（之前的对话挪得更早）
+                try await store.seedAgeCueMessages(by: 480)
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
+                try await store.seedAgeCueMessages(by: 120)
             default: break
             }
         } catch {

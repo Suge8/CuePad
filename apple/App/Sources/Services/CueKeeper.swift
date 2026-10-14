@@ -83,6 +83,8 @@ final class CueKeeper {
         /// Cue 自己的目录：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL
         var timing: CueTiming
+        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，不等引擎自己排，见 `Speech`）
+        var upload: @Sendable ([UUID]) async -> Void = { _ in }
     }
 
     /// 值班的生命周期。
@@ -403,7 +405,7 @@ final class CueKeeper {
                         $0.turn?.author = .cue
                         $0.turn?.delivered += ids
                     }
-                    try await store.markCueMessagesDelivered(ids)
+                    try await markDelivered(ids)
                 } else {
                     _ = try await wakeUp(.message, said: said, delivering: ids)
                 }
@@ -536,8 +538,16 @@ final class CueKeeper {
                 author: author, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, baseline: (now, board.map(\.task.id)))
         }
         save()
-        try await store.markCueMessagesDelivered(delivering)
+        try await markDelivered(delivering)
         return true
+    }
+
+    /// 记下送达并立即上传（不等上传完就接着对账）。
+    private func markDelivered(_ ids: [UUID]) async throws {
+        try await setup.store.markCueMessagesDelivered(ids)
+        guard !ids.isEmpty else { return }
+        let upload = setup.upload
+        Task { await upload(ids) }
     }
 
     /// Cue 在 `since` 之后写过给你的消息（tell）。

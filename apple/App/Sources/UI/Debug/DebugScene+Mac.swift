@@ -86,6 +86,7 @@ extension DebugScene {
             }
         default: break
         }
+        await presetSpeech(workspace)
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)
