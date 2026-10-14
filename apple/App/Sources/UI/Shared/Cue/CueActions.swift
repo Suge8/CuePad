@@ -30,12 +30,9 @@ extension Workspace {
     }
 
     /// 回答 Cue 的一条"等你"。
-    func answerCue(_ message: CueMessage, _ answer: String) {
-        let store = services.store, services = services, id = message.id
-        attempt {
-            try await store.answerCueMessage(id, answer: answer)
-            await services.upload(id)
-        }
+    func answerCue(_ message: CueMessage, _ answer: String) async throws {
+        try await services.store.answerCueMessage(message.id, answer: answer)
+        await services.upload(message.id)
     }
 
     /// 交给 Cue 跟进，或收回自己做（记在顶层任务上）。
