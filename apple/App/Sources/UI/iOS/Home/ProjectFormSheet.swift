@@ -5,6 +5,7 @@ import SwiftUI
 /// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以从 Mac 上已知的文件夹里选一个（可不选，之后在项目菜单里绑也行）。
 struct ProjectFormSheet: View {
     let project: Project?
+    var created: ((UUID) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
@@ -62,12 +63,13 @@ struct ProjectFormSheet: View {
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, intro = intro, icon = icon, color = color, folder = folder
+        let project = project, intro = intro, icon = icon, color = color, folder = folder, created = created
         workspace.attempt {
             let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
             if project == nil, let folder {
                 try await workspace.requestFolder(PiBind(project: id, folder: folder.target), title: name, on: folder.hostID)
             }
+            if project == nil { created?(id) }
         }
         dismiss()
     }

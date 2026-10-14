@@ -24,9 +24,12 @@ struct ProjectForm: View {
     struct Request: Identifiable {
         let id = UUID()
         var project: Project?
+        /// 新建好之后接着做的（从新会话来的：回到新会话）；没有时打开新项目的页。
+        var created: ((UUID) -> Void)?
     }
 
     let project: Project?
+    var created: ((UUID) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
@@ -83,12 +86,12 @@ struct ProjectForm: View {
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, intro = intro, icon = icon, color = color, folder = folder
+        let project = project, intro = intro, icon = icon, color = color, folder = folder, created = created
         workspace.attempt {
             let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
             if project == nil {
                 if let folder { try await workspace.services.store.setDirectory(folder, for: id) }
-                workspace.show(.project(id))
+                if let created { created(id) } else { workspace.show(.project(id)) }
             }
         }
         close()

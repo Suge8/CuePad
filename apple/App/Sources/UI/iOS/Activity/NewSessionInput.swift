@@ -7,7 +7,7 @@ import SwiftUI
 /// （列全部，默认上次用的 `AppSettings.lastAgent`；那台 Mac 没接入它时由 Mac 写回原因）。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
 /// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
-/// 没有项目时输入框换成一句说明与"新建项目"（收起这里、打开新建项目）。
+/// 没有项目时不出这个输入框，先新建项目（`Navigation.startNewSession`）。
 struct NewSessionInput: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
@@ -38,35 +38,19 @@ struct NewSessionInput: View {
     private var canStart: Bool { chosen?.binding != nil && services.reachesPiHost && !inFlight }
 
     var body: some View {
-        Group {
-            if places.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("先新建一个项目，再给它选文件夹，就能在这里开会话", systemImage: "folder")
-                        .font(.subheadline).foregroundStyle(palette.ink2)
-                    Button("新建项目", systemImage: "folder.badge.plus") {
-                        navigation.newSession = nil
-                        navigation.projectForm = .init()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                .glass(in: .rect(cornerRadius: 25, style: .continuous))
-            } else {
-                Composer(
-                    draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-                    cardsFrom: chosen?.project.id, submitsEmpty: true,
-                    header: {
-                        header.padding(.horizontal, 12).padding(.top, 10)
-                        status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
-                    },
-                    tools: { EmptyView() },
-                    send: {
-                        Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
-                            .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
-                    })
-                .disabled(inFlight)
-            }
-        }
+        Composer(
+            draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
+            cardsFrom: chosen?.project.id, submitsEmpty: true,
+            header: {
+                header.padding(.horizontal, 12).padding(.top, 10)
+                status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
+            },
+            tools: { EmptyView() },
+            send: {
+                Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
+                    .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
+            })
+        .disabled(inFlight)
         // 浮在 `FloatingInput` 里（与随手记同一种）；发出后等它开好时不让收起
         .floatingInputLocked(inFlight)
         .onAppear {

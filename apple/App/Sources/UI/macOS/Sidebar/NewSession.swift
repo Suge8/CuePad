@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// Agent 分组标题旁与 Agent 整页右上的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
-/// 开好后关掉表单、在内容区打开新会话的整页。
+/// 开好后关掉表单、在内容区打开新会话的整页。还没有项目时从这里新建的项目，建好回到这张表单（它默认选最近活跃的，就是新建的那个）。
 struct NewSessionButton: View {
     @Binding var showing: Bool
     @Environment(Workspace.self) private var workspace
@@ -15,7 +15,7 @@ struct NewSessionButton: View {
             .panel(isPresented: $showing) {
                 NewSessionForm(createProject: {
                     showing = false
-                    workspace.projectForm = .init()
+                    workspace.projectForm = .init(created: { _ in showing = true })
                 }) { id in
                     showing = false
                     workspace.show(.session(id))
