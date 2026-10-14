@@ -185,11 +185,8 @@ final class ClaudeTerminal {
 
     @discardableResult
     private static func tmux(_ name: String, _ arguments: [String], environment: [String: String]) async throws -> String {
-        let process = Process()
-        process.executableURL = tmuxURL!
-        process.arguments = ["-L", name] + arguments
-        process.environment = environment
-        guard let result = await runCapturing(process, timeout: .seconds(10)), result.status == 0 else {
+        guard let result = await runCapturing(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
+              result.status == 0 else {
             throw TmuxFailed(command: arguments.joined(separator: " "))
         }
         return result.output

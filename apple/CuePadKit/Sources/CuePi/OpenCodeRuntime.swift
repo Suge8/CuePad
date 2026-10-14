@@ -772,29 +772,13 @@ public final class OpenCodeRuntime: AgentRuntime {
         return try await withCheckedThrowingContinuation { waiters[id] = $0 }
     }
 
-    /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。输出不接管道：常驻的服务进程继承它，
-    /// 管道就永远读不到结尾。
+    /// `opencode service start`：起后台服务、写好登记文件才返回（实测约 0.2 秒）。服务自成一个会话（不在这条命令的进程组里，
+    /// 超时结束整组碰不到它），标准输入输出指到 /dev/null（不握着这边的管道）：实测 2.0.25。
     private func launchService() async throws {
         guard let executable = locator.candidates(AgentKind.opencode.command).first else { throw AgentRuntimeError.notInstalled(.opencode) }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["service", "start"]
-        process.environment = paths.environment
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let (exited, exit) = AsyncStream<Int32>.makeStream()
-        process.terminationHandler = {
-            exit.yield($0.terminationStatus)
-            exit.finish()
-        }
-        try process.run()
-        let watchdog = Task {
-            guard (try? await Task.sleep(for: Self.launchTimeout)) != nil else { return }
-            process.end()
-        }
-        defer { watchdog.cancel() }
-        for await status in exited where status != 0 {
-            Self.log.error("opencode service start 失败：退出码 \(status)")
+        let result = await runCapturing(executable, ["service", "start"], environment: paths.environment, timeout: Self.launchTimeout)
+        guard let result, result.status == 0 else {
+            Self.log.error("opencode service start 失败：\(result.map { "退出码 \($0.status)" } ?? "超时", privacy: .public)")
             throw AgentRuntimeError.launchTimedOut(.opencode)
         }
     }
