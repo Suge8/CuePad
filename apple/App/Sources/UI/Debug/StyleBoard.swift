@@ -28,7 +28,7 @@ struct StyleBoard: View {
         let tokens: [(String, Color)] = [
             ("sidebar", palette.sidebar), ("desk", palette.desk), ("paper", palette.paper),
             ("ink", palette.ink), ("ink2", palette.ink2), ("ink3", palette.ink3),
-            ("signature", palette.signature), ("selection", palette.selection), ("attention", palette.attention),
+            ("signature", palette.signature), ("selection", palette.selection), ("waiting", Waiting.tint(dark: palette.dark)),
             ("failure", palette.failure), ("variable", palette.variable), ("bubble", palette.bubble),
         ]
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
@@ -77,7 +77,7 @@ struct StyleBoard: View {
 
     private static let statuses: [PiShown.Status] = [
         .working(.thinking), .delivery(.sending), .delivery(.waking), .asking, .failed, .delivery(.failed), .restart,
-        .cueAsking, .unread, .idle, .resting, .fresh, .ended, .unknown,
+        .cueAsking, .unread, .idle, .resting, .fresh, .ended, .interrupted, .unknown,
     ]
 
     private var motion: some View {

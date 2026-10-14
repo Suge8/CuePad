@@ -2,6 +2,7 @@
 import CueStore
 import AppKit
 import SwiftUI
+import UserNotifications
 import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
@@ -18,8 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 主窗口与它的工作区（主菜单"显示"里的开关作用在它上面）。
     private var workspace: Workspace?
     private weak var mainWindow: NSWindow?
+    /// 系统通知：在启动完成前设为代理，冷启动时点开的通知才不会丢。
+    private let alerts = AlertCenter()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = alerts
         sigterm = TerminationSignal.install()
         MainMenu.install()
         launch()
@@ -39,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         do {
             services = try AppServices(
                 location: location, defaults: location.makeDefaults(), sync: .iCloud,
-                mac: .live(location: location))
+                mac: .live(location: location, alerts: alerts))
         } catch {
             showLibraryFailure(LibraryFailure(error, location: location))
             return
@@ -53,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let windowDelegate = MainWindowDelegate(shell: shell)
         window.delegate = windowDelegate
         services.windowShell = shell
+        services.alerts = alerts
+        alerts.services = services
+        alerts.workspace = workspace
+        followAlertTaps(workspace)
         self.services = services
         self.windowDelegate = windowDelegate
         self.workspace = workspace
@@ -86,9 +94,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
+    /// 点开的 Agent 通知（含冷启动时点的）：打开那个会话（主窗口已由 `AlertCenter.receive` 叫到前面）。
+    private func followAlertTaps(_ workspace: Workspace) {
+        let alerts = alerts
+        Task { [weak workspace] in
+            await alerts.refresh()
+            for await _ in Observations({ alerts.pendingTap }) {
+                guard let tap = alerts.consumeTap(), let workspace else { continue }
+                await workspace.open(alert: tap)
+            }
+        }
+    }
+
     @objc func checkForUpdates(_ sender: Any?) {
         services?.updates.checkForUpdates()
     }
+
+    @objc func installUpdateNow(_ sender: Any?) {
+        services?.updates.installNow()
+    }
+
+    /// 主菜单里写"等 N 个 Agent 做完再装"的那一行（停用，只是说明）。
+    static let updateNoteTag = 1
 
     /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌃⌘S）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
     /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
@@ -100,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
+        case #selector(installUpdateNow(_:)): showsUpdateWait(item)
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
         case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
         case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === mainWindow
@@ -107,11 +135,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
+    /// 更新在等后台会话做完时才显示这两行；说明那一行跟着等几个改字、一直停用。
+    private func showsUpdateWait(_ item: NSMenuItem) -> Bool {
+        let note = services?.updates.waitingNote
+        item.isHidden = note == nil
+        guard item.tag == Self.updateNoteTag else { return note != nil }
+        item.title = note ?? ""
+        return false
+    }
+
     @objc func showSettings(_ sender: Any?) {
         settingsWindow?.show()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        // 通知权限可能在系统设置里改过
+        Task { await alerts.refresh() }
         Task { await services?.handleActivation() }
     }
 

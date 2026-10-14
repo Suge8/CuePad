@@ -6,13 +6,13 @@ import UserNotifications
 @testable import CuePad
 
 /// Pi 通知到不了锁屏时，用户要能在设置里看到卡在哪一步、点一下去解决。前台的提示是 App 内横幅（见 `SessionNoticeTests`）。
-struct PiAlertCenterTests {
+struct AlertCenterTests {
     typealias Case = (
-        UNAuthorizationStatus, PiAlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?, String?
+        UNAuthorizationStatus, AlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?, String?
     )
 
     @Test(arguments: [
-        (UNAuthorizationStatus.denied, PiAlertCenter.Registration.registered, PiAlertSubscriptionStatus.active, PiAlertStatus.State.problem, PiAlertStatus.Action.openSettings, nil),
+        (UNAuthorizationStatus.denied, AlertCenter.Registration.registered, PiAlertSubscriptionStatus.active, PiAlertStatus.State.problem, PiAlertStatus.Action.openSettings, nil),
         (.notDetermined, .pending, .off, .problem, .allow, nil),
         (.authorized, .registered, .active, .on, nil, nil),
         (.provisional, .registered, .active, .on, nil, nil),

@@ -292,10 +292,15 @@ public struct CueTools: Sendable {
       [
         "tasks": items.map { item -> [String: Any] in
           [
-            "id": id(item.task.id), "title": item.task.heading, "leaf": id(item.leaf.id),
+            "id": id(item.task.id), "title": item.task.heading,
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-            "session": item.session?.sessionID ?? NSNull(), "state": item.session?.state.rawValue ?? NSNull(),
-            "launching": item.launching, "sending": item.sending, "since": iso(item.since),
+            "leaves": item.leaves.map { leaf -> [String: Any] in
+              [
+                "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "session": leaf.session?.sessionID ?? NSNull(),
+                "state": leaf.session?.state.rawValue ?? NSNull(),
+                "launching": leaf.launching, "sending": leaf.sending, "since": iso(leaf.since),
+              ]
+            },
           ]
         }
       ])
@@ -326,9 +331,8 @@ public struct CueTools: Sendable {
         "tasks": items.map { item -> [String: Any] in
           [
             "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(),
-            "follows": item.task.cueFollows, "leaf": id(item.leaf.id),
+            "follows": item.task.cueFollows, "leaves": item.leaves.map { id($0.leaf.id) },
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-            "state": item.session?.state.rawValue ?? NSNull(), "since": iso(item.since),
           ]
         }
       ])

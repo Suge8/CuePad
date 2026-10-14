@@ -5,7 +5,7 @@ import Testing
 
 @testable import CueCLI
 
-/// `cuepad show`：把文件作为预览放进 Agent 会话的对话。会话从环境变量 `PI_SESSION_ID` 认出（Pi 给它的每条 bash 命令都带着），
+/// `cuepad show`：把文件作为预览放进 Agent 会话的对话。会话从 Agent 给每条命令带的环境变量认出（如 Pi 的 `PI_SESSION_ID`），
 /// 认不出就报错、不猜。
 @Suite struct PreviewCommandTests {
   private func page(_ sb: Sandbox, _ name: String = "demo.html", _ text: String = "<h1>登录页</h1>") throws -> String {
@@ -14,15 +14,17 @@ import Testing
     return url.path
   }
 
-  @Test func showStoresThePreviewForTheSessionFromTheEnvironmentAndReportsIt() async throws {
+  /// 一次给几个文件：按给的顺序存成同一次（对话里一张卡），--title 是这张卡的标题，每个文件一项报告。
+  @Test func showStoresTheFilesTogetherForTheSessionFromTheEnvironmentAndReportsEach() async throws {
     let sb = try Sandbox()
-    let reply = try await sb.object(
-      "show", page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), "--title", "登录页", environment: ["PI_SESSION_ID": "s1"])
+    let files = [try page(sb, "demo.html", "<link rel=\"stylesheet\" href=\"a.css\">"), try page(sb, "beep.m4a", "m4a"), try page(sb, "notes.docx", "docx")]
+    let reply = try array(try await sb.jsonValue(["show"] + files + ["--title", "登录页"], environment: ["PI_SESSION_ID": "s1"]))
 
-    let stored = try #require(try await sb.store.previews(of: "s1").first)
-    #expect(reply.string("id") == stored.id.uuidString.lowercased() && reply.string("title") == "登录页" && reply.string("name") == "demo.html")
-    #expect(reply.string("kind") == "web" && reply["bytes"] as? Int == stored.byteCount && reply["session"] as? String == "s1")
-    #expect(reply["outsideReferences"] as? [String] == ["a.css"])
+    let stored = try await sb.store.previews(of: "s1")
+    #expect(stored.map(\.name) == ["demo.html", "beep.m4a", "notes.docx"] && Set(stored.map(\.createdAt)).count == 1)
+    #expect(reply.map { $0.string("id") } == stored.map { $0.id.uuidString.lowercased() })
+    #expect(reply.map { $0.string("kind") } == ["web", "audio", "document"] && reply.allSatisfy { $0.string("title") == "登录页" && $0.string("session") == "s1" })
+    #expect(reply[0]["bytes"] as? Int == stored[0].byteCount && reply[0]["outsideReferences"] as? [String] == ["a.css"])
   }
 
   @Test func withoutASessionInTheEnvironmentItRefusesAndSaysWhy() async throws {
@@ -41,8 +43,17 @@ import Testing
     #expect(missing.code != 0 && missing.err.contains("nope.html"))
     let archive = await sb.run("show", try page(sb, "a.zip", "zip"), environment: env)
     #expect(archive.code != 0 && archive.err.contains("zip"))
+    // 压缩的 SVG 预览里显示不了：不收，可发列表里也不列
+    let compressed = await sb.run("show", try page(sb, "a.svgz", "svgz"), environment: env)
+    #expect(compressed.code != 0 && compressed.err.contains(".svgz") && !compressed.err.contains("、svgz"))
     #expect(try await sb.store.previews(of: "s1").isEmpty)
   }
 
+  /// .ts、.mts 是 TypeScript（系统认作视频流）：按文本发，交给快速查看看纯文本。
+  @Test func typeScriptFilesAreSentAsText() async throws {
+    let sb = try Sandbox()
+    let reply = try array(try await sb.jsonValue(["show", try page(sb, "app.ts", "let a = 1"), try page(sb, "mod.mts", "export {}")], environment: ["PI_SESSION_ID": "s1"]))
+    #expect(reply.map { $0.string("kind") } == ["text", "text"])
+  }
 }
 #endif

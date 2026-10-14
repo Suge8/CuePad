@@ -15,7 +15,7 @@ struct PiAlertStatus: Equatable {
     let diagnostics: String?
     let action: Action?
 
-    init(authorization: UNAuthorizationStatus, registration: PiAlertCenter.Registration, subscription: PiAlertSubscriptionStatus) {
+    init(authorization: UNAuthorizationStatus, registration: AlertCenter.Registration, subscription: PiAlertSubscriptionStatus) {
         switch (authorization, registration, subscription) {
         case (.denied, _, _):
             self = Self(.problem, "通知已关闭", "Agent 在等你确认或做完时，锁屏收不到提示。", action: .openSettings)

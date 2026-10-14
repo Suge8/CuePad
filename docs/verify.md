@@ -10,6 +10,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 - Debug 构建认的启动参数只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里。调试键不写进偏好域（`UserDefaults.standard` 是真实的 `com.sugeh.cuepad`）：预填的搜索词只认启动参数。
 - 截图与 App 测试以后台 App 运行，不抢前台（`DebugHooks.staysInBackground`）。要前台的只有量交互与动画（见"性能测量"），它会抢焦点、动指针，跑之前先确认用户此刻不在用这台 Mac。
+- 后台窗口里的网页截图不可信：同一次运行里先有内容、过几秒就成了空白，WebKit 自己的快照却一直有内容。看网页预览用快照：`-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview` 打开那一页，载入完存成 PNG）。
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸。
 - 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
 - 裁图、缩放用系统自带的 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
@@ -45,6 +46,14 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 - 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
 - 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
 - iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。模拟器用 `xc.sh` 给这个产物目录建的那台（名为 "CuePad <机型> @ <产物目录>"，见 `_sim.sh`），不碰别人的。
+
+## 通知（Mac）
+
+- 隔离库默认不发系统通知（只记日志），也不要权限、不装提示音、不设角标：权限、提示音与角标按 bundle id 记，与正式版同一个。验收时给 Debug 启动参数 `-CuePadNotifications YES` 才真发，提示音这时装进真实的 ~/Library/Sounds。
+- /tmp 下的构建（含 `CUEPAD_DERIVED=/tmp/…` 的产物）拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications，改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 AGENTS.md 要的几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
+- 触发：本机会话在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）切它的状态；Cue 来问用 `-CuePadSampleCue <秒>`（隔离库里 Cue 不值班）。
+- 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，本机实测有时要 20 秒；横幅 5 秒就收，按横幅要边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
+- 实际播了哪个文件看 `systemsoundserverd` 日志里的 `mAudioToken`（通知中心那行 `Playing notification sound` 只有声音名，找不到文件时也照样打，实际播的是系统兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
 
 ## 性能测量
 
