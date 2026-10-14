@@ -12,9 +12,10 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt；piSessionStates、cards、deliveryRequests、
+/// piMessages 的 writeSeq（本机写入序号，见 38）。
 ///
-/// 本机表（不同步）：piSessions、piProcesses、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
@@ -123,14 +124,73 @@ enum Schema {
     Upgrade(stringLiteral: cueState),
     // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
     Upgrade(stringLiteral: piProcesses),
-    // 37：Cue 自己验收、做完告诉你，不再请你收下：验收标记下线（还开着的旧验收照常是一条提问，答了交给 Cue）
-    "ALTER TABLE cueMessages DROP COLUMN acceptance;",
-    // 38：不再分"由谁跟进"：Cue 值班时管所有有活会话的事。卡片上的跟进标记与守它的触发器下线（CloudKit 里的字段照原样声明为已下线）
+    // 37：Cue 自己验收、做完告诉你，"等你"只给 `CueAsk` 那几类事、选项由它给。还开着的旧验收是 Cue 已经收尾的事：
+    // 任务连同步骤完成，那条改成做完的结果；其余还开着的提问都是 Cue 自拟的选项，撤回（同 Cue 撤回，不再交给它）。验收标记下线。
+    // modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let accepting = "SELECT taskID FROM cueMessages WHERE acceptance = 1 AND choices IS NOT NULL AND answeredAt IS NULL AND taskID IS NOT NULL"
+      try db.run(
+        """
+        UPDATE cards SET completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE todoAt IS NOT NULL AND completedAt IS NULL AND (id IN (\(accepting)) OR parentID IN (\(accepting)))
+        """, [now])
+      try db.run(
+        """
+        UPDATE cueMessages SET text = replace(text, '做好了，收下吗？', '做完了。'), choices = NULL, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE acceptance = 1 AND choices IS NOT NULL AND answeredAt IS NULL
+        """, [now])
+      try db.run(
+        """
+        UPDATE cueMessages SET answeredAt = ?1, deliveredAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
+        WHERE author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL
+        """, [now])
+      try db.exec("ALTER TABLE cueMessages DROP COLUMN acceptance;")
+    },
+    // 38：本机写入序号（`CueStore.lastWrite`）：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
+    // 旧行是 0（早于升级后的任何一次醒来）
+    Upgrade(stringLiteral: writeSeq),
+    // 39：不再分"由谁跟进"：Cue 值班时管所有有活会话的事。卡片上的跟进标记与守它的触发器下线（CloudKit 里的字段照原样声明为已下线）；
+    // 卡片盖写入序号的触发器原先也看它，先删、去掉它后重建
     """
-    DROP TRIGGER IF EXISTS cards_cueFollows_insert; DROP TRIGGER IF EXISTS cards_cueFollows_update;
+    DROP TRIGGER IF EXISTS cards_cueFollows_insert; DROP TRIGGER IF EXISTS cards_cueFollows_update; DROP TRIGGER cards_writeSeq_update;
     ALTER TABLE cards DROP COLUMN cueFollows;
+    \(stampOnChange("cards", cardChanges))
     """,
   ]
+
+  /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
+  /// 计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
+  /// 会话状态（进入的状态与时刻）、卡片（`cardChanges`）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
+  private static let writeSeq = """
+    CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
+    INSERT INTO writeCounter (seq) VALUES (0);
+    \(stamped("piSessionStates", when: ["state", "stateSince"]))
+    \(stamped("cards", when: cardChanges))
+    \(stamped("deliveryRequests", when: ["status"]))
+    \(stamped("piMessages", when: []))
+    """
+
+  /// 卡片上构成 Cue 的变化的列：完成、上级、是不是任务。
+  private static let cardChanges = ["completedAt", "parentID", "todoAt"]
+
+  /// `table` 加本机列 `writeSeq`：新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
+  private static func stamped(_ table: String, when columns: [String]) -> String {
+    """
+    ALTER TABLE \(table) ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;
+    """ + (columns.isEmpty ? "" : "\n" + stampOnChange(table, columns))
+  }
+
+  /// `columns` 里的列改了值的行盖上计数器的下一个数。
+  private static func stampOnChange(_ table: String, _ columns: [String]) -> String {
+    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
+    return "CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;"
+  }
+
+  private static func stamp(_ table: String) -> String {
+    "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
+  }
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -299,6 +359,7 @@ enum Schema {
     \(cue)
     \(formerSessions)
     \(cueState)
+    \(writeSeq)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

@@ -28,7 +28,6 @@ public enum CueEnvelope {
     public var contextUsed: Int?
     /// 用到这么多 token 就该换新上下文。
     public var renewAt: Int
-    public var since: Date
     /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
     public var projects: [CueProject]
     public var changes: [CueChange]
@@ -42,14 +41,13 @@ public enum CueEnvelope {
     public var said: String?
 
     public init(
-      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, since: Date, projects: [CueProject], changes: [CueChange],
+      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
       dismissed: [CueMessage], board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, said: String?
     ) {
       self.now = now
       self.timeZone = timeZone
       self.contextUsed = contextUsed
       self.renewAt = renewAt
-      self.since = since
       self.projects = projects
       self.changes = changes
       self.dismissed = dismissed
@@ -68,8 +66,7 @@ public enum CueEnvelope {
 
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
-    let since = calendar.isDate(input.since, inSameDayAs: input.now) ? clock(input.since, calendar) : stamp(input.since, calendar)
-    lines.append("变化（\(since) 之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
+    lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
     lines += input.dismissed.map { "- [关掉提问] 他没选就关掉了「\(clip(CueFormat.plainText($0.text), 80))」（\($0.id.shortID)）" }
 

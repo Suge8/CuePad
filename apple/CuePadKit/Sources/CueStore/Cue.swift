@@ -226,7 +226,7 @@ extension CueState: Record {
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事的验收，Cue 按你的规矩与最佳实践自己定，做完告诉你。
-/// 选项也由这里给（允许一次、以后都不用问、拒绝），Cue 不能自拟"照这个做 / 我再看看"这类确认。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
@@ -253,7 +253,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
 
   /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
-  func rule(project: String?) -> String? {
+  public func rule(project: String?) -> String? {
     always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
   }
 }

@@ -13,7 +13,7 @@ import Testing
     let task = try await store.createTask("发布", in: nil)
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .thinking)  // 正在跑一轮：停得了才发得出停下
-    let since = Date()
+    let since = CueMarks(try await store.lastWrite())
     let executor = DeliveryExecutor(store: store, hostID: "mac", retention: .milliseconds(1), onIssue: { Issue.record("\($0)") }) { _ in
       .failed("会话已关闭")
     }
@@ -23,7 +23,7 @@ import Testing
     let mine = try await store.requestEnd(of: SendTarget(kind: .piSession, name: "发布", ref: "s1"), on: "mac")
     _ = try await eventually(store, { try $0.deliveryRequest(mine.id) }) { $0 == nil }  // 清理过了
 
-    let changes = try await store.cueChanges(since: since)
+    let changes = try await store.cueChanges(after: since)
     #expect(changes.map(\.detail) == ["停下：会话已关闭"])
     #expect(changes.first?.task.id == task.id && changes.first?.leaf?.id == task.id)
   }

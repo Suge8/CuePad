@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// iPhone（及窄窗口 iPad）：两个标签的内容 + 底部自绘的一行（`BottomBar`）。系统标签栏隐藏，TabView 只管切内容
+/// iPhone（及窄窗口 iPad）：三个标签的内容 + 底部自绘的一行（`BottomBar`）。Cue 是主入口（打开就在它上面），
+/// Agent 是全部会话，灵感是项目、灵感与任务。系统标签栏隐藏，TabView 只管切内容
 /// （保留各标签的导航栈、滚动位置与页面的出现/消失）；点底部换标签时页面按标签顺序推移（`TabSlide`）。
-/// 底部那一行不随滚动收小，进纸页、会话页时随页收起。
+/// 底部那一行不随滚动收小，进纸页、会话页时随页收起（`Navigation.ownsBottom`）。
 struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
@@ -16,21 +17,21 @@ struct TabsRoot: View {
     var body: some View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.tab) {
+            Tab(value: Navigation.Tab.cue) { stack(.cue, $navigation.cuePath) { RouteView(route: .cue) } }
+            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .agent) } }
             Tab(value: Navigation.Tab.projects) { stack(.projects, $navigation.projectsPath) { RouteView(route: .shelf) } }
-            // Agent 标签的第一屏是 Cue，全部会话在它右上角进去的第二层
-            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .cue) } }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
         .environment(\.bottomBarReserve, BottomBar.reserve(above: safeBottom))
         // 底部那一行浮在上面、离屏幕底边固定距离（不随键盘升起，键盘出来时被盖住）；内容给它让出的高度在每一页上（`RouteView`）
         .overlay(alignment: .bottom) {
-            if navigation.bottomPages == 0 {
-                BottomBar(waiting: workspace.cue.digest.waiting, select: select)
+            if !navigation.ownsBottom {
+                BottomBar(select: select)
                     .ignoresSafeArea(edges: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: navigation.bottomPages == 0)
+        .animation(Motion.panel, value: navigation.ownsBottom)
         .debugExposesTabSelect(select)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的搜索（与宽屏的搜索页同一组快捷键）
         .background {
@@ -48,7 +49,7 @@ struct TabsRoot: View {
     /// 点底部换标签：选中滴滑过去，页面同向推移。
     private func select(_ tab: Navigation.Tab) {
         guard tab != navigation.tab else { return }
-        slide.leave(to: tab, reduceMotion: reduceMotion)
+        slide.leave(navigation.tab, to: tab, reduceMotion: reduceMotion)
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }
     }
 
@@ -63,7 +64,7 @@ struct TabsRoot: View {
 }
 
 /// 换标签的推移：拍下要离开的那一页盖在上面，照常切标签（页面不重建，出现/消失、导航栈与滚动位置都由 TabView 管），
-/// 等新的一页有了内容（标签根页读到数据时报 `tabPageReady`）再一起推：新页从选中滴去的那一侧推入，旧页的快照往另一边推出。
+/// 等新的一页有了内容（标签根页读到数据时报 `tabPageReady`）再一起推：新页从选中滴去的那一侧推入（往右边的标签去从右边进），旧页的快照往另一边推出。
 /// 第一次切到某一页时它要现建、现读，旧页就多停那几十毫秒，不露出空白；减弱动态效果时新页直接在位，旧页的快照淡出。
 /// 动的只是两张视图层，不碰页面的状态。
 private final class TabSlide {
@@ -71,19 +72,20 @@ private final class TabSlide {
     /// 新页迟迟没报有内容（读库出错）时最多等这么久，不让快照一直盖着。
     private static let readyTimeout = 0.3
 
-    private var pending: (tab: Navigation.Tab, reduceMotion: Bool, snapshot: UIView)?
+    private var pending: (tab: Navigation.Tab, rightward: Bool, reduceMotion: Bool, snapshot: UIView)?
     private var pages: [Navigation.Tab: UIView] = [:]
     private var filled: Set<Navigation.Tab> = []
     private var animator: UIViewPropertyAnimator?
     private weak var tabs: UITabBarController?
 
     /// 切标签之前：完成上一次推移，拍下此刻的页面盖在上面；新页已有内容就立刻推，否则等它。
-    func leave(to tab: Navigation.Tab, reduceMotion: Bool) {
+    func leave(_ from: Navigation.Tab, to tab: Navigation.Tab, reduceMotion: Bool) {
         animator?.stopAnimation(false)
         animator?.finishAnimation(at: .end)
         guard let container = tabs?.view, let snapshot = container.snapshotView(afterScreenUpdates: false) else { return }
         container.addSubview(snapshot)
-        pending = (tab, reduceMotion, snapshot)
+        let order = Navigation.Tab.allCases
+        pending = (tab, order.firstIndex(of: tab)! > order.firstIndex(of: from)!, reduceMotion, snapshot)
         start()
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.readyTimeout))
@@ -98,9 +100,9 @@ private final class TabSlide {
     }
 
     private func start(force: Bool = false) {
-        guard let (tab, reduceMotion, snapshot) = pending, let page = pages[tab], force || filled.contains(tab) else { return }
+        guard let (tab, rightward, reduceMotion, snapshot) = pending, let page = pages[tab], force || filled.contains(tab) else { return }
         pending = nil
-        let width = page.bounds.width * (tab == .agent ? 1 : -1)
+        let width = page.bounds.width * (rightward ? 1 : -1)
         if !reduceMotion { page.transform = CGAffineTransform(translationX: width, y: 0) }
         let animator = UIViewPropertyAnimator(duration: reduceMotion ? 0.2 : Self.duration, dampingRatio: 1) {
             if reduceMotion {

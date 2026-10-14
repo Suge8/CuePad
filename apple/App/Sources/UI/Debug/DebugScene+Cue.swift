@@ -44,12 +44,8 @@ extension DebugScene {
             ] { _ = try await store.addCueMessage(.note, text: note) }
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
-            // Cue 验收过、做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）；直接写，不经 finishTask——那会请 notes 会话结束
-            if let panel {
-                try await store.setStatus(panel.id, .done)
-                _ = try await store.addCueMessage(
-                    .cue, text: CueReport.text(task: panel.heading, evidence: ["浅色深色各一张", "README 里的图都换了", "旧截图已删"]), task: panel.id)
-            }
+            // Cue 验收过、做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
+            if let panel { _ = try await store.finishTask(panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"]) }
             _ = try await store.addCueMessage(
                 .cue, text: """
                     预发上验过了，截图在这里。重连用例都过了：

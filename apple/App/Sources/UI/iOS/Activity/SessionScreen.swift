@@ -112,7 +112,6 @@ struct SessionScreen: View {
                 .environment(\.composerInk, .solid)
             }
         }
-        .ownsBottomEdge()
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)

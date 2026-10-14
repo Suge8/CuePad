@@ -89,7 +89,10 @@ public struct CueChange: Equatable, Sendable {
   public var task: Card
   /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
+  /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
+  /// 本机收到它的写入序号（`CueStore.lastWrite`）：越大越晚写进库
+  public var seq: Int
   /// 提问、错误、哪个请求为什么没成。
   public var detail: String?
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
@@ -97,8 +100,11 @@ public struct CueChange: Equatable, Sendable {
   /// 停下是因为做到一半被打断（`PiWorkState.interrupted`），不是做完了。
   public var interrupted: Bool
 
-  init(kind: Kind, task: Card, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil, interrupted: Bool = false) {
+  init(
+    kind: Kind, task: Card, leaf: Card? = nil, at: Date, seq: Int, detail: String? = nil, recap: PiRecap? = nil, interrupted: Bool = false
+  ) {
     self.kind = kind
+    self.seq = seq
     self.interrupted = interrupted
     self.task = task
     self.leaf = leaf
@@ -106,6 +112,20 @@ public struct CueChange: Equatable, Sendable {
     self.detail = detail
     self.recap = recap
   }
+}
+
+/// Cue 的变化从哪算起（本机写入序号，`CueStore.lastWrite`）：会话的动静从 `sessions` 之后，任务完成从 `tasks` 之后。
+/// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。
+public struct CueMarks: Codable, Equatable, Sendable {
+  public var sessions: Int
+  public var tasks: Int
+
+  public init(sessions: Int, tasks: Int) {
+    self.sessions = sessions
+    self.tasks = tasks
+  }
+
+  public init(_ both: Int) { self.init(sessions: both, tasks: both) }
 }
 
 /// 一件事的细节（Cue 的 peek）：叶子、各自的草稿、会话、最近几轮问答与预览。
@@ -207,13 +227,18 @@ extension CueStore {
     }
   }
 
-  /// 同一件事别的步骤绑着、还没结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
+  /// 同一件事别的步骤绑着、还没结束也没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
   private func continuableSession(for leaf: UUID, agent: AgentKind?) throws -> PiSessionState? {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
+    let ending = Set(try db.query(
+      "SELECT targetRef FROM deliveryRequests WHERE mode = '\(DeliveryMode.end.rawValue)' AND status IN ('pending', 'executing') AND targetRef IS NOT NULL"
+    ) { $0.text(0) })
     let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
     return sessions.values
-      .filter { session in session.state != .known(.ended) && agent.map { session.agent == .known($0) } != false }
+      .filter { session in
+        session.state != .known(.ended) && !ending.contains(session.sessionID) && agent.map { session.agent == .known($0) } != false
+      }
       .max { $0.stateSince < $1.stateSince }
   }
 
@@ -336,7 +361,7 @@ extension CueStore {
   }
 
   /// Cue 收尾一件事：验收由 Cue 按证据自己定，不请你收下。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
-  /// 结束做完了的会话（`endFinishedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
+  /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
   /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤为 nil）与结束请求。
   @discardableResult
@@ -345,7 +370,7 @@ extension CueStore {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       _ = try applyStatus(task, .done)
-      let ended = try endFinishedSessions(of: task, cue: true)
+      let ended = try endUnusedSessions(of: task, cue: true)
       guard card.parentID == nil else { return (nil, ended) }
       return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), task: task), ended)
     }
@@ -366,33 +391,48 @@ extension CueStore {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
       let status = try applyStatus(id, current == .done ? .todo : .done)
-      return (status, status == .done ? try endFinishedSessions(of: id, cue: false) : [])
+      return (status, status == .done ? try endUnusedSessions(of: id, cue: false) : [])
     }
   }
 
-  /// 会话的去留只在这里定。刚完成的 `task` 所在的那件事里（连同它的各个步骤：最后一步做完时，前几步留着的会话也到了结束的时候）
-  /// 绑着的会话，满足这些才请它所在的 Mac 结束：
-  /// 1. 它绑着的事（`tasks(boundTo:)`，一个会话可以绑好几件）都做完了；
-  /// 2. 这些事所在的那件事都没有没做完的步骤了——还有下一步时会话留着，下一步接着用它（`handOffPlan`）；
-  /// 3. 做得到（`PiSessionState.canEnd`：终端里开的 Codex 会话这类结束不了的留着）；已结束的、记录还没到的不动。
-  /// 必须在写事务内调用。
-  func endFinishedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+  /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 收尾 `finishTask`），或叶子换去别的会话的那一刻
+  /// （开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
+  /// 1. 有没做完、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
+  /// 2. 这件事的下一步（排在最前的没做完的步骤）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
+  /// 3. 其余结束：没有下一步了、下一步换了别的会话、整件事完成。做不到的（`PiSessionState.canEnd`：终端里开的 Codex 会话这类）留着；
+  ///    已结束的、记录还没到的不动。
+  /// `task` 是这件事里的任意一个任务。返回结束请求。必须在写事务内调用。
+  @discardableResult
+  func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+    guard let top = try find(Card.self, try topTask(of: task)) else { return [] }
     let sessions = try db.query(
-      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [try topTask(of: task)]
+      "SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))", [top.id]
     ) { $0.text(0) }
+    guard !sessions.isEmpty else { return [] }
+    let open = try leaves(of: top).filter { $0.completedAt == nil }
+    let launching = try launchingLeaves(open.map(\.id))
+    var used = Set(open.filter { !launching.contains($0.id) }.compactMap(\.piSessionID))
+    if let next = open.first, next.id != top.id, next.piSessionID == nil, !launching.contains(next.id), try sendingLeaves([next.id]).isEmpty,
+      let continued = try continuableSession(for: next.id, agent: nil)
+    {
+      used.insert(continued.sessionID)
+    }
     return try sessions.compactMap { sessionID in
-      guard try tasks(boundTo: sessionID).allSatisfy({ try $0.task.status == .done && !hasNextStep(after: $0.task) }),
+      guard !used.contains(sessionID), try db.first(Self.usedElsewhere, [sessionID, top.id], { _ in true }) == nil,
         let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }
   }
 
-  /// 叶子是步骤、它所在的那件事还有没做完的步骤。
-  private func hasNextStep(after leaf: Card) throws -> Bool {
-    guard leaf.parentID != nil, let top = try find(Card.self, try topTask(of: leaf.id)) else { return false }
-    return try leaves(of: top).contains { $0.completedAt == nil }
-  }
+  /// 会话（?1）在这件事（以 ?2 为根）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
+  private static let usedElsewhere = """
+    SELECT 1 WHERE EXISTS (
+        SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
+          AND id NOT IN (\(subtree(from: "SELECT ?2"))))
+      OR EXISTS (
+        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(toSessionModes)) AND status IN ('pending', 'executing'))
+    """
 
   /// 任务此刻在做的叶子：叶子就是它自己，有步骤的是第一个没完成的步骤（没有就第一个）。不是任务抛 `notATask`。
   public func workingLeaf(of task: UUID) throws -> Card {
@@ -514,21 +554,29 @@ extension CueStore {
     EXISTS (SELECT 1 FROM cards l WHERE (l.id = t.id OR l.parentID = t.id) AND l.todoAt IS NOT NULL AND l.deletedAt IS NULL AND l.piSessionID IS NOT NULL)
     """
 
-  /// `since` 之后有会话的事里的变化，从早到晚：会话歇下、等回答、出错（按会话进入这个状态的时刻），叶子或任务完成，
-  /// Cue 发起的请求没能执行（按本机得知结果的时刻；还没开成会话的事也报）。会话里用户说的话不另报：他那一轮歇下时 Cue 照常醒来、peek 时看到。
-  public func cueChanges(since: Date) throws -> [CueChange] {
-    let tasks = try topTasks(where: "(t.completedAt IS NULL OR t.completedAt > ?) AND \(Self.hasSession)", [since])
+  /// 本机最近一次写入的序号：构成 Cue 的变化的那几列被写时（本机写入与同步落库一样），那一行盖上新序号（见 `Schema` 38）。
+  /// Cue 按它分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来。
+  public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
+
+  /// 写入序号 `marks` 之后有会话的事里的变化，按事件时刻从早到晚：会话歇下、等回答、出错，Cue 发起的请求没能执行
+  /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算）。
+  /// 会话里用户说的话不另报：他那一轮歇下时 Cue 照常醒来、peek 时看到。
+  public func cueChanges(after marks: CueMarks) throws -> [CueChange] {
+    let tasks = try topTasks(where: "(t.completedAt IS NULL OR t.writeSeq > ?) AND \(Self.hasSession)", [marks.tasks])
     var changes: [CueChange] = []
     let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
     let sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
-    for task in tasks where task.completedAt.map({ $0 > since }) ?? false {
-      changes.append(CueChange(kind: .done, task: task, at: task.completedAt!, recap: try latestRecap(of: task.id)))
+    let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
+    let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))
+    func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
+    for task in tasks where task.completedAt != nil && seq(task) > marks.tasks {
+      changes.append(CueChange(kind: .done, task: task, at: task.completedAt!, seq: seq(task), recap: try latestRecap(of: task.id)))
     }
     for (task, leaf) in leaves {
-      if leaf.id != task.id, let done = leaf.completedAt, done > since {
-        changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
+      if leaf.id != task.id, let done = leaf.completedAt, seq(leaf) > marks.tasks {
+        changes.append(CueChange(kind: .done, task: task, leaf: leaf, at: done, seq: seq(leaf), recap: leaf.piSessionID.flatMap { sessions[$0] }?.recap))
       }
-      guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
+      guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), let written = sessionSeqs[session.sessionID], written > marks.sessions else { continue }
       let (kind, detail): (CueChange.Kind?, String?) =
         switch session.state.known {
         case .settled, .interrupted: (.settled, nil)
@@ -538,23 +586,24 @@ extension CueStore {
         }
       if let kind {
         changes.append(CueChange(
-          kind: kind, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap,
+          kind: kind, task: task, leaf: leaf, at: session.stateSince, seq: written, detail: detail, recap: session.recap,
           interrupted: session.state == .known(.interrupted)))
       }
     }
     // 一个会话可以绑好几件事：没带卡的失败算在它绑着的每件事上（同一件事的几个叶子共用它时只报一次）
     let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
       .mapValues { pairs in pairs.filter { pair in pairs.first { $0.task.id == pair.task.id }!.leaf.id == pair.leaf.id } }
-    let failed = try select(
-      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND \(Self.resultKnownAt) > ?", [since],
-      orderBy: "createdAt, rowid")
-    for request in failed {
+    let failed = try selectWritten(
+      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed' AND writeSeq > ?", [marks.sessions],
+      orderBy: "writeSeq")
+    for (request, written) in failed {
       let pairs = try request.cardID.map(failedLeaf) ?? request.target.ref.flatMap { bySession[$0] } ?? []
       let at = request.resultReceivedAt ?? request.completedAt ?? request.createdAt
       let detail = "\(Self.action(request.mode))：\(request.failure ?? "")"
       for pair in pairs {
         changes.append(CueChange(
-          kind: .failed, task: pair.task, leaf: pair.leaf, at: at, detail: detail, recap: try pair.leaf.piSessionID.flatMap(sessionState)?.recap))
+          kind: .failed, task: pair.task, leaf: pair.leaf, at: at, seq: written, detail: detail,
+          recap: try pair.leaf.piSessionID.flatMap(sessionState)?.recap))
       }
     }
     return changes.sorted { $0.at < $1.at }
@@ -573,9 +622,6 @@ extension CueStore {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
   }
 
-  /// 本机得知请求结果的时刻：发起的这台收到结果时记的（本机时钟），本机执行的是完成时刻。
-  private static let resultKnownAt = "COALESCE(resultReceivedAt, completedAt)"
-
   /// 请求的动作在变化里的说法。
   private static func action(_ mode: Open<DeliveryMode>) -> String {
     switch mode.known {
@@ -586,13 +632,6 @@ extension CueStore {
     case .end: "结束"
     default: mode.rawValue
     }
-  }
-
-  /// Cue 发起的请求最近一次失败的时刻（本机得知结果的时刻）：管理器订阅它，请求一失败就对账、醒来。
-  public func lastCueRequestFailure() throws -> Date? {
-    try db.first(
-      "SELECT MAX(\(Self.resultKnownAt)) FROM deliveryRequests WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND status = 'failed'"
-    ) { $0.dateOrNil(0) } ?? nil
   }
 
   /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
@@ -661,6 +700,25 @@ extension CueStore {
   private func cards(_ ids: Set<UUID>) throws -> [UUID: Card] {
     Dictionary(
       uniqueKeysWithValues: try select(Card.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)]).map { ($0.id, $0) })
+  }
+
+  /// 这些行的写入序号，按 `key` 列（同一个键有几行取最新的）。
+  private func writeSeqs(of table: Table, _ key: String, _ keys: [String]) throws -> [String: Int] {
+    guard !keys.isEmpty else { return [:] }
+    return Dictionary(
+      try db.query(
+        "SELECT \(key), MAX(writeSeq) FROM \(table.rawValue) WHERE \(key) IN (SELECT value FROM json_each(?)) GROUP BY \(key)", [JSONColumn.encode(keys)]
+      ) { ($0.text(0), Int($0.int(1))) },
+      uniquingKeysWith: { first, _ in first })
+  }
+
+  /// 满足条件的行，带上它的写入序号。
+  private func selectWritten<R: Record>(
+    _ type: R.Type, where condition: String, _ arguments: [any SQLBindable], orderBy: String
+  ) throws -> [(R, Int)] {
+    try db.query(
+      "SELECT \(R.columns.joined(separator: ", ")), writeSeq FROM \(R.table.rawValue) WHERE \(condition) ORDER BY \(orderBy)", arguments
+    ) { (R(row: $0), Int($0.int(Int32(R.columns.count)))) }
   }
 
   private func sessionStates(_ sessionIDs: [String]) throws -> [String: PiSessionState] {
