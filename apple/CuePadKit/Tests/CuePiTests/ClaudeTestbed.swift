@@ -8,16 +8,14 @@ import Testing
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
 /// 模型走 DeepSeek 的 Anthropic 兼容接口（缺省 `deepseek-flash`，能看图；另有 `deepseek-v4-pro`；强度 low/high/max），
-/// 密钥运行时从 ~/.pi/agent/auth.json 读、只放进子进程环境，不落盘。
+/// 密钥只在录制与直连时从 ~/.pi/agent/auth.json 读、只放进子进程环境，不落盘，也不进录像带。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
-private let claudeKey: String? = {
+let claudeKey: String? = {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
     return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["deepseek"]?["key"]?.string
 }()
-/// 真 Claude Code 的用例开了（`RealAgents`）、本机装了 claude、有 DeepSeek 密钥
-let realClaudeAvailable = RealAgents.on(.claudeCode) && claudeURL != nil && claudeKey != nil
 
 /// 测试台的缺省模型与另一个能换过去的模型
 let claudeTestModel = "deepseek-flash"
@@ -39,11 +37,12 @@ final class ClaudeTestbed {
     let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
     let files: AttachmentFiles
+    /// 桥上从测试台起来以后的全部变化
+    let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
-    private let store: CueStore
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]), cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locator: AgentTape.locator("claude"), cuepad: PiProcess.cuepad)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
@@ -61,29 +60,30 @@ final class ClaudeTestbed {
         let seed: ClaudeJSON = ["hasCompletedOnboarding": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
+        AgentTape.current?.watch(config.appending(path: "projects"), work)
         environment = [
             "CLAUDE_CONFIG_DIR": config.path, "HOME": root.appending(path: "home").path,
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN": claudeKey ?? "", "ANTHROPIC_API_KEY": "",
+            "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : claudeKey ?? "", "ANTHROPIC_API_KEY": "",
             // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        store = try Fixture().store
-        files = store.files
+        files = scratchFiles
         bridge = PiBridge(socketDirectory: sockets)
+        log = ChangeLog(bridge)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]),
+            bridge: bridge, paths: paths, hooks: hooks, locator: AgentTape.locator("claude"),
             idleLimit: idleLimit)
         if installHooks { try await integration.install(.claudeCode) }
     }
 
-    /// 搭好测试台跑 `body`，不论成败都收拾干净（停掉起的进程、删掉临时目录）。
+    /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
         installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
@@ -112,17 +112,21 @@ final class ClaudeTestbed {
         return session(pid: pid)!
     }
 
-    /// 等这个会话这一轮做完（进过工作、又歇下）。
-    func waitForTurn(_ id: PiSession.ID, timeout: Duration = .seconds(180)) async throws {
-        var worked = false
-        do {
-            try await eventually("这一轮做完", timeout: timeout) {
-                let state = bridge.session(id: id)?.state
-                if state?.isWorking == true || state == .waitingForUser { worked = true }
-                return worked && state == .settled
+    /// 等这个会话在 `start` 之后做完一轮（进过工作、又歇下）：发话之前取 `start`。看变化记录，不看此刻的状态——
+    /// 回放时一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。
+    func waitForTurn(_ id: PiSession.ID, since start: Date, timeout: Duration = .seconds(180)) async throws {
+        func done() -> Bool {
+            var worked = false
+            for case .stateChanged(let session, _) in log.changes where session.id == id {
+                if session.state.isWorking || session.state == .waitingForUser { worked = true }
+                if worked && session.state == .settled && session.stateSince > start { return true }
             }
+            return false
+        }
+        do {
+            try await eventually("这一轮做完", timeout: timeout) { done() }
         } catch {
-            throw Stuck(description: "等不到这一轮做完（进过工作：\(worked)）；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))")
+            throw Stuck(description: "等不到这一轮做完；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))")
         }
     }
 
@@ -161,7 +165,6 @@ final class ClaudeTestbed {
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
-        try? FileManager.default.removeItem(at: root)
     }
 }
 

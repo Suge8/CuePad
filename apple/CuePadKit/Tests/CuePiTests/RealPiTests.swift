@@ -10,7 +10,7 @@ private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 
 /// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
@@ -225,6 +225,7 @@ struct RealPiTests {
         (cjkCommand, String(cjkCommand.prefix(119)) + "…"),
     ])
     func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
+        AgentTape.variant("\(command.count)")
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:\(command)]]")
