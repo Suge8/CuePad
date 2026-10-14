@@ -70,17 +70,25 @@ struct MacSyncTests {
         #expect(rig.sync.stopped == 1)
     }
 
-    /// 退出时这台 Mac 当场离线：别的组件停得慢、耗尽了收尾的上限，离线这一条也已写下并上传。
+    /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
     @Test(.timeLimit(.minutes(1)))
-    func 退出时这台Mac离线_收尾超时也不漏() async throws {
-        let host = TestApp.hostID
+    func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
+        // Cue 的大脑一直起不来也取消不了：停 Cue 这一步卡住
+        let rig = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }; return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let services: AppServices = rig.services, host = TestApp.hostID
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
         var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        try await services.store.updateCueProfile {
+            $0.hostID = host
+            $0.enabledAt = .now
+        }
         services.start()
         #expect(await uploads.next() == record)
-        #expect(try await services.store.macOnline(host))
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
 
-        #expect(await services.stop(within: .zero) != nil)  // 第一步就超时，之后的步骤都不执行
+        #expect(await services.stop(within: .milliseconds(300)) == "Cue")
 
         #expect(await uploads.next() == record)
         #expect(try await !services.store.macOnline(host))
