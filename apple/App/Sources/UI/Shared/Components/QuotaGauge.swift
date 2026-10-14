@@ -125,7 +125,7 @@ struct QuotaChip: View {
             // 弹出框只在点开时挂上：挂在与这枚同大的空底上，关掉随即卸下
             .background {
                 if showsDetail {
-                    Color.clear.popover(isPresented: $showsDetail, arrowEdge: .bottom) {
+                    Color.clear.popover(isPresented: $showsDetail, arrowEdge: Self.arrowEdge) {
                         QuotaDetail(meter: meter).presentationCompactAdaptation(.popover)
                     }
                 }
@@ -133,6 +133,14 @@ struct QuotaChip: View {
             .accessibilityLabel(meter.spoken)
             .onAppear { if DebugHooks.preset.quotaDetail == meter.provider { DebugHooks.later(.milliseconds(400)) { showsDetail = true } } }
     }
+
+    /// 朝哪边弹：总览在页顶，手机上固定朝上会被截（不翻面），交给系统按空间定；Mac 给的是首选边（弹在锚点的哪一边），
+    /// 放不下系统自己翻，首选下边：朝上会盖住窗口顶上的工具栏，菜单栏面板上方是菜单栏。
+    #if os(macOS)
+    private static let arrowEdge: Edge? = .bottom
+    #else
+    private static let arrowEdge: Edge? = nil
+    #endif
 
     private var label: some View {
         HStack(spacing: 10) {
