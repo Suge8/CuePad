@@ -2,6 +2,7 @@
 import CueStore
 import CueTestSupport
 import Foundation
+import Network
 import Testing
 @testable import CuePi
 
@@ -100,5 +101,62 @@ struct RealCodexHostedTests {
             #expect(indexed?.map(\.lastPathComponent).allSatisfy { $0.contains(main) } == true && indexed?.count == 1)
         }
     }
+
+    /// 提供方拒绝了这一轮（本机假服务对每个请求回 400，不花钱）：Codex 不重试、这一轮失败，没有 Stop 钩子；
+    /// 会话停在出错，说明是提供方的原话，悬停看的全文也在。
+    @Test func aFailedTurnLeavesTheSessionInErrorWithTheReason() async throws {
+        let provider = try await RejectingProvider()
+        defer { provider.stop() }
+        try await withCodexRig { rig in
+            let config = rig.codex.home.appending(path: "config.toml")
+            let text = try String(contentsOf: config, encoding: .utf8)
+            try ("model_provider = \"rejecting\"\n" + text + """
+
+                [model_providers.rejecting]
+                name = "rejecting"
+                base_url = "http://127.0.0.1:\(provider.port)/v1"
+                wire_api = "responses"
+
+                """).write(to: config, atomically: true, encoding: .utf8)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4")
+
+            _ = try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
+            try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {
+                rig.bridge.session(id: id)?.detail?.contains(RejectingProvider.reason) == true
+            }
+            let session = try #require(rig.bridge.session(id: id))
+            #expect(session.state == .error)
+            #expect(session.errorMessage?.contains(RejectingProvider.reason) == true)
+        }
+    }
+}
+
+/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
+private final class RejectingProvider: Sendable {
+    static let reason = "bad things happened"
+    private let listener: NWListener
+    let port: UInt16
+
+    init() async throws {
+        listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: .global())
+            // 请求读一块就够了：不论问什么都拒绝
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
+                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
+                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
+                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        let ready = AsyncStream<UInt16>.makeStream()
+        listener.stateUpdateHandler = { [listener] state in
+            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
+        }
+        listener.start(queue: .global())
+        var iterator = ready.stream.makeAsyncIterator()
+        port = try #require(await iterator.next())
+    }
+
+    func stop() { listener.cancel() }
 }
 #endif
