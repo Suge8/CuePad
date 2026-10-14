@@ -6,7 +6,7 @@ import Testing
 
 /// 端到端：真实 Pi + 本机 FireCode（指挥官开进程内子代理、把子代理事件以信封投回会话）+ 桥扩展 + 假模型。
 @MainActor
-@Suite(RealAgents.taped(.pi), .enabled(if: RealAgents.mode(of: .pi) == .replay || firecodeAvailable, "录制要本机的 FireCode 源码"), .agentTape(.pi), RealAgents.serialWhenRecording(.pi))
+@Suite(RealAgents.taped(.pi), .enabled(if: RealAgents.mode(of: .pi) == .replay || firecodeAvailable, "录制要本机的 FireCode 源码"), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealFirecodeTests {
     @Test func subagentsAreSummarizedOnTheMasterSessionAndTheirEventsAreNotYourPrompt() async throws {
         let pi = try await PiProcess(extraExtensions: [], firecode: true)

@@ -46,7 +46,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 - 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
 - 让 Cue 真跑（看 Mac 的“运行情况”，`-CuePadScene cuerun` 直接开着）：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），点启用后在设置里把 Agent 换成 Claude Code：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
 - 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
-- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。模拟器用 `xc.sh shot` 刚用过的那台（名为 "CuePad <机型> #<槽号>"，见 `_sim.sh`），不碰别人的；槽位是共用的，别的任务随时会在上面装包重跑，要连续操作就尽快做完。
+- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。模拟器用 `xc.sh shot` 刚用过的那台（名为 "CuePad <机型> #<号>"，见 `_sim.sh`），不碰别人的；这一池是共用的，别的任务随时会在上面装包重跑，要连续操作就尽快做完。
 
 ## 通知（Mac）
 
@@ -58,7 +58,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 
 ## 性能测量
 
-测量只有一个入口：单次交互（`-CuePadBench interact`）。`xc.sh perf mac`、`xc.sh perf ios`（独占全部槽位；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
+测量只有一个入口：单次交互（`-CuePadBench interact`）。`xc.sh perf mac`、`xc.sh perf ios`（独占机器；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
