@@ -95,19 +95,19 @@ extension CueStore {
     return pending
   }
 
-  /// "待推送"的唯一定义（全量、增量与单条判定都从这里来）：从未推送过，或推送后又改过。
+  /// "待推送"的唯一定义（全量、增量与单条判定都从这里来）：服务器从没收下过，或收下后又改过。
   private func pendingSaves(_ table: Table, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [SyncKey] {
     try db.query(
       """
       SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
-      WHERE (\(condition)) AND (s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
+      WHERE (\(condition)) AND (s.pushedModifiedAt IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
       """, arguments
     ) { SyncKey(table: table, id: $0.text(0)) }
   }
 
   private func pendingDeletes(_ table: Table) throws -> [String] {
     try db.query(
-      "SELECT recordName FROM syncRecords WHERE recordType = ? AND recordName NOT IN (SELECT id FROM \(table.rawValue))",
+      "SELECT recordName FROM syncRecords WHERE recordType = ? AND pushedModifiedAt IS NOT NULL AND recordName NOT IN (SELECT id FROM \(table.rawValue))",
       [table.rawValue]
     ) { $0.text(0) }
   }
@@ -124,11 +124,30 @@ extension CueStore {
   /// 本机推送过的每条记录：记录名 → 表与推送时的修改时间。按版本对账时，推送过而服务器上已没有的就是在别处删掉了。
   package func syncedRecords() throws -> [String: (table: Table, pushed: Int64)] {
     var synced: [String: (table: Table, pushed: Int64)] = [:]
-    let rows = try db.query("SELECT recordName, recordType, pushedModifiedAt FROM syncRecords") { ($0.text(0), $0.text(1), $0.int(2)) }
+    let rows = try db.query("SELECT recordName, recordType, pushedModifiedAt FROM syncRecords WHERE pushedModifiedAt IS NOT NULL") {
+      ($0.text(0), $0.text(1), $0.int(2))
+    }
     for (name, type, pushed) in rows {
       if let table = Table(rawValue: type) { synced[name] = (table, pushed) }
     }
     return synced
+  }
+
+  /// 本机把这几条记录的这一版交给服务器（构造上传批次时）。结果没回到本机就崩溃、或回包在路上丢了，服务器其实收下了它；
+  /// 之后它经拉取或重传被拒附的服务器版本回来，按修改时间认出是自己的（`applyVersion`），不当成并发编辑留冲突副本。
+  /// 同一时刻只有一批在路上，所以每条记录记一个时间就够：已有一版交出去而服务器还没收下时保留那一版（它最可能先回来），
+  /// 收下之后再交出去的才覆盖。
+  package func noteSent(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws {
+    try write {
+      for version in versions {
+        try db.run(
+          """
+          INSERT INTO syncRecords (recordName, recordType, sentModifiedAt) VALUES (?, ?, ?)
+          ON CONFLICT(recordName) DO UPDATE SET sentModifiedAt = excluded.sentModifiedAt
+          WHERE syncRecords.sentModifiedAt IS NULL OR syncRecords.sentModifiedAt <= COALESCE(syncRecords.pushedModifiedAt, -1)
+          """, [version.name, version.table.rawValue, version.modifiedAt])
+      }
+    }
   }
 
   /// 服务器已接受这条记录（上传结果里的那一版）：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
@@ -292,7 +311,7 @@ extension CueStore {
   /// - 本机自上次推送后没改过：直接采用远端。
   /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
-  /// 本机自己上传的版本回来（回声）不是并发编辑：由推送时间认出（`applyVersion`）。
+  /// 本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
@@ -309,7 +328,14 @@ extension CueStore {
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
     let table = remote.table
-    let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
+    let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
+      ($0.intOrNil(0), $0.intOrNil(1))
+    } ?? (nil, nil)
+    // 交出去而结果没回到本机的那一版回来了（崩溃、回包丢失）：服务器收下了它，记账；本机的行不动
+    if remote.modifiedAt == sent {
+      if remote.modifiedAt > (pushed ?? .min) { try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt) }
+      return
+    }
     guard let local = try readSyncRow(table, remote.id) else {
       if pushed != nil { return }
       try overwrite(remote)

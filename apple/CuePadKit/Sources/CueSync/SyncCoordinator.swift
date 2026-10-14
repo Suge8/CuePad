@@ -88,7 +88,17 @@ actor SyncCoordinator {
       if let record = await record(for: recordID(name)) { saves.append(record) }
     }
     let batch = (saves: saves, deletes: Array(deletes.prefix(limit - saves.count)).map(recordID))
-    return batch.saves.isEmpty && batch.deletes.isEmpty ? nil : batch
+    guard !batch.saves.isEmpty || !batch.deletes.isEmpty else { return nil }
+    do {
+      try await store.noteSent(saves.compactMap { record in
+        guard let table = RecordMapper.table(named: record.recordType), let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
+        return (record.recordID.recordName, table, stamp)
+      })
+    } catch {
+      report(error, recordName: nil)
+      return nil
+    }
+    return batch
   }
 
   /// 构造要上传的记录：以上次服务器记录的系统字段为底，写入当前行的字段；行已不在则返回 nil。
@@ -328,7 +338,9 @@ actor SyncCoordinator {
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
     var next = state
-    next.issues.append(SyncIssue(recordType: recordType, recordName: recordName, message: message))
+    let issue = SyncIssue(recordType: recordType, recordName: recordName, message: message)
+    // 停下后每次重试都会再报同一个错：问题列表里已有的不再加，免得被它刷满
+    if !next.issues.contains(issue) { next.issues.append(issue) }
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
     if failed, needsDecision == nil { next.status = .failed(message) }
     state = next  // 问题与状态一次送达

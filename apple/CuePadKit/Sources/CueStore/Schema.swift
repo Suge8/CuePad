@@ -125,10 +125,27 @@ enum Schema {
     Upgrade(stringLiteral: piProcesses),
     // 37：Cue 自己验收、做完告诉你，不再请你收下：验收标记下线（还开着的旧验收照常是一条提问，答了交给 Cue）
     "ALTER TABLE cueMessages DROP COLUMN acceptance;",
-    // 38：同步不再用 CKSyncEngine，只有一条上传通路：引擎状态换成同步区令牌（没有令牌时按版本对一遍账，不全量下载），
-    // 交出去还没落账的版本不再另记（回声只按推送时间认）
-    "DELETE FROM syncState; DROP TABLE IF EXISTS syncSent;",
+    // 38：同步不再用 CKSyncEngine，只有一条上传通路：引擎状态换成同步区令牌（没有令牌时按版本对一遍账，不全量下载）；
+    // 交出去还没落账的版本只记一个修改时间，从没被服务器收下过的记录也要记，所以系统字段与推送时间可空
+    Upgrade(stringLiteral: """
+      DELETE FROM syncState; DROP TABLE IF EXISTS syncSent;
+      DROP INDEX syncRecords_recordType; ALTER TABLE syncRecords RENAME TO syncRecordsOld;
+      \(syncRecords)
+      INSERT INTO syncRecords (recordName, recordType, systemFields, pushedModifiedAt)
+        SELECT recordName, recordType, systemFields, pushedModifiedAt FROM syncRecordsOld;
+      DROP TABLE syncRecordsOld;
+      """),
   ]
+
+  /// 同步元数据：每条记录服务器端的系统字段与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
+  /// （`sentModifiedAt`，见 `CueStore.noteSent`）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  private static let syncRecords = """
+    CREATE TABLE syncRecords (
+      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
+      pushedModifiedAt INTEGER, sentModifiedAt INTEGER
+    ) STRICT;
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    """
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -290,12 +307,7 @@ enum Schema {
       projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
     ) STRICT;
 
-    -- 同步元数据：每条记录服务器端的系统字段与已推送的修改时间。行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
-    CREATE TABLE syncRecords (
-      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB NOT NULL,
-      pushedModifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    \(syncRecords)
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 

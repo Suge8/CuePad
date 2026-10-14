@@ -234,11 +234,12 @@ import Testing
     let card = try await pushedCard()
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
+    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
 
     guard case .failed = await rig.coordinator.status else {
       Issue.record("status should be .failed, got \(await rig.coordinator.status)")
       return
     }
-    #expect(!(await rig.coordinator.issues).isEmpty)
+    #expect(await rig.coordinator.issues.count == 1)  // 同一个错只进问题列表一次
   }
 }

@@ -6,7 +6,7 @@ import Testing
 @testable import CueSync
 
 /// 用户在一台 Mac 上连续编辑同一条提示词：本机上传过的版本经拉取回到本机时，本机往往已有更新的编辑。
-/// 回声不是别的设备的并发编辑，不能留下冲突副本。上传一次只有一批在路上、结果先于之后的拉取落账，所以回声都按推送时间认。
+/// 回声不是别的设备的并发编辑，不能留下冲突副本。
 @Suite struct OwnEchoTests {
   let rig = try! Rig()
   var store: CueStore { rig.store }
@@ -38,6 +38,28 @@ import Testing
     let restarted = SyncCoordinator(store: store, zoneID: testZone)
 
     await restarted.handle(.fetched(modifications: [uploaded], deletions: []))
+
+    try await expectNoCopyAndLocalKept(card, body: "第二版")
+  }
+
+  /// 交出去的那一版服务器收下了、结果却没回到本机（崩溃或回包丢失），App 重启、本机又改过；那一版经拉取回来，
+  /// 或下一次上传被拒时附回来。
+  @Test(arguments: [false, true])
+  func anUploadWhoseResultNeverArrivedIsNotAConflict(comesBackAsRejection: Bool) async throws {
+    let card = try await store.createCard(in: nil, body: "base")
+    try await rig.simulatePush()
+    _ = try await edit(card, "第一版")
+    let lost = try #require(await rig.coordinator.nextBatch(first: [], limit: 400)?.saves.first)  // 交出去，结果没回来
+    let restarted = SyncCoordinator(store: store, zoneID: testZone)
+    _ = try await edit(card, "第二版")
+
+    if comesBackAsRejection {
+      let retry = try #require(await restarted.nextBatch(first: [], limit: 400)?.saves.first)
+      let rejection = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: lost])
+      await restarted.handle(.sent(saved: [], failedSaves: [(retry, rejection)], deleted: [], failedDeletes: []))
+    } else {
+      await restarted.handle(.fetched(modifications: [lost], deletions: []))
+    }
 
     try await expectNoCopyAndLocalKept(card, body: "第二版")
   }
