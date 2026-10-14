@@ -198,6 +198,26 @@ struct SendTargetTests {
         #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
     }
 
+    /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同一个叶子，Mac 上发给 Agent 与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
+    @Test func Mac发给Agent与Cue开工_交到同一个地方() async throws {
+        try await remoteSession("r", title: "atlas")
+        let (bound, boundDraft) = try await leaf(in: project, session: "r")
+        try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
+        workspace.handOff(boundDraft)
+        let mac = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
+        let cue = try await store.startLeaf(bound.id, host: TestApp.hostID, cue: true)
+        #expect(cue.target.ref == "r" && mac.target.ref == "r" && cue.hostID == mac.hostID)
+
+        let (fresh, freshDraft) = try await leaf(in: project)
+        let cueLaunch = try await store.startLeaf(fresh.id, host: TestApp.hostID, cue: true)
+        #expect(try await store.withdrawDelivery(cueLaunch.id))
+        workspace.handOff(freshDraft)
+        let macLaunch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }!
+        #expect(macLaunch.launch?.name == "修乱序" && cueLaunch.launch?.name == "修乱序")
+        #expect(macLaunch.launch?.project == cueLaunch.launch?.project && macLaunch.hostID == cueLaunch.hostID)
+        #expect(macLaunch.target.name == cueLaunch.target.name)
+    }
+
     /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能绑、能交的在线会话，与发送走的路（已结束）是同一个判定。
     @Test func 本机记录里在线但桥上已没有的会话不算在线() async throws {
         _ = try await open("a", in: "/work/alpha")

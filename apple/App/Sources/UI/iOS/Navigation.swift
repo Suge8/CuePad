@@ -43,6 +43,8 @@ final class Navigation {
         var draft: ComposerDraft?
         /// 为哪条提示词开的（发给 Agent 时定下）：开好后关联它。
         var card: UUID?
+        /// 会话名：为提示词开的是它的任务的标题（`CueStore.handOffPlan`）；nil 是不起名（以项目名称呼）。
+        var name: String?
     }
 
     var layout: Layout = .tabs
@@ -106,11 +108,11 @@ final class Navigation {
     }
 
     /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
-    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?) {
+    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, name: String?) {
         let project = outbox?.project
         outbox = nil
         task = nil
-        newSession = NewSession(project: project, draft: draft, card: card)
+        newSession = NewSession(project: project, draft: draft, card: card, name: name)
     }
 
     /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。

@@ -3,6 +3,26 @@ import Foundation
 
 // 任务交给会话、跟进与看板：界面与 Cue（经 MCP）共用这一份规则。`cue` 为真的写入标明来自 Cue（`DeliveryOrigin`）。
 
+/// 提示词交到哪（`CueStore.handOffPlan`）：界面（Mac 的发给 Agent、手机发给 Agent 的默认目标）与 Cue 的 `startLeaf` 共用这一份规则。
+public struct HandOffPlan: Equatable, Sendable {
+  public enum Destination: Equatable, Sendable {
+    /// 叶子绑着的会话：Pi 的会话 id、显示名、由哪台 Mac 执行（会话所在的那台；记录还没到时是发起的这台，手机上为 nil）。
+    case session(id: String, title: String, host: String?)
+    /// 在项目绑定的文件夹开新会话，由绑了文件夹的那台 Mac 执行（发起的这台绑了就是它）。
+    case launch(project: UUID, host: String)
+    /// 项目哪台 Mac 都没绑文件夹，开不了会话。
+    case noFolder(project: UUID, projectName: String)
+    /// 未分类的任务没有文件夹，开不了会话。
+    case unfiled
+  }
+
+  /// 交给会话的叶子。
+  public var leaf: UUID
+  public var destination: Destination
+  /// 开新会话时的会话名：叶子的标题。
+  public var name: String
+}
+
 /// 对会话说话的时机（`CueStore.sayToLeaf`）：会话正忙时马上说（插进这一轮）还是等它做完再说；歇着时两种都是直接说。
 public enum SayTiming: Sendable {
   case now, after
@@ -110,37 +130,57 @@ extension UUID {
 extension CueStore {
   // MARK: 交给会话
 
-  /// 开工：把叶子（没有步骤的任务）的草稿交出去。叶子绑着会话就发进那个会话（会话正忙时等它做完再说），
-  /// 没绑就在项目绑定的文件夹开一个以叶子标题命名的新会话，草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
-  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，项目没绑文件夹抛 `noFolder`。
-  /// `host` 是这台 Mac：会话记录不在、项目在这台 Mac 上绑了文件夹时用它。`model` 与 `thinking` 只用于开新会话。
+  /// 提示词交到哪：给叶子或它的提示词（叶子下的草稿）。叶子绑着会话就交给那个会话；没绑就在项目绑定的文件夹开一个以叶子标题命名的新会话
+  /// （这台 Mac 绑了就在这台，否则别的 Mac 里按名字排第一台）。`host` 是发起的这台 Mac，手机为 nil。
+  /// 不是叶子或叶子的提示词抛 `notATask` / `notALeaf`。
+  public func handOffPlan(_ card: UUID, host: String?) throws -> HandOffPlan {
+    guard let found = try find(Card.self, card) else { throw CueStoreError.notFound }
+    let leaf = try requireLeaf(found.isTask ? card : found.parentID ?? card)
+    return HandOffPlan(leaf: leaf.id, destination: try destination(of: leaf, host: host), name: leaf.heading)
+  }
+
+  private func destination(of leaf: Card, host: String?) throws -> HandOffPlan.Destination {
+    if let sessionID = leaf.piSessionID {
+      let session = try sessionTarget(of: leaf)
+      return .session(id: sessionID, title: session.target.name, host: session.host(or: host))
+    }
+    guard let project = leaf.projectID else { return .unfiled }
+    guard let launchHost = try launchHost(for: project, preferring: host) else {
+      return .noFolder(project: project, projectName: try find(Project.self, project)?.name ?? "")
+    }
+    return .launch(project: project, host: launchHost)
+  }
+
+  /// 开工：把叶子（没有步骤的任务）的草稿交到 `handOffPlan` 定下的地方。交给已有会话时会话正忙就等它做完再说；
+  /// 开新会话时草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
+  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，开不了会话抛 `noFolder`。`model` 与 `thinking` 只用于开新会话。
   public func startLeaf(
     _ leaf: UUID, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
-    let card = try requireLeaf(leaf)
-    let draft = try draft(of: leaf)
+    let plan = try handOffPlan(leaf, host: host)
+    let draft = try draft(of: plan.leaf)
     let content = draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
-    if card.piSessionID != nil {
-      guard let draft else { throw CueStoreError.alreadyStarted(card.heading) }
-      let session = try sessionTarget(of: card, host: host)
-      return try requestDelivery(content, to: session.target, on: session.host, mode: Self.mode(.after, session.state), card: draft.id, cue: cue)
+    switch plan.destination {
+    case .session:
+      guard let draft else { throw CueStoreError.alreadyStarted(plan.name) }
+      let session = try sessionTarget(of: try requireLeaf(plan.leaf))
+      return try requestDelivery(content, to: session.target, on: session.host(or: host), mode: Self.mode(.after, session.state), card: draft.id, cue: cue)
+    case .launch(let project, let host):
+      guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(plan.name) }
+      let launch = PiLaunch(
+        project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
+        name: plan.name, model: model, thinking: thinking)
+      return try requestLaunch(launch, title: plan.name, on: host, card: draft?.id ?? plan.leaf, cue: cue)
+    case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
+    case .unfiled: throw CueStoreError.noFolder("")
     }
-    guard try launchingLeaves([leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
-    guard let project = card.projectID else { throw CueStoreError.noFolder("") }
-    guard let launchHost = try launchHost(for: project, preferring: host) else {
-      throw CueStoreError.noFolder(try find(Project.self, project)?.name ?? "")
-    }
-    let launch = PiLaunch(
-      project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
-      name: card.heading, model: model, thinking: thinking)
-    return try requestLaunch(launch, title: card.heading, on: launchHost, card: draft?.id ?? leaf, cue: cue)
   }
 
   /// 对叶子已有的会话说话。方式由会话此刻的状态定：歇着就直接说；正在跑一轮时 `now` 马上说、`after` 等它做完再说。
   /// 没有会话抛 `noSession`（正在开会话抛 `launching`）。
   public func sayToLeaf(_ leaf: UUID, text: String, when: SayTiming, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let (card, session) = try requireSession(of: leaf, host: host)
-    return try requestDelivery(text, to: session.target, on: session.host, mode: Self.mode(when, session.state), card: card.id, cue: cue)
+    let (card, session) = try requireSession(of: leaf)
+    return try requestDelivery(text, to: session.target, on: session.host(or: host), mode: Self.mode(when, session.state), card: card.id, cue: cue)
   }
 
   /// 说话的方式：会话正在跑一轮才分马上说与等它做完再说，否则直接说（记录不在时也直接说）。
@@ -164,20 +204,20 @@ extension CueStore {
   }
 
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。
-  private func launchHost(for project: UUID, preferring host: String) throws -> String? {
-    if try directory(of: project) != nil { return host }
+  private func launchHost(for project: UUID, preferring host: String?) throws -> String? {
+    if let host, try directory(of: project) != nil { return host }
     let hosts = try db.query("SELECT hostID FROM directoryBindings WHERE projectID = ? ORDER BY hostName, hostID", [project]) { $0.text(0) }
-    return hosts.contains(host) ? host : hosts.first
+    return host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first
   }
 
   /// 回答叶子的会话正在等的提问：选择框给选项原文或从 1 起的序号，确认框给是或否，输入框给文字。
   public func answerLeaf(_ leaf: UUID, _ value: String, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let session = try requireSession(of: leaf, host: host).session
+    let session = try requireSession(of: leaf).session
     guard let question = session.state?.question, question.isAnswerable, let promptID = question.promptID, let kind = question.kind.known else {
       throw CueStoreError.nothingToAnswer
     }
     let answer = try Self.answerValue(value.trimmingCharacters(in: .whitespacesAndNewlines), kind: kind, options: question.options)
-    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host, cue: cue)
+    return try requestAnswer(PiAnswer(promptID: promptID, value: answer), to: session.target, on: session.host(or: host), cue: cue)
   }
 
   private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String]) throws -> PiAnswerValue {
@@ -200,8 +240,8 @@ extension CueStore {
 
   /// 停止叶子的会话正在跑的这一轮。
   public func stopLeaf(_ leaf: UUID, host: String, cue: Bool = false) throws -> DeliveryRequest {
-    let session = try requireSession(of: leaf, host: host).session
-    return try requestStop(of: session.target, on: session.host, cue: cue)
+    let session = try requireSession(of: leaf).session
+    return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
   /// 完成一件事并结束它的会话（写结束请求），返回结束请求。叶子直接完成；有步骤的任务要步骤都完成了才行
@@ -216,9 +256,9 @@ extension CueStore {
     try write { _ = try applyStatus(task, .done) }
     return try leaves.compactMap { leaf in
       guard leaf.piSessionID != nil else { return nil }
-      let session = try sessionTarget(of: leaf, host: host)
+      let session = try sessionTarget(of: leaf)
       guard session.state?.state != .known(.ended) else { return nil }
-      return try requestEnd(of: session.target, on: session.host, cue: cue)
+      return try requestEnd(of: session.target, on: session.host(or: host), cue: cue)
     }
   }
 
@@ -255,26 +295,29 @@ extension CueStore {
   }
 
   /// 叶子与它的会话；没有会话抛 `noSession`（正在开会话抛 `launching`）。
-  private func requireSession(of leaf: UUID, host: String) throws -> (card: Card, session: SessionTarget) {
+  private func requireSession(of leaf: UUID) throws -> (card: Card, session: SessionTarget) {
     let card = try requireLeaf(leaf)
     guard card.piSessionID != nil else {
       throw try launchingLeaves([leaf]).isEmpty ? CueStoreError.noSession(card.heading) : CueStoreError.launching(card.heading)
     }
-    return (card, try sessionTarget(of: card, host: host))
+    return (card, try sessionTarget(of: card))
   }
 
-  /// 发给叶子会话的目标、由哪台 Mac 执行（会话所在的那台；记录不在时 `host`），与会话此刻的记录。
+  /// 发给叶子会话的目标与会话此刻的记录。
   private struct SessionTarget {
     var target: SendTarget
-    var host: String
     var state: PiSessionState?
+
+    /// 由哪台 Mac 执行：会话所在的那台；记录还没到时是发起的这台（`initiator`，手机为 nil）。
+    func host(or initiator: String?) -> String? { state?.hostID ?? initiator }
+    func host(or initiator: String) -> String { state?.hostID ?? initiator }
   }
 
   /// 叶子 `leaf`（绑着会话）的会话目标。
-  private func sessionTarget(of leaf: Card, host: String) throws -> SessionTarget {
+  private func sessionTarget(of leaf: Card) throws -> SessionTarget {
     let sessionID = leaf.piSessionID!
     let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
-    return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), host: state?.hostID ?? host, state: state)
+    return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? leaf.heading, ref: sessionID), state: state)
   }
 
   /// 这件事的叶子：有步骤的是各步骤（按顺序），没有步骤的是它自己。

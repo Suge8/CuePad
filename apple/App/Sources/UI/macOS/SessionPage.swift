@@ -204,12 +204,15 @@ extension Workspace {
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
+    /// `name`：Pi 的会话名（交出提示词时是叶子的标题，`CueStore.handOffPlan`）；`host`：由哪台 Mac 开，默认这台。
     /// `card`：从这条灵感或任务开的，开好后它关联到新会话。
     func startSession(
-        in project: UUID, prompt: String?, title: String, card: UUID? = nil, launched: @escaping () -> Void
+        in project: UUID, prompt: String?, title: String, name: String? = nil, on host: String? = nil, card: UUID? = nil,
+        launched: @escaping () -> Void
     ) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(PiLaunch(project: project, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
+        let request = try await services.launch(
+            PiLaunch(project: project, prompt: prompt, token: token, name: name), title: title, on: host ?? services.hostID, card: card)
         var reported = false
         for try await progress in services.store.observe({
             try LaunchProgress.read(request: request.id, token: token, from: $0)

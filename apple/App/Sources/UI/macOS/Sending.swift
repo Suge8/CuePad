@@ -13,7 +13,7 @@ struct AgentTarget: Equatable {
 }
 
 /// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
-/// 发到哪只有一条规则（`Workspace.handOff`）：任务绑着的会话，没绑就开一个以任务命名的新会话。不碰界面提示：成败由调用方（`Workspace.send`）说。
+/// 发到哪只有一条规则（`CueStore.handOffPlan`，Mac 上经 `Workspace.handOff`）。不碰界面提示：成败由调用方（`Workspace.send`）说。
 @Observable
 final class SendState {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
@@ -109,28 +109,28 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 把任务的草稿（提示词）发给 Agent：任务绑着会话就发进那个会话，没绑就在项目绑定的文件夹开一个以任务命名的新会话、绑上它
-    /// （没绑文件夹时就地弹选文件夹，取消就不开）。会话正忙时转为询问。送达后草稿就用掉了（Store 删掉它）。
+    /// 把任务的草稿（提示词）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定（与 Cue 的开工同一份规则）：绑着的会话经本机桥直接发，
+    /// 会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。
+    /// 送达后草稿就用掉了（Store 删掉它）。
     func handOff(_ prompt: Card) {
-        let text = Outgoing.text(of: prompt), id = prompt.id, store = services.store
-        attempt {
-            guard let parent = prompt.parentID, let task = try await store.card(parent) else { return }
-            if let session = task.piSessionID {
-                await self.send(text, to: AgentTarget(session: session), card: id)
-            } else {
-                try await self.startSession(for: task, prompt: id, text: text)
-            }
-        }
+        let text = Outgoing.text(of: prompt), id = prompt.id
+        attempt { try await self.handOff(text, prompt: id) }
     }
 
-    /// 在任务所在项目绑定的文件夹开新会话，会话名就是任务名，话作为第一句；开好后任务绑上它。
-    private func startSession(for task: Card, prompt: UUID, text: String) async throws {
-        guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }
-        if try await services.store.directory(of: project) == nil {
+    private func handOff(_ text: String, prompt: UUID) async throws {
+        let plan = try await services.store.handOffPlan(prompt, host: services.hostID)
+        switch plan.destination {
+        case .session(let session, _, _):
+            await send(text, to: AgentTarget(session: session), card: prompt)
+        case .launch(let project, let host):
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: plan.name, name: plan.name, on: host, card: prompt) {}
+        case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
+            try await handOff(text, prompt: prompt)
+        case .unfiled:
+            say("未分类的任务没有文件夹，开不了会话", isError: true)
         }
-        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt) {}
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。

@@ -3,9 +3,9 @@ import CueStore
 import SwiftUI
 
 /// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），提示词的正文已经带在里面，可以补一句；
-/// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。发出即收起，
-/// 提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。
-/// 没有在线会话时发送就是开新会话。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
+/// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。默认交到哪与 Mac 的发给 Agent、
+/// Cue 的开工同一份规则（`CueStore.handOffPlan`）：叶子绑着会话就是那个会话（已结束的也列上，Mac 收到后唤醒它），没绑就是新会话。
+/// 发出即收起，提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
 struct HandOffInput: View {
     let outbox: Outbox
     @Environment(Workspace.self) private var workspace
@@ -15,13 +15,28 @@ struct HandOffInput: View {
     @State private var draft = ComposerDraft()
     @State private var configs: [UUID: PiConfigShown]?
     @State private var choice: UUID?
+    @State private var planned: Planned?
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 能交给的在线会话（Mac 的发送目标共用同一份规则）。
-    private var sessions: [PiSessionListItem] { HandOffTargets.sessions(services.liveSessions.live, project: outbox.project) }
-    private var chosen: PiSessionListItem? { let all = sessions; return all.first { $0.state.id == choice } ?? all.first }
-    private var canSend: Bool { services.reachesPiHost && !sending }
+    /// 交到哪的规则读出的：默认目标是叶子绑着的会话（没绑为 nil，即新会话）；开新会话时的会话名（叶子的标题）。
+    nonisolated private struct Planned: Equatable, Sendable {
+        var bound: PiSessionListItem?
+        var name: String?
+    }
+
+    /// 能交给的会话：在线的（Mac 的发送目标共用同一份规则），叶子绑着的会话已结束时它排最前。
+    private var sessions: [PiSessionListItem] {
+        let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project)
+        guard let bound = planned?.bound, !live.contains(where: { $0.state.sessionID == bound.state.sessionID }) else { return live }
+        return [bound] + live
+    }
+    private var chosen: PiSessionListItem? {
+        let all = sessions
+        if let choice { return all.first { $0.state.id == choice } }
+        return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
+    }
+    private var canSend: Bool { services.reachesPiHost && !sending && planned != nil }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
     private var config: PiConfigShown? { chosen.flatMap { configs?[$0.state.id] } }
 
@@ -54,6 +69,12 @@ struct HandOffInput: View {
         .onAppear {
             draft.attachments = [outbox]
             focused = true
+        }
+        .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
+            guard let card else { return Planned() }
+            let plan = try store.handOffPlan(card, host: nil)
+            guard case .session(let id, _, _) = plan.destination else { return Planned(name: plan.name) }
+            return Planned(bound: try store.piSessions(sessionIDs: [id])[id], name: plan.name)
         }
         // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
         .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
@@ -113,7 +134,7 @@ struct HandOffInput: View {
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        navigation.handOffToNewSession(draft, card: outbox.card)
+        navigation.handOffToNewSession(draft, card: outbox.card, name: planned?.name)
     }
 }
 #endif
