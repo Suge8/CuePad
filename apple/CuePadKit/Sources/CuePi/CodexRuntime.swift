@@ -436,8 +436,9 @@ public final class CodexRuntime: AgentRuntime {
     /// 钩子先走了（终端里停下了这一轮）就收起问题。
     private func ask(_ session: Tracked, call: AgentHookCall, _ input: JSONValue) {
         let arguments = input["tool_input"] ?? .object([:])
-        let action = arguments["command"]?.string.map { "Codex 想运行：\($0)" } ?? "Codex 想用 \(input["tool_name"]?.string ?? "工具")"
-        let text = String([action, arguments["description"]?.string].compactMap { $0 }.joined(separator: "\n").prefix(500))
+        let command = arguments["command"]?.string
+        let text = PermissionWording.question(
+            .codex, command == nil ? "使用 \(input["tool_name"]?.string ?? "工具")" : "运行命令", [command, arguments["description"]?.string])
         release(session)
         let promptID = UUID().uuidString
         var hold: UUID?
@@ -513,7 +514,7 @@ public final class CodexRuntime: AgentRuntime {
         guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
         switch (reply, answer) {
         case (.hook(let call, let hold), .confirmed(let allowed)):
-            let decision: JSONValue = ["behavior": allowed ? "allow" : "deny", "message": allowed ? "在 CuePad 里允许了" : "在 CuePad 里拒绝了"]
+            let decision: JSONValue = ["behavior": allowed ? "allow" : "deny", "message": .string(allowed ? PermissionWording.allowed : PermissionWording.denied)]
             call.reply(JSONValue.object(["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]).data)
             gate.drop(hold)
         case (.request(let rpc, let requestID, let questionID), .option(let text)) where question.options.contains(text),

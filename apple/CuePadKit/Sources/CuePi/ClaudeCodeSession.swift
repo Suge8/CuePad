@@ -71,9 +71,8 @@ struct ClaudePermission {
             // 终端里每道选择题都有"自己填"（Type something）
             return PiQuestion(promptID: id, kind: .select, text: ToolDetail.clip(text, Self.textLimit), options: asked.options, allowsOther: true)
         }
-        let text = ["允许 Claude Code 使用 \(tool)？", ToolDetail.target(input), input["description"]?.string]
-            .compactMap { $0 }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: "\n")
-        return PiQuestion(promptID: id, kind: .confirm, text: ToolDetail.clip(text, Self.textLimit))
+        let text = PermissionWording.question(.claudeCode, "使用 \(tool)", [ToolDetail.target(input), input["description"]?.string])
+        return PiQuestion(promptID: id, kind: .confirm, text: text)
     }
 
     /// 作答写成 Claude Code 的决定（`{behavior, updatedInput}` 或 `{behavior: deny, message}`）；答案对不上抛 `rejected("bad_answer")`。
@@ -82,7 +81,7 @@ struct ClaudePermission {
         guard id == promptID else { throw PiBridgeError.rejected("stale_prompt") }
         switch answer {
         case .confirmed(true): return ["behavior": "allow", "updatedInput": input]
-        case .confirmed(false): return ["behavior": "deny", "message": "用户在 CuePad 里拒绝了"]
+        case .confirmed(false): return ["behavior": "deny", "message": .string(PermissionWording.denied)]
         default: throw PiBridgeError.rejected("bad_answer")
         }
     }

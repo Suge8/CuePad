@@ -528,9 +528,9 @@ public final class OpenCodeRuntime: AgentRuntime {
     }
 
     private static func question(_ permission: OpenCodePermission) -> PiQuestion {
-        let text = ([permission.action] + permission.resources).joined(separator: "\n")
+        let text = PermissionWording.question(.opencode, "使用 \(permission.action)", permission.resources)
         return PiQuestion(
-            promptID: prompt(.permission, permission.sessionID, permission.id), kind: .select, text: String(text.prefix(500)),
+            promptID: prompt(.permission, permission.sessionID, permission.id), kind: .select, text: text,
             options: [allowOnce, allowAlways, reject])
     }
 

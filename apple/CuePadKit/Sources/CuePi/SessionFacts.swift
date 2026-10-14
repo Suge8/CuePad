@@ -187,4 +187,17 @@ final class PresenceGate {
         watch = nil
     }
 }
+
+/// 权限确认的说法，四家同一句式：标题"允许 <Agent> <动作>？"，下面一行一件要做的事（去掉空的与重复的）；
+/// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。
+enum PermissionWording {
+    static let allowed = "用户在 CuePad 里允许了", denied = "用户在 CuePad 里拒绝了"
+
+    static func question(_ agent: AgentKind, _ action: String, _ details: [String?]) -> String {
+        let lines = (["允许 \(agent.name) \(action)？"] + details.compactMap { $0 }).reduce(into: [String]()) { lines, line in
+            if !line.isEmpty, !lines.contains(line) { lines.append(line) }
+        }
+        return ToolDetail.clip(lines.joined(separator: "\n"), 500)
+    }
+}
 #endif

@@ -167,6 +167,7 @@ struct RealOpenCodeTests {
             try await eventually("在等你确认这条命令", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
             let question = try #require(session(bridge)?.question)
             #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch approved.txt"))
+            #expect(question.text.hasPrefix("允许 OpenCode 使用 shell？"), "四家同一句式：\(question.text)")
             try await bridge.answer(.option(question.options[0]), to: question.promptID!, in: live.id)
             try await eventually("答了之后命令跑了、这一轮做完", timeout: .seconds(90)) {
                 FileManager.default.fileExists(atPath: marker.path) && session(bridge)?.state == .settled

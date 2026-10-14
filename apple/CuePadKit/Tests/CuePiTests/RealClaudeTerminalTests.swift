@@ -88,7 +88,7 @@ struct RealClaudeTerminalTests {
 
             try await terminal.type("用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE")
             let permission = try await testbed.waitForQuestion(session.id, on: terminal)
-            #expect(permission.kind == .known(.confirm) && permission.text.contains("Bash"))
+            #expect(permission.kind == .known(.confirm) && permission.text.hasPrefix("允许 Claude Code 使用 Bash？"))
             try await testbed.bridge.answer(.confirmed(true), to: try #require(permission.promptID), in: session.id)
             try await testbed.waitForTurn(session.id)
             #expect(FileManager.default.fileExists(atPath: touched.path))

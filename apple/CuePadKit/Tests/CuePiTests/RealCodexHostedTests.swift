@@ -82,7 +82,7 @@ struct RealCodexHostedTests {
             try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
-            #expect(question.kind == .known(.confirm) && question.text.contains("curl"))
+            #expect(question.kind == .known(.confirm) && question.text.hasPrefix("允许 Codex 运行命令？") && question.text.contains("curl"))
 
             try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
 
