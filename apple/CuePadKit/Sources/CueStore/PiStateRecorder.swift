@@ -208,8 +208,9 @@ public actor PiStateRecorder {
     var timer: Task<Void, Never>?
   }
 
-  /// 工作中细节的最短写入间隔：每次写入都是一次整条记录的上传与各端的下载。
-  /// 另有调研在评估它与流式显示（看着 Agent 一句句写出来）是否冲突，可能再调。
+  /// 工作中细节的最短写入间隔：每次写入都是一次整条记录的上传与各端的下载。放宽到 15 秒不拖慢该快的：
+  /// 状态转换（开始工作、等你、做完、出错）不受它管；回答（对话与近况）不经这里写，提交后随即上传（`RecordSender`）；
+  /// 正在说的话只在 Mac 的内存里逐字显示（`PiDraft`），不靠同步。
   public static let detailInterval: Duration = .seconds(15)
 
   private let store: CueStore

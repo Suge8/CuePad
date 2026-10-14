@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// Pi 会话状态记录（Mac 写，按会话一条）：开始工作、等你确认、完成、出错立即写；工作中的细节变化合并且有最短间隔；
+/// Pi 会话状态记录（Mac 写，按会话一条）：开始工作、等你确认、完成、出错立即写（不受细节节流）；工作中的细节变化合并且有最短间隔；
 /// 会话结束记为"已结束"并保留近况；历史会话（本机会话文件索引）写成同一种记录，会话文件被删时才删。
 @Suite struct PiStateTests {
   let fixture = try! Fixture()
@@ -63,10 +63,12 @@ import Testing
     }
   }
 
-  @Test func waitingSettledAndErrorAreWrittenImmediatelyAndSupersedeAPendingUpdate() async throws {
-    let recorder = recorder()
+  /// 工作中细节的节流按正式的间隔（`detailInterval`，15 秒）：等你、出错、做完与再开始工作都不等它，立即写，并取代挂起的细节。
+  @Test func stateTransitionsAreWrittenImmediatelyDespiteTheDetailInterval() async throws {
+    let recorder = recorder(interval: PiStateRecorder.detailInterval)
     try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "pending")  // 挂起中
+    #expect(try await states()["s1"]?.state == .known(.thinking))
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入文件？")
     #expect(try await states()["s1"]?.state == .known(.waitingForUser))
@@ -75,6 +77,10 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .settled)
     let settled = try await states()["s1"]
     #expect(settled?.state == .known(.settled) && settled?.detail == nil)
+    try await recorder.update(sessionID: "s1", state: .thinking)  // 下一轮开始工作
+    #expect(try await states()["s1"]?.state == .known(.thinking))
+    try await recorder.update(sessionID: "s1", state: .settled)  // 一转眼又做完
+    #expect(try await states()["s1"]?.state == .known(.settled))
 
     clock.advance(.seconds(30))  // 被取代的挂起更新不会再落盘
     await Task.yield()
