@@ -10,9 +10,10 @@ extension AppServices {
 
     /// 启动时认下这台 Mac 记录的会话（从此每个都挂在任务上，见 `CueStore.ownSessions`），再对账上次留下的会话记录（别的 Mac 的不动）：
     /// 进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。先认再对账：上次还在跑的游离会话归位成进行中，不当历史归档。
+    /// 对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
     func resetPiState() async throws {
         try await store.ownSessions(host: hostID)
-        try await piStateRecorder.reset { $0.isRunning }
+        pi.carryOver(try await piStateRecorder.reset { $0.isRunning })
     }
 
     /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给

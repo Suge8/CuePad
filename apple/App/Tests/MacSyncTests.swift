@@ -199,6 +199,27 @@ struct MacSyncTests {
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 
+    /// App 重开：接回的会话"多久前"与"有新回复"仍从原来的起点算（看过的不又亮"有新回复"，排序不乱）；状态种类变了才从接回时算。
+    /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
+    @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
+        let past = Date.now.addingTimeInterval(-3600)
+        let before = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
+        try await before.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: past, busySince: nil))
+        try await before.update(sessionID: "s2", state: .thinking, times: PiTimes(stateSince: past, busySince: past))
+        let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
+        services.settings.markSeen(seen, at: past.addingTimeInterval(1))
+
+        try await services.resetPiState()
+        let kept = try await rig.host.connect("s1", cwd: "/work/s1")
+        let changed = try await rig.host.connect("s2", cwd: "/work/s2")
+
+        let live = try #require(services.pi.session(id: kept.id))
+        #expect(live.stateSince == seen.stateSince)
+        let row = PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了"))
+        #expect(!services.settings.isUnread(row))
+        #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
+    }
+
     // MARK: 手机发来的投送请求
 
     /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。

@@ -201,8 +201,6 @@ public actor PiStateRecorder {
   private let minInterval: Duration
   private let timing: Timing
   private var sessions: [String: Session] = [:]
-  /// 启动对账之前各会话的状态与计时：重新接上的会话第一次更新时，状态种类没变就沿用重开前的起点（各家重新接上时都从"现在"算）
-  private var beforeReset: [String: (state: PiWorkState, times: PiTimes)] = [:]
   private var tail: Task<Void, Never>?
 
   public init(store: CueStore, hostID: String, minInterval: Duration = .seconds(5), timing: Timing = .system) {
@@ -235,12 +233,7 @@ public actor PiStateRecorder {
     if let title { content.title = title }
     if let folder { content.folder = folder }
     if let projectID { content.projectID = projectID }
-    if var times {
-      if session.content == nil, let before = beforeReset.removeValue(forKey: sessionID), before.state.phase == state.phase {
-        times = before.times
-      }
-      content.times = times
-    }
+    if let times { content.times = times }
     if let launchToken { content.launchToken = launchToken }
     if let hosted { content.hosted = hosted }
     if let subagents { content.subagents = subagents }
@@ -317,14 +310,16 @@ public actor PiStateRecorder {
 
   /// App 启动时对账这台 Mac 上次留下的记录：记下的进程确实没了的按 `exited` 收尾（手上还有活的记为被打断），其余不动——
   /// 进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着）与没记下进程的，由桥重新连上后接着写。`running` 判断记下的进程是不是还是那一个。
-  public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws {
+  /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ）：桥据此让重新接上的会话沿用原来的起点（`PiBridge.carryOver`）。
+  @discardableResult
+  public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws -> [String: (state: PiWorkState, times: PiTimes)] {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
     let now = timing.now()
     let before = Before()
     try await persist { [store, hostID] in before.value = try await store.reconcilePiStates(host: hostID, running: running, at: now) }
-    beforeReset = before.value
+    return before.value
   }
 
   private final class Before: @unchecked Sendable { var value: [String: (state: PiWorkState, times: PiTimes)] = [:] }
