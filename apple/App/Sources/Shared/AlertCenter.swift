@@ -11,7 +11,7 @@ import UIKit
 /// 冷启动时点开的通知才不会丢。
 /// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知；这里另管远程通知注册，设置页据此显示一行状态（`PiAlertStatus`）。
 ///   前台收到的 Agent 通知不展示（前台的提示是 App 内横幅，`SessionAlertTracker`）；Cue 的在 Cue 页不在前台时照常弹。
-/// - Mac：不收推送，通知都是这里发的本地通知（`post`），前台怎么呈现、你正看着时不发由主窗口定（`Workspace.presentation`）。
+/// - Mac：不收推送，通知都是这里发的本地通知（`post`）；你正看着那一页时什么都不发（`Workspace.isWatching`），其余前台后台一样是系统通知。
 @Observable
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var pendingTap: PiAlertTap?
@@ -77,7 +77,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     ) async -> UNNotificationPresentationOptions {
         guard let route = AlertRoute(userInfo: notification.request.content.userInfo) else { return [] }
         #if os(macOS)
-        return await present(route, content: notification.request.content)
+        return present(route)
         #else
         // Agent 的由 App 内横幅提示（正看着那个会话时连横幅也不弹）；Cue 的没有 App 内横幅，Cue 页开着就不弹（对话里已经看到了）
         return route == .cue && services?.cueViewers == 0 ? [.banner, .list, .sound] : []
@@ -132,6 +132,11 @@ nonisolated enum AlertRoute: Equatable {
         case .session(let tap): tap.kind
         case .cue: .waitingForUser
         }
+    }
+
+    /// 说的是哪个会话（会话记录 id）；Cue 的为 nil。
+    var session: UUID? {
+        if case .session(let tap) = self { tap.sessionState } else { nil }
     }
 
     private static let subjectKey = "cuepad.alert", kindKey = "cuepad.alert.kind", recordKey = "cuepad.alert.record"

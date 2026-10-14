@@ -210,8 +210,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
+  /// 会话在等回答（弹了问题）。算不算"等你"还要看是不是由 Cue 跟进：见 `asksYou(cueFollows:)`。
   public var waitsForYou: Bool { state == .known(.waitingForUser) }
+
+  /// "等你"里会话那一半的唯一规则：在等回答，且不由 Cue 跟进（Cue 跟进的由 Cue 去答或转问你）。"等你 N"、Dock 角标、
+  /// "等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  public func asksYou(cueFollows: Bool) -> Bool { waitsForYou && !cueFollows }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }

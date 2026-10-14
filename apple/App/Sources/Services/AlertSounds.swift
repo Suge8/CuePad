@@ -22,11 +22,11 @@ nonisolated enum AlertSound: String, CaseIterable, Sendable {
     /// 装进 ~/Library/Sounds 后的文件名，也是通知用的声音名：带品牌前缀，在系统设置的提示音列表里不撞名。
     var installedName: String { "CuePad \(rawValue.capitalized).caf" }
 
-    /// 直接播包里的文件：设置里试听，与前台提示条那一下（`AlertCenter.present`）。其余提醒的声音经系统通知，遵守专注模式。
-    func play() { NSSound(contentsOf: bundled, byReference: true)?.play() }
+    /// 设置里试听：直接播包里的文件。提醒本身的声音只经系统通知（遵守专注模式），不走这里。
+    func preview() { NSSound(contentsOf: bundled, byReference: true)?.play() }
 }
 
-/// 一种提示的偏好。关掉 = 系统横幅、窗口顶上的提示条、声音都没有；`sound` 为 nil 是不出声。
+/// 一种提示的偏好。关掉 = 系统横幅与声音都没有；`sound` 为 nil 是不出声。
 nonisolated struct AlertPreference: Equatable, Sendable {
     var isOn: Bool
     var sound: AlertSound?

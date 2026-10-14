@@ -161,6 +161,8 @@ final class Workspace {
         presses.clearSelection()
         presses.dismiss()
         pages.visit(from: self.page, to: page)
+        // 打开了这个会话：它那一组通知撤掉（点通知进来的也走这里）
+        if case .session(let route) = page, let alerts = services.alerts { Task { await alerts.dismiss(session: route.id) } }
         if case .project(let id) = page {
             nonProjectPage = nil
             services.settings.currentProject = id
@@ -173,8 +175,6 @@ final class Workspace {
     // MARK: 提示
 
     static let noticeDuration: Duration = .seconds(2.4)
-    /// 会话与 Cue 的提示（等你、做完了）在顶上停留的时长。
-    static let alertDuration: Duration = .seconds(5)
 
     func say(
         _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,

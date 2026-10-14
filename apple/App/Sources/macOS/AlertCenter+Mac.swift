@@ -32,18 +32,18 @@ extension AlertCenter: CueNotifying {
     /// Debug 构建给 `-CuePadNotifications YES` 时照常发（验收用，规则见 docs/verify.md「通知（Mac）」）。
     var delivers: Bool { services.map { !$0.location.isIsolated || DebugHooks.deliversNotifications } ?? false }
 
-    var isWatchingCue: Bool { workspace?.presentation(of: .cue) == .watching }
+    var isWatchingCue: Bool { workspace?.isWatching(.cue) == true }
 
     func post(title: String, body: String) async {
         await post(AlertMessage(title: title, body: body))
     }
 
-    /// 发一条提示：这种提示关掉了、你正看着那一页时什么都不做（不要权限、不装提示音）；第一次真要提示时才征求权限，没有权限就不发。
-    /// 前台怎么呈现在系统交来时再定（`present`）。
+    /// 发一条提示：这种提示关掉了、你正看着那一页（`Workspace.isWatching`）时什么都不做（不要权限、不装提示音）；
+    /// 第一次真要提示时才征求权限，没有权限就不发。
     func post(_ alert: AlertMessage) async {
         guard let workspace else { return }
         let preference = workspace.services.settings.alerts[alert.route.kind]
-        guard preference.isOn, workspace.presentation(of: alert.route) != .watching else { return }
+        guard preference.isOn, !workspace.isWatching(alert.route) else { return }
         guard delivers else {
             return AppServices.log.notice("通知（隔离库不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
         }
@@ -62,23 +62,21 @@ extension AlertCenter: CueNotifying {
         }
     }
 
-    /// CuePad 在前台时系统要呈现一条通知：正看着就不呈现；主窗口在屏幕上就换成窗口顶上的提示条加声音；否则系统横幅加声音。
-    /// 发出之后才关掉这种提示的，不呈现。提示条那种的声音由 App 自己播、系统只记进通知中心：macOS 27 实测前台回复里只要带
-    /// `.sound`，系统照样弹横幅（文档说只响）。这一下你正用着 CuePad，专注模式不再拦。
-    func present(_ route: AlertRoute, content: UNNotificationContent) async -> UNNotificationPresentationOptions {
-        guard let workspace else { return [] }
-        let preference = workspace.services.settings.alerts[route.kind]
-        guard preference.isOn else { return [] }
-        let presentation = workspace.presentation(of: route)
-        AppServices.log.info("前台收到通知：\(String(describing: route), privacy: .public) → \(String(describing: presentation), privacy: .public)")
-        switch presentation {
-        case .watching: return []
-        case .banner: return [.banner, .list, .sound]
-        case .notice:
-            await workspace.say(route, text: Dotted(content.title, content.body))
-            preference.sound?.play()
-            return [.list]
-        }
+    /// CuePad 在前台时系统要呈现一条通知：发出之后才关掉这种提示、才看着那一页的，不呈现；其余同后台，系统横幅加声音
+    /// （遵守专注模式）。不在窗口里另出提示条：macOS 27 实测前台回复里只要带 `.sound`，系统照样弹横幅。
+    func present(_ route: AlertRoute) -> UNNotificationPresentationOptions {
+        guard let workspace, workspace.services.settings.alerts[route.kind].isOn, !workspace.isWatching(route) else { return [] }
+        return [.banner, .sound, .list]
+    }
+
+    /// 打开了这个会话：撤掉它那一组已送达的通知（每条标识不同，按路由认）。
+    func dismiss(session: UUID) async {
+        guard delivers else { return }
+        let center = UNUserNotificationCenter.current()
+        let shown = await center.deliveredNotifications()
+            .filter { AlertRoute(userInfo: $0.request.content.userInfo)?.session == session }
+            .map(\.request.identifier)
+        if !shown.isEmpty { center.removeDeliveredNotifications(withIdentifiers: shown) }
     }
 
     /// Dock 角标 = "等你"的总数；没有通知权限时不设（经通知中心设，受系统"标记"开关控制）。

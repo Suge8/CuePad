@@ -130,7 +130,7 @@ private struct ShortcutRow: View {
 }
 
 /// 通知：先一行系统权限（没决定过给"开启"，拒绝了给"打开系统设置"，开着时说横幅与专注模式在系统设置里调），
-/// 再是两种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅、窗口顶上的提示条、声音都没有。
+/// 再是两种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
 private struct NotificationSection: View {
     let alerts: AlertCenter
     @Environment(AppServices.self) private var services
@@ -166,7 +166,7 @@ private struct NotificationSection: View {
             HStack(spacing: 12) {
                 Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
                     settings.alerts[kind].sound = sound
-                    sound?.play()
+                    sound?.preview()
                 })) {
                     Text("无").tag(AlertSound?.none)
                     Divider()
