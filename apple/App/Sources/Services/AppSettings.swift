@@ -22,6 +22,7 @@ final class AppSettings {
         static let globalShortcut = "globalShortcut"
         static let cueShortcut = "cueShortcut"
         static let currentProject = "currentProject"
+        static let alerts = "alerts"
         #endif
         static let replyTexts = "replyTexts"
         static let replyNotes = "replyNotes"
@@ -44,6 +45,8 @@ final class AppSettings {
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
+    /// 通知两种提示（等你、做完了）各自的开关与提示音（`AlertPreferences`）。
+    var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
@@ -144,6 +147,7 @@ final class AppSettings {
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi

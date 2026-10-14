@@ -10,9 +10,9 @@ struct IOSRoot: View {
     @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    let alerts: PiAlertCenter
+    let alerts: AlertCenter
 
-    init(services: AppServices, alerts: PiAlertCenter) {
+    init(services: AppServices, alerts: AlertCenter) {
         _workspace = State(initialValue: Workspace(services: services))
         _navigation = State(initialValue: Navigation(settings: services.settings))
         self.alerts = alerts
@@ -85,7 +85,7 @@ struct IOSRoot: View {
             guard let alert, navigation.showsAlert(about: alert.session) else { return }
             // Cue 跟进的会话由 Cue 去看、只在例外时找你，不再另弹一条
             guard workspace.services.liveSessions.items?.first(where: { $0.state.id == alert.session })?.cueFollows != true else { return }
-            workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
+            workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: Workspace.alertDuration)
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
         .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }

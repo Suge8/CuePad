@@ -18,7 +18,7 @@ extension AppServices {
     }
 
     /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你确认"、"做完了"的转换，交给界面。
-    /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `PiAlertCenter`）。
+    /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `AlertCenter`）。
     private func startSessionAlerts() {
         let active = ActiveSince()
         follow {

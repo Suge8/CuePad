@@ -90,13 +90,14 @@ extension AppServices {
     /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义；等的对象所在的表见 `ZoneChangePuller.awaitedTables`，
     /// 加新的等待理由时一并更新：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
-    ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的）时，每 2 秒。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
+    ///   有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（等你对它说的话、等别的 Mac 接管）时，每 2 秒。
+    ///   Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」），别的设备写来的这些只靠这一拉。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
     ///   实测推送到不了 Mac、请求全靠这一拉，所以不放慢（docs/sync.md「拉取节奏」）；
     /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(hasOpenDeliveries: hasOpenDeliveries, hasSessions: !pi.slots.isEmpty)
+        .mac(hasOpenDeliveries: hasOpenDeliveries, hasSessions: !pi.slots.isEmpty, cueOnDuty: cue.state != nil)
         #else
         .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
         #endif
@@ -163,8 +164,8 @@ extension AppServices {
 
 extension SyncPoller.Cadence {
     /// Mac 的节奏，规则见 `AppServices.pollingCadence`。
-    static func mac(hasOpenDeliveries: Bool, hasSessions: Bool) -> Self? {
-        hasOpenDeliveries || hasSessions ? Self(.every(.seconds(2))) : nil
+    static func mac(hasOpenDeliveries: Bool, hasSessions: Bool, cueOnDuty: Bool) -> Self? {
+        hasOpenDeliveries || hasSessions || cueOnDuty ? Self(.every(.seconds(2))) : nil
     }
 
     /// 手机的节奏，规则见 `AppServices.pollingCadence`。

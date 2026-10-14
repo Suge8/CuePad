@@ -133,6 +133,15 @@ enum DebugHooks {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
     }
 
+    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
+    static var deliversNotifications: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        #else
+        false
+        #endif
+    }
+
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
     static func placesOffscreen(_ window: NSWindow) -> Bool {
         #if DEBUG

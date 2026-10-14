@@ -406,6 +406,7 @@ struct NoticeActionButton: View {
 }
 
 /// 顶部居中的短提示：操作结果与错误；带动作的（撤销、完成后的归档）右边一个按钮，撤销另有 ⌘Z。
+/// 也是前台没在看时的通知（`Workspace.say(_:text:)`）：图标是那种提示的，点它去那一页。
 private struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -416,7 +417,7 @@ private struct NoticeView: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
-                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
+                            Label { Text(notice.text) } icon: { Image(systemName: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")) }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))
