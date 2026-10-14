@@ -12,12 +12,8 @@ import Foundation
 /// - 思考强度按 `model/list` 里这个模型支持的档位夹取（见 `effort(_:supported:)`），随 `turn/start` 给；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮。
 actor CodexBrain: CueBrain {
-    nonisolated let events: AsyncStream<CueBrainEvent>
-    private let emit: AsyncStream<CueBrainEvent>.Continuation
-    private var process: BrainProcess?
-    private var runner: Task<Void, Never>?
-    private var pending = PendingReplies()
-    private var nextID = 0
+    private let session = BrainSession()
+    nonisolated var events: AsyncStream<CueBrainEvent> { session.events }
     private var thread: String?
     /// 交给 `turn/start` 的强度（已夹到模型支持的档位）
     private var effort: String?
@@ -32,32 +28,19 @@ actor CodexBrain: CueBrain {
     /// 或会给模型加上读文件以外的能力（apps、plugins、computer_use、browser_use、image_generation、multi_agent）。
     static let disabledFeatures = ["memories", "chronicle", "hooks", "apps", "plugins", "computer_use", "browser_use", "image_generation", "multi_agent"]
 
-    init() {
-        (events, emit) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
-    }
-
     func start(_ config: CueBrainConfig) async throws {
-        guard process == nil else { return }
-        do {
-            try await launch(config)
-        } catch {
-            // 握手失败：调用方拿不到这个大脑，起了的进程与临时文件这里收拾
-            await stop()
-            throw error
+        try await session.start(config) { _ in
+            ["app-server", "-c", "notify=[]", "-c", "web_search=\"disabled\""] + Self.disabledFeatures.flatMap { ["--disable", $0] }
+        } replyID: { $0["method"] == nil ? $0["id"] as? String : nil
+        } receive: { await self.receive($0) } handshake: {
+            try await handshake(config)
         }
     }
 
-    private func launch(_ config: CueBrainConfig) async throws {
-        let arguments = ["app-server", "-c", "notify=[]", "-c", "web_search=\"disabled\""]
-            + Self.disabledFeatures.flatMap { ["--disable", $0] }
-        let process = try BrainProcess(
-            executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: brainEnvironment(config))
-        self.process = process
-        runner = Task { await self.run(process) }
-
-        _ = try await request("initialize", ["clientInfo": ["name": "cuepad", "title": "CuePad", "version": "1"], "capabilities": ["experimentalApi": false, "requestAttestation": false]])
-        try process.write(["jsonrpc": "2.0", "method": "initialized", "params": [:] as [String: Any]])
-        let effective = try await request("config/read", [:])
+    private func handshake(_ config: CueBrainConfig) async throws {
+        _ = try await call("initialize", ["clientInfo": ["name": "cuepad", "title": "CuePad", "version": "1"], "capabilities": ["experimentalApi": false, "requestAttestation": false]])
+        try session.write(["jsonrpc": "2.0", "method": "initialized", "params": [:] as [String: Any]])
+        let effective = try await call("config/read", [:])
         let userServers = ((effective["config"] as? [String: Any])?["mcp_servers"] as? [String: Any])?.keys ?? [:].keys
         var overrides: [String: Any] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
         overrides["mcp_servers.cuepad"] = ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]
@@ -66,10 +49,10 @@ actor CodexBrain: CueBrain {
             "baseInstructions": config.systemPrompt, "config": overrides,
         ]
         if let model = config.model { params["model"] = model }
-        let started = try await request("thread/start", params)
+        let started = try await call("thread/start", params)
         thread = (started["thread"] as? [String: Any])?["id"] as? String
         if let level = config.effort, let model = started["model"] as? String {
-            let models = try await request("model/list", ["includeHidden": true, "limit": 500])["data"] as? [[String: Any]] ?? []
+            let models = try await call("model/list", ["includeHidden": true, "limit": 500])["data"] as? [[String: Any]] ?? []
             let supported = (models.first { $0["id"] as? String == model }?["supportedReasoningEfforts"] as? [[String: Any]])?
                 .compactMap { $0["reasoningEffort"] as? String }
             effort = Self.effort(level, supported: supported)
@@ -91,7 +74,7 @@ actor CodexBrain: CueBrain {
         let input: [[String: Any]] = [["type": "text", "text": text, "text_elements": [] as [Any]]]
         if let active = turn?.id {
             do {
-                _ = try await request("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])
+                _ = try await call("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])
                 return
             } catch CueBrainError.rejected {
                 // 这一轮刚好结束：下面开新的一轮
@@ -99,38 +82,23 @@ actor CodexBrain: CueBrain {
         }
         var params: [String: Any] = ["threadId": thread, "input": input]
         if let effort { params["effort"] = effort }
-        let started = try await request("turn/start", params)
+        let started = try await call("turn/start", params)
         if let id = (started["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
     }
 
     func abort() async throws {
         guard let thread, let active = turn?.id else { return }
-        _ = try await request("turn/interrupt", ["threadId": thread, "turnId": active])
+        _ = try await call("turn/interrupt", ["threadId": thread, "turnId": active])
     }
 
     func stop() async {
-        await process?.stop()
-        await runner?.value
-        process = nil
+        await session.stop()
         thread = nil
     }
 
-    private func run(_ process: BrainProcess) async {
-        let reason = await process.pump { self.receive($0) }
-        pending.close()
-        emit.yield(.exited(reason))
-        emit.finish()
-    }
-
     /// JSON-RPC 请求，返回 `result`；`error` 抛 `rejected`。
-    private func request(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
-        guard let process else { throw CueBrainError.notRunning }
-        nextID += 1
-        let id = nextID
-        let reply = try await withCheckedThrowingContinuation { continuation in
-            pending.add(String(id), continuation)
-            do { try process.write(["jsonrpc": "2.0", "id": id, "method": method, "params": params]) } catch { pending.fail(String(id), error) }
-        }
+    private func call(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
+        let reply = try await session.request { ["jsonrpc": "2.0", "id": $0, "method": method, "params": params] }
         if let error = reply["error"] as? [String: Any] { throw CueBrainError.rejected(error["message"] as? String ?? "未知错误") }
         return reply["result"] as? [String: Any] ?? [:]
     }
@@ -139,22 +107,17 @@ actor CodexBrain: CueBrain {
     private func beginTurn(_ id: String) {
         guard turn?.id != id else { return }
         turn = Turn(id: id)
-        emit.yield(.turnStarted)
+        session.emit(.turnStarted)
     }
 
-    private func receive(_ line: Data) {
-        guard let message = jsonObject(line) else { return }
-        let method = message["method"] as? String
+    private func receive(_ message: [String: Any]) {
+        guard let method = message["method"] as? String else { return }
         if let id = message["id"] {
-            if let method {
-                // 服务端发来的请求（批准、MCP 征询……）：Cue 不答应任何请求，回错误免得这一轮卡住
-                try? process?.write(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "CuePad does not handle \(method)"]])
-            } else if let id = (id as? Int).map(String.init) {
-                _ = pending.resolve(id, message)
-            }
+            // 服务端发来的请求（批准、MCP 征询……）：Cue 不答应任何请求，回错误免得这一轮卡住
+            try? session.write(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "CuePad does not handle \(method)"]])
             return
         }
-        guard let method, let params = message["params"] as? [String: Any] else { return }
+        guard let params = message["params"] as? [String: Any] else { return }
         switch method {
         case "turn/started":
             if let id = (params["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
@@ -168,17 +131,17 @@ actor CodexBrain: CueBrain {
             guard let usage = params["tokenUsage"] as? [String: Any], let last = usage["last"] as? [String: Any],
                   let input = last["inputTokens"] as? Int else { return }
             // inputTokens 已含缓存命中（cachedInputTokens 是其中一部分）
-            emit.yield(.context(used: input, window: usage["modelContextWindow"] as? Int))
+            session.emit(.context(used: input, window: usage["modelContextWindow"] as? Int))
         case "turn/completed":
             let completed = params["turn"] as? [String: Any]
             let finished = turn
             turn = nil
             let status = completed?["status"] as? String
-            if status != "interrupted", let reply = finished?.reply { emit.yield(.reply(reply)) }
+            if status != "interrupted", let reply = finished?.reply { session.emit(.reply(reply)) }
             if status == "failed" {
-                emit.yield(.failed((completed?["error"] as? [String: Any])?["message"] as? String ?? "未知错误"))
+                session.emit(.failed((completed?["error"] as? [String: Any])?["message"] as? String ?? "未知错误"))
             }
-            emit.yield(.turnFinished)
+            session.emit(.turnFinished)
         default:
             break
         }

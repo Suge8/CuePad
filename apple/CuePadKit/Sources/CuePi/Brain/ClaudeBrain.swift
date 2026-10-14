@@ -12,71 +12,47 @@ import Foundation
 /// - 思考强度：`--effort` 只有 low 到 max，off、minimal 夹到 low（Claude Code 没有关掉思考的档位）；
 /// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`。
 actor ClaudeBrain: CueBrain {
-    nonisolated let events: AsyncStream<CueBrainEvent>
-    private let emit: AsyncStream<CueBrainEvent>.Continuation
-    private var process: BrainProcess?
-    private var runner: Task<Void, Never>?
-    private var directory: URL?
-    private var pending = PendingReplies()
-    private var nextID = 0
+    private let session = BrainSession()
+    nonisolated var events: AsyncStream<CueBrainEvent> { session.events }
     private var turn: Turn?
     private struct Turn {
         var used: Int?
         var aborted = false
     }
 
-    init() {
-        (events, emit) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
-    }
-
     func start(_ config: CueBrainConfig) async throws {
-        guard process == nil else { return }
-        do {
-            try await launch(config)
-        } catch {
-            // 握手失败：调用方拿不到这个大脑，起了的进程与临时文件这里收拾
-            await stop()
-            if let directory { try? FileManager.default.removeItem(at: directory) }
-            throw error
-        }
-    }
-
-    private func launch(_ config: CueBrainConfig) async throws {
-        let directory = try makeBrainDirectory()
-        self.directory = directory
-        let prompt = directory.appending(path: "system-prompt.md")
-        try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
-        let mcp = ["mcpServers": ["cuepad": ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
-
-        var arguments = [
-            "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
-            "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob", "--allowedTools", "Read,Grep,Glob,mcp__cuepad__*",
-            "--permission-prompts", "none", "--strict-mcp-config", "--mcp-config", jsonString(mcp),
-            "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands",
-        ]
-        if let model = config.model { arguments += ["--model", model] }
-        if let effort = config.effort { arguments += ["--effort", Self.effort(effort)] }
-        let environment = brainEnvironment(config, ["CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"])
-        let process = try BrainProcess(executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
-        self.process = process
-        runner = Task { await self.run(process) }
+        let environment = ["CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"]
+        try await session.start(config, environment: environment) { directory in
+            let prompt = directory.appending(path: "system-prompt.md")
+            try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
+            let mcp = ["mcpServers": ["cuepad": ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
+            var arguments = [
+                "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--no-session-persistence",
+                "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob", "--allowedTools", "Read,Grep,Glob,mcp__cuepad__*",
+                "--permission-prompts", "none", "--strict-mcp-config", "--mcp-config", jsonString(mcp),
+                "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands",
+            ]
+            if let model = config.model { arguments += ["--model", model] }
+            if let effort = config.effort { arguments += ["--effort", Self.effort(effort)] }
+            return arguments
+        } replyID: { $0["type"] as? String == "control_response" ? ($0["response"] as? [String: Any])?["request_id"] as? String : nil
+        } receive: { await self.receive($0) }
     }
 
     func send(_ text: String) async throws {
-        guard let process else { throw CueBrainError.notRunning }
-        try process.write(["type": "user", "message": ["role": "user", "content": text], "parent_tool_use_id": NSNull()])
+        try session.write(["type": "user", "message": ["role": "user", "content": text], "parent_tool_use_id": NSNull()])
     }
 
     func abort() async throws {
         guard turn != nil else { return }
         turn?.aborted = true
-        _ = try await control(["subtype": "interrupt"])
+        let reply = try await session.request { ["type": "control_request", "request_id": $0, "request": ["subtype": "interrupt"]] }
+        let response = reply["response"] as? [String: Any]
+        guard response?["subtype"] as? String == "success" else { throw CueBrainError.rejected(response?["error"] as? String ?? "未知错误") }
     }
 
     func stop() async {
-        await process?.stop()
-        await runner?.value
-        process = nil
+        await session.stop()
     }
 
     static func effort(_ level: PiThinkingLevel) -> String {
@@ -86,39 +62,17 @@ actor ClaudeBrain: CueBrain {
         }
     }
 
-    private func run(_ process: BrainProcess) async {
-        let reason = await process.pump { self.receive($0) }
-        pending.close()
-        if let directory { try? FileManager.default.removeItem(at: directory) }
-        emit.yield(.exited(reason))
-        emit.finish()
-    }
-
-    private func control(_ request: [String: Any]) async throws -> [String: Any] {
-        guard let process else { throw CueBrainError.notRunning }
-        nextID += 1
-        let id = "cue-\(nextID)"
-        let reply = try await withCheckedThrowingContinuation { continuation in
-            pending.add(id, continuation)
-            do { try process.write(["type": "control_request", "request_id": id, "request": request]) } catch { pending.fail(id, error) }
-        }
-        guard reply["subtype"] as? String == "success" else { throw CueBrainError.rejected(reply["error"] as? String ?? "未知错误") }
-        return reply
-    }
-
-    private func receive(_ line: Data) {
-        guard let event = jsonObject(line), let type = event["type"] as? String else { return }
+    private func receive(_ event: [String: Any]) {
+        guard let type = event["type"] as? String else { return }
         switch type {
-        case "control_response":
-            if let response = event["response"] as? [String: Any], let id = response["request_id"] as? String { _ = pending.resolve(id, response) }
         case "control_request":
             // Claude Code 问的事（批准工具……）一律不答应，回错误免得这一轮卡住
             guard let id = event["request_id"] as? String else { return }
-            try? process?.write(["type": "control_response", "response": ["subtype": "error", "request_id": id, "error": "CuePad does not handle this request"]])
+            try? session.write(["type": "control_response", "response": ["subtype": "error", "request_id": id, "error": "CuePad does not handle this request"]])
         case "system":
             guard event["subtype"] as? String == "init", turn == nil else { return }
             turn = Turn()
-            emit.yield(.turnStarted)
+            session.emit(.turnStarted)
         case "assistant":
             // 子代理的消息带 parent_tool_use_id；用量为 0 的是 Claude Code 自己合成的（报错等），不是模型请求
             guard event["parent_tool_use_id"] is NSNull || event["parent_tool_use_id"] == nil,
@@ -126,7 +80,7 @@ actor ClaudeBrain: CueBrain {
             let used = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].reduce(0) { $0 + (usage[$1] as? Int ?? 0) }
             guard used > 0, used != turn?.used else { return }
             turn?.used = used
-            emit.yield(.context(used: used, window: nil))
+            session.emit(.context(used: used, window: nil))
         case "result":
             finish(event)
         default:
@@ -138,14 +92,14 @@ actor ClaudeBrain: CueBrain {
         let finished = turn ?? Turn()
         turn = nil
         let windows = (result["modelUsage"] as? [String: [String: Any]])?.values.compactMap { $0["contextWindow"] as? Int } ?? []
-        if let used = finished.used, let window = windows.max() { emit.yield(.context(used: used, window: window)) }
+        if let used = finished.used, let window = windows.max() { session.emit(.context(used: used, window: window)) }
         let text = (result["result"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if result["is_error"] as? Bool == true {
-            if !finished.aborted { emit.yield(.failed(text.isEmpty ? (result["subtype"] as? String ?? "未知错误") : text)) }
+            if !finished.aborted { session.emit(.failed(text.isEmpty ? (result["subtype"] as? String ?? "未知错误") : text)) }
         } else if !finished.aborted, !text.isEmpty {
-            emit.yield(.reply(text))
+            session.emit(.reply(text))
         }
-        emit.yield(.turnFinished)
+        session.emit(.turnFinished)
     }
 }
 #endif
