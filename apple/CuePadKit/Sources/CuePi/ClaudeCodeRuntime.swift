@@ -9,7 +9,8 @@ import OSLog
 ///
 /// - 终端会话：第一次钩子调用时上桥，id 是 `<会话 id>.<进程 pid>`；同一进程里 /clear、/resume 换了会话，旧的下桥、新的上桥；
 ///   进程退出（kqueue）时下桥。CuePad 启动时已经在跑的会话（还没触发钩子）从 `claude agents --json` 补上。
-///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`）；之前没有的，记录里的标题取会话索引里的（不在这里读会话文件）。
+///   会话名与首条消息随钩子来（`session_title`、`UserPromptSubmit`）；重新上桥（托管接着、CuePad 重开后补上、钩子先到）时先取会话索引里记下的
+///   （`remembered`，不在这里读会话文件），钩子带来新的再换。
 /// - 托管会话：开新会话（`--session-id`）与接着已结束的会话（`--resume`）；接着之前先确认它没开在别处（终端里开着时两边会各写各的）。
 ///   让出与空闲退出由桥决定（`PiBridge` 的托管会话一节）。
 @MainActor
@@ -20,20 +21,41 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private let hooks: AgentHookServer
     private let locate: @Sendable () async -> ExecutableLocator
     private let gate: PresenceGate
+    private let store: CueStore
     private var terminals: [PiSession.ID: ClaudeTerminalSession] = [:]
     /// 每个终端进程一个退出监视；进程里此刻的会话见 `terminals`
     private var exitWatchers: [Int32: ProcessExitWatcher] = [:]
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer,
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, store: CueStore,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
     ) {
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
         self.locate = locate
+        self.store = store
         gate = PresenceGate(presence: presence)
+    }
+
+    /// 会话索引里记下的会话名与首条消息（索引器读会话文件得出，存在检查点里）；没索引过为 nil。
+    private func remembered(_ sessionID: String) async -> (name: String?, firstMessage: String?)? {
+        guard let data = try? await store.piCheckpoint(of: sessionID),
+              let checkpoint = try? JSONDecoder().decode(PiHistoryCheckpoint.self, from: data) else { return nil }
+        return (checkpoint.name, checkpoint.firstMessage)
+    }
+
+    /// 上桥后补上索引里记下的名字与首条消息：首条消息以索引为准（钩子先到时记下的可能是重新接上后说的第一句），
+    /// 名字钩子已带来的更新、不动。
+    private func recall(_ id: PiSession.ID, sessionID: String) {
+        Task { [weak self] in
+            guard let known = await self?.remembered(sessionID) else { return }
+            self?.bridge.update(id) { session in
+                if session.name == nil { session.name = known.name }
+                if let first = known.firstMessage { session.firstMessage = first }
+            }
+        }
     }
 
     private var home: URL { paths.home(of: .claudeCode) }
@@ -68,7 +90,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         // 还没触发过钩子的终端会话（钩子没装、或 CuePad 之后才启动）桥上没有，问 Claude Code 自己
         if try await running().contains(where: { $0.sessionID == session.id }) { throw AgentRuntimeError.openElsewhere }
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
-        return try await launch(sessionID: session.id, arguments: ["--resume", session.id], in: directory, launchToken: nil)
+        return try await launch(
+            sessionID: session.id, arguments: ["--resume", session.id], in: directory, launchToken: nil, known: await remembered(session.id))
     }
 
     // MARK: 托管
@@ -82,7 +105,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     /// 起托管进程、握手、上桥；进程先退出或握手超时（这时让它退出）都抛错。
-    private func launch(sessionID: String, arguments: [String], in directory: URL, launchToken: String?) async throws -> PiSession.ID {
+    private func launch(
+        sessionID: String, arguments: [String], in directory: URL, launchToken: String?, known: (name: String?, firstMessage: String?)? = nil
+    ) async throws -> PiSession.ID {
         let claude = try await executable()
         let session = try ClaudeHostedSession(
             executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
@@ -94,7 +119,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         }
         let cwd = URL(filePath: ClaudeCode.realPath(directory), directoryHint: .isDirectory)
         do {
-            return try await session.connect(cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), launchToken: launchToken).id
+            return try await session.connect(
+                cwd: cwd, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID), launchToken: launchToken, known: known).id
         } catch PiBridgeError.sessionEnded {
             throw ClaudeCodeError.exited(await session.process.exited() ?? "")
         } catch PiBridgeError.ackTimeout {
@@ -131,7 +157,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             id: id, sessionID: sessionID, agent: .claudeCode, sessionFile: file, pid: envelope.pid, cwd: cwd,
             terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), extensionVersion: 0, state: .settled, stateSince: .now)
         session.model = input["model"]?.string.map { ClaudeCode.model($0) }
-        return attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], busy: false, waiting: false)
+        let terminal = attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], busy: false, waiting: false)
+        recall(id, sessionID: sessionID)
+        return terminal
     }
 
     /// 启动时从会话列表补上的会话没有终端的环境变量：钩子带来时换上。
@@ -215,6 +243,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)), extensionVersion: 0,
                 state: .settled, stateSince: .now)
             _ = attach(session, inbox: inbox(of: entry.pid), busy: entry.status == "busy", waiting: entry.status == "waiting")
+            recall(id, sessionID: entry.sessionID)
         }
     }
 

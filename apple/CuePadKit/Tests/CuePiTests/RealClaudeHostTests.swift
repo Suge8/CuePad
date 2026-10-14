@@ -129,12 +129,15 @@ struct RealClaudeHostTests {
             #expect(testbed.bridge.session(id: id) == nil)
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
 
+            try await testbed.index(first.sessionFile)
             let indexed = IndexedSession(
                 id: first.sessionID, path: first.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)
             let resumed = try await testbed.runtime.resume(indexed)
             #expect(testbed.bridge.session(id: resumed)?.sessionID == first.sessionID)
             _ = try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
             try await testbed.waitForTurn(resumed)
+            // 接着的会话仍叫它的第一句，不是接着说的这句
+            #expect(testbed.bridge.session(id: resumed)?.firstMessage == "记住暗号 BANANA42，只回复 OK")
             #expect(try testbed.transcript(first.sessionFile).recap.lastReply?.contains("BANANA42") == true)
         }
     }

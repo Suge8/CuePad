@@ -90,7 +90,7 @@ final class ClaudeTestbed {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
+            bridge: bridge, paths: paths, hooks: hooks, store: store, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
             presence: presence)
         if installHooks { try await integration.install(.claudeCode) }
     }
@@ -167,6 +167,14 @@ final class ClaudeTestbed {
     /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
+    }
+
+    /// 像 App 的索引器那样把会话文件读进会话索引（检查点里有会话名与首条消息）。
+    func index(_ file: URL?) async throws {
+        let update = try transcript(file)
+        let session = IndexedSession(
+            id: try #require(update.checkpoint.sessionID), path: update.file.path, cwd: work.path, lastActivityAt: .now, agent: .claudeCode)
+        try await store.upsertPiSessions([PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
     /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
