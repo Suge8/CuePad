@@ -27,9 +27,11 @@ struct BrainLifecycleTests {
         try #require(pid_t(String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
-    /// 运行时一开口（初始化）就拒绝、之后也不退出：启动抛出它的拒绝原文，起了的进程不留下（调用方拿不到大脑，没人能收拾）。
+    /// 运行时一开口（初始化）就拒绝、之后也不退出、还忽略 SIGTERM：启动照样返回、抛出它的拒绝原文，起了的进程不留下
+    /// （调用方拿不到大脑，没人能收拾）。
     @Test func aRuntimeThatRejectsTheHandshakeIsNotLeftRunning() async throws {
         let (config, file) = try fakeRuntime(.codex, #"""
+            trap '' TERM
             read line
             id=$(printf '%s' "$line" | sed -E 's/.*"id":([0-9]+).*/\1/')
             printf '{"id":%s,"error":{"code":-1,"message":"nope"}}\n' "$id"

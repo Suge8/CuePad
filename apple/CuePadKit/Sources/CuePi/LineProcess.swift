@@ -109,9 +109,12 @@ final class LineProcess: Sendable {
         }
     }
 
-    /// 请它马上退出（SIGTERM），不等。
-    func terminate() {
+    /// 请它马上退出（不关输入、不等它收尾）：SIGTERM，宽限期过了还没走就结束整个进程组。不等，返回即可接着等读端结束。
+    func terminate(grace: Duration = .seconds(5)) {
         kill(pid, SIGTERM)
+        Task { [self] in
+            if await !exited(within: grace) { killpg(pid, SIGKILL) }
+        }
     }
 
     /// 让它退出并等到退出：先关标准输入请它收尾，不走再 SIGTERM，还不走就结束整个进程组。之后 `exited()` 报 nil。

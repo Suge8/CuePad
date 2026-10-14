@@ -790,7 +790,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         try process.run()
         let watchdog = Task {
             guard (try? await Task.sleep(for: Self.launchTimeout)) != nil else { return }
-            process.terminate()
+            process.end()
         }
         defer { watchdog.cancel() }
         for await status in exited where status != 0 {
