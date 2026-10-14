@@ -145,6 +145,22 @@ struct CueHostTests {
         await rig.stop()
     }
 
+    /// Cue 对开着的会话说话，这一轮做完后 Mac 才回报没送达（会话已关闭）：看板不变，这次失败也叫醒 Cue，信封里写着动作与原因。
+    @Test func 说话没送达_Cue醒来看到原因() async throws {
+        let rig = try await Rig()
+        try await rig.settleFollowedTask(titled: "修好登录页 说不出去")
+        try await rig.message(.note, containing: "登录页那边歇下了")
+        let session = try #require(rig.app.host.extensions.values.first)
+        session.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true, "delivered": "immediate"] }  // 先不回
+        try await rig.say("请对登录页说继续")
+        try await eventually("这一轮做完") { rig.services.cue.state == .idle && rig.model.answered("已对「修好登录页 说不出去」的会话说了") }
+        let send = try #require(session.commands.last { $0.json["t"] as? String == "send" }?.json["id"] as? String)
+        session.sendRaw(#"{"t":"ack","id":"\#(send)","ok":false,"error":"会话已关闭"}"#)
+        let seen = try await rig.message(.note, containing: "看到了")
+        #expect(seen.text.contains("说话") && seen.text.contains("会话已关闭"))
+        await rig.stop()
+    }
+
     /// Cue 带选项问你；你回答后 Cue 被唤醒，回答写成 Cue 说的。"等你"推了通知。
     @Test func 等你被回答_Cue被唤醒() async throws {
         let rig = try await Rig()
@@ -366,12 +382,13 @@ nonisolated final class FakeModel: Sendable {
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
+        if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "先做哪个？", "choices": ["A", "B"]]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
-        if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[[^\]]+\] [^\n]*开工[^\n]*)/)?.1 {
+        if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {
             return say("看到了：\(failed)")
         }
         if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") {
