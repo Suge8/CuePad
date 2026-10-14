@@ -21,6 +21,8 @@ public final class PiBridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: PiSession
+        /// 此刻正在说的这条回答（见 `PiDraft`）；单独一项，出字时只有读它的视图重算
+        public internal(set) var draft: PiDraft?
         init(_ session: PiSession) {
             id = session.id
             sessionID = session.sessionID
@@ -260,6 +262,13 @@ public final class PiBridge {
         let previous = slot.session.state
         slot.session = session
         emit(session.state == previous ? .infoChanged(session) : .stateChanged(session, from: previous))
+    }
+
+    /// 改一个在线会话正在说的话（`PiDraft`）：各家接入每个增量调一次即可，刷新节奏由桥统一定；只改这一格的 `draft`，
+    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做。
+    public func setDraft(_ id: PiSession.ID, _ draft: PiDraft?) {
+        guard let slot = slots.first(where: { $0.id == id }), slot.draft != draft else { return }
+        slot.draft = draft
     }
 
     /// 一个会话下线（进程退出、会话结束）。
