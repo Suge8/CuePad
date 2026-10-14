@@ -340,7 +340,7 @@ extension DebugScene {
 
     /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
     /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
-    private static let demoModels: PiModelState = {
+    static let demoModels: PiModelState = {
         func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
             PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
         }

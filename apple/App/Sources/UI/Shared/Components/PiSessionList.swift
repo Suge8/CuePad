@@ -46,14 +46,14 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
 /// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
 /// 不写会话在说什么（那在会话页里），只写它是谁、在哪、什么状态、跑得怎样。
-/// - 整页（`page`）是一张圆角卡片，"现在"的卡片固定三层、一样高：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
-///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词；读数一层是会话的模型、子代理（角色图标，颜色是它的状态，
-///   后接在跑 / 共几个；没有时空着），上下文靠右。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
+/// - 整页（`page`）是一张圆角卡片，"现在"的卡片：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
+///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
+///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
 /// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
 /// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
-/// 两种都落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
+/// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
 struct PiSessionRow: View {
     let session: PiSessionState
@@ -84,7 +84,7 @@ struct PiSessionRow: View {
         /// 状态标的基准直径（外框是它的 1.8 倍）。
         var dot: CGFloat
         var spacing: CGFloat
-        /// 整页：一张卡片、三层。
+        /// 整页：一张卡片。
         var card = false
 
         static let page = Style(name: Typography.bodyStrong, line: Typography.secondary, meta: Typography.meta, dot: 11, spacing: 4, card: true)
@@ -108,7 +108,7 @@ struct PiSessionRow: View {
             if !ended { PiStateDot(shown: shown, size: style.dot) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     // 已结束的没有状态词：所在后面不留孤零零的分隔点
                     if let place { place; if searchHit != nil || !ended { Dot() } }
                     if let searchHit {
@@ -117,10 +117,12 @@ struct PiSessionRow: View {
                         StateWord(shown: shown)
                         if let note = facts.note { Dot(); NoteWord(note: note) }
                     }
+                    Spacer(minLength: 4)
+                    if let context = facts.context { ContextFact(meter: context).font(style.meta).fixedSize() }
                 }
                 .font(style.line)
                 .lineLimit(1)
-                if !ended { FactColumns(facts: facts, font: style.meta) }
+                if facts.model != nil || facts.subagents != nil { FactColumns(facts: facts, font: style.meta) }
             }
         }
         .contentTransition(.opacity)
@@ -297,7 +299,7 @@ private struct HostedTag: View {
     }
 }
 
-/// 整页卡片的读数一层：模型一列固定宽、子代理接在后面（卡片之间上下对齐，没有模型时那一列空着，位置不动），上下文靠右、落在时长正下方。
+/// 整页卡片的读数一层（有模型或子代理时才有）：模型一列固定宽、子代理接在后面，卡片之间上下对齐；没有模型时那一列空着。
 private struct FactColumns: View {
     let facts: PiRowFacts
     let font: Font
@@ -310,7 +312,6 @@ private struct FactColumns: View {
                 .accessibilityLabel(facts.model.map { "模型 \($0.name)" } ?? "")
             if let subagents = facts.subagents { SubagentRoster(summary: subagents) }
             Spacer(minLength: 0)
-            if let context = facts.context { ContextFact(meter: context).fixedSize() }
         }
         .font(font)
         .lineLimit(1)
