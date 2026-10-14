@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePi
@@ -41,10 +42,12 @@ struct BrainLifecycleTests {
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
         let (config, file) = try fakeRuntime(.claude, "trap '' TERM\nexec sleep 300")
         let brain = try await config.startBrain()
-        let started = ContinuousClock.now
-        while (try? pid(in: file)) == nil {  // 脚本跑起来写下 pid 之前停它，测不到"忽略 SIGTERM"
-            #expect(ContinuousClock.now - started < .seconds(5))
-            try await Task.sleep(for: .milliseconds(10))
+        do {
+            // 脚本跑起来写下 pid 之前停它，测不到"忽略 SIGTERM"
+            try await eventually("假运行时写下 pid", timeout: .seconds(5)) { (try? pid(in: file)) != nil }
+        } catch {
+            await brain.stop()
+            throw error
         }
         let begun = ContinuousClock.now
         await brain.stop()
