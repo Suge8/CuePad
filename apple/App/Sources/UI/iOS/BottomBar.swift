@@ -10,7 +10,7 @@ import SwiftUI
 /// 字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
-/// 角标是"等你 N"（`CueWaiting`）各归各的：Cue 那一格是 Cue 问你的，Agent 那一格是会话问你的。
+/// Cue 那一格挂"等你 N"（`CueWaiting`，同侧栏的 Cue 一行）。
 struct BottomBar: View {
     let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
@@ -69,8 +69,8 @@ struct BottomBar: View {
             .overlay {
                 let cue = workspace.cue
                 HStack(spacing: 0) {
-                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.digest.waiting.asked)
-                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", waiting: cue.digest.waiting.sessions)
+                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.digest.waiting)
+                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg")
                     tab(.projects, title: "灵感", symbol: "lightbulb")
                 }
                 .accessibilityElement(children: .contain)

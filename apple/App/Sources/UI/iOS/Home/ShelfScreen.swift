@@ -134,7 +134,7 @@ struct ShelfScreen: View {
     private func lead(_ data: ShelfData, _ catalog: ProjectCatalog) -> some View {
         let tasksLine = data.active.isEmpty ? catalog.shelfTasks : nil
         let unfiled = catalog.unfiledCount
-        if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: catalog.shelfTasks).transition(Motion.item) }
+        if !data.active.isEmpty { ActiveTasks(tasks: data.active, more: data.activeMore, counts: catalog.shelfTasks).transition(Motion.item) }
         if unfiled > 0 || tasksLine != nil {
             VStack(spacing: 0) {
                 if let tasksLine { TasksLine(tasks: tasksLine) }
@@ -295,7 +295,7 @@ private struct PinnedShelfCard: View {
             .paper(radius: Self.radius)
         }
         .buttonStyle(PressStyle(.card))
-        .projectActions(entry.project, radius: Self.radius, pi: now?.shown)
+        .projectActions(entry.project, radius: Self.radius, pi: nil)
         .accessibilityElement(children: .combine)
     }
 
@@ -406,7 +406,7 @@ private struct ShelfRow: View {
         }
         .buttonStyle(RowPressStyle())
         .background(palette.paper)
-        .projectActions(entry.project, radius: 16, pi: now?.shown)
+        .projectActions(entry.project, radius: 16, pi: nil)
         .accessibilityElement(children: .combine)
     }
 }
@@ -414,7 +414,7 @@ private struct ShelfRow: View {
 /// 正在推进：一屏的重点。进行中的任务排在一张纸上，每行是标题与所在项目，点开推入任务页；
 /// 标题右边是全部任务的计数，点它进任务页——单独一行"任务 · N 进行中"会与下面这几行重复报进行中，所以并进标题。
 private struct ActiveTasks: View {
-    let rows: [TaskBoard.Row]
+    let tasks: [Card]
     let more: Int
     let counts: TaskCounts?
     @Environment(\.palette) private var palette
@@ -437,8 +437,8 @@ private struct ActiveTasks: View {
             }
             .padding(.horizontal, 4)
             VStack(spacing: 0) {
-                ForEach(rows) { row in
-                    ActiveTaskRow(row: row, divided: row.id != rows.first?.id).transition(Motion.item)
+                ForEach(tasks) { task in
+                    ActiveTaskRow(task: task, divided: task.id != tasks.first?.id).transition(Motion.item)
                 }
                 if more > 0 { moreRow }
             }
@@ -485,9 +485,10 @@ private struct ActiveTasks: View {
 
 /// 正在推进的一行：进行中圆圈（全 App 同一个 `TaskRingView`）、标题，下面是所在项目。
 private struct ActiveTaskRow: View {
-    let row: TaskBoard.Row
+    let task: Card
     let divided: Bool
     @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .headline) private var scaledRing: CGFloat = 20
@@ -496,13 +497,13 @@ private struct ActiveTaskRow: View {
     private var ring: CGFloat { min(scaledRing, 28) }
 
     var body: some View {
-        Button { navigation.push(.card(row.id)) } label: {
+        Button { navigation.push(.card(task.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 TaskRingView(status: .inProgress, ring: .plain, done: false, size: ring)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
+                    Text(task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
                         .lineLimit(typeSize.isAccessibilitySize ? 4 : 2).multilineTextAlignment(.leading)
-                    if let project = row.project {
+                    if let project = workspace.catalog?.project(task.projectID) {
                         HStack(spacing: 4) {
                             ProjectGlyph(project: project, size: 11)
                             Text(project.name)
@@ -521,7 +522,7 @@ private struct ActiveTaskRow: View {
         .overlay(alignment: .top) {
             if divided { palette.hair.frame(height: 1).padding(.leading, 16 + ring + 12) }
         }
-        .contextMenu { CardActions(card: row.task) }
+        .contextMenu { CardActions(card: task) }
         .accessibilityElement(children: .combine)
         .accessibilityHint("打开任务")
     }
