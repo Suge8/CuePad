@@ -205,8 +205,10 @@ public enum PiBridgeError: Error, Equatable {
     case sessionEnded
     case ackTimeout
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
-    /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
+    /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）
     case rejected(String)
+    /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
+    case unknownModel(AgentKind)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiWorkState.incompatible`），不发命令
     case incompatibleExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
@@ -220,8 +222,8 @@ extension PiBridgeError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
-        case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
+        case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
+        case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
@@ -230,7 +232,7 @@ extension PiBridgeError: LocalizedError {
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
-        case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
+        case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"

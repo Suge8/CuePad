@@ -71,7 +71,7 @@ struct RealPiTests {
             try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high, in: s.id)
             try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.key.id == "echo" && bridge.sessions.first?.thinking == .known(.off) }
 
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.pi)) {
                 try await bridge.configure(model: PiModelKey(provider: "fake", id: "nope"), in: s.id)
             }
 

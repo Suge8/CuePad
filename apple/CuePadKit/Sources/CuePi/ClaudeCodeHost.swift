@@ -223,7 +223,7 @@ final class ClaudeHostedSession: SessionLink {
                 let text = reason.lowercased()
                 let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { text.contains($0) }
                     || (["api error: 400", "api error: 404"].contains { text.contains($0) } && text.contains(model.id.lowercased()))
-                throw PiBridgeError.rejected(unknown ? "unknown_model" : "failed: \(reason)")
+                throw unknown ? PiBridgeError.unknownModel(.claudeCode) : PiBridgeError.rejected("failed: \(reason)")
             }
             bridge?.update(id) { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
         }

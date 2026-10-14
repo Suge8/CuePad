@@ -204,7 +204,7 @@ struct RealOpenCodeTests {
             let stored = try await sandbox.api("GET", "/api/session/\(live.sessionID)")["data"] as? [String: Any]
             let model = stored?["model"] as? [String: Any]
             #expect(model?["id"] as? String == thinker.id && model?["variant"] as? String == "high" && stored?["title"] as? String == "改过的名字")
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
                 try await bridge.configure(model: PiModelKey(provider: "opencode", id: "no-such-model"), in: live.id)
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
@@ -324,7 +324,7 @@ struct RealOpenCodeTests {
     /// 开会话时模型配不上：开会话整体失败，这个会话不留在桥上，也不留在 OpenCode 的后台服务里。
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
                 _ = try await runtime.open(
                     in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: "opencode", id: "no-such-model"), thinking: nil)
             }

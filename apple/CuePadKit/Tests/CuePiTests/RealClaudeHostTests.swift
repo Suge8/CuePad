@@ -90,7 +90,7 @@ struct RealClaudeHostTests {
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
             try await testbed.bridge.configure(model: other, thinking: .low, name: "托管改名", in: id)
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.claudeCode)) {
                 try await testbed.bridge.configure(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model"), in: id)
             }
             try await testbed.bridge.command("/rename 命令改名", in: id)

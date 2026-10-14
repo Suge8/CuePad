@@ -677,7 +677,7 @@ public final class CodexRuntime: AgentRuntime {
         if models == nil { models = try await CodexModel.list(rpc) }
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
-        if model != nil, entry == nil { throw PiBridgeError.rejected("unknown_model") }
+        if model != nil, entry == nil { throw PiBridgeError.unknownModel(.codex) }
         var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }

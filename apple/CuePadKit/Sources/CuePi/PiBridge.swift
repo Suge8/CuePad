@@ -131,7 +131,7 @@ public final class PiBridge {
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)
             let ack = try await replies.request(commandID) { connection.write(data) }
-            guard ack.ok else { throw PiBridgeError.rejected(ack.error ?? "unknown") }
+            guard ack.ok else { throw ack.error == "unknown_model" ? PiBridgeError.unknownModel(.pi) : PiBridgeError.rejected(ack.error ?? "unknown") }
             return ack
         }
     }
@@ -238,7 +238,7 @@ public final class PiBridge {
     }
 
     /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
-    /// 模型不在 Agent 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
+    /// 模型不在 Agent 的模型表里抛 `unknownModel`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
         let name = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard model != nil || thinking != nil || name != nil, name?.isEmpty != true else { throw PiBridgeError.rejected("bad_request") }
