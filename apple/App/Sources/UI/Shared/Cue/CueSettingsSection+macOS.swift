@@ -71,10 +71,11 @@ struct CueSettingsSection: View {
             }
             .labelsHidden().fixedSize()
         }
-        SettingRow(title: "用哪个 Agent", icon: Image(systemName: "cpu")) {
-            Picker("用哪个 Agent", selection: Binding(get: { profile.runtime.known ?? .pi }, set: { runtime in update { $0.runtime = .known(runtime) } })) {
+        let runtime = profile.runtime.known ?? .pi
+        SettingRow(title: "用哪个 Agent", icon: runtime.mark.image) {
+            Picker("用哪个 Agent", selection: Binding(get: { runtime }, set: { runtime in update { $0.runtime = .known(runtime) } })) {
                 ForEach(CueRuntimes.order, id: \.self) { runtime in
-                    Text(runtime.name).tag(runtime).selectionDisabled(here && services.cue.runtimes?.contains(runtime) == false)
+                    AgentLabel(kind: runtime).tag(runtime).selectionDisabled(here && services.cue.runtimes?.contains(runtime) == false)
                 }
             }
             .labelsHidden().fixedSize()

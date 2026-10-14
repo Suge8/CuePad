@@ -57,7 +57,7 @@ struct NewSessionForm: View {
                 Spacer(minLength: 0)
                 if agents.count > 1 {
                     Picker("用哪个 Agent", selection: Binding(get: { agent ?? services.defaultAgent }, set: { agent = $0 })) {
-                        ForEach(agents) { (kind: AgentKind) in Label { Text(kind.name) } icon: { kind.icon }.tag(kind) }
+                        ForEach(agents) { (kind: AgentKind) in AgentLabel(kind: kind).tag(kind) }
                     }
                     .pickerStyle(.menu).labelsHidden().fixedSize()
                     .controlSize(.small)

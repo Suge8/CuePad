@@ -416,7 +416,7 @@ private struct NoticeView: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
-                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
+                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? Failure.symbol : "checkmark.circle.fill") }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))

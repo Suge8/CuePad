@@ -2,14 +2,15 @@
 # requires-python = ">=3.12"
 # dependencies = ["picosvg==0.23.0"]
 # ///
-"""模型提供方的图标：把 LobeHub 单色图标（npm @lobehub/icons-static-svg，MIT，许可见仓库根目录 THIRD-PARTY-NOTICES.md）
-转成自定义 SF Symbol，写进 App 的资源目录（两端共用）。用法：uv run design/tools/provider-symbols.py
+"""品牌标志（模型家族、接入的 Agent、订阅账号与提供方）：把 LobeHub 单色图标（npm @lobehub/icons-static-svg，MIT，许可见仓库根目录
+THIRD-PARTY-NOTICES.md）转成自定义 SF Symbol（brand-<名>），整个重写 App 资源目录的 Brands 下（两端共用）。用法：uv run design/tools/brand-symbols.py
 
 图标按 LobeHub 的 24 格放成边长 SIDE 的方块、竖向居中在大写字母高度的中线上（与系统的圆形符号同高），所以与文字基线对齐、随字号缩放。
 三种粗细放同一份路径：标志没有粗细之分。evenodd 由 picosvg 转成 nonzero（符号只认 nonzero）。
-哪个提供方用哪个图标在 PiProvider（App 代码）里，这里只管有哪些图标。
+谁用哪个标志只在 App 代码的 BrandMark 里，这里只管有哪些标志。
 """
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -20,19 +21,21 @@ from picosvg.svg import SVG
 from picosvg.svg_transform import Affine2D
 
 VERSION = "1.95.1"
-OUT = Path(__file__).resolve().parents[2] / "apple/App/Sources/Assets.xcassets/Providers"
-# 资源名（provider-<名>）→ LobeHub 图标名与取哪一块（24 格里的 x, y, 宽, 高；默认整格）
+OUT = Path(__file__).resolve().parents[2] / "apple/App/Sources/Assets.xcassets/Brands"
+# 资源名（brand-<名>）→ LobeHub 图标名与取哪一块（24 格里的 x, y, 宽, 高；默认整格）
 ICONS = {
-    "anthropic": ("anthropic", None),
+    # 模型家族（也是订阅账号与提供方分组的标志）
+    "claude": ("claude", None),
     "openai": ("openai", None),
     "gemini": ("gemini", None),
-    "xai": ("xai", None),
+    "grok": ("grok", None),
     "deepseek": ("deepseek", None),
     "kimi": ("kimi", None),
-    "openrouter": ("openrouter", None),
     # 整个图标是两行字标，小字号读不出；只取下面那一行 MiMo 标
     "mimo": ("xiaomimimo", (0, 13.4, 24, 6.4)),
-    # 接入的 Agent（AgentKind 用哪个在 App 代码的 AgentMark 里）
+    # 转发模型的提供方：认不出家族时退到它
+    "openrouter": ("openrouter", None),
+    # 接入的 Agent
     "claudecode": ("claudecode", None),
     "codex": ("codex", None),
     "opencode": ("opencode", None),
@@ -90,15 +93,16 @@ def main() -> None:
         with tarfile.open(next(Path(tmp).glob("*.tgz"))) as archive:
             archive.extractall(tmp, filter="data")
         icons = Path(tmp) / "package/icons"
-        OUT.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(OUT, ignore_errors=True)
+        OUT.mkdir(parents=True)
         (OUT / "Contents.json").write_text('{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n')
         for name, (source, crop) in ICONS.items():
-            folder = OUT / f"provider-{name}.symbolset"
+            folder = OUT / f"brand-{name}.symbolset"
             folder.mkdir(exist_ok=True)
-            (folder / f"provider-{name}.svg").write_text(template(*glyph(icons / f"{source}.svg", crop)))
+            (folder / f"brand-{name}.svg").write_text(template(*glyph(icons / f"{source}.svg", crop)))
             (folder / "Contents.json").write_text(
                 '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  },\n  "symbols" : [\n    {\n'
-                f'      "filename" : "provider-{name}.svg",\n      "idiom" : "universal"\n    }}\n  ]\n}}\n')
+                f'      "filename" : "brand-{name}.svg",\n      "idiom" : "universal"\n    }}\n  ]\n}}\n')
 
 
 main()

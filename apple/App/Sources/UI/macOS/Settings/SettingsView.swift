@@ -138,8 +138,8 @@ private struct NotificationSection: View {
     var body: some View {
         Section {
             permission
-            row("等你", symbol: "questionmark.bubble", kind: .waitingForUser, help: "Agent 在等你回答或确认，Cue 带选项来问你或有急事")
-            row("做完了", symbol: "checkmark.circle", kind: .settled, help: "Agent 做完了一轮")
+            row("等你", kind: .waitingForUser, help: "Agent 在等你回答或确认，Cue 带选项来问你或有急事")
+            row("做完了", kind: .settled, help: "Agent 做完了一轮")
         }
         .task { await alerts.refresh() }
     }
@@ -160,9 +160,10 @@ private struct NotificationSection: View {
         }
     }
 
-    private func row(_ title: String, symbol: String, kind: PiAlert, help: String) -> some View {
+    private func row(_ title: String, kind: PiAlert, help: String) -> some View {
         @Bindable var settings = services.settings
-        return SettingRow(title: title, icon: Image(systemName: symbol), help: help) {
+        // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
+        return SettingRow(title: title, icon: Image(systemName: PiShown(status: SessionAlert.status(kind)).symbol), help: help) {
             HStack(spacing: 12) {
                 Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
                     settings.alerts[kind].sound = sound
@@ -205,7 +206,7 @@ private struct CrashRow: View {
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, icon: Image(systemName: "exclamationmark.triangle"), tone: .notice,
+            title: report.kind.label, icon: Image(systemName: Failure.symbol), tone: .failure,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()

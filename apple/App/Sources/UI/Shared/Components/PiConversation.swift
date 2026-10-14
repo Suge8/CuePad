@@ -140,7 +140,7 @@ struct PiConversation: View {
         liveStatus
         #endif
         if session.state == .known(.error) {
-            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
+            Callout(.failed, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 
@@ -355,7 +355,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
+                Callout(.asking, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
         }
     }

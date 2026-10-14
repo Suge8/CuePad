@@ -516,7 +516,7 @@ private struct StartupIssues: View {
             Button {
                 showing.toggle()
             } label: {
-                Label("\(services.startupIssues.count) 个启动问题", systemImage: "exclamationmark.triangle")
+                Label { Text("\(services.startupIssues.count) 个启动问题") } icon: { FailureMark() }
                     .font(Typography.meta).foregroundStyle(palette.failure)
             }
             .buttonStyle(.plain)

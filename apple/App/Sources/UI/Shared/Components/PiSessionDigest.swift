@@ -68,21 +68,20 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
-/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态符号上（问题是 `WaitingMark`、出错是胭脂叹号），正文中性；
+/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态图形上（`PiStateGlyph`，与状态标同一个样子：问题是赭黄问号圆、出错是胭脂圆叹号），正文中性；
 /// 问题的正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
 /// 层级只有两层：对话里的（出错的原因）是纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是玻璃，
 /// 与回复框同属底部玻璃那一层。顶上只有系统玻璃（标题、圆钮），不在对话上另浮卡片。
 struct Callout<Accessory: View>: View {
-    enum Kind { case question, failure }
-
-    let kind: Kind
+    /// 问题是 `.asking`，出错与没能结束是 `.failed`。
+    let status: PiShown.Status
     let text: String
     var docked = false
     @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
 
-    init(_ kind: Kind, text: String, docked: Bool = false, @ViewBuilder accessory: () -> Accessory) {
-        self.kind = kind
+    init(_ status: PiShown.Status, text: String, docked: Bool = false, @ViewBuilder accessory: () -> Accessory) {
+        self.status = status
         self.text = text
         self.docked = docked
         self.accessory = accessory()
@@ -91,15 +90,12 @@ struct Callout<Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                switch kind {
-                case .question: WaitingMark()
-                case .failure: Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityHidden(true)
-                }
+                PiStateGlyph(status: status)
                 Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            .font(kind == .question ? Typography.title : Typography.body)
+            .font(status == .asking ? Typography.title : Typography.body)
             accessory
         }
         .padding(16)
@@ -110,8 +106,8 @@ struct Callout<Accessory: View>: View {
 }
 
 extension Callout where Accessory == EmptyView {
-    init(_ kind: Kind, text: String, docked: Bool = false) {
-        self.init(kind, text: text, docked: docked) { EmptyView() }
+    init(_ status: PiShown.Status, text: String, docked: Bool = false) {
+        self.init(status, text: text, docked: docked) { EmptyView() }
     }
 }
 
@@ -168,7 +164,7 @@ struct QuestionCard: View {
     private var failure: String? { writeError ?? sent?.failure }
 
     var body: some View {
-        Callout(.question, text: question.text, docked: true) {
+        Callout(.asking, text: question.text, docked: true) {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {
@@ -304,8 +300,8 @@ struct DeliveryStatusLabel: View {
             case .known(.succeeded):
                 Label { Text(Dotted("已送达", request.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: { Image(systemName: "paperplane.fill") }
                     .foregroundStyle(palette.ink2)
-            case .known(.failed): Label("没能送达", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
-            case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
+            case .known(.failed): Label { Text("没能送达") } icon: { PiStateGlyph(status: .delivery(.failed)) }.foregroundStyle(palette.failure)
+            case .unknown: Label { Text("未知状态") } icon: { PiStateGlyph(status: .unknown) }.foregroundStyle(palette.ink2)
             }
         }
         .font(Typography.meta.weight(.medium))
