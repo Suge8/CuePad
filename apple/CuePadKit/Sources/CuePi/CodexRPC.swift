@@ -20,8 +20,10 @@ final class CodexRPC {
     private var reader: Task<Void, Never>?
     private(set) var isClosed = false
     var onNotification: ((String, Object) -> Void)?
-    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新；下一项开始（转成工具调用、思考等）、
-    /// 下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。只有订阅了线程的连接（自己起的进程）收得到增量
+    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文）变了：随增量更新；过程中的说明（`phase` 为 commentary）说完、
+    /// 下一项开始（转成工具调用、思考等）、下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。
+    /// 说明说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
+    /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
     var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
     private var drafts: [String: (item: String, draft: PiDraft)] = [:]
     /// 连接断了（进程退出、常驻服务退出）；只调一次
@@ -162,6 +164,8 @@ final class CodexRPC {
             onDraft?(thread, draft)
             return true
         case "item/started", "turn/started":
+            clearDraft(thread)
+        case "item/completed" where (params["item"] as? Object).map({ $0["type"] as? String == "agentMessage" && $0["phase"] as? String == "commentary" }) == true:
             clearDraft(thread)
         case "turn/completed" where (params["turn"] as? Object)?["status"] as? String != "completed":
             clearDraft(thread)
