@@ -1,5 +1,6 @@
 import CueStore
 import SwiftUI
+import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -100,6 +101,13 @@ enum DebugHooks {
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         #if DEBUG
         await DebugScene.presetComposer(draft, source: source, store: store)
+        #endif
+    }
+
+    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
+    static func previewWebLoaded(_ page: WebPage) {
+        #if DEBUG
+        DebugScene.snapshotWeb(page)
         #endif
     }
 
