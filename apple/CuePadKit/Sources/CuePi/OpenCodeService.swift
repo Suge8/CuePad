@@ -133,6 +133,8 @@ struct OpenCodeEvent: Decodable, Sendable {
         var ordinal: Int?
         var delta: String?
         var text: String?
+        /// 这一步开始的时刻（ms，`session.step.started`），就是这条回答消息的建立时刻
+        var started: Double?
 
         struct Item: Decodable, Sendable { var payload: OpenCodePrompt? }
     }
@@ -150,6 +152,10 @@ struct OpenCodeEvent: Decodable, Sendable {
 /// （`ordinal`）排、换行连接（与对话里这条回答的写法一致，见 `OpenCodeHistory`），一段说完（`session.text.ended`）换成这段的全文；
 /// 换一条回答就重来；转成工具调用（`session.tool.input.started`）、下一轮开始（`session.execution.started`）、这一轮停下或失败时清掉，
 /// 正常说完的留着。服务不续传：断线重连后错过的增量补不回来，由调用方 `reset`。
+///
+/// `since` 取这一步开始（`session.step.started` 的 `started`）的时刻，不取第一个增量到的时刻：对话里这条回答的时刻是这条消息建立的时刻
+/// （`OpenCodeMessage.at`，与 `started` 是同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`PiDraft.landed`），
+/// 说完后草稿与对话里的回答会叠成两份。没看到这一步开始（中途连上）的回答不给草稿。
 struct OpenCodeDrafts {
     private struct Entry {
         var message: String
@@ -158,15 +164,24 @@ struct OpenCodeDrafts {
         var draft: PiDraft { PiDraft(text: parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n"), since: since) }
     }
     private var entries: [String: Entry] = [:]
+    /// 每个会话最近开始的一步：哪条回答、它的时刻
+    private var steps: [String: (message: String, at: Date)] = [:]
 
     /// 这条事件改了哪个会话正在说的话、改成什么；与正在说的话无关或没有变化为 nil。
     mutating func apply(_ event: OpenCodeEvent) -> (sessionID: String, draft: PiDraft?)? {
         let data = event.data
         guard let sessionID = data.sessionID else { return nil }
         switch event.type {
+        case "session.step.started":
+            if let message = data.assistantMessageID, let started = data.started {
+                steps[sessionID] = (message, Date(timeIntervalSince1970: started / 1000))
+            }
+            return nil
         case "session.text.delta":
             guard let message = data.assistantMessageID, let delta = data.delta else { return nil }
-            var entry = entries[sessionID].flatMap { $0.message == message ? $0 : nil } ?? Entry(message: message, since: .now)
+            let current = entries[sessionID].flatMap { $0.message == message ? $0 : nil }
+            guard var entry = current ?? steps[sessionID].flatMap({ $0.message == message ? Entry(message: message, since: $0.at) : nil })
+            else { return nil }
             entry.parts[data.ordinal ?? 0, default: ""] += delta
             entries[sessionID] = entry
             return (sessionID, entry.draft)
@@ -178,6 +193,7 @@ struct OpenCodeDrafts {
             return (sessionID, entry.draft)
         case "session.tool.input.started", "session.execution.started", "session.execution.failed", "session.execution.interrupted",
              "session.deleted":
+            if event.type == "session.deleted" { steps[sessionID] = nil }
             guard entries.removeValue(forKey: sessionID) != nil else { return nil }
             return (sessionID, nil)
         default:
@@ -187,7 +203,7 @@ struct OpenCodeDrafts {
 
     /// 全部清掉（断线重连），返回原先有草稿的会话。
     mutating func reset() -> [String] {
-        defer { entries = [:] }
+        defer { entries = [:]; steps = [:] }
         return Array(entries.keys)
     }
 }

@@ -12,7 +12,7 @@ import Foundation
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 思考强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`），随 `turn/start` 给；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
-/// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`，停下与失败的一轮它已清掉）；过程中的说明（commentary）说完就清掉。
+/// - 正在说的话用 `CodexRPC` 累积好的这个线程的（`onDraft`）：过程中的说明（commentary）说完、停下与失败的一轮它已清掉，留下的只有给你看的回答。
 @MainActor
 final class CodexBrain: CueBrain {
     private let session = BrainSession()
@@ -131,9 +131,6 @@ final class CodexBrain: CueBrain {
                 session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
             case "commandExecution" where turn != nil:
                 session.emit(.toolDone(id: id, result: item["aggregatedOutput"] as? String ?? "", failed: failed))
-            // 过程中的说明（commentary）说完就清掉：只有给你看的回答算这一轮的回答
-            case "agentMessage" where item["phase"] as? String == "commentary":
-                session.emit(.speaking(nil))
             default: break
             }
         case "thread/tokenUsage/updated":

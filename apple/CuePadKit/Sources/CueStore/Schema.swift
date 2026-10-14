@@ -13,7 +13,7 @@ import Foundation
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt；piSessionStates、cards、deliveryRequests、
-/// piMessages 的 writeSeq（本机写入序号，见 37）。
+/// piMessages 的 writeSeq（本机写入序号，见 38）。
 ///
 /// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
@@ -150,31 +150,46 @@ enum Schema {
     // 38：本机写入序号（`CueStore.lastWrite`）：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
     // 旧行是 0（早于升级后的任何一次醒来）
     Upgrade(stringLiteral: writeSeq),
+    // 39：不再分"由谁跟进"：Cue 值班时管所有有活会话的事。卡片上的跟进标记与守它的触发器下线（CloudKit 里的字段照原样声明为已下线）；
+    // 卡片盖写入序号的触发器原先也看它，先删、去掉它后重建
+    """
+    DROP TRIGGER IF EXISTS cards_cueFollows_insert; DROP TRIGGER IF EXISTS cards_cueFollows_update; DROP TRIGGER cards_writeSeq_update;
+    ALTER TABLE cards DROP COLUMN cueFollows;
+    \(stampOnChange("cards", cardChanges))
+    """,
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
   /// 计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
-  /// 会话状态（进入的状态与时刻）、卡片（完成与跟进相关：完成、跟进、上级、是不是任务）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
+  /// 会话状态（进入的状态与时刻）、卡片（`cardChanges`）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
   private static let writeSeq = """
     CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
     INSERT INTO writeCounter (seq) VALUES (0);
     \(stamped("piSessionStates", when: ["state", "stateSince"]))
-    \(stamped("cards", when: ["completedAt", "cueFollows", "parentID", "todoAt"]))
+    \(stamped("cards", when: cardChanges))
     \(stamped("deliveryRequests", when: ["status"]))
     \(stamped("piMessages", when: []))
     """
 
+  /// 卡片上构成 Cue 的变化的列：完成、上级、是不是任务。
+  private static let cardChanges = ["completedAt", "parentID", "todoAt"]
+
   /// `table` 加本机列 `writeSeq`：新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
   private static func stamped(_ table: String, when columns: [String]) -> String {
-    let stamp = "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
-    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
-    return """
-      ALTER TABLE \(table) ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
-      CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp) END;
-      """ + (columns.isEmpty ? "" : """
+    """
+    ALTER TABLE \(table) ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;
+    """ + (columns.isEmpty ? "" : "\n" + stampOnChange(table, columns))
+  }
 
-      CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp) END;
-      """)
+  /// `columns` 里的列改了值的行盖上计数器的下一个数。
+  private static func stampOnChange(_ table: String, _ columns: [String]) -> String {
+    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
+    return "CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;"
+  }
+
+  private static func stamp(_ table: String) -> String {
+    "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
   }
 
   private static let piProcesses = """
@@ -199,7 +214,7 @@ enum Schema {
     ) STRICT;
     """
 
-  /// Cue 的表与"只有顶层任务能由 Cue 跟进"的守卫：卡片挂到别的任务下、改回灵感时 `cueFollows` 归零（本机写入与远端同步一视同仁）。
+  /// Cue 的表。
   private static let cue = """
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
@@ -221,12 +236,6 @@ enum Schema {
     CREATE TABLE cueSummaries (
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
-    CREATE TRIGGER cards_cueFollows_insert AFTER INSERT ON cards
-      WHEN new.cueFollows <> 0 AND (new.parentID IS NOT NULL OR new.todoAt IS NULL)
-      BEGIN UPDATE cards SET cueFollows = 0 WHERE id = new.id; END;
-    CREATE TRIGGER cards_cueFollows_update AFTER UPDATE OF parentID, todoAt, cueFollows ON cards
-      WHEN new.cueFollows <> 0 AND (new.parentID IS NOT NULL OR new.todoAt IS NULL)
-      BEGIN UPDATE cards SET cueFollows = 0 WHERE id = new.id; END;
     """
 
   private static let syncSent = """
@@ -257,8 +266,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      cueFollows INTEGER NOT NULL DEFAULT 0
+      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);

@@ -13,8 +13,6 @@ final class SessionHeader {
         var session: PiSessionState
         var title: String
         var undelivered: String?
-        /// 由 Cue 跟进（`SessionDigest.cueFollows`）。
-        var cueFollows: Bool
         var ending: Bool
         /// "⋯"最上面写的所在。
         var place: Dotted?
@@ -90,17 +88,13 @@ struct PageTitleSlot: View {
             if let task { ring(task) }
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // 会话绑着的事里有一件由 Cue 跟进（`CueStore.cueFollowedSessions`），不只看标题里写的那一件
-                    if state.cueFollows {
-                        CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
-                    }
                     Text(state.title).font(task == nil ? Typography.toolbarTitle : Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
                         .lineLimit(1).layoutPriority(1)
                         .accessibilityAddTraits(.isHeader)
                     if state.ending {
                         Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
                     } else {
-                        PiSessionSubtitle(session: session, undelivered: state.undelivered, cueFollows: state.cueFollows)
+                        PiSessionSubtitle(session: session, undelivered: state.undelivered)
                     }
                 }
                 if let primary { path(primary, count: state.task?.tasks.count ?? 1) }

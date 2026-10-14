@@ -31,23 +31,24 @@ public struct CueTools: Sendable {
       [
         "name": "task",
         "description": """
-          派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。prompt、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
-          add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
+          派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。标题与步骤名宽不过 \(CueName.limit)（汉字算 2，约 12 个汉字），超了整件退回。prompt、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
+          add{title,project?,steps?,prompt?} 建任务；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
           start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true（上一步的会话随之结束）；
-          say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
-          peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
-          stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence} 收尾：你按证据验收过就完成，不请用户收下。evidence 写两三条证据要点。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；
-          顶层任务（步骤要都完成）完成时把标题与 evidence 作为结果告诉用户，不用再 tell。
+          say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说；他发起的那一轮还没完时 now 也等它做完）；
+          peek{task?} 只读：不带 task 看所有没做完的事（"在做"的归你管），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与预览；
+          stop{task} 停下这一轮；
+          done{task,evidence?} 收尾：你按证据验收过就完成，不请用户收下。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；
+          顶层任务（步骤要都完成）要 evidence：1–\(evidenceCount) 条结论、每条宽不过 \(evidenceLimit)（约 20 个汉字），超了退回；完成时 CuePad 把标题与证据拼成结果告诉用户，不用再 tell。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "done", "follow"]],
-            "task": string, "title": string, "project": string, "steps": ["type": "array", "items": string], "prompt": string,
+            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "done"]],
+            "task": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "prompt": string,
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "when": ["type": "string", "enum": ["now", "after", "answer"]], "value": string,
-            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "fresh": ["type": "boolean"],
+            "evidence": ["type": "array", "items": ["type": "string", "description": "宽不过 \(evidenceLimit)"], "maxItems": evidenceCount],
+            "fresh": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],
@@ -86,6 +87,11 @@ public struct CueTools: Sendable {
   }
 
   private static var string: [String: Any] { ["type": "string"] }
+  private static var name: [String: Any] { ["type": "string", "description": "宽不过 \(CueName.limit)（汉字算 2）"] }
+
+  /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
+  static let evidenceCount = 3
+  static let evidenceLimit = 40
 
 
   private static func schema(_ properties: [String: Any], required: [String]) -> [String: Any] {
@@ -120,20 +126,13 @@ public struct CueTools: Sendable {
     case "edit": return try await edit(args)
     case "start": return try await start(args)
     case "say": return try await say(args)
-    case "peek":
-      if args.bool("all") == true { return try await overview() }
-      return try await args.string("task") == nil ? board() : peek(try await task(args.required("task")))
+    case "peek": return try await args.string("task") == nil ? board() : peek(try await task(args.required("task")))
     case "stop":
       let leaf = try await workingLeaf(try args.required("task"))
       let request = try await store.stopLeaf(leaf.id, host: try await host(), cue: true)
       return .ok("已请会话停下这一轮：「\(leaf.heading)」（\(leaf.id.shortID)）。", ["task": id(leaf.id), "request": id(request.id)])
     case "done": return try await done(args)
-    case "follow":
-      let who = try args.required("who")
-      guard ["cue", "you"].contains(who) else { throw Failure("who 只能是 cue 或 you") }
-      let top = try await store.setCueFollows(try await task(args.required("task")).id, who == "cue")
-      return .ok("「\(top.heading)」（\(top.id.shortID)）" + (who == "cue" ? "由你跟进。" : "交还给用户，不再跟进。"), ["task": id(top.id), "follows": who == "cue"])
-    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done / follow")
+    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done")
     }
   }
 
@@ -142,7 +141,7 @@ public struct CueTools: Sendable {
     let card = try await task(args.required("task"))
     _ = try await host()  // 停用后不能再收尾
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
-    let evidence = card.parentID == nil ? try args.required("evidence") : args.string("evidence") ?? ""
+    let evidence = card.parentID == nil ? try Self.evidence(args) : []
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束")
@@ -150,15 +149,34 @@ public struct CueTools: Sendable {
       ["task": id(card.id), "requests": ends.map { id($0.id) }, "report": report.map { id($0.id) } ?? NSNull()])
   }
 
-  private func add(_ args: Args) async throws -> Result {
-    let heading = try args.required("title")
-    let project = try await args.string("project").asyncMap(project)
-    let created = try await store.createTask(heading, in: project?.id)
-    var steps: [UUID] = []
-    for step in args.strings("steps") ?? [] where !step.trimmingCharacters(in: .whitespaces).isEmpty {
-      steps.append(try await store.createTask(step, under: created.id).id)
+  /// 证据（done 收顶层任务时）：1–`evidenceCount` 条，每条宽不过 `evidenceLimit`；不合就整件退回，什么都不写。
+  private static func evidence(_ args: Args) throws -> [String] {
+    let items = (args.strings("evidence") ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    guard (1...evidenceCount).contains(items.count) else { throw Failure("evidence 写 1–\(evidenceCount) 条证据（字符串数组），每条一句结论") }
+    if let long = items.first(where: { CueName.width($0) > evidenceLimit }) {
+      throw Failure("证据「\(long)」宽 \(CueName.width(long))，每条上限 \(evidenceLimit)（约 20 个汉字），没写：只写结论，如\"登录测试全过\"，过程不写")
     }
-    let top = try await store.setCueFollows(created.id, true)
+    return items
+  }
+
+  /// Cue 写的名字（标题、步骤名）：去掉首尾空白后不空、宽不过 `CueName.limit`。不合抛错，调用方在写任何东西之前查完。
+  private static func name(_ raw: String, _ what: String) throws -> String {
+    let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { throw Failure("\(what)不能为空") }
+    let width = CueName.width(name)
+    guard width <= CueName.limit else {
+      throw Failure("\(what)「\(name)」宽 \(width)，上限 \(CueName.limit)（约 12 个汉字），什么都没写：只留要做成的结果，细节写进草稿")
+    }
+    return name
+  }
+
+  private func add(_ args: Args) async throws -> Result {
+    let heading = try Self.name(try args.required("title"), "标题")
+    let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "步骤") }
+    let project = try await args.string("project").asyncMap(project)
+    let top = try await store.createTask(heading, in: project?.id)
+    var steps: [UUID] = []
+    for step in names { steps.append(try await store.createTask(step, under: top.id).id) }
     var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个步骤")
     var prompt: UUID?
     if let body = args.string("prompt") {
@@ -167,28 +185,29 @@ public struct CueTools: Sendable {
       let leaf = try await store.workingLeaf(of: top.id)
       text += leaf.id == top.id ? "，带着草稿" : "，草稿在「\(leaf.heading)」上"
     }
-    text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里，由你跟进。"
+    text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里。"
     return .ok(text, ["task": id(top.id), "steps": steps.map(id), "prompt": prompt.map(id) ?? NSNull()])
   }
 
   private func edit(_ args: Args) async throws -> Result {
     let card = try await task(args.required("task"))
-    // 绑了会话的叶子不留草稿（话在会话里说）：先查，免得标题、步骤改了一半才报错
+    // 先查完再写，免得标题、步骤改了一半才报错：名字的宽度；绑了会话的叶子不留草稿（话在会话里说）
+    let heading = try args.string("title").map { try Self.name($0, "标题") }
+    let steps = try args.strings("steps").map { try $0.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "步骤") } }
+    if steps != nil, card.parentID != nil { throw Failure("步骤只能加在顶层任务上：task 写它的顶层任务") }
     if args.string("prompt") != nil {
       let leaf = try await store.workingLeaf(of: card.id)
       if leaf.piSessionID != nil { throw CueStoreError.leafHasSession(leaf.heading) }
     }
     var done: [String] = []
-    if let heading = args.string("title") {
-      guard !heading.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure("标题不能为空") }
+    if let heading {
       try await store.updateCard(card.id) { $0.body = heading }
       done.append("改了标题")
     }
-    if let steps = args.strings("steps") {
-      guard card.parentID == nil else { throw Failure("步骤只能加在顶层任务上：task 写它的顶层任务") }
+    if let steps {
       let existing = Set(try await store.children(of: card.id).filter(\.isTask).map { $0.heading })
       var added = 0
-      for step in steps where !step.isEmpty && !existing.contains(step) {
+      for step in steps where !existing.contains(step) {
         _ = try await store.createTask(step, under: card.id)
         added += 1
       }
@@ -285,16 +304,33 @@ public struct CueTools: Sendable {
     return PiConfig(model: try Self.model(raw, of: agent ?? .pi), thinking: effort)
   }
 
+  /// 看板：所有没做完的顶层任务，按项目分组（未分类在最后），至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
   private func board() async throws -> Result {
     let items = try await store.cueBoard()
+    let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
     let now = Date()
-    let lines = items.map { "- " + CueEnvelope.boardLine($0, now: now) }
+    var lines: [(text: String, isTask: Bool)] = [], group: UUID?? = .none
+    for item in items {
+      if item.task.projectID != group {
+        group = item.task.projectID
+        lines.append(((item.task.projectID.flatMap { names[$0] } ?? "未分类") + "：", false))
+      }
+      lines.append(("- " + CueEnvelope.boardLine(item, now: now), true))
+    }
+    let room = Self.overviewLimit - 1  // 第一行是"没做完的 N 件"
+    if lines.count > room {
+      lines = Array(lines.prefix(room - 1))
+      if lines.last?.isTask == false { lines.removeLast() }
+      lines.append(("还有 \(items.count - lines.filter(\.isTask).count) 件", false))
+    }
     return .ok(
-      items.isEmpty ? "你没有在跟进的事。" : "跟进中 \(items.count) 件：\n" + lines.joined(separator: "\n"),
+      items.isEmpty
+        ? "没有没做完的事。"
+        : "没做完的 \(items.count) 件，在做 \(items.count(where: \.isActive)) 件：\n" + lines.map(\.text).joined(separator: "\n"),
       [
         "tasks": items.map { item -> [String: Any] in
           [
-            "id": id(item.task.id), "title": item.task.heading,
+            "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(), "active": item.isActive,
             "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
             "leaves": item.leaves.map { leaf -> [String: Any] in
               [
@@ -308,42 +344,10 @@ public struct CueTools: Sendable {
       ])
   }
 
-  /// 所有没做完的顶层任务，按项目分组（未分类在最后），至多 `overviewLimit` 行。
-  private func overview() async throws -> Result {
-    let items = try await store.openTopTasks()
-    let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
-    let now = Date()
-    var lines: [(text: String, isTask: Bool)] = [], group: UUID?? = .none
-    for item in items {
-      if item.task.projectID != group {
-        group = item.task.projectID
-        lines.append(((item.task.projectID.flatMap { names[$0] } ?? "未分类") + "：", false))
-      }
-      lines.append(("- " + CueEnvelope.boardLine(item, now: now, showingFollower: true), true))
-    }
-    let room = Self.overviewLimit - 1  // 第一行是"没做完的 N 件"
-    if lines.count > room {
-      lines = Array(lines.prefix(room - 1))
-      if lines.last?.isTask == false { lines.removeLast() }
-      lines.append(("还有 \(items.count - lines.filter(\.isTask).count) 件", false))
-    }
-    return .ok(
-      items.isEmpty ? "用户手上没有没做完的事。" : "没做完的 \(items.count) 件：\n" + lines.map(\.text).joined(separator: "\n"),
-      [
-        "tasks": items.map { item -> [String: Any] in
-          [
-            "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(),
-            "follows": item.task.cueFollows, "leaves": item.leaves.map { id($0.leaf.id) },
-            "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-          ]
-        }
-      ])
-  }
-
   /// peek 里每个叶子最新的那条回答最多给这么多字。
   static let latestReplyLimit = 4000
 
-  /// peek all 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
+  /// 不带 task 的 peek 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
   static let overviewLimit = 60
 
   /// 会话是哪家 Agent 的（本版本不认识的写 Agent）。
@@ -354,7 +358,7 @@ public struct CueTools: Sendable {
     let now = Date()
     var lines = [
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 步骤 \($0.done)/\($0.total)" } ?? "")
-        + " · " + (detail.task.cueFollows ? "由你跟进" : "用户自己做") + " · " + status(detail.task)
+        + " · " + status(detail.task)
     ]
     for leaf in detail.leaves {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
@@ -372,7 +376,8 @@ public struct CueTools: Sendable {
       for (index, message) in leaf.recent.enumerated() {
         let text = CueFormat.plainText(message.text)
         guard index == latest else {
-          lines.append("  \(message.role == .known(.user) ? "你" : agent)：\(CueEnvelope.clip(text, 300))")
+          let who = message.role == .known(.pi) ? agent : message.saidByCue(leaf.cueSent) ? "你" : "他"
+          lines.append("  \(who)：\(CueEnvelope.clip(text, 300))")
           continue
         }
         let full = text.count > Self.latestReplyLimit
@@ -384,7 +389,7 @@ public struct CueTools: Sendable {
     return .ok(
       lines.joined(separator: "\n"),
       [
-        "task": id(detail.task.id), "follows": detail.task.cueFollows,
+        "task": id(detail.task.id),
         "leaves": detail.leaves.map { leaf -> [String: Any] in
           [
             "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "status": leaf.leaf.status?.rawValue ?? NSNull(),

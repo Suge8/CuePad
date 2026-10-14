@@ -161,8 +161,8 @@ struct SessionDraft: View {
 }
 
 extension PiDraft {
-    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它开始出字——回答说完才写进会话文件，
-    /// Cue 的话一轮做完才写进对话，时刻都是写入的那一刻。按时刻认、不按文字认：两轮说了一样的话也认得开。
+    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
     func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
 }
 #endif
@@ -264,14 +264,12 @@ extension PiConversation {
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
-    /// 由 Cue 跟进（`SessionDigest.cueFollows`）：等回答时写"等 Cue 回答"。
-    var cueFollows = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: cueFollows ? workspace.cue.name : nil)
+        let shown = PiShown(session, cue: workspace.cueOnDuty)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {
