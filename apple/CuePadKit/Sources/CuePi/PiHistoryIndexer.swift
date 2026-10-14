@@ -68,7 +68,7 @@ public struct PiHistoryIndexer: Sendable {
                 if let dropped = change.dropped { watcher.unfollow(dropped) }
                 if change.follows { watcher.follow(file.path) }
             }
-            if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
+            if update.isSession, update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
 
         // 回填时记住最近修改的那批文件（正在被 Pi 写入的最可能是它们）：之后的事件（包括 FSEvents
