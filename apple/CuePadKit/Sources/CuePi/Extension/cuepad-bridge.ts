@@ -518,7 +518,7 @@ export default function (pi: ExtensionAPI) {
 		ownWatcher.on("error", (error) => ctx.ui.notify(`CuePad 扩展文件监听失败：${reason(error)}`, "error"));
 	}
 	function canReload() {
-		return (phase === "idle" || phase === "error") && !asking && ctx.isIdle();
+		return (phase === "idle" || phase === "error") && !asking;
 	}
 	function reloadWhenIdle() {
 		if (!newerOnDisk || ownReload || !canReload()) return;
@@ -714,9 +714,14 @@ export default function (pi: ExtensionAPI) {
 				}
 				case "new": await command.newSession(); break;
 				case "reload-if-idle":
+					if (!newerOnDisk || !canReload()) {
+						ownReload = undefined;
+						break;
+					}
+					// session_compact 先通知扩展、再收起 Pi 的压缩标记：用它的空闲 Promise 等收尾，不轮询
+					await command.waitForIdle();
 					ownReload = undefined;
-					// 派发前又开始了工作或弹窗：留到下次歇下，不打断
-					if (!newerOnDisk || !canReload()) break;
+					if (!newerOnDisk || !canReload() || !command.isIdle()) break;
 					newerOnDisk = false;
 					await command.reload();
 					break;
