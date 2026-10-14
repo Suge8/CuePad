@@ -338,7 +338,7 @@ private enum CueRunFormat {
         switch wake {
         case .enabled: "刚启用"
         case .message: "你发来消息"
-        case .sessionActivity: "跟进的事有动静"
+        case .sessionActivity: "会话有动静"
         case .idle: "空闲巡视"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
         case .renewed: "换新后接着做"

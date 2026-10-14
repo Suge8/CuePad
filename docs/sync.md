@@ -47,7 +47,7 @@ Cue 说的话（say、answer、把草稿发进已有会话的 start）写下后�
 
 - "要不要提示"只有一条规则 `PiAlert.entering`：Mac 写会话状态时置位手机推送标志，两端读同步来的在线会话认出转换（`SessionAlertTracker`），都用它。通知代理、权限与点开的路由两端一份（`AlertCenter`）。
 - iPhone：锁屏通知由 CloudKit 查询订阅在服务端生成，不靠 App 在后台运行。Pi 会话状态记录带明文可查询的 `notify` 标志，是一次性事件标志，只存在于未上传的版本上（理由与规则见 `PiStateRecorder` 与 `PiAlerts.swift`）；Cue 的消息同样带 `notify`，只由 Cue 值班的那台 Mac 置位（`CueService`），上传即清。取舍：通知反映服务端收到记录那一刻的状态，标志在上传前被状态已前进的写入取代就不送出；状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。前台不展示 Agent 的系统通知，提示是 App 内横幅（读同步来的会话状态，不依赖推送是否到达）。
-- Mac 不注册远程通知、没有推送权限：账号级订阅的推送一到 Mac，CuePad 不在前台时由系统直接展示，设置里的开关与提示音管不到；同步到达本来也不靠推送（见「拉取节奏」）。Mac 的提示都是本机发的本地通知：Agent 的不分会话在本机还是别的 Mac，同一条路（`LiveSessions` → `SessionAlertTracker`，本次运行第一次读到的只记基线）；Cue 的由值班的 Mac 读库（`CueService.followNotifications`）。你在不在看只有一处（`Workspace.isWatching`）：正看着那一页什么都不发，其余前台后台都是系统横幅加声音（macOS 27 实测前台回复里带 `.sound` 系统就会弹横幅，所以不另出窗口里的提示条），免打扰只认系统的专注模式。打开会话时撤掉它那一组已送达的通知。"等你"只算不由 Cue 跟进的会话（`PiSessionState.asksYou`），通知、手机推送标志与"等你 N"、Dock 角标同一条规则。
+- Mac 不注册远程通知、没有推送权限：账号级订阅的推送一到 Mac，CuePad 不在前台时由系统直接展示，设置里的开关与提示音管不到；同步到达本来也不靠推送（见「拉取节奏」）。Mac 的提示都是本机发的本地通知：Agent 的不分会话在本机还是别的 Mac，同一条路（`LiveSessions` → `SessionAlertTracker`，本次运行第一次读到的只记基线）；Cue 的由值班的 Mac 读库（`CueService.followNotifications`）。你在不在看只有一处（`Workspace.isWatching`）：正看着那一页什么都不发，其余前台后台都是系统横幅加声音（macOS 27 实测前台回复里带 `.sound` 系统就会弹横幅，所以不另出窗口里的提示条），免打扰只认系统的专注模式。打开会话时撤掉它那一组已送达的通知。"等你"只算等你回答的会话（`PiSessionState.asksYou`：Cue 值班时它答得了的归 Cue），通知、手机推送标志与"等你 N"、Dock 角标同一条规则。
 - Mac 的提示音：通知中心只在 ~/Library/Sounds 与系统声音目录里找声音，不看 App 包；一个声音名找不到过一次，之后装上了也播兜底音。所以先把选中的那段装进去再发（`AlertSounds`）。这几个文件卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。
 

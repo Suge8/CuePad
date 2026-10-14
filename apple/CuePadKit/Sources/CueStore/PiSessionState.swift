@@ -68,20 +68,16 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var rename: DeliveryRequest?
   /// 发给它、没能送达的话有几句（说话的方式里失败、还没重发或移除的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
   public var undelivered: Int
-  /// 绑着它的任务由 Cue 跟进（`cueFollowedSessions()`）：歇下时该看的是 Cue，不催你。
-  public var cueFollows: Bool
   public var id: UUID { state.id }
 
   public init(
-    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0,
-    cueFollows: Bool = false
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
     self.undelivered = undelivered
-    self.cueFollows = cueFollows
   }
 }
 
@@ -212,12 +208,12 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 会话在等回答（弹了问题）。算不算"等你"还要看是不是由 Cue 跟进：见 `asksYou(cueFollows:)`。
-  public var waitsForYou: Bool { state == .known(.waitingForUser) }
+  /// 等的是 Cue：在等回答，Cue 在值班（`CueProfile.onDuty`），这个问题 CuePad 也答得了（`answerableQuestion`）——Cue 去答或转问你。
+  public func waitsForCue(cueOnDuty: Bool) -> Bool { cueOnDuty && answerableQuestion != nil }
 
-  /// "等你"里会话那一半的唯一规则：在等回答，且不由 Cue 跟进（Cue 跟进的由 Cue 去答或转问你）。"等你 N"、Dock 角标、
+  /// "等你"里会话那一半的唯一规则：在等回答，且等的不是 Cue（`waitsForCue`）。"等你 N"、Dock 角标、
   /// "等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
-  public func asksYou(cueFollows: Bool) -> Bool { waitsForYou && !cueFollows }
+  public func asksYou(cueOnDuty: Bool) -> Bool { state == .known(.waitingForUser) && !waitsForCue(cueOnDuty: cueOnDuty) }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }

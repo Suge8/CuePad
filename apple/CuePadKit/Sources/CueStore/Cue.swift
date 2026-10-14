@@ -2,7 +2,8 @@ import CueText
 import Foundation
 
 // Cue：常驻的总控 Agent。它不写代码，只经 CuePad 的任务派活、跟进、问你、记东西。这里是它的数据：
-// 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）；它跟进哪些事记在卡片上（`Card.cueFollows`）。
+// 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）、此刻在做什么（`cueState`）。
+// 值班时它管所有有活会话、没做完的事（`CueStore.cueBoard`），不另记"由谁跟进"。
 
 /// Cue 页对话里一行是谁的。
 public enum CueAuthor: String, Sendable, CaseIterable {
@@ -163,6 +164,10 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
+  /// Cue 在值班（唯一规则）：启用了，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue
+  /// （`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
+  public func onDuty(_ state: CueState?) -> Bool { activeHost != nil && state?.state != .known(.error) }
+
   public static let defaultName = "Cue"
   /// 只有一行：任何设备上都是这个 id。
   public static let recordID = DeterministicID.uuid("cue-profile")
@@ -221,7 +226,7 @@ extension CueState: Record {
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事的验收，Cue 按你的规矩与最佳实践自己定，做完告诉你。
-/// 选项也由这里给（允许一次、以后都不用问、拒绝），Cue 不能自拟"照这个做 / 我再看看"这类确认。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
@@ -248,8 +253,15 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
 
   /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
-  func rule(project: String?) -> String? {
+  public func rule(project: String?) -> String? {
     always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
+  }
+}
+
+/// Cue 收尾一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点。
+public enum CueReport {
+  public static func text(task: String, evidence: [String]) -> String {
+    (["「\(task)」做完了", ""] + evidence.map { "- \($0)" }).joined(separator: "\n")
   }
 }
 

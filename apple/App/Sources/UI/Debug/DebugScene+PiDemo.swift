@@ -91,8 +91,8 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
-    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 在命令行里 `cuepad show` 了两次——页面一张卡，截图与评审结论一起一张卡
-    /// （对话里按创建时间排在你的话与回答之间）。
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 先截了手机宽度的图，再在命令行里 `cuepad show` 了两次——
+    /// 页面一张卡，截图与评审结论一起一张卡（对话里按创建时间排在你的话与回答之间）；工具清单只有截图那条，发卡片的命令不列（`PiToolLog`）。
     private static func seedPreviews(_ store: CueStore, now: Date) async {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -114,7 +114,7 @@ extension DebugScene {
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-                at: last.addingTimeInterval(2), tools: .init(commands: 2, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(commands: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
@@ -340,7 +340,7 @@ extension DebugScene {
 
     /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
     /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
-    private static let demoModels: PiModelState = {
+    static let demoModels: PiModelState = {
         func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
             PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
         }

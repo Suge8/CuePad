@@ -94,6 +94,18 @@ struct RealBrainTests {
         }
     }
 
+    /// 带一张图问颜色：图按这家原生的图片输入交给模型，它看得见（红色）。
+    @Test(arguments: enabledRuntimes) func anImageIsSeen(_ runtime: AgentKind) async throws {
+        try await withRig(runtime) { rig in
+        #expect(rig.brain.seesImages)
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)])
+        try await rig.finished()
+
+        #expect(rig.failures == [], "\(rig.events)")
+        #expect(rig.replies.last?.lowercased().contains("red") == true, "\(rig.replies)")
+        }
+    }
+
     /// 一轮进行中再说的话并进这一轮，在下一次请求模型前就起作用，而不是等这一轮做完：一串前后相依的 MCP 调用中途叫停，
     /// 它停在半路、照新的话回答，没有另起一轮。
     @Test(arguments: enabledRuntimes) func aMessageDuringATurnJoinsThatTurn(_ runtime: AgentKind) async throws {
@@ -206,5 +218,9 @@ struct RealBrainTests {
             ((try? FileManager.default.contentsOfDirectory(atPath: root.appending(path: project).path)) ?? []).filter { $0.hasSuffix(".jsonl") }
         }
     }
+}
+
+private extension CueBrain {
+    func send(_ text: String) async throws { try await send(text, images: []) }
 }
 #endif

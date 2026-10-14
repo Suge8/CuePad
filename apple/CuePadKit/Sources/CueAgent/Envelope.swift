@@ -8,7 +8,7 @@ public enum CueWake: Equatable, Sendable {
   case enabled
   /// 你发来新消息
   case message
-  /// 跟进的会话有动静
+  /// 在做的事里的会话有动静
   case sessionActivity
   /// 空闲时的例行查看
   case idle
@@ -19,7 +19,7 @@ public enum CueWake: Equatable, Sendable {
 }
 
 /// 交给 Cue 的大脑的一轮输入：一个 `<cue>` 块，你的话（若有）接在块后面。
-/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、跟进中、等你、醒来的原因。
+/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（`CueBoardItem.isActive`）、等你、醒来的原因。
 public enum CueEnvelope {
   public struct Input: Sendable {
     public var now: Date
@@ -28,12 +28,12 @@ public enum CueEnvelope {
     public var contextUsed: Int?
     /// 用到这么多 token 就该换新上下文。
     public var renewAt: Int
-    public var since: Date
     /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
     public var projects: [CueProject]
     public var changes: [CueChange]
     /// 你关掉、还没告诉 Cue 的提问（`CueStore.cueMessagesToDeliver` 里没选就结束的）：写在变化里。
     public var dismissed: [CueMessage]
+    /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: [CueBoardItem]
     public var waiting: [CueMessage]
     public var wake: CueWake
@@ -41,14 +41,13 @@ public enum CueEnvelope {
     public var said: String?
 
     public init(
-      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, since: Date, projects: [CueProject], changes: [CueChange],
+      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
       dismissed: [CueMessage], board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, said: String?
     ) {
       self.now = now
       self.timeZone = timeZone
       self.contextUsed = contextUsed
       self.renewAt = renewAt
-      self.since = since
       self.projects = projects
       self.changes = changes
       self.dismissed = dismissed
@@ -67,13 +66,13 @@ public enum CueEnvelope {
 
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
-    let since = calendar.isDate(input.since, inSameDayAs: input.now) ? clock(input.since, calendar) : stamp(input.since, calendar)
-    lines.append("变化（\(since) 之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
+    lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
     lines += input.dismissed.map { "- [关掉提问] 他没选就关掉了「\(clip(CueFormat.plainText($0.text), 80))」（\($0.id.shortID)）" }
 
-    lines.append("跟进中 \(input.board.count) 件" + (input.board.isEmpty ? "" : "："))
-    lines += input.board.map { "- \(boardLine($0, now: input.now))" }
+    let active = input.board.filter(\.isActive)
+    lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
+    lines += active.map { "- \(boardLine($0, now: input.now))" }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { message in
@@ -92,7 +91,7 @@ public enum CueEnvelope {
     switch wake {
     case .enabled: "刚启用"
     case .message: "你发来新消息"
-    case .sessionActivity: "跟进的会话有动静"
+    case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
     case .reminder: "提醒到点"
     case .renewed: "换了新上下文，上一段的交接："
@@ -107,9 +106,6 @@ public enum CueEnvelope {
       case .failed: "出错"
       case .undelivered: "发送失败"
       case .done: "完成"
-      case .youSpoke: "你在会话里说了话"
-      case .joined: "交给你跟进"
-      case .left: "不再由你跟进"
       }
     var text = "[\(label)] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
@@ -118,10 +114,8 @@ public enum CueEnvelope {
   }
 
   /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带步骤的短 id）。
-  /// `showingFollower` 写上谁在跟进（看所有事时用；看板上都是 Cue 跟进的，不写）。
-  static func boardLine(_ item: CueBoardItem, now: Date, showingFollower: Bool = false) -> String {
+  static func boardLine(_ item: CueBoardItem, now: Date) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
-    if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
     guard item.leaves.count > 1 else {
       let leaf = item.leaves[0]
@@ -143,7 +137,7 @@ public enum CueEnvelope {
   private static func recent(_ session: PiSessionState) -> String? {
     if session.state == .known(.waitingForUser), let question = session.question { return question.text }
     if session.state.isWorking, let detail = session.detail { return detail }
-    return session.pendingPrompt.map { "你说：\($0)" } ?? session.lastReply
+    return session.pendingPrompt.map { "在处理：\($0)" } ?? session.lastReply
   }
 
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
@@ -161,8 +155,8 @@ public enum CueEnvelope {
   }
 
   private static func where_(_ change: CueChange) -> String {
-    let base = change.task.map { "\($0.heading)（\($0.id.shortID)）" } ?? "已永久删除的任务（\(change.taskID.shortID)）"
-    guard let leaf = change.leaf, leaf.id != change.taskID else { return base }
+    let base = "\(change.task.heading)（\(change.task.id.shortID)）"
+    guard let leaf = change.leaf, leaf.id != change.task.id else { return base }
     return "\(base) › \(leaf.heading)"
   }
 

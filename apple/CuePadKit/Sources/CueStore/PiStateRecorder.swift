@@ -1,7 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// `notify` 只置给你的提示（`PiAlert.reaches`）：会话由 Cue 跟进时进入等回答不置，这类提问 Cue 处理，要你拍板的它会发"等你"。
+  /// `notify` 只置给你的提示（`PiAlert.reaches`）：Cue 值班、问题 CuePad 答得了时进入等回答不置，这类提问 Cue 处理，要你拍板的它会发"等你"。
   func writePiState(sessionID: String, hostID: String, content: PiStateContent, notify: PiAlert?) throws {
     try write {
       let now = Date.stamp
@@ -12,11 +12,7 @@ extension CueStore {
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
-      if let alert = notify, alert == .waitingForUser,
-        !alert.reaches(record, cueFollows: try db.first("SELECT 1 WHERE \(Self.followedByCue("?"))", [sessionID], { _ in true }) != nil)
-      {
-        record.notify = nil
-      }
+      if let alert = notify, !alert.reaches(record, cueOnDuty: try cueOnDuty()) { record.notify = nil }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }

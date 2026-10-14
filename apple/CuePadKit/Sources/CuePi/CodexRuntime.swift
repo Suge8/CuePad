@@ -5,10 +5,12 @@ import OSLog
 
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
-/// - 状态只来自钩子（托管的会话也一样，钩子在承载线程的进程里跑）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
+/// - 状态来自钩子（托管的会话也一样，钩子在承载线程的进程里跑；托管会话的“输出中”另由正在说的话给出，见下）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
 ///   `Stop`/`Interrupt` 歇下，`SessionEnd` 下线。会话 id 是线程 id，承载进程是钩子的父进程（终端会话是常驻服务，托管的是 CuePad 起的进程）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置 30 分钟才卸载并报 `SessionEnd`），
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
+/// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好交给桥，
+///   开始出字时状态从思考进入输出；终端里的会话不订阅，也就没有。
 /// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/steer`（马上说，
 ///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
@@ -205,7 +207,14 @@ public final class CodexRuntime: AgentRuntime {
         let pid = rpc.pid
         hosted[pid] = rpc
         rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
+        rpc.onDraft = { [weak self] thread, draft in self?.drafted("\(thread).\(pid)", draft) }
         rpc.onClose = { [weak self] in self?.processGone(pid) }
+    }
+
+    /// 托管会话正在说的话交给桥；开始出字时从思考进入输出（钩子不报输出，与 Claude Code 托管会话同一规则）。
+    private func drafted(_ id: PiSession.ID, _ draft: PiDraft?) {
+        if draft != nil, bridge.session(id: id)?.state == .thinking { change(id) { Self.move(&$0, to: .outputting) } }
+        bridge.setDraft(id, draft)
     }
 
     private func attachHosted(_ result: CodexRPC.Object, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
@@ -670,9 +679,7 @@ public final class CodexRuntime: AgentRuntime {
 
     fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws -> PiDelivery {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        var input: [CodexRPC.Object] = message.text.isEmpty ? [] : [["type": "text", "text": message.text, "text_elements": []]]
-        input += message.images.map { ["type": "image", "url": "data:\($0.mimeType);base64,\($0.data.base64EncodedString())"] }
-        return try await deliver(input, clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
+        return try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
     }
 
     /// 马上说：插进在跑的这一轮；刚好歇下（没有这一轮了）就排进队列。等它做完再说、空闲时都进队列，空闲时再让队列里的这一条开始：
@@ -805,6 +812,8 @@ struct CodexModel {
     let id: String
     let name: String
     let efforts: [PiThinkingLevel]
+    /// 能看图（`inputModalities` 里有 image）
+    let seesImages: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
@@ -823,12 +832,15 @@ struct CodexModel {
         return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
     }
 
-    @MainActor static func list(_ rpc: CodexRPC) async throws -> [CodexModel] {
-        let listed = try await rpc.call("model/list", [:])
+    /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。
+    @MainActor static func list(_ rpc: CodexRPC, hidden: Bool = false) async throws -> [CodexModel] {
+        let listed = try await rpc.call("model/list", hidden ? ["includeHidden": true, "limit": 500] : [:])
         return (listed["data"] as? [CodexRPC.Object] ?? []).compactMap { entry in
-            guard entry["hidden"] as? Bool != true, let id = entry["id"] as? String else { return nil }
+            guard hidden || entry["hidden"] as? Bool != true, let id = entry["id"] as? String else { return nil }
             let efforts = (entry["supportedReasoningEfforts"] as? [CodexRPC.Object] ?? []).compactMap { $0["reasoningEffort"] as? String }
-            return CodexModel(id: id, name: entry["displayName"] as? String ?? id, efforts: efforts.compactMap { thinking($0).known })
+            return CodexModel(
+                id: id, name: entry["displayName"] as? String ?? id, efforts: efforts.compactMap { thinking($0).known },
+                seesImages: (entry["inputModalities"] as? [String])?.contains("image") == true)
         }
     }
 }

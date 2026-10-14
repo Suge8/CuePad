@@ -1,10 +1,14 @@
 import CueStore
 import SwiftUI
+#if os(macOS)
+import CuePi
+#endif
 
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
 /// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
 /// Pi 在处理时末尾一行流光的进展（当前动作；计时在顶上一行），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
+/// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
@@ -16,6 +20,10 @@ struct PiConversation: View {
     /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
     var showEarlier: () -> Void = {}
+    #if os(macOS)
+    /// 这个会话在本机桥上的那一格（在线时）：正在说的话从这里读。
+    var slot: PiBridge.Slot?
+    #endif
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -91,7 +99,7 @@ struct PiConversation: View {
         {
             Color.clear.frame(height: (size.height * size.width / width).rounded())
         } else {
-            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, opened: $opened)
+            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                 .equatable()
                 .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
                     sizes[index] = $0
@@ -111,14 +119,70 @@ struct PiConversation: View {
     /// 排开最近 `window` 条要从第几段起。
     static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }
 
-    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
+    /// 回答原位换下正在说的话（Mac 上本机在线的会话），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        slot != nil
+        #else
+        false
+        #endif
+    }
+
+    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因。
     @ViewBuilder private var ending: some View {
-        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
+        #if os(macOS)
+        if let slot {
+            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }?.at)
+        } else {
+            liveStatus
+        }
+        #else
+        liveStatus
+        #endif
         if session.state == .known(.error) {
             Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
         }
     }
+
+    @ViewBuilder private var liveStatus: some View {
+        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session).transition(.entry) }
+    }
 }
+
+
+#if os(macOS)
+/// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方一行是此刻的进展），
+/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。只有这个视图读草稿：出字时对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：它与对话在同一次更新里拿到同一份对话，换下是同一帧里的一减一加。会话文件先到时状态还是"输出中"，
+/// 这时也不冒出进展那一行（正文已经说完）；状态先到时草稿照常留着、等文件——两种先后都只换一次。进展那一行被草稿换下时直接拿掉，不与草稿叠着淡出。
+struct SessionDraft: View {
+    let slot: PiBridge.Slot
+    let session: PiSessionState
+    /// 对话里最近一条 Agent 回答的时刻
+    let newestReply: Date?
+
+    var body: some View {
+        let draft = slot.draft
+        let landed = draft?.landed(newestReply: newestReply) ?? false
+        if let draft, !landed {
+            VStack(alignment: .leading, spacing: 8) {
+                DraftReply(text: draft.text) { DraftProgress(session: session) }
+                PiSubagentList(agents: session.subagents)
+            }
+        } else if landed, session.state == .known(.outputting) {
+            PiSubagentList(agents: session.subagents)
+        } else if session.state.isWorking || !session.subagents.isEmpty {
+            LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
+    }
+}
+
+extension PiDraft {
+    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
+    func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
+}
+#endif
 
 
 /// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
@@ -127,19 +191,21 @@ private struct ChatSegment: View, Equatable {
     let session: PiSessionState
     let highlight: UUID?
     let notes: [ReplyNote]
+    let swapsInPlace: Bool
     @Binding var opened: PreviewOpening?
     @Environment(\.palette) private var palette
 
-    init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], opened: Binding<PreviewOpening?>) {
+    init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
         self.items = items
         self.session = session
+        self.swapsInPlace = swapsInPlace
         self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
         self.notes = notes.filter { note in items.contains { $0.id == note.entry } }
         _opened = opened
     }
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes
+        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes && lhs.swapsInPlace == rhs.swapsInPlace
             && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
@@ -160,7 +226,8 @@ private struct ChatSegment: View, Equatable {
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
-            ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id })
+            ReplyBlock(
+                text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
@@ -214,14 +281,12 @@ extension PiConversation {
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
-    /// 由 Cue 跟进（`SessionDigest.cueFollows`）：等回答时写"等 Cue 回答"。
-    var cueFollows = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: cueFollows ? workspace.cue.name : nil)
+        let shown = PiShown(session, cue: workspace.cueOnDuty)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {

@@ -33,8 +33,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let followed = Set(live.filter(\.cueFollows).map(\.state.sessionID))
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, followed: followed).enumerated().map { ($1.id, $0) })
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cueOnDuty: try store.cueOnDuty()).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)),
@@ -46,12 +45,14 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
 /// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
 /// 不写会话在说什么（那在会话页里），只写它是谁、在哪、什么状态、跑得怎样。
-/// - 整页（`page`）是一张圆角卡片，"现在"的卡片固定三层、一样高：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
-///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词；读数三列上下对齐——上下文（不知道时写"—"）、
-///   会话的模型、子代理（角色图标，颜色是它的状态，后接在跑 / 共几个；没有时空着）。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
+/// - 整页（`page`）是一张圆角卡片，"现在"的卡片：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
+///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
+///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
 /// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
-/// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`）。
+/// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
+/// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
+/// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
 /// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
 struct PiSessionRow: View {
     let session: PiSessionState
@@ -65,8 +66,6 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
-    /// 由 Cue 跟进（`PiSessionListItem.cueFollows`）：名字前带 Cue 的小头像，歇下时只说"歇着"，不催你。
-    var cueFollows = false
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -82,7 +81,7 @@ struct PiSessionRow: View {
         /// 状态标的基准直径（外框是它的 1.8 倍）。
         var dot: CGFloat
         var spacing: CGFloat
-        /// 整页：一张卡片、三层。
+        /// 整页：一张卡片。
         var card = false
 
         static let page = Style(name: Typography.bodyStrong, line: Typography.secondary, meta: Typography.meta, dot: 11, spacing: 4, card: true)
@@ -90,7 +89,7 @@ struct PiSessionRow: View {
     }
 
     var body: some View {
-        let shown = workspace.shown(session, delivery: delivery, cueFollows: cueFollows)
+        let shown = workspace.shown(session, delivery: delivery)
         let facts = services.settings.facts(session, shown: shown, end: end, rename: rename)
         if style.card {
             card(shown: shown, facts: facts)
@@ -106,7 +105,7 @@ struct PiSessionRow: View {
             if !ended { PiStateDot(shown: shown, size: style.dot) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                HStack(spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     // 已结束的没有状态词：所在后面不留孤零零的分隔点
                     if let place { place; if searchHit != nil || !ended { Dot() } }
                     if let searchHit {
@@ -115,10 +114,12 @@ struct PiSessionRow: View {
                         StateWord(shown: shown)
                         if let note = facts.note { Dot(); NoteWord(note: note) }
                     }
+                    Spacer(minLength: 4)
+                    if let context = facts.context { ContextFact(meter: context).font(style.meta).fixedSize() }
                 }
                 .font(style.line)
                 .lineLimit(1)
-                if !ended { FactColumns(facts: facts, font: style.meta) }
+                if facts.model != nil || facts.subagents != nil { FactColumns(facts: facts, font: style.meta) }
             }
         }
         .contentTransition(.opacity)
@@ -133,11 +134,16 @@ struct PiSessionRow: View {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
-                if let searchHit {
-                    Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2).font(style.line).lineLimit(1)
-                } else {
-                    PiStatusLine(shown: shown, facts: facts).font(style.line)
+                HStack(spacing: 6) {
+                    if let searchHit {
+                        Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2).lineLimit(1)
+                    } else {
+                        PiStatusLine(shown: shown, facts: facts)
+                    }
+                    Spacer(minLength: 4)
+                    if let context = facts.context { ContextFact(meter: context).fixedSize() }
                 }
+                .font(style.line)
             }
             .contentTransition(.opacity)
             .animation(Motion.quick, value: shown)
@@ -149,8 +155,6 @@ struct PiSessionRow: View {
     /// 第一层：名字（有新回复时加粗）、"后台"小签、没送到的折回箭头、右上的时长。
     private func headline(shown: PiShown) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            // 头像的中线对着名字的字身：基线落在头像下缘往上约三成处
-            if cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + $0.height * 0.3 } }
             Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
@@ -194,7 +198,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.cueFollows == b.cueFollows && a.style.card == b.style.card && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }
 
@@ -292,17 +296,15 @@ private struct HostedTag: View {
     }
 }
 
-/// 整页卡片的读数一层：三列固定宽、上下对齐——上下文、模型、子代理。不知道用量写"—"，没有模型、没有子代理时那一列空着，位置不动。
+/// 整页卡片的读数一层（有模型或子代理时才有）：模型一列固定宽、子代理接在后面，卡片之间上下对齐；没有模型时那一列空着。
 private struct FactColumns: View {
     let facts: PiRowFacts
     let font: Font
     @Environment(\.palette) private var palette
-    @ScaledMetric private var contextWidth: CGFloat = 80
     @ScaledMetric private var modelWidth: CGFloat = 92
 
     var body: some View {
         HStack(spacing: 10) {
-            ContextFact(meter: facts.context).frame(width: contextWidth, alignment: .leading)
             (facts.model.map { Text("\($0.provider.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
                 .accessibilityLabel(facts.model.map { "模型 \($0.name)" } ?? "")
             if let subagents = facts.subagents { SubagentRoster(summary: subagents) }
@@ -336,7 +338,7 @@ private struct SubagentRoster: View {
     }
 }
 
-/// 窄处的状态一行：状态色的状态词 → 此刻的短词 → 子代理在跑 / 共几个 → 上下文用了多少。放不下的从后往前整项丢掉（`FactsLayout`）。字号由外面给。
+/// 窄处的状态一行：状态色的状态词 → 此刻的短词 → 子代理在跑 / 共几个。放不下的从后往前整项丢掉（`FactsLayout`）。字号由外面给。
 private struct PiStatusLine: View {
     let shown: PiShown
     let facts: PiRowFacts
@@ -346,27 +348,22 @@ private struct PiStatusLine: View {
             StateWord(shown: shown).fact()
             if let note = facts.note { NoteWord(note: note).fact() }
             if let subagents = facts.subagents { SubagentCount(summary: subagents, branch: true).fact() }
-            if let context = facts.context { ContextFact(meter: context).fact() }
         }
         .lineLimit(1)
     }
 }
 
-/// 上下文读数："上下文 62%"，与回复框上的用量胶囊同一个说法（不画小图形的理由见 `PiContextGauge`）：七成起百分比墨色加粗，九成起胭脂；
-/// 不知道（刚压缩完）时写"—"。
+/// 上下文读数："上下文 82%"，与回复框上的用量胶囊同一个说法（不画小图形的理由见 `PiContextGauge`）。行上只有快满的才有（`PiRowFacts.context`）：
+/// 百分比加粗，七成起墨色，九成起胭脂。
 private struct ContextFact: View {
-    let meter: PiContextMeter?
+    let meter: PiContextMeter
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let tint = switch meter?.level {
-        case .critical: palette.failure
-        case .tight: palette.ink
-        case .roomy, nil: palette.ink2
-        }
-        Text("\(Text("上下文").foregroundStyle(palette.ink3)) \(Text(meter?.percent ?? "—").foregroundStyle(meter == nil ? palette.ink3 : tint).fontWeight(meter.map { $0.level == .roomy ? nil : .semibold } ?? nil))")
+        let tint = meter.level == .critical ? palette.failure : palette.ink
+        Text("\(Text("上下文").foregroundStyle(palette.ink3)) \(Text(meter.percent).foregroundStyle(tint).fontWeight(.semibold))")
             .monospacedDigit()
-            .accessibilityLabel(meter?.help.spoken ?? "上下文用量还不知道")
+            .accessibilityLabel(meter.help.spoken)
     }
 }
 

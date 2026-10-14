@@ -24,7 +24,6 @@ public enum CueActivity {
       case "peek": return line("看进展")
       case "stop": return line("停下会话")
       case "done": return line("收尾")
-      case "follow": return line("换人跟进")
       default: return line("看任务")
       }
     case "tell": return line(args["ask"] == nil ? "给你写话" : "问你")
