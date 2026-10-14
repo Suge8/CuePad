@@ -359,6 +359,13 @@ import Testing
     #expect(reason.contains("换不了模型") && reason.contains("fresh"))
     #expect(try await store.deliveryRequests().count == 2)
 
+    // 回答提问不带换模型：明说，不悄悄丢掉
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "继续？"))
+    let answering = try await server.request(
+      "tools/call", ["name": "task", "arguments": ["action": "say", "task": pi.id.uuidString, "when": "answer", "value": "yes", "model": "openai/gpt-6-luna"]])
+    #expect(answering["isError"] as? Bool == true)
+    #expect(try await store.deliveryRequests().count == 2)
+
     // 照提示 fresh 开新会话：绑着会话的叶子也开新的
     _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
     let launch = try #require(try await store.deliveryRequests().first)
