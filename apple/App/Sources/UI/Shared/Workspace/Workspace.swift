@@ -14,8 +14,8 @@ final class Workspace {
         let id = UUID()
         var text: Dotted
         var isError: Bool
-        /// 图标；nil 时按成功/错误用默认的。
-        var symbol: String?
+        /// 会话状态的提示（前台横幅）带的状态图形（`PiStateGlyph`）；nil 时按成功/错误用默认的。
+        var status: PiShown.Status?
         /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
         var link: Route?
         /// 提示右边的一个动作：多是"撤销"（把刚才那一下拨回去），完成任务后是"归档"。
@@ -177,10 +177,10 @@ final class Workspace {
     static let noticeDuration: Duration = .seconds(2.4)
 
     func say(
-        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, isError: Bool = false, status: PiShown.Status? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction? = nil
     ) {
-        let notice = Notice(text: text, isError: isError, symbol: symbol, link: link, action: action)
+        let notice = Notice(text: text, isError: isError, status: status, link: link, action: action)
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in

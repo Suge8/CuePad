@@ -22,9 +22,10 @@ struct SessionAlert: Equatable, Identifiable {
 
     var text: Dotted { Dotted(content.title, content.body) }
 
-    var symbol: String { Self.symbol(kind) }
+    var status: PiShown.Status { Self.status(kind) }
 
-    static func symbol(_ kind: PiAlert) -> String { kind == .waitingForUser ? "questionmark.bubble.fill" : "checkmark.circle.fill" }
+    /// 提示带的状态图形与会话状态标同一个（`PiShown.symbol`）：等你是赭黄问号圆，做完了是有新回复的铃铛。
+    static func status(_ kind: PiAlert) -> PiShown.Status { kind == .waitingForUser ? .asking : .unread }
 }
 
 /// 把读到的在线会话（`LiveSessions`，同步来的，本机与别的 Mac 的会话都在）变成要提示你的转换：与上一次读到的版本比

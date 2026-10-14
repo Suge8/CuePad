@@ -40,7 +40,7 @@ struct CueConfigControls: View {
                     }
                 }
             }
-            return PiModelGroup(id: agent.rawValue, title: agent.name, items: models.isEmpty ? [fallback] : models)
+            return PiModelGroup(id: agent.rawValue, title: agent.name, agent: agent, items: models.isEmpty ? [fallback] : models)
         }
     }
 

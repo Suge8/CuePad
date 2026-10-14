@@ -338,40 +338,51 @@ extension DebugScene {
             context: session.context)
     }
 
-    /// 演示会话的模型配置（`agent` 为 nil 是 Pi）：Pi 是下面那份；Codex 与 Claude Code 是它们自己报的清单，照录像带里
-    /// Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）与 Claude Code 的 `initialize`（Claude 系），
-    /// 提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
+    private static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
+        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+    }
+
+    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里是通用图标）；
+    /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
+    /// Codex 与 Claude Code 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）
+    /// 与 Claude Code 的 `initialize`（Claude 系），提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
     static func demoModels(for agent: AgentKind?) -> PiModelState {
-        func listed(_ agent: AgentKind, _ models: [(id: String, name: String)], current: Int, thinking: PiThinkingLevel) -> PiModelState {
-            let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
-            let options = models.map { PiModelOption(key: PiModelKey(provider: agent.modelProvider ?? "", id: $0.id), name: $0.name, thinkingLevels: levels) }
-            return PiModelState(model: options[current], thinking: .known(thinking), models: options)
+        func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
+            PiModelState(model: models[current], thinking: .known(thinking), models: models)
         }
+        let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
         switch agent {
+        case .opencode:
+            return listed([
+                model("openrouter", "anthropic/claude-sonnet-5", "Claude Sonnet 5", [.low, .medium, .high]),
+                model("openrouter", "google/gemini-3-pro", "Gemini 3 Pro", [.low, .high]),
+                model("openrouter", "qwen/qwen3-coder", "Qwen3 Coder", [.off]),
+            ], current: 0, thinking: .medium)
         case .codex:
-            return listed(.codex, [
-                ("gpt-6.1-sol", "GPT-6.1-Sol"), ("gpt-6-astra", "GPT-6-Astra"), ("gpt-6-sol", "GPT-6-Sol"), ("gpt-6-luna", "GPT-6-Luna"),
-                ("gpt-5.6-terra", "GPT-5.6-Terra"),
+            let provider = AgentKind.codex.modelProvider ?? ""
+            return listed([
+                model(provider, "gpt-6.1-sol", "GPT-6.1-Sol", levels), model(provider, "gpt-6-astra", "GPT-6-Astra", levels),
+                model(provider, "gpt-6-sol", "GPT-6-Sol", levels), model(provider, "gpt-6-luna", "GPT-6-Luna", levels),
+                model(provider, "gpt-5.6-terra", "GPT-5.6-Terra", levels),
             ], current: 0, thinking: .medium)
         case .claudeCode:
-            return listed(.claudeCode, [("default", "Default (recommended)"), ("opus", "Opus"), ("fable", "Fable"), ("sonnet", "Sonnet"), ("haiku", "Haiku")],
-                          current: 1, thinking: .high)
-        default:
+            let provider = AgentKind.claudeCode.modelProvider ?? ""
+            return listed([
+                model(provider, "default", "Default (recommended)", levels), model(provider, "opus", "Opus", levels),
+                model(provider, "fable", "Fable", levels), model(provider, "sonnet", "Sonnet", levels), model(provider, "haiku", "Haiku", levels),
+            ], current: 1, thinking: .high)
+        case .pi, nil:
             return demoModels
         }
     }
 
-    /// Pi 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
-    /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
     static let demoModels: PiModelState = {
-        func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
-            PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
-        }
         let opus = model("anthropic", "claude-opus-5-5-20260901", "Claude Opus 5.5", [.low, .medium, .high, .max])
         return PiModelState(model: opus, thinking: .known(.medium), models: [
             opus,
             model("anthropic", "claude-sonnet-5-20260801", "Claude Sonnet 5", [.off, .low, .medium, .high]),
             model("openai-codex", "gpt-6-luna", "GPT-6 Luna", [.off, .low, .high]),
+            model("xai", "grok-5", "Grok 5", [.low, .high]),
             model("deepseek", "deepseek-v4", "DeepSeek V4", [.off, .high]),
             model("kimi-coding", "kimi-k3", "Kimi K3", [.off]),
             model("xiaomi", "mimo-v3-pro", "MiMo V3 Pro", [.off, .high]),

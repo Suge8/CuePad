@@ -47,8 +47,10 @@ forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regula
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
-forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里的 Waiting.tint 或现成的几件；要你处理的其他状态（同步、连接、崩溃）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
+forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里的 Waiting.tint 或现成的几件；要你处理的其他状态（同步、连接）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
   '(?i:A8740A|EDBD57)' 'App/AppGroup/Waiting.swift'
+forbid "出错只有一个样子：胭脂圆叹号，符号只在 Failure.swift（Failure.symbol、FailureMark），会话状态经 PiShown 引用它；不另画三角或叉" \
+  '"(exclamationmark\.(circle|triangle)(\.fill)?|xmark\.(octagon|icloud)(\.fill)?)"' '**/Theme/Failure.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
   '(\baddCueMessage\(\s*\.you\b|\bstore\.requestDelivery\()' '**/Workspace/Speaking.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \

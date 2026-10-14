@@ -2,17 +2,24 @@ import CueStore
 import SwiftUI
 
 nonisolated extension AgentKind {
-    /// 品牌标志：LobeHub 的单色标志转成的自定义符号（资源目录 Providers 下，由 design/tools/provider-symbols.py 生成），
-    /// 与文字基线对齐、随字号缩放、能嵌进 `Text` 插值，颜色跟着前景色走。
-    var icon: Image { Image("provider-" + iconName) }
-
-    private var iconName: String {
+    /// 这家 Agent 的产品标志（`BrandMark`）。
+    var mark: BrandMark {
         switch self {
-        case .pi: "pi"
-        case .claudeCode: "claudecode"
-        case .codex: "codex"
-        case .opencode: "opencode"
+        case .pi: .pi
+        case .claudeCode: .claudeCode
+        case .codex: .codex
+        case .opencode: .opencode
         }
+    }
+}
+
+/// 选哪家 Agent 的菜单里的一项：标志与名字。macOS 27、iPadOS 27 起菜单默认藏起选项的图片，这里的标志说的是"哪一家"
+/// （对象而非动作），要显示（同模型菜单，`ChoiceMenu`）。
+struct AgentLabel: View {
+    let kind: AgentKind
+
+    var body: some View {
+        Label { Text(kind.name) } icon: { kind.mark.image }.labelStyle(.titleAndIcon)
     }
 }
 
@@ -31,7 +38,7 @@ struct AgentMark: View {
 
     var body: some View {
         if let name = session.agentMark, let kind = session.agent.known {
-            (named ? Text("\(kind.icon) \(name)") : Text(kind.icon)).font(font).foregroundStyle(palette.ink3).lineLimit(1)
+            (named ? Text("\(kind.mark.image) \(name)") : Text(kind.mark.image)).font(font).foregroundStyle(palette.ink3).lineLimit(1)
                 .accessibilityLabel(name)
         }
     }

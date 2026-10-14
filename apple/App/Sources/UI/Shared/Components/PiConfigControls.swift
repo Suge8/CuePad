@@ -11,11 +11,15 @@ struct PiModelGroup: Identifiable {
     let id: String
     /// 组名；nil 是 `provider` 的名字，这家有订阅额度时带用量（`PiModelLabel.title`，到了重置时刻随即更新）。
     var title: String?
-    /// 组名旁的图标；nil 不带。
+    /// 组名的提供方（会话页）；Cue 页的组是 Agent，不给。
     var provider: PiProvider?
+    /// 组名旁的标志：Agent 的产品标志，或提供方的；都没有不带。
+    var agent: AgentKind?
     let items: [Item]
 
-    /// 一项：一个模型，或这一组没有清单时的"默认"（`model` 为 nil）。名字与图标都按模型定，这里一处。
+    var mark: BrandMark? { agent?.mark ?? provider?.mark }
+
+    /// 一项：一个模型，或这一组没有清单时的"默认"（`model` 为 nil）。名字与标志都按模型定（`BrandMark.model`），这里一处。
     struct Item: Identifiable {
         let id: String
         let model: PiModelOption?
@@ -23,7 +27,7 @@ struct PiModelGroup: Identifiable {
         let choose: () -> Void
 
         var name: String { model.map(\.displayName) ?? "默认" }
-        var provider: PiProvider? { model.map { PiProvider(id: $0.key.provider) } }
+        var mark: BrandMark? { model.map(BrandMark.model) }
     }
 }
 
@@ -33,8 +37,8 @@ extension PiModelOption {
 }
 
 
-/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`、Cue 页输入框 `CueConfigControls` 各自接线）：左边模型胶囊（提供方图标 + 模型短名；
-/// 有订阅额度的提供方，图标外一圈细环是卡着的那个窗口用了多少。点开是分好组的菜单，当前打勾），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是可选的档位，一格比一格高，
+/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`、Cue 页输入框 `CueConfigControls` 各自接线）：左边模型胶囊（模型的标志 + 模型短名；
+/// 有订阅额度的提供方，标志外一圈细环是卡着的那个窗口用了多少。点开是分好组的菜单，当前打勾），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是可选的档位，一格比一格高，
 /// 当前档以下填满，关着时格全空、一道斜线；点在哪格或横着拖就调到哪档，每过一档轻触一下；按下就在上方浮出档位名，
 /// 松手后停一会儿再淡出，点"思考"的标只看现在是哪档；最高档填色有一道流光），再往右是调用方给的（会话页的上下文用量）。
 /// 只管显示与选择：可选什么、当前值、送达中（填色轻轻呼吸）、选了之后做什么都由调用方给；没换成的原因由调用方写在输入框头部。减弱动态效果时没有流光与呼吸。

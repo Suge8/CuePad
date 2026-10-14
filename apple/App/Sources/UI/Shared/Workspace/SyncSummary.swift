@@ -26,7 +26,7 @@ struct SyncSummary: Equatable {
         case .needsDecision(let decision):
             (title, detail, symbol, tone) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .notice)
         // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
-        case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, "xmark.icloud", .failure)
+        case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, Failure.symbol, .failure)
         }
     }
 
