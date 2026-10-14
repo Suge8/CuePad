@@ -102,21 +102,21 @@ struct CodexHome {
 
     /// 经 Codex 自己的 app-server 读它此刻看到的钩子（命令 → 信任状态）。
     @MainActor func hookTrust() async throws -> [(command: String, event: String, trust: String)] {
-        try await listedHooks().map { ($0["command"] as? String ?? "", $0["eventName"] as? String ?? "", $0["trustStatus"] as? String ?? "") }
+        try await listedHooks().map { ($0["command"]?.string ?? "", $0["eventName"]?.string ?? "", $0["trustStatus"]?.string ?? "") }
     }
 
     /// 像用户在 Codex 的 /hooks 里点了信任：把 Codex 列出的条目全部信任。
     @MainActor func trustEverything() async throws {
-        var state: CodexRPC.Object = [:]
-        for entry in try await listedHooks() { state[entry["key"] as! String] = ["trusted_hash": entry["currentHash"] as! String] }
-        try await withCodex { try await $0.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": state, "mergeStrategy": "upsert"]]]) }
+        var state: [String: JSONValue] = [:]
+        for entry in try await listedHooks() { state[entry["key"]!.string!] = ["trusted_hash": entry["currentHash"]!] }
+        try await withCodex { try await $0.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": .object(state), "mergeStrategy": "upsert"]]]) }
     }
 
-    @MainActor private func listedHooks() async throws -> [CodexRPC.Object] {
-        var entries: [CodexRPC.Object] = []
+    @MainActor private func listedHooks() async throws -> [JSONValue] {
+        var entries: [JSONValue] = []
         try await withCodex { rpc in
-            let list = try await rpc.call("hooks/list", ["cwds": [home.path]])
-            entries = ((list["data"] as? [CodexRPC.Object])?.first?["hooks"] as? [CodexRPC.Object]) ?? []
+            let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
+            entries = list["data"]?.array?.first?["hooks"]?.array ?? []
         }
         return entries
     }

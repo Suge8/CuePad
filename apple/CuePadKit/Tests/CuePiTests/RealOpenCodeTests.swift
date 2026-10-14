@@ -42,13 +42,10 @@ final class OpenCodeSandbox {
     /// 跑一条 opencode 命令（在 `directory` 里），要它成功。
     @discardableResult
     func run(_ arguments: [String], in directory: URL? = nil) async throws -> String {
-        let process = Process()
-        process.executableURL = realOpenCodeURL
-        process.arguments = arguments
-        process.environment = environment
-        process.currentDirectoryURL = directory ?? work
-        process.standardError = FileHandle.nullDevice
-        let result = try #require(await runCapturing(process, timeout: .seconds(180)), "opencode \(arguments) 没跑完")
+        let opencode = try #require(realOpenCodeURL)
+        let result = try #require(
+            await ChildProcess.run(opencode, arguments, directory: directory ?? work, environment: environment, timeout: .seconds(180)),
+            "opencode \(arguments) 没跑完")
         try #require(result.status == 0, "opencode \(arguments) 失败：\(result.output)")
         return result.output
     }
@@ -190,7 +187,7 @@ struct RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             #expect(sandbox.service == nil)
 
-            let id = try await runtime.open(in: sandbox.work, launchToken: "token-1")
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
 
             let opened = try #require(bridge.session(id: id))
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
@@ -237,7 +234,7 @@ struct RealOpenCodeTests {
             try await bridge.abort(id)
             try await eventually("停下了") { session(bridge)?.state == .settled }
 
-            try await runtime.end(id)
+            try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)
             let indexed = try #require(try await store.piSession(opened.sessionID))
             #expect(indexed.agent == .opencode)

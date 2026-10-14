@@ -328,7 +328,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.end(ext.id)])
+        #expect(ext.received == ["end"] && rig.host.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 

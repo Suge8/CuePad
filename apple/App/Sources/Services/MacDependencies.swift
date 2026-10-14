@@ -50,7 +50,7 @@ struct MacDependencies {
             updater: location.isIsolated ? nil : SparkleUpdater(),
             hooks: hooks,
             runtimes: { store in [
-                .pi: PiRuntime(host: PiHost(bridge: pi, paths: paths.pi), locate: { await agents.locatePi() }),
+                .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.locatePi() }),
                 .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks),
                 .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks),
                 .opencode: OpenCodeRuntime(

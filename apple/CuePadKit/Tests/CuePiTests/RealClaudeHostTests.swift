@@ -14,7 +14,7 @@ struct RealClaudeHostTests {
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
             let session = try #require(testbed.bridge.session(id: id))
             #expect(session.hosted && session.launchToken == "token-1" && session.agent == .claudeCode)
             #expect(session.availableModels.contains { $0.key.id == "mimo-v2.5" })
@@ -39,7 +39,7 @@ struct RealClaudeHostTests {
     @Test func cuePadAnswersAPermissionAndStopsARunningTurn() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let touched = testbed.work.appending(path: "hosted.txt")
 
             _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE"), to: id)
@@ -64,7 +64,7 @@ struct RealClaudeHostTests {
     @Test func cuePadChangesModelEffortAndNameOfAHostedSession() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
             // 测试网关上除了缺省的 mimo-v2.5，还能用的另一个模型
             let pro = PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro")
@@ -91,7 +91,7 @@ struct RealClaudeHostTests {
     /// 会话文件里最后一条模型回答记下的模型与强度
     private func lastAnswer(in file: URL) -> (model: String?, effort: String?)? {
         let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n")
-        return lines.reversed().lazy.compactMap { ClaudeJSON.parse(Data($0.utf8)) }.first { $0["type"]?.string == "assistant" }
+        return lines.reversed().lazy.compactMap { JSONValue.parse(Data($0.utf8)) }.first { $0["type"]?.string == "assistant" }
             .map { ($0["message"]?["model"]?.string, $0["effort"]?.string) }
     }
 
@@ -99,13 +99,13 @@ struct RealClaudeHostTests {
     @Test func anEndedHostedSessionIsResumedWithItsHistory() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let first = try #require(testbed.bridge.session(id: id))
             _ = try await testbed.bridge.send(PiMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
             try await testbed.waitForTurn(id)
             let log = ChangeLog(testbed.bridge)
 
-            try await testbed.runtime.end(id)
+            try await testbed.bridge.end(id)
             #expect(testbed.bridge.session(id: id) == nil)
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
 
@@ -123,7 +123,7 @@ struct RealClaudeHostTests {
     @Test func aHostedSessionYieldsWhenTheUserOpensItInTheTerminal() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id)
@@ -142,7 +142,7 @@ struct RealClaudeHostTests {
         try await ClaudeTestbed.run(idleLimit: .seconds(2)) { testbed in
             try testbed.runtime.start()
             let log = ChangeLog(testbed.bridge)
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
 
             try await eventually("空闲退出", timeout: .seconds(60)) { log.ended.map(\.0.id) == [id] }
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])

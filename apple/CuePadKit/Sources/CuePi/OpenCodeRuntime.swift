@@ -16,7 +16,6 @@ import OSLog
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
-    private static let launchTimeout: Duration = .seconds(30)
     private static let sessionPage = 200
     /// 权限请求的三个选项（作答时按原文认）
     private static let allowOnce = "允许", allowAlways = "总是允许", reject = "拒绝"
@@ -75,21 +74,12 @@ public final class OpenCodeRuntime: AgentRuntime {
         var online = false
         var hosted = false
         var launchToken: String?
-        /// 自己这一轮在跑
-        var running = false
-        var activity: PiWorkState = .thinking
-        var detail: String?
+        /// 状态、要你回答的、子代理（子会话按会话 id）
+        var facts = SessionFacts()
         /// 在跑的工具调用 → 名字（`tool.called` 不带名字，名字在它之前的 `tool.input.started` 里）
         var toolNames: [String: String] = [:]
-        var questions: [PiQuestion] = []
-        var compacting = false
-        var failure: String?
         var tokens: Int?
         var firstMessage: String?
-        var subagents: [String] = []
-        var children: [String: PiSubagentState] = [:]
-        var stateSince = Date()
-        var busySince: Date?
 
         var directory: String { info.location.directory }
     }
@@ -138,7 +128,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         let connection = Connection(client: OpenCodeClient(info), startedAt: startedAt)
         self.connection = connection
         connection.exitWatcher = ProcessExitWatcher(pid: info.pid) { [weak self] in
-            Task { @MainActor in if self?.connection?.client.service == info { self?.disconnect() } }
+            if self?.connection?.client.service == info { self?.disconnect() }
         }
         connection.events = Task { [weak self] in await self?.follow(connection) }
     }
@@ -209,13 +199,12 @@ public final class OpenCodeRuntime: AgentRuntime {
             var tracked = sessions[info.id] ?? Tracked(info: info)
             tracked.info = info
             // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
-            tracked.running = active.contains(info.id)
-            tracked.activity = .thinking
-            tracked.detail = nil
+            tracked.facts.running = active.contains(info.id)
+            tracked.facts.work(.thinking)
             tracked.toolNames = [:]
-            tracked.compacting = false
-            tracked.failure = !tracked.running && info.outcome == "failed" ? Self.unknownFailure : nil
-            if tracked.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
+            tracked.facts.compacting = false
+            tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? Self.unknownFailure : nil
+            if tracked.facts.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
                 tracked.online = true
             }
             sessions[info.id] = tracked
@@ -235,9 +224,13 @@ public final class OpenCodeRuntime: AgentRuntime {
                 default: .done
                 }
             }
-            subagent(child.id, of: parent) { $0.phase = .known(phase); $0.startedAt = child.createdAt; $0.settledAt = phase == .running ? nil : child.updatedAt }
-            sessions[parent]?.children[child.id]?.name = child.title ?? ""
-            sessions[parent]?.children[child.id]?.role = child.agent ?? ""
+            subagent(child.id, of: parent) { agent in
+                agent.phase = .known(phase)
+                agent.startedAt = child.createdAt
+                agent.settledAt = phase == .running ? nil : child.updatedAt
+                agent.name = child.title ?? ""
+                agent.role = child.agent ?? ""
+            }
         }
         for (id, tracked) in sessions where tracked.online { try await refreshLive(id, tracked, client) }
         guard self.connection === connection else { return }
@@ -252,7 +245,7 @@ public final class OpenCodeRuntime: AgentRuntime {
     /// 在线会话此刻要的另几样：待答的权限与表单、上下文用量、工作目录的模型与命令。
     private func refreshLive(_ id: String, _ tracked: Tracked, _ client: OpenCodeClient) async throws {
         var permissions: [OpenCodePermission] = [], forms: [OpenCodeForm] = []
-        let running = tracked.children.filter { $0.value.phase == .known(.running) }.keys
+        let running = tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id)
         for asker in [id] + running {
             permissions += try await client.get(OpenCodeData<[OpenCodePermission]>.self, "/api/session/\(asker)/permission").data
             forms += try await client.get(OpenCodeData<[OpenCodeForm]>.self, "/api/session/\(asker)/form").data
@@ -261,11 +254,11 @@ public final class OpenCodeRuntime: AgentRuntime {
         // 压缩开始与结束之间，最近一条压缩消息是 running：断线时错过了开始事件，从它恢复"压缩中"
         let compaction = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=compaction&limit=1").data.first
         try await catalog(tracked.directory, client)
-        sessions[id]?.questions = permissions.map(Self.question) + forms.map(Self.question)
+        sessions[id]?.facts.questions = permissions.map(Self.question) + forms.map(Self.question)
         sessions[id]?.tokens = last?.tokens?.context
-        sessions[id]?.compacting = compaction?.status == "running"
+        sessions[id]?.facts.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
-        if tracked.failure != nil, let error = last?.error?.message { sessions[id]?.failure = error }
+        if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }
     }
 
     /// 工作目录的模型与命令（没取过才取）。
@@ -299,19 +292,19 @@ public final class OpenCodeRuntime: AgentRuntime {
         case "permission.asked":
             guard let sessionID = data.sessionID, let id = data.id else { return }
             let question = Self.question(OpenCodePermission(id: id, sessionID: sessionID, action: data.action ?? "", resources: data.resources ?? []))
-            await change(topLevel(sessionID), connection, active: true) { $0.questions.append(question) }
+            await change(topLevel(sessionID), connection, active: true) { $0.facts.questions.append(question) }
             return
         case "permission.replied":
             guard let sessionID = data.sessionID, let id = data.requestID else { return }
-            await change(topLevel(sessionID), connection) { $0.questions.removeAll { $0.promptID == Self.prompt(.permission, sessionID, id) } }
+            await change(topLevel(sessionID), connection) { $0.facts.questions.removeAll { $0.promptID == Self.prompt(.permission, sessionID, id) } }
             return
         case "form.created":
             guard let form = data.form else { return }
-            await change(topLevel(form.sessionID), connection, active: true) { $0.questions.append(Self.question(form)) }
+            await change(topLevel(form.sessionID), connection, active: true) { $0.facts.questions.append(Self.question(form)) }
             return
         case "form.replied", "form.cancelled":
             guard let sessionID = data.sessionID, let id = data.id else { return }
-            await change(topLevel(sessionID), connection) { $0.questions.removeAll { $0.promptID == Self.prompt(.form, sessionID, id) } }
+            await change(topLevel(sessionID), connection) { $0.facts.questions.removeAll { $0.promptID == Self.prompt(.form, sessionID, id) } }
             return
         default: break
         }
@@ -345,53 +338,46 @@ public final class OpenCodeRuntime: AgentRuntime {
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.started":
-            await change(sessionID, connection, active: true) {
-                $0.running = true
-                $0.activity = .thinking
-                $0.detail = nil
-                $0.failure = nil
-            }
+            await change(sessionID, connection, active: true) { $0.facts.startTurn() }
         case "session.step.started":
             // 没给会话选过模型时它用配置里的默认模型：每一步都带着实际用的那个
             await change(sessionID, connection) {
-                $0.activity = .thinking
-                $0.detail = nil
+                $0.facts.work(.thinking)
                 if let model = data.model { $0.info.model = model }
             }
         case "session.reasoning.started":
-            await change(sessionID, connection) { $0.activity = .thinking; $0.detail = nil }
+            await change(sessionID, connection) { $0.facts.work(.thinking) }
         case "session.text.started":
-            await change(sessionID, connection) { $0.activity = .outputting; $0.detail = nil }
+            await change(sessionID, connection) { $0.facts.work(.outputting) }
         case "session.tool.input.started":
             guard let id = data.id, let name = data.name else { return }
             await change(sessionID, connection) { $0.toolNames[id] = name }
         case "session.tool.called":
             guard let id = data.id else { return }
-            await change(sessionID, connection) {
-                $0.activity = .tool
-                $0.detail = Self.toolDetail($0.toolNames[id] ?? "tool", data.input?.arguments)
-            }
+            await change(sessionID, connection) { $0.facts.work(.tool, detail: ToolDetail.line($0.toolNames[id] ?? "tool", data.input?.arguments)) }
         case "session.tool.success", "session.tool.failed":
             await change(sessionID, connection) {
                 if let id = data.id { $0.toolNames[id] = nil }
-                if $0.toolNames.isEmpty { $0.activity = .thinking; $0.detail = nil }
+                if $0.toolNames.isEmpty { $0.facts.work(.thinking) }
             }
         case "session.step.ended":
             await change(sessionID, connection) { if let tokens = data.tokens { $0.tokens = tokens.context } }
             enqueueIngest(sessionID, urgent: true)
         case "session.compaction.started":
-            await change(sessionID, connection, active: true) { $0.compacting = true }
+            await change(sessionID, connection, active: true) { $0.facts.compacting = true }
         case "session.compaction.ended", "session.compaction.failed":
             await change(sessionID, connection) {
-                $0.compacting = false
+                $0.facts.compacting = false
                 if event.type == "session.compaction.ended" { $0.tokens = nil }
             }
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
             await change(sessionID, connection) {
-                $0.running = false
                 $0.toolNames = [:]
-                $0.failure = event.type == "session.execution.failed" ? (data.error?.message ?? data.error?.type ?? Self.unknownFailure) : nil
+                let failure = event.type == "session.execution.failed" ? (data.error?.message ?? data.error?.type ?? Self.unknownFailure) : nil
+                let questions = $0.facts.questions
+                $0.facts.endTurn(failure: failure)
+                $0.facts.questions = questions  // 权限与表单随它们自己的事件收起
             }
             enqueueIngest(sessionID, urgent: true)
         default:
@@ -435,7 +421,7 @@ public final class OpenCodeRuntime: AgentRuntime {
             case "session.tool.input.started":
                 if let id = data.id, let name = data.name { childTools[id] = name }
             case "session.tool.called":
-                agent.action = Self.toolDetail(data.id.flatMap { childTools.removeValue(forKey: $0) } ?? "tool", data.input?.arguments) ?? ""
+                agent.action = ToolDetail.line(data.id.flatMap { childTools.removeValue(forKey: $0) } ?? "tool", data.input?.arguments)
             case "session.execution.succeeded":
                 agent.phase = .known(.done)
                 agent.action = ""
@@ -456,11 +442,8 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     private func subagent(_ id: String, of parent: String, _ body: (inout PiSubagentState) -> Void) {
         guard var tracked = sessions[parent] else { return }
-        if tracked.children[id] == nil {
-            tracked.subagents.append(id)
-            tracked.children[id] = PiSubagentState(name: "", role: "", phase: .known(.running), startedAt: Date())
-        }
-        body(&tracked.children[id]!)
+        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: Date()) }
+        tracked.facts.updateSubagent(id, body)
         sessions[parent] = tracked
     }
 
@@ -472,15 +455,6 @@ public final class OpenCodeRuntime: AgentRuntime {
     private func publish(_ sessionID: String) {
         guard let connection, connection.ready, var tracked = sessions[sessionID], tracked.online else { return }
         let id = bridgeID(sessionID, connection)
-        let (state, detail) = Self.state(of: tracked)
-        let now = Date()
-        let previous = bridge.session(id: id)?.state
-        if previous.map({ $0.phase != state.phase }) ?? true { tracked.stateSince = now }
-        switch state {
-        case .settled, .error: tracked.busySince = nil
-        default: if tracked.busySince == nil { tracked.busySince = now }
-        }
-        sessions[sessionID] = tracked
         let catalog = catalogs[tracked.directory]
         let model = tracked.info.model.map { ref in
             catalog?.models.first { $0.key == PiModelKey(provider: ref.providerID, id: ref.id) }?.option
@@ -488,62 +462,34 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         let window = tracked.info.model.flatMap { ref in catalog?.models.first { $0.id == ref.id && $0.providerID == ref.providerID }?.limit?.context }
         func fill(_ session: inout PiSession) {
-            session.state = state
-            session.detail = detail
-            session.errorMessage = state == .error ? tracked.failure : nil
-            session.stateSince = tracked.stateSince
-            session.busySince = tracked.busySince
+            tracked.facts.publish(to: &session)
             session.name = tracked.info.title
             session.firstMessage = tracked.firstMessage
-            session.question = tracked.questions.first
             session.launchToken = tracked.launchToken
             session.hosted = tracked.hosted
-            session.subagents = tracked.subagents.compactMap { tracked.children[$0] }
             session.model = model
             session.thinking = model.flatMap { Self.thinking(tracked.info.model?.variant, of: $0) }
             session.availableModels = catalog?.models.map(\.option) ?? []
             session.context = window.map { PiContextUsage(tokens: tracked.tokens, window: $0) }
             session.commands = catalog?.commands ?? []
         }
-        if previous == nil {
+        if bridge.session(id: id) == nil {
             var session = PiSession(
                 id: id, sessionID: sessionID, agent: .opencode, sessionFile: nil, pid: connection.pid,
                 cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: 0,
-                state: state, stateSince: now)
+                state: .settled, stateSince: .now)
             fill(&session)
             bridge.attach(session, via: OpenCodeLink(runtime: self, sessionID: sessionID))
         } else {
             bridge.update(id, fill)
         }
-    }
-
-    /// 状态：等你回答的优先；自己这一轮在跑时看在做什么；歇下了还有子代理在跑是等子代理；上一次执行出错是出错。
-    private static func state(of tracked: Tracked) -> (PiWorkState, String?) {
-        if let question = tracked.questions.first {
-            let line = question.text.split(whereSeparator: \.isNewline).joined(separator: PiSessionState.detailSeparator)
-            return (.waitingForUser, line.count <= 120 ? line : String(line.prefix(119)) + "…")
-        }
-        if tracked.compacting { return (.compacting, nil) }
-        if tracked.running { return (tracked.activity, tracked.detail) }
-        if tracked.children.values.contains(where: { $0.phase == .known(.running) }) { return (.delegating, nil) }
-        if let failure = tracked.failure { return (.error, PiErrorSummary(failure).line) }
-        return (.settled, nil)
+        sessions[sessionID] = tracked
     }
 
     /// 强度是模型的 `variant`；没设（`default`）时，没有强度可选的模型是 `off`，有的不知道是哪一档。
     private static func thinking(_ variant: String?, of model: PiModelOption) -> Open<PiThinkingLevel>? {
         guard let variant, variant != "default" else { return model.thinkingLevels == [.off] ? .known(.off) : nil }
         return Open(rawValue: variant)
-    }
-
-    /// "工具名 · 调用目标"（命令或搜索取首个非空行，文件取文件名），至多 120 字符。
-    private static func toolDetail(_ name: String, _ arguments: PiToolArguments?) -> String? {
-        let target = arguments.flatMap { arguments in
-            (arguments.command ?? arguments.pattern).flatMap { $0.split(whereSeparator: \.isNewline).first.map(String.init) }
-                ?? arguments.path.map { URL(filePath: $0).lastPathComponent }
-        }
-        let detail = target.map { name + PiSessionState.detailSeparator + $0 } ?? name
-        return detail.count <= 120 ? detail : String(detail.prefix(119)) + "…"
     }
 
     // MARK: 问答
@@ -597,7 +543,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata?; var delivery: String }
-        let busy = tracked.running || tracked.compacting
+        let busy = tracked.facts.running || tracked.facts.compacting
         let mode = message.whenBusy ?? .followUp
         let prompt = Prompt(
             text: message.text, files: message.images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") },
@@ -637,7 +583,7 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in sessionID: String) async throws {
         let (connection, tracked) = try live(sessionID)
-        guard let question = tracked.questions.first(where: { $0.promptID == promptID }), let target = Self.parse(promptID) else {
+        guard let question = tracked.facts.questions.first(where: { $0.promptID == promptID }), let target = Self.parse(promptID) else {
             throw PiBridgeError.rejected("stale_prompt")
         }
         if target.kind == .permission {
@@ -670,12 +616,9 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     fileprivate func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in sessionID: String) async throws {
         let (connection, tracked) = try live(sessionID)
-        guard model != nil || thinking != nil || name != nil else { throw PiBridgeError.rejected("bad_request") }
         if let name {
-            let title = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !title.isEmpty else { throw PiBridgeError.rejected("bad_request") }
             struct Update: Encodable { var title: String }
-            try await connection.client.call("PATCH", "/api/session/\(sessionID)", body: Update(title: title))
+            try await connection.client.call("PATCH", "/api/session/\(sessionID)", body: Update(title: name))
         }
         if model != nil || thinking != nil {
             let current = tracked.info.model
@@ -697,7 +640,7 @@ public final class OpenCodeRuntime: AgentRuntime {
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
     fileprivate func endSession(_ sessionID: String) async throws {
         let (connection, tracked) = try live(sessionID)
-        if tracked.running || tracked.compacting { try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt") }
+        if tracked.facts.running || tracked.facts.compacting { try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt") }
         guard self.connection === connection, sessions[sessionID]?.online == true else { return }
         sessions[sessionID]?.online = false
         ended[sessionID] = Date()
@@ -706,23 +649,19 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     // MARK: 托管
 
-    public func open(in directory: URL, launchToken: String) async throws -> PiSession.ID {
+    public func open(
+        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
+    ) async throws -> PiSession.ID {
         let connection = try await ensureService()
         struct Create: Encodable { var location: OpenCodeLocation }
         let data = try await connection.client.call(
             "POST", "/api/session", body: Create(location: OpenCodeLocation(directory: directory.path(percentEncoded: false))))
         let info = try JSONDecoder().decode(OpenCodeData<OpenCodeSessionInfo>.self, from: data).data
-        return try await host(info, connection) {
+        let id = try await host(info, connection) {
             $0.hosted = true
             $0.launchToken = launchToken
         }
-    }
-
-    public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
-        try await configure(
-            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
+        return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
@@ -751,11 +690,6 @@ public final class OpenCodeRuntime: AgentRuntime {
         return bridgeID(info.id, connection)
     }
 
-    public func end(_ id: PiSession.ID) async throws {
-        guard let session = bridge.session(id: id), session.agent == .opencode else { return }
-        try await endSession(session.sessionID)
-    }
-
     /// 连着的服务；没开就把它拉起来，等连上、拉完快照。
     private func ensureService() async throws -> Connection {
         if connection == nil {
@@ -766,7 +700,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         if let connection, connection.ready { return connection }
         let id = UUID()
         let timeout = Task { [weak self] in
-            guard (try? await Task.sleep(for: Self.launchTimeout)) != nil else { return }
+            guard (try? await Task.sleep(for: AgentTimeouts.launch)) != nil else { return }
             self?.waiters.removeValue(forKey: id)?.resume(throwing: AgentRuntimeError.launchTimedOut(.opencode))
         }
         defer { timeout.cancel() }
@@ -778,28 +712,11 @@ public final class OpenCodeRuntime: AgentRuntime {
     private func launchService() async throws {
         let locator = await locate()
         guard let executable = locator.executable(.opencode) else { throw AgentRuntimeError.notInstalled(.opencode) }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = ["service", "start"]
         // 服务常驻，它起的工具也用这个 PATH
-        process.environment = locator.environment(launching: executable, overrides: paths.environment)
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let (exited, exit) = AsyncStream<Int32>.makeStream()
-        process.terminationHandler = {
-            exit.yield($0.terminationStatus)
-            exit.finish()
-        }
-        try process.run()
-        let watchdog = Task {
-            guard (try? await Task.sleep(for: Self.launchTimeout)) != nil else { return }
-            process.end()
-        }
-        defer { watchdog.cancel() }
-        for await status in exited where status != 0 {
-            Self.log.error("opencode service start 失败：退出码 \(status)")
-            throw AgentRuntimeError.launchTimedOut(.opencode)
-        }
+        let environment = locator.environment(launching: executable, overrides: paths.environment)
+        guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, collect: false)
+        else { throw AgentRuntimeError.launchTimedOut(.opencode) }
+        guard result.status == 0 else { throw AgentRuntimeError.launchFailed(.opencode, "opencode service start 退出码 \(result.status)") }
     }
 
     // MARK: 会话索引与对话

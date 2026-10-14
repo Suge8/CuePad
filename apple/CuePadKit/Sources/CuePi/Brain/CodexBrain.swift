@@ -50,44 +50,47 @@ final class CodexBrain: CueBrain {
 
     private func threadStart(_ config: CueBrainConfig, on rpc: CodexRPC) async throws {
         let effective = try await rpc.call("config/read", [:])
-        let userServers = ((effective["config"] as? [String: Any])?["mcp_servers"] as? [String: Any])?.keys ?? [:].keys
-        var overrides: [String: Any] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
-        overrides["mcp_servers.cuepad"] = ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]
-        var params: [String: Any] = [
-            "cwd": config.workingDirectory.path, "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": true,
-            "baseInstructions": config.systemPrompt, "config": overrides,
+        let userServers = effective["config"]?["mcp_servers"]?.object?.keys ?? [:].keys
+        var overrides: [String: JSONValue] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
+        overrides["mcp_servers.cuepad"] = [
+            "command": .string(config.mcp[0]), "args": .array(config.mcp.dropFirst().map(JSONValue.string)),
+            "env": .object(config.environment.mapValues(JSONValue.string)),
         ]
-        if let model = config.model { params["model"] = model }
-        let started = try await rpc.call("thread/start", params)
-        thread = (started["thread"] as? [String: Any])?["id"] as? String
-        if let level = config.effort, let model = started["model"] as? String {
-            let models = try await rpc.call("model/list", ["includeHidden": true, "limit": 500])["data"] as? [[String: Any]] ?? []
-            let supported = (models.first { $0["id"] as? String == model }?["supportedReasoningEfforts"] as? [[String: Any]] ?? [])
-                .compactMap { ($0["reasoningEffort"] as? String).flatMap { CodexModel.thinking($0).known } }
+        var params: [String: JSONValue] = [
+            "cwd": .string(config.workingDirectory.path), "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": true,
+            "baseInstructions": .string(config.systemPrompt), "config": .object(overrides),
+        ]
+        if let model = config.model { params["model"] = .string(model) }
+        let started = try await rpc.call("thread/start", .object(params))
+        thread = started["thread"]?["id"]?.string
+        if let level = config.effort, let model = started["model"]?.string {
+            let models = try await rpc.call("model/list", ["includeHidden": true, "limit": 500])["data"]?.array ?? []
+            let supported = (models.first { $0["id"]?.string == model }?["supportedReasoningEfforts"]?.array ?? [])
+                .compactMap { $0["reasoningEffort"]?.string.flatMap { CodexModel.thinking($0).known } }
             effort = CodexModel.effort(level.clamped(to: supported))
         }
     }
 
     func send(_ text: String) async throws {
         guard let rpc, let thread else { throw CueBrainError.notRunning }
-        let input: [[String: Any]] = [["type": "text", "text": text, "text_elements": [] as [Any]]]
+        let input: JSONValue = [["type": "text", "text": .string(text), "text_elements": []]]
         if let active = turn?.id {
             do {
-                try await rpc.call("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])
+                try await rpc.call("turn/steer", ["threadId": .string(thread), "input": input, "expectedTurnId": .string(active)])
                 return
             } catch CodexRPCError.server {
                 // 这一轮刚好结束：下面开新的一轮
             }
         }
-        var params: [String: Any] = ["threadId": thread, "input": input]
-        if let effort { params["effort"] = effort }
-        let started = try await rpc.call("turn/start", params)
-        if let id = (started["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
+        var params: [String: JSONValue] = ["threadId": .string(thread), "input": input]
+        if let effort { params["effort"] = .string(effort) }
+        let started = try await rpc.call("turn/start", .object(params))
+        if let id = started["turn"]?["id"]?.string { beginTurn(id) }
     }
 
     func abort() async throws {
         guard let rpc, let thread, let active = turn?.id else { return }
-        try await rpc.call("turn/interrupt", ["threadId": thread, "turnId": active])
+        try await rpc.call("turn/interrupt", ["threadId": .string(thread), "turnId": .string(active)])
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {
@@ -103,26 +106,25 @@ final class CodexBrain: CueBrain {
         session.emit(.turnStarted)
     }
 
-    private func notification(_ method: String, _ params: CodexRPC.Object) {
+    private func notification(_ method: String, _ params: JSONValue) {
         switch method {
         case "turn/started":
-            if let id = (params["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
+            if let id = params["turn"]?["id"]?.string { beginTurn(id) }
         case "item/completed":
             // 只认给你看的回答，过程中的说明（commentary）不算
-            guard let item = params["item"] as? [String: Any], item["type"] as? String == "agentMessage",
-                  item["phase"] as? String != "commentary", let text = item["text"] as? String else { return }
+            guard let item = params["item"], item["type"]?.string == "agentMessage", item["phase"]?.string != "commentary",
+                  let text = item["text"]?.string else { return }
             let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !reply.isEmpty { turn?.reply = reply }
         case "thread/tokenUsage/updated":
-            guard let usage = params["tokenUsage"] as? [String: Any], let last = usage["last"] as? [String: Any],
-                  let input = last["inputTokens"] as? Int else { return }
+            guard let usage = params["tokenUsage"], let input = usage["last"]?["inputTokens"]?.int else { return }
             // inputTokens 已含缓存命中（cachedInputTokens 是其中一部分）
-            session.emit(.context(used: input, window: usage["modelContextWindow"] as? Int))
+            session.emit(.context(used: input, window: usage["modelContextWindow"]?.int))
         case "turn/completed":
-            let completed = params["turn"] as? [String: Any]
+            let completed = params["turn"]
             let finished = turn
             turn = nil
-            let status = completed?["status"] as? String
+            let status = completed?["status"]?.string
             if status != "interrupted", let reply = finished?.reply { session.emit(.reply(reply)) }
             if status == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
             session.emit(.turnFinished)

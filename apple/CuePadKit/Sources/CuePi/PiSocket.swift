@@ -55,8 +55,6 @@ enum PiSocketDirectory {
 /// 一条 Unix socket 连接：按行产出，EOF（含对端被强杀）即 `lines` 结束。
 /// 读在专用串行队列的 DispatchSource 上；写在另一条队列上阻塞完成（图片可达数 MB）。
 final class PiSocketConnection: Sendable {
-    enum ConnectError: Error { case pathTooLong, socket(Int32), connect(Int32), peerNotOwner }
-
     let lines: AsyncStream<Data>
     private let fd: Int32
     private let source: DispatchSourceRead
@@ -66,39 +64,24 @@ final class PiSocketConnection: Sendable {
 
     /// 连接到本机 socket：本地 connect 是微秒级；对端进程被冻结时也由内核 backlog 接住，不会阻塞。
     convenience init(path: String) throws {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw ConnectError.socket(errno) }
-        var one: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
-
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        guard path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { Darwin.close(fd); throw ConnectError.pathTooLong }
-        withUnsafeMutableBytes(of: &addr.sun_path) { $0.copyBytes(from: path.utf8) }
-        let rc = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
-        }
-        guard rc == 0 else { let e = errno; Darwin.close(fd); throw ConnectError.connect(e) }
-
-        try self.init(peer: fd)
+        try self.init(peer: try UnixSocket.connect(path))
     }
 
     /// 接管一个已连上的描述符（connect 得到的，或监听端 accept 得到的）。对端必须是当前用户的进程，否则关掉它并抛错。
     init(peer fd: Int32) throws {
         var one: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
-        var euid: uid_t = 0, egid: gid_t = 0
-        guard getpeereid(fd, &euid, &egid) == 0, euid == getuid() else { Darwin.close(fd); throw ConnectError.peerNotOwner }
+        guard UnixSocket.peerIsOwner(fd) else { Darwin.close(fd); throw UnixSocket.Failure.peerNotOwner }
 
         self.fd = fd
         let (stream, continuation) = AsyncStream<Data>.makeStream()
         lines = stream
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "cuepi.socket.read"))
         self.source = source
-        let reader = LineReader()
+        let buffer = ReadBuffer(), lines = LineReader()
         source.setEventHandler {
-            guard let lines = reader.read(from: fd) else { return source.cancel() }
-            for line in lines { continuation.yield(line) }
+            guard let chunk = buffer.read(from: fd) else { return source.cancel() }
+            for line in lines.split(chunk) { continuation.yield(line) }
         }
         source.setCancelHandler { [self] in
             shutdown(fd, SHUT_RDWR) // 让阻塞中的写入失败返回，释放 closed 的锁
@@ -117,14 +100,7 @@ final class PiSocketConnection: Sendable {
             defer { if thenClose { source.cancel() } }
             closed.withLock {
                 guard !$0 else { return }
-                data.withUnsafeBytes { raw in
-                    var offset = 0
-                    while offset < raw.count {
-                        let n = Darwin.write(fd, raw.baseAddress! + offset, raw.count - offset)
-                        if n <= 0 { return } // 对端已断开：读端会随即 EOF
-                        offset += n
-                    }
-                }
+                writeAll(fd, data)  // 对端已断开时失败：读端会随即 EOF
             }
         }
     }
@@ -132,43 +108,28 @@ final class PiSocketConnection: Sendable {
     func close() { source.cancel() }
 }
 
-/// 从 socket 读出完整的行。只在读事件的串行队列上用：读缓冲复用，不是每次读都分配 256KB；
-/// 余下的半行留在 `pending`，每次读完一次性扔掉已切出的部分（不是每切一行复制一遍余量）。
-private final class LineReader: @unchecked Sendable {
-    private var scratch = [UInt8](repeating: 0, count: 256 * 1024)
-    private var pending = Data()
-
-    /// 读一次，返回这次凑齐的行（不含换行、不含空行）；EOF 或读失败返回 nil。
-    func read(from fd: Int32) -> [Data]? {
-        let n = scratch.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
-        guard n > 0 else { return nil }
-        pending.append(contentsOf: scratch[0..<n])
-        var lines: [Data] = []
-        var start = 0
-        pending.withUnsafeBytes { raw in
-            guard let base = raw.baseAddress else { return }
-            while start < raw.count, let hit = memchr(base + start, 0x0A, raw.count - start) {
-                let end = base.distance(to: UnsafeRawPointer(hit))
-                if end > start { lines.append(Data(bytes: base + start, count: end - start)) }
-                start = end + 1
-            }
-        }
-        pending.removeSubrange(0..<start)
-        return lines
-    }
-}
-
-/// 进程退出通知（kqueue `NOTE_EXIT`，非子进程也可用）。连接的 EOF 在进程退出过程中就会到达，
-/// 此时进程可能还没被父进程回收（`kill(pid, 0)` 仍成功），所以强杀后的残留清理由它触发，而不是轮询。
+/// 进程退出通知（kqueue `NOTE_EXIT`，非子进程也可用），回调在主线程、至多一次。注册时进程已经不在了（事件不会再来）也通知。
+/// 连接的 EOF 在进程退出过程中就会到达，此时进程可能还没被父进程回收（`kill(pid, 0)` 仍成功），所以强杀后的残留清理由它触发，而不是轮询。
+@MainActor
 final class ProcessExitWatcher {
     private let source: DispatchSourceProcess
 
-    init(pid: Int32, onExit: @escaping @Sendable () -> Void) {
-        source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
-        source.setEventHandler(handler: onExit)
+    init(pid: Int32, onExit: @escaping @MainActor () -> Void) {
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+        self.source = source
+        // 取消即放开回调（连同它对事件源的引用）
+        let fire: @MainActor () -> Void = {
+            guard !source.isCancelled else { return }
+            source.cancel()
+            onExit()
+        }
+        source.setEventHandler { MainActor.assumeIsolated(fire) }
         source.resume()
+        if kill(pid, 0) == -1 && errno == ESRCH { DispatchQueue.main.async { MainActor.assumeIsolated(fire) } }
     }
 
     func cancel() { source.cancel() }
+
+    deinit { source.cancel() }
 }
 #endif

@@ -2,7 +2,7 @@
 import Foundation
 
 /// 三家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
-/// （`LineProcess`、`CodexRPC`、`ClaudeStream`）。
+/// （`ChildProcess`、`CodexRPC`、`ClaudeStream`）。
 @MainActor
 final class BrainSession {
     let events: AsyncStream<CueBrainEvent>

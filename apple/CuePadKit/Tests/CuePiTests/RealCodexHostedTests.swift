@@ -15,7 +15,7 @@ struct RealCodexHostedTests {
     @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
         try await withCodexRig { rig in
             let log = ChangeLog(rig.bridge)
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-1")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
 
             let opened = try #require(rig.bridge.session(id: id))
             #expect(opened.hosted && opened.agent == .codex && opened.launchToken == "token-1")
@@ -43,7 +43,7 @@ struct RealCodexHostedTests {
                 try await rig.bridge.configure(model: PiModelKey(provider: CodexModel.provider, id: "no-such-model"), in: id)
             }
 
-            try await rig.runtime.end(id)
+            try await rig.bridge.end(id)
             try await eventually("下线") { rig.bridge.session(id: id) == nil }
 
             let file = try #require(session.sessionFile)
@@ -59,7 +59,7 @@ struct RealCodexHostedTests {
     /// 需要你确认的命令：会话停在"等你确认"、带着要跑的命令；在 CuePad 里允许后命令照常跑完，这一轮做完。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request") { rig in
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2", name: nil, model: nil, thinking: nil)
             let page = rig.codex.work.appending(path: "page.html")
 
             _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
@@ -78,7 +78,7 @@ struct RealCodexHostedTests {
     /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定。
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig { rig in
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3", name: nil, model: nil, thinking: nil)
             let log = ChangeLog(rig.bridge)
 
             _ = try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name pong and ask it to reply with the word PONG. Wait for it, then tell me what it said."), to: id)
@@ -118,7 +118,7 @@ struct RealCodexHostedTests {
                 wire_api = "responses"
 
                 """).write(to: config, atomically: true, encoding: .utf8)
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4", name: nil, model: nil, thinking: nil)
 
             _ = try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
             try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {

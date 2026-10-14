@@ -75,12 +75,8 @@ public struct ExecutableLocator: Sendable, Equatable {
     /// 用户登录 shell 此刻的 PATH（交互式启动才会读 .zshrc）；5 秒没结果就放弃。
     public static func loginShellPath() async -> String? {
         let marker = "__CUEPAD_PATH__"
-        let process = Process()
-        process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
+        let shell = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+        guard let result = await ChildProcess.run(shell, ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""], timeout: .seconds(5)) else { return nil }
         return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }

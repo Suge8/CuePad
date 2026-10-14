@@ -82,14 +82,8 @@ nonisolated struct CueRuntimes: Sendable {
         _ executable: URL?, _ arguments: [String], locator: ExecutableLocator, _ check: @Sendable (Int32, String) -> Bool
     ) async -> Bool {
         guard let executable else { return false }
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = locator.environment(
-            launching: executable, overrides: ["PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": piAgentDirectory.path])
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        guard let result = await runCapturing(process, timeout: Self.timeout) else { return false }
+        let environment = locator.environment(launching: executable, overrides: ["PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": piAgentDirectory.path])
+        guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: Self.timeout) else { return false }
         return check(result.status, result.output)
     }
 }

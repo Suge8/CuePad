@@ -42,7 +42,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
     public let pid: Int32
     public let cwd: URL
-    public let terminal: PiTerminal
+    /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
+    public internal(set) var terminal: PiTerminal
     /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）；只有测试读（核对 /reload 后载入的是随包的扩展）
     public let extensionVersion: Int
     public internal(set) var state: PiWorkState
@@ -193,6 +194,8 @@ public enum PiBridgeError: Error, Equatable {
     case incompatibleExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
+    /// 请它结束后一直没下线（多半还卡在需要你在终端里处理的地方）
+    case notEnded
 }
 
 extension PiBridgeError: LocalizedError {
@@ -203,6 +206,7 @@ extension PiBridgeError: LocalizedError {
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
+        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

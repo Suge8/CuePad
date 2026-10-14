@@ -151,7 +151,7 @@ struct ClaudeJSONText {
             default:
                 while position < bytes.count, !",]} \t\r\n".utf8.contains(bytes[position]) { position += 1 }
                 guard position > start else { throw Malformed() }
-                guard (try? JSONDecoder().decode(ClaudeJSON.self, from: Data(bytes[start..<position]))) != nil else { throw Malformed() }
+                guard (try? JSONDecoder().decode(JSONValue.self, from: Data(bytes[start..<position]))) != nil else { throw Malformed() }
             }
             return Node(start: start, end: position, kind: .scalar)
         }

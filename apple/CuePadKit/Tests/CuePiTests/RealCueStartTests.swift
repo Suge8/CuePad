@@ -46,7 +46,7 @@ struct RealCueStartTests {
     /// Pi 是回答上的 `model`。OpenCode 的会话在它的库里，看会话上报的就够了。
     private static func used(in file: URL, _ agent: AgentKind) -> (model: String?, effort: String?)? {
         let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").reversed().lazy
-            .compactMap { ClaudeJSON.parse(Data($0.utf8)) }
+            .compactMap { JSONValue.parse(Data($0.utf8)) }
         switch agent {
         case .claudeCode:
             return lines.first { $0["type"]?.string == "assistant" }.map { ($0["message"]?["model"]?.string, $0["effort"]?.string) }
@@ -69,9 +69,9 @@ struct RealCueStartTests {
             let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let host = PiHost(bridge: bridge, paths: pi.paths, idleLimit: .seconds(120), extraArguments: PiProcess.quietArguments)
-            host.start()
-            try await body(PiRuntime(host: host, locate: { realPiURL }), bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { realPiURL }, idleLimit: .seconds(120), extraArguments: PiProcess.quietArguments)
+            runtime.start()
+            try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:
             try await withCodexRig { rig in
                 try await body(rig.runtime, rig.bridge, rig.codex.work, PiModelKey(provider: CodexModel.provider, id: codexTestModel))

@@ -48,9 +48,12 @@ extension AppServices {
         for id in failed { Task { await upload(id) } }
     }
 
+    /// 标题：会话自己报了名字或首条消息就用它的，否则用会话索引里的（接上的老会话在第一句话之前就有标题，不必去读会话文件）。
     private func recordPiState(of session: CuePi.PiSession) async throws {
+        let title = session.name != nil || session.firstMessage != nil
+            ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let alert = try await piStateRecorder.update(
-            sessionID: session.sessionID, state: session.state, detail: session.detail, title: session.displayName,
+            sessionID: session.sessionID, state: session.state, detail: session.detail, title: title,
             folder: CueStore.folderName(ofWorkingDirectory: session.cwd.path(percentEncoded: false)),
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,

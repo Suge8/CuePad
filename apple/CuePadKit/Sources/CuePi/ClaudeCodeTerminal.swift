@@ -4,176 +4,208 @@ import Darwin
 import Foundation
 
 /// 终端里跑的一个 Claude Code 会话：状态由钩子推出（`ClaudeCodeRuntime` 把这个会话的每次钩子调用交给 `handle`），
-/// 说话经它的收件箱 socket，作答经挡着的 `PermissionRequest` 钩子，改名经收件箱的 `rename`，结束是给进程发 SIGINT
-/// （与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端）。
+/// 说话经它的收件箱 socket，结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端），
+/// 改名经收件箱的 `rename`。做不到的（图片、停止这一轮、换模型与强度、斜杠命令）见 `AgentCapabilities`，桥先拒绝。
+/// 收件箱送到的话 Claude Code 当作"另一个会话发来的"，模型会照做，但不当作你本人的指令。
 ///
-/// 做不到的（缺省实现抛 `unsupported`）：图片（收件箱只收文字）、停止这一轮（SIGINT 是退出）、换模型与强度、斜杠命令（收件箱送到的斜杠开头的话
-/// 只是文字）。收件箱送到的话 Claude Code 当作"另一个会话发来的"，模型会照做，但不当作你本人的指令。
+/// 要你回答的：
+/// - 权限确认经挡着的 `PermissionRequest` 钩子，终端里同时弹框，哪边先答算哪边；
+/// - 提问（`AskUserQuestion`）经 `PreToolUse` 钩子（官方的路：放行并改写输入里的 `answers`），MCP 请求输入经 `Elicitation` 钩子：
+///   挂住钩子时终端不弹，所以按人在不在（`PresenceGate`）分：人在就放行、终端里问，CuePad 只显示；人不在就挂住等 CuePad 答，人回来就放行。
 @MainActor
 final class ClaudeTerminalSession: SessionLink {
     let id: PiSession.ID
     let pid: Int32
     private weak var bridge: PiBridge?
+    private let gate: PresenceGate
     /// 收件箱 socket（钩子环境里的 `CLAUDE_CODE_MESSAGING_SOCKET`，或会话登记文件里的）
     var inbox: String?
-    /// 在等的确认（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
+    private var facts = SessionFacts()
+    /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
-    /// 手动压缩前的状态：压完回到它（压缩不是新的一轮）
-    private var beforeCompaction: (state: PiWorkState, detail: String?, since: Date, busySince: Date?)?
-    /// 子代理按 `agent_id` 认
-    private var subagents: [(id: String, state: PiSubagentState)] = []
 
     private struct Pending {
-        var permission: ClaudePermission
-        var call: AgentHookCall
+        var question: PiQuestion
+        var kind: Kind
+        /// 挂着的钩子；交给终端了（放行了）为 nil，这时只显示
+        var call: AgentHookCall?
         /// 主会话为 nil，子代理是它的 `agent_id`
         var agent: String?
+        /// 人不在而挂住（`PresenceGate`）
+        var hold: UUID?
+
+        enum Kind {
+            case permission(ClaudePermission)
+            case ask(ClaudePermission)
+            /// 只有一个字段的表单（字段名、类型、可选值）
+            case elicitation(field: String, type: String, values: [String]?)
+        }
     }
 
-    init(id: PiSession.ID, pid: Int32, bridge: PiBridge, inbox: String?) {
+    init(id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, busy: Bool, waiting: Bool) {
         self.id = id
         self.pid = pid
         self.bridge = bridge
+        self.gate = gate
         self.inbox = inbox
+        facts.running = busy || waiting
+        if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: "在终端里等你")] }
     }
+
+    /// 补上桥时按事实写好的会话。
+    func publish(_ session: inout PiSession) { facts.publish(to: &session) }
 
     // MARK: 钩子
 
-    /// 一次钩子调用：更新会话；要等答复的（权限确认）留着，其余当场放行。
-    func handle(_ event: String, _ input: ClaudeJSON, call: AgentHookCall) {
+    /// 一次钩子调用：更新会话；要等答复的留着，其余当场放行。
+    func handle(_ event: String, _ input: JSONValue, call: AgentHookCall) {
         let agent = input["agent_id"]?.string
         let now = Date.now
-        // 在等的确认之后，同一个代理又有了动静：终端里已经答了（Claude Code 不收回挡着的钩子），不再等
+        // 在等的之后同一个代理又有了动静：终端里已经答了（Claude Code 不收回挡着的钩子），不再等
         if event != "PermissionRequest" { settlePending(agent: agent, when: event) }
         bridge?.update(id) { session in
             if let level = input["effort"]?["level"]?.string { session.thinking = Open(rawValue: level) }
             if let title = input["session_title"]?.string, !title.isEmpty { session.name = title }
+            if session.firstMessage == nil, event == "UserPromptSubmit", let prompt = input["prompt"]?.string, !prompt.isEmpty {
+                session.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
+            }
+            if event == "PostModelSwitch", let model = input["to_model"]?.string { session.model = ClaudeCode.model(model) }
         }
+        let tool = input["tool_name"]?.string ?? "?"
         switch event {
         case "UserPromptSubmit":
-            update { session in
-                if session.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
-                    session.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
-                }
-                session.enter(.thinking, at: now)
-            }
+            facts.startTurn()
+        case "PreToolUse" where tool == "AskUserQuestion":
+            let ask = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
+            return hold(Pending(question: ask.question(), kind: .ask(ask), call: call, agent: agent), answerable: ask.answerable, at: now)
         case "PreToolUse":
-            let detail = ClaudeCode.toolDetail(input["tool_name"]?.string ?? "?", input["tool_input"])
             if let agent {
-                updateSubagent(agent) { $0.action = detail }
+                facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) }
             } else {
-                update { $0.enter(.tool, detail: detail, at: now) }
+                facts.work(.tool, detail: ToolDetail.line(tool, input["tool_input"]))
             }
         case "PostToolUse", "PostToolUseFailure":
-            if agent == nil { update { $0.enter(.thinking, at: now) } }
+            if agent == nil { facts.work(.thinking) }
+        case "PermissionRequest" where tool == "AskUserQuestion":
+            break  // 提问在 PreToolUse 里答
         case "PermissionRequest":
-            let permission = ClaudePermission(tool: input["tool_name"]?.string ?? "?", input: input["tool_input"] ?? .object([:]))
-            pending.append(Pending(permission: permission, call: call, agent: agent))
-            call.onClose = { [weak self] in self?.withdraw(permission.promptID) }
-            showQuestion(at: now)
-            return
+            let permission = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
+            pending.append(Pending(question: permission.question(), kind: .permission(permission), call: call, agent: agent))
+            watch(call, promptID: permission.promptID)
+            return show(at: now)
+        case "Elicitation":
+            return elicit(input, call: call, agent: agent, at: now)
         case "Stop":
-            update { $0.enter(rested, at: now) }
+            facts.endTurn()
         case "StopFailure":
             let raw = [input["error"]?.string, input["error_details"]?.string, input["last_assistant_message"]?.string]
                 .compactMap { $0 }.joined(separator: "\n")
-            update { session in
-                session.enter(.error, detail: PiErrorSummary(raw).line, at: now)
-                session.errorMessage = raw
-            }
+            facts.endTurn(failure: raw)
         case "PreCompact":
-            update { session in
-                if input["trigger"]?.string == "manual" {
-                    self.beforeCompaction = (session.state, session.detail, session.stateSince, session.busySince)
-                }
-                session.enter(.compacting, at: now)
-            }
+            facts.compacting = true
         case "PostCompact":
-            let before = beforeCompaction
-            beforeCompaction = nil
-            update { session in
-                guard let before else { return session.enter(.thinking, at: now) }
-                session.state = before.state
-                session.detail = before.detail
-                session.stateSince = before.since
-                session.busySince = before.busySince
-            }
+            facts.compacting = false
         case "SubagentStart":
-            guard let agent else { break }
-            subagents.append((agent, ClaudeCode.subagent(name: "", role: input["agent_type"]?.string ?? "", at: now)))
-            publishSubagents()
+            if let agent { facts.startSubagent(agent, name: "", role: input["agent_type"]?.string ?? "", at: now) }
         case "SubagentStop":
             // 压缩上下文也会报一个没有开始的子代理，不在名册里
-            guard let agent else { break }
-            updateSubagent(agent) { ClaudeCode.settle(&$0, .done, summary: input["last_assistant_message"]?.string, at: now) }
-            update { session in if session.state == .delegating { session.enter(rested, at: now) } }
-        case "PostModelSwitch":
-            if let model = input["to_model"]?.string { update { $0.model = ClaudeCode.model(model) } }
+            if let agent { facts.settleSubagent(agent, .done, summary: input["last_assistant_message"]?.string, at: now) }
         default:
             break
         }
         call.finish()
+        show(at: now)
+    }
+
+    /// MCP 服务请求输入（`Elicitation`）：只有一个字段的表单（文字、选项、是否）能从 CuePad 答，其余（多个字段、要打开网址）只显示。
+    private func elicit(_ input: JSONValue, call: AgentHookCall, agent: String?, at now: Date) {
+        let message = input["message"]?.string ?? ""
+        let text = ToolDetail.clip([input["mcp_server_name"]?.string, message].compactMap { $0 }.joined(separator: "\n"), 500)
+        let properties = input["requested_schema"]?["properties"]?.object ?? [:]
+        guard input["mode"]?.string ?? "form" == "form", properties.count == 1, let (field, schema) = properties.first,
+              let type = schema["type"]?.string, ["string", "boolean"].contains(type) else {
+            let question = PiQuestion(promptID: nil, kind: .unknown("elicitation"), text: text)
+            return hold(Pending(question: question, kind: .elicitation(field: "", type: "", values: nil), call: call, agent: agent), answerable: false, at: now)
+        }
+        let values = schema["enum"]?.array?.compactMap(\.string)
+        let kind: PiQuestionKind = type == "boolean" ? .confirm : values?.isEmpty == false ? .select : .text
+        let title = [schema["title"]?.string ?? schema["description"]?.string].compactMap { $0 }
+        let question = PiQuestion(promptID: UUID().uuidString, kind: kind, text: ([text] + title).joined(separator: "\n"), options: values ?? [])
+        hold(Pending(question: question, kind: .elicitation(field: field, type: type, values: values), call: call, agent: agent), answerable: true, at: now)
+    }
+
+    /// 挂住钩子会让终端不问：人不在才挂住等 CuePad 答，人在（或 CuePad 答不了）就放行，终端里问，CuePad 只显示。
+    private func hold(_ item: Pending, answerable: Bool, at now: Date) {
+        var item = item
+        let promptID = item.question.promptID
+        if answerable, let promptID, let token = gate.hold(handBack: { [weak self] in self?.handBack(promptID) }) {
+            item.hold = token
+            watch(item.call, promptID: promptID)
+        } else {
+            item.call?.finish()
+            item.call = nil
+            item.question.promptID = nil
+        }
+        pending.append(item)
+        show(at: now)
+    }
+
+    /// 人回来了：放行，终端里问，CuePad 里只显示。
+    private func handBack(_ promptID: String) {
+        guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }) else { return }
+        pending[index].call?.finish()
+        pending[index].call = nil
+        pending[index].hold = nil
+        pending[index].question.promptID = nil
+        show(at: .now)
+    }
+
+    /// 钩子进程先走了（超时、Claude Code 收回）：问题不再等。
+    private func watch(_ call: AgentHookCall?, promptID: String) {
+        call?.onClose = { [weak self] in self?.withdraw(promptID) }
     }
 
     /// 进程退出或会话结束：还挂着的钩子放掉（进程走了它们也就没了）。
     func close() {
-        for item in pending { item.call.finish() }
+        for item in pending {
+            item.call?.finish()
+            gate.drop(item.hold)
+        }
         pending = []
     }
 
-    private func update(_ change: (inout PiSession) -> Void) { bridge?.update(id, change) }
-
-    /// 这一轮歇下时：还有在后台跑的子代理就是等子代理，否则空闲
-    private var rested: PiWorkState { subagents.contains { $0.state.phase == .known(.running) } ? .delegating : .settled }
-
-    private func showQuestion(at now: Date) {
-        update { session in
-            if let first = pending.first {
-                session.question = first.permission.question
-                session.enter(.waitingForUser, detail: first.permission.title, at: now)
-            } else if session.state == .waitingForUser {
-                session.question = nil
-                session.enter(.thinking, at: now)
-            }
-        }
+    private func show(at now: Date) {
+        facts.questions = pending.map(\.question)
+        bridge?.update(id) { facts.publish(to: &$0, at: now) }
     }
 
-    /// 终端里先答了：同一个代理之后的任一事件说明它已不在等。
+    /// 终端里先答了：同一个代理之后的任一事件说明它已不在等；这一轮结束时全部作废。
     private func settlePending(agent: String?, when event: String) {
-        let stale = pending.filter { $0.agent == agent || event == "Stop" || event == "StopFailure" }
+        let ending = event == "Stop" || event == "StopFailure"
+        let stale = pending.filter { $0.agent == agent || ending }
         guard !stale.isEmpty else { return }
-        for item in stale { item.call.finish() }
-        pending.removeAll { item in stale.contains { $0.permission.promptID == item.permission.promptID } }
-        showQuestion(at: .now)
+        for item in stale {
+            item.call?.finish()
+            gate.drop(item.hold)
+        }
+        pending.removeAll { item in ending || item.agent == agent }
     }
 
-    /// 钩子进程先走了（超时、Claude Code 收回）：问题不再等。
     private func withdraw(_ promptID: String) {
-        pending.removeAll { $0.permission.promptID == promptID }
-        showQuestion(at: .now)
-    }
-
-    private func updateSubagent(_ agent: String, _ change: (inout PiSubagentState) -> Void) {
-        guard let index = subagents.firstIndex(where: { $0.id == agent }) else { return }
-        change(&subagents[index].state)
-        publishSubagents()
-    }
-
-    private func publishSubagents() {
-        let roster = subagents.map(\.state)
-        update { $0.subagents = roster }
+        guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }) else { return }
+        gate.drop(pending.remove(at: index).hold)
+        show(at: .now)
     }
 
     // MARK: SessionLink
 
     func send(_ message: PiMessage) async throws -> PiDelivery {
-        guard message.images.isEmpty else { throw PiBridgeError.unsupported }
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
         guard let session = bridge?.session(id: id) else { throw PiBridgeError.sessionEnded }
         let busy = session.state.isTurnRunning
         let mode = message.whenBusy ?? .followUp
         // 收件箱的 now 等在跑的工具做完、在这一轮里插进去（马上说），later 等这一轮做完（等它做完再说）
-        var line: [String: ClaudeJSON] = [
+        var line: [String: JSONValue] = [
             "type": "user", "message": ["role": "user", "content": .string(message.text)],
             "priority": .string(!busy ? "next" : mode == .steer ? "now" : "later"),
         ]
@@ -182,61 +214,62 @@ final class ClaudeTerminalSession: SessionLink {
         return busy ? .queued(mode) : .immediate
     }
 
+    func command(_ line: String, whenBusy: PiQueueMode?) async throws { throw PiBridgeError.unsupported }
+    func abort() async throws { throw PiBridgeError.unsupported }
+
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
-        guard model == nil, thinking == nil, let name else { throw PiBridgeError.unsupported }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw PiBridgeError.rejected("bad_request") }
-        try await post(["type": "control", "action": "rename", "name": .string(trimmed)])
-        update { $0.name = trimmed }
+        guard let name else { throw PiBridgeError.unsupported }
+        try await post(["type": "control", "action": "rename", "name": .string(name)])
+        bridge?.update(id) { $0.name = name }
     }
 
     func answer(_ answer: PiAnswerValue, to promptID: String) async throws {
-        guard let index = pending.firstIndex(where: { $0.permission.promptID == promptID }) else {
-            throw PiBridgeError.rejected(pending.isEmpty ? "no_prompt" : "stale_prompt")
+        guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }), let call = pending[index].call else {
+            throw PiBridgeError.rejected(pending.contains { $0.call != nil } ? "stale_prompt" : "no_prompt")
         }
-        let item = pending[index]
-        let decision = try item.permission.decision(answer, to: promptID)
-        let output: ClaudeJSON = ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]
-        item.call.reply(output.data + Data([0x0A]))
-        pending.remove(at: index)
-        showQuestion(at: .now)
+        let output: JSONValue = switch pending[index].kind {
+        case .permission(let permission):
+            ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": try permission.decision(answer, to: promptID)]]
+        case .ask(let ask):
+            ["hookSpecificOutput": [
+                "hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": try ask.answered(answer, to: promptID),
+            ]]
+        case .elicitation(let field, let type, let values):
+            ["hookSpecificOutput": ["hookEventName": "Elicitation", "action": "accept", "content": [field: try Self.value(answer, type, values)]]]
+        }
+        call.reply(output.data + Data([0x0A]))
+        gate.drop(pending.remove(at: index).hold)
+        show(at: .now)
+    }
+
+    /// 表单字段的值：选项按显示的原文认。
+    private static func value(_ answer: PiAnswerValue, _ type: String, _ values: [String]?) throws -> JSONValue {
+        switch (answer, type) {
+        case (.confirmed(let yes), "boolean"): return .bool(yes)
+        case (.option(let label), "string") where values?.contains(label) == true: return .string(label)
+        case (.text(let text), "string") where values?.isEmpty != false: return .string(text)
+        default: throw PiBridgeError.rejected("bad_answer")
+        }
     }
 
     func end() async throws {
         guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
     }
 
-    private func post(_ line: ClaudeJSON) async throws {
+    private func post(_ line: JSONValue) async throws {
         guard let inbox else { throw PiBridgeError.unsupported }
         try await ClaudeInbox.post(line.data + Data([0x0A]), to: inbox)
     }
 }
 
-/// Claude Code 会话的收件箱（跨会话消息的 Unix socket，2.1.224 起）：连上、写一行、关掉。它不回话；macOS 上不要求先发 auth 行。
+/// Claude Code 会话的收件箱（跨会话消息的 Unix socket，2.1.224 起，官方文档化）：连上、写一行、关掉。它不回话；macOS 上不要求先发认证行。
+/// 消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
 enum ClaudeInbox {
     @concurrent static func post(_ line: Data, to path: String) async throws {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw POSIXError(.EIO) }
-        defer { Darwin.close(fd) }
-        var one: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
-        var address = sockaddr_un()
-        address.sun_family = sa_family_t(AF_UNIX)
-        guard path.utf8.count < MemoryLayout.size(ofValue: address.sun_path) else { throw PiBridgeError.sessionEnded }
-        withUnsafeMutableBytes(of: &address.sun_path) { $0.copyBytes(from: path.utf8) }
-        let connected = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
-        }
         // 连不上：会话已经退出（socket 删了或没人听）
-        guard connected == 0 else { throw PiBridgeError.sessionEnded }
-        try line.withUnsafeBytes { raw in
-            var offset = 0
-            while offset < raw.count {
-                let n = write(fd, raw.baseAddress! + offset, raw.count - offset)
-                guard n > 0 else { throw PiBridgeError.sessionEnded }
-                offset += n
-            }
-        }
+        guard let fd = try? UnixSocket.connect(path) else { throw PiBridgeError.sessionEnded }
+        defer { close(fd) }
+        guard writeAll(fd, line) else { throw PiBridgeError.sessionEnded }
         shutdown(fd, SHUT_WR)
     }
 }

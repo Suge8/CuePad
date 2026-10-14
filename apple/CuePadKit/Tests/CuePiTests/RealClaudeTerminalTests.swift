@@ -137,7 +137,7 @@ struct RealClaudeTerminalTests {
             #expect(testbed.bridge.session(id: session.id)?.displayName == "CuePad 改的名")
             await #expect(throws: PiBridgeError.unsupported) { try await testbed.bridge.abort(session.id) }
 
-            try await testbed.runtime.end(session.id)
+            try await testbed.bridge.end(session.id)
 
             #expect(testbed.session(pid: terminal.pid) == nil)
             #expect(log.ended.map(\.0.id) == [session.id])

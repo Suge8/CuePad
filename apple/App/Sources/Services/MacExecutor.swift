@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 /// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
-/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止，经各 Agent 的接入在后台开会话、接着会话、结束会话的只有这里；成功送出的话记发送记录。
+/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     private let store: CueStore
     private let pi: PiBridge
@@ -132,7 +132,7 @@ final class MacExecutor {
     /// 不能为了结束它而恢复它。两种都由这里记为已结束、进历史——托管的会话闲置退出不算结束，只有用户的结束请求才算。
     private func end(_ target: SendTarget) async throws {
         let ref = try sessionID(of: target)
-        if let live = pi.session(sessionID: ref) { try await runtime(live.agent).end(live.id) }
+        if let live = pi.session(sessionID: ref) { try await pi.end(live.id) }
         try await recorder.end(sessionID: ref)
     }
 

@@ -48,6 +48,8 @@ public final class AgentHookServer {
     private var listener: Int32 = -1
     private var source: DispatchSourceRead?
     private var handlers: [AgentKind: @MainActor (AgentHookCall) -> Void] = [:]
+    /// 接进来还没结束的连接：停的时候一并关掉（挂着的钩子随即放行）
+    private var open: [ObjectIdentifier: PiSocketConnection] = [:]
 
     public init(path: URL = PiPaths().hookSocket) {
         self.path = path
@@ -61,22 +63,8 @@ public final class AgentHookServer {
     public func start() throws {
         guard listener < 0 else { return }
         try PiSocketDirectory.prepare(path.deletingLastPathComponent())
-        unlink(path.path)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw PiSocketConnection.ConnectError.socket(errno) }
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        guard path.path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { close(fd); throw PiBridgeError.socketDirectoryTooLong }
-        withUnsafeMutableBytes(of: &addr.sun_path) { $0.copyBytes(from: path.path.utf8) }
-        let bound = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
-        }
-        guard bound == 0, chmod(path.path, 0o600) == 0, listen(fd, 64) == 0 else {
-            let code = errno
-            close(fd)
-            throw PiSocketConnection.ConnectError.connect(code)
-        }
-        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+        let fd: Int32
+        do { fd = try UnixSocket.listen(path.path) } catch .pathTooLong { throw PiBridgeError.socketDirectoryTooLong }
         listener = fd
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
         source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.acceptAll() } }
@@ -90,6 +78,8 @@ public final class AgentHookServer {
         source = nil
         if listener >= 0 { unlink(path.path) }
         listener = -1
+        for connection in open.values { connection.close() }
+        open = [:]
     }
 
     private func acceptAll() {
@@ -103,6 +93,8 @@ public final class AgentHookServer {
     }
 
     private func serve(_ connection: PiSocketConnection) async {
+        open[ObjectIdentifier(connection)] = connection
+        defer { open[ObjectIdentifier(connection)] = nil }
         var call: AgentHookCall?
         for await line in connection.lines {
             guard call == nil else { continue }

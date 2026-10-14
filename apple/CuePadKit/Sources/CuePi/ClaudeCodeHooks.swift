@@ -27,15 +27,15 @@ struct ClaudeCodeHooks: AgentHookConfig {
         guard let root = try? text.root(), let hooks = root.member("hooks")?.value, hooks.kind == .object else { return .missing }
         var found = false, current = true
         for member in hooks.items where member.value.kind == .array {
-            let mine = member.value.items.filter { isMine(ClaudeJSON.parse(text.text(of: $0.value))) }
+            let mine = member.value.items.filter { isMine(JSONValue.parse(text.text(of: $0.value))) }
             guard !mine.isEmpty else { continue }
             found = true
             let expected = Self.events.contains(member.key ?? "") ? Self.group(command: command, event: member.key ?? "") : nil
-            if mine.count != 1 || ClaudeJSON.parse(text.text(of: mine[0].value)) != expected { current = false }
+            if mine.count != 1 || JSONValue.parse(text.text(of: mine[0].value)) != expected { current = false }
         }
         guard found else { return .missing }
         let complete = Self.events.allSatisfy { event in
-            hooks.member(event)?.value.items.contains { ClaudeJSON.parse(text.text(of: $0.value)) == Self.group(command: command, event: event) } == true
+            hooks.member(event)?.value.items.contains { JSONValue.parse(text.text(of: $0.value)) == Self.group(command: command, event: event) } == true
         }
         return current && complete ? .current : .outdated
     }
@@ -79,7 +79,7 @@ struct ClaudeCodeHooks: AgentHookConfig {
 
     // MARK: 条目
 
-    private func isMine(_ group: ClaudeJSON?) -> Bool {
+    private func isMine(_ group: JSONValue?) -> Bool {
         guard let hooks = group?["hooks"]?.array, !hooks.isEmpty else { return false }
         return hooks.allSatisfy { $0["command"]?.string.map(Self.isCuePadCommand) == true }
     }
@@ -92,7 +92,7 @@ struct ClaudeCodeHooks: AgentHookConfig {
         return URL(filePath: executable).lastPathComponent == "cuepad"
     }
 
-    private static func group(command: String, event: String) -> ClaudeJSON {
+    private static func group(command: String, event: String) -> JSONValue {
         ["hooks": [["type": "command", "command": .string(command), "timeout": .number(Double(timeout(event)))]]]
     }
 
@@ -130,7 +130,7 @@ struct ClaudeCodeHooks: AgentHookConfig {
 
     /// 文件里 CuePad 条目用的命令（可能是 App 搬家前的旧路径）
     private func commands(in data: Data) -> [String] {
-        let groups = ClaudeJSON.parse(data)?["hooks"]?.object?.values.flatMap { $0.array ?? [] } ?? []
+        let groups = JSONValue.parse(data)?["hooks"]?.object?.values.flatMap { $0.array ?? [] } ?? []
         return groups.filter(isMine).compactMap { $0["hooks"]?.array?.first?["command"]?.string }
     }
 
@@ -163,7 +163,7 @@ struct ClaudeCodeHooks: AgentHookConfig {
             }
             let group = hooks.items.lazy.compactMap { member -> (index: Int, in: ClaudeJSONText.Node)? in
                 guard member.value.kind == .array,
-                      let index = member.value.items.firstIndex(where: { isMine(ClaudeJSON.parse(text.text(of: $0.value))) }) else { return nil }
+                      let index = member.value.items.firstIndex(where: { isMine(JSONValue.parse(text.text(of: $0.value))) }) else { return nil }
                 return (index, member.value)
             }.first
             guard let group else { return text }

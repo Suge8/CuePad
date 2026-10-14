@@ -233,13 +233,8 @@ public struct AgentIntegration: Sendable {
 
     /// 运行并取标准输出；超时或无法启动返回 nil。
     private static func capture(_ executable: URL, _ arguments: [String], path: String, timeout: Duration = .seconds(10)) async -> String? {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        return await runCapturing(process, timeout: timeout)?.output
+        let environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
+        return await ChildProcess.run(executable, arguments, environment: environment, timeout: timeout)?.output
     }
 }
 

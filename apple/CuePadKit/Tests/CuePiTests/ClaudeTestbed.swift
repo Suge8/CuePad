@@ -13,7 +13,7 @@ let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 private let claudeKey: String? = {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
-    return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["xiaomi"]?["key"]?.string
+    return (try? Data(contentsOf: auth)).flatMap(JSONValue.parse)?["xiaomi"]?["key"]?.string
 }()
 let realClaudeAvailable = claudeURL != nil && claudeKey != nil
 
@@ -52,7 +52,7 @@ final class ClaudeTestbed {
             try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
         }
         // 跳过首次启动的引导与"信任这个目录"的询问
-        let seed: ClaudeJSON = ["hasCompletedOnboarding": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
+        let seed: JSONValue = ["hasCompletedOnboarding": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
         environment = [
@@ -66,13 +66,12 @@ final class ClaudeTestbed {
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         store = try Fixture().store
         files = store.files
-        bridge = PiBridge(socketDirectory: sockets)
+        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
-            idleLimit: idleLimit)
+            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) })
         if installHooks { try await integration.install(.claudeCode) }
     }
 
@@ -184,11 +183,8 @@ final class ClaudeTerminal {
 
     @discardableResult
     private static func tmux(_ name: String, _ arguments: [String], environment: [String: String]) async throws -> String {
-        let process = Process()
-        process.executableURL = tmuxURL!
-        process.arguments = ["-L", name] + arguments
-        process.environment = environment
-        guard let result = await runCapturing(process, timeout: .seconds(10)), result.status == 0 else {
+        guard let result = await ChildProcess.run(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
+              result.status == 0 else {
             throw TmuxFailed(command: arguments.joined(separator: " "))
         }
         return result.output

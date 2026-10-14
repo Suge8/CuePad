@@ -67,7 +67,7 @@ final class ClaudeBrain: CueBrain {
         return { await process?.stop() }
     }
 
-    private func received(_ event: ClaudeJSON) {
+    private func received(_ event: JSONValue) {
         switch event["type"]?.string {
         case "control_request":
             // Claude Code 问的事（批准工具……）一律不答应，回错误免得这一轮卡住
@@ -92,7 +92,7 @@ final class ClaudeBrain: CueBrain {
         }
     }
 
-    private func finish(_ result: ClaudeJSON) {
+    private func finish(_ result: JSONValue) {
         let finished = turn ?? Turn()
         turn = nil
         let windows = (result["modelUsage"]?.object ?? [:]).values.compactMap { $0["contextWindow"]?.number }

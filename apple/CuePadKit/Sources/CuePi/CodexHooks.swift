@@ -120,16 +120,16 @@ struct CodexHooks: AgentHookConfig {
     /// 让 Codex 信任 CuePad 的条目：它列出的键与哈希原样写回。第一次写之前记下 `[hooks]`、`[hooks.state]` 原来在不在。
     private func trust(command: String, footprint: Footprint) async throws {
         try await withCodex { rpc in
-            let list = try await rpc.call("hooks/list", ["cwds": [home.path]])
-            let listed = (list["data"] as? [CodexRPC.Object])?.first
-            let entries = (listed?["hooks"] as? [CodexRPC.Object]) ?? []
-            guard entries.contains(where: { $0["command"] as? String == command }) else {
-                throw CodexHooksError.rejected(((listed?["warnings"] as? [String]) ?? []).joined(separator: "；"))
+            let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
+            let listed = list["data"]?.array?.first
+            let entries = listed?["hooks"]?.array ?? []
+            guard entries.contains(where: { $0["command"]?.string == command }) else {
+                throw CodexHooksError.rejected((listed?["warnings"]?.array?.compactMap(\.string) ?? []).joined(separator: "；"))
             }
-            var state: CodexRPC.Object = [:]
-            for entry in entries where entry["command"] as? String == command && entry["trustStatus"] as? String != "trusted" {
-                guard let key = entry["key"] as? String, let hash = entry["currentHash"] as? String else { continue }
-                state[key] = ["trusted_hash": hash]
+            var state: [String: JSONValue] = [:]
+            for entry in entries where entry["command"]?.string == command && entry["trustStatus"]?.string != "trusted" {
+                guard let key = entry["key"]?.string, let hash = entry["currentHash"]?.string else { continue }
+                state[key] = ["trusted_hash": .string(hash)]
             }
             guard !state.isEmpty else { return }
             if footprint.stateTable == nil {
@@ -139,7 +139,7 @@ struct CodexHooks: AgentHookConfig {
                 updated.stateTable = hooks?["state"] == nil
                 try save(updated)
             }
-            try await rpc.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": state, "mergeStrategy": "upsert"]]])
+            try await rpc.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": .object(state), "mergeStrategy": "upsert"]]])
         }
     }
 
@@ -148,15 +148,15 @@ struct CodexHooks: AgentHookConfig {
     private func untrust(_ keys: [String], footprint: Footprint) async throws {
         try await withCodex { rpc in
             let hooks = try await userHooks(rpc) ?? [:]
-            let state = hooks["state"] as? CodexRPC.Object ?? [:]
-            var edits: [CodexRPC.Object] = keys.map { ["keyPath": "hooks.state.\(Self.quoted($0))", "value": NSNull(), "mergeStrategy": "replace"] }
+            let state = hooks["state"]?.object ?? [:]
+            var edits: [JSONValue] = keys.map { ["keyPath": .string("hooks.state.\(Self.quoted($0))"), "value": .null, "mergeStrategy": "replace"] }
             if footprint.stateTable == true, Set(state.keys).isSubset(of: keys) {
-                edits.append(["keyPath": "hooks.state", "value": NSNull(), "mergeStrategy": "replace"])
+                edits.append(["keyPath": "hooks.state", "value": .null, "mergeStrategy": "replace"])
                 if footprint.hooksTable == true, hooks.keys.allSatisfy({ $0 == "state" }) {
-                    edits.append(["keyPath": "hooks", "value": NSNull(), "mergeStrategy": "replace"])
+                    edits.append(["keyPath": "hooks", "value": .null, "mergeStrategy": "replace"])
                 }
             }
-            try await rpc.call("config/batchWrite", ["edits": edits])
+            try await rpc.call("config/batchWrite", ["edits": .array(edits)])
         }
         if !footprint.configFile, let left = try? String(contentsOf: configFile, encoding: .utf8), left.allSatisfy(\.isWhitespace) {
             try FileManager.default.removeItem(at: configFile)
@@ -164,10 +164,10 @@ struct CodexHooks: AgentHookConfig {
     }
 
     /// 用户层 `config.toml` 里的 `[hooks]`（不含别的层与缺省值）；没有为 nil。
-    @MainActor private func userHooks(_ rpc: CodexRPC) async throws -> CodexRPC.Object? {
+    @MainActor private func userHooks(_ rpc: CodexRPC) async throws -> [String: JSONValue]? {
         let read = try await rpc.call("config/read", ["includeLayers": true])
-        let user = (read["layers"] as? [CodexRPC.Object])?.first { ($0["name"] as? CodexRPC.Object)?["type"] as? String == "user" }
-        return (user?["config"] as? CodexRPC.Object)?["hooks"] as? CodexRPC.Object
+        let user = read["layers"]?.array?.first { $0["name"]?["type"]?.string == "user" }
+        return user?["config"]?["hooks"]?.object
     }
 
     /// 起一个指向这个配置目录的 `codex app-server`，用完关掉并等它退出。

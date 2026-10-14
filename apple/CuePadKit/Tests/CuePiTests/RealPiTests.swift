@@ -93,13 +93,14 @@ struct RealPiTests {
     }
 
     /// 终端里开的会话（扩展接口 `ctx.shutdown`）：正在等你确认时，结束会取消这个弹窗，让会话能收尾（弹窗不取消，Pi 会一直等下去）。
-    /// 测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求，所以这里只验证弹窗被取消、会话回到空闲。
+    /// 测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求（结束等不到它下线），所以这里只验证弹窗被取消、会话回到空闲。
     @Test func endingASessionCancelsItsPendingDialog() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/ask")
             try await eventually("确认框") { bridge.sessions.first?.question?.kind == .known(.confirm) }
 
-            try await bridge.end(s.id)
+            let ending = Task { try await bridge.end(s.id) }
+            defer { ending.cancel() }
 
             _ = try await pi.waitForEvent("扩展拿到取消") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:false" }
             try await eventually("弹窗收起") { bridge.sessions.first?.question == nil }
