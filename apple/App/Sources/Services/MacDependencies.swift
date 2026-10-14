@@ -28,7 +28,7 @@ struct MacDependencies {
     var cue: CueDependencies
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
-    static func live(location: LibraryLocation) -> MacDependencies {
+    static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
         let paths = AgentPaths()
         let pi = PiBridge(socketDirectory: paths.pi.socketDirectory)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
@@ -63,7 +63,7 @@ struct MacDependencies {
                     await runtimes.launch($0, store: $1)
                 },
                 helper: commandLineTool.helper,
-                notifier: location.isIsolated ? LoggedCueNotifier() : SystemCueNotifier()))
+                notifier: alerts))
     }
 }
 #endif

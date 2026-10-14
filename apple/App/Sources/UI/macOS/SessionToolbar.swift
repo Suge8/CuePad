@@ -5,7 +5,7 @@ import SwiftUI
 
 /// 会话页的页头全在窗口工具栏上：居中的标题（会话名接状态，下面一行是它在做的事，左边是那件事的完成圈）与右上"⋯"里的会话操作
 /// （所在、完成任务、绑定到任务、解除绑定、重命名、跳到终端、结束会话）。内容区里不再另起一行页头。
-/// 工具栏项在主窗口里常驻（`SessionTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
+/// 工具栏项在主窗口里常驻（`PageTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
 /// 进出会话页、换会话时那要占点击回合的一半。会话页只把算好的值与动作交到这里；不是会话页时槽里是空的。
 @Observable
 final class SessionHeader {
@@ -60,7 +60,8 @@ extension Workspace {
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
 /// 玻璃只包住内容、在标题位里居中（最宽 `width`，名字再长就截断）。标题位的尺寸只随窗口变、不随内容变（项的尺寸一变整条工具栏重排）：
 /// 宽裕时是 `width`，窗口窄、侧栏收起时让到最窄 `minWidth`，不压到左上的侧栏钮、项目切换与右上的搜索、任务、"⋯"，玻璃里的名字随之截断。
-struct SessionTitleSlot: View {
+/// Cue 页的页头也在这一位（`CueTitle`，同一块玻璃、同样的宽度规则）。
+struct PageTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     /// 点标题弹出的说明（需要 /reload 时）开着。
@@ -74,6 +75,12 @@ struct SessionTitleSlot: View {
     var body: some View {
         if let state = workspace.shownSessionHeader {
             title(state)
+        } else if workspace.page == .cue {
+            CueTitle()
+                .frame(height: Spacing.toolbarControl)
+                .glass(in: .capsule)
+                .frame(maxWidth: .infinity)
+                .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
         }
     }
 

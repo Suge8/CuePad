@@ -130,10 +130,20 @@
 			);
 			target = C1000000000000000000000A /* CuePadShare */;
 		};
+		A1000000000000000000E0A2 /* Exceptions for "Sources" folder in "CuePad" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			platformFiltersByRelativePath = {
+				Sounds/bell.caf = (macos, );
+				Sounds/chime.caf = (macos, );
+				Sounds/drop.caf = (macos, );
+				Sounds/tap.caf = (macos, );
+			};
+			target = A10000000000000000000030 /* CuePad */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A10000000000000000000020 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Sources; sourceTree = "<group>"; };
+		A10000000000000000000020 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A2 /* Exceptions for "Sources" folder in "CuePad" target */, ); path = App/Sources; sourceTree = "<group>"; };
 		A10000000000000000000021 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Tests; sourceTree = "<group>"; };
 		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */, ); path = App/AppGroup; sourceTree = "<group>"; };
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };

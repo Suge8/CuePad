@@ -145,7 +145,7 @@ struct MacSyncTests {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory("/work", for: project.id)
 
-        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app"))]))
+        try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app", state: .settled))]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
@@ -190,7 +190,7 @@ struct MacSyncTests {
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
         let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .thinking)
+        try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try await services.resetPiState()
@@ -532,7 +532,7 @@ struct MacSyncTests {
         derived.refresh(digest)
 
         #expect(digest.deliveries.isEmpty)
-        let entry = try #require(derived.items.compactMap { if case .entry(let entry) = $0 { entry } else { nil } }.first)
+        let entry = try #require(derived.items.first)
         #expect(entry.fromCue)
     }
 

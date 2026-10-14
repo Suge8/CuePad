@@ -65,13 +65,16 @@ final class RecordingHost: AgentRuntime {
         return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的。
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的；
+    /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false, protocolVersion: Int = PiWire.protocolVersion
+        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false, protocolVersion: Int = PiWire.protocolVersion,
+        sessionFile: String? = nil
     ) async throws -> FakeExtension {
-        let ext = FakeExtension(
-            directory: socketDirectory, sessionID: sessionID, options: .init(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted))
+        var options = FakeExtension.Options(protocolVersion: protocolVersion, cwd: cwd, hosted: hosted)
+        if let sessionFile { options.sessionFile = sessionFile }
+        let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
         try bridge.start()
         try ext.start()
@@ -117,10 +120,10 @@ final class FakeUpdater: AppUpdater {
 
 /// 记下 Cue 推了哪些通知，不碰系统通知中心。
 final class RecordingCueNotifier: CueNotifying {
-    var onOpen: (() -> Void)?
+    var isWatchingCue = false
     private(set) var posted: [(title: String, body: String)] = []
 
-    func post(id: UUID, title: String, body: String) async { posted.append((title, body)) }
+    func post(title: String, body: String) async { posted.append((title, body)) }
 }
 
 final class RecordingWindow: ShellWindow {

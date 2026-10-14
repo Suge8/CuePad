@@ -22,7 +22,7 @@ nonisolated struct CueTiming: Sendable {
     var restarts: [Duration] = [.seconds(2), .seconds(10), .seconds(60)]
     /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
     var retryWake: Duration = .seconds(120)
-    /// 打扰时段（本地钟点）：不推通知、不巡视。
+    /// 打扰时段（本地钟点）：不巡视。通知不看它，免打扰只认系统的专注模式。
     var quietHours: Set<Int> = [23, 0, 1, 2, 3, 4, 5, 6, 7]
 
     func isQuiet(_ date: Date) -> Bool { quietHours.contains(Calendar.current.component(.hour, from: date)) }
@@ -41,7 +41,8 @@ nonisolated struct CueTiming: Sendable {
 
 /// 一个"在这台 Mac 上值班"的时段：Cue 住在这台 Mac 且已启用时由 `CueService` 起一个，设置变了或不再住这里时停掉。
 /// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变；对话、跟进与"等你"都在库里，换班次、App 重启都不丢。
-/// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 的样子（`presence`）由它直接得出。
+/// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起 → 次数用完停在起不来；Cue 此刻在做什么（`work`）由它直接得出，
+/// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
 /// 1. 你的消息与"等你"的回答：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
@@ -137,6 +138,8 @@ final class CueKeeper {
         var baseline: (since: Date, followed: [UUID])?
         /// 这一轮报的错（原文）
         var failure: String?
+        /// 正在用的工具（`CueActivity.detail`）；nil 是在想
+        var tool: String?
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（晚于 `latest`）。
@@ -165,7 +168,6 @@ final class CueKeeper {
     private nonisolated static let log = Logger(subsystem: "com.sugeh.cuepad", category: "cue")
 
     private let setup: Setup
-    private let onPresence: (CuePresence) -> Void
     private let inputs: AsyncStream<Input>
     private let input: AsyncStream<Input>.Continuation
     private var progress: Progress
@@ -179,19 +181,26 @@ final class CueKeeper {
     private var window: (first: Date, last: Date, latest: Date)?
     private var timer: Task<Void, Never>?
 
-    init(_ setup: Setup, onPresence: @escaping (CuePresence) -> Void) {
+    init(_ setup: Setup) {
         self.setup = setup
-        self.onPresence = onPresence
         (inputs, input) = AsyncStream.makeStream()
         progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
     }
 
-    /// Cue 此刻的样子：起大脑、等着重起的那一下算空闲。
-    var presence: CuePresence {
+    /// Cue 此刻在做什么：一轮里在想或在用工具，起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
+    private var work: (state: PiWorkState, detail: String?) {
         switch phase {
-        case .starting, .restarting: .idle
-        case .running(let shift): shift.turn == nil ? .idle : .thinking
-        case .stuck(let reason): .unreachable(reason)
+        case .starting, .restarting: (.settled, nil)
+        case .running(let shift): shift.turn.map { $0.tool == nil ? (.thinking, nil) : (.tool, $0.tool) } ?? (.settled, nil)
+        case .stuck(let reason): (.error, reason)
+        }
+    }
+
+    private func publish() async {
+        do {
+            try await setup.store.setCueState(work.state, detail: work.detail)
+        } catch {
+            Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -210,8 +219,10 @@ final class CueKeeper {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
                 }
             }
+            // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
+            await publish()
             await startShift()
-            onPresence(presence)
+            await publish()
             loop: for await next in inputs {
                 switch next {
                 case .stop: break loop
@@ -220,7 +231,7 @@ final class CueKeeper {
                 case .brain(let id, let event): if shift?.id == id { await handle(event) }
                 }
                 await reconcile()
-                onPresence(presence)
+                await publish()
             }
             group.cancelAll()
         }
@@ -324,6 +335,10 @@ final class CueKeeper {
             await say(author, text)
         case .context(let used, _):
             updateShift { $0.contextUsed = used }
+        case .tool(let name, let arguments):
+            updateShift { $0.turn?.tool = CueActivity.detail(tool: name, arguments: arguments) }
+        case .toolDone:
+            updateShift { $0.turn?.tool = nil }
         case .failed(let raw):
             updateShift { $0.turn?.failure = raw }
             let summary = PiErrorSummary(raw)

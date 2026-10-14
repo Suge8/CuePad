@@ -91,11 +91,11 @@ extension AppServices {
     /// 等的对象所在的表见 `ZoneChangePuller.awaitedTables`，加新的等待理由时一并更新：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
-    ///   "等你"的回答只经这一拉才到，会话都关着时它也在等）；
+    ///   "等你"的回答、别的 Mac 接管只经这一拉才到，会话都关着时它也在等）；Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」）；
     /// - 手机：有发往 Mac 还没结果的请求，或正在看 Agent 页、会话近况。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.state != nil)
+        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
         #else
         .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
         #endif

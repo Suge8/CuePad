@@ -82,7 +82,8 @@ import Testing
     // 一个叶子正在用的最多一个会话：改绑换上新的，原来的留作它以前用过的；解绑后会话照常、任务状态不变
     try await store.bindSession("s2", to: first.id)
     #expect(try await store.card(first.id)?.piSessionID == "s2")
-    #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [first.id, second.id])
+    // 两次绑定常落在同一毫秒（开始时刻相同时按 id 排），只比是哪几件
+    #expect(Set(try await store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
     try await store.unbindSession(from: second.id)
     #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [first.id])
     #expect(try await store.card(second.id)?.status == .inProgress)
