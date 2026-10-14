@@ -98,7 +98,7 @@ public enum CueEnvelope {
   private static func change(_ change: CueChange) -> String {
     let label: String =
       switch change.kind {
-      case .settled: "歇下"
+      case .settled: change.interrupted ? "被打断" : "歇下"
       case .waitingForUser: "等回答"
       case .failed: "出错"
       case .done: "完成"
@@ -107,22 +107,32 @@ public enum CueEnvelope {
       case .left: "不再由你跟进"
       }
     var text = "[\(label)] \(where_(change))"
-    if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
+    if !change.interrupted, let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
   }
 
-  /// 看板上一件事的一行（信封与 peek 共用）。
+  /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带步骤的短 id）。
   /// `showingFollower` 写上谁在跟进（看所有事时用；看板上都是 Cue 跟进的，不写）。
   static func boardLine(_ item: CueBoardItem, now: Date, showingFollower: Bool = false) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
-    let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : item.sending ? "发送中" : "没开工")
-    let leaf = item.leaf.id == item.task.id ? "" : "\(item.leaf.heading) › "
-    parts.append("\(leaf)\(state) \(duration(now.timeIntervalSince(item.since)))")
-    if let session = item.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
-    return parts.joined(separator: " · ")
+    guard item.leaves.count > 1 else {
+      let leaf = item.leaves[0]
+      return (parts + leafParts(leaf, named: leaf.leaf.id == item.task.id ? nil : leaf.leaf.heading, now: now)).joined(separator: " · ")
+    }
+    parts.append("同时在做 \(item.leaves.count) 步：")
+    return ([parts.joined(separator: " · ")] + item.leaves.map { leaf in
+      "  - " + leafParts(leaf, named: "\(leaf.leaf.heading)（\(leaf.leaf.id.shortID)）", now: now).joined(separator: " · ")
+    }).joined(separator: "\n")
+  }
+
+  private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date) -> [String] {
+    let state = leaf.session.map(state) ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
+    var parts = ["\(name.map { "\($0) › " } ?? "")\(state) \(duration(now.timeIntervalSince(leaf.since)))"]
+    if let session = leaf.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
+    return parts
   }
 
   private static func recent(_ session: PiSessionState) -> String? {
@@ -131,7 +141,12 @@ public enum CueEnvelope {
     return session.pendingPrompt.map { "你说：\($0)" } ?? session.lastReply
   }
 
-  static func state(_ state: Open<PiWorkState>) -> String {
+  /// 会话此刻的状态（看板与 peek 共用）：做到一半被打断的写出来，不当成歇着或已结束。
+  static func state(_ session: PiSessionState) -> String {
+    session.wasInterrupted ? "做到一半被打断" : state(session.state)
+  }
+
+  private static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
     case .thinking, .outputting, .tool, .delegating, .compacting: "工作中"
     case .waitingForUser: "等回答"

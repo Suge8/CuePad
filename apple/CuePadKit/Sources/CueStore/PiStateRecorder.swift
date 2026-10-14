@@ -38,12 +38,14 @@ extension CueStore {
 
   /// 把这台 Mac 的会话记为已结束，近况留着。`sessionID` 为 nil 时是启动对账：上次没来得及结束的会话都记为已结束，
   /// 只有托管着的（进程随上次退出而歇下，仍可唤醒）改记为歇着、不进历史。
-  func endPiStates(host: String, sessionID: String?, at now: Date) throws {
+  /// `lost`：进程没了（崩溃、被杀、启动对账），不是你结束的——手上还有活的记为做到一半被打断（`PiSessionState.interrupted`）。
+  func endPiStates(host: String, sessionID: String?, lost: Bool, at now: Date) throws {
     try write {
       let ended = PiWorkState.ended.rawValue
       let end = """
-        UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
-          hosted = NULL, subagents = NULL, models = NULL, commands = NULL,
+        UPDATE piSessionStates SET state = ?, detail = \(lost ? "CASE WHEN \(Self.hadWork) THEN '\(PiSessionState.interrupted)' END" : "NULL"),
+          question = NULL, notify = NULL, stateSince = ?,
+          busySince = NULL, hosted = NULL, subagents = NULL, models = NULL, commands = NULL,
           modifiedAt = ?
         """
       if let sessionID {
@@ -55,16 +57,26 @@ extension CueStore {
     }
   }
 
+  /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
+  private static let hadWork: String = {
+    let pending = PiWorkState.allCases.filter(\.hasPendingWork).map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let running = "EXISTS (SELECT 1 FROM json_each(subagents) WHERE json_extract(value, '$.state') = '\(PiSubagentPhase.running.rawValue)')"
+    return "(state IN (\(pending)) OR \(running))"
+  }()
+
   /// 托管的会话进程退出后的样子（见 `rest`），在一个写事务里提交并发布变更。
   func restPiStates(host: String, sessionID: String, at now: Date) throws {
     try write { try rest(host: host, sessionID: sessionID, at: now) }
   }
 
   /// 托管的会话进程退出后的样子：记录留着、托管标记留着（进程不在），歇着——没有在做的事、没有问题、没有通知。
-  /// 已经歇着的不动起点（"多久前"仍从它歇下算起）；已结束的不碰，所以与用户结束会话写的已结束先后不论。
+  /// 手上还有活的记为做到一半被打断、起点是此刻；本来就歇着的不动起点（"多久前"仍从它歇下算起），已记下的被打断也留着
+  /// （启动对账会再歇一遍上次就歇着的托管会话）。已结束的不碰，所以与用户结束会话写的已结束先后不论。
   private func rest(host: String, sessionID: String?, at now: Date) throws {
+    let interrupted = "'\(PiSessionState.interrupted)'"
     let rest = """
-      UPDATE piSessionStates SET stateSince = CASE WHEN state = ? THEN stateSince ELSE ? END, state = ?, detail = NULL, question = NULL,
+      UPDATE piSessionStates SET detail = CASE WHEN \(Self.hadWork) OR detail = \(interrupted) THEN \(interrupted) END,
+        stateSince = CASE WHEN state = ? AND NOT \(Self.hadWork) THEN stateSince ELSE ? END, state = ?, question = NULL,
         notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL, modifiedAt = ?
       WHERE hosted = 1 AND state != ?
       """
@@ -218,10 +230,10 @@ public actor PiStateRecorder {
     return alert
   }
 
-  /// 会话结束：记录标为已结束（用户在 CuePad 里结束会话、终端里的 Pi 退出），进历史。
+  /// 用户结束会话：记录标为已结束，进历史（不算被打断）。
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
-    try await endRecords(sessionID: sessionID)
+    try await endRecords(sessionID: sessionID, lost: false)
   }
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
@@ -235,6 +247,7 @@ public actor PiStateRecorder {
   /// - 没留下对话的（`spoke` 为 false：Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
   /// - CuePad 后台托管的：闲置退出不算结束，记录留着、歇着，仍在"现在"，发话由本机执行器照常唤醒；
   /// - 其余（终端里的 Pi 退出）：记为已结束，进历史。
+  /// 后两种在手上还有活时记为做到一半被打断（进程没了：崩溃、被杀、App 更新时让旧扩展的托管进程退出）。
   /// 托管的会话要结束，由用户的结束请求写 `end`。
   public func exited(sessionID: String, spoke: Bool, hosted: Bool) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
@@ -245,21 +258,21 @@ public actor PiStateRecorder {
     } else if hosted {
       try await persist { [store, hostID] in try await store.restPiStates(host: hostID, sessionID: id, at: now) }
     } else {
-      try await endRecords(sessionID: id)
+      try await endRecords(sessionID: id, lost: true)
     }
   }
 
-  /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记）。
+  /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记）；当时手上还有活的记为被打断。
   public func reset() async throws {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
-    try await endRecords(sessionID: nil)
+    try await endRecords(sessionID: nil, lost: true)
   }
 
-  private func endRecords(sessionID: String?) async throws {
+  private func endRecords(sessionID: String?, lost: Bool) async throws {
     let now = timing.now()
-    try await persist { [store, hostID] in try await store.endPiStates(host: hostID, sessionID: sessionID, at: now) }
+    try await persist { [store, hostID] in try await store.endPiStates(host: hostID, sessionID: sessionID, lost: lost, at: now) }
   }
 
   private func flush(_ sessionID: String) async {

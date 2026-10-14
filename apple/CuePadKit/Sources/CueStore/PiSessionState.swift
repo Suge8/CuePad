@@ -210,6 +210,13 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
+  /// 做到一半被打断时 `detail` 的值：手上还有活（在跑一轮、等你确认、子代理还在跑）时进程没了——重启、App 更新、崩溃
+  /// （`PiStateRecorder.exited`、启动对账）。它记在已有的说明字段上、随记录同步，会话再动起来时随新状态换掉。
+  public static let interrupted = "做到一半被打断：会话的进程没了（重启、更新或崩溃），这一轮没做完"
+
+  /// 做到一半被打断（`interrupted`）：歇着或已结束，而不是做完了歇下的。
+  public var wasInterrupted: Bool { detail == Self.interrupted && (state == .known(.settled) || state == .known(.ended)) }
+
   /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
   public var waitsForYou: Bool { state == .known(.waitingForUser) }
 
