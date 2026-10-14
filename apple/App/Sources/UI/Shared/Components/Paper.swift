@@ -83,11 +83,13 @@ struct SentMark: View {
     }
 }
 
-/// 附件缩略图：按内容哈希从附件目录降采样读取，读不到时显示占位底色。
+/// 附件缩略图：按内容哈希从附件目录降采样读取，读不到时显示占位底色。默认铺满给的框（裁掉多的）；给了 `fitWidth` 时
+/// 高度不变、宽度随图片比例（读到之前是方的，不超过 `fitWidth`），更宽的整张缩进去、两边留底色，不裁。
 struct Thumbnail: View {
     let hash: String
     var height: CGFloat
     var radius: CGFloat = 10
+    var fitWidth: CGFloat?
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
@@ -98,13 +100,13 @@ struct Thumbnail: View {
             .fill(palette.fill)
             .overlay {
                 if let image {
-                    Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: fitWidth == nil ? .fill : .fit)
                         // 深色下截图多是亮底，原样放在暗纸上刺眼：压暗一层
                         .overlay { if palette.dark { Color.black.opacity(0.14) } }
                 }
             }
-            .frame(height: height)
-            .frame(maxWidth: .infinity)
+            .frame(width: width, height: height)
+            .frame(maxWidth: fitWidth == nil ? .infinity : nil)
             .clipShape(.rect(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
             .task(id: hash) {
@@ -112,6 +114,12 @@ struct Thumbnail: View {
                 let pixels = Int(height * 3 * scale)
                 image = await Task.detached(priority: .utility) { Thumbnails.image(at: url, maxPixel: pixels) }.value
             }
+    }
+
+    private var width: CGFloat? {
+        guard let fitWidth else { return nil }
+        guard let image, image.height > 0 else { return height }
+        return min(fitWidth, height * CGFloat(image.width) / CGFloat(image.height))
     }
 }
 
