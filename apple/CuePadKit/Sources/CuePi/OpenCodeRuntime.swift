@@ -678,9 +678,11 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
         if model != nil || thinking != nil {
             let current = tracked.info.model
-            guard let key = model ?? current.map({ PiModelKey(provider: $0.providerID, id: $0.id) }),
-                  let target = try await catalog(tracked.directory, connection.client).models.first(where: { $0.key == key })
-            else { throw PiBridgeError.rejected("unknown_model") }
+            guard let key = model ?? current.map({ PiModelKey(provider: $0.providerID, id: $0.id) }) else { throw PiBridgeError.rejected("unknown_model") }
+            // 服务刚起时头一次取到的模型表是空的（实测 2.0.25：约 0.2 秒后才有），开会话紧接着配模型就会撞上：没找到先重取一次再说
+            var target = try await catalog(tracked.directory, connection.client).models.first { $0.key == key }
+            if target == nil { target = try await catalog(tracked.directory, connection.client, reload: true).models.first { $0.key == key } }
+            guard let target else { throw PiBridgeError.rejected("unknown_model") }
             let variants = (target.variants ?? []).map(\.id)
             // 模型没有强度档（没有 variant）时不带；关闭就是不带 variant
             let level = thinking.flatMap { target.thinkingLevels.isEmpty ? nil : $0.clamped(to: target.thinkingLevels) }
