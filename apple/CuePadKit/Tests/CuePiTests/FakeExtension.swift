@@ -208,6 +208,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "info"].merging(fields) { $1 })
     }
 
+    /// 发 `quota`：订阅额度的一次观测（`windows` 按线上格式：`seconds`、`used`、`resetsAt` 秒、可选 `model`、`binding`）。
+    func sendQuota(provider: String, windows: [[String: Any]], complete: Bool) {
+        broadcast(["t": "quota", "provider": provider, "windows": windows, "complete": complete])
+    }
+
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。
     func setState(_ state: [String: Any]) {
         var s = state
