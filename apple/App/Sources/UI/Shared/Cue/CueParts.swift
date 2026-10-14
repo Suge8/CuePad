@@ -165,6 +165,8 @@ struct CueTrayCard: View {
     @Environment(\.palette) private var palette
 
     private var item: CueBoardItem { live.item }
+    /// 卡片上写的那一步：在做的里排最前的（同时在做几步时，其余的在任务里看）。
+    private var leaf: CueBoardLeaf { item.leaves[0] }
 
     var body: some View {
         CueTaskButton(task: item.task.id) {
@@ -200,10 +202,10 @@ struct CueTrayCard: View {
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let shown {
                 PiStateDot(shown: shown, size: 6)
-            } else if item.launching || item.sending {
+            } else if leaf.launching || leaf.sending {
                 Spinner(.mini)
             }
-            Text(Dotted(item.leaf.id == item.task.id ? nil : item.leaf.title, note)).lineLimit(1)
+            Text(Dotted(leaf.leaf.id == item.task.id ? nil : leaf.leaf.title, note)).lineLimit(1)
                 .foregroundStyle(shown.map { $0.needsYou ? $0.tint(palette) : palette.ink2 } ?? palette.ink2)
         }
         .font(Typography.meta)
@@ -211,15 +213,15 @@ struct CueTrayCard: View {
 
     private var session: PiSessionState? {
         #if os(macOS)
-        item.session.map(workspace.withLiveState)
+        leaf.session.map(workspace.withLiveState)
         #else
-        item.session
+        leaf.session
         #endif
     }
 
     private var note: String {
-        if item.launching { return "正在开会话" }
-        if item.sending { return "发送中" }
+        if leaf.launching { return "正在开会话" }
+        if leaf.sending { return "发送中" }
         guard let session else { return "还没开始" }
         let shown = workspace.shown(session, delivery: nil, cueFollows: true)
         if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }

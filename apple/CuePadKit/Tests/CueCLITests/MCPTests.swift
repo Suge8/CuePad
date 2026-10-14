@@ -95,7 +95,7 @@ import Testing
     #expect(launch.launch?.model == PiModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
     #expect(try await store.workingLeaf(of: task).id == step.id)
     let starting = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
-    #expect(starting.first?["launching"] as? Bool == true)
+    #expect((starting.first?["leaves"] as? [[String: Any]])?.first?["launching"] as? Bool == true)
 
     _ = try await server.call("tell", ["text": "要不要顺便升级 Node？", "choices": ["要", "不要"], "task": task.uuidString])
     #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["要不要顺便升级 Node？"])
@@ -341,7 +341,7 @@ import Testing
     // 送到前：还没绑上，看板写发送中，不能再开工或说话
     #expect(try await store.card(second.id)?.piSessionID == nil)
     let board = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
-    #expect(board["sending"] as? Bool == true)
+    #expect((board["leaves"] as? [[String: Any]])?.first?["sending"] as? Bool == true)
     let peek = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "task": task.id.uuidString]])
     #expect(((peek["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("发送中") == true)
     #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("送到") == true)
@@ -474,7 +474,8 @@ import Testing
     defer { server.close() }
     func shown() async throws -> (leaf: String?, session: String?) {
       let item = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
-      return (item["leaf"] as? String, item["session"] as? String)
+      let leaf = try #require((item["leaves"] as? [[String: Any]])?.first)
+      return (leaf["id"] as? String, leaf["session"] as? String)
     }
 
     _ = try await store.toggleDone(first.id)
