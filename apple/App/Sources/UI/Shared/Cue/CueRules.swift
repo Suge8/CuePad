@@ -90,7 +90,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
-    /// Cue 最近对你说的那条的摘要行（第一行纯文字，Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsk.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
@@ -115,7 +115,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
             waiting: try CueWaiting.count(in: store),
-            lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
+            lastSaid: said.flatMap { $0.ask?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             sending: !spoke && lastYou.map { recent[$0].deliveredAt == nil } == true,
             asleep: try store.cueAsleep(),

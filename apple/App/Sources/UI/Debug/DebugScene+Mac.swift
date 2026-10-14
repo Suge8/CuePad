@@ -113,7 +113,7 @@ extension DebugScene {
         try? await Task.sleep(for: delay)
         guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: .push),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices, task: nil)
         guard !alerts.isWatchingCue else { return }
         await alerts.post(title: content.title, body: content.body)
     }

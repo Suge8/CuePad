@@ -55,7 +55,7 @@ struct CuePage: View {
     private var page: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                chat.fadesUnderBars().frame(maxHeight: .infinity)
+                chat.modifier(BelowHeader()).frame(maxHeight: .infinity)
                 bottom
                     .padding(.horizontal, Self.inset).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
@@ -73,6 +73,7 @@ struct CuePage: View {
     #else
     @ViewBuilder private var page: some View {
         let body = chat
+            .modifier(BelowHeader())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -220,6 +221,24 @@ private struct CueEnding: View {
         let presence = workspace.cue.presence
         if let shown = presence.shown, let progress = presence.progress {
             LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
+    }
+}
+
+/// 对话从页头下面开始，不滚到它后面（Mac 是窗口工具栏，手机是名牌与它下面的提示）：名牌是一颗小胶囊、提示是一整条，
+/// 气泡滚过去时两层字叠在一起读不清，也看不出提示后面还有没有话（别的沉浸式页照 `fadesUnderBars`）。
+/// 上安全区里含页头与 safeAreaBar 里的提示：那一段全透，下沿往下 `Bars.contentGap` 淡回，滚出去的字不是一刀切断。
+private struct BelowHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        content.mask {
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: proxy.safeAreaInsets.top)
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Bars.contentGap)
+                    Rectangle()
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 }

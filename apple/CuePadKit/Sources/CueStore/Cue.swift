@@ -27,6 +27,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk` 给出、Cue 不能自拟，
   /// 所以你选的那一项就说明了是哪类事（`CueAsk.always`）。
   public var choices: [String]?
+  /// 带选项的是哪一类"等你"（`CueAsk.init(choices:)`）。
+  public var ask: CueAsk? { choices.map(CueAsk.init(choices:)) }
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
@@ -255,6 +257,26 @@ public enum CueAsk: String, CaseIterable, Sendable {
 
   public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
 
+  /// 由一条"等你"的选项认出是哪一类：选项只由 `choices` 写出，带"以后……都不用问"的是那一类，不带的是规矩那一类。
+  public init(choices: [String]) {
+    self = Self.allCases.first { $0.always.map(choices.contains) ?? false } ?? .rule
+  }
+
+  /// 一条"等你"在 Cue 页以外的说法（卡片第一句、侧栏与菜单栏的摘要、小组件、本机与手机通知同一句）：要你定什么，
+  /// 按类别与关联任务的标题（`Card.heading`，没有或空白时不写）由代码写出；Cue 的原话只在 Cue 页的卡片里点开看。
+  public func question(task: String?) -> String {
+    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" } ?? ""
+    return switch self {
+    case .push: "要不要推送\(named)？"
+    case .merge: "要不要把\(named.isEmpty ? "改动" : named)合并到共享分支？"
+    case .release: "要不要发布或部署\(named)？"
+    case .delete: "\(named)要删除东西，允许吗？"
+    case .outside: "\(named)要动项目以外的东西，允许吗？"
+    case .budget: "\(named)要超出预算，允许吗？"
+    case .rule: "\(named)这一步按你的规矩要先问，允许吗？"
+    }
+  }
+
   /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
   public func rule(project: String?) -> String? {
     always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
@@ -268,15 +290,19 @@ public enum CueReport {
   }
 }
 
-/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
-/// 正文是那条消息的文字（去掉图片，至多 `bodyLimit` 字），"等你"再附上选项。
+/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
+/// "等你"的正文是要你定什么（`CueAsk.question`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, choices: [String]?) -> (title: String, body: String) {
-    var body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-    if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
-    if let choices, !choices.isEmpty { body += "\n" + choices.joined(separator: " / ") }
+  public static func content(name: String?, text: String, choices: [String]?, task: String?) -> (title: String, body: String) {
+    var body: String
+    if let choices {
+      body = CueAsk(choices: choices).question(task: task) + "\n" + choices.joined(separator: " / ")
+    } else {
+      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
+      if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
+    }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)
   }
