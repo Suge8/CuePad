@@ -15,8 +15,8 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 25;
-const PROTOCOL_VERSION = 12;
+const EXTENSION_VERSION = 26;
+const PROTOCOL_VERSION = 13;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;

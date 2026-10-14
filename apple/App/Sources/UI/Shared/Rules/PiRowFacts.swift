@@ -7,7 +7,13 @@ nonisolated struct PiRowFacts: Equatable {
     var note: Note?
     var subagents: PiSubagentSummary?
     var context: PiContextMeter?
-    var model: String?
+    var model: Model?
+
+    /// 会话的模型：提供方（图标）与短名（`PiModelName`，与回复框的模型胶囊同一种写法）。
+    struct Model: Equatable {
+        let provider: PiProvider
+        let name: String
+    }
 
     /// 状态词后的短词，先后：正在结束 → 没能结束 → 没能改名 → 你的话在路上（会话在跑时）→ 正在改名 → 有草稿。
     enum Note: Equatable {
@@ -41,7 +47,7 @@ nonisolated struct PiRowFacts: Equatable {
         guard session.state != .known(.ended) else { return }
         subagents = PiSubagentSummary(session.subagents)
         context = session.context.flatMap(PiContextMeter.init)
-        model = session.model.map { PiModelName.short($0.key.id) }
+        model = session.model.map { Model(provider: PiProvider(id: $0.key.provider), name: PiModelName.short($0)) }
     }
 }
 
@@ -54,12 +60,3 @@ extension AppSettings {
     }
 }
 
-/// 模型的短名（会话行、子代理）：去掉提供方、开头的厂商词与末尾的日期版本，"anthropic/claude-opus-5-5-20260901" 写成 "opus-5-5"。
-nonisolated enum PiModelName {
-    static func short(_ model: String) -> String {
-        let id = (model.split(separator: "/").last.map(String.init) ?? model).replacing(/-\d{8}$/, with: "")
-        return vendorPrefixes.lazy.compactMap { id.hasPrefix($0) && id.count > $0.count ? String(id.dropFirst($0.count)) : nil }.first ?? id
-    }
-
-    private static let vendorPrefixes = ["claude-"]
-}
