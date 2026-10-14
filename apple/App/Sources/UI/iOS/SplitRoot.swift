@@ -127,7 +127,7 @@ private struct SplitSidebar: View {
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果；在线会话读到前先留空白（`ProjectNow.byProject`）
                 let now = ProjectNow.byProject(
-                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: services.settings.shown)
+                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: workspace.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }

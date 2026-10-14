@@ -23,7 +23,7 @@ struct MenuBarPad: View {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            }).prefix(Self.sessionLimit)
+            }, followed: services.liveSessions.cueFollowed).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(sessions, id: \.sessionID) { session in

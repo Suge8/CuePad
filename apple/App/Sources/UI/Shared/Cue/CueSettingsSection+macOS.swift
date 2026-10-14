@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 设置里的"Cue"一节：名字、住在哪台 Mac（这台与绑过文件夹的别的 Mac）、它的大脑用哪个 Agent 与模型、启用或停用。都写进同步的 `CueProfile`，
-/// 别的设备上看到的是同一份；改完立即上传这一条（同其他记录）。启用、停用经这台 Mac 的管理器（`services.cue`）：启用就是让 Cue 住在这台 Mac，挑第一家装好并登录了的 Agent；
+/// 别的设备上看到的是同一份。写入、启用、停用都经这台 Mac 的管理器（`services.cue`，写完自己上传）：启用就是让 Cue 住在这台 Mac，挑第一家装好并登录了的 Agent；
 /// 这台一家都没有时就地说明。Agent 只列这台装好的（住在别的 Mac 上时全列）。
 struct CueSettingsSection: View {
     @Environment(AppServices.self) private var services
@@ -77,8 +77,8 @@ struct CueSettingsSection: View {
             Text("默认").tag(PiThinkingLevel?.none)
             ForEach(PiThinkingLevel.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
         }
-        Toggle("在这台 Mac 上启用 Cue", isOn: Binding(get: { here && profile.enabledAt != nil }, set: enable))
-        if !here, profile.enabledAt != nil, let host = data.hosts.first(where: { $0.id == profile.hostID }) {
+        Toggle("在这台 Mac 上启用 Cue", isOn: Binding(get: { profile.activeHost == services.hostID }, set: enable))
+        if let active = profile.activeHost, active != services.hostID, let host = data.hosts.first(where: { $0.id == active }) {
             Text("\(profile.name) 住在\(host.name)上；在这里启用就搬到这台").font(Typography.meta).foregroundStyle(palette.ink3)
         }
     }
@@ -99,11 +99,10 @@ struct CueSettingsSection: View {
 
     private func enable(_ on: Bool) {
         failure = nil
-        let cue = services.cue, services = services
+        let cue = services.cue
         Task {
             do {
                 if on { try await cue.enable() } else { try await cue.disable() }
-                await services.upload(CueProfile.recordID)
             } catch {
                 failure = error.localizedDescription
             }
@@ -112,11 +111,10 @@ struct CueSettingsSection: View {
 
     private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) {
         failure = nil
-        let store = services.store, services = services
+        let cue = services.cue
         Task {
             do {
-                try await store.updateCueProfile(edit)
-                await services.upload(CueProfile.recordID)
+                try await cue.update(edit)
             } catch {
                 failure = error.localizedDescription
             }

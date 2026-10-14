@@ -15,8 +15,10 @@ struct SessionGroup: Equatable {
     let key: Key
     let sessions: [PiSessionState]
 
-    static func grouped(live: [PiSessionState], ended: [PiSessionState], now: Date, calendar: Calendar = .current) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live))]
+    static func grouped(
+        live: [PiSessionState], ended: [PiSessionState], followed: Set<String> = [], now: Date, calendar: Calendar = .current
+    ) -> [SessionGroup] {
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, followed: followed))]
         let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }

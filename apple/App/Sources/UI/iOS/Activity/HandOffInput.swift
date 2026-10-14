@@ -80,7 +80,7 @@ struct HandOffInput: View {
                 }
             } label: {
                 DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
-                    if let chosen { PiStateDot(shown: services.settings.shown(chosen), size: 7) }
+                    if let chosen { PiStateDot(shown: workspace.shown(chosen), size: 7) }
                 }
             }
             .accessibilityLabel(chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话")
@@ -89,7 +89,7 @@ struct HandOffInput: View {
     }
 
     private func title(_ item: PiSessionListItem) -> Dotted {
-        HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: services.settings.shown(item))
+        HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.shown(item))
     }
 
     private func send() {

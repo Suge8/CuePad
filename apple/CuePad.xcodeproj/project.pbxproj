@@ -121,10 +121,20 @@
 		F1000000000000000000A004 /* CuePad-macOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "CuePad-macOS-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CueFaces.xcassets,
+			);
+			target = C1000000000000000000000A /* CuePadShare */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000020 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Sources; sourceTree = "<group>"; };
 		A10000000000000000000021 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Tests; sourceTree = "<group>"; };
-		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/AppGroup; sourceTree = "<group>"; };
+		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */, ); path = App/AppGroup; sourceTree = "<group>"; };
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };

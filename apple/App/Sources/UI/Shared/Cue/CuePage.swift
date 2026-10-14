@@ -75,21 +75,22 @@ struct CuePage: View {
                     .frame(maxWidth: .infinity)
                     .environment(\.composerInk, .solid)
             }
+            // Cue 页在屏上（整页或 iPad 右侧面板）就由它显示提示（操作结果、别的会话做完了）：排在页头下面、占自己的位置，
+            // 顶部的提示横幅这时不出现（`AppServices.cueViewers`）
+            .safeAreaBar(edge: .top, spacing: 0) {
+                if let notice = workspace.notice {
+                    NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
+                        .frame(maxWidth: Self.readingWidth)
+                        .transition(.opacity)
+                        .id(notice.id)
+                }
+            }
+            .animation(Motion.quick, value: workspace.notice)
+            .modifier(NoticeFeedback(notice: workspace.notice))
         if inPanel {
             body
         } else {
             body.floatingHeader(cue.name, detail: Dotted(cue.presence.line(name: cue.name) ?? "")) { trailing }
-                // 提示（操作结果、别的会话做完了）排在页头下面、占自己的位置，不浮在页头上（`NoticeBanner` 这时不出现）
-                .safeAreaBar(edge: .top, spacing: 0) {
-                    if let notice = workspace.notice {
-                        NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
-                            .frame(maxWidth: Self.readingWidth)
-                            .transition(.opacity)
-                            .id(notice.id)
-                    }
-                }
-                .animation(Motion.quick, value: workspace.notice)
-                .modifier(NoticeFeedback(notice: workspace.notice))
         }
     }
 

@@ -48,11 +48,6 @@ extension Workspace {
         }
     }
 
-    /// 这个会话（记录 id）绑着的任务由 Cue 跟进：读在线会话那一份（`LiveSessions.cueFollowed`）。
-    func cueFollows(sessionRecord: UUID) async throws -> Bool {
-        services.liveSessions.items?.first { $0.state.id == sessionRecord }?.cueFollows ?? false
-    }
-
     // MARK: 记忆
 
     func noteCueLine(_ text: String) async throws {

@@ -12,9 +12,14 @@ nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
-    static func inListOrder(_ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:]) -> [PiSessionState] {
+    /// `followed`：由 Cue 跟进的会话（`LiveSessions.cueFollowed`），它们等回答时与在跑的同档（`PiShown.Status.cueAsking`）。
+    static func inListOrder(_ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], followed: Set<String> = []) -> [PiSessionState] {
         sessions.enumerated()
-            .map { (rank: PiShown($0.element, delivery: deliveries[$0.element.sessionID]).rank, offset: $0.offset, session: $0.element) }
+            .map { index, session in
+                // 排序只看档位，不读说法：Cue 的名字给空串
+                let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: followed.contains(session.sessionID) ? "" : nil)
+                return (rank: shown.rank, offset: index, session: session)
+            }
             .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
             .map(\.session)
     }
@@ -125,26 +130,30 @@ nonisolated struct PiShown: Hashable, Sendable {
     var note: String?
     /// 计时；只有状态、没有会话的（子代理、样板）没有。
     var clock: PiClock?
+    /// 跟进它的 Cue 的名字（用户起的）；不由 Cue 跟进为 nil。
+    var cue: String?
 }
 
 nonisolated extension PiShown {
-    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cueFollows: Bool = false) {
+    /// `cue`：跟进它的 Cue 的名字（`PiSessionListItem.cueFollows` 时给，见 `Workspace.shown`）。
+    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue: String? = nil) {
+        let cueFollows = cue != nil
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.isWorking || session.state == .known(.waitingForUser)
         let reported = Self.status(of: session.state)
         let asked = cueFollows && reported == .asking ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen) {
         case .failed:
-            self.init(status: .delivery(.failed), clock: own)
+            self.init(status: .delivery(.failed), clock: own, cue: cue)
         case let phase? where busy:
             let transit = delivery.map { PiDelivery.transit($0, busy: true) }
-            self.init(status: asked, note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own)
+            self.init(status: asked, note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own, cue: cue)
         case let phase?:
-            self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) })
+            self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
         case nil where session.state == .known(.settled):
-            self.init(status: !session.hasStarted ? .fresh : cueFollows ? .resting : unread ? .unread : .idle, clock: own)
+            self.init(status: !session.hasStarted ? .fresh : cueFollows ? .resting : unread ? .unread : .idle, clock: own, cue: cue)
         case nil:
-            self.init(status: asked, clock: own)
+            self.init(status: asked, clock: own, cue: cue)
         }
     }
 
@@ -178,7 +187,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "正在压缩上下文"
         case .working: "思考中"
         case .asking: "等你确认"
-        case .cueAsking: "等 Cue 回答"
+        case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
         case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
@@ -204,7 +213,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"
-        case .cueAsking: "Agent 在等 Cue 回答"
+        case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
@@ -269,9 +278,16 @@ nonisolated extension PiShown {
 
 extension AppSettings {
     /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
-    /// `cueFollows`：这个会话由 Cue 跟进（`PiSessionListItem.cueFollows`）。
-    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cueFollows: Bool = false) -> PiShown {
-        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cueFollows: cueFollows)
+    /// `cue`：跟进它的 Cue 的名字（不由 Cue 跟进为 nil）；界面经 `Workspace.shown` 调，名字从那里来。
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: String? = nil) -> PiShown {
+        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cue: cue)
+    }
+}
+
+extension Workspace {
+    /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：由 Cue 跟进时带上用户给 Cue 起的名字（"等 X 回答"）。
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cueFollows: Bool) -> PiShown {
+        services.settings.shown(session, delivery: delivery, cue: cueFollows ? cue.name : nil)
     }
 
     func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery, cueFollows: item.cueFollows) }

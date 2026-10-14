@@ -90,12 +90,11 @@ struct CueEnableCard: View {
     private func enable() {
         enabling = true
         failure = nil
-        let cue = services.cue, services = services
+        let cue = services.cue
         Task {
             defer { enabling = false }
             do {
                 try await cue.enable()
-                await services.upload(CueProfile.recordID)
             } catch {
                 failure = error.localizedDescription
             }
@@ -198,7 +197,7 @@ struct CueTrayCard: View {
     private var status: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let session {
-                PiStateDot(shown: services.settings.shown(session, delivery: nil, cueFollows: true), size: 6)
+                PiStateDot(shown: workspace.shown(session, delivery: nil, cueFollows: true), size: 6)
             } else if item.launching {
                 Spinner(.mini)
             }
@@ -219,7 +218,7 @@ struct CueTrayCard: View {
     private var note: String {
         if item.launching { return "正在开会话" }
         guard let session else { return "还没开始" }
-        let shown = services.settings.shown(session, delivery: nil, cueFollows: true)
+        let shown = workspace.shown(session, delivery: nil, cueFollows: true)
         if session.waitsForYou { return PiProgress.firstLine(session.question?.text) ?? shown.label }
         if session.state == .known(.error) { return PiProgress.firstLine(session.detail) ?? shown.label }
         if shown.isLive { return session.detail.flatMap(PiProgress.action) ?? shown.label }

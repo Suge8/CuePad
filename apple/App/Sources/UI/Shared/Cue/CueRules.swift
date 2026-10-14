@@ -66,9 +66,9 @@ nonisolated enum CueMood: String, Sendable {
 /// Cue 的一页摘要：名字、"等你 N"、它最近一句、你最近一句交没交出去。Mac 侧栏、iPhone 底栏、菜单栏面板、小组件都读它（一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
+    /// 启用了（`CueProfile.activeHost` 有值）。
     var enabled: Bool
-    /// 住在哪台 Mac（与它的名字：绑过文件夹的 Mac 才知道名字）。
-    var hostID: String?
+    /// 它住（或停用前住）的那台 Mac 的名字：绑过文件夹的 Mac 才知道名字（没启用时说去哪台启用）。
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
@@ -84,7 +84,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         var delivered: Bool
     }
 
-    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
+    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -95,7 +95,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         let saidTask = try said?.taskID.flatMap { try store.card($0) }
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
-            enabled: profile?.enabledAt != nil && profile?.hostID != nil, hostID: profile?.hostID,
+            enabled: profile?.activeHost != nil,
             hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.flatMap { MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
