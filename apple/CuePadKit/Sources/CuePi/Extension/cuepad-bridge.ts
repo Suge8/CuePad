@@ -2,7 +2,7 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ quota（订阅额度的一次观测）/ ack / bye
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ draft（正在说的话）/ quota（订阅额度的一次观测）/ ack / bye
 //   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ quota（查一次订阅额度）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
@@ -15,13 +15,15 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 27;
-const PROTOCOL_VERSION = 13;
+const EXTENSION_VERSION = 28;
+const PROTOCOL_VERSION = 14;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
 /** 一行命令（含 base64 图片）的上限，超过就断开该客户端 */
 const MAX_LINE_BYTES = 64 * 1024 * 1024;
+/** 正在说的话（`draft`）最多每这么久上报一次：增量在这里合并，这条说完时立即补发最后一次 */
+const DRAFT_INTERVAL_MS = 100;
 /** 工具状态里一句话详情的字符数上限（含省略号） */
 const DETAIL_LIMIT = 120;
 /** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
@@ -279,6 +281,12 @@ function messageText(message: object): string {
 	return content.filter((block) => block?.type === "text").map((block) => block.text).join(" ");
 }
 
+/** 助手消息到目前为止的正文：文字块按换行连接，与对话读会话文件取回答的规则一致（CuePi 的 `PiHistory`）。 */
+function replyText(message: object): string {
+	const content = "content" in message && Array.isArray(message.content) ? message.content : [];
+	return content.filter((block) => block?.type === "text").map((block) => block.text).join("\n");
+}
+
 function preview(text: string): string | null {
 	return text ? Array.from(text).slice(0, FIRST_MESSAGE_LIMIT).join("") : null;
 }
@@ -404,6 +412,48 @@ export default function (pi: ExtensionAPI) {
 	 * 换会话）时，告别里报出它们的投送请求 id（`bye.undelivered`），CuePad 记为没送到。自动压缩期间 Pi 照常排队，不经这里。 */
 	let manualCompaction = false;
 	let held: { deliveryId?: string; deliver: () => void }[] = [];
+
+	/**
+	 * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
+	 * 增量合并到每 `DRAFT_INTERVAL_MS` 一次，这条说完时立即补发全文；它转成工具调用、被停下或出错、新一轮开始时清掉（`text: null`）。
+	 * 正常说完的不清：CuePad 在对话（读会话文件）里出现这一条后自己换下。
+	 */
+	let draft: { text: string; since: number; message: number } | null = null;
+	/** 第几条助手消息（`message_start` 加一）：草稿属于哪一条，下一条开始出字时换成它自己的起点 */
+	let assistantMessages = 0;
+	/** 这条消息已转成工具调用：之后的正文不再算草稿 */
+	let draftClosed = false;
+	let draftSentAt = 0;
+	let draftTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function sendDraft() {
+		clearTimeout(draftTimer);
+		draftTimer = undefined;
+		draftSentAt = Date.now();
+		const message = { t: "draft", text: draft?.text ?? null, since: draft?.since ?? null };
+		for (const client of clients) write(client, message);
+	}
+
+	/** `now`：这条说完了，不等合并的间隔 */
+	function growDraft(message: object, now = false) {
+		const text = replyText(message);
+		if (draftClosed || !text || text === draft?.text) {
+			if (now && draftTimer) sendDraft();
+			return;
+		}
+		draft = { text, since: draft?.message === assistantMessages ? draft.since : Date.now(), message: assistantMessages };
+		if (now) return sendDraft();
+		if (draftTimer) return;
+		const wait = draftSentAt + DRAFT_INTERVAL_MS - Date.now();
+		if (wait <= 0) sendDraft();
+		else draftTimer = setTimeout(sendDraft, wait);
+	}
+
+	function clearDraft() {
+		if (!draft) return;
+		draft = null;
+		sendDraft();
+	}
 
 	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 	function commit(resume?: { phase: Phase; since: number; busySince: number | null }) {
@@ -882,6 +932,9 @@ export default function (pi: ExtensionAPI) {
 		beforeCompaction = null;
 		manualCompaction = false;
 		held = [];
+		clearTimeout(draftTimer);
+		draftTimer = undefined;
+		draft = null;
 		lastKey = JSON.stringify(tracker.derive());
 		phase = "idle";
 		since = Date.now();
@@ -912,6 +965,8 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", (event) => {
 		clearTimeout(idleExit);
 		idleExit = undefined;
+		clearTimeout(draftTimer);
+		draftTimer = undefined;
 		launchToken = null;
 		stop(event.reason);
 	});
@@ -923,7 +978,16 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_compact", refreshContext);
 	pi.on("session_tree", refreshContext);
 	pi.on("session_info_changed", (event) => updateInfo({ name: event.name ?? null }));
+	pi.on("message_start", (event) => {
+		if (event.message.role !== "assistant") return;
+		assistantMessages += 1;
+		draftClosed = false;
+	});
 	pi.on("message_end", (event) => {
+		if (event.message.role === "assistant") {
+			const stop = event.message.stopReason;
+			return stop === "toolUse" || stop === "aborted" || stop === "error" ? clearDraft() : growDraft(event.message, true);
+		}
 		if (event.message.role !== "user") return;
 		// 首条消息与 Pi 会话列表一致，不区分机器消息
 		updateInfo({ firstMessage: info.firstMessage ?? preview(messageText(event.message)) });
@@ -948,10 +1012,16 @@ export default function (pi: ExtensionAPI) {
 		tracker.settled = null;
 		tracker.outcome = { kind: "done", aborted: false };
 		commit();
+		clearDraft();
 	});
 	pi.on("turn_start", () => { tracker.phase = "thinking"; commit(); });
 	pi.on("message_update", (event) => {
 		const type = event.assistantMessageEvent.type;
+		if (type === "text_delta") growDraft(event.message);
+		if (type === "toolcall_start") {
+			draftClosed = true;
+			clearDraft();
+		}
 		const next = type === "text_delta" ? "outputting" : type === "thinking_delta" ? "thinking" : tracker.phase;
 		if (next === tracker.phase) return;
 		tracker.phase = next;
