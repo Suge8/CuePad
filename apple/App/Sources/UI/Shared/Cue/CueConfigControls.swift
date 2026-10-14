@@ -25,7 +25,7 @@ struct CueConfigControls: View {
     private func groups(_ menu: CueBrainMenu) -> [PiModelGroup] {
         CueProfile.runtimes.map { agent in
             let mine = menu.runtime == agent
-            let fallback = PiModelGroup.Item(id: "default", name: "默认", checked: mine && menu.profile.model == nil) {
+            let fallback = PiModelGroup.Item(id: "default", model: nil, checked: mine && menu.profile.model == nil) {
                 update {
                     $0.runtime = .known(agent)
                     $0.model = nil
@@ -33,10 +33,7 @@ struct CueConfigControls: View {
             }
             let models = (menu.lists[agent] ?? []).map { model in
                 let ref = agent.modelRef(model.key)
-                return PiModelGroup.Item(
-                    id: ref, name: model.name.isEmpty ? model.key.id : model.name, provider: PiProvider(id: model.key.provider),
-                    checked: mine && menu.model?.key == model.key
-                ) {
+                return PiModelGroup.Item(id: ref, model: model, checked: mine && menu.model?.key == model.key) {
                     update {
                         $0.runtime = .known(agent)
                         $0.model = ref
