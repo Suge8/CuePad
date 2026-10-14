@@ -14,6 +14,9 @@ enum MainMenu {
         main.addItem(submenu(title: "CuePad", items: [
             .item("关于 CuePad", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .item("检查更新…", #selector(AppDelegate.checkForUpdates(_:)), ""),
+            // 更新等后台会话做完再装时才出现：一行写等几个（停用的说明），一行现在就装（`AppDelegate.validateMenuItem`）
+            .item("", #selector(AppDelegate.installUpdateNow(_:)), "", tag: AppDelegate.updateNoteTag),
+            .item("现在就装", #selector(AppDelegate.installUpdateNow(_:)), ""),
             .separator,
             .item("设置…", #selector(AppDelegate.showSettings(_:)), ","),
             .separator,
@@ -60,7 +63,7 @@ enum MainMenu {
     }
 
     private enum Entry {
-        case item(String, Selector, String, NSEvent.ModifierFlags = .command)
+        case item(String, Selector, String, NSEvent.ModifierFlags = .command, tag: Int = 0)
         case separator
     }
 
@@ -68,8 +71,10 @@ enum MainMenu {
         let menu = NSMenu(title: title)
         for entry in items {
             switch entry {
-            case let .item(title, action, key, modifiers):
-                menu.addItem(withTitle: title, action: action, keyEquivalent: key).keyEquivalentModifierMask = modifiers
+            case let .item(title, action, key, modifiers, tag):
+                let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
+                item.keyEquivalentModifierMask = modifiers
+                item.tag = tag
             case .separator: menu.addItem(.separator())
             }
         }

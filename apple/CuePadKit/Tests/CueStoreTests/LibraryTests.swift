@@ -126,8 +126,14 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 32：撤掉 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
-  static let undoSchema33 = "ALTER TABLE cueMessages DROP COLUMN acceptance;"
+  /// 把新建的库退回结构 35：撤掉 36（本机的会话进程表）。
+  static let undoSchema36 = "DROP TABLE piProcesses;"
+  /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
+  static let undoSchema35 = undoSchema36 + "DROP TABLE cueState;"
+  /// 退回结构 33：再撤掉 34（叶子以前用过的会话）。
+  static let undoSchema34 = undoSchema35 + "DROP INDEX cards_formerSessionIDs; ALTER TABLE cards DROP COLUMN formerSessionIDs;"
+  /// 退回结构 32：再撤掉 33（验收标记）。更早结构的升级测试先逐级撤到 29，再撤自己那一步。
+  static let undoSchema33 = undoSchema34 + "ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。
   static let undoSchema32 = undoSchema33 + """
     DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
@@ -149,7 +155,7 @@ import Testing
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.cueMessages().map { [$0.id: $0.isAcceptance] } == [[said.id: false]])
     let asked = try await upgraded.askToAccept(task.id, evidence: "- 测试全过").message
-    try await upgraded.answerCueMessage(asked.id, answer: CueAcceptance.accept)
+    try await upgraded.endCueQuestion(asked.id, .answered(CueAcceptance.accept))
     #expect(try await upgraded.card(task.id)?.status == .done)
   }
 

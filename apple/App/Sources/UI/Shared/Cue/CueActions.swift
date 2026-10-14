@@ -6,9 +6,6 @@ import Foundation
 extension Workspace {
     /// 跟随 Cue 的现状（窗口根视图调用）。
     func observeCue() async {
-        #if os(macOS)
-        cue.attach(services.cue)
-        #endif
         do {
             try await cue.follow(services.store)
         } catch is CancellationError {
@@ -29,9 +26,9 @@ extension Workspace {
         await services.upload(message.id)
     }
 
-    /// 回答 Cue 的一条"等你"。对验收答"收下"就是收下：Store 同时完成任务，结束做完了的会话的请求写下就上传（同点圆圈）。
-    func answerCue(_ message: CueMessage, _ answer: String) async throws {
-        let ended = try await services.store.answerCueMessage(message.id, answer: answer)
+    /// 结束 Cue 的一条"等你"：选一项或关掉。对验收答"收下"就是收下：Store 同时完成任务，结束做完了的会话的请求写下就上传（同点圆圈）。
+    func endCueQuestion(_ message: CueMessage, _ end: CueQuestionEnd) async throws {
+        let ended = try await services.store.endCueQuestion(message.id, end)
         for request in ended { _ = services.uploaded(request) }
         await services.upload(message.id)
     }

@@ -47,7 +47,15 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
   /// 步骤完成了几个；没有步骤为 nil。
   public var progress: TaskProgress?
-  /// 此刻在做的叶子：没有步骤是任务自己，否则第一个没完成的步骤；步骤都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
+  /// 在做的叶子，至少一个（按步骤顺序）：没做完、开着会话（会话没结束，或做到一半被打断）、正在开会话或话正送进会话的每一个——
+  /// 并行做的几步都在。一个都没有时是此刻该做的那一个：没有步骤是任务自己，否则第一个没完成的步骤；
+  /// 步骤都做完了是最后做完的那一步（近况取它的会话，不落回第一步）。
+  public var leaves: [CueBoardLeaf]
+  public var id: UUID { task.id }
+}
+
+/// 看板上一件事里在做的一个叶子。
+public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
   /// 叶子的会话记录；还没开会话（或记录还没到）为 nil。
   public var session: PiSessionState?
@@ -57,13 +65,12 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var sending: Bool
   /// 停在当前状态的起点：会话进入当前状态的时刻，没有会话时是开始做或设为任务的时刻。
   public var since: Date
-  public var id: UUID { task.id }
 }
 
 /// 某时刻之后，Cue 跟进的事里的一处变化。
 public struct CueChange: Equatable, Sendable {
   public enum Kind: String, Sendable, CaseIterable {
-    /// 会话歇下（这一轮做完）
+    /// 会话停下：这一轮做完歇下，或做到一半被打断（`interrupted`，会话状态是 `PiWorkState.interrupted`）
     case settled
     /// 会话在等回答
     case waitingForUser
@@ -91,9 +98,14 @@ public struct CueChange: Equatable, Sendable {
   public var detail: String?
   /// 会话记录里已有的摘要：叶子的会话的；任务本身的变化取它最近有动静的那个会话的。
   public var recap: PiRecap?
+  /// 停下是因为做到一半被打断（`PiWorkState.interrupted`），不是做完了。
+  public var interrupted: Bool
 
-  init(kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil) {
+  init(
+    kind: Kind, taskID: UUID, task: Card?, leaf: Card? = nil, at: Date, detail: String? = nil, recap: PiRecap? = nil, interrupted: Bool = false
+  ) {
     self.kind = kind
+    self.interrupted = interrupted
     self.taskID = taskID
     self.task = task
     self.leaf = leaf
@@ -226,17 +238,15 @@ extension CueStore {
     return request
   }
 
-  /// Cue 又对一件事开工、说话或作答（返工）：这件事还没答的验收（`askToAccept`）作废——去掉选项与验收标记，留在对话里当一句话，
-  /// 不再算等你；返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
+  /// Cue 又对一件事开工、说话或作答（返工）：这件事还开着的验收（`askToAccept`）撤回（同 Cue 撤回提问），回到对话里当一句话；
+  /// 返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
   private func withdrawAcceptance(of leaf: UUID) throws {
     let task = try topTask(of: leaf)
-    try write {
-      try db.run("UPDATE cueMessages SET choices = NULL, acceptance = 0, modifiedAt = ? WHERE \(Self.pendingAcceptance)", [Date.stamp, task])
-    }
+    try write { _ = try endQuestions(.withdrawn, where: Self.pendingAcceptance, [task]) }
   }
 
-  /// 这件事（参数）还没答的验收。
-  private static let pendingAcceptance = "acceptance = 1 AND taskID = ? AND answeredAt IS NULL"
+  /// 这件事（参数）还开着的验收（与 `openQuestion` 连用）。
+  private static let pendingAcceptance = "acceptance = 1 AND taskID = ?"
 
   /// 说话、作答之前先请会话换上 `config`（与界面换模型同一种请求，执行器按先后执行）；换不了模型
   /// （`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`。调用方先做完别的检查：抛错时什么都没写。
@@ -334,7 +344,7 @@ extension CueStore {
   }
 
   /// 完成一件事（连同它还没做完的步骤）并结束做完了的会话（`endFinishedSessions`，写结束请求），返回结束请求。
-  /// 界面点完成走 `toggleDone`、你收下走 `answerCueMessage`，同一条规则。`requireStepsDone` 为真时还有没完成的步骤就抛
+  /// 界面点完成走 `toggleDone`、你收下走 `endCueQuestion`，同一条规则。`requireStepsDone` 为真时还有没完成的步骤就抛
   /// `stepsRemaining`、什么都不改（Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
   @discardableResult
   public func completeTask(_ task: UUID, requireStepsDone: Bool = false, cue: Bool = false) throws -> [DeliveryRequest] {
@@ -361,7 +371,7 @@ extension CueStore {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let pending = try select(
-        CueMessage.self, where: Self.pendingAcceptance, [task], orderBy: "createdAt, rowid")
+        CueMessage.self, where: "\(Self.openQuestion) AND \(Self.pendingAcceptance)", [task], orderBy: "createdAt, rowid")
       if let pending = pending.last { return (pending, false) }
       let now = Date.stamp
       let message = CueMessage(
@@ -500,18 +510,29 @@ extension CueStore {
     let links = try CardLinks(db, around: tasks.map(\.id))
     let homes = try cards(Set(tasks.map { links.home(of: $0.id) }))
     let lastDone = try lastCompletedSteps(of: tasks.filter { task in homes[links.home(of: task.id)].map { $0.id != task.id && $0.completedAt != nil } ?? false })
-    let leaves = homes.merging(lastDone.values.map { ($0.id, $0) }) { $1 }
-    let sessions = try sessionStates(Array(leaves.values.compactMap(\.piSessionID)))
+    // 每件事的候选：没做完的叶子（并行做的几步都在），加上没有在做的步骤时落回的那一个
+    let steps = Dictionary(grouping: try select(
+      Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NULL",
+      [Self.idList(tasks.map(\.id))], orderBy: "sortKey, id"
+    ), by: { $0.parentID! })
+    let fallback = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, lastDone[$0.id] ?? homes[links.home(of: $0.id)] ?? $0) })
+    let candidates = tasks.map { task in (steps[task.id] ?? []) + [fallback[task.id]!] }
+    let all = candidates.flatMap { $0 }
+    let sessions = try sessionStates(all.compactMap(\.piSessionID))
     let progress = try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(tasks.map(\.id))])
-    let launching = try launchingLeaves(Array(leaves.keys))
-    let sending = try sendingLeaves(leaves.values.filter { $0.piSessionID == nil }.map(\.id))
-    return tasks.map { task in
-      let leaf = lastDone[task.id] ?? leaves[links.home(of: task.id)] ?? task
-      let session = leaf.piSessionID.flatMap { sessions[$0] }
-      return CueBoardItem(
-        task: task, progress: progress[task.id], leaf: leaf, session: session, launching: launching.contains(leaf.id),
-        sending: sending.contains(leaf.id),
-        since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
+    let launching = try launchingLeaves(all.map(\.id))
+    let sending = try sendingLeaves(all.filter { $0.piSessionID == nil }.map(\.id))
+    return zip(tasks, candidates).map { task, candidates in
+      let leaves = candidates.map { leaf in
+        let session = leaf.piSessionID.flatMap { sessions[$0] }
+        return CueBoardLeaf(
+          leaf: leaf, session: session, launching: launching.contains(leaf.id), sending: sending.contains(leaf.id),
+          since: session?.stateSince ?? leaf.startedAt ?? task.startedAt ?? task.todoAt ?? task.createdAt)
+      }
+      let open = leaves.dropLast().filter { item in
+        item.launching || item.sending || item.session.map { $0.state != .known(.ended) } ?? false
+      }
+      return CueBoardItem(task: task, progress: progress[task.id], leaves: open.isEmpty ? [leaves.last!] : Array(open))
     }
   }
 
@@ -547,12 +568,16 @@ extension CueStore {
         guard let session = leaf.piSessionID.flatMap({ sessions[$0] }), session.stateSince > since else { continue }
         let (kind, detail): (CueChange.Kind?, String?) =
           switch session.state.known {
-          case .settled: (.settled, nil)
+          case .settled, .interrupted: (.settled, nil)
           case .waitingForUser: (.waitingForUser, session.question?.text ?? session.detail)
           case .error: (.failed, session.detail)
           default: (nil, nil)
           }
-        if let kind { changes.append(CueChange(kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap)) }
+        if let kind {
+          changes.append(CueChange(
+            kind: kind, taskID: task.id, task: task, leaf: leaf, at: session.stateSince, detail: detail, recap: session.recap,
+            interrupted: session.state == .known(.interrupted)))
+        }
       }
       // 一个会话可以绑好几件事：你在里面说的话算在它绑着的每件跟进的事上（同一件事的几个叶子共用它时只报一次）
       let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })

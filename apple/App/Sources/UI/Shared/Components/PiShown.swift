@@ -121,6 +121,8 @@ nonisolated struct PiShown: Hashable, Sendable {
         case resting
         case fresh
         case ended
+        /// 做到一半被打断（进程没了）：停着，说一句它就接着做。
+        case interrupted
         /// 其他版本写入、本版本不认识的状态。
         case unknown
     }
@@ -168,6 +170,7 @@ nonisolated extension PiShown {
         case .incompatible: .restart
         case .settled: .idle
         case .ended: .ended
+        case .interrupted: .interrupted
         case nil: .unknown
         }
     }
@@ -195,6 +198,7 @@ nonisolated extension PiShown {
         case .resting: "歇着"
         case .fresh: "新会话"
         case .ended: "已结束"
+        case .interrupted: "被打断"
         case .unknown: "未知状态"
         }
     }
@@ -221,6 +225,7 @@ nonisolated extension PiShown {
         case .resting: "Agent 歇着"
         case .fresh: "Agent 新会话"
         case .ended: "Agent 会话已结束"
+        case .interrupted: "Agent 被打断"
         case .unknown: "Agent 状态未知"
         }
     }
@@ -247,7 +252,7 @@ nonisolated extension PiShown {
         case .working, .delivery, .cueAsking: 2
         // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
         case .restart: 3
-        case .unread, .idle, .resting, .fresh, .unknown: 4
+        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
         case .ended: 5
         }
     }
@@ -260,7 +265,7 @@ nonisolated extension PiShown {
         case .unread: 4
         case .working, .delivery, .cueAsking: 3
         case .restart: 2
-        case .idle, .resting, .fresh, .unknown: 1
+        case .idle, .resting, .fresh, .interrupted, .unknown: 1
         case .ended: 0
         }
     }

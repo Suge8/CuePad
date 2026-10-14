@@ -6,14 +6,14 @@ extension PiShown {
     /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking: palette.attention
+        case .asking: Waiting.tint(dark: palette.dark)
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking: palette.ink
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.live
         case .unread: palette.replied
         case .restart: palette.ink2
-        case .idle, .resting, .fresh, .unknown: palette.ink3
+        case .idle, .resting, .fresh, .interrupted, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
@@ -22,7 +22,7 @@ extension PiShown {
     var isColored: Bool {
         switch status {
         case .asking, .failed, .working, .delivery, .unread: true
-        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .unknown: false
+        case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
     }
 
@@ -39,7 +39,7 @@ extension PiShown {
     /// 这里是减弱动态效果与菜单里的样子。每种轮廓各不相同（缩到 10 点也认得出），要你看的三种是实心，其余是线条。
     var symbol: String {
         switch status {
-        case .asking: "questionmark.circle.fill"
+        case .asking: Waiting.symbol
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: "questionmark.bubble"
         // 三角：轮廓与等你确认的圆分开
@@ -57,6 +57,8 @@ extension PiShown {
         case .fresh: "sparkle"
         // 不用空心圈：待办任务的圆圈就是它
         case .ended: "circle.slash"
+        // 断了电：做到一半停下
+        case .interrupted: "bolt.slash"
         case .unknown: "questionmark.circle"
         }
     }

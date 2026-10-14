@@ -152,11 +152,6 @@ extension Workspace {
         say("已绑定，写好的话放进了会话的回复框", link: .session(sessionID))
     }
 
-    /// 用会话名在会话所在的项目里新建一个任务，绑上。
-    func bindNewTask(to session: PiSessionState) async throws {
-        try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
-    }
-
     /// `text` 为 nil 只在开新会话时（没有草稿）。
     private func handOff(_ text: String?, prompt: UUID, fresh: Bool = false) async throws {
         let plan = try await services.store.handOffPlan(prompt, host: services.hostID, fresh: fresh)

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile。约束：
+/// cueMessages、cueLines、cueProfile、cueState。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -14,7 +14,7 @@ import Foundation
 ///
 /// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// 本机表（不同步）：piSessions、piProcesses、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
@@ -117,7 +117,25 @@ enum Schema {
       """),
     // 33：Cue 的验收由消息上的标记认（写入时定下），不再按选项文字猜
     Upgrade(stringLiteral: cueAcceptance),
+    // 34：叶子记下以前用过的会话（换下来的会话仍属于它）；记着的卡只占一小部分（部分索引）
+    Upgrade(stringLiteral: formerSessions),
+    // 35：Cue 此刻在做什么（值班的 Mac 写，各端读）
+    Upgrade(stringLiteral: cueState),
+    // 36：承载会话的进程（本机）：启动对账据此分清进程还在不在，只把确实没了的记为被打断
+    Upgrade(stringLiteral: piProcesses),
   ]
+
+  private static let piProcesses = """
+    CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
+    """
+
+  /// 34 加的列与索引：建新库时跟在 `cueAcceptance` 之后。
+  private static let formerSessions = """
+    ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
+    CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
+    """
+
+  private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
   /// 33 加的列：建新库时跟在 `cue` 之后（`cue` 是 32 建的样子，升级 32 也用它）。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -259,6 +277,9 @@ enum Schema {
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
 
+    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
+    \(piProcesses)
+
     -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
     CREATE TABLE projectDirectories (
       projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
@@ -277,6 +298,8 @@ enum Schema {
 
     \(cue)
     \(cueAcceptance)
+    \(formerSessions)
+    \(cueState)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

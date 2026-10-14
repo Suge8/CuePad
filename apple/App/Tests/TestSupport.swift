@@ -113,10 +113,13 @@ final class TestApp {
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
+    /// 自动更新器；默认没有（同隔离模式）。
+    private let updater: (any AppUpdater)?
 
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
         syncSource = source
         self.cue = cue
+        self.updater = updater
         services = makeServices()
     }
     #else
@@ -171,7 +174,7 @@ final class TestApp {
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
-            updater: nil,
+            updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,

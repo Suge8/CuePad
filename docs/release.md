@@ -2,11 +2,11 @@
 
 ## 签名
 
-本机构建走 ad-hoc 签名（`xc.sh` 覆盖工程默认的团队与身份，并换用不含 iCloud/推送的 macOS 权限文件）；签名事实源是 `App/Config/Signing.xcconfig`。发布与真机构建是手动签名：Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以证书与描述文件由 `scripts/provision.py` 经 App Store Connect API 创建，工程里各 target 指定名称（只对 `iphoneos` 与 macOS 的 Release 生效，模拟器与日常构建不受影响）。
+本机构建走 ad-hoc 签名（`xc.sh` 覆盖工程默认的团队与身份，并换用不含 iCloud 的 macOS 权限文件）；签名事实源是 `App/Config/Signing.xcconfig`。发布与真机构建是手动签名：Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以证书与描述文件由 `scripts/provision.py` 经 App Store Connect API 创建，工程里各 target 指定名称（只对 `iphoneos` 与 macOS 的 Release 生效，模拟器与日常构建不受影响）。
 
 凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）的字段：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（API 密钥 `.p8` 的路径）、`CUEPAD_TEAM_ID`；`xc.sh release ios` 另需 `CUEPAD_TESTER_EMAIL`。Apple Distribution 证书的私钥放专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`。缺凭据文件时 build/test/shot 照常，只有发布命令会报错；密钥内容不会打印。
 
-权限：主 App 有 iCloud（`iCloud.com.sugeh.cuepad`）、推送（`$(APS_ENVIRONMENT)`：Debug development，Release production）与 App Group（iOS）；扩展只有 App Group；macOS 另有 Apple Events 自动化（终端跳转）。
+权限：主 App 有 iCloud（`iCloud.com.sugeh.cuepad`）；iOS 另有推送（`$(APS_ENVIRONMENT)`：Debug development，Release production）与 App Group，macOS 另有 Apple Events 自动化（终端跳转），没有推送（Mac 不收推送，见 [sync.md](sync.md)「Agent 与 Cue 的通知」）；扩展只有 App Group。
 
 只能在网页上做的一次性前置：App Group `group.com.sugeh.cuepad` 与 iCloud 容器的创建及挂到 App ID（主 App 与通知服务扩展 `com.sugeh.cuepad.notify` 都要挂）；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
@@ -29,6 +29,8 @@
 ## 自动更新（macOS）
 
 Sparkle 2（EdDSA 校验，只发完整包、不做增量），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源（`SUFeedURL`，即下面固定 Release 里的 `appcast.xml`）与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
+
+装更新要重启 CuePad，会结束它在后台托管的会话；还有托管的会话在干活或等你确认时，重启推迟到它们都空下来（规则在 `UpdateService`，接的是 Sparkle 的 `shouldPostponeRelaunchForUpdate`）。验收用 `-CuePadScene updatewait`：演示更新器，托管会话由隔离 socket 目录里的替身扩展扮。
 
 EdDSA 私钥在专用钥匙串（`cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。
 

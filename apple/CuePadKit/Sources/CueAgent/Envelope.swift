@@ -32,6 +32,8 @@ public enum CueEnvelope {
     /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
     public var projects: [CueProject]
     public var changes: [CueChange]
+    /// 你关掉、还没告诉 Cue 的提问（`CueStore.cueMessagesToDeliver` 里没选就结束的）：写在变化里。
+    public var dismissed: [CueMessage]
     public var board: [CueBoardItem]
     public var waiting: [CueMessage]
     public var wake: CueWake
@@ -40,7 +42,7 @@ public enum CueEnvelope {
 
     public init(
       now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, since: Date, projects: [CueProject], changes: [CueChange],
-      board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, said: String?
+      dismissed: [CueMessage], board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, said: String?
     ) {
       self.now = now
       self.timeZone = timeZone
@@ -49,6 +51,7 @@ public enum CueEnvelope {
       self.since = since
       self.projects = projects
       self.changes = changes
+      self.dismissed = dismissed
       self.board = board
       self.waiting = waiting
       self.wake = wake
@@ -65,8 +68,9 @@ public enum CueEnvelope {
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
     let since = calendar.isDate(input.since, inSameDayAs: input.now) ? clock(input.since, calendar) : stamp(input.since, calendar)
-    lines.append("变化（\(since) 之后）：" + (input.changes.isEmpty ? "无" : ""))
+    lines.append("变化（\(since) 之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
+    lines += input.dismissed.map { "- [关掉提问] 他没选就关掉了「\(clip(CueFormat.plainText($0.text), 80))」（\($0.id.shortID)）" }
 
     lines.append("跟进中 \(input.board.count) 件" + (input.board.isEmpty ? "" : "："))
     lines += input.board.map { "- \(boardLine($0, now: input.now))" }
@@ -98,7 +102,7 @@ public enum CueEnvelope {
   private static func change(_ change: CueChange) -> String {
     let label: String =
       switch change.kind {
-      case .settled: "歇下"
+      case .settled: change.interrupted ? state(.known(.interrupted)) : "歇下"
       case .waitingForUser: "等回答"
       case .failed: "出错"
       case .done: "完成"
@@ -112,17 +116,27 @@ public enum CueEnvelope {
     return text
   }
 
-  /// 看板上一件事的一行（信封与 peek 共用）。
+  /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带步骤的短 id）。
   /// `showingFollower` 写上谁在跟进（看所有事时用；看板上都是 Cue 跟进的，不写）。
   static func boardLine(_ item: CueBoardItem, now: Date, showingFollower: Bool = false) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
-    let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : item.sending ? "发送中" : "没开工")
-    let leaf = item.leaf.id == item.task.id ? "" : "\(item.leaf.heading) › "
-    parts.append("\(leaf)\(state) \(duration(now.timeIntervalSince(item.since)))")
-    if let session = item.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
-    return parts.joined(separator: " · ")
+    guard item.leaves.count > 1 else {
+      let leaf = item.leaves[0]
+      return (parts + leafParts(leaf, named: leaf.leaf.id == item.task.id ? nil : leaf.leaf.heading, now: now)).joined(separator: " · ")
+    }
+    parts.append("同时在做 \(item.leaves.count) 步：")
+    return ([parts.joined(separator: " · ")] + item.leaves.map { leaf in
+      "  - " + leafParts(leaf, named: "\(leaf.leaf.heading)（\(leaf.leaf.id.shortID)）", now: now).joined(separator: " · ")
+    }).joined(separator: "\n")
+  }
+
+  private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date) -> [String] {
+    let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
+    var parts = ["\(name.map { "\($0) › " } ?? "")\(state) \(duration(now.timeIntervalSince(leaf.since)))"]
+    if let session = leaf.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
+    return parts
   }
 
   private static func recent(_ session: PiSessionState) -> String? {
@@ -131,6 +145,7 @@ public enum CueEnvelope {
     return session.pendingPrompt.map { "你说：\($0)" } ?? session.lastReply
   }
 
+  /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
     case .thinking, .outputting, .tool, .delegating, .compacting: "工作中"
@@ -138,6 +153,7 @@ public enum CueEnvelope {
     case .settled: "歇着"
     case .error: "出错"
     case .ended: "已结束"
+    case .interrupted: "做到一半被打断"
     case .incompatible: "版本不兼容"
     case nil: state.rawValue
     }

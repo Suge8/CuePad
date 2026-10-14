@@ -177,6 +177,7 @@ private struct LeafDetail: View {
             case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
             case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
             case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")
+            case .interrupted: (mascot, title, note) = (.error, "Agent 被打断了", "在会话里说一句，它接着做")
             case .idle, .resting, .fresh, .unknown: (mascot, title, note) = (.welcome, "Agent 歇着", "去会话里接着说")
             }
         }
