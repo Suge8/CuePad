@@ -282,7 +282,7 @@ final class AppServices {
     }
 
     /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
-    private func result(
+    func result(
         of request: DeliveryRequest.ID, within timeout: Duration
     ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
         try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in

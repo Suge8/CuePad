@@ -5,8 +5,9 @@
 用法：provision.py <ids|identity|profiles|device|devid-csr|devid-import|unlock|all> ...
   ids                           创建 App ID（主 App、分享扩展、小组件）并开启能力（App Groups、iCloud、推送；推送只有 iOS 用）
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
-  profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID）
-  device <UDID> <名称>          登记一台真机
+  profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID；
+                                有已登记的 Mac 时再建 Development，CloudKit 开发环境只能用它，见 docs/verify.md「同步测量」）
+  device <UDID> <名称> [MAC_OS] 登记一台真机（Mac 用 Provisioning UDID，不是 Hardware UUID）
   devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 docs/release.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
   unlock                        解锁专用钥匙串并加入搜索列表（发布脚本用）
@@ -215,25 +216,44 @@ def devid_import(cer_path):
 MAC_PROFILE = "CuePad macOS DeveloperID"
 
 
+MAC_DEV_PROFILE = "CuePad macOS Development"
+
+
 def ensure_mac_profile(ids):
     certs = local_cert_ids("Developer ID Application", "DEVELOPER_ID_APPLICATION,DEVELOPER_ID_APPLICATION_G2")
-    if not certs:
+    if certs:
+        create_mac_profile(ids, MAC_PROFILE, "MAC_APP_DIRECT", certs)
+    else:
         print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 docs/release.md）")
-        return
-    for old in api("GET", f"/v1/profiles?filter[name]={MAC_PROFILE.replace(' ', '%20')}&limit=50")["data"]:
+    macs = [x["id"] for x in api("GET", "/v1/devices?filter[platform]=MAC_OS&filter[status]=ENABLED&limit=200")["data"]]
+    certs = local_cert_ids("Apple Development", "DEVELOPMENT")
+    if macs and certs:
+        create_mac_profile(ids, MAC_DEV_PROFILE, "MAC_APP_DEVELOPMENT", certs, macs)
+    else:
+        print("没有已登记的 Mac 或 Apple Development 证书：跳过 macOS Development 描述文件")
+
+
+def create_mac_profile(ids, name, profile_type, certs, devices=()):
+    for old in api("GET", f"/v1/profiles?filter[name]={name.replace(' ', '%20')}&limit=50")["data"]:
         api("DELETE", f"/v1/profiles/{old['id']}")
-    body = {"data": {"type": "profiles", "attributes": {"name": MAC_PROFILE, "profileType": "MAC_APP_DIRECT"},
-                     "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": ids[APP_ID]}},
-                                       "certificates": {"data": [{"type": "certificates", "id": c} for c in certs]}}}}
-    profile = api("POST", "/v1/profiles", body)["data"]["attributes"]
-    install_profile(profile, ".provisionprofile")
+    relationships = {"bundleId": {"data": {"type": "bundleIds", "id": ids[APP_ID]}},
+                     "certificates": {"data": [{"type": "certificates", "id": c} for c in certs]}}
+    if devices:
+        relationships["devices"] = {"data": [{"type": "devices", "id": d} for d in devices]}
+    body = {"data": {"type": "profiles", "attributes": {"name": name, "profileType": profile_type}, "relationships": relationships}}
+    install_profile(api("POST", "/v1/profiles", body)["data"]["attributes"], ".provisionprofile")
 
 
-def register_device(udid, name):
-    if api("GET", f"/v1/devices?filter[udid]={udid}")["data"]:
-        print(f"设备 {name} 已登记")
+def register_device(udid, name, platform="IOS"):
+    for device in api("GET", f"/v1/devices?filter[udid]={udid}")["data"]:
+        if device["attributes"]["status"] != "ENABLED":
+            body = {"data": {"type": "devices", "id": device["id"], "attributes": {"status": "ENABLED"}}}
+            api("PATCH", f"/v1/devices/{device['id']}", body)
+            print(f"已重新启用设备 {device['attributes']['name']}")
+        else:
+            print(f"设备 {device['attributes']['name']} 已登记")
         return
-    body = {"data": {"type": "devices", "attributes": {"name": name, "udid": udid, "platform": "IOS"}}}
+    body = {"data": {"type": "devices", "attributes": {"name": name, "udid": udid, "platform": platform}}}
     api("POST", "/v1/devices", body)
     print(f"已登记设备 {name}")
 
@@ -247,7 +267,7 @@ if __name__ == "__main__":
     elif command == "profiles":
         ensure_profiles()
     elif command == "device":
-        register_device(sys.argv[2], sys.argv[3])
+        register_device(*sys.argv[2:5])
     elif command == "devid-csr":
         devid_csr()
     elif command == "devid-import":
