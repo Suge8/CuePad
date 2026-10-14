@@ -6,10 +6,11 @@ import Testing
 
 /// 接入 Codex 的钩子，用真 codex 判定（它自己的 `hooks/list` 说信任了才算装好）。
 @MainActor
-@Suite(.enabled(if: realCodexAvailable, RealAgents.skipped(.codex, needs: "本机装有 codex")), .timeLimit(.minutes(2)))
+@Suite(RealAgents.taped(.codex), .agentTape(.codex), .timeLimit(.minutes(2)))
 struct CodexHooksTests {
     let codex: CodexHome
-    var cuepad: URL { codex.root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
+    /// 钩子命令里的 cuepad 只是字符串（这里不跑钩子）。用固定路径：Codex 的信任哈希按命令算，录下的哈希回放时要对得上
+    let cuepad = URL(filePath: "/Applications/CuePad.app/Contents/Helpers/cuepad")
     var command: String { "\(cuepad.path) hook codex" }
     var hooksFile: URL { codex.home.appending(path: "hooks.json") }
     var configFile: URL { codex.home.appending(path: "config.toml") }
@@ -47,7 +48,7 @@ struct CodexHooksTests {
         #expect(hooks.filter { $0.command == command }.allSatisfy { $0.trust == "trusted" })
         #expect(hooks.filter { $0.command.hasPrefix("echo") }.map(\.trust) == ["trusted", "trusted"])
 
-        let moved = codex.root.appending(path: "Other/CuePad.app/Contents/Helpers/cuepad")
+        let moved = URL(filePath: "/Applications/Other/CuePad.app/Contents/Helpers/cuepad")
         #expect(await integration(cuepad: moved).status(of: .codex).files == .outdated)
         try await integration(cuepad: moved).install(.codex)
         #expect(await integration(cuepad: moved).status(of: .codex).files == .current)
@@ -69,6 +70,7 @@ struct CodexHooksTests {
         ("{\"hooks\": {\"Stop\": [], \"SessionStart\":[ ]}}", "[hooks.state]\n"),
     ])
     func uninstallKeepsTheUsersEmptyStructures(hooks: String, config: String) async throws {
+        AgentTape.variant("\(hooks.count)-\(config.count)")
         defer { codex.remove() }
         try hooks.write(to: hooksFile, atomically: true, encoding: .utf8)
         try config.write(to: configFile, atomically: true, encoding: .utf8)
