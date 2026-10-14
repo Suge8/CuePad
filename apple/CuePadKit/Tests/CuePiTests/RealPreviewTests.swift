@@ -7,17 +7,10 @@ import Testing
 /// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
 /// 模型在 bash 里一次 `cuepad show` 两个文件：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPreviewTests {
-    private func sqlite(_ database: URL, _ query: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/sqlite3")
-        process.arguments = [database.path, query]
-        let out = Pipe()
-        process.standardOutput = out
-        try process.run()
-        process.waitUntilExit()
-        return String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    private func sqlite(_ database: URL, _ query: String) async throws -> String {
+        try #require(await runCapturing(URL(filePath: "/usr/bin/sqlite3"), [database.path, query])).output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
@@ -28,6 +21,7 @@ struct RealPreviewTests {
 
     @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
         let library = try makeTempDirectory()
+        AgentTape.active.watch(library)  // 预览是 Pi 的 bash 里跑的 cuepad 命令写进资料库的
         let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
@@ -50,7 +44,7 @@ struct RealPreviewTests {
         #expect(reply.map { $0["name"] as? String } == ["demo.html", "beep.m4a"])
         #expect(reply.allSatisfy { $0["session"] as? String == session.sessionID && $0["title"] as? String == "登录页改好了" })
         // 一次发的两个是同一批：同一创建时间
-        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT count(DISTINCT createdAt) || '|' || count(*) FROM previews WHERE sessionID = '\(session.sessionID)'") == "1|2")
+        #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT count(DISTINCT createdAt) || '|' || count(*) FROM previews WHERE sessionID = '\(session.sessionID)'") == "1|2")
     }
 
     /// 不在 Pi 的 bash 里（没有 PI_SESSION_ID）时命令失败并说明，不猜是哪个会话。
@@ -58,17 +52,13 @@ struct RealPreviewTests {
         let library = try makeTempDirectory()
         let page = library.appending(path: "demo.html")
         try "<h1>x</h1>".write(to: page, atomically: true, encoding: .utf8)
-        let process = Process()
-        process.executableURL = PiProcess.cuepad
-        process.arguments = ["show", page.path]
-        process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
-        let err = Pipe()
-        process.standardError = err
-        try process.run()
-        process.waitUntilExit()
-        #expect(process.terminationStatus != 0)
-        #expect(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("PI_SESSION_ID"))
-        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
+        // 报错在标准错误里：经 sh 并进标准输出
+        let shown = try #require(await runCapturing(
+            URL(filePath: "/bin/sh"), ["-c", "exec \"$0\" show \"$1\" 2>&1", PiProcess.cuepad.path, page.path],
+            environment: ["CUEPAD_LIBRARY_DIR": library.path]))
+        #expect(shown.status != 0)
+        #expect(shown.output.contains("PI_SESSION_ID"))
+        #expect(try await sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
     }
 }
 #endif

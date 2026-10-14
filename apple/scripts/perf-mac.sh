@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# 用法：perf-mac.sh [次数=3]
+# 用法：xc.sh perf mac [次数=3]
 #   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）、合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   与交互预算（docs/verify.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
-# 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定；产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf-release。
-# iOS 的单次交互见 perf-ios.sh。
+# 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定；产物在 apple/.derived-perf-release（Instruments 也用这份）。
+# 独占机器（_lock.sh）：别的编译、测试同时跑，指令数之外的数都会被拖歪。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
+xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
 
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}-perf-release"
+DERIVED="$APPLE_DIR/.derived-perf-release"
 EXE="$DERIVED/Build/Products/Release/CuePad.app/Contents/MacOS/CuePad"
 LIBRARY="$DERIVED/library-perf"
 
