@@ -64,8 +64,10 @@ private struct PreviewPresenter: ViewModifier {
 private struct PreviewPage: View {
     let preview: PiPreview
     let file: URL?
-    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(\.closePanel) private var close
+    #endif
 
     var body: some View {
         #if os(iOS)

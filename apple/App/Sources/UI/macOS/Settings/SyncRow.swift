@@ -24,7 +24,7 @@ struct SyncRow: View {
         let summary = SyncSummary(services.syncStatus)
         let fix = fix
         SettingRow(
-            title: "iCloud 同步", symbol: summary.symbol, tone: tone(summary), status: status(summary, fix: fix),
+            title: "iCloud 同步", symbol: summary.symbol, tone: tone(summary), busy: busy, status: status(summary, fix: fix),
             help: fix == nil ? nil : summary.detail
         ) {
             if services.sync != nil, fix != .decide, fix != .openSettings {
@@ -67,16 +67,14 @@ struct SyncRow: View {
         }
     }
 
-    private func tone(_ summary: SyncSummary) -> SettingTone {
-        if failure != nil || !services.syncIssues.isEmpty { return .failure }
+    private func tone(_ summary: SyncSummary) -> StatusTone {
+        failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
+    }
+
+    private var busy: Bool {
         switch services.syncStatus {
-        case .starting, .syncing: return .busy
-        default: break
-        }
-        return switch summary.tone {
-        case .normal: .calm
-        case .notice: .attention
-        case .failure: .failure
+        case .starting, .syncing: true
+        default: false
         }
     }
 

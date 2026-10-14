@@ -130,7 +130,7 @@ private struct SyncSection: View {
                 if services.syncStatus == .syncing {
                     Spinner(.small)
                 } else {
-                    Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                    Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
                 }
             }
             if services.sync != nil {

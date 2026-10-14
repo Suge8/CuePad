@@ -83,7 +83,7 @@ struct Palette {
 
     // MARK: 状态（只表达含义，不给文字大面积上色）
 
-    /// 等你确认、需要处理：赭黄。
+    /// Agent 等你确认：赭黄（不借给别的"要你处理"，那些按 `StatusTone.notice` 用墨色）。
     var attention: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0xA8740A) }
     /// 出错：胭脂。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
@@ -150,6 +150,23 @@ extension EnvironmentValues {
 }
 
 /// 按外观、对比度注入 `palette`，并把强调色（墨）设为系统控件的 tint：选中、焦点、开关都用它。
+/// 一样东西此刻要不要你注意（同步、Pi 连接、命令行、崩溃这类状态），全 App 着色只按它：平静是次要墨色；要你处理是墨色，
+/// 靠图形与比平静更深的字抢眼（赭黄只留给 Agent 等你确认）；出错是胭脂。
+enum StatusTone: Equatable {
+    case calm, notice, failure
+}
+
+extension Palette {
+    /// 状态的颜色；`muted` 是写在名称下面的那行状态字，平静时比图标再淡一级。
+    func color(_ tone: StatusTone, muted: Bool = false) -> Color {
+        switch tone {
+        case .calm: muted ? ink3 : ink2
+        case .notice: ink
+        case .failure: failure
+        }
+    }
+}
+
 struct PaletteProvider: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast

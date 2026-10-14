@@ -142,7 +142,7 @@ private struct PiRow: View {
         let status = services.piIntegration.status
         let (tone, line) = describe(status)
         SettingRow(
-            title: "Pi", symbol: "puzzlepiece.extension", tone: tone, status: line,
+            title: "Pi", symbol: "puzzlepiece.extension", tone: tone, busy: working || status == nil, status: line,
             help: "连上后 CuePad 能看到 Pi 会话的实时状态、把提示词（含图片）发进会话，Agent 也能把页面和截图发到手机上看"
         ) {
             if let action = action(status) {
@@ -159,17 +159,17 @@ private struct PiRow: View {
         }
     }
 
-    private func describe(_ status: PiIntegrationStatus?) -> (SettingTone, Dotted) {
-        if working { return (.busy, "正在连接…") }
+    private func describe(_ status: PiIntegrationStatus?) -> (StatusTone, Dotted) {
+        if working { return (.calm, "正在连接…") }
         if let outcome, outcome.failed { return (.failure, Dotted(outcome.text)) }
-        guard let status else { return (.busy, "检测中…") }
+        guard let status else { return (.calm, "检测中…") }
         switch status.pi {
-        case .notFound: return (.attention, "没有找到 pi 命令")
-        case .found(_, let version) where !status.pi.isSupported: return (.attention, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
+        case .notFound: return (.notice, "没有找到 pi 命令")
+        case .found(_, let version) where !status.pi.isSupported: return (.notice, "\(version) 太旧，需要 \(PiVersion.minimumSupported) 或更新")
         case .found(_, let version):
             return switch status.file {
             case .current: (.calm, Dotted("已连接", "\(version)", outcome?.text))
-            case .outdated: (.attention, "需要升级")
+            case .outdated: (.notice, "需要升级")
             case .missing: (.calm, "未连接")
             case .foreign: (.failure, "Pi 目录里有同名的其他文件，没有改动")
             }
@@ -200,14 +200,14 @@ private struct PiRow: View {
     }
 }
 
-/// 上次崩溃：赭黄的一行，"查看"弹出摘要与导出（启动参数 `-CuePadCrashSheet` 时一打开就弹）。
+/// 上次崩溃：要你注意的一行，"查看"弹出摘要与导出（启动参数 `-CuePadCrashSheet` 时一打开就弹）。
 private struct CrashRow: View {
     let report: CrashReport
     @State private var showing = DebugHooks.preset.crashSheet
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, symbol: "exclamationmark.triangle", tone: .attention,
+            title: report.kind.label, symbol: "exclamationmark.triangle", tone: .notice,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()
@@ -228,7 +228,7 @@ private struct ConflictsRow: View {
 
     var body: some View {
         SettingRow(
-            title: "同步冲突", symbol: "square.on.square", tone: .attention,
+            title: "同步冲突", symbol: "square.on.square", tone: .notice,
             status: "\(services.conflicts.count) 条灵感或任务有两个版本"
         ) {
             EmptyView()

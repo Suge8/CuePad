@@ -1,3 +1,4 @@
+#if DEBUG
 import CueStore
 import CueSync
 import Foundation
@@ -24,7 +25,7 @@ extension DebugScene {
         }
     }
 
-    /// 库里没有创建冲突副本的公开入口（由同步引擎产生）：拿最近改过的一张灵感，复制一份改过的正文，直接在库文件里把副本指回原卡。
+    /// 拿演示库里的一张灵感，复制一份改过的正文，标成它的冲突副本。
     private static func seedConflict(_ services: AppServices) async {
         let store = services.store
         var original: Card?
@@ -33,14 +34,20 @@ extension DebugScene {
         }
         guard let original, let copy = try? await store.createCard(in: original.projectID, body: original.body + "\n另一台设备上补了一句")
         else { return }
-        var handle: OpaquePointer?
-        defer { sqlite3_close(handle) }
-        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK else { return }
-        let sql = "UPDATE cards SET conflictOf = '\(original.id.uuidString.lowercased())' WHERE id = '\(copy.id.uuidString.lowercased())'"
-        guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { return }
+        guard markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL) else { return }
         // 与有同步引擎时一样跟着库走（`AppServices.startSync`）：选好保留哪份，这一行就消失
         Task {
             for try await conflicts in store.observe({ try $0.conflicts() }) { services.setConflicts(conflicts) }
         }
     }
+
+    /// 库里没有创建冲突副本的公开入口（由同步引擎产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。
+    static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        guard sqlite3_open(database.path, &handle) == SQLITE_OK else { return false }
+        let sql = "UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'"
+        return sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK
+    }
 }
+#endif

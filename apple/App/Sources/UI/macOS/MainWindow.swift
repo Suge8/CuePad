@@ -322,11 +322,11 @@ private struct SyncAlert: View {
 
     var body: some View {
         let summary = SyncSummary(services.syncStatus)
-        if services.sync != nil, summary.tone != .normal {
+        if services.sync != nil, summary.tone != .calm {
             Button {
                 NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
             } label: {
-                Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
             }
             .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
             .accessibilityLabel(summary.title)

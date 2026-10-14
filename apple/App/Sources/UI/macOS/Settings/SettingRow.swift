@@ -1,20 +1,16 @@
 #if os(macOS)
 import SwiftUI
 
-/// 设置的一行此刻怎么样：平静时图标与状态都是墨的次要色；要你处理是赭黄、出错是胭脂（图标与状态一起变，配上该状态的图形）；
-/// 在等结果时图标位置是转圈。没有绿色与对勾：正常就是安静，只有要你动手的那一行抢眼。
-enum SettingTone: Equatable {
-    case calm, busy, attention, failure
-}
-
 /// 设置的一行，全窗口只有这一种排法（同系统设置的网络、iCloud 行）：
 /// - 左边定宽的图标与名称，名称下面一行状态；状态有现成的解决办法时，紧跟一个链接（`fix`：打开系统设置、处理…、查看、复制命令）。
+/// - 图标与状态字按 `StatusTone` 一起着色（正常就是安静，没有绿色与对勾）；在等结果（`busy`）时图标位置是转圈。
 /// - 右边只放这一行常驻的那一个控件（开关、分段、键帽、立即同步、连接）。
 /// 解释性的长句不上屏，放在悬停提示里（`help`）。
 struct SettingRow<Control: View, Fix: View>: View {
     let title: String
     let symbol: String
-    var tone = SettingTone.calm
+    var tone = StatusTone.calm
+    var busy = false
     var status: Dotted?
     var help: String?
     @ViewBuilder var control: Control
@@ -31,17 +27,17 @@ struct SettingRow<Control: View, Fix: View>: View {
                 Text(title)
                 if let status {
                     HStack(spacing: 8) {
-                        Text(status).foregroundStyle(color(muted: true))
+                        Text(status).foregroundStyle(palette.color(tone, muted: true))
                         fix
                     }
                     .font(Typography.meta)
                 }
             } icon: {
                 Group {
-                    if tone == .busy {
+                    if busy {
                         Spinner(.small)
                     } else {
-                        Image(systemName: symbol).foregroundStyle(color(muted: false))
+                        Image(systemName: symbol).foregroundStyle(palette.color(tone))
                             .contentTransition(.symbolEffect(.replace))
                     }
                 }
@@ -50,27 +46,20 @@ struct SettingRow<Control: View, Fix: View>: View {
             }
         }
         .animation(Motion.quick, value: tone)
+        .animation(Motion.quick, value: busy)
         .help(help ?? "")
         // 读屏把这一行当一组、组名是这一行的名称：状态后的"修复""查看"与右边的控件都读得出属于哪一行
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }
-
-    private func color(muted: Bool) -> Color {
-        switch tone {
-        case .calm, .busy: muted ? palette.ink3 : palette.ink2
-        case .attention: palette.attention
-        case .failure: palette.failure
-        }
-    }
 }
 
 extension SettingRow where Fix == EmptyView {
     init(
-        title: String, symbol: String, tone: SettingTone = .calm, status: Dotted? = nil, help: String? = nil,
+        title: String, symbol: String, tone: StatusTone = .calm, busy: Bool = false, status: Dotted? = nil, help: String? = nil,
         @ViewBuilder control: () -> Control
     ) {
-        self.init(title: title, symbol: symbol, tone: tone, status: status, help: help, control: control) { EmptyView() }
+        self.init(title: title, symbol: symbol, tone: tone, busy: busy, status: status, help: help, control: control) { EmptyView() }
     }
 }
 

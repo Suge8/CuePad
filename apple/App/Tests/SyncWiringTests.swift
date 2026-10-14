@@ -1,7 +1,6 @@
 import CueStore
 import CueSync
 import Foundation
-import SQLite3
 import Testing
 @testable import CuePad
 
@@ -66,7 +65,7 @@ struct SyncWiringTests {
         defer { services.cancelBackgroundWork() }
         let original = try await services.store.createCard(in: nil, body: "原卡")
         let copy = try await services.store.createCard(in: nil, body: "副本")
-        try markConflict(copy: copy.id, of: original.id)
+        #expect(DebugScene.markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL))
         _ = try await services.store.createCard(in: nil, body: "触发一次重读")
 
         try await eventually("services.conflicts.count == 1") { services.conflicts.count == 1 }
@@ -98,15 +97,4 @@ struct SyncWiringTests {
         #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: false).get()) == nil)
         #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: true).get()) != nil)
     }
-
-    /// 库里没有创建冲突副本的公开入口（由同步引擎产生），测试直接写库文件。
-    private func markConflict(copy: UUID, of original: UUID) throws {
-        var handle: OpaquePointer?
-        defer { sqlite3_close(handle) }
-        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK else { throw SyncTestError() }
-        let sql = "UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'"
-        guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw SyncTestError() }
-    }
-
-    struct SyncTestError: Error {}
 }

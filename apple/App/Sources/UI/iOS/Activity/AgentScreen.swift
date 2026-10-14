@@ -345,7 +345,7 @@ private struct SyncBadge: View {
         Button { open = true } label: {
             Label(summary.title, systemImage: summary.symbol).foregroundStyle(palette.ink2)
                 .overlay(alignment: .topTrailing) {
-                    Circle().fill(summary.color(palette)).frame(width: 6, height: 6).offset(x: 3, y: -1).accessibilityHidden(true)
+                    Circle().fill(palette.color(summary.tone)).frame(width: 6, height: 6).offset(x: 3, y: -1).accessibilityHidden(true)
                 }
         }
             .popover(isPresented: $open) {

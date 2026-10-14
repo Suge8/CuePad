@@ -45,18 +45,18 @@ struct CommandLineToolRow: View {
     }
 
     /// 读不出 PATH 也要明说，不静默。
-    private var describe: (SettingTone, Dotted?) {
+    private var describe: (StatusTone, Dotted?) {
         if let error { return (.failure, Dotted(error)) }
         switch tool.state {
         case .notInstalled: return (.calm, nil)
         case .unavailable: return (.calm, "这个构建里没有命令行工具")
-        case .stale: return (.attention, "App 移动过，链接失效了")
+        case .stale: return (.notice, "App 移动过，链接失效了")
         case .blocked(let what): return (.failure, "\(tool.linkDirectoryDisplay)/cuepad 位置\(what)，没有覆盖")
         case .installed:
             return switch tool.pathIncludesLinkDirectory {
             case true?: (.calm, "\(tool.linkDirectoryDisplay)/cuepad")
-            case false?: (.attention, "\(tool.linkDirectoryDisplay) 不在 PATH 里")
-            case nil: (.attention, "没能读取 shell 的 PATH，请确认 \(tool.linkDirectoryDisplay) 在其中")
+            case false?: (.notice, "\(tool.linkDirectoryDisplay) 不在 PATH 里")
+            case nil: (.notice, "没能读取 shell 的 PATH，请确认 \(tool.linkDirectoryDisplay) 在其中")
             }
         }
     }
