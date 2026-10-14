@@ -292,11 +292,13 @@ final class ClaudeHostedSession: SessionLink {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed?.isEmpty == true { throw PiBridgeError.rejected("bad_request") }
         if let model {
-            // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证）照原话报
+            // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证）照原话报。
+            // 兼容网关不认的模型多半直接回 400（DeepSeek："The supported API model names are …"），核对请求里能错的只有模型
             do {
                 _ = try await request(["subtype": "set_model", "model": .string(model.id)])
             } catch PiBridgeError.rejected(let reason) {
-                let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { reason.lowercased().contains($0) }
+                let unknown = ["unsupported model", "not found", "unknown model", "invalid model", "api error: 400", "api error: 404"]
+                    .contains { reason.lowercased().contains($0) }
                 throw PiBridgeError.rejected(unknown ? "unknown_model" : "failed: \(reason)")
             }
             update { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
