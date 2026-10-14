@@ -151,7 +151,8 @@ struct RealBrainTests {
 
     /// 就地换模型与强度：同一个进程接着说，前面的话还记得，下一轮用的是新模型（Pi 的上下文窗口跟着变）；
     /// 运行时不认的模型抛错，在用的不变。
-    @Test(arguments: enabledRuntimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
+    @Test(arguments: runtimes) func configureSwitchesModelInPlace(_ runtime: AgentKind) async throws {
+        AgentTape.use(runtime)
         try await withRig(runtime) { rig in
         try await rig.brain.send("Remember the word PAPAYA. Reply with only OK.")
         try await rig.finished()
