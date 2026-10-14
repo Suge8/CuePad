@@ -401,6 +401,7 @@ public enum CueStoreError: Error, Equatable {
   /// 会话此刻没有能从 CuePad 作答的提问。
   case nothingToAnswer
   case cannotStop(String)
+  case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
   case invalidAnswer([String])
   /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
@@ -443,6 +444,7 @@ extension CueStoreError: LocalizedError {
         ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
         : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
     case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Agent 那边答）：用 say 说话"
+    case .cannotChangeModel(let title): "「\(title)」的会话换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "「\(title)」的会话现在停不了：没在跑一轮、在等你回答，或它在终端里开、不能从 CuePad 停止"
     case .invalidAnswer(let options): "答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"

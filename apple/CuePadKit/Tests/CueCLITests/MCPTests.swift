@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Testing
 
@@ -244,6 +245,124 @@ import Testing
     _ = try await server.call("task", ["action": "done", "task": spoken.id.uuidString, "evidence": "- 文案改好了", "accepted": true])
     #expect(try await store.card(spoken.id)?.status == .done)
     #expect(try await store.cueMessagesWaitingForYou().isEmpty)
+  }
+
+  /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（Pi 以外只写 id 时提供方补成这家；Pi 要写 provider/id）。
+  /// 那台 Mac 开不了这家时，失败是 Cue 跟进的事里的一条变化，写着"开工：原因"，Cue 下次醒来看得到。
+  @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("演示")
+    try await store.setDirectory("/tmp/demo", for: project.id)
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let task = try await store.createTask("修好登录页", in: project.id)
+    try await store.setCueFollows(task.id, true)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    for bad in [["agent": "pi", "model": "gpt-5.1"], ["agent": "cursor"]] {
+      let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString].merging(bad) { $1 }])
+      #expect(refused["isError"] as? Bool == true, "\(bad)")
+    }
+    #expect(try await store.deliveryRequests().isEmpty)
+
+    let since = Date()
+    _ = try await server.call("task", ["action": "start", "task": task.id.uuidString, "agent": "codex", "model": "gpt-5.1", "effort": "high"])
+    let launch = try #require(try await store.deliveryRequests().first)
+    #expect(launch.isFromCue && launch.mode == .known(.start))
+    #expect(launch.launch?.agent == .codex && launch.launch?.model == PiModelKey(provider: "codex", id: "gpt-5.1") && launch.launch?.thinking == .high)
+
+    // 那台 Mac 上没有 Codex：执行器把失败写回
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上没有找到 Codex") }
+    try await executor.start()
+    defer { Task { await executor.stop() } }
+    let changes = try await eventually(store, { try $0.cueChanges(since: since) }) { !$0.isEmpty }
+    #expect(changes.map(\.kind) == [.failed] && changes.map(\.detail) == ["开工：这台 Mac 上没有找到 Codex"])
+    #expect(changes.first?.taskID == task.id)
+  }
+
+  /// 分步做一件事：上一步收尾不结束会话，下一步开工接着用它——绑上、草稿作为下一句发进去，不开新会话；
+  /// 你收下整件事时，这个会话按做完了的规则结束。
+  @Test(.timeLimit(.minutes(1))) func stepsOfATaskContinueInTheSameSession() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("演示")
+    try await store.setDirectory("/tmp/demo", for: project.id)
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let task = try await store.createTask("重写发布脚本", in: project.id)
+    try await store.setCueFollows(task.id, true)
+    let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
+    try await store.linkCard(first.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
+    _ = try await store.createCard(body: "照调研结论改 release.sh", under: second.id)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": "- 看完了"])
+    #expect(try await store.card(first.id)?.status == .done)
+    #expect(try await store.deliveryRequests().isEmpty)
+
+    _ = try await server.call("task", ["action": "start", "task": second.id.uuidString])
+    #expect(try await store.card(second.id)?.piSessionID == "s1")
+    let sent = try await store.deliveryRequests()
+    #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
+    #expect(sent.first?.content == "照调研结论改 release.sh")
+
+    _ = try await server.call("task", ["action": "done", "task": second.id.uuidString, "evidence": "- 改好了"])
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 两步都做完了"])
+    #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
+    let asked = try #require(try await store.cueMessagesWaitingForYou().first)
+    try await store.answerCueMessage(asked.id, answer: CueAcceptance.accept)
+    #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) == ["s1"])
+  }
+
+  /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
+  /// 换不了模型的会话（终端里的 Claude Code）直接报错，什么都不写，告诉 Cue 可以 fresh 开新会话。
+  @Test(.timeLimit(.minutes(1))) func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    try await store.updateCueProfile {
+      $0.hostID = "mac-a"
+      $0.enabledAt = .now
+    }
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    let project = try await sandbox.project("演示")
+    try await store.setDirectory("/tmp/demo", for: project.id)
+    let pi = try await store.createTask("修好登录页", in: nil), claude = try await store.createTask("改文案", in: project.id)
+    try await store.linkCard(pi.id, toSession: "s1")
+    try await store.linkCard(claude.id, toSession: "c1")
+    try await recorder.update(sessionID: "s1", state: .error, title: "修好登录页")
+    try await recorder.update(sessionID: "c1", state: .error, title: "改文案", agent: .claudeCode)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    _ = try await server.call(
+      "task", ["action": "say", "task": pi.id.uuidString, "text": "用 luna 重试", "model": "openai/gpt-6-luna", "effort": "high"])
+    let requests = try await store.deliveryRequests(toSession: "s1")  // 执行器按这个先后执行
+    #expect(requests.map(\.mode) == [.known(.config), .known(.send)] && requests.allSatisfy(\.isFromCue))
+    #expect(requests.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
+    #expect(requests.last?.content == "用 luna 重试")
+
+    let refused = try await server.request(
+      "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "text": "换个模型", "model": "opus"]])
+    #expect(refused["isError"] as? Bool == true)
+    let reason = try #require((refused["content"] as? [[String: Any]])?.first?["text"] as? String)
+    #expect(reason.contains("换不了模型") && reason.contains("fresh"))
+    #expect(try await store.deliveryRequests().count == 2)
+
+    // 照提示 fresh 开新会话：绑着会话的叶子也开新的
+    _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
+    let launch = try #require(try await store.deliveryRequests().first)
+    #expect(launch.mode == .known(.start) && launch.launch?.agent == .claudeCode && launch.launch?.model == PiModelKey(provider: "claude", id: "opus"))
   }
 }
 #endif

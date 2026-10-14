@@ -139,8 +139,9 @@ extension CueStore {
     return HandOffPlan(leaf: leaf.id, destination: try destination(of: leaf, host: host), name: try sessionName(forCard: leaf.id))
   }
 
-  private func destination(of leaf: Card, host: String?) throws -> HandOffPlan.Destination {
-    if let sessionID = leaf.piSessionID {
+  /// `fresh`：不管绑着的会话，照样在文件夹开新会话（Cue 的 `startLeaf`）。
+  private func destination(of leaf: Card, host: String?, fresh: Bool = false) throws -> HandOffPlan.Destination {
+    if !fresh, let sessionID = leaf.piSessionID {
       let session = try sessionTarget(of: leaf)
       return .session(id: sessionID, title: session.target.name, host: session.host(or: host))
     }
@@ -151,15 +152,26 @@ extension CueStore {
     return .launch(project: project, host: launchHost)
   }
 
-  /// 开工：把叶子（没有步骤的任务）的草稿交到 `handOffPlan` 定下的地方。交给已有会话时会话正忙就等它做完再说；
+  /// Cue 开工：把叶子（没有步骤的任务）的草稿交到 `handOffPlan` 定下的地方。交给已有会话时会话正忙就等它做完再说；
   /// 开新会话时草稿作为第一句（没有草稿就只开会话）；送达后草稿用掉（`PromptConsumption`）。
-  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，开不了会话抛 `noFolder`。`model` 与 `thinking` 只用于开新会话。
+  /// 叶子还没有会话、同一顶层任务的别的步骤绑着没结束的会话时，不开新会话：接着用那个（`continuableSession`），
+  /// 叶子绑上它、草稿作为下一句发进去（没有草稿就只绑上，返回 nil）。`fresh` 为真时总是开新会话（叶子绑着的也换成新的：
+  /// 上下文太长、要换 Agent，或那个会话换不了模型）。
+  /// 已有会话却没有草稿抛 `alreadyStarted`，正在开会话抛 `launching`，开不了会话抛 `noFolder`。
+  /// `agent` 缺省是 Pi，给了就只接着用这一家的会话；`agent`、`model` 与 `thinking` 只用于开新会话。
   public func startLeaf(
-    _ leaf: UUID, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, host: String, cue: Bool = false
-  ) throws -> DeliveryRequest {
-    let plan = try handOffPlan(leaf, host: host)
+    _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
+    host: String, cue: Bool = false
+  ) throws -> DeliveryRequest? {
+    var plan = try handOffPlan(leaf, host: host)
+    if fresh { plan.destination = try destination(of: try requireLeaf(plan.leaf), host: host, fresh: true) }
     let draft = try draft(of: plan.leaf)
     let content = draft.map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) } ?? ""
+    if !fresh, try requireLeaf(plan.leaf).piSessionID == nil, let session = try continuableSession(for: plan.leaf, agent: agent) {
+      try linkCard(plan.leaf, toSession: session.sessionID)
+      guard let draft else { return nil }
+      return try say(content, to: try sessionTarget(of: try requireLeaf(plan.leaf)), when: .after, card: draft.id, host: host, cue: cue)
+    }
     switch plan.destination {
     case .session:
       guard let draft else { throw CueStoreError.alreadyStarted(try requireLeaf(plan.leaf).heading) }
@@ -168,17 +180,35 @@ extension CueStore {
       guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(try requireLeaf(plan.leaf).heading) }
       let launch = PiLaunch(
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
-        model: model, thinking: thinking)
+        agent: agent ?? .pi, model: model, thinking: thinking)
       return try requestLaunch(launch, title: plan.name ?? "", on: host, card: draft?.id ?? plan.leaf, cue: cue)
     case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
     case .unfiled: throw CueStoreError.noFolder("")
     }
   }
 
+  /// 同一顶层任务下别的步骤绑着、还没结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。
+  private func continuableSession(for leaf: UUID, agent: AgentKind?) throws -> PiSessionState? {
+    let top = try topTask(of: leaf)
+    guard top != leaf, let task = try find(Card.self, top) else { return nil }
+    let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
+    return sessions.values
+      .filter { session in session.state != .known(.ended) && agent.map { session.agent == .known($0) } != false }
+      .max { $0.stateSince < $1.stateSince }
+  }
+
   /// 对叶子已有的会话说话。方式由会话此刻的状态定：歇着就直接说；正在跑一轮时 `now` 马上说、`after` 等它做完再说。
   /// 没有会话抛 `noSession`（正在开会话抛 `launching`）。
-  public func sayToLeaf(_ leaf: UUID, text: String, when: SayTiming, host: String, cue: Bool = false) throws -> DeliveryRequest {
+  /// 带 `config`（模型、思考强度）时先请会话换上（与界面换模型同一种请求），再说这句，两条按先后执行；
+  /// 会话换不了模型（`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`，什么都不写。
+  public func sayToLeaf(
+    _ leaf: UUID, text: String, when: SayTiming, config: PiConfig? = nil, host: String, cue: Bool = false
+  ) throws -> DeliveryRequest {
     let (card, session) = try requireSession(of: leaf)
+    if let config {
+      guard session.state?.capabilities.contains(.model) == true else { throw CueStoreError.cannotChangeModel(card.heading) }
+      try requestDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
+    }
     return try say(text, to: session, when: when, card: card.id, host: host, cue: cue)
   }
 
@@ -255,12 +285,15 @@ extension CueStore {
   /// `toggleDone`，你收下走 `answerCueMessage`，同一条路）：一个会话可以绑好几件事，它绑着的事（`tasks(boundTo:)`）都做完了才结束；
   /// 已结束的、结束不了的（`PiSessionState.canEnd`）、记录还没到的不动。结束请求写给会话所在的那台 Mac。`requireStepsDone` 为真时还有没完成的步骤就抛 `stepsRemaining`、
   /// 什么都不改（Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
+  /// `endsSessions` 为假时只完成、不结束会话（Cue 收尾一个步骤：会话留给下一步接着用，顶层任务完成时按上面的规则一起结束）。
   @discardableResult
-  public func completeTask(_ task: UUID, requireStepsDone: Bool = false, cue: Bool = false) throws -> [DeliveryRequest] {
+  public func completeTask(
+    _ task: UUID, requireStepsDone: Bool = false, endsSessions: Bool = true, cue: Bool = false
+  ) throws -> [DeliveryRequest] {
     try write {
       if requireStepsDone { try checkStepsDone(task) }
       _ = try applyStatus(task, .done)
-      return try endFinishedSessions(of: task, cue: cue)
+      return endsSessions ? try endFinishedSessions(of: task, cue: cue) : []
     }
   }
 

@@ -33,20 +33,20 @@ public struct CueTools: Sendable {
         "description": """
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
           add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
-          start{task,agent?,model?,effort?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹开新会话；
-          say{task,text,when:now|after|answer,value?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no）；
+          start{task,agent?,model?,effort?,fresh?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（Pi 以外可只写 id）；同一任务的下一步默认接着用上一步的会话，上下文太长或要换 Agent 时用 fresh:true；
+          say{task,text,when:now|after|answer,value?,model?,effort?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no；带 model、effort 先给会话换上再说）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
           stop{task} 停下这一轮；follow{task,who:cue|you} 换人跟进；
-          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成并结束会话；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
+          done{task,evidence,accepted?} 收尾，evidence 写两三条证据要点：步骤直接完成，会话留给下一步；顶层任务（步骤要都完成）替你请用户收下，他答了才完成，只有他用话说了收下才带 accepted:true 直接完成。
           """,
         "inputSchema": schema(
           [
             "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "done", "follow"]],
             "task": string, "title": string, "project": string, "steps": ["type": "array", "items": string], "prompt": string,
-            "agent": ["type": "string", "enum": ["pi"]], "model": ["type": "string", "description": "provider/id"],
+            "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "when": ["type": "string", "enum": ["now", "after", "answer"]], "value": string,
-            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "accepted": ["type": "boolean"],
+            "who": ["type": "string", "enum": ["cue", "you"]], "all": ["type": "boolean"], "evidence": string, "accepted": ["type": "boolean"], "fresh": ["type": "boolean"],
           ], required: ["action"]),
         "annotations": ["readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": false],
       ],
@@ -133,7 +133,8 @@ public struct CueTools: Sendable {
     _ = try await host()  // 停用后不能再收尾
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
     guard card.parentID == nil, args.bool("accepted") != true else {
-      let ends = try await store.completeTask(card.id, requireStepsDone: true, cue: true)
+      // 步骤收尾不结束会话：同一任务的下一步接着用，你收下整件事时一起结束
+      let ends = try await store.completeTask(card.id, requireStepsDone: true, endsSessions: card.parentID == nil, cue: true)
       return .ok(
         "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "。" : "，已请 \(ends.count) 个会话结束。"),
         ["task": id(card.id), "requests": ends.map { id($0.id) }])
@@ -208,24 +209,43 @@ public struct CueTools: Sendable {
   }
 
   private func start(_ args: Args) async throws -> Result {
-    if let agent = args.string("agent"), agent != "pi" { throw Failure("目前只能开 Pi 会话（agent 省略或写 pi）") }
-    let leaf = try await workingLeaf(try args.required("task"))
-    let model = try args.string("model").map { ref -> PiModelKey in
-      let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
-      guard parts.count == 2 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开") }
-      return PiModelKey(provider: parts[0], id: parts[1])
+    let agent = try args.string("agent").map { raw -> AgentKind in
+      guard let agent = AgentKind(rawValue: raw) else { throw Failure("agent 只能是 \(Self.agents)") }
+      return agent
     }
-    let effort = try args.string("effort").map { raw -> PiThinkingLevel in
+    let leaf = try await workingLeaf(try args.required("task"))
+    let model = try args.string("model").map { try Self.model($0, of: agent ?? .pi) }
+    let effort = try Self.effort(args)
+    let request = try await store.startLeaf(
+      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: model, thinking: effort, host: try await host(), cue: true)
+    let started = request?.mode == .known(.start), continued = leaf.piSessionID == nil && !started
+    let text =
+      started
+      ? "已请 Mac 为「\(leaf.heading)」开新会话" + (request?.launch?.prompt == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
+      : continued
+        ? "「\(leaf.heading)」接着用上一步的会话" + (request == nil ? "（没有草稿，用 say 说下一句）。" : "，草稿作为下一句发进去了。")
+        : "草稿已发进「\(leaf.heading)」的会话。"
+    var data: [String: Any] = ["task": id(leaf.id), "started": started, "continued": continued]
+    if let request { data["request"] = id(request.id) }
+    return .ok(text + "（\(leaf.id.shortID)）", data)
+  }
+
+  private static func effort(_ args: Args) throws -> PiThinkingLevel? {
+    try args.string("effort").map { raw -> PiThinkingLevel in
       guard let level = PiThinkingLevel(rawValue: raw) else { throw Failure("effort 只能是 \(PiThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
       return level
     }
-    let request = try await store.startLeaf(leaf.id, model: model, thinking: effort, host: try await host(), cue: true)
-    let started = request.mode == .known(.start)
-    let text =
-      started
-      ? "已请 Mac 为「\(leaf.heading)」开新会话" + (request.launch?.prompt == nil ? "（没有草稿，开好后用 say 说第一句）。" : "，草稿作为第一句。")
-      : "草稿已发进「\(leaf.heading)」的会话。"
-    return .ok(text + "（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "started": started])
+  }
+
+  /// `agent` 的取值。
+  private static let agents = AgentKind.allCases.map(\.rawValue).joined(separator: " / ")
+
+  /// 开新会话的模型：provider/id；Pi 以外的几家可以只写 id，提供方补成这一家。
+  private static func model(_ ref: String, of agent: AgentKind) throws -> PiModelKey {
+    let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
+    if parts.count == 2 { return PiModelKey(provider: parts[0], id: parts[1]) }
+    guard agent != .pi, parts.count == 1 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开（Pi 以外可以只写 id）") }
+    return PiModelKey(provider: agent.rawValue, id: parts[0])
   }
 
   private func say(_ args: Args) async throws -> Result {
@@ -243,9 +263,19 @@ public struct CueTools: Sendable {
     case "after": timing = .after
     default: throw Failure("when 只能是 now、after 或 answer")
     }
-    let request = try await store.sayToLeaf(leaf.id, text: try args.required("text"), when: timing, host: host, cue: true)
+    // 带 model、effort 就先换上再说；model 的写法同 start，只写 id 时提供方按会话是哪家补
+    var config: PiConfig?
+    let effort = try Self.effort(args)
+    if let raw = args.string("model") {
+      let agent = try await leaf.piSessionID.asyncMap { try await store.piSessions(sessionIDs: [$0])[$0]?.state.agent.known } ?? nil
+      config = PiConfig(model: try Self.model(raw, of: agent ?? .pi), thinking: effort)
+    } else if let effort {
+      config = PiConfig(thinking: effort)
+    }
+    let request = try await store.sayToLeaf(leaf.id, text: try args.required("text"), when: timing, config: config, host: host, cue: true)
     let how = request.mode == .known(.steer) ? "（会话正忙，马上说）" : request.mode == .known(.followUp) ? "（会话正忙，等它做完再说）" : ""
-    return .ok("已对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
+    let switched = config.map { "先换成 " + [$0.model.map { "\($0.provider)/\($0.id)" }, $0.thinking?.rawValue].compactMap { $0 }.joined(separator: " ") + "，再" } ?? "已"
+    return .ok("\(switched)对「\(leaf.heading)」的会话说了\(how)。（\(leaf.id.shortID)）", ["task": id(leaf.id), "request": id(request.id), "mode": request.mode.rawValue])
   }
 
   private func board() async throws -> Result {
