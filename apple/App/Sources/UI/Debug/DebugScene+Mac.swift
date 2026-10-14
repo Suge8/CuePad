@@ -44,6 +44,10 @@ extension DebugScene {
             }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+        case "cuerows":
+            await connectAgents(workspace.services)
+            await seedCueRows(workspace.services)
+            workspace.show(.agent)
         case "menubar", "cuebar":
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
