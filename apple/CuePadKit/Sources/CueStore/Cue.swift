@@ -259,12 +259,13 @@ public enum CueAsk: String, CaseIterable, Sendable {
     self = Self.allCases.first { $0.always.map(choices.contains) ?? false } ?? .rule
   }
 
-  /// "等你"卡片的第一句：要你定什么，按类别与关联任务的名字由代码写出（Cue 的原话收在下面）。
+  /// 一条"等你"在 Cue 页以外的说法（卡片第一句、侧栏与菜单栏的摘要、小组件、本机与手机通知同一句）：要你定什么，
+  /// 按类别与关联任务的标题（`Card.heading`，没有或空白时不写）由代码写出；Cue 的原话只在 Cue 页的卡片里点开看。
   public func question(task: String?) -> String {
-    let named = task.map { "「\($0)」" } ?? ""
+    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" } ?? ""
     return switch self {
     case .push: "要不要推送\(named)？"
-    case .merge: "要不要把\(task == nil ? "改动" : named)合并到共享分支？"
+    case .merge: "要不要把\(named.isEmpty ? "改动" : named)合并到共享分支？"
     case .release: "要不要发布或部署\(named)？"
     case .delete: "\(named)要删除东西，允许吗？"
     case .outside: "\(named)要动项目以外的东西，允许吗？"
@@ -286,15 +287,19 @@ public enum CueReport {
   }
 }
 
-/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
-/// 正文是那条消息的文字（去掉图片，至多 `bodyLimit` 字），"等你"再附上选项。
+/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
+/// "等你"的正文是要你定什么（`CueAsk.question`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, choices: [String]?) -> (title: String, body: String) {
-    var body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-    if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
-    if let choices, !choices.isEmpty { body += "\n" + choices.joined(separator: " / ") }
+  public static func content(name: String?, text: String, choices: [String]?, task: String?) -> (title: String, body: String) {
+    var body: String
+    if let choices {
+      body = CueAsk(choices: choices).question(task: task) + "\n" + choices.joined(separator: " / ")
+    } else {
+      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
+      if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
+    }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)
   }

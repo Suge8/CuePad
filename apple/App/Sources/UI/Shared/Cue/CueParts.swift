@@ -217,7 +217,7 @@ struct CueWaitingDock: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     WaitingMark()
-                    Text((message.ask ?? .rule).question(task: ref?.task.title))
+                    Text((message.ask ?? .rule).question(task: ref?.task.heading))
                         .font(Typography.bodyStrong).foregroundStyle(palette.ink)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
