@@ -25,14 +25,17 @@ struct CueHostTests {
         var store: CueStore { services.store }
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。`quiet`、`talking` 是安静窗口与"你在和 Cue 说话"的压制。
-        init(usage: Int = 100, failingOnce: [String] = [], quiet: Duration = .milliseconds(500), talking: Duration = .zero) async throws {
+        /// `sync`：同步引擎的替身（默认没有同步）。
+        init(
+            usage: Int = 100, failingOnce: [String] = [], quiet: Duration = .milliseconds(500), talking: Duration = .zero, sync: FakeSync? = nil
+        ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce)
             let port = try await model.start()
             let timing = CueTiming(
                 quiet: quiet, quietLimit: max(quiet, .seconds(2)), talking: talking, patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
-            app = TestApp(cue: CueDependencies(
+            app = TestApp(sync: sync.map { .custom($0) }, cue: CueDependencies(
                 scan: { [.pi] }, launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
@@ -95,6 +98,47 @@ struct CueHostTests {
                 return URL(filePath: cwd).resolvingSymlinksInPath().path == work
             }
         }
+    }
+
+    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，这台 Mac 上说的话与手机上说的（到服务器后经主动拉取到达；
+    /// 这台 Mac 上没有连着的会话、也没有在路上的请求，Cue 住在这里就是在等）都很快交给 Cue。推送到不了 Mac，不靠它。
+    @Test func 库正忙时你的话很快送进Cue() async throws {
+        let sync = FakeSync()
+        let rig = try await Rig(sync: sync)
+        let store = rig.store
+        let busy = Task {
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            var round = 0
+            while !Task.isCancelled {
+                round += 1
+                for index in 0..<10 {
+                    try? await recorder.update(sessionID: "busy-\(index)", state: round.isMultiple(of: 2) ? .thinking : .tool, title: "会话 \(index)")
+                }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        defer { busy.cancel() }
+        func delivered(_ text: String, within limit: Duration, since start: ContinuousClock.Instant) async throws -> Duration {
+            try await eventually("「\(text)」交给 Cue", timeout: limit) {
+                try await store.cueMessages().contains { $0.text == text && $0.deliveredAt != nil }
+            }
+            return ContinuousClock.now - start
+        }
+
+        var start = ContinuousClock.now
+        try await rig.say("这台 Mac 上说的")
+        let here = try await delivered("这台 Mac 上说的", within: .seconds(1), since: start)
+
+        // 手机上说的：已到服务器，等这台 Mac 来拉（先等这一轮做完，拉取照常隔着走）
+        try await eventually("这一轮做完") { rig.services.cue.state == .idle }
+        try await Task.sleep(for: .seconds(1))
+        let phone = Mutex(true)
+        sync.onPull.withLock { $0 = { if phone.withLock({ $0 }) { phone.withLock { $0 = false }; _ = try? await store.addCueMessage(.you, text: "手机上说的") } } }
+        start = ContinuousClock.now
+        let there = try await delivered("手机上说的", within: .seconds(3), since: start)
+        print("送进 Cue：本机 \(here)，手机（到服务器起）\(there)")
+        busy.cancel()
+        await rig.stop()
     }
 
     /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。

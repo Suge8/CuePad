@@ -65,7 +65,9 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
-    func pullChanges() async throws {}
+    /// 主动拉取时做的事（测试里扮演服务器上别的设备写来的记录到达）。
+    let onPull = Mutex<(@Sendable () async -> Void)?>(nil)
+    func pullChanges() async throws { await onPull.withLock { $0 }?() }
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
