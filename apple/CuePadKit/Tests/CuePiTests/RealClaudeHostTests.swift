@@ -10,6 +10,23 @@ import Testing
 @MainActor
 @Suite(.enabled(if: realClaudeAvailable, "需要 claude 与 ~/.pi/agent/auth.json 里的小米密钥"), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
+    /// CuePad 起的 `claude` 是外壳、真 claude 是它的子进程：托管进程的钩子仍认得是它自己的，桥上不多出一个终端会话。
+    /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
+    @Test func aWrappedClaudeIsNotSeenTwice() async throws {
+        try await ClaudeTestbed.run(wrapped: true) { testbed in
+            try testbed.runtime.start()
+            let log = ChangeLog(testbed.bridge)
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(testbed.bridge.session(id: id)?.sessionID)
+
+            _ = try await testbed.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
+            try await eventually("这一轮开始又结束", timeout: .seconds(120)) {
+                log.states.contains { $0.isWorking } && testbed.bridge.session(id: id)?.state.isWorking == false
+            }
+            #expect(log.changes.allSatisfy { if case .appeared(let s) = $0 { s.sessionID != sessionID || s.id == id } else { true } })
+        }
+    }
+
     /// 新会话带着发起方的认领标识上桥；发的话带图，会话文件里认得出是哪条投送请求、图存进了附件目录。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
         try await ClaudeTestbed.run { testbed in

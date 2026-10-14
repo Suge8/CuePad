@@ -48,6 +48,13 @@ public struct AgentPaths: Sendable, Equatable {
     }
 }
 
+/// CuePad 托管的 Claude Code、Codex 进程在环境里带的标记（钩子转发 `CUEPAD_` 前缀的变量）：钩子按它认回托管会话。
+/// 不按进程号认：可执行文件可能是外壳（npm 装的 codex 是 node 脚本），钩子的父进程是外壳起的子进程。
+/// Agent 在托管会话里再起的进程也继承它，所以认的时候还要对上会话。
+enum HostMark {
+    static let variable = "CUEPAD_HOST"
+}
+
 /// 一个 Agent 在这台 Mac 上的接入：发现它的会话、接上桥（`PiBridge.attach`），在后台开新会话、接着已结束的会话。
 /// 投送执行器开会话、接着会话只经这里（按会话的 Agent 找到它）；对在线会话的一切（含结束）经桥。
 @MainActor

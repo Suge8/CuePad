@@ -43,7 +43,8 @@ final class ClaudeTestbed {
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
-    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800)) async throws {
+    /// - Parameter wrapped: CuePad 托管时起的 `claude` 是一层外壳、真 claude 是它的子进程（钩子的父进程不是 CuePad 起的那个）。
+    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false) async throws {
         root = try makeTempDirectory()
         config = root.appending(path: "config")
         sockets = root.appending(path: "s")
@@ -74,17 +75,26 @@ final class ClaudeTestbed {
         try hooks.start()
         let presence = TestPresence()
         self.presence = presence
+        var bin = claudeURL!.deletingLastPathComponent()
+        if wrapped {
+            bin = root.appending(path: "wrapper", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let script = bin.appending(path: "claude")
+            try "#!/bin/sh\n'\(claudeURL!.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locate: { ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]) },
+            bridge: bridge, paths: paths, hooks: hooks, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
             presence: presence)
         if installHooks { try await integration.install(.claudeCode) }
     }
 
     /// 搭好测试台跑 `body`，不论成败都收拾干净（停掉起的进程、删掉临时目录）。
     static func run(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), _ body: (ClaudeTestbed) async throws -> Void
+        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false,
+        _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
-        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit)
+        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapped: wrapped)
         do {
             try await body(testbed)
         } catch {

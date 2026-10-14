@@ -5,8 +5,10 @@ import OSLog
 
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
-/// - 状态只来自钩子（托管的会话也一样，钩子在承载线程的进程里跑）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
-///   `Stop`/`Interrupt` 歇下，`SessionEnd` 下线。会话 id 是线程 id，承载进程是钩子的父进程（终端会话是常驻服务，托管的是 CuePad 起的进程）。
+/// - 状态来自钩子：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，`Stop`/`Interrupt` 歇下，`SessionEnd` 下线。
+///   托管的会话另有自己进程的 `turn/started`、`turn/completed` 通知管忙闲（钩子没装好时也对）。
+///   会话 id 是 `<线程 id>.<承载进程>`：终端会话的承载进程是钩子的父进程（常驻服务）；托管的是 CuePad 起的进程，它的钩子按环境里的
+///   `HostMark` 认回（`codex` 可能是外壳，钩子的父进程是外壳起的子进程，不按进程号认）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置后才卸载并报 `SessionEnd`），
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
 /// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/steer`（马上说，
@@ -29,6 +31,8 @@ public final class CodexRuntime: AgentRuntime {
     private var tracked: [PiSession.ID: Tracked] = [:]
     /// CuePad 托管的进程（进程号 → 进程）
     private var hosted: [Int32: CodexRPC] = [:]
+    /// 托管进程环境里的标记（`HostMark`）→ 进程号
+    private var marks: [String: Int32] = [:]
     private var daemon: CodexRPC?
     private var connecting: Task<CodexRPC, any Error>?
     /// 常驻服务的控制 socket（服务在跑时问到的）
@@ -61,6 +65,8 @@ public final class CodexRuntime: AgentRuntime {
         var reply: Reply?
         /// 发起的子代理的任务名，等 `SubagentStart` 认领（按先后）
         var spawnNames: [String] = []
+        /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
+        var lastError: String?
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {
@@ -141,8 +147,9 @@ public final class CodexRuntime: AgentRuntime {
     /// 起一个托管进程交给 `body`；连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
     private func launch(_ body: @escaping @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
         let codex = try await executable()
-        let rpc = try await CodexRPC.launch(codex.url, environment: codex.environment)
-        host(rpc)
+        let mark = UUID().uuidString
+        let rpc = try await CodexRPC.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
+        host(rpc, mark: mark)
         do {
             return try await withDeadline(AgentTimeouts.launch, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(rpc) }
         } catch {
@@ -151,9 +158,10 @@ public final class CodexRuntime: AgentRuntime {
         }
     }
 
-    private func host(_ rpc: CodexRPC) {
+    private func host(_ rpc: CodexRPC, mark: String) {
         let pid = rpc.pid
         hosted[pid] = rpc
+        marks[mark] = pid
         rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
         rpc.onRequest = { [weak self, weak rpc] method, id, params in
             guard let self, let rpc, method == "item/tool/requestUserInput" else { return false }
@@ -286,6 +294,7 @@ public final class CodexRuntime: AgentRuntime {
     private func processGone(_ pid: Int32) {
         exitWatchers.removeValue(forKey: pid)?.cancel()
         hosted[pid] = nil
+        marks = marks.filter { $0.value != pid }
         for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
@@ -345,12 +354,13 @@ public final class CodexRuntime: AgentRuntime {
     private func hook(_ call: AgentHookCall) {
         guard let input = JSONValue.parse(call.envelope.input), let event = input["hook_event_name"]?.string,
               let threadID = input["session_id"]?.string else { return call.finish() }
-        let id = "\(threadID).\(call.envelope.pid)"
+        let pid = hostedPID(of: call.envelope, thread: threadID) ?? call.envelope.pid
+        let id = "\(threadID).\(pid)"
         if event == "SessionEnd" {
             call.finish()
             return detach(id)
         }
-        let session = tracked[id] ?? adoptFromHook(threadID, pid: call.envelope.pid, input)
+        let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input)
         let agent = input["agent_id"]?.string
         if let turn = input["turn_id"]?.string, agent == nil { session.turnID = turn }
         let tool = input["tool_name"]?.string ?? ""
@@ -401,6 +411,13 @@ public final class CodexRuntime: AgentRuntime {
         }
         call.finish()
         publish(session)
+    }
+
+    /// 钩子来自哪个托管进程：环境里带着它的标记，且线程是它承载的（或它还没有上桥的线程：刚开、刚接着）。
+    /// Agent 在托管会话里再起的 codex 也继承标记，但线程不同，算终端会话。
+    private func hostedPID(of envelope: AgentHookEnvelope, thread: String) -> Int32? {
+        guard let mark = envelope.environment[HostMark.variable], let pid = marks[mark] else { return nil }
+        return tracked["\(thread).\(pid)"] != nil || !tracked.values.contains(where: { $0.pid == pid }) ? pid : nil
     }
 
     /// 钩子先于其他途径报出的会话（终端里刚开、或 CuePad 晚启动）：接上桥，名字与模型随后从 Codex 读。
@@ -522,13 +539,29 @@ public final class CodexRuntime: AgentRuntime {
                 release(session)
                 session.facts.endTurn()
             case "systemError":
-                session.facts.endTurn(failure: "Codex 出错了")
+                release(session)
+                session.facts.endTurn(failure: session.lastError ?? "Codex 出错了")
+                if session.lastError == nil { readFailure(session) }
             default: return
             }
+        case "error" where params["willRetry"]?.bool != true:
+            // 出错的原文（常驻服务也广播）；随后的 systemError 或失败的 turn/completed 用它
+            session.lastError = CodexModel.failure(of: params)
+            return
+        // 以下只有开出这个线程的连接（托管的进程）收得到
+        case "turn/started":
+            session.turnID = params["turn"]?["id"]?.string
+            session.lastError = nil
+            guard !session.facts.running else { return }
+            session.facts.startTurn()
         case "turn/completed" where params["turn"]?["status"]?.string == "failed":
-            // 只有开出这个线程的连接（托管的进程）收得到；失败的一轮没有 Stop 钩子，状态停在这里
+            // 失败的一轮没有 Stop 钩子，状态停在这里
             release(session)
-            session.facts.endTurn(failure: CodexModel.failure(of: params["turn"]))
+            session.facts.endTurn(failure: session.lastError ?? CodexModel.failure(of: params["turn"]))
+        case "turn/completed":
+            guard session.facts.running else { return }
+            release(session)
+            session.facts.endTurn()
         case "serverRequest/resolved":
             // 服务端请求被别处答了或收回了
             guard case .request = session.reply else { return }
@@ -545,6 +578,18 @@ public final class CodexRuntime: AgentRuntime {
             return
         }
         publish(session)
+    }
+
+    /// 出错的原文只在开出线程的连接上（`error` 通知），常驻服务只广播 `systemError`：从最近一轮读出它的错误。
+    private func readFailure(_ session: Tracked) {
+        Task {
+            guard let rpc = try? await control(session),
+                  let turns = try? await rpc.call("thread/turns/list", ["threadId": .string(session.threadID), "limit": 1]),
+                  let turn = turns["data"]?.array?.first, turn["status"]?.string == "failed", tracked[session.id] === session,
+                  !session.facts.running else { return }
+            session.facts.failure = CodexModel.failure(of: turn)
+            publish(session)
+        }
     }
 
     // MARK: 命令（`CodexLink` 转来）

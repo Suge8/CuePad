@@ -2,7 +2,6 @@
 import CueStore
 import CueTestSupport
 import Foundation
-import Network
 import Testing
 @testable import CuePi
 
@@ -53,6 +52,23 @@ struct RealCodexHostedTests {
             _ = try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
             // 前一句要它答小写，模型可能沿用：大小写不论
             try await eventually("接着回答了", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("AGAIN") == true }
+        }
+    }
+
+    /// CuePad 起的 `codex` 是外壳（npm 装的就是 node 外壳）、真 codex 是它的子进程：钩子仍认回这个托管会话，不另接一个；
+    /// 忙闲来自托管进程自己的通知，第一句照常进入思考、答完歇下。
+    @Test func aWrappedCodexAnswersTheFirstMessage() async throws {
+        try await withCodexRig(wrapped: true) { rig in
+            let log = ChangeLog(rig.bridge)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-wrapped", name: nil, model: nil, thinking: nil)
+            let threadID = try #require(rig.bridge.session(id: id)?.sessionID)
+
+            _ = try await rig.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
+            try await eventually("这一轮做完", timeout: .seconds(120)) { log.states.contains(.thinking) && rig.bridge.session(id: id)?.state == .settled }
+
+            let session = try #require(rig.bridge.session(id: id))
+            #expect(rig.replies(session).last?.uppercased().contains("WRAPPED") == true, "\(rig.replies(session))")
+            #expect(rig.bridge.sessions.filter { $0.sessionID == threadID }.map(\.id) == [id])
         }
     }
 
@@ -132,16 +148,7 @@ struct RealCodexHostedTests {
         let provider = try await RejectingProvider()
         defer { provider.stop() }
         try await withCodexRig { rig in
-            let config = rig.codex.home.appending(path: "config.toml")
-            let text = try String(contentsOf: config, encoding: .utf8)
-            try ("model_provider = \"rejecting\"\n" + text + """
-
-                [model_providers.rejecting]
-                name = "rejecting"
-                base_url = "http://127.0.0.1:\(provider.port)/v1"
-                wire_api = "responses"
-
-                """).write(to: config, atomically: true, encoding: .utf8)
+            try rig.codex.use(provider)
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4", name: nil, model: nil, thinking: nil)
 
             _ = try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
@@ -155,32 +162,4 @@ struct RealCodexHostedTests {
     }
 }
 
-/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
-private final class RejectingProvider: Sendable {
-    static let reason = "bad things happened"
-    private let listener: NWListener
-    let port: UInt16
-
-    init() async throws {
-        listener = try NWListener(using: .tcp, on: .any)
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global())
-            // 请求读一块就够了：不论问什么都拒绝
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
-                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
-                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
-                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
-            }
-        }
-        let ready = AsyncStream<UInt16>.makeStream()
-        listener.stateUpdateHandler = { [listener] state in
-            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
-        }
-        listener.start(queue: .global())
-        var iterator = ready.stream.makeAsyncIterator()
-        port = try #require(await iterator.next())
-    }
-
-    func stop() { listener.cancel() }
-}
 #endif

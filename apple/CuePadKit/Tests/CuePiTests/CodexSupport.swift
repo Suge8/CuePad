@@ -3,6 +3,7 @@ import CueStore
 import CueTestSupport
 import Foundation
 import ImageIO
+import Network
 import Synchronization
 import Testing
 @testable import CuePi
@@ -95,6 +96,20 @@ struct CodexHome {
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
+    /// 模型改走本机的假提供方（`RejectingProvider`）。
+    func use(_ provider: RejectingProvider) throws {
+        let config = home.appending(path: "config.toml")
+        let text = try String(contentsOf: config, encoding: .utf8)
+        try ("model_provider = \"rejecting\"\n" + text + """
+
+            [model_providers.rejecting]
+            name = "rejecting"
+            base_url = "http://127.0.0.1:\(provider.port)/v1"
+            wire_api = "responses"
+
+            """).write(to: config, atomically: true, encoding: .utf8)
+    }
+
     /// 删掉临时目录（含复制的凭据）。
     func remove() {
         try? FileManager.default.removeItem(at: root)
@@ -136,8 +151,8 @@ struct CodexHome {
 
 /// 起一整套接入交给 `body`，结束后（失败也一样）停掉它起的进程、删掉临时目录。
 @MainActor
-func withCodexRig(approvals: String = "never", _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals)
+func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
+    let rig = try await CodexRig(approvals: approvals, wrapped: wrapped)
     do {
         try await body(rig)
     } catch {
@@ -158,12 +173,22 @@ final class CodexRig {
     let presence: TestPresence
 
     /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
-    init(approvals: String = "never") async throws {
+    /// - Parameter wrapped: CuePad 起的 `codex` 是一层外壳、真 codex 是它的子进程（npm 装的 `codex` 就是 node 外壳），钩子的父进程不是 CuePad 起的那个。
+    init(approvals: String = "never", wrapped: Bool = false) async throws {
         let codex = try CodexHome()
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator = codex.locator] in locator }, presence: presence)
+        var locator = codex.locator
+        if wrapped {
+            let bin = codex.root.appending(path: "wrapper", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let script = bin.appending(path: "codex")
+            try "#!/bin/sh\n'\(realCodexURL!.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            locator = ExecutableLocator(searchDirectories: [bin])
+        }
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator] in locator }, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
@@ -238,9 +263,9 @@ final class CodexTerminal: @unchecked Sendable {
     private let output = Pipe()
     private let screen = Mutex(Data())
 
-    init(_ codex: CodexHome) throws {
+    init(_ codex: CodexHome, arguments: [String] = []) throws {
         process.executableURL = URL(filePath: "/usr/bin/script")
-        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\"", realCodexURL!.path]
+        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", realCodexURL!.path] + arguments
         process.environment = codex.environment.merging(["TERM": "xterm-256color"]) { $1 }
         process.currentDirectoryURL = codex.work
         process.standardInput = input
@@ -285,5 +310,33 @@ final class CodexTerminal: @unchecked Sendable {
         for child in children.prefix(Int(max(count, 0))) where child > 0 { kill(child, SIGTERM) }
         if process.isRunning { process.terminate() }
     }
+}
+/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
+final class RejectingProvider: Sendable {
+    static let reason = "bad things happened"
+    private let listener: NWListener
+    let port: UInt16
+
+    init() async throws {
+        listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: .global())
+            // 请求读一块就够了：不论问什么都拒绝
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
+                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
+                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
+                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        let ready = AsyncStream<UInt16>.makeStream()
+        listener.stateUpdateHandler = { [listener] state in
+            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
+        }
+        listener.start(queue: .global())
+        var iterator = ready.stream.makeAsyncIterator()
+        port = try #require(await iterator.next())
+    }
+
+    func stop() { listener.cancel() }
 }
 #endif

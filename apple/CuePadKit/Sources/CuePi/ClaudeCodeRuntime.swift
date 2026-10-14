@@ -85,7 +85,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func launch(sessionID: String, arguments: [String], in directory: URL, launchToken: String?) async throws -> PiSession.ID {
         let claude = try await executable()
         let session = try ClaudeHostedSession(
-            executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory, environment: claude.environment, bridge: bridge)
+            executable: claude.url, arguments: arguments, sessionID: sessionID, directory: directory,
+            environment: claude.environment.merging([HostMark.variable: sessionID]) { $1 }, bridge: bridge)
         hosted[sessionID] = session
         Task { [weak self] in
             _ = await session.process.exited()
@@ -104,11 +105,13 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 
     // MARK: 终端会话
 
-    /// 一次钩子调用：托管进程自己的直接放行（按进程认：环境变量会被从 CuePad 托管的会话里开的终端继承）；其余交给它所在的终端会话（第一次见到就上桥）。
+    /// 一次钩子调用：托管会话自己的直接放行（状态来自 stream-json）——按环境里的 `HostMark`（值是会话 id）认，还要对上会话
+    /// （从托管会话里开的终端继承了标记）；其余交给它所在的终端会话（第一次见到就上桥）。
     private func received(_ call: AgentHookCall) {
         let envelope = call.envelope
-        guard !hosted.values.contains(where: { $0.process.pid == envelope.pid }), let input = JSONValue.parse(envelope.input),
-              let event = input["hook_event_name"]?.string, let sessionID = input["session_id"]?.string else { return call.finish() }
+        guard let input = JSONValue.parse(envelope.input), let event = input["hook_event_name"]?.string,
+              let sessionID = input["session_id"]?.string,
+              envelope.environment[HostMark.variable] != sessionID || hosted[sessionID] == nil else { return call.finish() }
         let id = PiSession.claudeID(sessionID: sessionID, pid: envelope.pid)
         if event == "SessionEnd" {
             settle(id, reason: input["reason"]?.string)
@@ -203,8 +206,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         } catch {
             return Self.log.notice("没能补上已在跑的 Claude Code 会话：\(String(describing: error))")
         }
-        let ours = Set(hosted.values.map(\.process.pid))
-        for entry in list where !ours.contains(entry.pid) && kill(entry.pid, 0) == 0 {
+        for entry in list where hosted[entry.sessionID] == nil && kill(entry.pid, 0) == 0 {
             let id = PiSession.claudeID(sessionID: entry.sessionID, pid: entry.pid)
             guard terminals[id] == nil else { continue }
             let cwd = URL(filePath: entry.cwd, directoryHint: .isDirectory)

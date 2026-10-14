@@ -79,6 +79,20 @@ struct RealCodexTerminalTests {
 
     /// 权限确认按人在不在这台 Mac 前分：人在，终端照常弹框，CuePad 里只显示；人不在，钩子挂住、在 CuePad 里答；
     /// 挂着时人回来了，终端补弹确认框，CuePad 里收起成只显示。
+    /// 终端里的这一轮出错（账号用不了的模型，Codex 回 400）：会话停在出错，说明是 Codex 的原话，不是笼统的一句。
+    /// 原话只在开出线程的连接上，常驻服务只广播 systemError。
+    @Test func aFailedTerminalTurnShowsTheReason() async throws {
+        try await withCodexRig { rig in
+            let terminal = try CodexTerminal(rig.codex, arguments: ["-m", "no-such-model-xyz"])
+            defer { terminal.stop() }
+            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            try terminal.type("Reply OK.")
+            try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {
+                rig.session?.state == .error && rig.session?.errorMessage?.contains("no-such-model-xyz") == true
+            }
+        }
+    }
+
     @Test func aPermissionRequestGoesWhereThePersonIs() async throws {
         try await withCodexRig(approvals: "on-request") { rig in
             let terminal = try CodexTerminal(rig.codex)
