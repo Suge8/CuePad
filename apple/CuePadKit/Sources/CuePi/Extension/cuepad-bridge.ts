@@ -217,6 +217,8 @@ class StateTracker {
 	prompt: { kind: string; title?: string } | null = null;
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
 	outcome: State = { kind: "done", aborted: false };
+	/** 这一轮收到过 CuePad 的停止（`abort` 命令） */
+	stopped = false;
 	settled: State | null = null;
 	/** 在飞子代理数（FireCode 发布） */
 	inFlight = 0;
@@ -749,7 +751,10 @@ export default function (pi: ExtensionAPI) {
 	 */
 	function handleAbort(ack: Ack) {
 		asking?.dismiss?.();
-		if (!ctx.isIdle()) ctx.abort();
+		if (!ctx.isIdle()) {
+			tracker.stopped = true;
+			ctx.abort();
+		}
 		ack({ ok: true });
 	}
 
@@ -959,6 +964,7 @@ export default function (pi: ExtensionAPI) {
 		tracker.phase = "thinking";
 		tracker.settled = null;
 		tracker.outcome = { kind: "done", aborted: false };
+		tracker.stopped = false;
 		commit();
 	});
 	pi.on("turn_start", () => { tracker.phase = "thinking"; commit(); });
@@ -1002,10 +1008,13 @@ export default function (pi: ExtensionAPI) {
 	}
 	pi.on("session_compact", finishCompaction);
 	pi.on("session_compact_failed", finishCompaction);
-	pi.on("agent_end", (event) => {
+	// 被停下的一轮有时以 error 结束（Pi 1.2 在工具被中止后再请求模型、请求因中止失败时记成 error）：只认确定的事实——
+	// 这一轮收到过停止、或这一轮的中止信号已触发——按被停下报，不看错误文案
+	pi.on("agent_end", (event, context) => {
 		const last = event.messages.findLast((m) => m.role === "assistant");
-		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
-		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
+		const stopped = tracker.stopped || context.signal?.aborted === true;
+		if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done", aborted: true };
+		else if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 	});
 	pi.events?.on(FIRECODE_WORKERS_CHANNEL, (data) => {
 		const { inFlight } = (data ?? {}) as { inFlight?: unknown };

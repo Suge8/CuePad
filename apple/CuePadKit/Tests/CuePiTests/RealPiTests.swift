@@ -123,6 +123,18 @@ struct RealPiTests {
         }
     }
 
+    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（Pi 1.2 在工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
+    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错。
+    @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
+        try await withRig { pi, bridge, s in
+            try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
+            try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
+            try await bridge.abort(s.id)
+            try await eventually("这一轮结束", timeout: .seconds(30)) { [.settled, .error].contains(bridge.sessions.first?.state) }
+            #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
+        }
+    }
+
     /// 正在等你确认时停止：弹窗取消、这一轮中止，不会卡在等你。
     @Test func abortWhileWaitingForYouCancelsTheDialogAndStopsTheTurn() async throws {
         try await withRig { pi, bridge, s in

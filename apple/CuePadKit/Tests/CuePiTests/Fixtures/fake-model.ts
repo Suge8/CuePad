@@ -2,6 +2,7 @@
 // 最后一条 user 文字里的标记决定行为（请求被中止时以 aborted 结束）：
 //   [[slow]]      流式输出前停住，直到测试放行（制造"正忙"窗口；见下"停住与放行"）
 //   [[fail]]      以 error 结束
+//   [[abort-as-error]] 请求被中止时以 error（"The operation was aborted."）结束，像 Pi 1.2 的 openai-codex 在工具被中止后的那次请求
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
 //   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
 //   [[subagent:NAME]] 先调用 FireCode 的 subagents 工具开一个子代理（任务"[[slow]] 子任务"），收到工具结果后回复 TOOL_DONE
@@ -79,9 +80,10 @@ export default function (pi: any) {
 
 				// 与真实提供方一样：被中止（Esc、CuePad 的停止）就以 aborted 结束这次请求
 				if (options?.signal?.aborted) {
-					msg.stopReason = "aborted";
-					msg.errorMessage = "Request was aborted";
-					stream.push({ type: "error", reason: "aborted", error: msg });
+					const asError = text.includes("[[abort-as-error]]");
+					msg.stopReason = asError ? "error" : "aborted";
+					msg.errorMessage = asError ? "The operation was aborted." : "Request was aborted";
+					stream.push({ type: "error", reason: msg.stopReason, error: msg });
 					stream.end();
 					return;
 				}
