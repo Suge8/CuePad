@@ -111,8 +111,8 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "here.txt")
 
-            try await terminal.type("用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE")
-            let permission = try await testbed.waitForQuestion(session.id, on: terminal)
+            let permission = try await testbed.ask(
+                "必须用 Bash 工具执行 touch \(touched.path) （不要用别的工具，也不要先检查），执行完只回复 DONE", on: terminal, in: session.id)
             try await eventually("终端里弹出确认") { await terminal.screen.contains("Do you want to proceed?") }
             try await terminal.keys("Enter")
 

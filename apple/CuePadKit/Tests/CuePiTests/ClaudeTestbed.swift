@@ -129,6 +129,21 @@ final class ClaudeTestbed {
         return bridge.session(id: id)!.question!
     }
 
+    /// 在终端里叫它用一个要确认的工具，等到它在等你确认。模型偶尔不照做（没调工具就答完了这一轮）：在同一会话里再说一次，只重来一次。
+    func ask(_ prompt: String, on terminal: ClaudeTerminal, in id: PiSession.ID) async throws -> PiQuestion {
+        for attempt in 0..<2 {
+            try await terminal.type(prompt)
+            var worked = false
+            try await eventually("在等你确认或这一轮做完", timeout: .seconds(180)) {
+                let session = bridge.session(id: id)
+                if session?.state.isWorking == true { worked = true }
+                return session?.question?.promptID != nil || (worked && session?.state == .settled)
+            }
+            if bridge.session(id: id)?.question?.promptID != nil || attempt == 1 { break }
+        }
+        return try await waitForQuestion(id, on: terminal)
+    }
+
     /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
