@@ -52,7 +52,7 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 等你确认（托管进程问 CuePad 能不能用工具）从 CuePad 作答；跑着的一轮能停，停了还能接着说。
+    /// 等你确认（托管进程问 CuePad 能不能用工具）从 CuePad 作答；跑着的一轮能停，停了上下文用量不归零，还能接着说。
     @Test func cuePadAnswersAPermissionAndStopsARunningTurn() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
@@ -74,6 +74,14 @@ struct RealClaudeHostTests {
             }
             try await testbed.bridge.abort(id)
             try await eventually("停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+
+            // 模型还没回出一个字就停：这一轮的用量全是 0，上下文仍是上一次的
+            let used = try #require(testbed.bridge.session(id: id)?.context?.tokens)
+            _ = try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
+            try await eventually("开始这一轮", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state.isWorking == true }
+            try await testbed.bridge.abort(id)
+            try await eventually("又停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+            #expect(try #require(testbed.bridge.session(id: id)?.context?.tokens) >= used)
 
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
             try await testbed.waitForTurn(id)

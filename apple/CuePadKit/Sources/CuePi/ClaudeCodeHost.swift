@@ -25,6 +25,8 @@ final class ClaudeHostedSession: SessionLink {
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     private var contextWindow: Int?
+    /// 最近一次调模型的用量（模型回答里带的）：上下文按它算。一轮的 `result` 是整轮累加的，停在模型回话之前时全是 0，不能用
+    private var lastUsage: JSONValue?
     /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
     private var resolved: [String: String] = [:]
 
@@ -91,7 +93,10 @@ final class ClaudeHostedSession: SessionLink {
             system(message, at: now)
         case "assistant":
             guard message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null else { return }
-            if let usage = message["message"]?["usage"] { context(usage) }
+            if let usage = message["message"]?["usage"] {
+                lastUsage = usage
+                context()
+            }
             // 这一轮出错时 Claude Code 合成一条带错误类型的回答（`is_api_error_message`），原话就是对话里的那条
             if message["is_api_error_message"]?.bool == true, let code = message["error"]?.string {
                 apiError = ClaudeCode.failure(
@@ -113,7 +118,7 @@ final class ClaudeHostedSession: SessionLink {
             for usage in (message["modelUsage"]?.object ?? [:]).values {
                 if let window = usage["contextWindow"]?.int { contextWindow = window }
             }
-            if let usage = message["usage"] { context(usage) }
+            context()
             let failed = (message["is_error"]?.bool == true || apiError != nil) && !stopping
             stopping = false
             permission = nil
@@ -171,8 +176,8 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     /// 已用上下文：最近一次模型调用的输入（含缓存）加输出；窗口从 `result` 的模型用量里来。
-    private func context(_ usage: JSONValue) {
-        guard let window = contextWindow, let id else { return }
+    private func context() {
+        guard let usage = lastUsage, let window = contextWindow, let id else { return }
         let used = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"]
             .compactMap { usage[$0]?.int }.reduce(0, +)
         bridge?.update(id) { $0.context = PiContextUsage(tokens: used, window: window) }
