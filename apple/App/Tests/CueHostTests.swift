@@ -62,9 +62,11 @@ struct CueHostTests {
 
         /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下；
         /// `beforeSettling` 在会话歇下（叫醒 Cue）之前做。
+        /// 会话要等开工这一轮做完才歇下：同一刻歇下的，状态记进库时可能已落在这一轮前移的基线之前，Cue 就看不到这处变化。
+        /// 等的是开工结果之后那句回复、且 Cue 空闲：只等"办好了"会撞上更早一轮的同一句。
         func settleFollowedTask(titled title: String, beforeSettling: () async throws -> Void = {}) async throws {
             try await say("请建个任务并开工")
-            try await message(.cue, containing: "办好了")
+            try await eventually("开工这一轮做完") { self.model.answered("开新会话") && self.services.cue.state == .idle }
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
             let session = try #require(app.host.extensions.values.first)
             let task = try #require(try await store.cueBoard().first?.task)
