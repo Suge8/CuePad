@@ -50,6 +50,7 @@ nonisolated struct CueTiming: Sendable {
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
 /// 5. 跟进的事有变化（含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
+///    其中有会话在等回答（如"允许使用 Bash？"）就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
 /// 6. 空闲巡视：没在跟进任何事、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -436,7 +437,8 @@ final class CueKeeper {
 
             let timing = setup.timing
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
-            let latest = try await changes().map(\.at).max()
+            let changes = try await changes()
+            let latest = changes.map(\.at).max()
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
                 if let latest, latest > held.latest ?? .distantPast {
@@ -454,7 +456,8 @@ final class CueKeeper {
                 if latest > current.latest { (current.last, current.latest) = (now, latest) }
                 window = current
                 let settled = min(current.last + timing.quiet.seconds, current.first + timing.quietLimit.seconds)
-                let ready = max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
+                let blocked = changes.contains { $0.kind == .waitingForUser }
+                let ready = blocked ? now : max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
                 if now >= ready {
                     window = nil
                     return _ = try await wakeUp(.sessionActivity)

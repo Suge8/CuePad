@@ -24,12 +24,12 @@ struct CueHostTests {
         var services: AppServices { app.services }
         var store: CueStore { services.store }
 
-        /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
-        init(usage: Int = 100, failingOnce: [String] = []) async throws {
+        /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。`quiet`、`talking` 是安静窗口与"你在和 Cue 说话"的压制。
+        init(usage: Int = 100, failingOnce: [String] = [], quiet: Duration = .milliseconds(500), talking: Duration = .zero) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce)
             let port = try await model.start()
             let timing = CueTiming(
-                quiet: .milliseconds(500), quietLimit: .seconds(2), talking: .zero, patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
+                quiet: quiet, quietLimit: max(quiet, .seconds(2)), talking: talking, patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
@@ -131,6 +131,16 @@ struct CueHostTests {
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
         try await rig.message(.note, containing: "登录页那边歇下了")
+        await rig.stop()
+    }
+
+    /// 跟进的会话在等回答（如"允许使用 Bash？"）是活被卡住了：不攒安静窗口，你刚和 Cue 说过话也不压着，马上叫醒 Cue。
+    @Test func 会话等回答时Cue马上醒来() async throws {
+        let rig = try await Rig(quiet: .seconds(30), talking: .seconds(30))
+        try await rig.settleFollowedTask(titled: "修好登录页 要作答")  // 你刚说过"请建个任务并开工"；会话歇下这一处变化要攒 30 秒
+        let session = try #require(rig.app.host.extensions.values.first)
+        session.setState(["kind": "waiting_user", "title": "允许使用 Bash？"])
+        try await rig.message(.note, containing: "去作答了", timeout: .seconds(5))
         await rig.stop()
     }
 
@@ -391,6 +401,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {
             return say("看到了：\(failed)")
         }
+        if text.contains("醒来：跟进的会话有动静"), text.contains("要作答") { return say("去作答了") }
         if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") {
             return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": "- 登录测试全过"])
         }
