@@ -23,7 +23,8 @@ nonisolated enum PiProgress {
         // 状态词"正在压缩上下文"就是这一句（整页的行没有别的话时写状态词）
         case .compacting: nil
         case .error: firstLine(session.detail)
-        case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply)
+        // 被打断的：最近一轮做完的回答，正在处理的那句由状态词"被打断"带出
+        case .settled, .ended, .interrupted, .incompatible, nil: firstSentence(session.lastReply)
         }
     }
 

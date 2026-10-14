@@ -152,9 +152,11 @@ struct PiTranscriptTests {
         await consume([file])
         #expect(try await record("s1").pendingPrompt == "做到一半")
 
+        var idle = session
+        idle.state = .settled
         try await services.consumePiChanges(AsyncStream { continuation in
-            continuation.yield(.stateChanged(session, from: .settled))
-            continuation.yield(.ended(session, reason: .closed(reason: "quit")))
+            continuation.yield(.stateChanged(idle, from: .thinking))
+            continuation.yield(.ended(idle, reason: .closed(reason: "quit")))
             continuation.finish()
         })
         #expect(try await record("s1").pendingPrompt == nil)
@@ -192,7 +194,7 @@ struct PiTranscriptTests {
         #expect(seen, "追加后 \(ContinuousClock.now - appended) 仍没读到")
     }
 
-    /// Mac 重启：启动时把上次遗留的记录标为已结束，会话重新连上后，正在处理的提问照样在——不必等文件再追加。
+    /// Mac 重启：启动对账之后会话重新连上，正在处理的提问照样在——不必等文件再追加。
     @Test func 重启后会话重新连上_正在处理的提问仍在() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         let handle = try FileHandle(forWritingTo: file)
@@ -203,8 +205,7 @@ struct PiTranscriptTests {
         await consume([file])
         #expect(try await record("s1").pendingPrompt == "第三问")
 
-        try await services.resetPiState()  // 重启：上次的会话都标为已结束
-        #expect(try await record("s1").pendingPrompt == nil)
+        try await services.resetPiState()  // 重启时的启动对账
         _ = try await live("s1", file: file)  // 桥重新发现它；文件没有新内容，不会再读
 
         #expect(try await record("s1").pendingPrompt == "第三问")
