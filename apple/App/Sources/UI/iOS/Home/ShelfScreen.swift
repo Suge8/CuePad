@@ -536,7 +536,7 @@ private struct ActiveTaskRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 project
                 if let session = row.session {
-                    let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
+                    let shown = workspace.shown(session, delivery: row.delivery)
                     VStack(alignment: .leading, spacing: 2) {
                         presence(shown)
                         PiElapsed(shown: shown, font: .footnote)
@@ -557,7 +557,7 @@ private struct ActiveTaskRow: View {
         HStack(spacing: 6) {
             project.fixedSize()
             if let session = row.session {
-                let shown = workspace.shown(session, delivery: row.delivery, cueFollows: row.task.cueFollows)
+                let shown = workspace.shown(session, delivery: row.delivery)
                 if row.project != nil { Dot().foregroundStyle(palette.ink3) }
                 HStack(spacing: 4) {
                     presence(shown)

@@ -3,9 +3,10 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：启用在演示 Mac 上，跟进圆桌的"乱序"（步骤在 Agent 会话里跑，
-/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"刚做完。
-/// 对话里有你的话（一句带图）、Cue 的话、折起的动态与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；记忆有钉住的与其他，还有一条忘掉的。
+/// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
+/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 验收过、做完了（结果带证据与截图）。
+/// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
+/// 记忆有钉住的与其他，还有一条忘掉的。
 /// `-CuePadCuePresence <thinking|tool|asleep|disabled>`：你的最后一句已交给 Cue、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 没交出去超过 30 秒（它住的那台 Mac 不在线，在睡觉）、没启用。演示 Mac 不值班，此刻在做什么直接写进库（`CueStore.setCueState`）。
 extension DebugScene {
@@ -21,14 +22,11 @@ extension DebugScene {
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
             let order = task("发言轮次"), importing = task("导入旧数据"), panel = task("README 截图")
-            for card in [order, importing, panel].compactMap(\.self) { _ = try await store.setCueFollows(card.id, true) }
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
-            if let panel {
-                // 截图是 notes 会话做的（歇着、有新回复）：侧栏与会话列表里它只说"歇着"，带 Cue 的小头像
-                try await store.linkCard(panel.id, toSession: "notes")
-                try await store.setStatus(panel.id, .done)
-            }
-            await seedEvidence(store)
+            // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
+            if let panel { try await store.linkCard(panel.id, toSession: "notes") }
+            await seedEvidence(store, session: "deploy", title: "预发上的发言顺序")
+            await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
                 "排序改完后把 scheduler 的测试全跑一遍，结果贴给我", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "demo-mac", cue: true)
@@ -46,7 +44,12 @@ extension DebugScene {
             ] { _ = try await store.addCueMessage(.note, text: note) }
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
-            _ = try await store.addCueMessage(.cue, text: "README 的截图换好了，浅色深色各一张。", task: panel?.id)
+            // Cue 验收过、做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）；直接写，不经 finishTask——那会请 notes 会话结束
+            if let panel {
+                try await store.setStatus(panel.id, .done)
+                _ = try await store.addCueMessage(
+                    .cue, text: CueReport.text(task: panel.heading, evidence: ["浅色深色各一张", "README 里的图都换了", "旧截图已删"]), task: panel.id)
+            }
             _ = try await store.addCueMessage(
                 .cue, text: """
                     预发上验过了，截图在这里。重连用例都过了：
@@ -84,14 +87,14 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadScene cuerows`（不配演示库）：Cue 启用、只有它跟进的五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、等你的、在跑的都有；各绑一件交给 Cue 的任务。看窄处名字优先、Agent 只留标志。
+    /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
+    /// 停着的、等回答的、在跑的都有；各绑一件任务。看窄处名字优先、Agent 只留标志。
     static func seedCueRows(_ services: AppServices) async {
         do { try await seedCueRows(services.store) } catch { print("cuerows: \(error)") }
     }
 
     private static func seedCueRows(_ store: CueStore) async throws {
-        guard try await store.cueFollowedSessions().isEmpty else { return }
+        guard try await store.piSessionCount() == 0 else { return }
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "demo-mac"
             profile.enabledAt = .now
@@ -110,16 +113,15 @@ extension DebugScene {
                 context: PiContextUsage(tokens: 60_000, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
             let task = try await store.createTask(row.title, in: nil)
-            _ = try await store.setCueFollows(task.id, true)
             try await store.linkCard(task.id, toSession: row.id)
         }
     }
 
-    /// 部署那一步（deploy 会话）发来一张预发的截图：卡片与"等你"上的证据。
-    private static func seedEvidence(_ store: CueStore) async {
-        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-staging.png")
+    /// 会话发来一张截图：卡片与"等你"上的证据。
+    private static func seedEvidence(_ store: CueStore, session: String, title: String) async {
+        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreviews(filesAt: [file], title: "预发上的发言顺序", sessionID: "deploy")
+        _ = try? await store.addPreviews(filesAt: [file], title: title, sessionID: session)
     }
 
     /// 一张像截图的演示图：浅底上一列名单。

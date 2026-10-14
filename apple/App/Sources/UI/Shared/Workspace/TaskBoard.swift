@@ -15,10 +15,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var delivery: DeliveryRequest?
         var id: UUID { task.id }
 
-        /// 书架上排前后的档：0 等你确认（Cue 跟进的等的是 Cue，不算）或出错，1 正在干活，2 其余。
-        var attention: Int {
+        /// 书架上排前后的档：0 等你确认（`PiSessionState.asksYou`，等 Cue 回答的不算）或出错，1 正在干活，2 其余。
+        func attention(cueOnDuty: Bool) -> Int {
             guard let session else { return 2 }
-            return session.asksYou(cueFollows: task.cueFollows) || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
+            return session.asksYou(cueOnDuty: cueOnDuty) || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
         }
 
         /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
@@ -97,7 +97,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let sessions = try store.piSessions(sessionIDs: started.compactMap(\.piSessionID))
         let rows = started.map { Row($0, projects: projects, sessions: sessions) }
         // `startedTasks` 已按最近开始排好（同刻按原来的先后）：只按档排，同档保持这个顺序
-        let ordered = rows.enumerated().sorted { ($0.element.attention, $0.offset) < ($1.element.attention, $1.offset) }.map(\.element)
+        let onDuty = try store.cueOnDuty()
+        let ordered = rows.enumerated().map { (rank: $1.attention(cueOnDuty: onDuty), offset: $0, row: $1) }
+            .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }.map(\.row)
         return Active(rows: Array(ordered.prefix(limit)), more: max(0, ordered.count - limit))
     }
 

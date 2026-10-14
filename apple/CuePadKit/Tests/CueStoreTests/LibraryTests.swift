@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 36：撤掉 37（验收标记下线）。
-  static let undoSchema37 = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
+  /// 把新建的库退回结构 37：撤掉 38（卡片上的跟进标记下线）。
+  static let undoSchema38 = "ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;"
+  /// 退回结构 36：再撤掉 37（验收标记下线）。
+  static let undoSchema37 = undoSchema38 + "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 35：再撤掉 36（本机的会话进程表）。
   static let undoSchema36 = undoSchema37 + "DROP TABLE piProcesses;"
   /// 退回结构 34：再撤掉 35（Cue 此刻在做什么）。
@@ -138,7 +140,6 @@ import Testing
   static let undoSchema33 = undoSchema34 + "ALTER TABLE cueMessages DROP COLUMN acceptance;"
   /// 退回结构 31：再撤掉 32（Cue）。
   static let undoSchema32 = undoSchema33 + """
-    DROP TRIGGER cards_cueFollows_insert; DROP TRIGGER cards_cueFollows_update;
     DROP TABLE cueMessages; DROP TABLE cueLines; DROP TABLE cueProfile; DROP TABLE cueSummaries;
     ALTER TABLE cards DROP COLUMN cueFollows; ALTER TABLE deliveryRequests DROP COLUMN origin;
     DROP INDEX sendRecords_deliveryID; ALTER TABLE sendRecords DROP COLUMN deliveryID; ALTER TABLE sendRecords DROP COLUMN origin;
@@ -161,16 +162,15 @@ import Testing
     #expect(try await upgraded.cueMessagesToDeliver().map(\.id) == [asked.id])
   }
 
-  /// 结构 31 的库升到 32：卡片与投送请求原样都在（没有人跟进、请求来自你），顶层任务能交给 Cue 跟进，Cue 的对话可写。
+  /// 结构 31 的库升到 32 起：卡片与投送请求原样都在（请求来自你），Cue 的对话可写。
   @Test func schema31LibraryUpgradesForCue() async throws {
     let task = try await store.createTask("发布", in: nil)
     try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "s", ref: "s1"), on: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema32 + "PRAGMA user_version = 31;")
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.card(task.id)?.cueFollows == false)
+    #expect(try await upgraded.card(task.id)?.heading == "发布")
     #expect(try await upgraded.deliveryRequests().map(\.origin) == [nil])
-    #expect(try await upgraded.setCueFollows(task.id, true).cueFollows)
     #expect(try await upgraded.addCueMessage(.cue, text: "开工了").author == .known(.cue))
   }
 

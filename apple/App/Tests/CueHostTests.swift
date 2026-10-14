@@ -55,7 +55,7 @@ struct CueHostTests {
         }
 
         /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下。
-        func settleFollowedTask(titled title: String) async throws {
+        func settleTask(titled title: String) async throws {
             try await say("请建个任务并开工")
             try await message(.cue, containing: "办好了")
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
@@ -162,17 +162,17 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 跟进的会话在等回答（如"允许使用 Bash？"）是活被卡住了：不攒安静窗口，你刚和 Cue 说过话也不压着，马上叫醒 Cue。
+    /// 在做的会话在等回答（如"允许使用 Bash？"）是活被卡住了：不攒安静窗口，你刚和 Cue 说过话也不压着，马上叫醒 Cue。
     @Test func 会话等回答时Cue马上醒来() async throws {
         let rig = try await Rig(quiet: .seconds(30), talking: .seconds(30))
-        try await rig.settleFollowedTask(titled: "修好登录页 要作答")  // 你刚说过"请建个任务并开工"；会话歇下这一处变化要攒 30 秒
+        try await rig.settleTask(titled: "修好登录页 要作答")  // 你刚说过"请建个任务并开工"；会话歇下这一处变化要攒 30 秒
         let session = try #require(rig.app.host.extensions.values.first)
         session.setState(["kind": "waiting_user", "title": "允许使用 Bash？"])
         try await rig.message(.note, containing: "去作答了", timeout: .seconds(5))
         await rig.stop()
     }
 
-    /// Cue 开工，Mac 开不了会话（这里是 Pi 起来就退出）：这次失败是一条跟进的变化，叫醒 Cue，信封里写着动作与 Mac 报的原因。
+    /// Cue 开工，Mac 开不了会话（这里是 Pi 起来就退出）：这次失败是这件事的一条变化，叫醒 Cue，信封里写着动作与 Mac 报的原因。
     @Test func 开工失败_Cue醒来看到原因() async throws {
         let rig = try await Rig()
         rig.app.host.openFailure = #"Error: Model "fake/nope" not found"#
@@ -190,7 +190,6 @@ struct CueHostTests {
         let rig = try await Rig()
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
-        try await rig.store.setCueFollows(task.id, true)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
@@ -238,11 +237,11 @@ struct CueHostTests {
     }
 
     /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
-    /// 刚启用那一轮出错，重试后照常看一眼；跟进的会话有动静那一轮出错，重试时看到的还是同一处变化，成了就只有动态。
+    /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了就只有动态。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
         #expect(rig.model.errors == 1)
-        try await rig.settleFollowedTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
+        try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
         try await rig.message(.note, containing: "登录页那边歇下了")
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
@@ -252,7 +251,7 @@ struct CueHostTests {
     /// 重试也出错：这时才写一条 Cue 的消息告诉你，只说一次。
     @Test func 自己醒来重试也出错才告诉你() async throws {
         let rig = try await Rig()
-        try await rig.settleFollowedTask(titled: "修好登录页 先出两次错")
+        try await rig.settleTask(titled: "修好登录页 先出两次错")
         try await rig.message(.cue, containing: "bad things happened")
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().filter { $0.text.contains("bad things happened") }.count == 1)
@@ -263,9 +262,9 @@ struct CueHostTests {
     /// 这就是对你说过话了，最后那句回复不再写成灰色的一行（几乎是同一句）。
     @Test func 自己醒来收尾_做完告诉你结果_不再写动态() async throws {
         let rig = try await Rig()
-        try await rig.settleFollowedTask(titled: "修好登录页 请收一下")  // 假模型据此 done
+        try await rig.settleTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let report = try await rig.message(.cue, containing: "做完了")
-        #expect(report.choices == nil && report.text.contains("登录测试全过"))
+        #expect(report.choices == nil && report.text.contains("- 登录测试全过"))
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("结果已告诉用户") }
         #expect(try await rig.store.card(try #require(report.taskID))?.status == .done)
         #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
@@ -307,15 +306,15 @@ struct CueHostTests {
             let step = try await store.createTask(title, under: task.id)
             let file = rig.folder.appending(path: "s\(index).jsonl")
             try Data("{}\n".utf8).write(to: file)
-            let session = try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path)
-            try await store.linkCard(step.id, toSession: session.sessionID)
-            sessions.append(session)
+            // 先绑上再连上（同从任务开会话）：会话一出现就有归处，不另长同名任务
+            try await store.linkCard(step.id, toSession: "s\(index)")
+            sessions.append(try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path))
         }
         try await eventually("三个会话都记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 3 }
-        try await store.setCueFollows(task.id, true)
 
-        let joined = try await rig.message(.note, containing: "看板：")
-        for title in titles { #expect(joined.text.contains(title), "信封里有「\(title)」") }
+        try await rig.say("念一下看板")
+        let board = try await rig.message(.cue, containing: "看板：")
+        for title in titles { #expect(board.text.contains(title), "信封里有「\(title)」") }
 
         sessions[1].crash()
         let after = try await rig.message(.note, containing: "被打断")
@@ -344,8 +343,6 @@ struct CueHostTests {
             .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
         try await store.linkCard(upgraded.id, toSession: "h1")
         try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
-        try await store.setCueFollows(task.id, true)
-        _ = try await rig.message(.note, containing: "看板：")
 
         try await rig.services.resetPiState()  // 启动对账：桥上的托管会话还连着，它的进程还在
         let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
@@ -517,17 +514,17 @@ nonisolated final class FakeModel: Sendable {
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }
-        if text.contains("三步并行"), let board = text.firstMatch(of: /跟进中 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
+        if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return say("看板：\n" + board)
         }
-        if text.contains("醒来：跟进的会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {
+        if text.contains("醒来：会话有动静"), let failed = text.firstMatch(of: /\n- (\[出错\] [^\n]*)/)?.1 {
             return say("看到了：\(failed)")
         }
-        if text.contains("醒来：跟进的会话有动静"), text.contains("要作答") { return say("去作答了") }
-        if text.contains("醒来：跟进的会话有动静"), text.contains("请收一下") {
-            return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": "- 登录测试全过"])
+        if text.contains("醒来：会话有动静"), text.contains("要作答") { return say("去作答了") }
+        if text.contains("醒来：会话有动静"), text.contains("请收一下") {
+            return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": ["登录测试全过"]])
         }
-        if text.contains("醒来：跟进的会话有动静") {
+        if text.contains("醒来：会话有动静") {
             if text.contains("先出一次错"), once("error") { return fail() }
             if text.contains("先出两次错"), once("error", times: 2) { return fail() }
             return say("登录页那边歇下了")

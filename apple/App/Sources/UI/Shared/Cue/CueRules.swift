@@ -137,12 +137,13 @@ nonisolated extension CueSnapshot {
     }
 }
 
-/// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上不由 Cue 跟进的会话里在等你回答的
-/// （Cue 跟进的会话等回答由 Cue 去答或转问你，不重复算）。
+/// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上会话里在等你回答的
+/// （`PiSessionState.asksYou`：等 Cue 回答的由 Cue 去答或转问你，不重复算）。
 nonisolated enum CueWaiting {
     static func count(in store: isolated CueStore) throws -> Int {
         let asked = try store.cueMessagesWaitingForYou().count
-        let sessions = try store.piSessionPage(.live).items.count(where: \.asksYou)
+        let onDuty = try store.cueOnDuty()
+        let sessions = try store.piSessionPage(.live).items.count { $0.state.asksYou(cueOnDuty: onDuty) }
         return asked + sessions
     }
 }

@@ -33,8 +33,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let followed = Set(live.filter(\.cueFollows).map(\.state.sessionID))
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, followed: followed).enumerated().map { ($1.id, $0) })
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cueOnDuty: try store.cueOnDuty()).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)),
@@ -65,8 +64,6 @@ struct PiSessionRow: View {
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
     let undelivered: Int
-    /// 由 Cue 跟进（`PiSessionListItem.cueFollows`）：名字前带 Cue 的小头像，歇下时只说"歇着"，不催你。
-    var cueFollows = false
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -90,7 +87,7 @@ struct PiSessionRow: View {
     }
 
     var body: some View {
-        let shown = workspace.shown(session, delivery: delivery, cueFollows: cueFollows)
+        let shown = workspace.shown(session, delivery: delivery)
         let facts = services.settings.facts(session, shown: shown, end: end, rename: rename)
         if style.card {
             card(shown: shown, facts: facts)
@@ -149,8 +146,6 @@ struct PiSessionRow: View {
     /// 第一层：名字（有新回复时加粗）、"后台"小签、没送到的折回箭头、右上的时长。
     private func headline(shown: PiShown) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            // 头像的中线对着名字的字身：基线落在头像下缘往上约三成处
-            if cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + $0.height * 0.3 } }
             Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
@@ -194,7 +189,7 @@ struct PiSessionRow: View {
 extension PiSessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
-            && a.undelivered == b.undelivered && a.cueFollows == b.cueFollows && a.style.card == b.style.card && a.style.dot == b.style.dot
+            && a.undelivered == b.undelivered && a.style.card == b.style.card && a.style.dot == b.style.dot
     }
 }
 

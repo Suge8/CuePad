@@ -110,18 +110,3 @@ struct CueByline: View {
         .accessibilityLabel("\(cue.name) 说")
     }
 }
-
-/// 由 Cue 跟进的标记（任务行、会话行、会话标题旁）：行内的小头像，读屏读"由 Cue 跟进"。
-struct CueFollowMark: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let cue = workspace.cue
-        CueAvatar(mood: cue.mood(), presence: cue.presence, size: .inline)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("由 \(cue.name) 跟进")
-            #if os(macOS)
-            .help("由 \(cue.name) 跟进")
-            #endif
-    }
-}

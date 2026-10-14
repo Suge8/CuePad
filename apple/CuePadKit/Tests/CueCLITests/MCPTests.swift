@@ -75,6 +75,13 @@ import Testing
     let task = try #require(UUID(uuidString: taskID))
     let board = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
     #expect(board.compactMap { $0["title"] as? String } == ["重写发布脚本"])
+    // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
+    for long: [String: Any] in [["title": "让 Agent 编译测试排队、模拟器复用、测试快速失败"], ["title": "发布", "steps": ["调研", "把发布脚本改成按渠道分别打包上传"]]] {
+      let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "add"].merging(long) { $1 }])
+      #expect(refused["isError"] as? Bool == true)
+      #expect(((refused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("上限 24") == true)
+    }
+    #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { $0.parentID == nil }.count == 1)
 
     // 没有草稿不开工（开新会话也一样，fresh 也一样）：先 edit 写草稿，什么请求都不写
     let blankID = try await server.call("task", ["action": "add", "title": "空着", "project": "演示"])["task"] as? String
@@ -188,29 +195,27 @@ import Testing
     #expect(!text.contains(older) && text.contains(String(older.prefix(200))))
   }
 
-  /// 刚启用或巡视时 Cue 看用户手上所有没做完的事：谁在跟进都列，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
+  /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
   @Test(.timeLimit(.minutes(1))) func cueSeesEveryOpenTaskGroupedByProject() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
     let mine = try await store.createTask("用户自己的事", in: project.id)
-    let followed = try await store.createTask("Cue 跟进的事", in: nil)
-    try await store.setCueFollows(followed.id, true)
+    let unfiled = try await store.createTask("未分类的事", in: nil)
     let done = try await store.createTask("做完的事", in: project.id)
     try await store.setStatus(done.id, .done)
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
 
-    let all = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "all": true]])
+    let all = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek"]])
     let text = try #require((all["content"] as? [[String: Any]])?.first?["text"] as? String)
     let tasks = try #require((all["structuredContent"] as? [String: Any])?["tasks"] as? [[String: Any]])
-    #expect(tasks.compactMap { $0["id"] as? String } == [mine.id, followed.id].map { $0.uuidString.lowercased() })
-    #expect(tasks.compactMap { $0["follows"] as? Bool } == [false, true])
+    #expect(tasks.compactMap { $0["id"] as? String } == [mine.id, unfiled.id].map { $0.uuidString.lowercased() })
     #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "未分类："])
 
     for index in 0..<70 { _ = try await store.createTask("事 \(index)", in: nil) }
-    let many = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "all": true]])
+    let many = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek"]])
     let lines = try #require((many["content"] as? [[String: Any]])?.first?["text"] as? String).split(separator: "\n")
     #expect(lines.count == 60)
     let shown = lines.filter { $0.hasPrefix("- ") }.count
@@ -218,7 +223,8 @@ import Testing
   }
 
   /// 会话交了结果、Cue 收尾（task done 带证据）：Cue 自己验收，顶层任务直接完成，不请用户收下；做完了的会话请它结束（算 Cue 发起），
-  /// 给用户写一条结果（关联任务、正文带证据要点、不是"等你"）。再调一次只说已经完成，不重复写。整件事收尾要带证据。
+  /// 给用户写一条结果（关联任务、不是"等你"，正文由代码拼成"「任务名」做完了"加证据要点）。再调一次只说已经完成，不重复写。
+  /// 整件事收尾要带证据：没带、多于 3 条或一条太长都退回，什么都不写。
   @Test(.timeLimit(.minutes(1))) func cueFinishesATopTaskAndReportsIt() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -229,7 +235,6 @@ import Testing
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页", in: project.id)
-    try await store.setCueFollows(task.id, true)
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页")
     let server = try Server(library: sandbox.directory)
@@ -237,9 +242,15 @@ import Testing
 
     let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "done", "task": task.id.uuidString]])
     #expect(refused["isError"] as? Bool == true)
+    // 证据多于 3 条或一条太长：退回，什么都不写
+    for bad in [["一", "二", "三", "四"], ["登录测试 12 个全过，另外把注册页、找回密码页也顺手都改好了"]] {
+      let tooMuch = try await server.request("tools/call", ["name": "task", "arguments": ["action": "done", "task": task.id.uuidString, "evidence": bad]])
+      #expect(tooMuch["isError"] as? Bool == true, "\(bad)")
+    }
     #expect(try await store.card(task.id)?.status != .done)
+    #expect(try await store.cueMessages().isEmpty)
 
-    let evidence = "- 登录测试 12 个全过\n- 截图里错误提示对上了"
+    let evidence = ["登录测试 12 个全过", "截图里错误提示对上了"]
     for _ in 0..<2 { _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": evidence]) }
     #expect(try await store.card(task.id)?.status == .done)
     #expect(try await store.cueMessagesWaitingForYou().isEmpty)
@@ -247,7 +258,7 @@ import Testing
     #expect(reports.count == 1)
     let report = try #require(reports.first)
     #expect(report.choices == nil && report.taskID == task.id)
-    #expect(report.text.contains("修好登录页") && report.text.contains("登录测试 12 个全过") && report.text.contains("错误提示对上了"))
+    #expect(report.text == "「修好登录页」做完了\n\n- 登录测试 12 个全过\n- 截图里错误提示对上了")
     let ends = try await store.deliveryRequests().filter { $0.mode == .known(.end) }
     #expect(ends.compactMap(\.target.ref) == ["s1"] && ends.allSatisfy { $0.isFromCue && $0.hostID == "mac-a" })
   }
@@ -290,7 +301,7 @@ import Testing
 
   /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（写法同给大脑的清单：Claude Code、Codex 只写 id，提供方补成这家；
   /// Pi、OpenCode 要写 provider/id）。
-  /// 那台 Mac 开不了这家时，失败是 Cue 跟进的事里的一条变化，写着"开工：原因"，Cue 下次醒来看得到。
+  /// 那台 Mac 开不了这家时，失败是这件事的一条变化（还没开成会话也报），写着"开工：原因"，Cue 下次醒来看得到。
   @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -302,7 +313,6 @@ import Testing
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页", in: project.id)
-    try await store.setCueFollows(task.id, true)
     _ = try await store.createCard(body: "登录页白屏，查一下", under: task.id)
     let server = try Server(library: sandbox.directory)
     defer { server.close() }
@@ -325,7 +335,7 @@ import Testing
     defer { Task { await executor.stop() } }
     let changes = try await eventually(store, { try $0.cueChanges(since: since) }) { !$0.isEmpty }
     #expect(changes.map(\.kind) == [.failed] && changes.map(\.detail) == ["开工：这台 Mac 上没有找到 Codex"])
-    #expect(changes.first?.taskID == task.id)
+    #expect(changes.first?.task.id == task.id)
   }
 
   /// 分步做一件事：上一步收尾、还有没做完的步骤时不结束会话，下一步开工接着用它——草稿作为下一句发进去，不开新会话；
@@ -342,7 +352,6 @@ import Testing
       $0.enabledAt = .now
     }
     let task = try await store.createTask("重写发布脚本", in: project.id)
-    try await store.setCueFollows(task.id, true)
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
@@ -354,7 +363,7 @@ import Testing
       return (result["content"] as? [[String: Any]])?.first?["text"] as? String
     }
 
-    _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": "- 看完了"])
+    _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": ["看完了"]])
     #expect(try await store.card(first.id)?.status == .done)
     #expect(try await store.deliveryRequests().isEmpty)
 
@@ -388,9 +397,9 @@ import Testing
 
     // 最后一步做完：没有没做完的步骤了，会话按做完了的规则结束；整件事收尾时不再请它结束第二次
     let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref) }
-    _ = try await server.call("task", ["action": "done", "task": second.id.uuidString, "evidence": "- 改好了"])
+    _ = try await server.call("task", ["action": "done", "task": second.id.uuidString, "evidence": ["改好了"]])
     #expect(try await ends() == ["s1"])
-    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": "- 两步都做完了"])
+    _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": ["两步都做完了"]])
     #expect(try await store.card(task.id)?.status == .done)
     #expect(try await ends() == ["s1"])
   }
@@ -419,7 +428,6 @@ import Testing
     let sandbox = try Sandbox()
     let store = sandbox.store
     let task = try await store.createTask("加语言参数", in: nil)
-    try await store.setCueFollows(task.id, true)
     let first = try await store.createTask("加 --lang", under: task.id), second = try await store.createTask("写 README", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await store.linkCard(second.id, toSession: "s2")
