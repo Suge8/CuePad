@@ -32,6 +32,11 @@ enum DebugHooks {
         var modelMenu = false
         /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
         var taskFold = TaskFold()
+        #if os(macOS)
+        /// 正文以它开头的那张灵感卡或那条任务一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
+        /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
+        var hovered: String?
+        #endif
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false
@@ -46,6 +51,11 @@ enum DebugHooks {
 
     #if os(iOS)
     enum SearchFocus { case shelf, project }
+    #endif
+
+    #if os(macOS)
+    /// 这张卡或这条任务是否按 `Preset.hovered` 一出现就画成悬停的样子。
+    static func hovers(_ card: Card) -> Bool { preset.hovered.map { card.body.hasPrefix($0) } ?? false }
     #endif
 
     static let preset: Preset = {

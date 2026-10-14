@@ -113,7 +113,7 @@ struct PiReplyBar: View {
                     }
                 },
                 tools: {
-                    if hasTools, let config { PiConfigControls(session: session, shown: config, opening: $opening) }
+                    if hasTools, let config { SessionConfigControls(session: session, shown: config, opening: $opening) }
                 },
                 send: { sendControl }
             )

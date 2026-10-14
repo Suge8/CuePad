@@ -109,7 +109,8 @@ struct TasksScreen: View {
 }
 
 /// 一条任务：完成圈（`TaskCheckButton`：点了立即显示完成、停留片刻再移出，这段时间里再点一下撤销）、标题（点了推入任务页），
-/// 标题下一行写所在项目与步骤进度，右边是那一格"下一步"（`TaskNextChip`：Agent 要你看的、正在做的，或"开始"），与 Mac 的任务行同一个判断。
+/// 标题下一行写所在项目与步骤进度；那一格"下一步"（`TaskNextChip`：Agent 要你看的、正在做的，或"开始"）与 Mac 的任务行同一个判断：
+/// 手机上在行尾（屏窄，行尾就在眼前），iPad 的宽栏里紧跟标题（同 Mac：放在行尾时离标题太远，一眼看不到）。
 struct TaskLine: View {
     let task: Card
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
@@ -126,6 +127,7 @@ struct TaskLine: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     /// 长按提起的那块纸的圆角：与列表那张纸同一个圆角。
     private static let liftRadius: CGFloat = 16
@@ -168,20 +170,26 @@ struct TaskLine: View {
                 task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 20,
                 target: CGSize(width: 44, height: 44), check: $check)
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title.textGlyphs)
-                    .font(.body).strikethrough(done, color: palette.ink3)
-                    .foregroundStyle(done ? palette.ink3 : palette.ink)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(task.title.textGlyphs)
+                        .font(.body).strikethrough(done, color: palette.ink3)
+                        .foregroundStyle(done ? palette.ink3 : palette.ink)
+                        .lineLimit(2)
+                    if inline, let next, !done { TaskNextChip(next: next).transition(.opacity) }
+                }
                 if hasMeta(done: done) { meta(done: done) }
             }
             .padding(.vertical, hasMeta(done: done) ? 6 : 0)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture { navigation.push(.card(task.id)) }
-            if let next, !done { TaskNextChip(next: next).padding(.leading, 6).transition(.opacity) }
+            if !inline, let next, !done { TaskNextChip(next: next).padding(.leading, 6).transition(.opacity) }
         }
         .animation(.easeOut(duration: 0.12), value: done)
     }
+
+    /// 宽栏（iPad）里"下一步"紧跟标题。
+    private var inline: Bool { sizeClass == .regular }
 
     private func hasMeta(done: Bool) -> Bool { project != nil || (!done && subtasks != nil) }
 

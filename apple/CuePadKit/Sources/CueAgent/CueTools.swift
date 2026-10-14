@@ -268,12 +268,10 @@ public struct CueTools: Sendable {
   /// 模型：provider/id；模型在这家自己命名空间里的（`AgentKind.modelProvider`：Claude Code、Codex）只写 id，提供方补成这一家，
   /// 与给大脑的 Agent 与模型清单同一种写法，照抄就行。
   private static func model(_ ref: String, of agent: AgentKind) throws -> PiModelKey {
-    let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
-    if parts.count == 2 { return PiModelKey(provider: parts[0], id: parts[1]) }
-    guard parts.count == 1, let provider = agent.modelProvider else {
+    guard let key = agent.modelKey(ref) else {
       throw Failure("\(agent.name) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）")
     }
-    return PiModelKey(provider: provider, id: parts[0])
+    return key
   }
 
   private func say(_ args: Args) async throws -> Result {

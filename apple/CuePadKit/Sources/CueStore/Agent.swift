@@ -27,6 +27,18 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     case .pi, .opencode: nil
     }
   }
+
+  /// 模型的文字写法（Cue 的设置 `CueProfile.model`、给大脑的 Agent 与模型清单、Cue 开工时给的 model）：
+  /// 模型在这家自己命名空间里的只写 id，其余写 `provider/id`。
+  public func modelRef(_ key: PiModelKey) -> String { modelProvider != nil ? key.id : "\(key.provider)/\(key.id)" }
+
+  /// `modelRef` 读回：写了 `provider/id` 就是它；只写 id 时提供方补成这一家，这家的模型本身带提供方时读不出（nil）。
+  public func modelKey(_ ref: String) -> PiModelKey? {
+    let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
+    if parts.count == 2 { return PiModelKey(provider: parts[0], id: parts[1]) }
+    guard parts.count == 1, let modelProvider else { return nil }
+    return PiModelKey(provider: modelProvider, id: parts[0])
+  }
 }
 
 /// 从 CuePad 能对一个会话做什么（发文字总能做，不在其中）。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，

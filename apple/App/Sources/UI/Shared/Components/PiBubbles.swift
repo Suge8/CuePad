@@ -202,11 +202,13 @@ struct SpeechBubble<Menu: View>: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    /// 刚从刻度滑条跳到的那一句（Cue 页里你的话）描一圈。
+    @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(stored: said.content, trip: trip.bubble, fromCue: fromCue) { menu(trip) }
+            UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
             status(trip).font(Typography.caption)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

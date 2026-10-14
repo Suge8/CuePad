@@ -78,8 +78,7 @@ struct SessionPage: View {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(
-                        session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth,
-                        slot: slot)
+                        session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
                         .replyNotes(session: session.id, messages: digest.messages)
                         .fadesUnderBars()
                         .frame(maxHeight: .infinity)
@@ -159,9 +158,6 @@ struct SessionPage: View {
         var session: String
         var project: UUID?
     }
-
-    /// 窗口右缘系统滚动条（悬浮式）占的宽。
-    private static let scrollerWidth: CGFloat = 16
 
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
     private func askForTranscriptIfNeeded() {

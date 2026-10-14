@@ -296,7 +296,7 @@ final class ClaudeHostedSession: SessionLink {
             // 兼容网关不认的模型常只回 400/404 而没有上面的短语（DeepSeek 400："…but you passed <id>"；官方 404："model: <id>"），
             // 但 400 也可能是别的原因（官方余额不足："Your credit balance is too low…"），所以 400/404 还要原文里点了这次的模型 id 才算
             do {
-                _ = try await request(["subtype": "set_model", "model": .string(model.id)])
+                try await stream.setModel(model.id)
             } catch PiBridgeError.rejected(let reason) {
                 let text = reason.lowercased()
                 let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { text.contains($0) }
@@ -306,8 +306,7 @@ final class ClaudeHostedSession: SessionLink {
             update { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
         }
         if let thinking {
-            let effort = ClaudeCode.effort(thinking)
-            _ = try await request(["subtype": "apply_flag_settings", "settings": ["effortLevel": .string(effort)]])
+            let effort = try await stream.setEffort(thinking)
             update { $0.thinking = Open(rawValue: effort) }
         }
         if let trimmed {

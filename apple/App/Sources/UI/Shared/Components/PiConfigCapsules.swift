@@ -1,17 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 模型胶囊：提供方图标 + 模型短名。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
+/// 模型胶囊：提供方图标 + 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉，分组标题与模型项要带提供方图标）。
-/// 有订阅额度的提供方：图标外一圈细环是卡着的那个窗口用了多少（`ProviderBadge`），菜单的分组标题写各窗口的用量
+/// 有订阅额度的提供方：图标外一圈细环是卡着的那个窗口用了多少（`ProviderBadge`），没给组名的分组标题写各窗口的用量
 /// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`QuotaMoments`）。
 struct PiModelCapsule: View {
-    let models: [PiModelOption]
+    let groups: [PiModelGroup]
     let current: PiModelOption?
+    let unnamed: String
     let pending: Bool
     let maxWidth: CGFloat
     let quotas: [AccountQuota]
-    let choose: (PiModelKey) -> Void
     #if os(macOS)
     /// 弹出 AppKit 的模型菜单。
     let pick: () -> Void
@@ -30,13 +30,12 @@ struct PiModelCapsule: View {
             .accessibilityValue(spoken(at: now))
         #else
         Menu {
-            ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
-                Section(PiModelLabel.title(group.provider, quotas: quotas, at: now)) {
-                    ForEach(group.models) { model in
-                        Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
-                            Text(model.name.isEmpty ? model.key.id : model.name)
-                            Text(PiModelLabel.levels(model))
-                            group.provider.image
+            ForEach(groups) { group in
+                Section(group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) } ?? "") {
+                    ForEach(group.items) { item in
+                        Toggle(isOn: Binding(get: { item.checked }, set: { if $0 { item.choose() } })) {
+                            Text(item.name)
+                            item.provider?.image
                         }
                     }
                 }
@@ -57,7 +56,7 @@ struct PiModelCapsule: View {
             ProviderBadge(provider: current.map { PiProvider(id: $0.key.provider) }, binding: binding(at: now))
                 .modifier(Breathing(active: pending))
                 .accessibilityHidden(true)
-            Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
+            Text(current.map(PiModelName.short) ?? unnamed).lineLimit(1).truncationMode(.tail)
                 .contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
@@ -73,7 +72,7 @@ struct PiModelCapsule: View {
     }
 
     private func spoken(at now: Date) -> String {
-        Dotted(current?.name ?? "未知", binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken
+        Dotted(current?.displayName ?? unnamed, binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
