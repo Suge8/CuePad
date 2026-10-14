@@ -33,7 +33,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 - Claude Code 的收件箱 socket、认证行与 `CLAUDE_CODE_MESSAGING_SOCKET` / `CLAUDE_CODE_MESSAGING_TOKEN` 已在官方文档（cross-session-messaging），消息体格式与控制消息（改名）没有，来自实测；会话登记文件 `<配置目录>/sessions/<pid>.json` 也不在文档里，只用来给 CuePad 启动前就在跑的会话补上收件箱地址。经收件箱发进去的话 Claude Code 一律包成"另一个会话发来的"（收件箱行里没有能改这一点的字段，"宿主注入"只对托管进程的标准输入），CuePad 在正文前加一句"这是用户本人从 CuePad 发的、直接回答、不必回传"：模型多半照做，但仍被告知这不是用户亲手打的、不能当作对待确认的批准，偶尔仍会试着回传。接收方在 bypassPermissions 模式下默认挂起它；CuePad 带上会话的收件箱令牌（认证行）后直接收下（令牌只在钩子到过之后才有）。
 - AskUserQuestion 的官方作答路径是它的 PreToolUse（`permissionDecision: allow` 加带答案的 `updatedInput`），CuePad 走这条；PermissionRequest 会不会为它触发文档没写，CuePad 不在那里答它。
 - Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（实测，文档里没有这个数），期间仍在线、能收话；历史会话没有名字（会话名只在它的 `session_index.jsonl`）。`thread/queue/*` 是实验接口（要 `experimentalApi`）。
-- OpenCode 只认 v2：官方 v2 已发布，brew 与官方安装脚本装的就是它（npm 上是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）；v1 的服务接口不同，不做兼容。它的服务登记文件 `service.json` 不在文档里。会话在线规则"服务活着期间有过活动"是 CuePad 定的。
+- OpenCode 只认 v2：官方 v2 已发布，brew 与官方安装脚本装的就是它（npm 上是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）；v1 的服务接口不同，不做兼容。它的服务登记文件 `service.json` 不在文档里。会话在线规则"服务活着期间有过活动"是 CuePad 定的。从没取过模型表的头一次启动（实测 2.0.25），它先用随包的旧表、同时联网取新表（约 1～2 秒）：这期间说的话，配置的默认模型不在旧表里时它改用旧表第一个（它自己的终端界面也一样）；CuePad 不补，会话页显示的就是实际用的模型。
 
 ## Cue 的大脑（`Brain/`）
 

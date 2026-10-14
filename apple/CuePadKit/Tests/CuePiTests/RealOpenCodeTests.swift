@@ -9,11 +9,13 @@ import Testing
 /// 本机装的 OpenCode（`brew install opencode`）；没装就跳过。
 /// 真 OpenCode 的用例开了（`RealAgents`）时，本机装的 OpenCode
 let realOpenCodeURL = RealAgents.on(.opencode) ? ExecutableLocator.standard.candidates("opencode").first : nil
-private let freeModel = PiModelKey(provider: "opencode", id: "big-pickle")
+/// 测试用的免费模型：缺省 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id）
+private let freeModel = PiModelKey(provider: "opencode", id: ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"] ?? "big-pickle")
 
 /// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
 /// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。
-/// 默认模型是免费的 big-pickle。
+/// 像用过 OpenCode 的机器：先起一次服务、等它取到模型表（存进它的库）再停。从没取过表的头一次启动用随包的旧表，
+/// 配置的默认模型不在旧表里时它改用表里第一个（README"已知边界"）。
 final class OpenCodeSandbox {
     let root: URL
     let work: URL
@@ -38,6 +40,37 @@ final class OpenCodeSandbox {
         let settings: [String: Any] = ["model": "\(freeModel.provider)/\(freeModel.id)"]
         try JSONSerialization.data(withJSONObject: settings).write(to: config.appending(path: "opencode.json"))
         try await run(["service", "set", "port", String(try Self.freePort())])
+        try await run(["service", "start"])
+        try await refreshed()
+        let pid = try #require(service?.pid)
+        try await run(["service", "stop"])
+        try await eventually("OpenCode 服务退出") { kill(pid, 0) == -1 && errno == ESRCH && self.service == nil }
+    }
+
+    /// 让服务取到模型表：头一回有人要模型表时它才联网取（实测 0.6～2 秒），存进它库里的 `kv`（`models-dev:catalog`）后发
+    /// `models-dev.refreshed`。先连上事件流再要一次模型表；连上时与之后每来一行（含每 15 秒的心跳）都看一眼库里存了没有。
+    private func refreshed() async throws {
+        let service = try #require(service)
+        var request = URLRequest(url: URL(string: service.url + "/api/event")!)
+        request.setValue("Basic " + Data("opencode:\(service.password)".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
+        let events = request
+        request.url = URL(string: service.url + "/api/model")!
+        let models = request
+        let database = root.appending(path: "xd/opencode/opencode.db").path
+        try await withDeadline(.seconds(60), orThrow: CancellationError()) {
+            let (bytes, _) = try await URLSession.shared.bytes(for: events)
+            var asked = false
+            for try await _ in bytes.lines {
+                if !asked {
+                    _ = try await URLSession.shared.data(for: models)
+                    asked = true
+                }
+                let stored = await ChildProcess.run(
+                    URL(filePath: "/usr/bin/sqlite3"), ["-readonly", database, "SELECT count(*) FROM kv WHERE key = 'models-dev:catalog'"],
+                    timeout: .seconds(10))
+                if stored?.output.trimmingCharacters(in: .whitespacesAndNewlines) == "1" { return }
+            }
+        }
     }
 
     /// 跑一条 opencode 命令（在 `directory` 里），要它成功。
@@ -69,6 +102,19 @@ final class OpenCodeSandbox {
         let (data, response) = try await URLSession.shared.data(for: request)
         try #require((response as! HTTPURLResponse).statusCode < 300, "\(method) \(path)：\(String(decoding: data, as: UTF8.self))")
         return data.isEmpty ? [:] : (try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:])
+    }
+
+    /// 失败现场：服务里每个会话的消息与待答表单、桥上的会话，写进临时目录外的一个文件（临时目录随后删掉），路径记进测试结果。
+    @MainActor func dump(_ bridge: PiBridge) async {
+        guard let sessions = try? await api("GET", "/api/session?limit=100")["data"] as? [[String: Any]] else { return }
+        var dump: [String: Any] = ["sessions": sessions, "bridge": String(describing: bridge.sessions.filter { $0.agent == .opencode })]
+        for id in sessions.compactMap({ $0["id"] as? String }) {
+            dump[id] = (try? await api("GET", "/api/session/\(id)/message?limit=100&order=asc"))?["data"]
+            dump[id + ".form"] = (try? await api("GET", "/api/session/\(id)/form"))?["data"]
+        }
+        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-opencode-\(UUID().uuidString).json")
+        guard (try? JSONSerialization.data(withJSONObject: dump, options: [.prettyPrinted]).write(to: file)) != nil else { return }
+        Issue.record("OpenCode 现场：\(file.path)")
     }
 
     /// 停掉这台的后台服务（按登记文件里的确切 pid），删掉临时目录。
@@ -113,7 +159,10 @@ struct RealOpenCodeTests {
             try runtime.start()
             try await body(sandbox, store, bridge, runtime)
             outcome = .success(())
-        } catch { outcome = .failure(error) }
+        } catch {
+            outcome = .failure(error)
+            await sandbox.dump(bridge)
+        }
         await runtime.stop()()
         try await sandbox.stop()
         try outcome.get()
