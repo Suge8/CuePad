@@ -226,17 +226,15 @@ extension CueStore {
     return request
   }
 
-  /// Cue 又对一件事开工、说话或作答（返工）：这件事还没答的验收（`askToAccept`）作废——去掉选项与验收标记，留在对话里当一句话，
-  /// 不再算等你；返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
+  /// Cue 又对一件事开工、说话或作答（返工）：这件事还开着的验收（`askToAccept`）撤回（同 Cue 撤回提问），回到对话里当一句话；
+  /// 返工完再收尾时写新的、带新证据。Cue 别的提问不动；你在会话里亲自说话不走这里。
   private func withdrawAcceptance(of leaf: UUID) throws {
     let task = try topTask(of: leaf)
-    try write {
-      try db.run("UPDATE cueMessages SET choices = NULL, acceptance = 0, modifiedAt = ? WHERE \(Self.pendingAcceptance)", [Date.stamp, task])
-    }
+    try write { _ = try endQuestions(.withdrawn, where: Self.pendingAcceptance, [task]) }
   }
 
-  /// 这件事（参数）还没答的验收。
-  private static let pendingAcceptance = "acceptance = 1 AND taskID = ? AND answeredAt IS NULL"
+  /// 这件事（参数）还开着的验收（与 `openQuestion` 连用）。
+  private static let pendingAcceptance = "acceptance = 1 AND taskID = ?"
 
   /// 说话、作答之前先请会话换上 `config`（与界面换模型同一种请求，执行器按先后执行）；换不了模型
   /// （`AgentCapabilities.model`，记录没到也算不知道、不换）抛 `cannotChangeModel`。调用方先做完别的检查：抛错时什么都没写。
@@ -334,7 +332,7 @@ extension CueStore {
   }
 
   /// 完成一件事（连同它还没做完的步骤）并结束做完了的会话（`endFinishedSessions`，写结束请求），返回结束请求。
-  /// 界面点完成走 `toggleDone`、你收下走 `answerCueMessage`，同一条规则。`requireStepsDone` 为真时还有没完成的步骤就抛
+  /// 界面点完成走 `toggleDone`、你收下走 `endCueQuestion`，同一条规则。`requireStepsDone` 为真时还有没完成的步骤就抛
   /// `stepsRemaining`、什么都不改（Cue 只收尾做完了的事；你点完成是连步骤一起完成）。
   @discardableResult
   public func completeTask(_ task: UUID, requireStepsDone: Bool = false, cue: Bool = false) throws -> [DeliveryRequest] {
@@ -361,7 +359,7 @@ extension CueStore {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let pending = try select(
-        CueMessage.self, where: Self.pendingAcceptance, [task], orderBy: "createdAt, rowid")
+        CueMessage.self, where: "\(Self.openQuestion) AND \(Self.pendingAcceptance)", [task], orderBy: "createdAt, rowid")
       if let pending = pending.last { return (pending, false) }
       let now = Date.stamp
       let message = CueMessage(

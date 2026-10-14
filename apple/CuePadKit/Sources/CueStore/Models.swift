@@ -414,6 +414,8 @@ public enum CueStoreError: Error, Equatable {
   case invalidSummaryRange
   /// Cue 没启用（没有 `cueProfile`、停用了或没选住在哪台 Mac）。
   case cueNotEnabled
+  /// 这条提问已经结束了（答了、关掉了或撤回了）。
+  case questionEnded
 }
 
 extension CueStoreError: LocalizedError {
@@ -456,6 +458,7 @@ extension CueStoreError: LocalizedError {
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
+    case .questionEnded: "这条提问已经结束了"
     }
   }
 }
