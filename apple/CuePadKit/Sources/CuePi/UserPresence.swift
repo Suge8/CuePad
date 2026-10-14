@@ -10,7 +10,8 @@ public protocol UserPresence: AnyObject, Sendable {
     func untilPresent() async
 }
 
-/// 系统的判断：屏幕没锁，且最近 `idleLimit` 内有键盘鼠标操作。
+/// 系统的判断：屏幕没锁，且最近 `idleLimit` 内有键盘鼠标操作。操作按硬件层（`.hidSystemState`，与 ioreg 的 HIDIdleTime、
+/// 屏保同一口径）算：会话层（`.combinedSessionState`）实测只被合成事件更新，真人在用时反而一直在涨。
 @MainActor
 public final class SystemPresence: UserPresence {
     public static let idleLimit: TimeInterval = 120
@@ -40,7 +41,7 @@ public final class SystemPresence: UserPresence {
     }
 
     private var idleSeconds: TimeInterval {
-        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+        CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
     }
 }
 #endif
