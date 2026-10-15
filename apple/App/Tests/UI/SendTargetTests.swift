@@ -5,8 +5,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 上把任务的草稿（提示词）发给 Agent（`Workspace.handOff`）：叶子绑着会话就发进那个会话，没绑就在项目文件夹开一个以任务命名的新会话并绑上。
-/// 会话结束了在后台唤醒它，会话正忙先问怎么说，别的 Mac 上的会话写指定那台 Mac 的请求；送达后草稿用掉，没送到的留着。
+/// Mac 上"开始"一件任务（`Workspace.handOff`）：标题连同正文作为第一句交出去——上一步绑着会话就接着发进那个会话，没有就在项目文件夹开一个以任务命名的新会话并绑上。
+/// 会话结束了在后台唤醒它，会话正忙先问怎么说，别的 Mac 上的会话写指定那台 Mac 的请求；送达后这一步绑上会话，正文留在任务上。
 struct SendTargetTests {
     let rig = TestApp()
     let workspace: Workspace
@@ -47,13 +47,16 @@ struct SendTargetTests {
         try await eventually("rig.pi.session(id: ext.id) == nil") { rig.pi.session(id: ext.id) == nil }
     }
 
-    /// 一个叶子任务和它的草稿；`session` 给了就是已经绑着这个会话的叶子。
-    private func leaf(in project: Project?, session: String? = nil) async throws -> (task: Card, draft: Card) {
+    /// 一个带着正文的叶子任务；`session` 给了就是上一步绑着这个会话的第二步（开始时接着用它）。
+    private func leaf(in project: Project?, session: String? = nil) async throws -> Card {
+        guard let session else { return try await store.createTask(Self.text, in: project?.id) }
         let task = try await store.createTask("修乱序", in: project?.id)
-        let draft = try await store.createCard(body: "提示词", under: task.id)
-        if let session { try await store.linkCard(task.id, toSession: session) }
-        return (task, draft)
+        let first = try await store.createTask("复现", under: task.id)
+        try await store.linkCard(first.id, toSession: session)
+        return try await store.createTask(Self.text, under: task.id)
     }
+
+    private static let text = "修乱序\n按首次加入时间排"
 
     /// 别的 Mac 上在线的会话（同步记录里 hostID 不是本机）。
     private func remoteSession(_ id: String, title: String, state: PiWorkState = .settled) async throws {
@@ -61,15 +64,15 @@ struct SendTargetTests {
             sessionID: id, state: state, title: title, directory: title, projectID: project.id)
     }
 
-    @Test func 没绑会话的叶子_交出时在项目文件夹开以任务命名的新会话并绑上_草稿用掉() async throws {
+    @Test func 没有会话可接着用_开始时在项目文件夹开以任务命名的新会话并绑上_正文留着() async throws {
         let folder = rig.directory.appending(path: "work/new", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try await store.setDirectory(folder.path, for: project.id)
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let (task, draft) = try await leaf(in: project)
+        let task = try await leaf(in: project)
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
         try await eventually("rig.host.calls 里有在项目文件夹打开") { !rig.host.calls.isEmpty }
         guard case .open(let directory, let token, _, _, _) = try #require(rig.host.calls.first) else {
@@ -78,44 +81,43 @@ struct SendTargetTests {
         }
         #expect(directory == folder.path)
         let request = try #require(try await store.deliveryRequests().first)
-        #expect(request.mode == .known(.start) && request.target.name == "修乱序" && request.launch?.prompt == "提示词")
-        _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }  // 送达就用掉
+        #expect(request.mode == .known(.start) && request.target.name == "修乱序" && request.launch?.prompt == Self.text)
 
         // 会话开好、带着认领标识记下：任务绑上它
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "new", state: .thinking, title: "修乱序", launchToken: token)
         let bound = try #require(try await store.card(task.id))
-        #expect(bound.piSessionID == "new" && bound.status == .inProgress)
+        #expect(bound.piSessionID == "new" && bound.status == .inProgress && bound.body == Self.text)
     }
 
-    @Test func 没绑会话也没有文件夹的未分类任务_开不了会话_草稿留着() async throws {
+    @Test func 没有文件夹的未分类任务_开不了会话_什么都不写() async throws {
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let (_, draft) = try await leaf(in: nil)
+        let task = try await leaf(in: nil)
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
         try await eventually("workspace.notice != nil") { workspace.notice != nil }
         #expect(workspace.notice?.isError == true && rig.host.calls.isEmpty)
-        #expect(try await store.card(draft.id) != nil)
+        #expect(try await store.deliveryRequests().isEmpty)
     }
 
-    @Test func 绑着会话的叶子_发进那个会话_草稿用掉_不开新会话() async throws {
+    @Test func 上一步绑着会话_开始时接着发进那个会话_送达后这一步绑上_不开新会话() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let (task, draft) = try await leaf(in: project, session: "a")
+        let task = try await leaf(in: project, session: "a")
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
-        _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }
-        #expect(alpha.messages.map(\.text) == ["提示词"])
-        #expect(try await store.card(task.id)?.piSessionID == "a")
+        _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
+        #expect(alpha.messages.map(\.text) == [Self.text])
+        #expect(try await store.card(task.id)?.body == Self.text)
         #expect(rig.host.calls.isEmpty)
     }
 
-    @Test func 绑着的会话结束了_交出时在后台唤醒它() async throws {
+    @Test func 上一步的会话结束了_开始时在后台唤醒它() async throws {
         let alpha = try await open("a", in: "/work/alpha")
-        let (task, draft) = try await leaf(in: project, session: "a")
+        let task = try await leaf(in: project, session: "a")
         let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = "/sessions/--work-alpha--/a.jsonl"
@@ -124,72 +126,69 @@ struct SendTargetTests {
         defer { rig.services.cancelBackgroundWork() }
         try await end(alpha)
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
         try await eventually("唤醒后话送到") { rig.host.extensions["a"]?.messages.isEmpty == false }
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
-        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "提示词", deliveryID: request.id.uuidString)])
+        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: Self.text, deliveryID: request.id.uuidString)])
         // 交出就提示，不等送达
         #expect(workspace.notice?.text == Dotted("已交给 Agent 会话「alpha」", "唤醒后送达"))
-        _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }
-        #expect(try await store.card(task.id)?.piSessionID == "a")
+        _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
 
-    @Test func 唤醒不了_会话文件不在这台Mac上_没送到_草稿留着可重发() async throws {
+    @Test func 唤醒不了_会话文件不在这台Mac上_没送到_这一步不绑会话() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let (_, draft) = try await leaf(in: project, session: "a")
+        let task = try await leaf(in: project, session: "a")
         try await end(alpha)
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
         let request = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0?.isOpen == false })
-        #expect(request.status == .known(.failed))
-        let delivery = PromptDelivery(draft.id, agents: try await AgentLinks.read(from: store), at: .always())
-        #expect(delivery == .failed(request, .reported(try #require(request.failure))) && delivery.canSend)
+        #expect(request.status == .known(.failed) && request.cardID == task.id)
         #expect(rig.host.calls.isEmpty)
-        #expect(try await store.card(draft.id) != nil)
+        #expect(try await store.card(task.id)?.piSessionID == nil)
     }
 
-    @Test func 绑着的会话重新打开了_直接发进新开的那个() async throws {
+    @Test func 上一步的会话重新打开了_直接发进新开的那个() async throws {
         let first = try await open("a", in: "/work/alpha", pid: 100)
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        let (_, draft) = try await leaf(in: project, session: "a")
+        let task = try await leaf(in: project, session: "a")
         try await end(first)
         let again = try await open("a", in: "/work/alpha", pid: 200)
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
-        _ = try await eventually(store, { try $0.card(draft.id) }) { $0 == nil }
-        #expect(again.messages.map(\.text) == ["提示词"] && first.messages.isEmpty)
+        _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
+        #expect(again.messages.map(\.text) == [Self.text] && first.messages.isEmpty)
         #expect(rig.host.calls.isEmpty, "没有当成已结束的去唤醒")
     }
 
-    @Test func 绑着别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
+    @Test func 上一步绑着别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
         try await remoteSession("r", title: "atlas")
-        let (_, draft) = try await leaf(in: project, session: "r")
+        let task = try await leaf(in: project, session: "r")
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
 
         _ = try await eventually(store, { try $0.deliveryRequests().count }) { $0 > 0 }
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.hostID == "mac-b" && request.mode == .known(.send))
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
         #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
-        #expect(try await store.card(draft.id) != nil, "还没送达，草稿在路上")
+        #expect(try await store.card(task.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
     }
 
     @Test func 会话正忙_先问马上说还是等它做完再说() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
-        let (_, draft) = try await leaf(in: project, session: "r")
+        let task = try await leaf(in: project, session: "r")
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
 
-        workspace.handOff(draft)
+        workspace.handOff(task)
         try await eventually("workspace.sendState.busy?.session == r") { workspace.sendState.busy?.session == "r" }
         #expect(try await store.deliveryRequests().isEmpty)
 
@@ -199,28 +198,28 @@ struct SendTargetTests {
         #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
     }
 
-    /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同一个叶子，Mac 上发给 Agent 与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
-    @Test func Mac发给Agent与Cue开工_交到同一个地方() async throws {
+    /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同样的一步，Mac 上"开始"与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
+    @Test func Mac开始与Cue开工_交到同一个地方() async throws {
         try await remoteSession("r", title: "atlas")
-        let (bound, boundDraft) = try await leaf(in: project, session: "r")
+        let (forMac, forCue) = (try await leaf(in: project, session: "r"), try await leaf(in: project, session: "r"))
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
-        workspace.handOff(boundDraft)
+        workspace.handOff(forMac)
         let mac = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
-        let cue = try await store.startLeaf(bound.id, host: TestApp.hostID, cue: true)
+        let cue = try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true)
         #expect(cue.target.ref == "r" && mac.target.ref == "r" && cue.hostID == mac.hostID)
 
-        // 绑着别的 Mac 上已结束的会话：都请那台 Mac 唤醒它
+        // 上一步绑着别的 Mac 上已结束的会话：都请那台 Mac 唤醒它
         try await remoteSession("gone", title: "relic", state: .ended)
-        let (ended, endedDraft) = try await leaf(in: project, session: "gone")
-        workspace.handOff(endedDraft)
+        let (endedForMac, endedForCue) = (try await leaf(in: project, session: "gone"), try await leaf(in: project, session: "gone"))
+        workspace.handOff(endedForMac)
         let macWake = try await eventually(store, { try $0.deliveryRequests().first { $0.target.ref == "gone" } }) { $0 != nil }!
-        let cueWake = try await store.startLeaf(ended.id, host: TestApp.hostID, cue: true)
+        let cueWake = try await store.startLeaf(endedForCue.id, host: TestApp.hostID, cue: true)
         #expect(macWake.hostID == "mac-b" && cueWake.hostID == "mac-b" && cueWake.target.ref == "gone")
 
-        let (fresh, freshDraft) = try await leaf(in: project)
+        let fresh = try await leaf(in: project)
         let cueLaunch = try await store.startLeaf(fresh.id, host: TestApp.hostID, cue: true)
         #expect(try await store.withdrawDelivery(cueLaunch.id))
-        workspace.handOff(freshDraft)
+        workspace.handOff(fresh)
         let macLaunch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }!
         #expect(macLaunch.launch?.name == "修乱序" && cueLaunch.launch?.name == "修乱序")
         #expect(macLaunch.launch?.project == cueLaunch.launch?.project && macLaunch.hostID == cueLaunch.hostID)

@@ -69,34 +69,11 @@ enum Schema {
           SELECT p.id FROM cards p JOIN cards g ON g.id = p.parentID WHERE p.deletedAt IS NULL AND g.deletedAt IS NULL)
         """, [Date.stamp])
     },
-    // 26：提示词送达即用掉（`PromptConsumption`）。旧库里已经发出去的提示词同样删掉：任务下的灵感（非资料、没进回收站），
-    // 记着交给的会话（发给会话、开新会话认领后），或有成功的发送请求；还有在路上或失败的请求的留着（没送到的可重发）。
-    // 删的是行：同步表的删除由下次对账发现（`pendingDeletes`），不另记墓碑。图片文件不在这里回收：发出去的话的发送记录快照仍引用它们。
-    Upgrade { db in
-      let delivered = try db.query(
-        """
-        SELECT c.id FROM cards c WHERE \(CueStore.isPrompt("c")) AND c.deletedAt IS NULL
-          AND (c.piSessionID IS NOT NULL
-            OR EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status = 'succeeded' AND \(CueStore.delivers("r"))))
-          AND NOT EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status IN ('pending', 'executing', 'failed'))
-        """
-      ) { $0.uuid(0) }
-      _ = try CueStore.consumePrompts(delivered, in: db)
-    },
-    // 27：任务的正文只有标题。旧任务的第二行起（一句说明）按设为任务的规则（`CueLines.split`）拆成它的第一条提示词：不带会话与发送记录，
-    // 说明从没发给过 Agent。回收站与归档里的任务一并处理；modifiedAt 变大，改动才会同步出去
-    Upgrade { db in
-      let now = Date.stamp
-      let tasks = try db.query("SELECT id, modifiedAt FROM cards WHERE todoAt IS NOT NULL AND instr(body, char(10)) > 0") {
-        (id: $0.uuid(0), modifiedAt: $0.date(1))
-      }
-      for (id, modifiedAt) in tasks {
-        _ = try CueStore.splitPrompt(db, task: id, at: max(now, modifiedAt.addingTimeInterval(0.001)), carryingHandoff: false)
-      }
-    },
-    // 28：任务 → 步骤 → 会话。草稿（提示词）与会话只在叶子（没有步骤的任务）上，一个叶子最多一条草稿（`CardLinks`）。
-    // 有步骤的任务下的提示词移到第一个没完成的步骤（没有就第一个步骤），它记着的会话也交给那个步骤（它已有会话的就丢弃上级的），
-    // 一个叶子有多条提示词的按顺序并成一条：整库按远端收敛同一条规则（`CardLinks.repairs`）算一遍。modifiedAt 变大，改动才会同步出去
+    // 26：提示词送达即用掉；27：任务的正文只拆出提示词。提示词已并进任务（50），这两步不再有事可做
+    "",
+    "",
+    // 28：任务 → 步骤 → 会话：会话只在叶子（没有步骤的任务）上，有步骤的任务记着的会话交给第一个没完成的步骤（没有就第一个步骤；
+    // 它已有会话的就丢弃上级的）：整库按远端收敛同一条规则（`CardLinks.repairs`）算一遍。modifiedAt 变大，改动才会同步出去
     Upgrade { db in
       let links = try CardLinks(db)
       try CueStore.apply(links.repairs(touching: Set(links.links.keys)), in: db, at: Date.stamp)
@@ -248,6 +225,37 @@ enum Schema {
       try db.run(
         "UPDATE cueLines SET deletedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id IN (SELECT value FROM json_each(?2))",
         [now, JSONColumn.encode(converted)])
+    },
+    // 50：提示词并进任务：任务的正文第一行是标题、其余是开工时发出的话，发出后留在任务上。任务下的提示词（不是资料的灵感，回收站里的不算；
+    // 送达的早已删掉，留着的都没发出去）按先后拼进任务正文末尾、空行隔开，变量取值并入（同名的留任务的），再删掉；
+    // 带着它们的投送请求与发送记录改指任务，提示词记着的会话交给还没会话的任务。modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let prompts = try db.query(
+        """
+        SELECT c.id, c.parentID FROM cards c JOIN cards t ON t.id = c.parentID
+        WHERE c.todoAt IS NULL AND c.isPinned = 0 AND c.deletedAt IS NULL AND t.todoAt IS NOT NULL ORDER BY c.parentID, c.sortKey, c.id
+        """
+      ) { (id: $0.uuid(0), task: $0.uuid(1)) }
+      let read = { (row: Row) in (body: row.text(0), values: JSONColumn.decode([String: String].self, from: row.text(1)) ?? [:]) }
+      for (task, group) in Dictionary(grouping: prompts, by: \.task) {
+        let ids = group.map(\.id), list = CueStore.idList(ids)
+        guard let kept = try db.first("SELECT body, variableValues FROM cards WHERE id = ?", [task], read) else { continue }
+        let parts = try ids.compactMap { try db.first("SELECT body, variableValues FROM cards WHERE id = ?", [$0], read) }
+        let body = ([kept] + parts).map { $0.body.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let values = ([kept] + parts).reduce(into: [String: String]()) { $0.merge($1.values) { first, _ in first } }
+        try db.run(
+          """
+          UPDATE cards SET body = ?1, variableValues = ?2, modifiedAt = MAX(modifiedAt + 1, ?3),
+            piSessionID = COALESCE(piSessionID, (SELECT piSessionID FROM cards WHERE id IN (SELECT value FROM json_each(?5)) AND piSessionID IS NOT NULL))
+          WHERE id = ?4
+          """, [body, JSONColumn.encode(values), now, task, list])
+        for table in ["deliveryRequests", "sendRecords"] {
+          try db.run(
+            "UPDATE \(table) SET cardID = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE cardID IN (SELECT value FROM json_each(?3))", [task, now, list])
+        }
+        _ = try CueStore.purgeCards(where: "id IN (SELECT value FROM json_each(?))", [list], in: db)
+      }
     },
   ]
 

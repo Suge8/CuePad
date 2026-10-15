@@ -78,7 +78,8 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——步骤（顶层任务下的任务，勾选清单里的一条）与提示词（挂在顶层任务下的灵感，要发给 Agent 的话）；任务的正文只有标题，多出来的话都是提示词（`CueLines.split`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——步骤（顶层任务下的任务，勾选清单里的一条）与当资料的灵感。
+/// 任务的正文第一行是标题，其余是要交代给 Agent 的话（`CueLines.split`）：开工时整段作为第一句发出，发出后留在任务上。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -109,10 +110,10 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
-  /// 它仍属于这个叶子（不算没绑任务的会话，`CueStore.cueBoard`）。正在用的只在 `piSessionID`，不在这里。
+  /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
 
-  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
+  /// 任务最多两级：任务 → 步骤。任务下的灵感不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
@@ -191,16 +192,12 @@ public enum CardSlot: Hashable, Sendable {
 
 /// 一次卡片改动的回执：足够原样拨回去的快照，在改动的同一个事务里读到，所以不会和库里的实际写入对不上（`CueStore.undo`）。
 public enum CardChange: Sendable, Equatable {
-  /// 设为任务（`on`）或改回灵感：改动前的正文与变量取值，拆出的提示词，提上去的下级。
-  case todo(id: UUID, on: Bool, body: String, variableValues: [String: String], prompt: UUID?, lifted: [UUID])
+  /// 设为任务（`on`）或改回灵感：提上去的下级。
+  case todo(id: UUID, on: Bool, lifted: [UUID])
   /// 删除：提上去的下级。
   case trash(id: UUID, lifted: [UUID])
   /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
-  /// 灵感挂到已有草稿的叶子上：并进草稿，灵感删掉。带着删掉的灵感整张卡与草稿并之前的正文、变量取值，拨回时原样还原。
-  case fold(idea: Card, draft: UUID, body: String, variableValues: [String: String])
-  /// 灵感挂到绑了会话的叶子上：绑了会话的叶子不留提示词，灵感删掉，正文由界面接进会话 `session` 的回复框。拨回时灵感原样还原。
-  case handed(idea: Card, session: String)
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
@@ -354,7 +351,7 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、提示词与空白灵感）。
+/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
@@ -399,14 +396,10 @@ public enum CueStoreError: Error, Equatable {
   // 以下除 memoryLineTooLong 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它）。
   /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
-  /// 叶子已有会话、没有草稿可交，开工无事可做（参数是叶子标题）。
+  /// 叶子已有会话，开工无事可做：话在会话里说（参数是叶子标题）。
   case alreadyStarted(String)
-  /// 叶子没有草稿，开工没有第一句可交（参数是叶子标题）。
-  case draftNeeded(String)
   /// 叶子还没绑会话，它的话正送进上一步的会话（参数是叶子标题）。
   case sending(String)
-  /// 叶子绑着会话，不留草稿：话在会话里说（参数是叶子标题）。
-  case leafHasSession(String)
   /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
   case stepsRemaining(Int)
   /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
@@ -456,11 +449,9 @@ extension CueStoreError: LocalizedError {
     case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
     case .readOnlyLibrary: "资料库是只读的，写不进去"
-    case .noSession(let title): "「\(title)」还没有会话：先用 edit 写草稿再 start，草稿会作为第一句"
+    case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
-    case .leafHasSession(let title): "「\(title)」已有会话，不留草稿：用 say 对它说话"
     case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
-    case .draftNeeded(let title): "「\(title)」还没有草稿：先用 edit 写草稿再 start，草稿会作为第一句"
     case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
     case .noFolder(let project):

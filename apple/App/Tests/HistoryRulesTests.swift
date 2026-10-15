@@ -148,7 +148,7 @@ struct HistoryRulesTests {
     }
 }
 
-/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是任务绑着的会话时，交出草稿在后台唤醒它。
+/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是上一步绑着的会话时，下一步"开始"在后台唤醒它。
 struct RestingTargetTests {
     let rig = TestApp()
 
@@ -167,10 +167,11 @@ struct RestingTargetTests {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
         let task = try await store.createTask("任务", in: project.id)
-        let draft = try await store.createCard(body: "接着做", under: task.id)
-        try await store.linkCard(task.id, toSession: "a")
+        let first = try await store.createTask("上一步", under: task.id)
+        let next = try await store.createTask("接着做", under: task.id)
+        try await store.linkCard(first.id, toSession: "a")
 
-        workspace.handOff(draft)
+        workspace.handOff(next)
 
         try await eventually("唤醒后话送到") { rig.host.extensions["a"]?.messages.isEmpty == false }
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])

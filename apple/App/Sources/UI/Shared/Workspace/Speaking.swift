@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 发消息只有这一条路（全 App 所有入口：会话回复框的说话、作答与斜杠命令，Cue 页与浮起的 Cue 输入条，菜单栏交给 Cue，
-/// 手机发给 Agent，Mac 把提示词发给 Agent，压缩按钮）：
+/// 手机发给 Agent，Mac 开始任务，压缩按钮）：
 /// 按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（`Listener`）→ 后台立即上传。界面从不等上传或执行结果，
 /// 到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。
 /// 正文写不出（图片存不进图片库）时什么都没发：草稿原样留着、只提示原因；调用方看返回值，只有写出了才收起输入框、
@@ -30,7 +30,7 @@ extension Workspace {
         return write(stored, to: listener) { box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: kept) }
     }
 
-    /// 不是从输入框说的（提示词、压缩按钮）：写不进库时只提示，原文还在原处。
+    /// 不是从输入框说的（任务的正文、压缩按钮）：写不进库时只提示，原文还在原处。
     @discardableResult
     func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {
         if let saying { say(saying) }

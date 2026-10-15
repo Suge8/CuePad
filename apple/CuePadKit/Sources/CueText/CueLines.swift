@@ -31,15 +31,20 @@ public enum CueLines {
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// 任务的正文只有标题；一段多行的话变成任务时拆开：第一个有文字的行留给任务，其余（文字与图片，原样）成为它的一条提示词；
-    /// 只有那一行时提示词为 nil。
-    public static func split(_ stored: String) -> (task: String, prompt: String?) {
+    /// 任务的正文拆成标题与下面的话：第一个有文字的行是标题，其余（文字与图片，原样）是要交代给 Agent 的话；只有那一行时为 nil。
+    public static func split(_ stored: String) -> (title: String, rest: String?) {
         var lines = stored.components(separatedBy: "\n")
         guard let index = lines.firstIndex(where: isTitleLine) else { return (stored, nil) }
         let heading = lines.remove(at: index)
         let rest = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         let hasContent = !contentLines(rest).isEmpty || !CueFormat.imageHashes(in: rest).isEmpty
         return (heading, hasContent ? rest : nil)
+    }
+
+    /// `split` 反过来：标题一行，下面接着要交代的话；话是空白时只有标题。
+    public static func joined(title: String, rest: String?) -> String {
+        guard let rest, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return title }
+        return title + "\n" + rest
     }
 
     private static func stripListMarker(_ line: String) -> String {

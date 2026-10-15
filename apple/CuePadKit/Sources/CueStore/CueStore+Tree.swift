@@ -14,8 +14,8 @@ extension CueStore {
 
   /// 卡片的上级、项目与是不是任务；没有或已在回收站为 nil。
   func link(of id: UUID) throws -> CardLinks.Link? {
-    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL, isPinned FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
-      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2), isPinned: $0.bool(3))
+    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
+      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2))
     }
   }
 
@@ -30,7 +30,7 @@ extension CueStore {
       """, [id]) { $0.uuid(0) }
   }
 
-  /// 任务连自己在内往下有几级任务（提示词不算一级）。只数到 `Card.maxTaskDepth`：判断超限够了，也让环里的数据数得完。
+  /// 任务连自己在内往下有几级任务（挂在下面的灵感不算一级）。只数到 `Card.maxTaskDepth`：判断超限够了，也让环里的数据数得完。
   func taskHeight(of id: UUID) throws -> Int {
     try db.first(
       """

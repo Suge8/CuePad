@@ -125,7 +125,7 @@ enum Press {
     case control
     /// 整张卡片。
     case card
-    /// 整宽的一条（虚线框的"写一条提示词"）。
+    /// 整宽的一条（虚线框的"写正文"）。
     case wide
 }
 

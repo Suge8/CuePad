@@ -11,7 +11,7 @@ struct SessionBindItems: View {
 
     var body: some View {
         let sessions = workspace.sendState.onlineTargets(for: leaf.projectID).filter { $0.state.projectID == leaf.projectID }
-        Button("开新会话", systemImage: "plus") { workspace.startFresh(leaf.id) }
+        Button("开新会话", systemImage: "plus") { workspace.startFresh(leaf) }
         Divider()
         ForEach(sessions) { item in
             let sessionID = item.state.sessionID
@@ -29,7 +29,7 @@ struct SessionBindItems: View {
 
     private func bind(_ sessionID: String) {
         let id = leaf.id
-        workspace.attempt { try await workspace.bind(sessionID, to: id) }
+        workspace.perform { try await $0.bindSession(sessionID, to: id) }
     }
 }
 #endif

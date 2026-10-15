@@ -133,17 +133,17 @@ extension CueStore {
     }
   }
 
-  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；多行的第一行是任务、其余成为它的提示词。
+  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；第一行是标题，其余是它的正文（`CueLines.split`）。
   public func createTask(_ body: String, in project: UUID?) throws -> Card {
     try requireContent(body)
     return try write {
       try requireLiveProject(project)
-      return try splittingPrompt(insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project))))
+      return try insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project)))
     }
   }
 
   /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
-  /// 上级原本是叶子时，它的草稿与会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）。
+  /// 上级原本是叶子时，它的会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）；上级的正文留在上级。
   /// 上级已完成的不再算做完（`reopen`）：加步骤是明说还有活。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
@@ -151,57 +151,16 @@ extension CueStore {
       guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
       guard try ancestors(of: parent).count + 1 < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
-      let step = try splittingPrompt(insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last)))
-      try settle(around: [parent])  // 叶子加了第一个步骤：它的草稿与会话移到这个步骤上
+      let step = try insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last))
+      try settle(around: [parent])  // 叶子加了第一个步骤：它的会话移到这个步骤上
       try reopen([parent])
       return try find(Card.self, step.id) ?? step
     }
   }
 
-  /// 刚建好的任务：正文多行时拆出提示词，返回拆过的任务。
-  private func splittingPrompt(_ task: Card) throws -> Card {
-    guard try Self.splitPrompt(db, task: task.id, at: task.modifiedAt) != nil else { return task }
-    return try find(Card.self, task.id) ?? task
-  }
-
-  /// 任务下新写一条提示词（叶子的草稿），项目随任务。上级不是任务抛 `invalidParent`。可以是空的：
-  /// 写一条时先建好再进编辑，离开时还是空白就删掉（`dropIfBlank`）。提示词只挂在叶子下（`promptHome`），一个叶子最多一条：
-  /// 叶子已有草稿时不另建，空的就返回那一条，有字的接到它末尾（`fold`）。
-  public func createCard(body: String, under parent: UUID) throws -> Card {
-    try write {
-      guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
-      let home = try promptHome(parent)
-      guard let draft = try Self.draft(of: home, in: db) else {
-        return try insertCard(body, project: link.project, parent: home, todo: false, sortKey: SortKey.after(lastSortKey(under: home)))
-      }
-      if !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        let extra = try insertCard(body, project: link.project, parent: home, todo: false, sortKey: SortKey.after(lastSortKey(under: home)))
-        try Self.fold([extra.id], into: draft, in: db, at: Date.stamp)
-      }
-      return try find(Card.self, draft)!
-    }
-  }
-
-  private func lastSortKey(under parent: UUID) throws -> String? {
-    try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
-  }
-
-  /// 提示词挂在哪个任务下：提示词只挂在叶子（没有步骤的任务）下，往有步骤的任务上挂的落到它的第一个没完成的步骤（没有就第一个步骤），
-  /// 见 `CardLinks.home(of:)`。不拒绝而是改挂：远端收敛（`CardLinks.repairs`）与结构升级本来就这样处理，本机写入同一个结果，
-  /// 界面不必为"挂在有步骤的任务上"另做一条出错的路。`task` 必须是任务。
-  func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
-
-  /// 叶子绑着的会话；没绑为 nil。
-  private func session(of leaf: UUID) throws -> String? {
-    try db.first("SELECT piSessionID FROM cards WHERE id = ?", [leaf]) { $0.textOrNil(0) } ?? nil
-  }
-
-  /// 叶子的草稿：它下面第一条提示词（不是资料的灵感）；没有为 nil。
-  static func draft(of leaf: UUID, in db: SQLite) throws -> UUID? {
-    try db.first(
-      "SELECT id FROM cards WHERE parentID = ? AND todoAt IS NULL AND isPinned = 0 AND deletedAt IS NULL ORDER BY sortKey, id LIMIT 1", [leaf]
-    ) { $0.uuid(0) }
-  }
+  /// 任务此刻干活的叶子：任务自己是叶子就是它；有步骤的是第一个没完成的步骤，没有就第一个步骤（`CardLinks.home(of:)`）。
+  /// 开工、绑会话、交话都落到它上面。`task` 必须是任务。
+  func homeLeaf(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
   /// 改正文、置顶、变量取值。归属、结构、状态、删除对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
@@ -211,12 +170,10 @@ extension CueStore {
       card.modifiedAt = Date.stamp
       try update(card)
       try registerImages(in: card.body)
-      // 任务正文只有标题：写进来的多余的话（命令行、别的版本同步来又被改过的）同样拆成它的提示词
-      if card.isTask { _ = try Self.splitPrompt(db, task: id, at: card.modifiedAt, carryingHandoff: false) }
     }
   }
 
-  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueLines.split`）。
+  /// 设为任务 / 改回灵感。设为任务：成为待办的任务，正文原样（第一行是标题，其余是它的正文）。
   /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。已经是这个样子时什么都不做、返回 nil；
   /// 否则返回回执（`undo` 拨回）。
   @discardableResult
@@ -229,47 +186,18 @@ extension CueStore {
     guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
     guard card.isTask != on else { return nil }
     let now = Date.stamp
-    var prompt: UUID?, lifted: [UUID] = []
+    var lifted: [UUID] = []
     if on {
       try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
-      prompt = try Self.splitPrompt(db, task: id, at: now)
     } else {
       lifted = try liftChildren(of: card, at: now)
       try db.run(
         "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, formerSessionIDs = NULL, modifiedAt = ? WHERE id = ?",
         [now, id])
     }
-    // 步骤增减：上级的草稿、会话与提升上来的下级按叶子的规则放回去
+    // 步骤增减：上级的会话与提升上来的下级按叶子的规则放回去
     if let parent = card.parentID { try settle(around: [parent]) }
-    return .todo(id: id, on: on, body: card.body, variableValues: card.variableValues, prompt: prompt, lifted: lifted)
-  }
-
-  /// 任务正文除标题外还有话时拆出来（`CueLines.split`）：其余成为叶子（有步骤的任务是它的 `home`）的草稿：排在它下级最前，叶子已有草稿时并进那一条，
-  /// 带着任务的变量取值；`carryingHandoff`（设为任务：灵感原本交给过会话）时再带上会话，发给 Agent 的记录（发送记录、投送请求）跟到提示词上。
-  /// 返回提示词的 id，没有可拆的为 nil。设为任务、新建任务与结构升级共用。
-  static func splitPrompt(_ db: SQLite, task: UUID, at now: Date, carryingHandoff: Bool = true) throws -> UUID? {
-    guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
-    let (heading, prompt) = CueLines.split(body)
-    guard let prompt else { return nil }
-    let home = try CardLinks(db, around: [task]).home(of: task)
-    let existing = try draft(of: home, in: db)
-    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [home]) { $0.textOrNil(0) } ?? nil
-    let promptID = UUID()
-    try db.run(
-      """
-      INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, conflictOf, deletedAt, createdAt, modifiedAt,
-        parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt)
-      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, ?7, NULL, NULL, NULL, CASE WHEN ?6 THEN piSessionID END, archivedAt
-      FROM cards WHERE id = ?5
-      """, [promptID, prompt, SortKey.before(first), now, task, carryingHandoff ? 1 : 0, home])
-    try db.run("UPDATE cards SET body = ?, variableValues = '{}', modifiedAt = ? WHERE id = ?", [heading, now, task])
-    for table in carryingHandoff ? ["sendRecords", "deliveryRequests"] : [] {
-      try db.run("UPDATE \(table) SET cardID = ?, modifiedAt = ? WHERE cardID = ?", [promptID, now, task])
-    }
-    // 叶子已有草稿（改标题时写进来多余的话）：并进它末尾，不另立一条
-    guard let existing else { return promptID }
-    try fold([promptID], into: existing, in: db, at: now)
-    return existing
+    return .todo(id: id, on: on, lifted: lifted)
   }
 
   /// 归档：连同下级一起（已归档的保留原时刻）。
@@ -344,70 +272,43 @@ extension CueStore {
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成步骤或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
-  /// 灵感挂到任务下成为提示词，规则同 `createCard(body:under:)`：落在叶子（`promptHome`）、排在它的下级最后（给的 `previous` 作废）；
-  /// 叶子已有草稿时，灵感的文字并进草稿末尾、灵感删掉，回执是 `.fold`；叶子绑了会话时不留提示词，灵感删掉，回执 `.handed` 带着它，
-  /// 由界面接进会话的回复框。任务挂成步骤后，上级原来的草稿与会话按叶子的规则移到步骤上（`settle`）。
-  /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级；`.fold`、`.handed` 还原灵感与草稿原文）。
+  /// 挂成步骤、灵感挂到任务下当资料都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
+  /// 任务挂成步骤后，上级原来的会话按叶子的规则移到步骤上（`settle`）。
+  /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
-    try write { try handing(id, to: slot) ?? relocate(id, to: slot, after: previous) }
-  }
-
-  /// 灵感挂到绑了会话的叶子上：不留提示词，交出去（`.handed`）；别的情况为 nil，照常挪。
-  /// 只在用户挪卡时判断：撤销与下级归位（`relocate`）是把卡放回原处，不交。
-  private func handing(_ id: UUID, to slot: CardSlot) throws -> CardChange? {
-    guard case .under(let parent) = slot, let card = try link(of: id), !card.isTask, !card.isPinned,
-      try link(of: parent)?.isTask == true
-    else { return nil }
-    let home = try promptHome(parent)
-    guard card.parent != home, let session = try session(of: home) else { return nil }
-    return .handed(idea: try handOut(id), session: session)
+    try write { try relocate(id, to: slot, after: previous) }
   }
 
   @discardableResult
   private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
-      guard let current = try link(of: id) else { throw CueStoreError.notFound }
-      let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
-      let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
-      let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
-      let from: CardSlot = current.parent.map(CardSlot.under) ?? .top(project: current.project)
-      let destination: CardLinks.Link
-      var previous = previous
-      var absorbing: UUID?
-      switch slot {
-      case .top(let project):
-        try requireLiveProject(project)
-        destination = CardLinks.Link(parent: nil, project: project, isTask: current.isTask)
-      case .under(let parent):
-        let above = try ancestors(of: parent)
-        guard let target = try link(of: parent), target.isTask, parent != id, !above.contains(id) else {
-          throw CueStoreError.invalidParent
-        }
-        if current.isTask, above.count + 1 + (try taskHeight(of: id)) > Card.maxTaskDepth { throw CueStoreError.taskTooDeep }
-        if current.isTask || current.isPinned {
-          destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
-        } else {
-          let home = try promptHome(parent)
-          if home != parent { previous = try db.first("SELECT id FROM cards WHERE parentID = ? AND id != ? ORDER BY sortKey DESC, id DESC LIMIT 1", [home, id]) { $0.uuid(0) } }
-          absorbing = try Self.draft(of: home, in: db).flatMap { $0 == id ? nil : $0 }
-          destination = CardLinks.Link(parent: home, project: target.project, isTask: false)
-        }
+    guard let current = try link(of: id) else { throw CueStoreError.notFound }
+    let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
+    let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
+    let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
+    let from: CardSlot = current.parent.map(CardSlot.under) ?? .top(project: current.project)
+    let destination: CardLinks.Link
+    switch slot {
+    case .top(let project):
+      try requireLiveProject(project)
+      destination = CardLinks.Link(parent: nil, project: project, isTask: current.isTask)
+    case .under(let parent):
+      let above = try ancestors(of: parent)
+      guard let target = try link(of: parent), target.isTask, parent != id, !above.contains(id) else {
+        throw CueStoreError.invalidParent
       }
-      let now = Date.stamp
-      if let draft = absorbing {
-        guard let idea = try find(Card.self, id), let kept = try find(Card.self, draft) else { throw CueStoreError.notFound }
-        try Self.fold([id], into: draft, in: db, at: now)
-        return .fold(idea: idea, draft: draft, body: kept.body, variableValues: kept.variableValues)
-      }
-      try db.run("UPDATE cards SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
-      if destination.project != current.project {
-        try db.run(
-          "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (\(Self.subtree(from: "SELECT ?3")))", [destination.project, now, id])
-      }
-      try place(scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
-      if current.isTask, let parent = destination.parent { try settle(around: [parent]) }
-      return .move(id: id, from: from, after: before)
+      if current.isTask, above.count + 1 + (try taskHeight(of: id)) > Card.maxTaskDepth { throw CueStoreError.taskTooDeep }
+      destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
+    }
+    let now = Date.stamp
+    try db.run("UPDATE cards SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
+    if destination.project != current.project {
+      try db.run(
+        "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (\(Self.subtree(from: "SELECT ?3")))", [destination.project, now, id])
+    }
+    try place(scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
+    if current.isTask, let parent = destination.parent { try settle(around: [parent]) }
+    return .move(id: id, from: from, after: before)
   }
 
   /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
@@ -443,39 +344,24 @@ extension CueStore {
                          THEN NULL ELSE projectID END
       WHERE id = ?
       """, [Date.stamp, id])
-    // 恢复回原来的叶子（或有步骤的任务）下的提示词，按叶子的规则放好
+    // 恢复回原来的上级下的步骤：上级的会话按叶子的规则放好
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
   /// 拨回一次改动（`setTodo`、`trashCard`、`moveCard` 的回执），整个拨回是一个事务：
-  /// 设为任务拆出的提示词删掉、正文与变量取值合回；改回灵感后下级回到它下面；删除恢复、提上去的下级回到它下面；挪动放回原来的位置。
+  /// 改回灵感后下级回到它下面；删除恢复、提上去的下级回到它下面；挪动放回原来的位置。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
 
   /// 一次拨回多个回执（批量删除的撤销），同一个事务，倒序拨回。
   public func undo(_ changes: [CardChange]) throws {
-    try reportingFileFailures { try write {
-      var orphaned: Set<String> = []
-      for change in changes.reversed() { orphaned.formUnion(try undoRow(change)) }
-      return try reclaimAttachments(orphaned)
-    } }
+    try write { for change in changes.reversed() { try undoRow(change) } }
   }
 
-  /// 拨回一个回执（在调用方的事务里）；返回因此不再被引用的图片。
-  private func undoRow(_ change: CardChange) throws -> Set<String> {
-    var orphaned: Set<String> = []
+  /// 拨回一个回执（在调用方的事务里）。
+  private func undoRow(_ change: CardChange) throws {
     switch change {
-    case .todo(let id, let on, let body, let variableValues, let prompt, let lifted):
-      if let prompt {
-        orphaned = try purgeCards(where: "id = ?", [prompt])
-        if var card = try find(Card.self, id) {
-          card.body = body
-          card.variableValues = variableValues
-          card.modifiedAt = Date.stamp
-          try update(card)
-        }
-        try registerImages(in: body)
-      }
+    case .todo(let id, let on, let lifted):
       try applyTodo(id, !on)
       try adopt(lifted, by: id)
     case .trash(let id, let lifted):
@@ -484,26 +370,7 @@ extension CueStore {
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
-    case .fold(let idea, let draft, let body, let variableValues):
-      if var card = try find(Card.self, draft) {
-        card.body = body
-        card.variableValues = variableValues
-        card.modifiedAt = Date.stamp
-        try update(card)
-      }
-      try restoreCard(idea)
-    case .handed(let idea, _):
-      try restoreCard(idea)
     }
-    return orphaned
-  }
-
-  /// 把删掉的整张卡原样放回（撤销并入草稿、接进回复框）。
-  private func restoreCard(_ idea: Card) throws {
-    var restored = idea
-    restored.modifiedAt = Date.stamp
-    try insert(restored, ignoringExisting: true)
-    try registerImages(in: idea.body)
   }
 
   /// 把这些卡按顺序重新挂到 `parent` 下（已经不在的跳过）。
@@ -515,8 +382,8 @@ extension CueStore {
     }
   }
 
-  /// 离开一条灵感（含提示词）的编辑时：还是空白（`Card.isBlank`）就不留下。任务、写了字或放了图的不动。
-  /// 记灵感与写提示词都是先建一条空的再进编辑，这是它们共用的收尾。
+  /// 离开一条灵感的编辑时：还是空白（`Card.isBlank`）就不留下。任务、写了字或放了图的不动。
+  /// 记灵感是先建一条空的再进编辑，这是它的收尾。
   public func dropIfBlank(_ id: UUID) throws {
     try write {
       // 空白的正文不引用图片，没有附件要回收
@@ -678,8 +545,7 @@ extension CueStore {
 // MARK: 发送记录、附件、Pi 会话索引
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
-  /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
+  /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`；任务行据此显示会话状态）。执行投送的那台 Mac 记，
   /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
   @discardableResult
   public func recordSend(
@@ -704,8 +570,8 @@ extension CueStore {
       [Self.idList(deliveries)]) { $0.uuid(0) })
   }
 
-  /// 把灵感或任务关联到一个会话（没开始的任务进行中，提示词连带它的任务也一样；完成了的不变：说话不改任务的状态），不写发送记录：
-  /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。会话只记在叶子上（`promptHome`）；
+  /// 把灵感或任务关联到一个会话（没开始的任务进行中；完成了的不变：说话不改任务的状态），不写发送记录：
+  /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。任务的会话只记在叶子上（`homeLeaf`）；
   /// 一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
@@ -713,18 +579,12 @@ extension CueStore {
 
   private func linkCardInTransaction(_ card: UUID, toSession session: String, at now: Date) throws {
     guard let link = try link(of: card) else { return }
-    var targets = [card]
-    if link.isTask {
-      targets = [try promptHome(card)]
-    } else if let parent = link.parent {
-      targets.append(try promptHome(parent))
-    }
     try db.run(
       """
       UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
         startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END
-      WHERE id IN (\(targets.map { _ in "?" }.joined(separator: ", ")))
-      """, [session, now] + targets)
+      WHERE id = ?3
+      """, [session, now, link.isTask ? try homeLeaf(card) : card])
   }
 
   /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
@@ -743,26 +603,16 @@ extension CueStore {
 
   /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有步骤的任务，有步骤的抛 `notALeaf`，不是任务抛 `notATask`。
   /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子（已完成的事绑着的会话照样能绑给新的事）。没开始的任务置为进行中，完成了的不变。
-  /// 绑了会话的叶子不留提示词（话在会话里说）：有草稿时交出去（`handOut`）、返回它的正文，界面把它接进这个会话的回复框，不自动发。
-  @discardableResult
-  public func bindSession(_ sessionID: String, to task: UUID) throws -> String? {
+  /// 绑会话不发任务的正文：它在做的事已经在会话里，要说的话在会话里说。
+  public func bindSession(_ sessionID: String, to task: UUID) throws {
     try write {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
       guard link.isTask else { throw CueStoreError.notATask }
-      guard try promptHome(task) == task else { throw CueStoreError.notALeaf }
+      guard try homeLeaf(task) == task else { throw CueStoreError.notALeaf }
       try forgetLaunches(of: task)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
       try endUnusedSessions(of: task, cue: false)
-      return try Self.draft(of: task, in: db).map { try handOut($0).body }
     }
-  }
-
-  /// 绑了会话的叶子不留提示词：这张卡删掉、整张交出去，正文由界面接进会话的回复框（`bindSession` 的草稿、`moveCard` 的 `.handed`）。
-  /// 图片文件不回收：正文被界面接去，发出之前不能让文件没了。
-  private func handOut(_ id: UUID) throws -> Card {
-    guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-    _ = try purgeCards(where: "id = ?", [id])
-    return card
   }
 
   /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
@@ -775,7 +625,6 @@ extension CueStore {
 
   /// 用户亲手绑定、解绑是之后的一次交给：指向这个任务的开新会话请求不再认领它（`claimLaunchedCards` 只认最近一次），
   /// 否则那个会话的记录一写（或同步过来）就把它抢回去；它们也就不再算"正在开会话"（`launchingLeaves` 按请求带着的卡认）。
-  /// 带着草稿的请求不必另管：绑定时草稿交出去（`handOut`），请求就指不到这个任务了。
   private func forgetLaunches(of task: UUID) throws {
     try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode = 'start'", [Date.stamp, task])
   }

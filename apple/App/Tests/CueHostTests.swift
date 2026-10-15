@@ -217,7 +217,7 @@ struct CueHostTests {
         #expect(rig.app.host.calls.contains {
             if case .open(_, _, let name, let model, let thinking) = $0 { name == "修好登录页" && model == "fake/fake-model" && thinking == "high" } else { false }
         })
-        #expect(session.messages.first?.text == "把登录页修好")
+        #expect(session.messages.first?.text == "修好登录页\n把登录页修好")
         #expect(!session.received.contains("config"))
 
         // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
@@ -749,7 +749,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请先查一下") { return .held }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
-        if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
+        if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }

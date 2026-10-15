@@ -24,7 +24,7 @@ nonisolated struct TaskFold: Equatable, Sendable {
     }
 }
 
-/// 步骤进度与完成上级时的确认，项目页任务纸底的开合（Mac 与 iOS 同一套）。草稿不写条数：写好了的在行尾是"开始"（`TaskNext`）。
+/// 步骤进度与完成上级时的确认，项目页任务纸底的开合（Mac 与 iOS 同一套）。还没交出去的叶子在行尾是"开始"（`TaskNext`）。
 enum TaskCopy {
     /// 纸底展开其余没做完的任务那一格（`TaskFold`）：折着写"还有 2 条"，展开后写"收起"。数都来自 `TaskCounts`，纸上不另摆分数。
     static func more(hidden: Int, expanded: Bool) -> String { expanded ? "收起" : "还有 \(hidden) 条" }

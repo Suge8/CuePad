@@ -37,7 +37,7 @@ extension DebugScene {
             }
             workspace.show(.agent)
         case "projectagent":
-            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
+            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，开了工的步骤带会话状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
@@ -79,15 +79,9 @@ extension DebugScene {
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor":
-            // 散放的灵感进编辑页，提示词在它任务的浮窗里展开
+            // 散放的灵感进编辑页
             if let id = await card(in: workspace.currentProject, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }
-        case "attach":
-            guard let id = await card(in: workspace.currentProject, store: workspace.services.store),
-                  let card = try? await workspace.services.store.card(id) else { break }
-            workspace.open(card)
-            try? await Task.sleep(for: .seconds(1))
-            workspace.attaching = card
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
             if defaults.bool(forKey: "CuePadDemo") {

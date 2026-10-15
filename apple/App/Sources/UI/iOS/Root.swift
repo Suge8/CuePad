@@ -52,7 +52,6 @@ struct IOSRoot: View {
             }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project, created: $0.created) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
-            .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
         // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
         .measuresStatusBar()

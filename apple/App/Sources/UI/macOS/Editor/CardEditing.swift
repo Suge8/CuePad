@@ -4,9 +4,9 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一条灵感或任务草稿此刻的编辑：编辑器的操作口、打字中的正文、自动保存与保存状态。整页编辑页（散放的灵感）与
-/// 任务浮窗的输入框（草稿）共用这一份，各自只管怎么摆。编辑器是这条正文的唯一写者（见 `EditorHost`）；离开时 `leave` 写下没保存的字，
-/// 什么都没写的不留下（新记的一条、新写的提示词都是先建一条空的再编辑）。
+/// 一条灵感或任务正文此刻的编辑：编辑器的操作口、打字中的正文、自动保存与保存状态。整页编辑页（散放的灵感，整条正文）与
+/// 任务浮窗的输入框（任务标题下面的话，`Card.rest`）共用这一份，各自只管怎么摆。编辑器是这段正文的唯一写者（见 `EditorHost`）；
+/// 离开时 `leave` 写下没保存的字，什么都没写的灵感不留下（新记的一条先建一条空的再编辑）。
 @Observable
 final class CardEditing {
     let cardID: UUID
@@ -19,22 +19,16 @@ final class CardEditing {
     @ObservationIgnored private let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
 
-    init(_ card: Card, workspace: Workspace) {
+    init(_ card: Card, part: CardTextPart = .whole, workspace: Workspace) {
         cardID = card.id
-        initialText = card.body
-        text = card.body
+        initialText = part.text(of: card)
+        text = initialText
         self.workspace = workspace
         let store = workspace.services.store, id = card.id
         autosave = Autosave(
-            save: { [weak self] body in
+            save: { [weak self] text in
                 self?.saveState = .saving
-                do {
-                    try await store.updateCard(id) { $0.body = body }
-                } catch CueStoreError.notFound {
-                    // 提示词送达就从库里删掉了（用掉了）：发出之后再打的字没有地方可写，也不算出错
-                    self?.saveState = .idle
-                    return
-                }
+                try await store.updateCard(id) { part.write(text, into: &$0) }
                 self?.saveState = .saved
             },
             onError: { [weak self] error in
@@ -46,14 +40,17 @@ final class CardEditing {
     /// "已保存"亮过一会儿之后回到平时。
     func settleSaved() { if saveState == .saved { saveState = .idle } }
 
-    /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：任务的草稿交给 Agent（`Workspace.handOff`），散放的灵感挂到任务。交出去之前先写下没保存的字：
-    /// 草稿送达就用掉了，之后再写就没有地方了。
-    func submit(_ card: Card) {
-        guard CardMenu.handsToAgent(card) else { return workspace.attaching = card }
-        let autosave = autosave, workspace = workspace
+    /// 编辑器里的 ⌘↩ 与浮窗的"开始"：任务先写下没保存的字，再把库里此刻的正文交给 Agent（`Workspace.handOff`）；灵感没有这一下。
+    func submit() {
+        let autosave = autosave, workspace = workspace, id = cardID
         Task {
             await autosave?.flush()
-            workspace.handOff(card)
+            do {
+                guard let card = try await workspace.services.store.card(id), card.isTask else { return }
+                workspace.handOff(card)
+            } catch {
+                workspace.fail(error)
+            }
         }
     }
 
@@ -70,7 +67,7 @@ final class CardEditing {
                 self?.autosave?.changed(next)
             },
             selectionActions: Self.selectionActions(card, workspace: workspace),
-            onSubmit: { [weak self] in self?.submit(card) },
+            onSubmit: { [weak self] in self?.submit() },
             onError: workspace.fail)
     }
 
@@ -80,7 +77,7 @@ final class CardEditing {
     }
 }
 
-/// 保存状态那几个字（编辑页的元信息行、浮窗里展开的提示词上）：保存中、"已保存"亮一会儿、没能保存一直亮着。
+/// 保存状态那几个字（编辑页的元信息行）：保存中、"已保存"亮一会儿、没能保存一直亮着。
 struct SaveStatus: View {
     let editing: CardEditing
     @Environment(\.palette) private var palette
@@ -117,13 +114,10 @@ enum SaveState: Equatable {
     }
 }
 
-/// 散放灵感的编辑页底栏：左边是变量（有才出现），右边是主动作"挂到任务"（⌘↩ 由编辑器自己接，同 `CardEditing.submit`）。
-/// 分割线与转为任务在编辑器的右键菜单里。提示词不在这里写：它是任务的草稿，在任务浮窗里（`TaskSheet`）。
+/// 散放灵感的编辑页底栏：变量（有才出现）。分割线与转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
     let card: Card
     let editing: CardEditing
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let names = CueVariables.names(in: editing.text)
@@ -131,15 +125,6 @@ struct EditorBar: View {
             HStack(spacing: 10) {
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
                 Spacer(minLength: 0)
-                Button { workspace.attaching = card } label: {
-                    Label(CardMenu.Item.attachToTask.title, systemImage: CardMenu.Item.attachToTask.symbol)
-                        .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
-                        .padding(.horizontal, 16).frame(height: 44)
-                        .background(palette.signatureFill, in: .capsule)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle())
-                .help("挂到一个任务下，成为它要发给 Agent 的话（⌘↩）")
             }
         }
     }

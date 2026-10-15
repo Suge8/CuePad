@@ -218,7 +218,6 @@ struct CardTile: View {
         .onAppear { if DebugHooks.hovers(card) { hovering = true } }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
-        .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "设为任务", makeTask)
     }
@@ -234,7 +233,7 @@ struct CardTile: View {
     }
 }
 
-/// 悬停在墙上一张卡时右下角露出的"设为任务"：灵感变成任务的那一下（第一行做任务名，其余成为它的提示词，`CueStore.setTodo`），
+/// 悬停在墙上一张卡时右下角露出的"设为任务"：灵感变成任务的那一下（第一行做标题，其余是它的正文，`CueStore.setTodo`），
 /// 卡离开墙、出现在上面的任务里，行尾就是"开始"。圈是任务圈的样子，告诉你它会变成什么；批量选择时不出现（点按是选择）。
 private struct MakeTaskButton: View {
     let card: UUID

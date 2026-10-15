@@ -5,7 +5,7 @@ import CueText
 import Foundation
 import SwiftUI
 
-/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词发给 Agent（`CardMenu.handsToAgent`）。
+/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上交给 Agent 的是任务的正文（"开始"，`Workspace.handOff`）。
 /// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
     var session: String
@@ -85,7 +85,7 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 交出后的提示：写出了、还没送达（到哪了看提示词），"已交给 Agent 会话「…」"，已结束的补一句它会先被唤醒，忙时的说法也写上。
+    /// 交出后的提示：写出了、还没送达（到哪了看任务那一行），"已交给 Agent 会话「…」"，已结束的补一句它会先被唤醒，忙时的说法也写上。
     func handed(_ target: AgentTarget) -> Dotted {
         let note = isEnded(target) ? "唤醒后送达" : target.mode == .steer || target.mode == .followUp ? target.mode.label : nil
         return Dotted("已交给 Agent 会话「\(sessionName(target.session))」", note)
@@ -138,39 +138,28 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 把任务的草稿（提示词）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定（与 Cue 的开工同一份规则）：绑着的会话经本机桥直接发，
-    /// 会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。
-    /// 送达后草稿就用掉了（Store 删掉它）。
-    func handOff(_ prompt: Card) {
-        let text = Outgoing.text(of: prompt), id = prompt.id
-        attempt { try await self.handOff(text, prompt: id) }
+    /// 开始：把叶子任务的正文（标题连同下面的话）作为第一句发给 Agent，交到哪只由 `CueStore.handOffPlan` 定（与 Cue 的开工同一份规则）：
+    /// 接着用上一步的会话就经本机桥直接发，会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；
+    /// 哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。正文发出后留在任务上。
+    func handOff(_ leaf: Card) {
+        let text = Outgoing.text(of: leaf), id = leaf.id
+        attempt { try await self.handOff(text, leaf: id) }
     }
 
     /// 给叶子开一个新会话，不接着用绑着的或上一步的会话（"绑定会话"里的"开新会话"；与 Cue 开工带 fresh 同一条规则，
-    /// `CueStore.handOffPlan(fresh:)`）：写好的草稿作为第一句，没有就只开会话。
-    func startFresh(_ leaf: UUID) {
-        attempt {
-            let draft = try await self.services.store.draft(of: leaf)
-            try await self.handOff(draft.map(Outgoing.text(of:)), prompt: draft?.id ?? leaf, fresh: true)
-        }
+    /// `CueStore.handOffPlan(fresh:)`）：任务的正文作为第一句。
+    func startFresh(_ leaf: Card) {
+        let text = Outgoing.text(of: leaf), id = leaf.id
+        attempt { try await self.handOff(text, leaf: id, fresh: true) }
     }
 
-    /// 把会话绑到叶子任务上（任务的右键、浮窗里"绑定会话"、会话页的"⋯"）。叶子写好没发的话接进这个会话的回复框，由你决定发不发。
-    func bind(_ sessionID: String, to leaf: UUID) async throws {
-        guard let draft = try await services.store.bindSession(sessionID, to: leaf) else { return }
-        putInReplyBox(draft, of: sessionID)
-        say("已绑定，写好的话放进了会话的回复框", link: .session(sessionID))
-    }
-
-    /// `text` 为 nil 只在开新会话时（没有草稿）。
-    private func handOff(_ text: String?, prompt: UUID, fresh: Bool = false) async throws {
-        let plan = try await services.store.handOffPlan(prompt, host: services.hostID, fresh: fresh)
+    private func handOff(_ text: String, leaf: UUID, fresh: Bool = false) async throws {
+        let plan = try await services.store.handOffPlan(leaf, host: services.hostID, fresh: fresh)
         switch plan.destination {
         case .session(let session, _, let host):
-            guard let text else { return }
-            send(text, to: AgentTarget(session: session, host: host), card: prompt)
+            send(text, to: AgentTarget(session: session, host: host), card: leaf)
         case .launch(let project, let host):
-            // 会话名由带着的提示词定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
+            // 会话名由任务定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
             let projectName = try await services.store.project(project)?.name
             let title = plan.name ?? projectName ?? CaptureCopy.unfiled
             let agents = try await services.store.macAgents(on: host)
@@ -178,17 +167,17 @@ extension Workspace {
                 say("\(host == services.hostID ? "这台" : "那台") Mac 上开不了会话：\(agents.whyNone)", isError: true)
                 return
             }
-            _ = try await startSession(in: project, prompt: text?.nonEmpty, title: title, on: host, card: prompt, agent: agent) {}
+            _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent) {}
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
-            try await handOff(text, prompt: prompt, fresh: fresh)
+            try await handOff(text, leaf: leaf, fresh: fresh)
         case .unfiled:
             say("未分类的任务没有文件夹，开不了会话", isError: true)
         }
     }
 
-    /// 发给 Agent（存储格式正文）：经 `speak` 写出就提示，不等送达（到哪了看提示词与会话页）；会话正忙时转为询问马上说还是等它做完再说。
+    /// 发给 Agent（存储格式正文）：经 `speak` 写出就提示，不等送达（到哪了看任务那一行与会话页）；会话正忙时转为询问马上说还是等它做完再说。
     /// 返回是否已写出。
     @discardableResult
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Bool {

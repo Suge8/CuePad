@@ -168,7 +168,10 @@ struct SessionMenuItems: View {
             if !link.bindable.isEmpty {
                 Menu("绑定到任务", systemImage: "link") {
                     ForEach(link.bindable) { item in
-                        Button(Dotted(item.parent?.title, item.task.title).visible) { workspace.attempt { try await workspace.bind(session.sessionID, to: item.task.id) } }
+                        Button(Dotted(item.parent?.title, item.task.title).visible) {
+                            let (sessionID, task) = (session.sessionID, item.task.id)
+                            workspace.perform { try await $0.bindSession(sessionID, to: task) }
+                        }
                     }
                 }
             }

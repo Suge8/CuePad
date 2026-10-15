@@ -3,11 +3,11 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 任务浮窗："任务 → 步骤 → 会话"。点任务、步骤或它的草稿（项目页、任务面板、⌘K、归档）就在当前页上弹出，不换页。
+/// 任务浮窗："任务 → 步骤 → 会话"。点任务或步骤（项目页、任务面板、⌘K、归档）就在当前页上弹出，不换页。
 /// 没有步骤的任务一栏到底（与手机任务页同一个顺序）：完成圈与标题、所在项目，这件事此刻的样子，末尾一行添加步骤——不为一件事摆一个空着的左栏。
 /// 有步骤时分两栏：左栏是这件事（标题、做到第几步、每个步骤一行：圈、名字、会话在动时一个状态点；选中的那一步名字就地可改），末尾添加步骤；
-/// 右边是选中的那一步。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是"要 Agent 做什么"的输入框，
-/// 开始就交给会话（上一步的会话还开着就接着用它，否则开一个以它命名的新会话）；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
+/// 右边是选中的那一步。只有没有步骤的任务（叶子）交给 Agent：还没开始时右边是它的正文（标题下面要交代的话）的输入框，
+/// 开始就把标题连同正文交给会话（上一步的会话还开着就接着用它，否则开一个以它命名的新会话）；绑了会话后右边只是去会话的入口（随状态换的吉祥物、一句话、"打开会话"），话都在会话里说——
 /// 这里看不到 Agent 最新的回复，不另给一个能发话的地方。完成它，它的会话也一起结束（还有没做完的事绑着它、或下一步会接着用它时不结束，规则在 `CueStore.endUnusedSessions`）。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
@@ -58,7 +58,7 @@ struct TaskSheet: View {
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 .padding(.leading, TaskMetrics.chipTarget + 6).padding(.top, 2)
             }
-            LeafDetail(leaf: data.goal, draft: data.drafts[data.goal.id])
+            LeafDetail(leaf: data.goal)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Rectangle().fill(palette.hair).frame(height: 1).padding(.horizontal, -32)
             NewTaskField(project: data.goal.projectID, parent: data.goal.id).padding(.top, 10)
@@ -70,7 +70,7 @@ struct TaskSheet: View {
         let leaf = data.selected(workspace.openTask?.step)
         return HStack(spacing: 0) {
             sidebar(data, selected: leaf.id).frame(width: Self.sidebarWidth)
-            LeafDetail(leaf: leaf, draft: data.drafts[leaf.id])
+            LeafDetail(leaf: leaf)
                 .id(leaf.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(36)
@@ -127,8 +127,8 @@ private struct StepRow: View {
 
     var body: some View {
         let done = check.done(step)
-        // 步骤的草稿在右边写，这里只看会话那一格
-        let next = workspace.next(for: step, agent: agents.items[step.id], draft: nil)
+        // 开始在右边，这里只看会话那一格
+        let next = workspace.next(for: step, in: agents, steps: nil)
         HStack(spacing: TaskRow.columnGap) {
             TaskCheckButton(
                 task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskRow.ringColumn, height: 14), check: $check,
@@ -154,10 +154,9 @@ private struct StepRow: View {
 }
 
 /// 右边：一个叶子任务此刻的样子。完成了是笑着的吉祥物；交给了会话是随状态换的吉祥物（在做时轻轻浮动）、一句话与"打开会话"；
-/// 还没开始是挥手的吉祥物与输入框（`DraftComposer`）。
+/// 还没开始是挥手的吉祥物与正文的输入框（`BriefComposer`）。
 private struct LeafDetail: View {
     let leaf: Card
-    let draft: Card?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -177,7 +176,7 @@ private struct LeafDetail: View {
                 openSession(state.sessionID, primary: true)
             } else {
                 hero(.hello, floats: false, title: "交给 Agent 做这件事", note: nil)
-                DraftComposer(leaf: leaf, draft: draft)
+                BriefComposer(leaf: leaf).id(leaf.id)
             }
         }
     }
@@ -230,29 +229,28 @@ private struct MascotFigure: View {
     }
 }
 
-/// 还没开始的叶子任务的输入框：一块玻璃，里面是这件事的草稿（任务下的那条提示词，编辑器自动保存，⌘↩ 同"开始"）；
-/// 还没有草稿时是一行提示，点了新建一条接着写。左下"绑定会话"开新会话，或绑到本项目一个在跑的会话上（写好的话接进那个会话的回复框，不自动发）。
-private struct DraftComposer: View {
+/// 还没开始的叶子任务的输入框：一块玻璃，里面是它的正文（标题下面要交代给 Agent 的话，编辑器自动保存，⌘↩ 同"开始"）。
+/// 左下"绑定会话"开新会话，或绑到本项目一个在跑的会话上（不发正文：话在会话里说）。打开时接过键盘；换一条、关浮窗都经
+/// `CardEditing.leave` 写下没保存的字。
+private struct BriefComposer: View {
     let leaf: Card
-    let draft: Card?
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @State private var editing: CardEditing?
 
     private static let width: CGFloat = 460
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let draft {
-                DraftEditor(draft: draft)
-            } else {
-                Button(action: write) {
+            Group {
+                if let editing { editing.field(leaf, theme: .editor(palette, horizontalInset: 6)) } else { Color.clear }
+            }
+            .frame(height: 110)
+            .overlay(alignment: .topLeading) {
+                if editing?.text.isEmpty ?? true {
                     Text("要 Agent 做什么…").font(Typography.body).foregroundStyle(palette.placeholder)
-                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-                        .padding(.horizontal, 6).padding(.top, 6)
-                        .contentShape(.rect)
+                        .padding(.horizontal, 6).padding(.top, 6).allowsHitTesting(false)
                 }
-                .buttonStyle(.plain)
             }
             HStack(spacing: 10) {
                 Menu { SessionBindItems(leaf: leaf) } label: {
@@ -261,42 +259,19 @@ private struct DraftComposer: View {
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 Spacer(minLength: 0)
                 Text("⌘↩").font(Typography.meta).foregroundStyle(palette.ink3)
-                Button {
-                    if let draft { workspace.handOff(draft) }
-                } label: {
+                Button { editing?.submit() } label: {
                     Text("开始").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
                         .padding(.horizontal, 18).frame(height: 32)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
-                .disabled(draft.map { CardText($0.body).title.isEmpty && CardText($0.body).images.isEmpty } ?? true)
             }
         }
         .padding(14)
         .frame(width: Self.width)
         .glass(in: .rect(cornerRadius: 22), ink: .solid)
-    }
-
-    private func write() {
-        let id = leaf.id, store = services.store
-        workspace.attempt { _ = try await store.createCard(body: "", under: id) }
-    }
-}
-
-/// 草稿的编辑区：打开时接过键盘；换一条、关浮窗都经 `CardEditing.leave` 写下没保存的字，空白的不留下。
-private struct DraftEditor: View {
-    let draft: Card
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var editing: CardEditing?
-
-    var body: some View {
-        Group {
-            if let editing { editing.field(draft, theme: .editor(palette, horizontalInset: 6)) } else { Color.clear }
-        }
-        .frame(height: 110)
         .task {
-            editing = CardEditing(draft, workspace: workspace)
+            editing = CardEditing(leaf, part: .rest, workspace: workspace)
             await NextFrame.wait()
             editing?.handle.focus()
         }
@@ -304,13 +279,11 @@ private struct DraftEditor: View {
     }
 }
 
-/// 浮窗一次读出的东西：顶层任务、所在项目、它的步骤、各个叶子的草稿。
+/// 浮窗一次读出的东西：顶层任务、所在项目、它的步骤。
 nonisolated private struct SheetData: Sendable, Equatable {
     var goal: Card
     var project: Project?
     var steps: [Card]
-    /// 叶子任务 → 它的草稿（任务下的那条提示词）。
-    var drafts: [UUID: Card]
     /// 已不是一条看得见的任务（删了、归档了、改回了灵感）。
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil || !goal.isTask }
     var progress: TaskProgress? { steps.isEmpty ? nil : TaskProgress(done: steps.filter { $0.status == .done }.count, total: steps.count) }
@@ -323,9 +296,7 @@ nonisolated private struct SheetData: Sendable, Equatable {
     static func read(_ id: UUID, from store: isolated CueStore) throws -> SheetData {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         let steps = try store.children(of: id).filter(\.isTask)
-        let leaves = Set([id] + steps.map(\.id))
-        let drafts = try store.drafts(in: goal.projectID).filter { leaves.contains($0.key) }
-        return SheetData(goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps, drafts: drafts)
+        return SheetData(goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps)
     }
 }
 #endif

@@ -86,7 +86,6 @@ private struct WindowPanels: View {
             }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
             .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
-            .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
             .dialog(
                 "Agent 正在工作", isPresented: busy,

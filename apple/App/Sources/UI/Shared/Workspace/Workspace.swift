@@ -56,8 +56,6 @@ final class Workspace {
     /// 浮窗里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
     var openTask: TaskSheet.Request?
     #endif
-    /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
-    var attaching: Card?
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
@@ -141,14 +139,10 @@ final class Workspace {
     }
 
     /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着；步骤是它上级的浮窗、选中这一步）；
-    /// 任务的草稿（提示词）打开它的任务；散放的灵感进整页的编辑页。
+    /// 灵感（挂在任务下的资料也一样）进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
         if card.isTask { return openTask = card.parentID.map { .init(id: $0, step: card.id) } ?? .init(id: card.id) }
-        if let task = card.parentID {
-            let store = services.store
-            return attempt { if let task = try await store.card(task) { self.open(task) } }
-        }
         openTask = nil
         showsTasks = false
         openCard = card.id
@@ -281,7 +275,7 @@ final class Workspace {
         say(on ? "已设为任务" : "已改回灵感", action: .undo(try await services.store.settingTodo(id, on)))
     }
 
-    /// 离开一条灵感或提示词的编辑：先写下没保存的字，还是空白（`Card.isBlank`）就不留下——记一条与写提示词都是先建一条空的再编辑。
+    /// 离开一条灵感或任务正文的编辑：先写下没保存的字，还是空白（`Card.isBlank`）的灵感就不留下——记一条是先建一条空的再编辑。
     func leaveEditing(_ id: UUID, flush: Autosave?) {
         let store = services.store
         attempt {
@@ -315,35 +309,6 @@ final class Workspace {
     func archiveCompletedTasks() async throws {
         let count = try await services.store.archiveCompletedTasks()
         if count > 0 { say("已归档 \(count) 项任务") }
-    }
-
-    /// 从灵感里挑一条挂到任务下（成为它的提示词），排在已有下级之后。
-    func attach(_ idea: UUID, to task: UUID) async throws {
-        let last = try await services.store.children(of: task).last?.id
-        try await attach(idea, TaskMove(slot: .under(task), after: last))
-    }
-
-    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里可撤销。挂到绑了会话的任务上时不成为提示词，
-    /// 话接进那个会话的回复框（话在会话里说），撤销时回复框一并回到挂之前。
-    func attach(_ idea: UUID, _ move: TaskMove) async throws {
-        let (change, undo) = try await services.store.attaching(idea, move)
-        guard case .handed(let card, let session) = change else { return say("已成为任务的提示词", action: .undo(undo)) }
-        let restore = putInReplyBox(card.body, of: session)
-        say("已放进会话的回复框", link: .session(session), action: .undo {
-            restore()
-            try await undo()
-        })
-    }
-
-    /// 存储格式的话接进会话回复框已写的字后面（图片接进图片条），不自动发；返回把回复框放回接之前的闭包。
-    @discardableResult
-    func putInReplyBox(_ stored: String, of session: String) -> () -> Void {
-        let settings = services.settings, key = PiSessionState.recordID(sessionID: session)
-        let before = settings.replyDraft(for: key)
-        var draft = before
-        draft.append(stored: stored, files: services.store.files)
-        settings.setReplyDraft(draft, for: key)
-        return { settings.setReplyDraft(before, for: key) }
     }
 
     /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。

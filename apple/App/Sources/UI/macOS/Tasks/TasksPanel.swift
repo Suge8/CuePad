@@ -103,7 +103,7 @@ struct TasksPanel: View {
             TaskOutline(tree: board.tree, roots: items.map(\.id), lazyAfter: lazy ? 0 : nil) { row in
                 TaskRow(
                     task: row.task, project: row.depth == 0 ? board.rows[row.id]?.project : nil,
-                    subtasks: board.subtasks[row.id], draft: board.drafts[row.id])
+                    subtasks: board.subtasks[row.id])
             }
             .padding(.horizontal, 12)
         }
