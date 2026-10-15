@@ -18,8 +18,9 @@ struct ChatScrubber: View {
     @State private var finger: CGFloat?
     /// 停手后还留一会儿再淡回去。
     @State private var lingering = false
-    /// 读屏上一次跳到的（上一处、下一处从它算）。
-    @State private var current: Int?
+    /// 上一次跳到的那一处（读屏的上一处、下一处从它算）。记 id 不记序号：刻度随对话换（Cue 页只读最近 200 条，新消息进来最早的那处就掉出去），
+    /// 记着的序号会指到别处或越界；那一处掉出去了就当没跳过。
+    @State private var current: UUID?
     /// 指针停在右缘这条上（Mac、iPad 触控板）。
     @State private var hovering = false
 
@@ -115,9 +116,9 @@ struct ChatScrubber: View {
         }
         .accessibilityElement()
         .accessibilityLabel("对话刻度")
-        .accessibilityValue(current.map { "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)" } ?? "共 \(marks.count) 处")
+        .accessibilityValue(currentIndex.map { "第 \($0 + 1) 处，共 \(marks.count) 处：\(marks[$0].preview)" } ?? "共 \(marks.count) 处")
         .accessibilityAdjustableAction { direction in
-            let from = current ?? marks.count
+            let from = currentIndex ?? marks.count
             switch direction {
             case .increment: go(to: min(from + 1, marks.count - 1))
             case .decrement: go(to: max(from - 1, 0))
@@ -125,8 +126,8 @@ struct ChatScrubber: View {
             }
         }
         .accessibilityActions {
-            Button("上一处") { go(to: max((current ?? marks.count) - 1, 0)) }
-            Button("下一处") { go(to: min((current ?? marks.count) + 1, marks.count - 1)) }
+            Button("上一处") { go(to: max((currentIndex ?? marks.count) - 1, 0)) }
+            Button("下一处") { go(to: min((currentIndex ?? marks.count) + 1, marks.count - 1)) }
         }
     }
 
@@ -145,8 +146,10 @@ struct ChatScrubber: View {
         .fixedSize()
     }
 
+    private var currentIndex: Int? { current.flatMap { id in marks.firstIndex { $0.id == id } } }
+
     private func go(to index: Int) {
-        current = index
+        current = marks[index].id
         jump(marks[index].id)
     }
 
