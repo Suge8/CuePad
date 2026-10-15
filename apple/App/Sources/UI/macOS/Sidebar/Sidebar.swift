@@ -475,7 +475,7 @@ private struct AllSessionsRow: View {
     }
 }
 
-/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，各家一行开关与安装方法）。
+/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，检测到还没接入的几家，一键接入）。
 /// 没有"不用了"：没接入时本机的会话在这一区里看不到，这张卡就是这一区如实的空态。
 private struct AgentConnectCard: View {
     @Environment(Workspace.self) private var workspace
