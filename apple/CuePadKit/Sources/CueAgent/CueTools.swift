@@ -423,9 +423,7 @@ public struct CueTools: Sendable {
     }
     if !recent.isEmpty {
       lines.append(("最近完成的（会话还能接着用：在它上面做别的事用 add 带 session）：", false))
-      lines += recent.map { item in
-        ("- \(item.task.heading)（\(item.task.id.shortID)）" + (item.leaves[0].session.map { " · " + CueEnvelope.sessionLine($0, now: now) } ?? ""), true)
-      }
+      lines += recent.map { ("- \($0.task.heading)（\($0.task.id.shortID)） · " + CueEnvelope.sessionLine($0.session, now: now), true) }
     }
     return .ok(
       (total == 0 ? "没有没做完的事。" : "没做完的 \(total) 件，在做 \(items.count(where: \.isActive) + board.sessions.count) 件：")
@@ -448,11 +446,7 @@ public struct CueTools: Sendable {
           ["id": session.sessionID, "title": session.title, "state": session.state.rawValue, "since": iso(session.stateSince)]
         },
         "recentlyDone": recent.map { item -> [String: Any] in
-          let leaf = item.leaves[0]
-          return [
-            "id": id(item.task.id), "title": item.task.heading, "session": leaf.session?.sessionID ?? NSNull(),
-            "state": leaf.session?.state.rawValue ?? NSNull(),
-          ]
+          ["id": id(item.task.id), "title": item.task.heading, "session": item.session.sessionID, "state": item.session.state.rawValue]
         },
       ])
   }

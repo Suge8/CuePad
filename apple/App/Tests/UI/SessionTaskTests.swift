@@ -114,10 +114,20 @@ struct SessionTaskTests {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], board: board, waiting: [], wake: .idle, said: nil))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
+        // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
+        let stepped = try await store.createTask("加语言参数", in: project.id)
+        let first = try await store.createTask("加 --lang", under: stepped.id)
+        let second = try await store.createTask("写 README", under: stepped.id)
+        try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang")
+        try await workspace.bind("s2", to: first.id)
+        try await workspace.toggle(first.id)
+        try await workspace.toggle(second.id)
+        try await workspace.toggle(stepped.id)
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek"]))
         #expect(peek.text.contains("- 会话「修登录」（s1） · 歇着"))
         #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 歇着"))
+        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 歇着"))
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
         #expect(!added.isError)
@@ -125,7 +135,7 @@ struct SessionTaskTests {
         #expect(fresh.title == "补注册页" && fresh.piSessionID == "s1")
         let kept = try #require(try await store.card(old.id))
         #expect(kept.status == .done && kept.piSessionID == "s1")
-        #expect(try await store.cueBoard().sessions.isEmpty)
+        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s2"])
         let taken = try #require(await cue.call("task", ["action": "add", "title": "再补一处", "session": "s1"]))
         #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }

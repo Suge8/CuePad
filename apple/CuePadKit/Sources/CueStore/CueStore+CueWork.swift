@@ -560,10 +560,11 @@ extension CueStore {
       sessions: try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
   }
 
-  /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带最后做完的那一步与它的会话此刻的样子：
-  /// Cue 据此找能接着用的旧会话（不带参数的 peek 末尾列出）。
-  public func cueRecentlyDone(limit: Int) throws -> [CueBoardItem] {
-    try boardItems(try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: "t.completedAt DESC, t.id", limit: limit))
+  /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或步骤）的会话里最近有动静的那个此刻的样子：
+  /// Cue 据此找能接着用的旧会话（不带参数的 peek 末尾列出）。会话记录还没到的不列。
+  public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: PiSessionState)] {
+    try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: "t.completedAt DESC, t.id", limit: limit)
+      .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
   }
 
   /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它（开会话时替任务占着它的提示词也算绑着），
@@ -731,12 +732,15 @@ extension CueStore {
   }
 
   /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
-  private func latestRecap(of task: UUID) throws -> PiRecap? {
+  private func latestRecap(of task: UUID) throws -> PiRecap? { try latestSession(of: task)?.recap }
+
+  /// 任务（自己或它的步骤）绑着的会话里最近有动静的那个；没有为 nil。
+  private func latestSession(of task: UUID) throws -> PiSessionState? {
     try select(
       PiSessionState.self,
       where: "sessionID IN (SELECT piSessionID FROM cards WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND piSessionID IS NOT NULL)",
       [task], orderBy: "stateSince DESC, id", limit: 1
-    ).first?.recap
+    ).first
   }
 
   /// 一件事的细节；给步骤也行，按它的顶层任务给。`rounds` 是每个叶子带几轮最近的问答。
