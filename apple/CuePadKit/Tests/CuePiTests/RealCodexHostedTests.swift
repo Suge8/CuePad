@@ -22,9 +22,11 @@ struct RealCodexHostedTests {
             let image = PiImage(mimeType: "image/png", data: try solidPNG(red: 1, green: 0, blue: 0))
             let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString)
             #expect(try await rig.bridge.send(message, to: id) == .immediate)
-            // 上下文余量（`thread/tokenUsage/updated`）与歇下（Stop 钩子）走两条通道，先后不定：一起等
-            try await eventually("这一轮做完、报了上下文余量", timeout: .seconds(120)) {
-                log.states.contains(.thinking) && rig.bridge.session(id: id).map { $0.state == .settled && $0.context?.window ?? 0 > 0 } == true
+            // 上下文余量（`thread/tokenUsage/updated`）、歇下（Stop 钩子）与会话文件里的回答走三条通道，先后不定：一起等
+            try await eventually("这一轮做完、报了上下文余量、回答落盘", timeout: .seconds(120)) {
+                log.states.contains(.thinking) && rig.bridge.session(id: id).map {
+                    $0.state == .settled && $0.context?.window ?? 0 > 0 && rig.replies($0).last?.lowercased().contains("red") == true
+                } == true
             }
 
             let session = try #require(rig.bridge.session(id: id))
@@ -66,10 +68,10 @@ struct RealCodexHostedTests {
             let threadID = try #require(rig.bridge.session(id: id)?.sessionID)
 
             _ = try await rig.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
-            try await eventually("这一轮做完", timeout: .seconds(120)) { log.states.contains(.thinking) && rig.bridge.session(id: id)?.state == .settled }
-
-            let session = try #require(rig.bridge.session(id: id))
-            #expect(rig.replies(session).last?.uppercased().contains("WRAPPED") == true, "\(rig.replies(session))")
+            try await eventually("这一轮做完、回答落盘", timeout: .seconds(120)) {
+                log.states.contains(.thinking)
+                    && rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("WRAPPED") == true } == true
+            }
             #expect(rig.bridge.sessions.filter { $0.sessionID == threadID }.map(\.id) == [id])
         }
     }
