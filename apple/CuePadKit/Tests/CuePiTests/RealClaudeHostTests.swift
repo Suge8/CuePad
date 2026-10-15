@@ -158,6 +158,7 @@ struct RealClaudeHostTests {
 
             try await testbed.bridge.end(id)
             #expect(testbed.bridge.session(id: id) == nil)
+            try await eventually("变化记录里有这次结束") { !log.ended.isEmpty }
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
 
             try await testbed.index(first.sessionFile)

@@ -237,6 +237,7 @@ struct RealClaudeTerminalTests {
             try await testbed.bridge.end(session.id)
 
             #expect(testbed.session(pid: terminal.pid) == nil)
+            try await eventually("变化记录里有这次结束") { !log.ended.isEmpty }
             #expect(log.ended.map(\.0.id) == [session.id])
         }
     }

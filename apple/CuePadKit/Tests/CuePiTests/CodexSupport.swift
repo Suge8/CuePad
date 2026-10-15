@@ -111,9 +111,20 @@ struct CodexHome {
     }
 
     /// 停掉在里面跑的进程（终端界面拉起的常驻服务与它的升级进程、它们起的 git，见 `TestProcesses`），再删掉临时目录（含复制的凭据）。
-    func remove() {
-        TestProcesses.stop(under: root)
+    @concurrent func remove() async {
+        TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
+    }
+
+    /// 跑 `body`，不论成败都 `remove`。
+    func using(_ body: () async throws -> Void) async throws {
+        do {
+            try await body()
+        } catch {
+            await remove()
+            throw error
+        }
+        await remove()
     }
 
     /// 经 Codex 自己的 app-server 读它此刻看到的钩子（命令 → 信任状态）。
@@ -212,7 +223,7 @@ final class CodexRig {
             await runtime.stop()()
             hooks.stop()
             bridge.stop()
-            codex.remove()
+            await codex.remove()
             throw error
         }
         (self.codex, self.hooks, self.bridge, self.runtime, self.presence) = (codex, hooks, bridge, runtime, presence)
@@ -226,7 +237,7 @@ final class CodexRig {
         bridge.stop()
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
-        codex.remove()
+        await codex.remove()
         for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
     }
 
