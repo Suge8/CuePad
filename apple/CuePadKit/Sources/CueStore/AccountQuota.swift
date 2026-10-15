@@ -2,7 +2,7 @@ import Foundation
 
 /// 订阅账号的一个用量窗口（Pi 用的 OAuth 订阅：Claude、Codex；按量计费的 API 密钥没有）。
 /// 一个账号有几个窗口：Claude 是 5 小时、本周与按模型的周额度，Codex 按套餐有一到两个。
-public struct QuotaWindow: Sendable, Equatable, Codable {
+public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
   /// 窗口长度（秒）
   public var seconds: Int
   /// 这个窗口已用的比例，0 到 1（到顶后提供方可能报得略超 1）
@@ -44,8 +44,12 @@ public struct QuotaWindow: Sendable, Equatable, Codable {
     if isBinding { try c.encode(true, forKey: .isBinding) }
   }
 
-  /// 同一个窗口：长度与模型相同。
-  public func isSameWindow(as other: QuotaWindow) -> Bool { seconds == other.seconds && model == other.model }
+  /// 哪一个窗口：长度与模型（名字是给人看的，不同长度可能写成同一个"N 小时"）。同一个窗口的几次观测按它并成一条。
+  public struct Slot: Hashable, Sendable {
+    public let seconds: Int
+    public let model: String?
+  }
+  public var id: Slot { Slot(seconds: seconds, model: model) }
 
   /// `now` 时已用的比例（0 到 1）：过了重置时间按已重置算，不等新的观测。
   public func used(at now: Date) -> Double { now >= resetsAt ? 0 : min(max(used, 0), 1) }
@@ -133,13 +137,13 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   /// 同一个窗口报了几次的只留第一次：存下的窗口一个窗口一条（界面按窗口认圈与明细的行）。
   func merged(into stored: [QuotaWindow]) -> [QuotaWindow] {
     var reported: [QuotaWindow] = []
-    for window in windows where !reported.contains(where: { $0.isSameWindow(as: window) }) { reported.append(window) }
+    for window in windows where !reported.contains(where: { $0.id == window.id }) { reported.append(window) }
     if !reported.contains(where: \.isBinding), let claimed = stored.first(where: \.isBinding),
-      let index = reported.firstIndex(where: { $0.isSameWindow(as: claimed) })
+      let index = reported.firstIndex(where: { $0.id == claimed.id })
     {
       reported[index].isBinding = true
     }
-    let kept = complete ? [] : stored.filter { old in !reported.contains { $0.isSameWindow(as: old) } }
+    let kept = complete ? [] : stored.filter { old in !reported.contains { $0.id == old.id } }
     return (reported + kept).sorted(by: Self.order)
   }
 
@@ -201,7 +205,7 @@ extension CueStore {
     guard old.count == new.count else { return true }
     func percent(_ window: QuotaWindow) -> Int { Int((window.used * 100).rounded()) }
     return zip(old, new).contains { old, new in
-      !old.isSameWindow(as: new) || percent(old) != percent(new) || old.isBinding != new.isBinding
+      old.id != new.id || percent(old) != percent(new) || old.isBinding != new.isBinding
         || abs(old.resetsAt.timeIntervalSince(new.resetsAt)) > AccountQuota.resetTolerance
     }
   }
