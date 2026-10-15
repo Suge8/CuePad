@@ -33,8 +33,8 @@ public struct PiRecap: Sendable, Equatable, Codable {
   /// 进行中的提问：你说了、这一轮还没做完（单行，至多 `promptLimit` 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
   /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
   public var pendingPrompt: String?
-  /// 进行中这一轮已做完的工具调用（还在跑的不算，它在会话状态的 `detail` 里）：会话页末尾实时列出这一轮做到哪了；
-  /// 这一轮做完时随回答一起归进那条回答的 `PiChatMessage.tools`，这里清空。没在跑一轮、或这一轮还没做完过工具调用时为 nil。
+  /// 进行中这一轮到目前为止的经过：做完的工具调用与说过的话（还在跑的调用不算，它在会话状态的 `detail` 里）。会话页末尾实时列出
+  /// 这一轮做到哪了；这一轮做完时随回答一起归进那条回答的 `PiChatMessage.tools`，这里清空。没在跑一轮、或还什么都没做时为 nil。
   public var pendingTools: PiChatMessage.Tools?
 
   public static let promptLimit = 500
@@ -52,8 +52,8 @@ public struct PiRecap: Sendable, Equatable, Codable {
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
-/// 只记这一轮的工具活动（`tools`：分类计数与一份紧凑清单，不含工具输出）和从你说话起做了多久（界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。
-/// 还在跑的这一轮已做完的工具活动在会话记录上（`PiRecap.pendingTools`）。
+/// 只记这一轮的经过（`tools`：工具调用的分类计数、调用与中途说的话按先后的一份紧凑清单，不含工具输出）和从你说话起做了多久
+/// （界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。还在跑的这一轮到目前为止的经过在会话记录上（`PiRecap.pendingTools`）。
 public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
@@ -155,17 +155,19 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
-  /// 一轮里 Agent 的工具活动：各类调用的次数（失败的也算，读、改文件按文件算；合计就是界面上的"跑了 N 步"）和一份按先后的清单（每条自己标成败）。
+  /// 一轮的经过：各类工具调用的次数（失败的也算，读、改文件按文件算；合计就是界面上的"跑了 N 步"）和一份按先后的清单——
+  /// 每次调用一条（自己标成败），中途说的每段话也一条（`said`，不计步数）；最后那段话是回答，不在清单里。
   /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
   public struct Tools: StoredJSON, Equatable, Sendable {
-    /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说
     public enum Kind: String, Codable, CaseIterable, Sendable {
       case edit, command, read, search, other
+      /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"）：不是工具调用，`target` 是那段话
+      case said
     }
 
     public struct Item: Codable, Equatable, Sendable {
       public var kind: Kind
-      /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名
+      /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名；说的话是那段话（至多 `saidLimit` 个字符）
       public var target: String
       public var failed: Bool
       /// 改文件：新增、删除的行数；算不出为 nil
@@ -183,13 +185,15 @@ extension PiChatMessage {
 
     /// 各类的调用数，失败的也算在自己那一类里（与清单的行同一口径）
     public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
-    /// 清单，按发生先后。改了的文件与失败的调用总在里面（界面收起时也列出它们，不能被埋掉；出错几处就数它们）；
-    /// 其余至多列到清单满 `itemLimit` 条，超出的只进计数
+    /// 清单，按发生先后。改了的文件、失败的调用与说的话总在里面（界面收起时也列出改动与出错，不能被埋掉；出错几处就数它们）；
+    /// 其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
     public static let itemLimit = 30
-    /// 清单里一条的目标至多这么多字符
+    /// 清单里一条调用的目标至多这么多字符
     public static let targetLimit = 120
+    /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大
+    public static let saidLimit = 200
 
     public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, items: [Item] = []) {
       self.edits = edits
@@ -202,16 +206,6 @@ extension PiChatMessage {
 
     /// 调用总数
     public var total: Int { edits + commands + reads + searches + others }
-
-    public subscript(kind: Kind) -> Int {
-      switch kind {
-      case .edit: edits
-      case .command: commands
-      case .read: reads
-      case .search: searches
-      case .other: others
-      }
-    }
   }
 }
 
