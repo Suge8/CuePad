@@ -778,15 +778,14 @@ extension CueStore {
   /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；步骤带着上级。
   /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
-    let branches = try tasksWithSteps(among: Self.keptTask)
-    return try select(
+    try select(
       Card.self,
       where: """
         (piSessionID = ?1 OR EXISTS (SELECT 1 FROM json_each(cards.formerSessionIDs) WHERE value = ?1))
-          AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL
+          AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))
         """,
       [sessionID], orderBy: "startedAt, id"
-    ).filter { !branches.contains($0.id) }.map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
+    ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
 
   /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：步骤带着上级一起给，界面写"上级 · 步骤"。顺序同 `tasks(in:_:)`
@@ -794,14 +793,19 @@ extension CueStore {
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
     let open = try tasks(in: project, .todo, .inProgress)
     let byID = Dictionary(open.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-    let branches = try tasksWithSteps(among: Self.keptTask)
+    let leaves = try Set(db.query("SELECT id FROM cards c WHERE c.todoAt IS NOT NULL AND \(Self.isLeaf("c"))") { $0.uuid(0) })
     var result: [LeafTask] = []
-    for task in open where task.piSessionID == nil && !branches.contains(task.id) {
+    for task in open where task.piSessionID == nil && leaves.contains(task.id) {
       var parent = task.parentID.flatMap { byID[$0] }
       if parent == nil, let id = task.parentID { parent = try find(Card.self, id) }
       result.append(LeafTask(task: task, parent: parent))
     }
     return result
+  }
+
+  /// 表 `alias` 里的任务是叶子：没有（没删除的）步骤。
+  static func isLeaf(_ alias: String) -> String {
+    "NOT EXISTS (SELECT 1 FROM cards s WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)"
   }
 
   /// 插入或更新会话索引（本机，不同步）；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。

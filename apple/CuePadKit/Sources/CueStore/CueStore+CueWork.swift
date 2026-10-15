@@ -540,17 +540,8 @@ extension CueStore {
 
   /// 这件事的叶子：有步骤的是各步骤（按顺序），没有步骤的是它自己。
   private func leaves(of task: Card) throws -> [Card] {
-    let steps = try steps(of: [task.id])
+    let steps = try select(Card.self, where: "parentID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [task.id], orderBy: "sortKey, id")
     return steps.isEmpty ? [task] : steps
-  }
-
-  /// 这些任务的步骤（没删除的；`condition` 再筛），按手动顺序；上下级按断好环的（同"步骤 n/m"）。
-  private func steps(of tasks: [UUID], _ condition: String = "", orderBy: String = "sortKey, id") throws -> [Card] {
-    guard !tasks.isEmpty else { return [] }
-    return try untangledChildren(
-      select(
-        Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND \(Self.keptTask) \(condition)", [Self.idList(tasks)], orderBy: orderBy),
-      among: Self.keptTask)
   }
 
   // MARK: 看板与变化
@@ -588,7 +579,10 @@ extension CueStore {
     let homes = try cards(Set(tasks.map { links.home(of: $0.id) }))
     let lastDone = try lastCompletedSteps(of: tasks.filter { task in homes[links.home(of: task.id)].map { $0.id != task.id && $0.completedAt != nil } ?? false })
     // 每件事的候选：没做完的叶子（并行做的几步都在），加上没有在做的步骤时落回的那一个
-    let steps = Dictionary(grouping: try steps(of: tasks.map(\.id), "AND completedAt IS NULL"), by: { $0.parentID! })
+    let steps = Dictionary(grouping: try select(
+      Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NULL",
+      [Self.idList(tasks.map(\.id))], orderBy: "sortKey, id"
+    ), by: { $0.parentID! })
     let fallback = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, lastDone[$0.id] ?? homes[links.home(of: $0.id)] ?? $0) })
     let candidates = tasks.map { task in (steps[task.id] ?? []) + [fallback[task.id]!] }
     let all = candidates.flatMap { $0 }
@@ -610,7 +604,10 @@ extension CueStore {
 
   /// 这些任务各自最后做完的那一步（同一时刻做完的取排在后面的），按任务 id。
   private func lastCompletedSteps(of tasks: [Card]) throws -> [UUID: Card] {
-    let steps = try steps(of: tasks.map(\.id), "AND completedAt IS NOT NULL", orderBy: "completedAt, sortKey, id")
+    guard !tasks.isEmpty else { return [:] }
+    let steps = try select(
+      Card.self, where: "parentID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NOT NULL",
+      [Self.idList(tasks.map(\.id))], orderBy: "completedAt, sortKey, id")
     return Dictionary(steps.compactMap { step in step.parentID.map { ($0, step) } }, uniquingKeysWith: { _, later in later })
   }
 
@@ -795,7 +792,7 @@ extension CueStore {
 
   /// 顶层任务：在没删除的任务（含归档、完成的）里没有上级，按断好环的上下级判（`untangledParents`）。
   private func topTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
-    let parents = try untangledParents(where: Self.keptTask)
+    let parents = try untangledParents(where: "todoAt IS NOT NULL AND deletedAt IS NULL")
     return try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
