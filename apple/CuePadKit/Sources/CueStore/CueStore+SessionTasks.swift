@@ -2,7 +2,8 @@ import CueText
 import Foundation
 
 /// 活着的会话都属于一个任务叶子：任务树是它的归处，看板、Cue 与项目页都从任务看到会话。
-/// 从任务开的会话由认领绑上（`claimLaunchedCards`）；不经任务开的（终端里、"新会话"、别家 Agent），
+/// 从任务开的会话由认领绑上（`claimLaunchedCards`）：带着提示词开的，认领先落在提示词上，开会话的请求成功时转到任务（`consumePrompts`），
+/// 这中间提示词替任务占着它；不经任务开的（终端里、"新会话"、别家 Agent），
 /// 由写它记录的那台 Mac 在同一个写事务里建一个同名任务挂上（进行中，名字超长截断，`CueName.clipped`）：
 /// 归到会话所在文件夹的项目（没有就未分类），排在项目顶层最后。已结束的（历史，含只在会话文件里找到的）不补：留在 Agent 页的历史里。
 /// 叶子换会话（开新会话、改绑、Cue 换新会话）时，换下来的会话留在这个叶子下，作为它以前用过的（`Card.formerSessionIDs`，
@@ -37,7 +38,8 @@ extension CueStore {
       PiSessionState.self,
       where: """
         hostID = ? AND state <> ? \(scope.sql("rowid"))
-          AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = piSessionStates.sessionID AND c.todoAt IS NOT NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM cards c WHERE c.piSessionID = piSessionStates.sessionID AND (c.todoAt IS NOT NULL OR \(Self.isPrompt("c"))))
           AND NOT EXISTS (
             SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
             WHERE c.formerSessionIDs IS NOT NULL AND c.todoAt IS NOT NULL AND f.value = piSessionStates.sessionID)
