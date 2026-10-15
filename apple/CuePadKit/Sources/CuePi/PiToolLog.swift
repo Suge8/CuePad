@@ -51,7 +51,7 @@ struct PiToolLog: Codable, Equatable {
     }
 
     /// 失败的调用与成功的一样按类计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
-    /// 清单里的调用满了以后改文件与失败的照样列（界面收起时也要列出它们），其余只计数；说的话不占调用的名额。
+    /// 清单里的调用满了以后改文件的照样列（展开的清单不漏改了哪些文件），其余只计数；说的话不占调用的名额。
     private mutating func settle(_ call: Call, failed: Bool) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
@@ -61,7 +61,7 @@ struct PiToolLog: Codable, Equatable {
             return
         }
         activity.add(call.kind)
-        if activity.items.count(where: { $0.kind != .said }) < Tools.itemLimit || failed || call.kind == .edit {
+        if activity.items.count(where: { $0.kind != .said }) < Tools.itemLimit || call.kind == .edit {
             activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
         }
     }

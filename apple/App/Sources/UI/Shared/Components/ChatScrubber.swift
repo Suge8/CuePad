@@ -29,7 +29,7 @@ struct ChatScrubber: View {
             switch entry.role {
             case .user: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
             case .notice(let notice) where notice.changesContext: ChatMark(id: entry.id, kind: .boundary, preview: entry.text)
-            case .notice, .pi, .preview: nil
+            case .notice, .pi, .machine, .preview: nil
             }
         })
     }

@@ -27,7 +27,6 @@ struct AgentPage: View {
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
-        .fadesUnderBars()
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()

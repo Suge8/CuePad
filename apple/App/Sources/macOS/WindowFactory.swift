@@ -17,7 +17,7 @@ enum WindowFactory {
         return window
     }
 
-    /// 设置、资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区），滚进去的只在栏下沿淡出（`fadesUnderBars`）。
+    /// 设置、资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区）。
     static func utility(title: String, content: some View) -> NSWindow {
         let window = dress(NSWindow(
             contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false), content: content)

@@ -224,7 +224,7 @@ struct ConversationRuleTests {
     }
 
     /// 中途被停下的一轮：已经说出的那段（被停下的那条里说了一半的也算）是这一轮的回答，下面一行系统行"已停止"；什么都没说就被停下的
-    /// 问答不变，这一轮的提问也不再算进行中；之后机器消息触发的一轮沿用再往前你说的那句。存进库再读出来也是这个先后。
+    /// 问答不变，这一轮的提问也不再算进行中；之后机器消息原样进对话、它触发的一轮沿用再往前你说的那句。存进库再读出来也是这个先后。
     @Test func aStoppedRoundKeepsWhatWasSaidAndAddsAStoppedLine() async throws {
         let fixture = try Fixture()
         var stopped = SessionFile(directory: try makeTempDirectory(), name: "stopped.jsonl")
@@ -239,7 +239,8 @@ struct ConversationRuleTests {
 
         #expect(read.recap == PiRecap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil))
         #expect(try await fixture.store.piMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
-            "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "pi:汇报", "user:第三问", "system:已停止",
+            "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "machine:<some_event>\n子任务完成\n</some_event>", "pi:汇报",
+            "user:第三问", "system:已停止",
         ])
 
         // OpenCode 被停下的那一步带着说了一半的话

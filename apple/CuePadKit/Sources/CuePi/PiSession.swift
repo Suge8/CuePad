@@ -109,15 +109,6 @@ public enum PiSessionName {
         return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
     }
 
-    /// 扩展或 Agent 自己投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成（如 FireCode 的
-    /// `<firecode_master_event>`、Codex 子代理的通知）。块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配。
-    /// 它们不进对话、不是提问，只开始一轮。
-    public static func isMachineMessage(_ text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return machineMessage.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
-    }
-
-    private static let machineMessage = try! NSRegularExpression(pattern: #"^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n</\1>)[\s\S])*\n</\1>\s*)+$"#)
 
     /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
     /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行（说明行后面的空行不挡），其余原样。
