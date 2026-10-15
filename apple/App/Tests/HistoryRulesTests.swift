@@ -9,7 +9,6 @@ import Testing
 /// "什么算历史"的两条规则，端到端用真实 Pi：一句话没说过的会话关掉后不进历史；CuePad 后台托管的会话闲置退出不算结束，
 /// 仍在"现在"，Mac 本机与手机两条路发话都会唤醒它，只有用户结束它才进历史。
 /// 真实 Pi 与真实后台托管（闲置 2 秒退出），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
-nonisolated private let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
 

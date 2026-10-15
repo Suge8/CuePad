@@ -1,11 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 任务行尾那一格（`TaskNext`）画成一颗胶囊，Mac 与手机同一份：会话那边的事写状态标、状态词（要你看的用状态色，Mac 上在做时加计时），
+/// 任务行上"下一步"那一格（`TaskNext`）画成一颗胶囊，Mac 与手机同一份（宽的地方紧跟标题，手机在行尾：屏窄，行尾就在眼前）：会话那边的事写状态标、状态词（要你看的用状态色，Mac 上在做时加计时），
 /// 点了打开会话；写好了草稿的是"▶ 开始"，点了把草稿交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
-/// 胶囊是墨色淡底：一屏可能有好几颗"开始"，靛青只给指针停在上面的那一颗（ui.md：签名色只落在焦点上）。
+/// 胶囊是墨色淡底：一屏可能有好几颗"开始"，靛青只给指针停着的那一行（`lit`）或那一颗（ui.md：签名色只落在焦点上）。
 struct TaskNextChip: View {
     let next: TaskNext
+    /// 指针停在这一行上（Mac 的任务行）："开始"先亮起来，告诉你这一行能直接开工。
+    var lit = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -31,13 +33,13 @@ struct TaskNextChip: View {
                     Text("开始").fontWeight(.semibold)
                 }
             }
-            .font(TaskMetrics.caption)
-            .foregroundStyle(starts && hovering ? palette.onSignature : palette.ink)
+            .font(Self.font)
+            .foregroundStyle(starts && (lit || hovering) ? palette.onSignature : palette.ink)
             .lineLimit(1).fixedSize()
             .padding(.horizontal, Self.inset).frame(height: Self.height)
-            .background(starts && hovering ? palette.signatureFill : palette.fill, in: .capsule)
-            .animation(Motion.quick, value: hovering)
-            .contentShape(.capsule.inset(by: -(TaskMetrics.chipTarget - Self.height) / 2))
+            .background(starts && (lit || hovering) ? palette.signatureFill : palette.fill, in: .capsule)
+            .animation(Motion.quick, value: lit || hovering)
+            .contentShape(.capsule.inset(by: -Self.reach))
         }
         .buttonStyle(PressStyle())
         .onHover { hovering = $0 }
@@ -49,13 +51,19 @@ struct TaskNextChip: View {
     private var starts: Bool { if case .start = next { true } else { false } }
 
     #if os(macOS)
-    private static let height: CGFloat = 22
-    private static let inset: CGFloat = 9
-    private static let glyph: CGFloat = 8
+    private static let height: CGFloat = 24
+    private static let inset: CGFloat = 10
+    private static let glyph: CGFloat = 9
+    /// 比行里的元信息大一档：它是这一行唯一能直接动手的东西。
+    private static let font = Typography.secondary
+    /// 点得到的范围比胶囊四周多出这么多（不撑高行）。
+    private static let reach: CGFloat = 5
     #else
     private static let height: CGFloat = 28
     private static let inset: CGFloat = 11
     private static let glyph: CGFloat = 9
+    private static let font = TaskMetrics.caption
+    private static let reach = (TaskMetrics.chipTarget - height) / 2
     #endif
 
     private var help: String {

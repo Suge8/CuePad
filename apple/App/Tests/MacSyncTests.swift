@@ -233,7 +233,7 @@ struct MacSyncTests {
         let failed = try #require(try await store.deliveryRequest(lost.id))
         #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
         #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
-        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered == 1)
+        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered(at: .always()) == 1)
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
@@ -466,6 +466,7 @@ struct MacSyncTests {
     @Test(.timeLimit(.minutes(1)))
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
+        services.startSpeechClock()
         var waiting = services.pollingCondition().makeAsyncIterator()
         #expect(await waiting.next() == .some(nil))
 
@@ -510,10 +511,80 @@ struct MacSyncTests {
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+        let name = request.id.uuidString.lowercased()
 
         #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
+    }
+
+    // MARK: 订阅额度（Mac 唯一写入，手机只读）
+
+    /// 桥报来的额度一直写进库（`start()` 里同一条路），直到测试结束。
+    private func recordingQuotas() {
+        let changes = services.pi.changes()
+        services.follow { try? await self.services.consumePiChanges(changes) }
+    }
+
+    private static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)
+    private static let claude: [[String: Any]] = [
+        ["seconds": 18_000, "used": 0.42, "resetsAt": resetsAt.timeIntervalSince1970, "binding": true],
+        ["seconds": 604_800, "used": 0.1, "resetsAt": resetsAt.timeIntervalSince1970 + 86_400],
+    ]
+
+    private func quota(_ provider: String) async throws -> AccountQuota {
+        try await eventually(services.store, { try $0.accountQuotas() }) { $0.contains { $0.provider == provider } }
+            .first { $0.provider == provider }!
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func 回复里带回的额度写进这个账号的记录() async throws {
+        recordingQuotas()
+        defer { services.cancelBackgroundWork() }
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+
+        ext.sendQuota(provider: "anthropic", windows: Self.claude, complete: false)
+
+        let stored = try await quota("anthropic")
+        #expect(stored.hostID == TestApp.hostID)
+        #expect(stored.windows == [
+            QuotaWindow(seconds: 18_000, used: 0.42, resetsAt: Self.resetsAt, isBinding: true),
+            QuotaWindow(seconds: 604_800, used: 0.1, resetsAt: Self.resetsAt.addingTimeInterval(86_400)),
+        ])
+    }
+
+    /// 手机打开额度视图、数据陈旧时写的刷新请求：Mac 经在线会话里的扩展查一次，查到的写进账号记录，请求按成功写回。
+    @Test(.timeLimit(.minutes(1)))
+    func 手机的额度刷新请求经在线会话查到_写回额度与成功() async throws {
+        recordingQuotas()
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+        let resetsAt = Self.resetsAt.timeIntervalSince1970
+        ext.onCommand = { [weak ext] _, command in
+            if command["t"] as? String == "quota" {
+                ext?.sendQuota(provider: "openai-codex", windows: [["seconds": 604_800, "used": 0.91, "resetsAt": resetsAt]], complete: true)
+            }
+            return ["ok": true]
+        }
+
+        let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(ext.received == ["quota"])
+        #expect(try await quota("openai-codex").windows == [QuotaWindow(seconds: 604_800, used: 0.91, resetsAt: Self.resetsAt)])
+    }
+
+    @Test func 手机的额度刷新请求_这台Mac没有在线会话时按失败写回原因() async throws {
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.failure == "这台 Mac 上没有在线的 Agent 会话，查不了额度")
+        #expect(try await services.store.accountQuotas().isEmpty)
     }
 
     // MARK: 后台恢复、开新会话

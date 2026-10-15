@@ -2,7 +2,7 @@ import CueSync
 import SwiftUI
 
 /// 同步状态给人看的一句话、补充说明、图标与要不要你注意（`StatusTone`，颜色由它定）；Mac 与 iOS 共用。
-struct SyncSummary: Equatable {
+nonisolated struct SyncSummary: Equatable {
     let title: String
     let detail: String?
     let symbol: String
@@ -15,6 +15,7 @@ struct SyncSummary: Equatable {
         case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .notice)
         case .idle: (title, detail, symbol, tone) = ("已同步", nil, "checkmark.icloud", .calm)
         case .syncing: (title, detail, symbol, tone) = ("正在同步…", nil, "arrow.triangle.2.circlepath.icloud", .calm)
+        case .offline: (title, detail, symbol, tone) = ("连不上 iCloud", "没有网络或 iCloud 暂时不通；本机改动都在，连上后自动上传", "icloud.slash", .notice)
         case .noAccount:
             (title, detail, symbol, tone) = ("iCloud 没有开启", Self.turnOnICloud, "icloud.slash", .notice)
         case .accountRestricted:
@@ -26,7 +27,7 @@ struct SyncSummary: Equatable {
         case .needsDecision(let decision):
             (title, detail, symbol, tone) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .notice)
         // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
-        case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, "xmark.icloud", .failure)
+        case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, Failure.symbol, .failure)
         }
     }
 
@@ -83,9 +84,7 @@ extension AppServices {
     /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
     var reachesPiHost: Bool {
         #if os(iOS)
-        // 演示 Mac 就在本机库里接手，隔离模式没有同步也送得到
-        if DebugHooks.preset.demoMac { return true }
-        return syncStatus.reachesMac
+        speech.reachableSince != nil  // 演示 Mac 在本机库里接手时一直算通（`SpeechClock`）
         #else
         true
         #endif

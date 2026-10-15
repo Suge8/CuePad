@@ -17,8 +17,6 @@ struct PromptList: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
-    /// 推提示词发没发出去用的"此刻"：在等回执的那条到点时刷新（`Speech`）。
-    @State private var now = Date.now
 
     var body: some View {
         let prompts = detail?.prompts ?? []
@@ -42,7 +40,7 @@ struct PromptList: View {
             }
             ForEach(prompts) { prompt in
                 PromptCard(
-                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents, now: now, reaches: { services.reaches($0) }),
+                    prompt: prompt, delivery: PromptDelivery(prompt.id, agents: agents, at: services.speech),
                     primary: prompt.id == primary, open: { open(prompt) },
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -61,7 +59,6 @@ struct PromptList: View {
             }
         }
         .animation(Motion.quick, value: prompts.map(\.id))
-        .refreshes($now, at: prompts.compactMap { PromptDelivery.deadline(of: $0.id, agents: agents) }.min())
     }
 
     /// 从本项目的灵感里挑一条挂上来；没有可挑的不出现。
@@ -181,7 +178,7 @@ private struct AgentStatusCard: View {
         let shown = item.map(workspace.shown)
         let look = item.map { item in
             let shown = workspace.shown(item)
-            return TaskAgentLook(shown, line: PiProgress.note(of: item.state, failure: shown.undelivered(item.delivery)?.failure))
+            return TaskAgentLook(shown, line: PiProgress.note(of: item.state, failure: shown.undelivered?.text(sync: services.syncStatus)))
         }
         Button {
             navigation.openSession(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, store: services.store)

@@ -143,11 +143,13 @@ actor SyncCoordinator {
   private func attempt(_ saving: [CKRecord], deleting: [CKRecord.ID], via uploader: any RecordUploader) async throws -> SentRecords {
     do {
       let sent = try await uploader.upload(saving: saving, deleting: deleting)
+      reached(nil)
       for (record, error) in sent.failedSaves { Self.logRejected(record.recordID, error) }
       for (id, error) in sent.failedDeletes { Self.logRejected(id, error) }
       return sent
     } catch {
       Self.log.notice("立即上传整个请求失败：\(error.brief, privacy: .public)")
+      reached(error)
       throw error
     }
   }
@@ -197,6 +199,7 @@ actor SyncCoordinator {
       guard needsDecision == nil else { return }
       try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）经提交增量登记
       if case .failed = status { status = .idle }
+      reached(nil)
     case .sent(let saved, let failedSaves, let deleted, let failedDeletes):
       guard needsDecision == nil else { return }
       try await processSent(saved, failedSaves, deleted, failedDeletes)
@@ -366,11 +369,34 @@ actor SyncCoordinator {
     case .notAuthenticated:
       status = .noAccount
       return true
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited, .operationCancelled:
+    case .networkFailure, .networkUnavailable, .serviceUnavailable:
+      reached(error)
+      return false
+    case .zoneBusy, .requestRateLimited, .operationCancelled:
       return false
     default:
       report(error, recordType: recordType, recordName: recordName)
       return true
+    }
+  }
+
+  /// 一次拉取或上传的结果（nil 是成功）：网络类失败时连不上 iCloud（`SyncStatus.offline`），之后任何一次成功回到空闲。
+  /// 只在正常状态之间切换：账号、配额、要你决定这些更要紧的状态不被它盖过。
+  func reached(_ error: (any Error)?) {
+    if let error {
+      guard Self.isOffline(error), status == .idle || status == .syncing || status == .starting else { return }
+      status = .offline
+    } else if status == .offline {
+      status = .idle
+    }
+  }
+
+  private static func isOffline(_ error: any Error) -> Bool {
+    guard let error = error as? CKError else { return (error as? URLError) != nil }
+    switch error.code {
+    case .networkFailure, .networkUnavailable, .serviceUnavailable: return true
+    case .partialFailure: return error.partialErrorsByItemID?.values.contains { isOffline($0) } ?? false
+    default: return false
     }
   }
 

@@ -304,7 +304,7 @@ public struct CueTools: Sendable {
     var structured = structured
     structured["request"] = id(request.id)
     let tail = "（\(leaf.id.shortID)）"
-    switch Speech.trip(latest, now: .now, reachable: true) {
+    switch Speech.trip(latest, at: .always()) {
     case .delivered:
       structured["status"] = "delivered"
       return .ok("\(what)：已送达。\(tail)", structured)
@@ -320,6 +320,9 @@ public struct CueTools: Sendable {
 
   /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
   /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
+  /// 认的是正文而不是结构化结果（`structured["request"]`）：三家大脑的工具结果事件里正文都在，结构化结果只有 Codex 的
+  /// `mcpToolCall` 带回（`structuredContent`）；Claude 的 stream-json 工具结果块只有文字与 `is_error`，Pi 的 `tool_execution_end`
+  /// 是它自己的结果形状（`content` 与扩展自定的 `details`）。为一家改走结构化就成了两条路，所以三家都认正文。
   static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
 
   /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。

@@ -50,7 +50,7 @@ struct SessionControlsTests {
         let atlas = try await session()
         let request = try await store.requestConfig(PiConfig(model: luna.key, thinking: .high), to: target(atlas), on: atlas.hostID)
 
-        let shown = SessionDigest(session: atlas, project: nil, deliveries: [request]).config
+        let shown = SessionDigest(session: atlas, project: nil, deliveries: [request]).config(at: .always())
 
         #expect(shown == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
     }
@@ -60,9 +60,9 @@ struct SessionControlsTests {
         let request = try await store.requestConfig(PiConfig(thinking: .high), to: target(atlas), on: atlas.hostID)
         let failed = try await execute(request, failing: "Pi 没在运行")
 
-        let shown = SessionDigest(session: atlas, project: nil, deliveries: [failed]).config
+        let shown = SessionDigest(session: atlas, project: nil, deliveries: [failed]).config(at: .always())
 
-        #expect(shown == PiConfigShown(model: opus, thinking: .low, pending: false, failure: "Pi 没在运行"))
+        #expect(shown == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
     }
 
 }

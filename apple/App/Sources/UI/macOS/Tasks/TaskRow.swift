@@ -2,8 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 一条任务或步骤（项目页的任务区与任务面板同一种行），一行：完成圈（`TaskCheckButton`）、标题，行尾依次是步骤进度、
-/// 所在项目的图标（面板里跨项目时；悬停写全名）与那一格"下一步"（`TaskNextChip`：Agent 要你看的、正在做的，或"开始"）。
+/// 一条任务或步骤（项目页的任务区与任务面板同一种行），一行：完成圈（`TaskCheckButton`）、标题，紧跟标题的那一格"下一步"
+/// （`TaskNextChip`：Agent 要你看的、正在做的，或"开始"；指针停在行上时"开始"亮成靛青），行尾是步骤进度与所在项目的图标
+/// （面板里跨项目时；悬停写全名）。"下一步"是要你动手的，跟着标题走：放在行尾时宽窗口里离标题一千多点，一眼看不到；
+/// 进度与项目只是旁注，留在行尾成一列。
 /// 一个叶子任务一个 Agent 会话，它此刻怎样只在这一格说；要 Agent 做什么写在任务浮窗里。点行的其余地方弹出任务浮窗（`TaskSheet`）。
 /// 右键是 `CardActions`。
 struct TaskRow: View {
@@ -33,12 +35,13 @@ struct TaskRow: View {
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
             TaskCheckButton(
                 task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 15,
-                target: CGSize(width: Self.ringColumn, height: 15), check: $check)
+                target: CGSize(width: Self.ringColumn, height: 15), check: $check, rowTap: open)
             Text(task.title)
                 .font(Typography.body.weight(.medium))
                 .strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(1)
                 .layoutPriority(1)
+            if let next, !done { TaskNextChip(next: next, lit: hovering).layoutPriority(2) }
             Spacer(minLength: 8)
             if !done, let subtasks {
                 Text("\(subtasks.done)/\(subtasks.total)").font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
@@ -46,7 +49,6 @@ struct TaskRow: View {
             if let project {
                 ProjectGlyph(project: project, size: 11).help(project.name).accessibilityHidden(true)
             }
-            if let next, !done { TaskNextChip(next: next) }
         }
         .animation(Motion.quick, value: done)
         .padding(.horizontal, Self.inset)
@@ -54,6 +56,7 @@ struct TaskRow: View {
         .background(hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }
+        .onAppear { if DebugHooks.hovers(task) { hovering = true } }
         .onTapGesture(perform: open)
         .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
         .padding(.vertical, 2)
@@ -138,4 +141,5 @@ struct NewTaskField: View {
         }
     }
 }
+
 #endif

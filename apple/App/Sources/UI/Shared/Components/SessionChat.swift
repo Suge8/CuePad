@@ -17,18 +17,20 @@ struct SessionChat: View {
     var slot: PiBridge.Slot?
     #endif
     @State private var derived = ChatDerived()
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         let _ = derived.refresh(digest)
         let items = derived.items
         ChatColumn(
-            followKey: PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries),
+            followKey: PiConversation.followKey(
+                session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech),
             readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, count: items.count,
             position: { id in items.firstIndex { $0.id == id } }, paging: PiConversation.paging
         ) { window, showEarlier in
             VStack(spacing: 14) {
-                if digest.fetchingTranscript {
+                if digest.fetchingTranscript(at: services.speech) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 conversation(window: window, showEarlier: showEarlier)

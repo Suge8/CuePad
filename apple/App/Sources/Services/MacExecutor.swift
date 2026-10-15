@@ -53,28 +53,21 @@ final class MacExecutor {
         return { await executor?.stop() }
     }
 
+    /// 执行一次，把错误归类交给 `DeliveryExecutor`（重试与写回在那里）：暂时性错误（`isTransient`）是暂时没成，其余是失败；
     /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
+    /// 开新会话的错不算暂时性：起得慢的那个之后还会连上，再开一个就是两个会话。
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
-            try await performRetrying(request)
+            try await perform(request)
             return .succeeded
         } catch SendError.unrecorded(let reason) {
             // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
             reportIssue("处理投送请求时读写资料库失败：\(reason)")
             return .succeeded
+        } catch where request.mode != .known(.start) && Self.isTransient(error) {
+            return .transient(error.localizedDescription)
         } catch {
             return .failed(error.localizedDescription)
-        }
-    }
-
-    /// 暂时性错误（`isTransient`）隔 `Speech.retryDelay` 重试一次，再失败才写失败。开新会话不重试：起得慢的那个之后还会连上，
-    /// 再开一个就是两个会话。
-    private func performRetrying(_ request: DeliveryRequest) async throws {
-        do {
-            try await perform(request)
-        } catch where request.mode != .known(.start) && Self.isTransient(error) {
-            try await Task.sleep(for: Speech.retryDelay)
-            try await perform(request)
         }
     }
 

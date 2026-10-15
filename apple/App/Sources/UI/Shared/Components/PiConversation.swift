@@ -51,7 +51,7 @@ struct PiConversation: View {
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
             ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -74,10 +74,9 @@ struct PiConversation: View {
     /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request)
-        let busy = session.isWorking || session.state == .known(.waitingForUser)
         return SpeechBubble(
             said: said, box: services.settings.replyDraftBinding(for: session.id),
-            transit: session.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy), fromCue: request.isFromCue
+            transit: .of(request, session: session), fromCue: request.isFromCue
         ) { trip in
             let failed = if case .failed = trip { true } else { false }
             MessageActions(
@@ -141,7 +140,7 @@ struct PiConversation: View {
         liveStatus
         #endif
         if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
-            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
+            Callout(.failed, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 
@@ -267,12 +266,14 @@ extension PiConversation {
     struct FollowKey: Equatable {
         var messages: Int
         var previews: Int
-        var outgoing: [Open<DeliveryStatus>]
+        var outgoing: [Speech.Trip]
         var state: Open<PiWorkState>?
     }
 
-    static func followKey(session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest]) -> FollowKey {
-        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
+    static func followKey(
+        session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest], at moment: Speech.Moment
+    ) -> FollowKey {
+        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages, at: moment).map { Speech.trip($0, at: moment) }, state: session?.state)
     }
 }
 
@@ -348,7 +349,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
+                Callout(.asking, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
         }
     }

@@ -1,4 +1,5 @@
 import CueStore
+import CueSync
 import Foundation
 
 /// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
@@ -28,11 +29,10 @@ extension MacDelivery {
 
     /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
     /// 进度只读投送请求，界面不另存。
-    static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest]) -> Bool {
+    static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            request.mode == .known(.stop) && request.createdAt >= turnStart
-                && (request.isOpen || request.status == .known(.succeeded))
+            request.mode == .known(.stop) && request.createdAt >= turnStart && Speech.trip(request, at: moment).failure == nil
         }
     }
 
@@ -41,25 +41,28 @@ extension MacDelivery {
     /// 回复框上方一行显示。
     enum CommandProgress: Equatable {
         case running(String)
-        case failed(command: String, reason: String)
+        case failed(command: String, failure: Speech.Failure)
 
         var failed: Bool { if case .failed = self { true } else { false } }
 
-        var text: String {
+        func text(sync: SyncStatus) -> String {
             switch self {
             case .running(let command): "正在执行 \(command)…"
-            case .failed(let command, let reason): "\(command) 没执行成功：\(reason)"
+            case .failed(let command, let failure): "\(command) 没执行成功：\(failure.text(sync: sync))"
             }
         }
     }
 
-    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> CommandProgress? {
+    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> CommandProgress? {
         guard let latest = deliveries.max(by: { $0.createdAt < $1.createdAt }), latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
-        if latest.isOpen { return .running(command) }
-        guard let failure = latest.failure else { return nil }
-        let failedAt = latest.completedAt ?? latest.modifiedAt
-        return messages.contains { $0.at > failedAt } ? nil : .failed(command: command, reason: failure)
+        switch Speech.trip(latest, at: moment) {
+        case .sending: return .running(command)
+        case .delivered: return nil
+        case .failed(let failure):
+            let failedAt = latest.completedAt ?? latest.modifiedAt
+            return messages.contains { $0.at > failedAt } ? nil : .failed(command: command, failure: failure)
+        }
     }
 
     /// 回复框的主按钮（一颗，按状态切换；iOS 与 Mac 同一条）：空着而 Agent 自己在跑一轮是停止（这时最可能想做的就是叫停，同 ChatGPT、Claude），

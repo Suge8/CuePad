@@ -14,11 +14,11 @@ struct SharedPagesTests {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         for index in 0..<45 { try await recorder.update(sessionID: "e\(index)", state: .ended, title: "e\(index)") }
         let model = AgentListModel()
-        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, from: store)
+        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == PiSessionList.pageSize && model.hasMore)
 
         model.loadMore()
-        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, from: store)
+        model.list = try await PiSessionList.read(text: model.query, historyLimit: model.limit, at: .always(), from: store)
         #expect(model.list?.loaded == 45 && !model.hasMore)
 
         model.query = "e1"
@@ -89,18 +89,18 @@ struct SharedPagesTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let request = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-1"), title: "圆桌", on: "mac-a", card: nil)
         func phase() async throws -> LaunchProgress.Phase {
-            try await LaunchProgress.read(request: request.id, token: "tok-1", from: store).phase
+            try await LaunchProgress.read(request: request.id, token: "tok-1", from: store).phase(at: .always())
         }
         guard case .sending = try await phase() else { Issue.record("发出后应是在路上：\(try await phase())"); return }
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
-        _ = try await eventually(store, { try LaunchProgress.read(request: request.id, token: "tok-1", from: $0).phase }) { $0 == .opening }
+        _ = try await eventually(store, { try LaunchProgress.read(request: request.id, token: "tok-1", from: $0).phase(at: .always()) }) { $0 == .opening }
         #expect(try await phase() == .opening)
 
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .thinking, title: "圆桌", launchToken: "tok-1")
         let claimed = try await LaunchProgress.read(request: request.id, token: "tok-1", from: store)
-        #expect(claimed.phase == .claimed && claimed.claimed?.sessionID == "s1")
+        #expect(claimed.phase(at: .always()) == .claimed && claimed.claimed?.sessionID == "s1")
         await executor.stop()
 
         let refused = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
@@ -108,6 +108,6 @@ struct SharedPagesTests {
         try await failing.start()
         _ = try await eventually(store, { try $0.deliveryRequest(refused.id)?.isOpen }) { $0 == false }
         await failing.stop()
-        #expect(try await LaunchProgress.read(request: refused.id, token: "tok-2", from: store).phase == .failed("文件夹不在了"))
+        #expect(try await LaunchProgress.read(request: refused.id, token: "tok-2", from: store).phase(at: .always()) == .failed(.reported("文件夹不在了")))
     }
 }

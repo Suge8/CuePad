@@ -28,7 +28,7 @@ struct AgentRow: View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
 
-        SettingRow(title: kind.name, icon: kind.icon, tone: tone, busy: working, status: line, help: help) {
+        SettingRow(title: kind.name, icon: kind.mark.image, tone: tone, busy: working, status: line, help: help) {
             // 开不了也关不了的（没装、版本不对、开发构建没指定目录、别人的同名文件）不给开关，免得像是能点
             if let status, canToggle(status) {
                 Toggle(kind.name, isOn: Binding(get: { status.isConnected }, set: apply))

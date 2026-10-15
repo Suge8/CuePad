@@ -378,7 +378,7 @@ private struct PiSection: View {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
-            recorded: recorded, deliveries: deliveries, cueOnDuty: services.liveSessions.cueOnDuty)
+            recorded: recorded, deliveries: deliveries, cueOnDuty: services.liveSessions.cueOnDuty, at: services.speech)
         if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") {
@@ -449,11 +449,12 @@ extension PiSessionState {
     /// "现在"的会话行（侧栏 Agent 区、项目页的 Agent 栏）：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）
     /// 一起按要你注意的先后；同一个会话只出现一次（本机实时优先）。已结束的不列，历史在 Agent 整页里。`recorded` 是会话列表查询的一页。
     static func liveRows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false,
+        at moment: Speech.Moment
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) && $0.state != .known(.ended) }
-        return inListOrder(live + others, deliveries: deliveries, cueOnDuty: cueOnDuty)
+        return inListOrder(live + others, deliveries: deliveries, cueOnDuty: cueOnDuty, at: moment)
     }
 }
 
@@ -516,7 +517,7 @@ private struct StartupIssues: View {
             Button {
                 showing.toggle()
             } label: {
-                Label("\(services.startupIssues.count) 个启动问题", systemImage: "exclamationmark.triangle")
+                Label { Text("\(services.startupIssues.count) 个启动问题") } icon: { FailureMark() }
                     .font(Typography.meta).foregroundStyle(palette.failure)
             }
             .buttonStyle(.plain)

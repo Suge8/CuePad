@@ -61,7 +61,7 @@ final class SendState {
 
     /// 能交给的在线会话：所有 Mac 上的（手机的发给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
     func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
-        HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
+        HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech).filter { isReachable($0.state) }
     }
 
     /// `host`：会话记录所在的 Mac，nil 为本机。

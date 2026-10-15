@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         UNUserNotificationCenter.current().delegate = alerts
         sigterm = TerminationSignal.install()
         MainMenu.install()
+        FirstClick.install()
         launch()
     }
 

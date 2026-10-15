@@ -71,9 +71,11 @@ private struct AgentListReader: ViewModifier {
             .renameSession($model.renaming)
             .endSession($model.confirmingEnd)
             .onChange(of: filter) { model.resetPaging() }
-            .observing(services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit),
-                       into: $model.list, onError: workspace.fail) { [query = model.query, limit = model.limit] store in
-                try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
+            .observing(
+                services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit, moment: services.speech),
+                into: $model.list, onError: workspace.fail
+            ) { [query = model.query, limit = model.limit, moment = services.speech] store in
+                try PiSessionList.read(text: query, project: filter, historyLimit: limit, at: moment, from: store)
             }
     }
 }

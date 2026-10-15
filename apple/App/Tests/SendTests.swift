@@ -79,7 +79,7 @@ struct SendTests {
         _ = await Workspace(services: services).speak("hi", to: .session(session.sendTarget, host: TestApp.hostID, mode: .send, card: nil)).value
 
         let request = try await settled()
-        #expect(Said.request(request).trip(now: .now, reachable: true) == .delivered)
+        #expect(Said.request(request).trip(at: .always(at: .now)) == .delivered)
         #expect(ext.messages == [PiMessage(text: "hi", whenBusy: nil, deliveryID: request.id.uuidString)])
     }
 

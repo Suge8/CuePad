@@ -12,9 +12,9 @@ extension PiConfigControls {
             let now = Date.now, quotas = services.accountQuotas.items
             let sections = groups.map { group in
                 ChoiceMenu.Section(
-                    title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.provider?.nsImage,
+                    title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.mark?.nsImage,
                     choices: group.items.map { item in
-                        ChoiceMenu.Choice(title: item.name, image: item.provider?.nsImage, checked: item.checked, choose: item.choose)
+                        ChoiceMenu.Choice(title: item.name, image: item.mark?.nsImage, checked: item.checked, choose: item.choose)
                     })
             }
             ChoiceMenu.popUp(sections, below: anchor)

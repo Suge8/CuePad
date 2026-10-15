@@ -24,12 +24,19 @@ enum DebugHooks {
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
         var demoMac = false
+        /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、又没装同步替身时（替身自己报通断，`-CuePadSync`）。
+        var alwaysReachable = false
         /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
         var quotaDetail: String?
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
         /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
         var taskFold = TaskFold()
+        #if os(macOS)
+        /// 正文以它开头的那张灵感卡或那条任务一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
+        /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
+        var hovered: String?
+        #endif
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false
@@ -46,6 +53,11 @@ enum DebugHooks {
     enum SearchFocus { case shelf, project }
     #endif
 
+    #if os(macOS)
+    /// 这张卡或这条任务是否按 `Preset.hovered` 一出现就画成悬停的样子。
+    static func hovers(_ card: Card) -> Bool { preset.hovered.map { card.body.hasPrefix($0) } ?? false }
+    #endif
+
     static let preset: Preset = {
         #if DEBUG
         DebugScene.preset
@@ -60,6 +72,15 @@ enum DebugHooks {
         DebugScene.syncSource
         #else
         .iCloud
+        #endif
+    }
+
+    /// 不请求通知权限：演示与脚本截图、录屏（`-CuePadDemo` 或给了 `CUEPAD_SHOT_READY`）里系统弹窗会盖住画面，没人去点。
+    static var asksNotificationPermission: Bool {
+        #if DEBUG
+        !DebugScene.defaults.bool(forKey: "CuePadDemo") && ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] == nil
+        #else
+        true
         #endif
     }
 

@@ -113,6 +113,21 @@ struct PiTranscriptTests {
         #expect(try await store.sendRecords().isEmpty)
     }
 
+    /// 会话所在的 Mac 没回应：补写请求在页面上超时；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。
+    @Test func 补写请求还没被领取时再打开会话_不写第二条() async throws {
+        _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+        await backfill()
+        let session = try await record("old")
+
+        let first = try await services.requestTranscript(of: session)
+        let late = first.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
+        #expect(Speech.trip(first, at: .always(at: late)) == .failed(.timedOut))
+        let again = try await services.requestTranscript(of: session)
+
+        #expect(again.id == first.id)
+        #expect(try await store.deliveryRequests(toSession: "old").filter { $0.mode == .known(.transcript) }.count == 1)
+    }
+
     /// 工具计数口径变了、会话文件检查点作废后从头重读：七天外却还存着对话的会话（仍被提示词引用而没清掉）也要把已存的消息重写成新口径，
     /// 不能只有近七天的会话更新、同一界面留着两种口径。
     @Test func 检查点作废后从头重读_七天外存着对话的会话也更新已存消息的工具计数() async throws {

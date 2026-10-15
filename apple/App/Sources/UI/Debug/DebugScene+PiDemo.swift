@@ -255,13 +255,27 @@ extension DebugScene {
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
-    /// 录"发出 → 返回列表 → 状态流转"用。
-    static func runDemoMac(_ store: CueStore) async {
-        let host = "demo-mac"
+    /// 录"发出 → 返回列表 → 状态流转"用。Cue 住在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达）。
+    /// 同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
+    static func runDemoMac(_ services: AppServices) async {
+        let store = services.store, host = "demo-mac"
+        func reachable() async {
+            for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
+        }
+        Task {
+            // 每次变化都重读此刻还没交出去的：攒下的旧变化不再各等一遍
+            for try await waiting in store.observe({ try toDemoCue($0) }) where !waiting.isEmpty {
+                guard try await !toDemoCue(store).isEmpty else { continue }
+                await reachable()
+                try await Task.sleep(for: .seconds(1.5))
+                try await store.markCueMessagesDelivered(toDemoCue(store))
+            }
+        }
         do {
             for try await pending in store.observe({ store in
                 try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
             }) where !pending.isEmpty {
+                await reachable()
                 try await Task.sleep(for: .seconds(1.2))
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
@@ -276,9 +290,16 @@ extension DebugScene {
                     try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
                 }) where !open { break }
                 await executor.stop()
-                for id in pending { await playRound(for: id, store: store, host: host) }
+                // 各自演一轮，不挡住下一批话的接手
+                for id in pending { Task { await playRound(for: id, store: store, host: host) } }
             }
         } catch {}
+    }
+
+    /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
+    private static func toDemoCue(_ store: isolated CueStore) throws -> [UUID] {
+        guard try store.cueProfile()?.hostID == "demo-mac", try store.macOnline("demo-mac") else { return [] }
+        return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
     }
 
     /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——
@@ -287,7 +308,7 @@ extension DebugScene {
     static func cycleIfAsked(_ services: AppServices) async {
         guard defaults.bool(forKey: "CuePadCycle") else { return }
         let store = services.store
-        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(store) } }
+        if !defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(services) } }
         let query = PiSessionQuery(id: PiSessionState.recordID(sessionID: "scratch"))
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         func set(_ state: PiWorkState, _ detail: String, question: PiQuestion? = nil) async {
@@ -338,17 +359,51 @@ extension DebugScene {
             context: session.context)
     }
 
-    /// 演示会话的模型配置：几家各一两个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换），
-    /// 最后一个是用户自定义的提供方（菜单里是通用图标）。
-    static let demoModels: PiModelState = {
-        func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
-            PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+    private static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
+        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
+    }
+
+    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里是通用图标）；
+    /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
+    /// Codex 与 Claude Code 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）
+    /// 与 Claude Code 的 `initialize`（Claude 系），提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
+    static func demoModels(for agent: AgentKind?) -> PiModelState {
+        func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
+            PiModelState(model: models[current], thinking: .known(thinking), models: models)
         }
+        let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+        switch agent {
+        case .opencode:
+            return listed([
+                model("openrouter", "anthropic/claude-sonnet-5", "Claude Sonnet 5", [.low, .medium, .high]),
+                model("openrouter", "google/gemini-3-pro", "Gemini 3 Pro", [.low, .high]),
+                model("openrouter", "qwen/qwen3-coder", "Qwen3 Coder", [.off]),
+            ], current: 0, thinking: .medium)
+        case .codex:
+            let provider = AgentKind.codex.modelProvider ?? ""
+            return listed([
+                model(provider, "gpt-6.1-sol", "GPT-6.1-Sol", levels), model(provider, "gpt-6-astra", "GPT-6-Astra", levels),
+                model(provider, "gpt-6-sol", "GPT-6-Sol", levels), model(provider, "gpt-6-luna", "GPT-6-Luna", levels),
+                model(provider, "gpt-5.6-terra", "GPT-5.6-Terra", levels),
+            ], current: 0, thinking: .medium)
+        case .claudeCode:
+            let provider = AgentKind.claudeCode.modelProvider ?? ""
+            return listed([
+                model(provider, "default", "Default (recommended)", levels), model(provider, "opus", "Opus", levels),
+                model(provider, "fable", "Fable", levels), model(provider, "sonnet", "Sonnet", levels), model(provider, "haiku", "Haiku", levels),
+            ], current: 1, thinking: .high)
+        case .pi, nil:
+            return demoModels
+        }
+    }
+
+    static let demoModels: PiModelState = {
         let opus = model("anthropic", "claude-opus-5-5-20260901", "Claude Opus 5.5", [.low, .medium, .high, .max])
         return PiModelState(model: opus, thinking: .known(.medium), models: [
             opus,
             model("anthropic", "claude-sonnet-5-20260801", "Claude Sonnet 5", [.off, .low, .medium, .high]),
             model("openai-codex", "gpt-6-luna", "GPT-6 Luna", [.off, .low, .high]),
+            model("xai", "grok-5", "Grok 5", [.low, .high]),
             model("deepseek", "deepseek-v4", "DeepSeek V4", [.off, .high]),
             model("kimi-coding", "kimi-k3", "Kimi K3", [.off]),
             model("xiaomi", "mimo-v3-pro", "MiMo V3 Pro", [.off, .high]),
@@ -389,8 +444,9 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：各种状态、各家 Agent 的会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
-        // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
-        guard (try? await store.piSessionPage(.live).items.isEmpty) == true, let projects = try? await store.projects() else { return }
+        // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
+        // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
+        guard (try? await store.piSessionPage(.live).items.contains { $0.state.hostID == "demo-mac" }) == false, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
@@ -444,7 +500,7 @@ extension DebugScene {
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
+                modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],

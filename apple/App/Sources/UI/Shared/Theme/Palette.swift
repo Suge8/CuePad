@@ -143,7 +143,7 @@ extension EnvironmentValues {
 /// 按外观、对比度注入 `palette`，并把强调色（墨）设为系统控件的 tint：选中、焦点、开关都用它。
 /// 一样东西此刻要不要你注意（同步、Pi 连接、命令行、崩溃这类状态），全 App 着色只按它：平静是次要墨色；要你处理是墨色，
 /// 靠图形与比平静更深的字抢眼（赭黄只留给 Agent 等你确认）；出错是胭脂。
-enum StatusTone: Equatable {
+nonisolated enum StatusTone: Equatable {
     case calm, notice, failure
 }
 

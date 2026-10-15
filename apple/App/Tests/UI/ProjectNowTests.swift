@@ -20,7 +20,7 @@ struct ProjectNowTests {
 
     /// 回复第一句只在你没看过时算"有新回复"：测试里 notes 没看过，其余停着的都看过。
     private func shown(_ item: PiSessionListItem) -> PiShown {
-        PiShown(item.state, delivery: item.delivery, unread: item.state.sessionID == "notes")
+        PiShown(item.state, delivery: item.delivery, unread: item.state.sessionID == "notes", at: .always())
     }
 
     private func now(_ sessions: [PiSessionListItem], task: String? = "补重连用例", intro: String? = "多 Agent 调度本月可上线") -> ProjectNow? {
@@ -112,7 +112,7 @@ struct ProjectNowShelfTests {
         try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
 
         let shelf = try await ShelfData.read(from: store)
-        let sessions = try await LiveSessions.Page.read(from: store).items
+        let sessions = try await LiveSessions.Page.read(from: store, at: .always()).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
         let workspace = Workspace(services: app.services)

@@ -37,7 +37,7 @@ struct PiChatTests {
         let answer = try await app.services.store.requestAnswer(
             PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
 
-        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
+        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)], at: .always())
 
         #expect(shown.map(\.id) == [waiting.id])
     }
@@ -51,7 +51,7 @@ struct PiChatTests {
         let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
         let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
-        #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
+        #expect(PiChat.outgoing([said, command], messages: [], at: .always()).map(\.id) == [said.id])
     }
 
     /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，
@@ -64,7 +64,7 @@ struct PiChatTests {
         let lost = try await store.requestDelivery("改完再跑一遍", to: target, on: "mac-fail", mode: .send)
         _ = try await store.requestDelivery("还在路上的一句", to: target, on: "mac-wait", mode: .send)
         func item() async throws -> PiSessionListItem { try #require(try await store.piSessionPage(PiSessionQuery()).items.first) }
-        #expect(try await item().undelivered == 0)
+        #expect(try await item().undelivered(at: .always()) == 0)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
@@ -72,12 +72,12 @@ struct PiChatTests {
         await executor.stop()
 
         let failed = try await item()
-        #expect(failed.undelivered == 1 && PiChat.undeliveredNote(failed.undelivered) == "1 句没送到")
-        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
+        #expect(failed.undelivered(at: .always()) == 1 && PiChat.undeliveredNote(failed.undelivered(at: .always())) == "1 句没送到")
+        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered(at: .always()) == 1)
 
         app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
-        #expect(Workspace(services: app.services).shown(try await item()).status != .delivery(.failed))
-        #expect(try await item().undelivered == 1)
+        #expect(Workspace(services: app.services).shown(try await item()).undelivered == nil)
+        #expect(try await item().undelivered(at: .always()) == 1)
     }
 
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {

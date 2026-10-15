@@ -5,10 +5,10 @@ import SwiftUI
 /// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进，同任务面板）；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、
 /// 各自开合（规则见 `TaskFold`）。按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
-/// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了的"开始"；要 Agent 做什么在任务浮窗里写。
+/// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。每行标题后一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了的"开始"；要 Agent 做什么在任务浮窗里写。
 /// 会话的全部列表在侧栏，这里不另开一栏。
 /// 项目还没绑文件夹时，任务下面接一行绑定引导（`ProjectFolderGuide`，有同名建议、正在绑时才出现，见 `FolderGuide.shows`）。
-/// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度、"下一步"贴着纸的右边成一列，与任务面板的行同一个样子。
+/// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度贴着纸的右边成一列，与任务面板的行同一个样子。
 struct FocusBand: View {
     let data: ProjectPageData
     let guide: FolderGuide?
@@ -20,7 +20,7 @@ struct FocusBand: View {
     @State private var fold = DebugHooks.preset.taskFold
 
     private static let visibleTasks = 4
-    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
+    /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 130ms，Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建。
     private static let lazyFrom = 20
 
@@ -50,13 +50,14 @@ struct FocusBand: View {
         let roots = data.tasks.roots
         let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
         let shown = fold.shown(roots, limit: Self.visibleTasks)
-        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
         let done = data.taskCounts.done
         // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
-            TaskOutline(tree: data.tasks, roots: shown, lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
-                let line = TaskRow(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
-                if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
+            TaskOutline(
+                tree: data.tasks, roots: shown,
+                lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
+            ) { row in
+                TaskRow(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
             }
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {
@@ -77,7 +78,7 @@ struct FocusBand: View {
         .padding(.horizontal, -TaskRow.inset)
     }
 
-    /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时滚动在同一步里把纸底这一行留在原处。
+    /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时把纸底这一行留在原处（`TaskFoldAnchor`）。
     private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
         if key == \.showsAll, fold.showsAll { return anchor.collapse($fold, scrolling: $position) }
         withTransaction(\.disablesAnimations, true) { fold[keyPath: key].toggle() }

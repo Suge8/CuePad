@@ -131,7 +131,8 @@ private struct StepRow: View {
         let next = workspace.next(for: step, agent: agents.items[step.id], draft: nil)
         HStack(spacing: TaskRow.columnGap) {
             TaskCheckButton(
-                task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskRow.ringColumn, height: 14), check: $check)
+                task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskRow.ringColumn, height: 14), check: $check,
+                rowTap: select)
             if selected {
                 TaskHeading(task: step, font: Typography.body).id(step.id)
             } else {
@@ -145,9 +146,11 @@ private struct StepRow: View {
         .background(selected ? palette.paperLit.opacity(0.8) : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture { workspace.openTask?.step = step.id }
+        .onTapGesture(perform: select)
         .contextMenu { CardActions(card: step, leaf: true) }
     }
+
+    private func select() { workspace.openTask?.step = step.id }
 }
 
 /// 右边：一个叶子任务此刻的样子。完成了是笑着的吉祥物；交给了会话是随状态换的吉祥物（在做时轻轻浮动）、一句话与"打开会话"；
@@ -169,7 +172,7 @@ private struct LeafDetail: View {
             } else if let item {
                 let state = workspace.withLiveState(item.state)
                 let shown = workspace.shown(state, delivery: item.delivery)
-                let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered(item.delivery)?.failure))
+                let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text(sync: workspace.services.syncStatus)))
                 hero(look.mascot, floats: look.floats, title: look.title, note: look.note)
                 openSession(state.sessionID, primary: true)
             } else {

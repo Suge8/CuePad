@@ -25,7 +25,7 @@ struct MenuBarPad: View {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            }, cueOnDuty: services.liveSessions.cueOnDuty).prefix(Self.sessionLimit)
+            }, cueOnDuty: services.liveSessions.cueOnDuty, at: services.speech).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(sessions, id: \.sessionID) { session in
@@ -44,7 +44,7 @@ struct MenuBarPad: View {
                 CaptureComposer(state: $capture, defaultProject: services.settings.currentProject, pinnedOpen: true)
             } else if let failure = workspace.catalogFailure {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("读不出资料库", systemImage: "exclamationmark.triangle").font(Typography.secondary.weight(.medium))
+                    Label { Text("读不出资料库") } icon: { FailureMark() }.font(Typography.secondary.weight(.medium))
                     Text(failure).font(Typography.meta).foregroundStyle(.secondary).lineLimit(4)
                     Button("重试") { workspace.retryCatalog() }
                 }

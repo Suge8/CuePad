@@ -230,8 +230,12 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 把这个会话的对话补写进来（7 天前活跃过、还没同步对话的会话，手机打开时发）。
+  /// 已有一条还没被领取的补写请求就是它，不再写第二条：Mac 没回应时它在页面上超时，再打开会话也不会越攒越多；
+  /// 那台 Mac 醒来领取一条就够。
   public func requestTranscript(of session: PiSessionState) throws -> DeliveryRequest {
-    try requestDelivery(
+    let waiting = try deliveryRequests(toSession: session.sessionID).last { $0.mode == .known(.transcript) && $0.isWithdrawable }
+    if let waiting { return waiting }
+    return try requestDelivery(
       session.sessionID, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
       mode: .transcript)
   }

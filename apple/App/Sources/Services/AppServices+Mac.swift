@@ -46,6 +46,7 @@ extension AppServices {
         }
         startCue()
         startSync()
+        startSpeechClock()
         startLiveSessions()
         startAccountQuotas()
         startAlerts()

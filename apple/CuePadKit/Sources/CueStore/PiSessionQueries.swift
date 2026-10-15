@@ -42,12 +42,12 @@ extension CueStore {
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
-    let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
+    let unsettled = try unsettledTalk(to: states.map(\.sessionID))
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
           state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
+          unsettled: unsettled[$0.sessionID] ?? [])
       },
       total: total)
   }
@@ -63,20 +63,19 @@ extension CueStore {
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
   }
 
-  /// 发给这些会话、没能送达的话各有几句，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里失败的。失败的话不会进对话，
-  /// 一直留到你重发（新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
-  func undeliveredCounts(to sessionIDs: [String]) throws -> [String: Int] {
+  /// 发给这些会话、可能没能送达的话，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里还没被领取的与失败的——
+  /// 哪几句此刻算没能送达由说的话那条规则定（`PiSessionListItem.undelivered`）。失败的话不会进对话，一直留到你重发
+  /// （新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
+  func unsettledTalk(to sessionIDs: [String]) throws -> [String: [DeliveryRequest]] {
     guard !sessionIDs.isEmpty else { return [:] }
     let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
-    let rows = try db.query(
-      """
-      SELECT targetRef, count(*) FROM deliveryRequests
-      WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND status = '\(DeliveryStatus.failed.rawValue)'
-        AND targetRef IN (\(refs))
-      GROUP BY targetRef
-      """, sessionIDs
-    ) { ($0.text(0), Int($0.int(1))) }
-    return Dictionary(rows, uniquingKeysWith: +)
+    let requests = try select(
+      DeliveryRequest.self,
+      where: """
+        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk)))
+          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (\(refs))
+        """, sessionIDs, orderBy: "createdAt, rowid")
+    return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }
 
   /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。

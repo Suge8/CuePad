@@ -29,7 +29,7 @@ struct NewSessionInput: View {
         let places = places
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
-    private var phase: LaunchProgress.Phase { progress?.phase ?? .idle }
+    private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
     /// 发出且还没失败：输入框锁住，等它开好。
     private var inFlight: Bool {
         if case .failed = phase { return sending }
@@ -89,10 +89,10 @@ struct NewSessionInput: View {
             .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
             Menu {
                 Picker("用哪个 Agent", selection: Bindable(services.settings).lastAgent) {
-                    ForEach(AgentKind.allCases) { (kind: AgentKind) in Label { Text(kind.name) } icon: { kind.icon }.tag(kind) }
+                    ForEach(AgentKind.allCases) { (kind: AgentKind) in AgentLabel(kind: kind).tag(kind) }
                 }
             } label: {
-                DestinationChip(title: Text("\(services.settings.lastAgent.icon) \(services.settings.lastAgent.name)")) { EmptyView() }
+                DestinationChip(title: Text("\(services.settings.lastAgent.mark.image) \(services.settings.lastAgent.name)")) { EmptyView() }
             }
             .disabled(inFlight)
             .accessibilityLabel("用哪个 Agent：\(services.settings.lastAgent.name)")
@@ -110,9 +110,10 @@ struct NewSessionInput: View {
             }
         } else {
             switch phase {
-            case .failed(let reason): Text(reason).foregroundStyle(palette.failure)
+            case .failed(let failure): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
             case .opening, .claimed: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
-            case .sending(let request): DeliveryStatusLabel(request: request)
+            case .sending(let transit):
+                HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             case .idle: if !services.reachesPiHost { SyncHint(status: services.syncStatus, consequence: "发不到 Mac") }
             }
         }

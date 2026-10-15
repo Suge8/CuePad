@@ -110,7 +110,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     /// 这件事的那一句：在问什么、出错或没送到的原因、在做什么、回复的第一句；说不出时是 nil。
     static func gist(_ item: PiSessionListItem, _ shown: PiShown) -> String? {
         switch shown.status {
-        case .delivery(.failed): item.delivery?.failure
+        case .delivery(.failed(let failure)): failure.text(sync: nil)
         case .delivery, .restart: nil
         default: PiProgress.line(of: item.state)
         }

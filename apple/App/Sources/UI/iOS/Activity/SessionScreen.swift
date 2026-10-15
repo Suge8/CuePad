@@ -33,7 +33,7 @@ struct SessionScreen: View {
     private static let readingWidth: CGFloat = 640
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
-    private var shownEnd: DeliveryRequest? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? []) }
+    private var shownEnd: Speech.Trip? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech) }
 
     var body: some View {
         Group {
@@ -55,12 +55,12 @@ struct SessionScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scrollDismissesKeyboard(.interactively)
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
-        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
+        .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
                         explanation: session.flatMap { PiShown($0).explanation }) {
-            if shownEnd?.isOpen == true {
+            if shownEnd == .sending {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered ?? 0))
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
             }
         } trailing: {
             if let session {
@@ -72,7 +72,7 @@ struct SessionScreen: View {
                     }
                     if session.canEnd {
                         Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
-                            .disabled(shownEnd?.isOpen == true)
+                            .disabled(shownEnd == .sending)
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -87,8 +87,8 @@ struct SessionScreen: View {
             if let session {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
-                    if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(.failure, text: "没能结束：\(reason)", docked: true)
+                    if let failure = shownEnd?.failure, session.state != .known(.ended) {
+                        Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
                     }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {
@@ -96,10 +96,10 @@ struct SessionScreen: View {
                     } else {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
                         PiReplyBar(
-                            session: session, config: digest?.config, compact: !follow.atNewest,
-                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? []),
-                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [], messages: digest?.messages ?? []),
-                            queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? []),
+                            session: session, config: digest?.config(at: services.speech), compact: !follow.atNewest,
+                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [], at: services.speech),
+                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
+                            queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
                             recall: PiChat.lastSaid(digest?.messages ?? [])
                         ) { follow.jumpToNewest() }
                     }
@@ -126,10 +126,10 @@ struct SessionScreen: View {
     }
 
     /// 请会话所在的 Mac 结束它；进度与失败都从发给它的结束请求推出（`shownEnd`）。
-    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
+    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: digest.messages), !digest.fetchingTranscript else { return }
+              PiChat.needsTranscript(session, messages: digest.messages) else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }

@@ -52,8 +52,8 @@ struct ProjectScreen: View {
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
-            try PiSessionList.read(text: "", project: projectID, historyLimit: 0, from: store)
+        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), limit: 0, moment: services.speech), into: $pi, onError: workspace.fail) {
+            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, historyLimit: 0, at: moment, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
@@ -64,7 +64,7 @@ struct ProjectScreen: View {
     @ViewBuilder
     private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
         let data = page.data, lastTarget = data.lastTarget
-        // 任务纸不进懒加载栈：收起时与之同一个事务的滚动在懒加载栈里会被丢掉（`TaskFoldAnchor`）
+        // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
             if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
@@ -108,7 +108,6 @@ struct ProjectScreen: View {
                 }
             }
         }
-        .taskFoldContent()
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
     }
@@ -187,7 +186,7 @@ private struct FocusCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleTasks = 3
-    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
+    /// 没做完的任务（含步骤）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
     /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
     private static let lazyFrom = 20
     /// 收起后纸上留下的那几行淡入多久（同 `Motion.quick`）。
@@ -224,10 +223,11 @@ private struct FocusCard: View {
                 if !roots.isEmpty {
                     Group {
                         SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                        let boundary = data.tasks.rows(of: Array(roots.prefix(Self.visibleTasks))).last?.id
-                        TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
-                            let line = TaskLine(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
-                            if row.id == boundary { line.taskFoldBoundary(anchor) } else { line }
+                        TaskOutline(
+                            tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks),
+                            lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
+                        ) { row in
+                            TaskLine(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
                         }
                     }
                     .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
@@ -304,7 +304,7 @@ private struct FocusCard: View {
         let session = item.state
         // 项目卡里已经是这个项目：不再写所在
         return Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: nil, delivery: item.delivery, rename: item.rename, undelivered: item.undelivered).equatable()
+            PiSessionRow(session: session, project: nil, delivery: item.delivery, rename: item.rename, undelivered: item.undelivered(at: services.speech)).equatable()
                 .padding(.vertical, 6)
                 .frame(minHeight: 44)
                 .contentShape(.rect)

@@ -35,15 +35,16 @@ extension PiShown {
     /// 在跑的不铺：会动的心电线与蓝字已经够醒目，整屏都上色颜色就不再表示"要你看"。
     func wash(_ palette: Palette) -> Color? { needsYou || isUnread ? tint(palette) : nil }
 
-    /// 状态的静止图形（SF Symbols）：没有自绘动效的状态直接画它；在跑、话在路上是自绘的循环动效（`PiStateDot`），
-    /// 这里是减弱动态效果与菜单里的样子。每种轮廓各不相同（缩到 10 点也认得出），要你看的三种是实心，其余是线条。
+    /// 状态的静止图形（SF Symbols），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
+    /// `PiStateGlyph`（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、通知设置）都从这里取。在跑、话在路上在状态标里是
+    /// 自绘的循环动效，这里是减弱动态效果与菜单里的样子。要你看的三种是实心，其余是线条；颜色与里面的字一起分开同为圆的几种。
     var symbol: String {
         switch status {
         case .asking: Waiting.symbol
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: "questionmark.bubble"
-        // 三角：轮廓与等你确认的圆分开
-        case .failed: "exclamationmark.triangle.fill"
+        // 胭脂圆叹号（`Failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开
+        case .failed: Failure.symbol
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
         case .restart: "arrow.clockwise.circle"
         case .delivery: "chevron.up.2"
@@ -52,7 +53,7 @@ extension PiShown {
         case .unread: "bell.fill"
         // 输入光标：轮到你打字
         case .idle: "character.cursor.ibeam"
-        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已有出错以外的四种（等你确认、要重载、未知、已结束），缩小后分不开
+        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（等你确认、出错、没能送达、要重载、未知、已结束），缩小后分不开
         case .resting: "ellipsis"
         case .fresh: "sparkle"
         // 不用空心圈：待办任务的圆圈就是它
@@ -65,7 +66,7 @@ extension PiShown {
 }
 
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：
-/// 颜色 + 不带外框的整体图形——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂三角、没能送达胭脂折回箭头、
+/// 颜色 + 不带外框的整体图形（符号与颜色只取 `PiShown.symbol`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
 /// 在跑晴蓝心电线（一截实色沿波形走）、话在路上晴蓝三层上箭头（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
 /// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、箭头、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
@@ -92,7 +93,8 @@ struct PiStateDot: View {
         guard !reduceMotion else { return .symbol }
         switch shown.status {
         case .working: return .heartbeat
-        case .delivery(let phase) where phase != .failed: return .climb
+        case .delivery(.failed): return .symbol
+        case .delivery: return .climb
         default: return .symbol
         }
     }
@@ -130,4 +132,19 @@ struct PiStateDot: View {
     }
 
     private static let swap = AnyTransition.scale(scale: 0.6).combined(with: .opacity)
+}
+
+/// 状态的静止图形，大小跟着旁边的字（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、气泡上的没能送达）：
+/// 与状态标同一份符号与颜色（`PiShown.symbol`、`tint`），不带动效。读屏跳过，意思由旁边的字说。
+struct PiStateGlyph: View {
+    let status: PiShown.Status
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let shown = PiShown(status: status)
+        Image(systemName: shown.symbol).foregroundStyle(shown.tint(palette)).accessibilityHidden(true)
+    }
+
+    /// 没能送达（会话行的"有话没送到"、气泡上的标记）：样子不随原因变，这里不带原因。
+    static let undelivered = PiStateGlyph(status: .delivery(.failed(.timedOut)))
 }

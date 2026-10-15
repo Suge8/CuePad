@@ -81,7 +81,7 @@ struct SearchPalette: View {
     /// 会话范围的数据（会话列表查询，分页；第一页很轻，卡片范围里也读着，切过去不闪空），选中项跟着结果走。
     private var sessionObservation: SessionObservation {
         SessionObservation(
-            key: SessionKey(text: query.text, pages: sessionPages), data: $sessions,
+            key: SessionKey(text: query.text, pages: sessionPages, moment: services.speech), data: $sessions,
             ids: sessionGroups.flatMap { $0.sessions.map(\.sessionID) }, selection: $sessionSelection)
     }
 
@@ -157,7 +157,7 @@ struct SearchPalette: View {
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
-        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], cueOnDuty: services.liveSessions.cueOnDuty, now: .now)
+        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], cueOnDuty: services.liveSessions.cueOnDuty, now: .now, at: services.speech)
     }
 
     private var results: some View {
@@ -323,6 +323,7 @@ struct SearchPalette: View {
 private struct SessionKey: Equatable {
     var text: String
     var pages: Int
+    var moment: Speech.Moment
 }
 
 private struct SessionObservation: ViewModifier {
@@ -336,7 +337,7 @@ private struct SessionObservation: ViewModifier {
     func body(content: Content) -> some View {
         content
             .observing(services.store, id: key, into: $data, onError: workspace.fail) { [key] store in
-                try SessionSearchData.read(text: key.text, pages: key.pages, from: store)
+                try SessionSearchData.read(text: key.text, pages: key.pages, at: key.moment, from: store)
             }
             .onChange(of: ids) { if selection.map(ids.contains) != true { selection = ids.first } }
     }

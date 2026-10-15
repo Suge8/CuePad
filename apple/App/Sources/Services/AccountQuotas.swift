@@ -64,7 +64,10 @@ extension AppServices {
 
     #if os(macOS)
     /// 此刻有没有可问的：在线的会话（额度视图据此在会话连上时再看一次）。
-    var canRefreshQuota: Bool { !pi.slots.isEmpty }
+    var canRefreshQuota: Bool { quotaSession != nil }
+
+    /// 能问的会话：协议对得上的在线会话（与 `canRefreshQuota` 同一个判定，视图不会在问不了时一出现就走一次刷新）。
+    private var quotaSession: PiBridge.Slot? { pi.slots.first { $0.session.state != .incompatible } }
 
     /// 手机发来的刷新请求（投送方式 `quota`）：与本机视图同一套节流，失败照常写回原因（手机不提示）。
     func refreshQuotaForRequest() async throws {
@@ -74,7 +77,7 @@ extension AppServices {
 
     /// 经在线会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件），查到的随桥的 `.quota` 写进库。
     private func refreshQuota() async throws -> Bool {
-        guard let session = pi.slots.first(where: { $0.session.state != .incompatible }) else { return false }
+        guard let session = quotaSession else { return false }
         try await pi.refreshQuota(in: session.id)
         return true
     }
