@@ -75,7 +75,7 @@ final class RecordingHost: AgentRuntime {
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
         ext.onCommand = { [weak ext] _, command in
-            if command["t"] as? String == "end" { DispatchQueue.global().async { ext?.close(bye: "quit") } }
+            if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true, "delivered": "immediate"]
         }
         try bridge.start()
