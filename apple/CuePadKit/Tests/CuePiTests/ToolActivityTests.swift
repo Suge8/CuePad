@@ -57,8 +57,8 @@ struct ToolActivityTests {
     @Test func aRoundsToolsAreClassifiedCountedAndListedWithoutOutput() throws {
         let tools = try #require(try index(try busyRound()).messages.last?.tools)
 
-        // 同一个文件读两次、改两次只算一个；失败的与成功的一样按类计数（摘要与清单同一口径）
-        #expect(tools.reads == 2 && tools.edits == 2 && tools.commands == 2 && tools.searches == 1 && tools.others == 1 && tools.total == tools.items.count)
+        // 同一个文件读两次、改两次只算一步；失败的与成功的一样计数（摘要与清单同一口径）
+        #expect(tools.steps == 8 && tools.steps == tools.items.count)
         #expect(tools.items.map(\.kind) == [.read, .read, .edit, .edit, .command, .command, .search, .other])
         // 路径写成相对工作目录的；命令取第一个非空行；其他工具写工具名
         #expect(tools.items.map(\.target) == ["Sources/a.swift", "Sources/b.swift", "Sources/a.swift", "NOTES.md", "swift test --filter Foo", "false", "TODO", "subagents"])
@@ -77,7 +77,7 @@ struct ToolActivityTests {
             Self.calls("t1", "u1", [["type": "toolCall", "id": "c1", "name": "bash", "arguments": "ls"], Self.call("c2", "read", ["path": 7])], at: 2),
             SessionFile.assistant("a1", "t1", text: "读完了", at: 3))
         let update = try index(f)
-        #expect(update.messages.last?.text == "读完了" && update.messages.last?.tools?.commands == 1 && update.messages.last?.tools?.reads == 1)
+        #expect(update.messages.last?.text == "读完了" && update.messages.last?.tools?.steps == 2)
     }
 
     /// Pi 以后换了工具结果行的键序（isError 提前、toolCallId 挪到长输出之后、role 不在行首）也读得对：快速路径认不出就完整解码。
@@ -93,7 +93,7 @@ struct ToolActivityTests {
             reordered("r1", "t1", call: "c1", failed: false, at: 3), reordered("r2", "r1", call: "c2", failed: true, at: 3),
             SessionFile.assistant("a1", "r2", text: "好", at: 4))
         let tools = try #require(try index(f).messages.last?.tools)
-        #expect(tools.commands == 2 && tools.items.map(\.failed) == [false, true])
+        #expect(tools.steps == 2 && tools.items.map(\.failed) == [false, true])
     }
 
 }

@@ -7,7 +7,8 @@ import CuePi
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`），它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 每一轮的经过在那一轮写下的那一行上方（`RoundProcess`，同会话页），连着的动态折成一行灰字（`CueNotes`），
+/// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
@@ -194,7 +195,8 @@ private struct CueRenewal: View {
     }
 }
 
-/// Cue 页对话的末尾：它在做事时一行进展（`LiveLine`，同会话页）。Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
+/// Cue 页对话的末尾：它在做事时是这一轮的经过（`RoundProcess`，同会话页：做完的几步收成一行，正在跑的那一步实时展开）。
+/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话，上方是这一轮的经过
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
 /// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
@@ -209,7 +211,7 @@ private struct CueEnding: View {
         let draft = services.cue.keeper?.speech.draft
         let landed = draft?.landed(newestReply: newestSaid) ?? false
         if let draft, !landed {
-            DraftReply(text: draft.text) { EmptyView() }
+            DraftReply(text: draft.text) { RoundProcess(tools: workspace.cue.digest.state?.pendingTools, ending: .speaking) }
         } else if !landed {
             live
         }
@@ -221,7 +223,9 @@ private struct CueEnding: View {
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
         if let shown = presence.shown, let progress = presence.progress {
-            LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+            let step = presence.isUsingTool ? RoundProcess.symbol(.other) : nil
+            RoundProcess(tools: workspace.cue.digest.state?.pendingTools, ending: .live(shown, doing: progress, step: step))
+                .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
 }

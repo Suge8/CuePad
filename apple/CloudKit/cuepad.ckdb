@@ -201,6 +201,7 @@ DEFINE SCHEMA
         createdAt     INT64,
         modifiedAt    INT64,
         notify        STRING QUERYABLE,
+        tools         ENCRYPTED STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -237,6 +238,7 @@ DEFINE SCHEMA
         state         STRING,
         detail        ENCRYPTED STRING,
         modifiedAt    INT64,
+        pendingTools  ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

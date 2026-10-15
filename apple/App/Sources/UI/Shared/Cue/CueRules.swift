@@ -43,6 +43,9 @@ nonisolated enum CuePresence: Equatable, Sendable {
 
     var isUnreachable: Bool { if case .unreachable = self { true } else { false } }
 
+    /// 在用工具（不是在想）：对话末尾单列正在跑的那一步。
+    var isUsingTool: Bool { if case .working(.tool, _) = self { true } else { false } }
+
     /// 与 Agent 会话同一套的状态：话在路上、在做事；其余没有。
     var shown: PiShown? {
         switch self {
