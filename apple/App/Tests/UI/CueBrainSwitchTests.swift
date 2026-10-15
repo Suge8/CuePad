@@ -46,7 +46,7 @@ struct CueBrainSwitchTests {
         let rig = try await CueHostTests.Rig()
         try await say("暗号是 PAPAYA", to: rig, expecting: "收到：暗号是 PAPAYA")
 
-        try await rig.services.updateCue {  // 模型菜单里 Codex 那组的"默认"
+        try await rig.services.updateCue {  // 模型菜单里 Codex 那组标着默认的那项
             $0.runtime = .known(.codex)
             $0.model = nil
         }

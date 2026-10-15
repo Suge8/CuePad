@@ -352,7 +352,7 @@ private struct FooterPage: View {
 /// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
 /// 同一个顺序（`liveRows`，要你注意的在前），全部列出（两个以上需要 /reload 的合成一行，`PiNowRow`，点开再列）；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。
-/// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（有接入了的 Agent 时）。
+/// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
 /// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
 private struct PiSection: View {
     let recorded: [PiSessionState]
@@ -382,7 +382,7 @@ private struct PiSection: View {
         if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") {
-                    if !services.launchableAgents.isEmpty { NewSessionButton(showing: $startingSession) }
+                    NewSessionButton(showing: $startingSession)
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isHeader)

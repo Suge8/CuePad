@@ -21,8 +21,6 @@ extension DebugScene {
             _ = try await store.updateCueProfile { profile in
                 profile.hostID = "demo-mac"
                 profile.enabledAt = presence == "disabled" ? nil : .now
-                // 演示会话的模型之一（Cue 页输入框的模型胶囊有名字、菜单里有打勾的）
-                profile.model = "anthropic/claude-opus-5-5-20260901"
             }
             if presence != "asleep" { try await store.recordMacPresence(host: "demo-mac") { true } }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
