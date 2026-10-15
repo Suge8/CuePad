@@ -110,8 +110,9 @@ struct CodexHome {
             """).write(to: config, atomically: true, encoding: .utf8)
     }
 
-    /// 删掉临时目录（含复制的凭据）。
+    /// 停掉在里面跑的进程（终端界面拉起的常驻服务与它的升级进程、它们起的 git，见 `TestProcesses`），再删掉临时目录（含复制的凭据）。
     func remove() {
+        TestProcesses.stop(under: root)
         try? FileManager.default.removeItem(at: root)
     }
 
@@ -217,25 +218,16 @@ final class CodexRig {
         (self.codex, self.hooks, self.bridge, self.runtime, self.presence) = (codex, hooks, bridge, runtime, presence)
     }
 
-    /// 关掉托管的进程；终端测试起的常驻服务与它的升级进程按登记的进程号停掉，删掉它在共用的 /tmp/codex-daemon-<uid> 里留下的
-    /// socket 与锁文件（控制 socket 是指向那里的符号链接）；删掉临时目录（含凭据）。
+    /// 关掉托管的进程；停掉终端测试起的常驻服务等、删掉临时目录（含凭据，`CodexHome.remove`），再删常驻服务在共用的
+    /// /tmp/codex-daemon-<uid> 里留下的 socket 与锁文件（控制 socket 是指向那里的符号链接）。
     func stop() async {
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
-        // 先停升级进程：它会把停掉的常驻服务再拉起来
-        for file in ["daemon-updater.pid", "daemon.pid"] {
-            let url = codex.home.appending(path: "app-server-daemon/\(file)")
-            guard let data = try? Data(contentsOf: url), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let pid = (object["pid"] as? NSNumber)?.int32Value else { continue }
-            // 常驻服务收到 SIGTERM 后要收尾一会儿，等它真的退出再删目录
-            guard kill(pid, SIGTERM) == 0 else { continue }
-            try? await eventually("进程 \(pid) 退出") { kill(pid, 0) != 0 }
-        }
-        for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
         codex.remove()
+        for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
     }
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
