@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 没装某个 Agent（或版本不对）时的说明（设置与首次接入面板里那一行的"安装方法"）：一行可复制的官方安装命令
+/// 没装某个 Agent（或版本不对）时的说明（设置里那一行的"安装方法"）：一行可复制的官方安装命令
 /// （Pi 版本太低时是它自带的升级命令；OpenCode 是 v1 时是 v2 的安装命令）、官网。命令取自各家官网的安装页。
 struct AgentSetupGuide: View {
     let kind: AgentKind

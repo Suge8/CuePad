@@ -12,7 +12,7 @@ import SwiftUI
 /// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
 /// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
-/// 手机空着没聚焦时一行，在线会话聚焦就展开（已结束的没有工具排，打了字再长），在看历史时收成短胶囊（停止钮在时不收）。
+/// 手机空着没聚焦时一行，有工具排的聚焦就展开，在看历史时收成短胶囊（停止钮在时不收）。
 /// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
     let session: PiSessionState
@@ -50,9 +50,9 @@ struct PiReplyBar: View {
         nonmutating set { services.settings.setReplyDraft(newValue, for: session.id) }
     }
 
-    /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。
+    /// 工具排（模型与思考强度）：会话报过可换的模型就有，已结束的也有——换了由 Mac 在后台唤醒它再换。
     private var hasTools: Bool {
-        config != nil && session.capabilities.contains(.model) && session.state != .known(.ended) && !models.isEmpty
+        config != nil && session.capabilities.contains(.model) && !models.isEmpty
     }
 
     private var form: ComposerForm {

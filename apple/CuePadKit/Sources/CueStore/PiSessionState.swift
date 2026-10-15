@@ -137,7 +137,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var context: PiContextUsage?
   /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
   public var agent: Open<AgentKind>
-  /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；进程不在了的会话没有。
+  /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；会话结束后也留着。
   public var catalogID: UUID?
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。

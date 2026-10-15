@@ -137,7 +137,7 @@ struct PiConfigControls<Trailing: View>: View {
 
 /// 会话页回复框（与手机上交给 Agent 的输入框）里的模型与思考强度：可选的是会话上报的模型（它的目录记录），按提供方分组（`PiModelLabel.groups`）；
 /// 换了写一条配置请求给会话所在的 Mac，显示值由会话记录与配置请求推出（`SessionDigest.config`：换了之后立即显示新值、呼吸到送达，没换成回到原值）。
-/// 思考强度的档是当前模型支持的；右边是上下文用量。只给在线会话（已结束的不为换模型去唤醒 Pi），由调用方决定放不放。
+/// 思考强度的档是当前模型支持的；右边是上下文用量。已结束的会话也能换（Mac 在后台唤醒它再换），放不放由调用方决定。
 struct SessionConfigControls: View {
     let session: PiSessionState
     /// 可以换成的模型（`AgentCatalog.models`）。

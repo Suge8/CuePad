@@ -13,7 +13,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PiPreview] = []
     /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
-    /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录）；进程不在了的会话没有。
+    /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录；会话结束后也在，从没报过的会话没有）。
     var catalog: AgentCatalog?
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。

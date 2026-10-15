@@ -65,7 +65,7 @@ final class Workspace {
     var searching = false
     /// 右上角的任务面板开着（`TasksPanel`）。
     var showsTasks = false
-    /// 接入 Agent 的面板（`AgentSetupPanel`；首次启动由 `AppDelegate` 置起，主窗口弹出）。
+    /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
     var showsAgentSetup = false
     #endif
     var notice: Notice?

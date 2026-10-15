@@ -5,7 +5,7 @@ import Foundation
 import Observation
 
 /// CuePad 接入各个 Agent 的状态与开关（`AgentIntegration` 之上唯一的一份，设置、首次接入与侧栏都读它）。
-/// 装只在用户点了之后（首次接入面板、设置的开关、侧栏的"接入 Pi"）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
+/// 装只在用户点了之后（首次接入面板的"接入"、设置的开关、侧栏的"接入"）；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
 /// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问——App 启动时就会 `refresh()`。
 /// 隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
@@ -51,6 +51,28 @@ final class AgentIntegrations {
             for await (kind, status) in group { found[kind] = status }
             return found
         }
+    }
+
+    /// 接入面板列出的几家：这台 Mac 上检测到、CuePad 能写、还没接入的（按 `AgentKind` 的顺序）。
+    var connectable: [AgentKind] {
+        AgentKind.allCases.filter { kind in
+            guard let status = statuses[kind] else { return false }
+            return isWritable(kind) && status.isAvailable && status.files == .missing
+        }
+    }
+
+    /// 首次打开该不该请你接入：全部检测完、一家都没接入过、有能接的。
+    var needsSetup: Bool {
+        statuses.count == AgentKind.allCases.count && !statuses.values.contains(where: \.isConnected) && !connectable.isEmpty
+    }
+
+    /// 一键接入这几家（接入面板的"接入"，同设置里逐个打开开关）：逐家装，返回没装上的与原因。
+    func install(_ kinds: [AgentKind]) async -> [AgentKind: String] {
+        var failures: [AgentKind: String] = [:]
+        for kind in kinds {
+            do { try await install(kind) } catch { failures[kind] = error.localizedDescription }
+        }
+        return failures
     }
 
     /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态。能开新会话的几家各起一个进程问，慢；

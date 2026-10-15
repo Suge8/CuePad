@@ -54,7 +54,6 @@ extension CueStore {
   /// 你结束了这个会话：记为已结束、进历史（不算被打断）；已结束、被打断的也改记为已结束。
   func endPiState(host: String, sessionID: String, at now: Date) throws {
     try write {
-      try dropCatalogModels(where: "id = ? AND state != ?", [PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue], at: now)
       try db.run(
         "UPDATE piSessionStates SET state = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
         [PiWorkState.ended.rawValue, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue])
@@ -100,7 +99,6 @@ extension CueStore {
         WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)' ELSE '\(PiWorkState.ended.rawValue)' END
       """
     let kept = "((state = '\(PiWorkState.settled.rawValue)' AND NOT \(Self.hadWork)) OR \(failed))"
-    try dropCatalogModels(where: "state NOT IN (\(finals)) AND \(condition)", arguments, at: now)
     try db.run(
       """
       UPDATE piSessionStates SET stateSince = CASE WHEN \(kept) THEN stateSince ELSE ? END,
@@ -109,8 +107,8 @@ extension CueStore {
       """, [now, Date.stamp] + arguments)
   }
 
-  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理，还有目录里的可选模型（`dropCatalogModels`）。
-  /// 它报过的斜杠命令留着：发话会在后台唤醒它，回复框认命令只看这份清单（`PiSlash.line`），清掉了 "/default" 就会当普通的话发给模型。
+  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理。它报过的模型与命令（目录记录）留着：发话、换模型会在后台唤醒它，
+  /// 回复框照这份列模型、认命令（`PiSlash.line`）。
   private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。

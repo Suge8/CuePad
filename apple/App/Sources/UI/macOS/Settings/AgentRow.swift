@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 设置与首次接入面板里的 Agent 那几行（`AgentRow`），两处同一份。
+/// 设置里的 Agent 那几行（`AgentRow`）。
 struct AgentRows: View {
     var body: some View {
         ForEach(AgentKind.allCases) { AgentRow(kind: $0) }
@@ -69,7 +69,7 @@ struct AgentRow: View {
     private var help: String {
         let files = services.agents.writtenFiles(kind).joined(separator: "、")
         return [
-            "接入后，在终端里开的 \(kind.name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。",
+            "接入后，在\(kind == .pi ? "终端" : "终端和桌面版")里开的 \(kind.name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。",
             kind == .pi ? "CuePad 在后台开 Pi 会话也要先接入。" : "不接入也能让 CuePad 在后台开 \(kind.name) 会话。",
             kind.limits,
             "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。",
@@ -99,7 +99,7 @@ struct AgentRow: View {
     }
 }
 
-/// 设置与首次接入面板里一个 Agent 那一行的状态（`AgentRow`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
+/// 设置与接入面板里一个 Agent 那一行的状态（`AgentRow`、`AgentSetupPanel`）：接入了的四家同一种写法"已接入 · 名字 版本"，报不出版本的（桌面版）只写"已接入"。
 enum AgentLine {
     static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, "检测中…") }

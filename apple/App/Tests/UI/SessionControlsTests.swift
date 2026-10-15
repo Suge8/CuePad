@@ -56,6 +56,18 @@ struct SessionControlsTests {
         #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
     }
 
+    @Test func 会话结束了_照样能换模型_换了立即显示新值() async throws {
+        let atlas = try await session()
+        try await PiStateRecorder(store: store, hostID: "mac-a").end(sessionID: "atlas")
+        let ended = try #require(try await store.allPiSessionStates().first)
+        #expect(ended.state == .known(.ended))
+        #expect(try await SessionDigest.read(ended.id, sessionID: ended.sessionID, from: store).catalog?.models == [opus, luna])
+
+        _ = try await store.requestConfig(PiConfig(model: luna.key), to: target(atlas), on: atlas.hostID)
+
+        #expect(try await shown(ended).model == luna)
+    }
+
     @Test func 没换成_回到会话当前的值并写原因() async throws {
         let atlas = try await session()
         let request = try await store.requestConfig(PiConfig(thinking: .high), to: target(atlas), on: atlas.hostID)

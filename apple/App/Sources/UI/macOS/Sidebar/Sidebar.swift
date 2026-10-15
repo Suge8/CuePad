@@ -475,7 +475,7 @@ private struct AllSessionsRow: View {
     }
 }
 
-/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，各家一行开关与安装方法）。
+/// 接入 Agent 的小卡：一个图标、一句话说接入了双向能做什么，右边"接入"打开接入面板（`AgentSetupPanel`，检测到还没接入的几家，一键接入）。
 /// 没有"不用了"：没接入时本机的会话在这一区里看不到，这张卡就是这一区如实的空态。
 private struct AgentConnectCard: View {
     @Environment(Workspace.self) private var workspace
@@ -488,7 +488,7 @@ private struct AgentConnectCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("接入 Agent").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text("终端里的会话也看得到、能发话作答").font(Typography.meta).foregroundStyle(palette.ink3)
+                Text("终端和桌面版里的会话与历史也看得到").font(Typography.meta).foregroundStyle(palette.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
@@ -501,7 +501,7 @@ private struct AgentConnectCard: View {
         }
         .padding(10)
         .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端里开的会话也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
+        .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端和桌面版里开的会话与历史也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
         .transition(.opacity)
     }
 }

@@ -175,16 +175,21 @@ final class TestApp {
     /// 假的 Pi 还像桥扩展的探测模式那样报出模型（登录了），所以这台 Mac 上能用它（同步表 macAgents）；其余几家问不出模型。
     /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
     func connect(_ kind: AgentKind, version: String = "2.1.0") async throws {
+        try install(kind, version: version)
+        if kind == .codex { try installCodexTrustedLikeCodex() }
+        else { try await services.agents.install(kind) }
+        await services.agents.detect(kind)
+        #expect(services.agents.status(kind)?.files == .current)
+    }
+
+    /// 这台 Mac 上装了这家 Agent（还没接入）：放一个只报版本的假可执行文件，Pi 的还能报出模型。
+    func install(_ kind: AgentKind, version: String = "2.1.0") throws {
         let bin = directory.appending(path: "bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let executable = bin.appending(path: kind.command)
         let probe = kind == .pi ? "[ -n \"$CUEPAD_PROBE\" ] && { echo '\(Self.piProbeLine)'; exit 0; }\n" : ""
         try "#!/bin/sh\n\(probe)echo '\(version)'\n".write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
-        if kind == .codex { try installCodexTrustedLikeCodex() }
-        else { try await services.agents.install(kind) }
-        await services.agents.detect(kind)
-        #expect(services.agents.status(kind)?.files == .current)
     }
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
