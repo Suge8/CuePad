@@ -69,7 +69,7 @@ struct AgentRow: View {
     private var help: String {
         let files = services.agents.writtenFiles(kind).joined(separator: "、")
         return [
-            "接入后，在终端里开的 \(kind.name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。",
+            "接入后，在\(kind == .pi ? "终端" : "终端和桌面版")里开的 \(kind.name) 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。",
             kind == .pi ? "CuePad 在后台开 Pi 会话也要先接入。" : "不接入也能让 CuePad 在后台开 \(kind.name) 会话。",
             kind.limits,
             "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。",
