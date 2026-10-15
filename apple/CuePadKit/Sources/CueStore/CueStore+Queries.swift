@@ -206,19 +206,17 @@ extension CueStore {
     }
   }
 
-  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环里的（远端并发、还没收敛）接在最后。
+  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层。
   private static func preorder(_ tasks: [Card]) -> [Card] {
     let ids = Set(tasks.map(\.id))
     var children: [UUID: [Card]] = [:]
     for task in tasks { if let parent = task.parentID, ids.contains(parent) { children[parent, default: []].append(task) } }
-    var ordered: [Card] = [], seen: Set<UUID> = []
+    var ordered: [Card] = []
     func visit(_ task: Card) {
-      guard seen.insert(task.id).inserted else { return }
       ordered.append(task)
       for child in children[task.id] ?? [] { visit(child) }
     }
     for task in tasks where task.parentID.map({ !ids.contains($0) }) ?? true { visit(task) }
-    for task in tasks { visit(task) }
     return ordered
   }
 
