@@ -221,7 +221,6 @@ struct CardTile: View {
         .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: "设为任务", makeTask)
-        .perfMark("content")
     }
 
     private func makeTask() {

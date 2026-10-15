@@ -74,7 +74,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 
 预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数至少跑两遍取中位数。
 
-Mac 的 `-CuePadInteractOnly 项,项` 只量列出的几项，前后对比省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）。
+`-CuePadInteractOnly 项,项`（两端，跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）。iOS 的长文打字（输入框里已有一大段时再敲一个字）配 `-CuePadPasteFile <路径>` 换成真的粘贴内容。
 
 ## 同步测量
 
