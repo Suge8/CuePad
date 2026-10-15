@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 由已检测出的接入状态（`AgentIntegration.status(of:)`）得出这台 Mac 上各家能不能用（同步表 macAgents 里这台的那条）：
-/// 能开新会话（`AgentStatus.canLaunch`）的几家问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出才算能用；
+/// 开得出会话的几家（装着、找得到命令行程序；Pi 还要接入，见 `reason`）问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出才算能用；
 /// 其余与问不出的给出原因（`MacAgentProblem`，接在 Agent 名后面读，用户能照着办）。只读，不改任何一家的配置。
 /// 每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出，各家并发、各自至多 `AgentTimeouts.probe`：
 /// - Pi：RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
@@ -15,7 +15,7 @@ import Foundation
 /// - Claude Code：stream-json 不存会话、关掉钩子（否则 CuePad 自己的钩子把它报成一个会话）、不起 MCP 服务，控制请求 `initialize` 给模型清单，
 ///   其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。清单去掉 `default` 那项
 ///   （它解析到的是推荐的模型，不一定是配置的），默认落到解析出同一个模型的第一项（`opus` 这样的别名排在完整 id 前面），对不上时只有 id。
-/// - OpenCode：没有模型清单，能开新会话就算能用。
+/// - OpenCode：没有模型清单，找得到命令行程序就算能用。
 /// 起的是检测时挑中的那个可执行文件（`AgentStatus.executable`，与开会话、起大脑同一个）。
 struct AgentProbe {
     let paths: AgentPaths
@@ -45,8 +45,8 @@ struct AgentProbe {
 
     private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
         if let reason = Self.reason(kind, status) { return .unusable(reason) }
-        if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         guard let executable = status.executable else { return .unusable("没找到它的命令行程序") }
+        if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
         do {
             let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
                 switch kind {
@@ -66,15 +66,17 @@ struct AgentProbe {
     /// 原因里错误原话的字符数上限（含省略号）：原因跟着同步记录走，界面只显示一行。
     private static let messageLimit = 60
 
-    /// 不能开新会话的原因；能开为 nil。
+    /// 不能开新会话的原因；能开为 nil。CuePad 写给 Claude Code、Codex、OpenCode 的文件（技能、钩子）只管终端里开的会话与历史，
+    /// 后台开的会话由 CuePad 直接托管（OpenCode 连它的服务），没接入照样开得出；托管的 Pi 经桥扩展上报，没接入就开不出来。
     private static func reason(_ kind: AgentKind, _ status: AgentStatus) -> String? {
         switch status.presence {
         case .notFound: return "没装"
         case .tooOld(let version): return "版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）"
         case .found: break
         }
+        guard kind == .pi else { return nil }
         switch status.files {
-        case .missing: return "还没接入 CuePad"
+        case .missing: return "还没接入 CuePad（在设置里打开）"
         case .foreign(let path): return "接不上：\(path) 是别人的同名文件"
         case .current, .outdated: return nil
         }

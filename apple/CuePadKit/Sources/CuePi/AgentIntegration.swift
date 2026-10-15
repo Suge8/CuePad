@@ -73,8 +73,6 @@ public struct AgentStatus: Sendable, Equatable {
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
     /// CuePad 的文件在（最新或待升级）：接入了。
     public var isConnected: Bool { files == .current || files == .outdated }
-    /// 能开新会话：装着、也接入了。开新会话与 Cue 可选的 Agent 都按这一条。
-    public var canLaunch: Bool { isAvailable && isConnected }
 }
 
 public enum AgentInstallError: Error, Equatable {
