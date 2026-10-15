@@ -6,7 +6,7 @@ import Foundation
 
 /// 这台 Mac 上的 Agent 能不能用、各家的模型（同步表 macAgents）只经这里写：按检测出的接入状态问（`AgentIntegrations.probe`），
 /// 内容变了才写，写了立即上传；各处读库，这里不留结果。
-/// 一次问完再问下一次，后问的不会被先问的覆盖；还没开始的那一次，期间要问的都并进去。
+/// 一次问完再问下一次，后问的不会被先问的覆盖。不合并请求：触发很少（状态变了、醒来、启用），问一次最慢约 2 秒。
 /// 什么时候问：各家接入状态都检测出来、状态变了（`keep`），系统唤醒时（先重新检测各家：睡着时可能装、换、卸了 Agent，登录或换了模型配置），
 /// 以及 Cue 启用前（`record`：等这一次写完再按库里的判断，刚启动还没问完时启用也不会读到旧的或空的）。
 /// 一次问用的状态记着（`probed`）：这次自己重新检测引起的状态变化不再触发一次。
@@ -16,11 +16,8 @@ final class MacAgentsRecorder {
     private let sync: (any SyncControlling)?
     private let host: String
     private let agents: AgentIntegrations
-    /// 最近排上的那一次，与它开始问了没有
+    /// 最近排上的那一次
     private var latest: Task<MacAgents, any Error>?
-    private var latestStarted = true
-    /// 还没开始的那一次要不要先重新检测（并进来的有一个要就要）
-    private var pendingRedetect = false
     /// 最近一次问用的接入状态
     private var probed: [AgentKind: AgentStatus]?
 
@@ -35,16 +32,10 @@ final class MacAgentsRecorder {
     /// 还没检测全的也先检测。
     @discardableResult
     func record(redetecting: Bool = false) async throws -> MacAgents {
-        pendingRedetect = pendingRedetect || redetecting
-        if let latest, !latestStarted { return try await latest.value }
         let before = latest
-        latestStarted = false
         let round = Task { [self] in
             _ = await before?.result
-            latestStarted = true
-            let redetect = pendingRedetect || agents.statuses.count < AgentKind.allCases.count
-            pendingRedetect = false
-            if redetect { await agents.redetect() }
+            if redetecting || agents.statuses.count < AgentKind.allCases.count { await agents.redetect() }
             probed = agents.statuses
             let found = await agents.probe()
             if let id = try await store.recordMacAgents(host: host, found.agents, problems: found.problems) { await sync?.upload(id) }
