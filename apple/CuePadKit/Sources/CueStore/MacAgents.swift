@@ -28,7 +28,7 @@ public struct MacAgents: Equatable, Sendable {
 
   /// 一家都不能用时为什么（"Pi 没登录 · Codex 没装"）；还没有这台 Mac 写的记录时说还没查过。
   public var whyNone: String {
-    problems.isEmpty ? "还没查过它上面的 Agent" : problems.map { "\($0.kind.name) \($0.reason)" }.joined(separator: " · ")
+    problems.isEmpty ? "还没查过有哪些 Agent 能用" : problems.map { "\($0.kind.name) \($0.reason)" }.joined(separator: " · ")
   }
 
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-agents/\(host)") }
