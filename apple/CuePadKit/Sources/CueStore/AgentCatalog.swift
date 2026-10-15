@@ -4,7 +4,8 @@ import Foundation
 /// 取值取决于的东西不止 Mac、Agent 与工作目录（Pi 的命令含工作目录 `.pi/` 下的技能、提示词模板与扩展，模型范围来自项目设置的
 /// `enabledModels`，也来自单个进程的 `--models`，当前模型不在范围内时还把它列上），所以按内容定 id：报的一样的会话共用一条，
 /// 不一样的各有一条，谁也不覆盖谁。一条写下就不再改；会话报的变了就指向另一条。不随会话状态的每次变化上传（模型清单可达几十 KB）。
-/// 没有会话再指向它时由写它的 Mac 删掉（`CueStore.dropUnusedCatalogs`）。
+/// 会话结束、进程不在了也留着（发话、换模型会在后台唤醒它，回复框照这份列模型与命令）；没有会话记录再指向它时由写它的 Mac 删掉
+/// （`CueStore.dropUnusedCatalogs`）。
 public struct AgentCatalog: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 写它的那台 Mac。
@@ -48,19 +49,6 @@ extension CueStore {
   /// 写下这一份；已有（id 即内容）就不写（不触发同步）。
   func writeCatalog(_ catalog: AgentCatalog) throws {
     _ = try insert(catalog, ignoringExisting: true)
-  }
-
-  /// 进程不在了的会话（`condition` 选出的）不再能换模型、命令还认：指向换成只有命令的那一份（没有命令就不指向），
-  /// 原来那份没人用了由 `dropUnusedCatalogs` 回收。
-  func dropCatalogModels(where condition: String, _ arguments: [any SQLBindable], at now: Date) throws {
-    let pointed = try db.query(
-      "SELECT DISTINCT catalogID FROM piSessionStates WHERE catalogID IS NOT NULL AND \(condition)", arguments) { $0.uuid(0) }
-    for id in pointed {
-      guard let full = try agentCatalog(id), !full.models.isEmpty else { continue }
-      let kept = full.commands.isEmpty ? nil : AgentCatalog(host: full.hostID, models: [], commands: full.commands, at: now)
-      if let kept { try writeCatalog(kept) }
-      try db.run("UPDATE piSessionStates SET catalogID = ? WHERE catalogID = ? AND \(condition)", [kept?.id, id] + arguments)
-    }
   }
 
   /// 删掉这台 Mac 写的、已没有会话记录指向的目录记录（同步删除）。只动本机的：别的 Mac 的会话记录可能还在路上。

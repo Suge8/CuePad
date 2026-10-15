@@ -164,7 +164,7 @@ import Testing
   }
 
   /// 三百个模型的清单：报的一样的会话共用一份，状态变化不再带着它上传；同一目录里报的不一样的（如 `--models` 限定了范围）各看各的；
-  /// 会话的进程都没了，这一份也删掉。
+  /// 会话结束了还留着（已结束的也能换模型），会话记录都没了才删掉。
   @Test func sessionsReportingTheSameModelListShareOneThatStateChangesDoNotResend() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
@@ -191,6 +191,11 @@ import Testing
 
     try await recorder.end(sessionID: "s1")
     try await recorder.end(sessionID: "s2")
+    try await cloud.exchange()
+    #expect(try await phone.store.agentCatalog(shared)?.models.count == 300)
+
+    try await recorder.exited(sessionID: "s1", spoke: false)
+    try await recorder.exited(sessionID: "s2", spoke: false)
     try await cloud.exchange()
     #expect(try await phone.store.agentCatalog(shared) == nil)
   }
