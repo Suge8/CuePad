@@ -32,16 +32,6 @@ extension CueStore {
     return request
   }
 
-  /// 说的话或答案送到了会话，它来了新活：带着任务里的卡的，那张卡所在的叶子回到进行中；其余在会话没有没做完的叶子绑着时，
-  /// 绑着它、最近完成的那个叶子回到进行中（`reopen`）。没送到的什么都不变。必须在写事务内、提示词用掉之前调用（之后卡已不在）。
-  private func reopenWork(on session: String, card: UUID?) throws {
-    if let card, let leaf = try leaf(holding: card) { return try reopen([leaf]) }
-    let bound = try select(
-      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [session], orderBy: "completedAt DESC, id")
-    guard let latest = bound.first, bound.allSatisfy({ $0.completedAt != nil }) else { return }
-    try reopen([latest.id])
-  }
-
   /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。
   private func leaf(holding card: UUID) throws -> UUID? {
     guard let found = try link(of: card) else { return nil }
@@ -216,7 +206,7 @@ extension CueStore {
 
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败；Agent 收下的话把方式改写成它实际收下的（`accepted`）。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
-  /// 发给会话（或开新会话）成功时，在同一个事务里让会话做的已完成的事回到进行中（`reopenWork`），再把它带着的提示词用掉（`consumePrompt`）。
+  /// 发给会话（或开新会话）成功时，在同一个事务里把它带着的提示词用掉（`consumePrompt`）。任务的状态不因说话而变。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let (status, detail, mode): (DeliveryStatus, String?, DeliveryMode?) =
       switch outcome {
@@ -232,11 +222,6 @@ extension CueStore {
           WHERE id = ? AND status IN ('pending', 'executing')
           """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
         guard status == .succeeded, db.changes > 0 else { return [] }
-        if let request = try find(DeliveryRequest.self, id), request.mode.known.map(DeliveryMode.toSession.contains) == true,
-          let session = request.target.ref
-        {
-          try reopenWork(on: session, card: request.cardID)
-        }
         return try reclaimAttachments(consumePrompt(deliveredBy: id))
       }
     }

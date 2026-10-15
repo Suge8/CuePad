@@ -274,8 +274,8 @@ import Testing
   }
 
   /// 带选项的"等你"只给收不回的那几类事（`CueAsk`），选项由 CuePad 给：Cue 自拟的确认（"照这个做吗"）发不出去。
-  /// 用户选"以后推送都不用问"：记一条他的、一直记着的规矩（只管这个项目）；之后 Cue 再为这个项目问推送被拒，叫它直接做，
-  /// 别的项目照问；他忘掉那条规矩又会问。
+  /// 用户选"以后推送都不用问"：允许清单记上这个项目的推送；之后 Cue 再为这个项目问推送被拒，叫它直接做，
+  /// 别的项目照问；他撤销那一项又会问。他对 Cue 说"以后删除都不用问"，Cue 用 memory allow 记进清单，规矩那一类放不进去。
   @Test(.timeLimit(.minutes(1))) func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
@@ -292,10 +292,11 @@ import Testing
       let reply = try await server.call("tell", ["text": "改好了，要推送到 origin/main 吗？", "ask": "push", "task": task.id.uuidString])
       let asked = try #require((reply["message"] as? String).flatMap(UUID.init(uuidString:)))
       let question = try #require(try await store.cueMessagesWaitingForYou().first)
-      #expect(question.id == asked && question.choices == ["允许一次", "以后推送都不用问", "拒绝"])
+      #expect(question.id == asked && question.choices == ["允许一次", "以后推送都不用问"])
 
-      let rule = try #require(try await store.endCueQuestion(asked, .answered("以后推送都不用问")))
-      #expect(rule.text == "以后推送都不用问（项目「演示」）" && rule.pinned && rule.source == .known(.you))
+      #expect(try await store.endCueQuestion(asked, .answered("以后推送都不用问")))
+      #expect(try await store.cueProfile()?.allows == [CueAllow(.push, project: demo.id)])
+      #expect(try await store.cueMemory().lines.isEmpty)
       let again = try await server.request(
         "tools/call", ["name": "tell", "arguments": ["text": "又改了一处，推送吗？", "ask": "push", "task": task.id.uuidString]])
       #expect(again["isError"] as? Bool == true)
@@ -303,9 +304,17 @@ import Testing
       #expect(try await store.cueMessagesWaitingForYou().isEmpty)
 
       _ = try await server.call("tell", ["text": "文案要推送吗？", "ask": "push", "task": elsewhere.id.uuidString])
-      try await store.forgetCueLine(rule.id)
+      try await store.setCueAllow(CueAllow(.push, project: demo.id), allowed: false)
       _ = try await server.call("tell", ["text": "又改了一处，推送吗？", "ask": "push", "task": task.id.uuidString])
       #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["文案要推送吗？", "又改了一处，推送吗？"])
+
+      _ = try await server.call("memory", ["action": "allow", "ask": "delete"])
+      let deleting = try await server.request(
+        "tools/call", ["name": "tell", "arguments": ["text": "要删掉旧分支吗？", "ask": "delete", "task": elsewhere.id.uuidString]])
+      #expect(deleting["isError"] as? Bool == true)
+      let rule = try await server.request("tools/call", ["name": "memory", "arguments": ["action": "allow", "ask": "rule"]])
+      #expect(rule["isError"] as? Bool == true)
+      #expect(try await store.cueProfile()?.allows == [CueAllow(.delete, project: nil)])
     }
   }
 

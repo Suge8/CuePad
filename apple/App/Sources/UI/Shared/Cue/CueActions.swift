@@ -15,11 +15,11 @@ extension Workspace {
         }
     }
 
-    /// 结束 Cue 的一条"等你"：选一项或关掉。选"以后……都不用问"时 Store 同时记下这条规矩，一起上传。
-    func endCueQuestion(_ message: CueMessage, _ end: CueQuestionEnd) async throws {
-        let rule = try await services.store.endCueQuestion(message.id, end)
+    /// 回答 Cue 的一条"等你"：选一项，或另外说一句。选"以后……都不用问"时 Store 同时把它记进允许清单（Cue 的设置），一起上传。
+    func answerCueQuestion(_ message: CueMessage, _ answer: String) async throws {
+        let allowed = try await services.store.endCueQuestion(message.id, .answered(answer))
         await services.upload(message.id)
-        if let rule { await services.upload(rule.id) }
+        if allowed { await services.upload(CueProfile.recordID) }
     }
 
     // MARK: 记忆

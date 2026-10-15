@@ -184,8 +184,8 @@ struct CueNotes: View {
     }
 }
 
-/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、你选了的下面一行写你选的那一项
-/// （还在等的不在对话里，见 `CueThread.rows`；关掉或撤回的只剩这句话）。
+/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、你回答了的下面一行写你的回答
+/// （还在等的不在对话里，见 `CueThread.rows`；撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
     /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
@@ -206,8 +206,9 @@ struct CueSays: View {
 
 /// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
 /// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务发来看的文件
-/// （小缩略图，验收的证据）、推荐的答案（第一个选项）作主按钮与其余选项，末行是关联的任务、还有几条在等、原话的开关；右上角关掉。
-/// 列表与数量只来自 `cueMessagesWaitingForYou()`：选了或关掉后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
+/// （小缩略图，看完再定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
+/// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
+/// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
@@ -218,6 +219,8 @@ struct CueWaitingDock: View {
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
     @State private var reading: UUID?
+    /// 不允许时另外说的话（换下一条时随视图身份清空）。
+    @State private var otherwise = ""
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
@@ -235,21 +238,16 @@ struct CueWaitingDock: View {
                         .font(Typography.bodyStrong).foregroundStyle(palette.ink)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Button("关掉", systemImage: "xmark") { end(message, .dismissed) }
-                        .labelStyle(.iconOnly).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink3)
-                        .frame(width: 28, height: 28).contentShape(.rect)
-                        .buttonStyle(PressStyle(.button))
-                        .disabled(ending == message.id)
-                        .help("不选，关掉这条")
                 }
                 if reading == message.id { original(message.text).transition(.opacity) }
-                // 关联任务发来看的文件就是证据：在手机上看完图再决定允不允许
+                // 关联任务发来看的文件：在手机上看完图再决定允不允许
                 if let previews = ref?.previews, !previews.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }
                     }
                 }
                 choices(message)
+                otherwiseField(message)
                 HStack(spacing: 10) {
                     if let ref { CueTaskLine(ref: ref) }
                     Spacer(minLength: 0)
@@ -302,18 +300,43 @@ struct CueWaitingDock: View {
 
     @ViewBuilder private func buttons(_ message: CueMessage, _ options: [String]) -> some View {
         ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-            Button(option) { end(message, .answered(option)) }
+            Button(option) { answer(message, option) }
                 .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
                 .lineLimit(2)
                 .disabled(ending == message.id)
         }
     }
 
-    private func end(_ message: CueMessage, _ end: CueQuestionEnd) {
+    /// 不允许时另外说：回车或点发送交给 Cue。
+    private func otherwiseField(_ message: CueMessage) -> some View {
+        let empty = otherwise.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HStack(spacing: 6) {
+            TextField(CueAsk.otherwise, text: $otherwise)
+                .textFieldStyle(.plain).font(Typography.secondary)
+                .submitLabel(.send)
+                .onSubmit { sayOtherwise(message) }
+            if !empty {
+                Button("发送", systemImage: "arrow.up.circle.fill") { sayOtherwise(message) }
+                    .labelStyle(.iconOnly).font(.system(size: 18)).foregroundStyle(palette.signature)
+                    .buttonStyle(PressStyle(.button))
+            }
+        }
+        .padding(.horizontal, 10).frame(minHeight: 32)
+        .background(palette.ink.opacity(0.05), in: .rect(cornerRadius: 8, style: .continuous))
+        .disabled(ending == message.id)
+    }
+
+    private func sayOtherwise(_ message: CueMessage) {
+        let text = otherwise.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        answer(message, text)
+    }
+
+    private func answer(_ message: CueMessage, _ text: String) {
         ending = message.id
         workspace.attempt {
             defer { ending = nil }
-            try await workspace.endCueQuestion(message, end)
+            try await workspace.answerCueQuestion(message, text)
         }
     }
 }

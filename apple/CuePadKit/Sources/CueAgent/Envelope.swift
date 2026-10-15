@@ -21,7 +21,7 @@ public enum CueWake: Equatable, Sendable {
 }
 
 /// 交给 Cue 的大脑的一轮输入：一个 `<cue>` 块，你的话（若有）接在块后面。
-/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（在做的任务与没绑任务的活会话，`CueBoard`）、等你、
+/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
 /// 接上的（新上下文第一次醒来才有）、醒来的原因。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
@@ -39,8 +39,6 @@ public enum CueEnvelope {
     /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
     public var projects: [CueProject]
     public var changes: [CueChange]
-    /// 你关掉、还没告诉 Cue 的提问（`CueStore.cueMessagesToDeliver` 里没选就结束的）：写在变化里。
-    public var dismissed: [CueMessage]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
     public var waiting: [CueMessage]
@@ -52,7 +50,7 @@ public enum CueEnvelope {
 
     public init(
       now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
-      dismissed: [CueMessage], board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
+      board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
     ) {
       self.resume = resume
       self.now = now
@@ -61,7 +59,6 @@ public enum CueEnvelope {
       self.renewAt = renewAt
       self.projects = projects
       self.changes = changes
-      self.dismissed = dismissed
       self.board = board
       self.waiting = waiting
       self.wake = wake
@@ -77,9 +74,8 @@ public enum CueEnvelope {
 
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
-    lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty && input.dismissed.isEmpty ? "无" : ""))
+    lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
-    lines += input.dismissed.map { "- [关掉提问] 他没选就关掉了「\(clip(CueFormat.plainText($0.text), 80))」（\($0.id.shortID)）" }
 
     let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
     lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
@@ -122,7 +118,7 @@ public enum CueEnvelope {
       default: "你的动态"
       }
       var text = CueFormat.plainText(message.text)
-      if let answer = message.answer { text += "（他选了：\(answer)）" }
+      if let answer = message.answer { text += "（他回答：\(answer)）" }
       let line = clip(text, kept.isEmpty ? budget : Int.max)
       guard line.count <= budget else { break }
       budget -= line.count
@@ -163,7 +159,7 @@ public enum CueEnvelope {
     }).joined(separator: "\n")
   }
 
-  /// 看板上一个没绑任务的活会话（信封与 peek 共用）：名字与短 id、状态与多久、近况。
+  /// 看板上一个不归没做完的事的活会话（信封与 peek 共用）：名字与短 id、状态与多久、近况。
   static func sessionLine(_ session: PiSessionState, now: Date) -> String {
     var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }

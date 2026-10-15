@@ -63,10 +63,9 @@ struct CueHostTests {
         }
 
         /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下；
-        /// `beforeSettling` 在会话歇下（叫醒 Cue）之前做。
         /// 会话要等开工这一轮做完才歇下：同一刻歇下的，状态记进库时可能已落在这一轮前移的基线之前，Cue 就看不到这处变化。
         /// 等的是开工结果之后那句回复、且 Cue 空闲：只等"办好了"会撞上更早一轮的同一句。
-        func settleTask(titled title: String, beforeSettling: () async throws -> Void = {}) async throws {
+        func settleTask(titled title: String) async throws {
             try await say("请建个任务并开工")
             try await eventually("开工这一轮做完") { try await self.store.cueState()?.state == .known(.settled) && self.model.answered("开新会话") }
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
@@ -75,7 +74,6 @@ struct CueHostTests {
             // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
             try await store.linkCard(task.id, toSession: session.sessionID)
             try await store.updateCard(task.id) { $0.body = title }
-            try await beforeSettling()
             session.setState(["kind": "thinking"])
             session.setState(["kind": "idle"])
         }
@@ -407,31 +405,32 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，记忆里多了一条你的、一直记着的规矩。"等你"推了通知（正文是要你定什么，不露原话）。
-    @Test func 等你被回答_Cue被唤醒_以后都不用问记成规矩() async throws {
+    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
+    /// 它再问推送就被拒、叫它直接做。"等你"推了通知（正文是要你定什么，不露原话）。
+    @Test func 等你被回答_Cue被唤醒_以后都不用问记进允许清单() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
-        #expect(question.choices == ["允许一次", "以后推送都不用问", "拒绝"])
-        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要不要推送？\n允许一次 / 以后推送都不用问 / 拒绝"] }
+        #expect(question.choices == ["允许一次", "以后推送都不用问"])
+        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要不要推送？\n允许一次 / 以后推送都不用问"] }
         try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).endCueQuestion(question, .answered("以后推送都不用问"))
+        try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送都不用问")
         try await rig.message(.cue, containing: "知道了：以后推送都不用问")
-        let rules = try await rig.store.cueMemory().lines.filter(\.pinned)
-        #expect(rules.map(\.text) == ["以后推送都不用问"] && rules.allSatisfy { $0.source == .known(.you) })
+        #expect(try await rig.store.cueProfile()?.allows == [CueAllow(.push, project: nil)])
+        #expect(try await rig.store.cueMemory().lines.isEmpty)
+        await #expect(throws: CueStoreError.alreadyAllowed(nil)) { try await rig.store.addCueMessage(.cue, text: "又要推送吗？", ask: .push) }
         await rig.stop()
     }
 
-    /// 你在"等你"上关掉 Cue 的提问：它不再等你，也不为此叫醒 Cue；Cue 下次醒来（这里是你说了一句）在变化里看到你关掉了它。
-    @Test func 关掉提问_Cue下次醒来在变化里看到() async throws {
+    /// "等你"没有关掉：你不允许就在卡片的输入框里另外说一句，它结束这条提问、叫醒 Cue，Cue 读到的是你没允许、另外说的话。
+    @Test func 不允许就另外说一句_Cue被唤醒照办() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
         try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
+        try await Workspace(services: rig.services).answerCueQuestion(question, "先别推，等我看完截图")
         #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
-        try await rig.say("还在吗")
-        try await rig.message(.cue, containing: "看到你关掉了：要推送吗？；还在吗")
+        try await rig.message(.cue, containing: "好，不做：先别推，等我看完截图")
         await rig.stop()
     }
 
@@ -457,9 +456,9 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 会话交了结果，Cue 自己醒来收尾（task done）：Cue 自己验收，顶层任务直接完成，不请你收下，给你写一条结果（不是"等你"）；
+    /// 会话交了结果，Cue 自己醒来做完（task done）：Cue 自己按证据确认，顶层任务直接完成，不请你确认，给你写一条结果（不是"等你"）；
     /// 这就是对你说过话了，最后那句回复不再写成灰色的一行（几乎是同一句）。
-    @Test func 自己醒来收尾_做完告诉你结果_不再写动态() async throws {
+    @Test func 自己醒来做完_告诉你结果_不再写动态() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 请收一下")  // 假模型据此 done
         let report = try await rig.message(.cue, containing: "做完了")
@@ -468,22 +467,6 @@ struct CueHostTests {
         #expect(try await rig.store.card(try #require(report.taskID))?.status == .done)
         #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
         #expect(try await rig.store.cueMessages().filter { $0.author == .known(.note) && $0.createdAt >= report.createdAt }.isEmpty)
-        await rig.stop()
-    }
-
-    /// 你关掉了 Cue 的提问，之后 Cue 自己醒来收尾、把结果告诉你：信封里带着"你关掉了"（随信封记下送达），这一轮仍是 Cue 自己醒来的，
-    /// 对你说过话就不再写最后那句。
-    @Test func 关掉提问后自己醒来_说过就不再多写() async throws {
-        let rig = try await Rig()
-        try await rig.say("请问我一个问题")
-        let question = try await rig.message(.cue, containing: "要推送吗？")
-        try await rig.message(.cue, containing: "办好了")
-        try await rig.settleTask(titled: "修好登录页 请收一下") {
-            try await Workspace(services: rig.services).endCueQuestion(question, .dismissed)
-        }
-        let report = try await rig.message(.cue, containing: "做完了")
-        try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("结果已告诉用户") }
-        #expect(try await rig.store.cueMessages().filter { $0.createdAt >= report.createdAt && $0.id != report.id }.isEmpty)
         await rig.stop()
     }
 
@@ -756,9 +739,7 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if !text.contains("醒来：会话有动静"), let closed = text.firstMatch(of: /\[关掉提问\] 他没选就关掉了「(.+?)」/)?.1 {
-            return say("看到你关掉了：\(closed)；" + (text.split(separator: "\n").last.map(String.init) ?? ""))
-        }
+        if let words = text.firstMatch(of: /你没允许「.*」，另外说：(.+)/)?.1 { return say("好，不做：\(words)") }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {

@@ -37,12 +37,11 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
-  /// 你选的那一项；没选就结束的（你关掉、Cue 撤回）为 nil。
+  /// 你选的那一项，或你不选、另外说的话（不在 `choices` 里）；Cue 撤回的为 nil。
   public var answer: String?
   /// 提问结束的时刻。
   public var answeredAt: Date?
-  /// 你的消息（或 Cue 的提问怎么结束的）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；结束晚于它时（别的设备同步来的另一个结局）要再交一次。
-  /// Cue 撤回的结束时同时写上：它自己撤的，不用再告诉它。
+  /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
@@ -91,19 +90,12 @@ extension CueMessage: Record {
   }
 }
 
-extension CueMessage {
-  /// 待交给 Cue 的这一条（`CueStore.cueMessagesToDeliver`）要不要叫醒它：你的话与选了的回答要；你关掉的提问不用，随下一次醒来的信封交。
-  public var wakesCue: Bool { author == .known(.you) || answer != nil }
-}
-
-/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`）。答了的记下选的那一项，
-/// 关掉与撤回都没选（`answer` 为 nil），撤回的同时记送达。
+/// 一条提问怎么结束（`CueStore.endCueQuestion`）：两种结局落到同一个状态上（`CueMessage.answeredAt`）。
+/// 卡片一直挂着，直到你回答或 Cue 撤回，没有"关掉"。
 public enum CueQuestionEnd: Equatable, Sendable {
-  /// 你选了一项
+  /// 你选了一项，或不选、另外说了一句（"不行，另外说…"）：都交给 Cue、叫醒它
   case answered(String)
-  /// 你关掉了：不叫醒 Cue，它下次醒来在信封的变化里看到
-  case dismissed
-  /// Cue 撤回了（拿了主意或情况变了）
+  /// Cue 撤回了（拿了主意或情况变了）：它自己撤的，不交给它
   case withdrawn
 }
 
@@ -184,6 +176,9 @@ public struct CueProfile: Equatable, Sendable {
   public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
+  /// 允许清单：哪几类要先问的事以后不用问（唯一的事实源）。卡片上的"以后……都不用问"、设置里的开关与 Cue 的 `memory allow` 都写这里，
+  /// Cue 的 `tell` 带 `ask` 时查它（`CueStore.addCueMessage`）。
+  public var allows: Set<CueAllow>
   public var modifiedAt: Date
 
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
@@ -203,7 +198,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = .known(.low), enabledAt: Date? = nil, allows: Set<CueAllow> = [], modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
@@ -211,19 +206,28 @@ public struct CueProfile: Equatable, Sendable {
     self.model = model
     self.effort = effort
     self.enabledAt = enabledAt
+    self.allows = allows
     self.modifiedAt = modifiedAt
+  }
+
+  /// 这类事在这个项目里（`project` 为 nil 是不在项目里的事）已允许：清单里有不分项目的那一项，或这个项目的那一项。返回对上的那一项。
+  public func allowing(_ ask: CueAsk, in project: UUID?) -> CueAllow? {
+    [CueAllow(ask, project: nil), project.map { CueAllow(ask, project: $0) }].compactMap(\.self).first(where: allows.contains)
   }
 }
 
 extension CueProfile: Record {
   static let table = Table.cueProfile
-  static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt] }
+  static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt", "allows"]
+  var bindings: [any SQLBindable] {
+    [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt, CueAllow.encode(allows)]
+  }
   init(row: Row) {
     let name = row.text(1).trimmingCharacters(in: .whitespacesAndNewlines)
     self.init(
       name: name.isEmpty ? Self.defaultName : name, hostID: row.textOrNil(2), runtime: Open(rawValue: row.text(3)),
-      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
+      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6),
+      allows: CueAllow.decode(row.textOrNil(8)), modifiedAt: row.date(7))
   }
 }
 
@@ -256,8 +260,8 @@ extension CueState: Record {
 }
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
-/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事的验收，Cue 按你的规矩与最佳实践自己定，做完告诉你。
-/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认。
+/// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；不允许就在卡片的输入框里另外说（`otherwise`）。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
@@ -275,13 +279,14 @@ public enum CueAsk: String, CaseIterable, Sendable {
   }
 
   public static let once = "允许一次"
-  public static let deny = "拒绝"
+  /// 卡片上选项之后的输入框：不允许，写下你的话（作为回答交给 Cue，叫醒它）。
+  public static let otherwise = "不行，另外说…"
 
-  /// 选了它，这类事以后就不再问：`CueStore.endCueQuestion` 记一条你的、一直记着的规矩（`rule(project:)`）。
+  /// 选了它，这类事以后就不再问：`CueStore.endCueQuestion` 把它记进允许清单（`CueProfile.allows`，问的事关联的任务在项目里时只管这个项目）。
   /// 规矩那一类没有这一项：一律放行等于没有规矩。
   public var always: String? { self == .rule ? nil : "以后\(name)都不用问" }
 
-  public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
+  public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) }
 
   /// 由一条"等你"的选项认出是哪一类：选项只由 `choices` 写出，带"以后……都不用问"的是那一类，不带的是规矩那一类。
   public init(choices: [String]) {
@@ -302,14 +307,33 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .rule: "\(named)这一步按你的规矩要先问，允许吗？"
     }
   }
-
-  /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
-  public func rule(project: String?) -> String? {
-    always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
-  }
 }
 
-/// Cue 收尾一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点。
+/// 允许清单里的一项（`CueProfile.allows`）：一类要先问的事在一个项目里（`project`），或所有项目里（nil）以后不用问。
+/// 存成"类别"或"类别/项目 id"的数组；更新的版本写的类别原样留着（`Open`），改清单时不丢。
+public struct CueAllow: Hashable, Sendable {
+  public var ask: Open<CueAsk>
+  public var project: UUID?
+
+  public init(_ ask: CueAsk, project: UUID?) {
+    self.ask = .known(ask)
+    self.project = project
+  }
+
+  init?(stored: String) {
+    let parts = stored.split(separator: "/", maxSplits: 1).map(String.init)
+    guard let raw = parts.first else { return nil }
+    ask = Open(rawValue: raw)
+    project = parts.count > 1 ? UUID(uuidString: parts[1]) : nil
+  }
+
+  var stored: String { ask.rawValue + (project.map { "/" + $0.uuidString.lowercased() } ?? "") }
+
+  static func encode(_ allows: Set<CueAllow>) -> String? { JSONColumn.encodeList(allows.map(\.stored).sorted()) }
+  static func decode(_ text: String?) -> Set<CueAllow> { Set(JSONColumn.decodeList(String.self, from: text).compactMap(CueAllow.init(stored:))) }
+}
+
+/// Cue 做完一件顶层任务后告诉你的结果（`CueStore.finishTask`）：一行"「任务名」做完了"，下面每条证据一个要点。
 public enum CueReport {
   public static func text(task: String, evidence: [String]) -> String {
     (["「\(task)」做完了", ""] + evidence.map { "- \($0)" }).joined(separator: "\n")

@@ -229,6 +229,7 @@ DEFINE SCHEMA
         effort        ENCRYPTED STRING,
         enabledAt     INT64,
         modifiedAt    INT64,
+        allows        ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
