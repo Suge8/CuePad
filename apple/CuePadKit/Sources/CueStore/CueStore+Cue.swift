@@ -141,17 +141,11 @@ extension CueStore {
     return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
   }
 
-  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：还开着的提问（`openQuestion`），
-  /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
+  /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你选了、关掉或 Cue 撤回。
+  /// 不看关联任务的状态：要问的几类（`CueAsk`）本来就在任务做完之后问（推送、合并、发布），按任务完成算过期会让刚问的那条立刻消失；
+  /// 情况变了由 Cue 撤回。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
-    try select(
-      CueMessage.self,
-      where: """
-        \(Self.openQuestion) AND (taskID IS NULL OR EXISTS (
-          SELECT 1 FROM cards c LEFT JOIN projects p ON p.id = c.projectID
-          WHERE c.id = cueMessages.taskID AND c.completedAt IS NULL AND c.archivedAt IS NULL AND c.deletedAt IS NULL AND p.deletedAt IS NULL))
-        """,
-      orderBy: "createdAt, rowid")
+    try select(CueMessage.self, where: Self.openQuestion, orderBy: "createdAt, rowid")
   }
 }
 
