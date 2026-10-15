@@ -40,7 +40,9 @@ struct SessionTaskTests {
     }
 
     /// 会话页标题下那一行写它在做的事；不经任务开的会话挂的是同名任务（改名时跟着改），那一段与会话名重复就不写，什么都不剩就没有这一行。
-    @Test func 会话名与它挂的同名任务不在标题里写两遍() async throws {
+    /// 长名字（终端会话的名字常是第一句话）挂的任务名是截短的，同样不写。
+    @Test(arguments: ["Pi 验收", String(repeating: "Run the shell command: sleep 30 && echo done. ", count: 8)])
+    func 会话名与它挂的同名任务不在标题里写两遍(name: String) async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await services.resetPiState()
@@ -48,15 +50,14 @@ struct SessionTaskTests {
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version,
             state: .settled, stateSince: .now)
-        session.name = "Pi 验收"
+        session.name = name
         try await bridge(.appeared(session))
 
         let link = try await SessionTaskLink.read(sessionID: "s1", project: project.id, from: store)
-        #expect(link.primary?.task.title == "Pi 验收")
-        #expect(link.path(below: "Pi 验收") == nil)
+        #expect(link.path(below: name) == nil)
 
         // 名字不同（经任务开、会话另起了名）时照写那件事
-        #expect(link.path(below: "登录页改版")?.visible == "Pi 验收")
+        #expect(link.path(below: "登录页改版")?.visible == link.primary?.task.title)
     }
 
     @Test func 启动时只在会话文件里的历史会话_不补任务_留在历史里() async throws {

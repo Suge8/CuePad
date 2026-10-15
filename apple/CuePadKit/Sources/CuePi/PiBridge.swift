@@ -23,6 +23,8 @@ public final class PiBridge {
         public internal(set) var session: PiSession
         /// 此刻正在说的这条回答（见 `PiDraft`，刷新节奏见 `PiDraftFeed`）：出字时只有读它的视图重算
         public var draft: PiDraft? { feed.draft }
+        /// 有正在说的话（`draft != nil`），只在有无变化时通知：会话行读它不随每个增量重算
+        public var speaking: Bool { feed.speaking }
         private let feed = PiDraftFeed()
 
         init(_ session: PiSession) {
@@ -448,7 +450,7 @@ public final class PiBridge {
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
-                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
+                id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
                 terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage

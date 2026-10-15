@@ -9,7 +9,7 @@ import Observation
 /// 这条开始出字时设上、随增量更新；它转成工具调用、这一轮被停下或出错、下一轮开始时清掉；正常说完的留着，由界面在对话里出现它之后换下。
 public struct PiDraft: Equatable, Sendable {
     public var text: String
-    /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻，界面据此认出它已落库（`landed`）。
+    /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻（各家都是说完那一刻），界面据此认出它已落库（`landed`）。
     /// 取这条开始的时刻，能拿到 Agent 自己的时钟就用它的（Pi 扩展里开始出字、Codex 的 `item/started` 的 `emittedAtMs`、OpenCode 的步骤开始），
     /// 拿不到的取这条消息开始时收到的时刻（Claude Code 的 `message_start`）。不取第一个增量收到的时刻：会话文件里的时刻截到毫秒，
     /// 一个增量就说完的短回答，Agent 写下的时刻可能早于增量到这里的时刻，落库了也认不出来，草稿一直挂在对话下面
@@ -64,6 +64,8 @@ struct DraftParts {
 @MainActor @Observable
 public final class PiDraftFeed {
     public private(set) var draft: PiDraft?
+    /// `draft != nil`，只在有无变化时通知
+    public private(set) var speaking = false
     /// 最近交来、还没显示的与等着显示它的那一拍
     @ObservationIgnored private var offered: PiDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
@@ -93,6 +95,7 @@ public final class PiDraftFeed {
         flush = nil
         shownAt = now
         if draft != offered { draft = offered }
+        if speaking != (offered != nil) { speaking = offered != nil }
     }
 }
 #endif

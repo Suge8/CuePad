@@ -5,7 +5,7 @@ import Foundation
 /// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
 /// 或 Agent 一次发到手机上看的几个文件（一张预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
-    enum Role: Sendable { case user, pi, system, preview }
+    enum Role: Equatable, Sendable { case user, pi, notice(PiNotice), preview }
 
     let id: UUID
     let role: Role
@@ -24,11 +24,13 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
 }
 
 private nonisolated extension PiChatEntry.Role {
-    init(_ role: PiChatRole) {
-        self = switch role {
-        case .user: .user
-        case .pi: .pi
-        case .system: .system
+    /// 认不出的（别的版本写的系统行）为 nil。
+    init?(_ message: PiChatMessage) {
+        switch message.role.known {
+        case .user: self = .user
+        case .pi: self = .pi
+        case .system: guard let notice = message.notice else { return nil }; self = .notice(notice)
+        case nil: return nil
         }
     }
 }
@@ -51,10 +53,10 @@ nonisolated enum PiChat {
             }
         }
         for message in messages {
-            guard let role = message.role.known else { continue }
+            guard let role = PiChatEntry.Role(message) else { continue }
             place(before: message.at)
             entries.append(PiChatEntry(
-                id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools,
+                id: message.id, role: role, text: message.text, meta: meta(message), tools: message.tools,
                 fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)

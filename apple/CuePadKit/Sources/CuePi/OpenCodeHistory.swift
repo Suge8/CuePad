@@ -60,7 +60,8 @@ struct OpenCodeMessage: Decodable, Sendable {
         var error: OpenCodeFailure?
     }
 
-    var at: Date { Date(timeIntervalSince1970: time.created / 1000) }
+    /// 这条的时刻：助手的一步取说完的那一刻（与各家对话里回答的时刻同一规则，回答上的"用时"从你说话算到它），其余取建立的那一刻。
+    var at: Date { Date(timeIntervalSince1970: (time.completed ?? time.created) / 1000) }
 
     /// 还在写的（助手这一步没完、压缩还在跑）不读：读到它为止，下次从它重读。
     var isComplete: Bool {
