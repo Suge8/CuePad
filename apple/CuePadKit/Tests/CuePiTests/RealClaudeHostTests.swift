@@ -43,6 +43,7 @@ struct RealClaudeHostTests {
             let delivered = try await testbed.bridge.send(PiMessage(text: "不用工具，直接看图：它是红色还是蓝色？只答颜色词", images: [image], deliveryID: delivery), to: id)
             #expect(delivered == .immediate)
             try await testbed.waitForTurn(id, since: start)
+            try await testbed.waitForDraftLanded(id)
 
             let transcript = try testbed.transcript(session.sessionFile)
             let said = try #require(transcript.messages.first { $0.role == .known(.user) })
@@ -66,6 +67,7 @@ struct RealClaudeHostTests {
             #expect(permission.kind == .known(.confirm))
             try await testbed.bridge.answer(.confirmed(true), to: try #require(permission.promptID), in: id)
             try await testbed.waitForTurn(id, since: asked)
+            try await testbed.waitForDraftLanded(id)
             #expect(FileManager.default.fileExists(atPath: touched.path))
 
             _ = try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 python3 -c 'import time; time.sleep(120)'（不要放到后台），然后只回复 SLEPT"), to: id)
@@ -101,6 +103,7 @@ struct RealClaudeHostTests {
             let first = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: first)
+            try await testbed.waitForDraftLanded(id)
             #expect(testbed.bridge.session(id: id)?.model?.key.id == claudeTestModel, "\(String(describing: testbed.bridge.session(id: id)?.model))")
             let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 

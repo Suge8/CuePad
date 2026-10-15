@@ -13,7 +13,7 @@ final class ClaudeStream {
     var onMessage: ((JSONValue) -> Void)?
     /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）：文字块是段，块号是段号，`text_delta` 追加，
     /// 块说完时那一行完整的 `assistant`（一行一块）是定稿。新的一条消息开始（`message_start` 或换了消息 id）、转成工具调用（`tool_use` 块）、
-    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着。起点是收到 `message_start` 的时刻（`PiDraft.since`）
+    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着。起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`PiDraft.since`）
     var onDraft: ((PiDraft?) -> Void)?
     private var speech = DraftParts()
     /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
@@ -88,7 +88,7 @@ final class ClaudeStream {
         case "stream_event": return streamed(message)
         case "system" where message["subtype"]?.string == "init": restart(nil)
         case "result" where message["is_error"]?.bool == true: restart(nil)
-        case "assistant" where isMain(message): finished(message["message"])
+        case "assistant" where isMain(message): finished(message)
         default: break
         }
         onMessage?(message)
@@ -123,14 +123,16 @@ final class ClaudeStream {
         }
     }
 
-    /// 一个内容块说完了（完整的 `assistant` 行）：文字块的定稿换下它的增量，工具调用清掉这条。
-    private func finished(_ message: JSONValue?) {
+    /// 一个内容块说完了（完整的 `assistant` 行，它的 `timestamp` 与会话文件里那一行相同）：文字块的定稿换下它的增量，工具调用清掉这条。
+    private func finished(_ line: JSONValue) {
+        let message = line["message"]
+        let written = line["timestamp"]?.string.flatMap { try? Date($0, strategy: Self.timestampStyle) }
         let id = message?["id"]?.string
         if id != speech.message { restart(id) }
         for block in message?["content"]?.array ?? [] {
             switch block["type"]?.string {
             case "text":
-                speech.finish(openBlock ?? speech.lastPart.map { $0 + 1 } ?? 0, with: block["text"]?.string ?? "")
+                speech.finish(openBlock ?? speech.lastPart.map { $0 + 1 } ?? 0, with: block["text"]?.string ?? "", at: written)
                 openBlock = nil
             case "tool_use": restart(id)
             default: break
@@ -138,6 +140,8 @@ final class ClaudeStream {
         }
         onDraft?(speech.draft)
     }
+
+    private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     /// 重新开始一条（`message` 为它的 id，`since` 是它开始的时刻）：清掉正在说的话。
     private func restart(_ message: String?, since: Date? = nil) {

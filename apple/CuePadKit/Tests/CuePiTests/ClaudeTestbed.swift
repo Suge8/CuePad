@@ -184,6 +184,25 @@ final class ClaudeTestbed {
         try await store.upsertPiSessions([PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
+    /// 这一轮的回答落了库，正在说的话就换下：没有了，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
+    /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
+    func waitForDraftLanded(_ id: PiSession.ID) async throws {
+        let file = bridge.session(id: id)?.sessionFile
+        var newest: Date?
+        try await eventually("回答落盘", timeout: .seconds(10)) {
+            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }?.at
+            return newest.map { $0 >= start(of: id) } ?? false
+        }
+        guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return }
+        #expect(draft.landed(newestReply: newest), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.timeIntervalSince1970))")
+    }
+
+    /// 这一轮开始（最近一次进入工作）的时刻
+    private func start(of id: PiSession.ID) -> Date {
+        log.changes.compactMap { if case .stateChanged(let session, _) = $0, session.id == id, session.state.isWorking { session.stateSince } else { nil } }
+            .last ?? .distantPast
+    }
+
     /// 像 App 的记录器那样记下桥上这个会话此刻的样子（状态与模型）。
     func record(_ id: PiSession.ID) async throws {
         let session = try #require(bridge.session(id: id))
