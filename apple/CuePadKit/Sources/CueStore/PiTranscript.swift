@@ -3,12 +3,53 @@ import Foundation
 
 /// 对话里一条消息的说话人。
 public enum PiChatRole: String, Sendable, CaseIterable {
-  /// 你说的（含 CuePad 替你发的）；扩展投进来的机器消息（如 FireCode 交回子代理结果）不算，不进对话
+  /// 你说的（含 CuePad 替你发的）；扩展投进来的机器消息不算，那是 `machine`
   case user
   /// Pi 一轮做完的回答
   case pi
   /// 一行系统记录（`PiNotice`：压缩、这一轮被停下或被你拒绝）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
   case system
+  /// 扩展投进会话的机器消息（`PiEnvelope`：FireCode 交回子代理结果、审查结论、观察员的提醒……），正文是信封原文；
+  /// 它开始一轮，但不是你说的话（不算提问、不是排队的话）
+  case machine
+}
+
+/// 机器消息的一块信封：`<名字>\n正文\n</名字>`。扩展或 Agent 自己投进会话的机器消息（FireCode 的 `<firecode_master_event>`、
+/// Codex 子代理的通知……）整条由一块或几块信封组成；块正文止于第一个同名闭合标签，块与块之间夹着真人文字就不是。
+/// 四家的读法（轮次）与会话页的卡片都只认这一处。
+public struct PiEnvelope: Equatable, Sendable {
+  public var name: String
+  public var body: String
+
+  public init(name: String, body: String) {
+    self.name = name
+    self.body = body
+  }
+
+  /// 整条是机器消息时的各块，按先后；不是为 nil。
+  public static func parse(_ text: String) -> [PiEnvelope]? {
+    let source = text.trimmingCharacters(in: .whitespacesAndNewlines) as NSString
+    var blocks: [PiEnvelope] = []
+    var location = 0
+    while location < source.length {
+      guard let match = block.firstMatch(in: source as String, options: .anchored, range: NSRange(location: location, length: source.length - location))
+      else { return nil }
+      blocks.append(PiEnvelope(name: source.substring(with: match.range(at: 1)), body: source.substring(with: match.range(at: 2))))
+      location = NSMaxRange(match.range)
+    }
+    return blocks.isEmpty ? nil : blocks
+  }
+
+  private static let block = try! NSRegularExpression(pattern: #"<([A-Za-z][\w.-]*)>\n((?:(?!\n</\1>)[\s\S])*)\n</\1>\s*"#)
+
+  /// 存进对话时的截断：几块平分上限，各自截正文、信封头尾留着（截在中间会让它认不出是机器消息）。
+  static func clipped(_ blocks: [PiEnvelope], limit: Int) -> String {
+    let share = limit / blocks.count
+    return blocks.map { block in
+      let body = block.body.count <= share ? block.body : String(block.body.prefix(share - 1)) + "…"
+      return "<\(block.name)>\n\(body)\n</\(block.name)>"
+    }.joined(separator: "\n")
+  }
 }
 
 /// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文就是它显示的那句）。
@@ -89,7 +130,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     self.sessionID = sessionID
     self.seq = seq
     self.role = .known(role)
-    self.text = Self.clipped(text)
+    self.text = role == .machine ? PiEnvelope.parse(text).map { PiEnvelope.clipped($0, limit: Self.textLimit) } ?? Self.clipped(text) : Self.clipped(text)
     self.at = at
     self.tools = tools
     self.roundStartedAt = roundStartedAt

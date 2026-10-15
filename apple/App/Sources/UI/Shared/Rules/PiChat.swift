@@ -3,9 +3,9 @@ import CueText
 import Foundation
 
 /// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一块这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
-/// 或 Agent 一次发到手机上看的几个文件（一张预览卡）。
+/// 扩展投进来的机器消息（FireCode 交回子代理结果、审查结论……，一块信封一张卡片），或 Agent 一次发到手机上看的几个文件（一张预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
-    enum Role: Equatable, Sendable { case user, pi, notice(PiNotice), preview }
+    enum Role: Equatable, Sendable { case user, pi, notice(PiNotice), machine, preview }
 
     let id: UUID
     let role: Role
@@ -29,6 +29,7 @@ private nonisolated extension PiChatEntry.Role {
         switch message.role.known {
         case .user: self = .user
         case .pi: self = .pi
+        case .machine: self = .machine
         case .system: guard let notice = message.notice else { return nil }; self = .notice(notice)
         case nil: return nil
         }

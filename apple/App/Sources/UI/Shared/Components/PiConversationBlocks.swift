@@ -54,6 +54,68 @@ struct ReplyBlock: View {
 }
 
 
+/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一张卡片：一行是谁发来的（FireCode 的子代理、审查、观察员，别的写信封名）与正文首行，
+/// 其余收着、点开看全文（Markdown）。它在对话里落在被读到的位置，与回答同一列、全宽，淡底与经过那一块同一套。
+struct MachineCards: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // 存进对话时总是整块的信封；认不出时整条当一块正文，不丢字
+            ForEach(Array((PiEnvelope.parse(text) ?? [PiEnvelope(name: "", body: text)]).enumerated()), id: \.offset) { _, envelope in
+                MachineCard(envelope: envelope)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.entry)
+    }
+}
+
+private struct MachineCard: View {
+    let envelope: PiEnvelope
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var open = false
+
+    var body: some View {
+        let lines = envelope.body.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+        let title = lines.first.map(String.init) ?? ""
+        let rest = lines.count > 1 ? lines[1].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        VStack(alignment: .leading, spacing: 8) {
+            Button { open.toggle() } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "flame").font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                    Text(Self.label(envelope.name)).font(Typography.caption).foregroundStyle(palette.ink3).fixedSize()
+                    Text(PiProgress.firstLine(title) ?? title).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+                        .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
+                    if !rest.isEmpty { DisclosureChevron(open: open) }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(rest.isEmpty)
+            .accessibilityLabel("\(Self.label(envelope.name))：\(title)")
+            .accessibilityValue(rest.isEmpty ? "" : open ? "已展开" : "已收起")
+            if open { MarkdownText(source: rest).equatable().transition(.opacity) }
+        }
+        .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 8)
+        .background(palette.fill, in: ChatBlock.shape)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
+    }
+
+    /// 谁发来的：FireCode 的三种信封写成人话，别的照信封名；没有信封（别的扩展投进来的纯文字）写扩展。
+    static func label(_ name: String) -> String {
+        switch name {
+        case "firecode_master_event": "FireCode 子代理"
+        case "firecode_review": "FireCode 审查"
+        case "firecode_watcher": "FireCode 观察员"
+        case "": "扩展"
+        default: name
+        }
+    }
+}
+
+
 /// 正在说的那条回答（Mac：会话页、Cue 页）：与说完落库后的那条同一套渲染、同一个位置，`header` 占着那条上方经过那一块的位置（同样高，见 `RoundProcess`），
 /// 所以落库时原位换下、正文不动。开始出字时淡入；换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
 struct DraftReply<Header: View>: View {
