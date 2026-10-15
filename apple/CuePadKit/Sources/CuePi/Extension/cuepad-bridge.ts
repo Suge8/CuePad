@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 30;
+const EXTENSION_VERSION = 31;
 const PROTOCOL_VERSION = 14;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
@@ -399,7 +399,8 @@ export default function (pi: ExtensionAPI) {
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
 	let loadedEntries = 0;
 	let info: Info = { name: null, firstMessage: null, question: null, subagents: [], model: null, thinking: null, models: [], context: null, commands: [] };
-	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
+	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领）。
+	 * 进程退出时还在这里的（排在 Pi 队列里、留着的）随进程丢掉，告别里报没送到（`bye.undelivered`） */
 	const deliveries: { text: string; id: string }[] = [];
 	/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
 	let asking: (Question & { settle?: (value: unknown) => void; dismiss?: () => void }) | null = null;
@@ -933,8 +934,10 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function stop(reason: string) {
-		// 留着还没交给 Pi 的话随会话一起没了：报给 CuePad，不让它们在那边一直显示成已送达
-		const undelivered = held.splice(0).flatMap((h) => h.deliveryId ? [h.deliveryId] : []);
+		// 没被读到的话随之没了，报给 CuePad，不让它们在那边一直显示成已送达：总有留着还没交给 Pi 的；
+		// 进程退出时另有已交给 Pi、排在它队列里没被读到的（还没在 message_end 里认领）——Pi 的队列随进程丢掉
+		const kept = held.splice(0).flatMap((h) => h.deliveryId ? [h.deliveryId] : []);
+		const undelivered = reason === "quit" ? deliveries.splice(0).map((d) => d.id) : kept;
 		for (const client of clients) {
 			write(client, { t: "bye", reason, undelivered });
 			client.end();

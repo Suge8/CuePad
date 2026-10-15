@@ -5,7 +5,7 @@ import SwiftUI
 
 extension PiSessionState {
     /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
-    /// 摘要（问与答）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
+    /// 摘要（问与答、这一轮已做完的步骤）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
     static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
         PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
@@ -13,7 +13,7 @@ extension PiSessionState {
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
-            pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, context: session.context,
+            pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, context: session.context,
             agent: .known(session.agent))
     }
 }

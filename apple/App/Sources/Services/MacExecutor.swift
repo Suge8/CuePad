@@ -58,12 +58,7 @@ final class MacExecutor {
     /// 开新会话的错不算暂时性：起得慢的那个之后还会连上，再开一个就是两个会话。
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
-            try await perform(request)
-            return .succeeded
-        } catch SendError.unrecorded(let reason) {
-            // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
-            reportIssue("处理投送请求时读写资料库失败：\(reason)")
-            return .succeeded
+            return try await perform(request)
         } catch where request.mode != .known(.start) && Self.isTransient(error) {
             return .transient(error.localizedDescription)
         } catch {
@@ -83,7 +78,7 @@ final class MacExecutor {
     }
 
     /// 每种发送方式一个分支。不认识的方式 `DeliveryExecutor` 已按失败写回，走到这里的都是已知方式。
-    private func perform(_ request: DeliveryRequest) async throws {
+    private func perform(_ request: DeliveryRequest) async throws -> DeliveryOutcome {
         guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
         switch mode {
         case .ping: break  // 连接测试：收到即成功，不碰目标、不写发送记录
@@ -96,26 +91,38 @@ final class MacExecutor {
         case .answer: try await answer(request)
         case .config: try await configure(request)
         case .command: try await runCommand(request)
-        case .send: try await deliver(request, whenBusy: nil)  // 桥缺省按等它做完再说入队：写请求时看到的"歇着"可能已过时
-        case .steer: try await deliver(request, whenBusy: .steer)
-        case .followUp: try await deliver(request, whenBusy: .followUp)
+        case .send: return try await deliver(request, whenBusy: nil)  // 桥缺省按等它做完再说入队：写请求时看到的"歇着"可能已过时
+        case .steer: return try await deliver(request, whenBusy: .steer)
+        case .followUp: return try await deliver(request, whenBusy: .followUp)
         }
+        return .succeeded
     }
 
     // MARK: 发给 Agent 会话
 
     /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时按等它做完再说。
     /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
-    private func deliver(_ request: DeliveryRequest, whenBusy: PiQueueMode?) async throws {
+    /// 结果带 Agent 实际怎么收下的：当场开始读写回 `send`，排进它的队列写回那种入队方式。
+    private func deliver(_ request: DeliveryRequest, whenBusy: PiQueueMode?) async throws -> DeliveryOutcome {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
         let content = SendContent(stored: request.content)
-        try await pi.send(
+        let delivered = try await pi.send(
             PiMessage(text: content.plainText, images: try content.piImages(from: store.files), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)
+        await record(request.content, of: request, to: session.sendTarget)
+        return switch delivered {
+        case .immediate: .accepted(.send)
+        case .queued(.steer): .accepted(.steer)
+        case .queued(.followUp): .accepted(.followUp)
+        }
+    }
+
+    /// 记发送记录。话已经送达，记不下也照样按成功写回（手机才不会重发）：没记下是这台 Mac 的资料库问题，在这里报。
+    private func record(_ content: String, of request: DeliveryRequest, to target: SendTarget) async {
         do {
-            try await store.recordSend(request.content, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
+            try await store.recordSend(content, to: target, card: request.cardID, delivery: request.id, origin: request.origin)
         } catch {
-            throw SendError.unrecorded(error.localizedDescription)
+            reportIssue("处理投送请求时读写资料库失败：发送已完成，但没能记下这次发送：\(error.localizedDescription)")
         }
     }
 
@@ -195,11 +202,7 @@ final class MacExecutor {
             let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
             try await pi.send(PiMessage(text: text, images: try content.piImages(from: store.files), deliveryID: request.id.uuidString), to: id)
             guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-            do {
-                try await store.recordSend(opening, to: session.sendTarget, card: request.cardID, delivery: request.id, origin: request.origin)
-            } catch {
-                throw SendError.unrecorded(error.localizedDescription)
-            }
+            await record(opening, of: request, to: session.sendTarget)
         }
     }
 

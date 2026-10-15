@@ -188,7 +188,7 @@ extension CueStore {
     }
   }
 
-  /// 交出去之后才知道没送到：`host` 这台 Mac 受理了、Pi 会话却在把话交给 Pi 之前关掉了（扩展在告别里报出），改记为失败，
+  /// 交出去之后才知道没送到：`host` 这台 Mac 受理了、Pi 会话却在读到这句之前关掉了（扩展在告别里报出：没来得及交给 Pi 的，或退出时还排在 Pi 队列里的），改记为失败，
   /// 走"没能送达 + 重发"。执行到一半的也算（告别可能先于执行器写回结果，写回不覆盖已有的结果，不会把它改回成功）。返回改了的。
   public func failAcceptedDeliveries(_ ids: [UUID], host: String, reason: String) throws -> [UUID] {
     try write {
@@ -204,20 +204,23 @@ extension CueStore {
     }
   }
 
-  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。只改还没有结果的（放弃的是待领取的、执行的是执行中的），
-  /// 不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
+  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败；Agent 收下的话把方式改写成它实际收下的（`accepted`）。
+  /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
   /// 发给会话（或开新会话）成功时，在同一个事务里把它带着的提示词用掉（`consumePrompt`）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
-    let (status, detail): (DeliveryStatus, String?) =
+    let (status, detail, mode): (DeliveryStatus, String?, DeliveryMode?) =
       switch outcome {
-      case .succeeded: (.succeeded, nil)
-      case .failed(let reason), .transient(let reason): (.failed, reason)
+      case .succeeded: (.succeeded, nil, nil)
+      case .accepted(let mode): (.succeeded, nil, mode)
+      case .failed(let reason), .transient(let reason): (.failed, reason, nil)
       }
     try reportingFileFailures {
       try write {
         try db.run(
-          "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ? AND status IN ('pending', 'executing')",
-          [status.rawValue, detail, completed, Date.stamp, id])
+          """
+          UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
+          WHERE id = ? AND status IN ('pending', 'executing')
+          """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
         guard status == .succeeded, db.changes > 0 else { return [] }
         return try reclaimAttachments(consumePrompt(deliveredBy: id))
       }
@@ -237,26 +240,37 @@ extension CueStore {
   /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 留着的算"还剩"：清理一轮轮排下去，认领后的那一轮就带走它。
+  /// 排在 Agent 队列里的话（收下的方式是 steer / followUp）在被读到（对话里出现 `deliveryID` 等于它的消息）前、会话还忙着时留着：
+  /// 界面据它显示排队的话，删早了话会在被读到前消失；会话停下后队列要么已读完、要么随进程丢了（告别里报没送到），下一轮就带走。
+  /// 留着的都算"还剩"：清理一轮轮排下去，认领、读到或会话停下后的那一轮就带走它。
   /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
-  /// 两者都只在完成早于 `undeliveredCutoff` 时清理。
+  /// 两者都只在完成早于 `undeliveredCutoff` 时清理；排队的话也最多留到这时。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
     let undelivered = """
-      status = 'failed' AND (mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?
+      status = 'failed' AND (mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
       """
     let awaitingClaim = """
-      mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
+      mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?2
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
         AND \(Self.launchUnclaimed)
       """
+    let queued = """
+      status = 'succeeded' AND mode IN (\(DeliveryMode.sqlList([DeliveryMode.steer, .followUp]))) AND completedAt >= ?3
+        AND NOT EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = deliveryRequests.targetRef AND m.deliveryID = deliveryRequests.id)
+        AND EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = deliveryRequests.targetRef AND s.state IN (\(Self.busyStates)))
+      """
+    let arguments: [any SQLBindable] = [cutoff, claimCutoff, undeliveredCutoff]
     return try write {
       try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ? AND NOT (\(awaitingClaim)) AND NOT (\(undelivered))",
-        [cutoff, claimCutoff, undeliveredCutoff])
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(undelivered))", [undeliveredCutoff]) { _ in true } != nil
+        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(undelivered)) AND NOT (\(queued))",
+        arguments)
+      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(undelivered))", arguments) { _ in true } != nil
     }
   }
+
+  /// 会话还忙着（`PiWorkState.hasPendingWork`）的状态值，SQL `IN (…)` 里的列表。
+  private static let busyStates = PiWorkState.allCases.filter(\.hasPendingWork).map { "'\($0.rawValue)'" }.joined(separator: ", ")
 }
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，

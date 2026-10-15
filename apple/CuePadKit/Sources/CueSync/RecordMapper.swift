@@ -8,7 +8,7 @@ enum RecordMapper {
     .projects: ["name"],
     .cards: ["body", "variableValues"],
     .sendRecords: ["content", "targetName", "targetRef"],
-    .piSessionStates: ["title", "detail", "folder", "lastPrompt", "lastReply", "question", "launchToken", "subagents", "pendingPrompt", "model", "thinking", "context"],
+    .piSessionStates: ["title", "detail", "folder", "lastPrompt", "lastReply", "question", "launchToken", "subagents", "pendingPrompt", "pendingTools", "model", "thinking", "context"],
     .agentCatalogs: ["models", "commands"],
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
     .directoryBindings: ["hostName", "folder"],

@@ -96,6 +96,7 @@ DEFINE SCHEMA
         context       ENCRYPTED STRING,
         agent         STRING,
         catalogID     STRING,
+        pendingTools  ENCRYPTED STRING,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",

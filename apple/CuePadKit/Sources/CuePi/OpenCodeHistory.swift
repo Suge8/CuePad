@@ -115,7 +115,7 @@ enum OpenCodeHistory {
             if let cursor = page.cursor?.next, !page.data.isEmpty { next.cursor = cursor }
             guard page.data.count == pageSize else { break }
         }
-        return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.recap))
+        return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.projectedRecap))
     }
 
     /// `cursor` 之后的一页（从头读时是最早的一页），从早到晚。

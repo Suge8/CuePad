@@ -1,17 +1,22 @@
 import CueStore
 import SwiftUI
 
-/// 排队的话（`PiChat.queued`）：Agent 在跑时"等它做完再说"发出、它还没开始处理的，排在回复框那块玻璃的上部、一句一行，
-/// 下面一道发丝线隔开输入区（`Composer` 的头部），按发出先后，同一句话不再同时是对话末尾的气泡。`folded` 时（手机上回复框聚焦，
-/// 键盘已占了半屏）收成一行"N 句排队中 ›"，点它展开。还没被 Mac 领取的每条可"马上说"（会话做得到时，`steers`）或撤回；
-/// Mac 已交给 Pi 的写"已发给 Agent"——Pi 的扩展接口没有撤回或提升已进它队列的话（只有 Pi 自己的终端能清队列），所以那之后做不了。
-/// 数据只在投送请求里：撤回是删掉它，马上说是改它的方式（`AppServices.withdraw` / `promote`），叠里不另存状态。
+/// 排队的话（`PiChat.queued`）：Agent 在跑时发出、它还没读到的，排在回复框那块玻璃的上部、一句两行（话，与它此刻到哪了），
+/// 下面一道发丝线隔开输入区（`Composer` 的头部），按发出先后。Agent 读到的那一刻它从这里消失、出现在对话里被读到的位置。
+/// `folded` 时（手机上回复框聚焦，键盘已占了半屏）收成一行"N 句排队中 ›"，点它展开。
+/// 到哪了只说实话（`PiChat.queueNote`）：还没交到 Agent 手上是"发送中"，排进它的队列后写它什么时候读到。
+/// 还没被 Mac 领取的每条可"马上说"（会话做得到时，`steers`）或撤回——撤回的话放回输入框，改了再发；交给 Agent 之后做不了：
+/// Pi 的扩展接口没有撤回或改写已进它队列的话（只有 Pi 自己的终端能清队列）。
+/// 数据只在投送请求与对话里：撤回是删掉它，马上说是改它的方式（`Workspace.takeBack`、`AppServices.promote`），叠里不另存状态。
 struct PiQueueStack: View {
     let requests: [DeliveryRequest]
     let folded: Bool
     /// 这个会话能马上说（`AgentCapabilities.steer`）。
     let steers: Bool
+    /// 撤回的话放回的输入框。
+    let box: Binding<ComposerDraft>
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     /// 收着时点开了。
     @State private var unfolded = false
@@ -54,17 +59,23 @@ struct PiQueueStack: View {
     }
 
     private func row(_ request: DeliveryRequest) -> some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 8) {
+        let note = PiChat.queueNote(of: request, at: services.speech)
+        return HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "clock").font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                Text(PiChat.shownText(of: request))
-                    .font(Typography.secondary).foregroundStyle(palette.ink2)
-                    .lineLimit(1).truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(PiChat.shownText(of: request))
+                        .font(Typography.secondary).foregroundStyle(palette.ink2)
+                        .lineLimit(1).truncationMode(.tail)
+                    Text(note).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                        .contentTransition(.opacity)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            // 时钟是装饰：读屏只读这句话
+            .padding(.vertical, 4)
+            // 时钟是装饰：读屏读这句话与它到哪了
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(PiChat.shownText(of: request).spoken)
+            .accessibilityLabel("\(PiChat.shownText(of: request).spoken)，\(note.spoken)")
             if request.isWithdrawable {
                 if steers {
                     Button { promote(request) } label: {
@@ -78,16 +89,14 @@ struct PiQueueStack: View {
                     .accessibilityLabel(DeliveryMode.steer.label)
                     .help(DeliveryMode.steer.explanation ?? "")
                 }
-                Button { withdraw(request) } label: {
-                    Image(systemName: "xmark").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                Button { workspace.takeBack(request, into: box) } label: {
+                    Image(systemName: "arrow.uturn.backward").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                         .frame(width: Self.target, height: Self.target).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
                 .accessibilityLabel("撤回")
-                .help("撤回这句")
-            } else {
-                Text("已发给 Agent").font(Typography.caption).foregroundStyle(palette.ink3)
-                    .frame(minHeight: Self.target)
+                .accessibilityHint("放回输入框，改了再发")
+                .help("撤回这句，放回输入框")
             }
         }
         .padding(.leading, 6)
@@ -106,7 +115,4 @@ struct PiQueueStack: View {
         workspace.attempt { try await workspace.services.promote(request) }
     }
 
-    private func withdraw(_ request: DeliveryRequest) {
-        workspace.attempt { try await workspace.services.withdraw(.request(request)) }
-    }
 }

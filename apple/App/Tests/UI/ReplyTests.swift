@@ -89,25 +89,6 @@ struct ReplyTests {
             """)
     }
 
-    private func message(_ seq: Int64, _ text: String, delivery: UUID?) -> PiChatMessage {
-        PiChatMessage(sessionID: "s", entryID: "e\(seq)", seq: seq, role: .user, text: text, at: Date(timeIntervalSince1970: 1_000_000 + Double(seq)), deliveryID: delivery)
-    }
-
-    /// 在跑时"等它做完再说"发出、还没进对话的话在回复框上方一叠，不再同时是对话末尾的气泡；
-    /// 没能送达的仍是气泡（在对话里重发或移除），进了对话的两处都没有。
-    @Test func 排队的话只在回复框上方_不再是末尾的气泡() async throws {
-        let app = TestApp()
-        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
-        let live = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let queued = try await app.services.store.requestDelivery("改完再看看超时", to: live.target, on: live.hostID, mode: .followUp)
-        let arrived = try await app.services.store.requestDelivery("顺便跑一遍", to: live.target, on: live.hostID, mode: .followUp)
-        let now = try await app.services.store.requestDelivery("先停下这个", to: live.target, on: live.hostID, mode: .steer)
-        let messages = [message(1, "顺便跑一遍", delivery: arrived.id)]
-
-        #expect(PiChat.queued([queued, arrived, now], messages: messages, at: .always()).map(\.id) == [queued.id])
-        #expect(PiChat.outgoing([queued, arrived, now], messages: messages, at: .always()).map(\.id) == [now.id])
-    }
-
     /// 撤回与改为马上说只对还没被 Mac 领取的（Pi 扩展收不回已交给 Pi 的话）。
     @Test func 还没被Mac领取的可撤回或改为马上说_领取后不行() async throws {
         let app = TestApp()

@@ -232,7 +232,7 @@ struct MacSyncTests {
         #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
     }
 
-    /// 会话在压缩上下文时关掉，扩展留着还没交给 Pi 的话在告别里报出：这台 Mac 已经写成"送到了"的那条改记为没送到，
+    /// 会话关掉前没被读到的话（压缩时留着的、退出时还排在 Pi 队列里的）扩展在告别里报出：这台 Mac 已经写成"送到了"的那条改记为没送到，
     /// 走"没能送达 + 重发"那条路（列表行与会话页的没送到计数里有它）；别的会话、别的请求不动。
     @Test func 告别里报没送到的话_记为没能送达() async throws {
         let store = services.store
@@ -250,7 +250,7 @@ struct MacSyncTests {
         try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
 
         let failed = try #require(try await store.deliveryRequest(lost.id))
-        #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
+        #expect(failed.status == .known(.failed) && failed.failure != nil)
         #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
         #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered(at: .always()) == 1)
     }

@@ -6,6 +6,9 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
 /// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
+/// 说话的三种（`talk`）在请求上有两层含义：执行前是请求的方式；成功后 Mac 改写成 Agent 实际收下的方式（`DeliveryOutcome.accepted`）——
+/// 当场开始读是 `send`，排进它的队列是 `steer` / `followUp`。没能送达的：执行中失败的仍是请求的方式，收下后才没送到的
+/// （`CueStore.failAcceptedDeliveries`）是收下的方式。
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   case send, steer, followUp
@@ -59,6 +62,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var target: SendTarget
   /// 指定执行的那台 Mac（只有它会领取）。必填。
   public var hostID: String
+  /// 执行前是请求的方式，说话类请求成功后是 Agent 实际收下的方式（见 `DeliveryMode`）。
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
@@ -128,11 +132,14 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
+/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、Agent 收下了一句话（`accepted`，带它实际怎么收下的，写回请求的 `mode`）、
+/// 失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
 /// （会话正在起、还没连上桥，清单在 App 的执行器里）。暂时没成由 `DeliveryExecutor` 隔 `Speech.retryDelay` 再执行一次，
 /// 再不成就按失败写回；终态只由执行器写这一处。
 public enum DeliveryOutcome: Sendable {
   case succeeded
+  /// 说话类请求送到了：`send` 是 Agent 当场开始读，`steer` / `followUp` 是排进了它的队列
+  case accepted(DeliveryMode)
   case failed(String)
   case transient(String)
 }

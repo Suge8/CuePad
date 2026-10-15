@@ -49,8 +49,6 @@ nonisolated enum PiDelivery: Hashable, Sendable {
     enum Transit: Hashable, Sendable {
         /// Mac 还没接手。
         case sending
-        /// 会话在跑时"等它做完再说"的。
-        case queued
         /// Mac 接手了，正在送达。
         case delivering
         /// 发给已结束的会话：Mac 先在后台唤醒它。
@@ -59,24 +57,21 @@ nonisolated enum PiDelivery: Hashable, Sendable {
         var label: String {
             switch self {
             case .sending: "发送中"
-            case .queued: "排队中"
             case .delivering: "送达中"
             case .waking: "正在唤醒"
             }
         }
 
-        /// `session` 是收话的会话；开新会话的请求没有。
+        /// `session` 是收话的会话；开新会话的请求没有。排进 Agent 队列之后怎么说在会话页的排队一叠（`PiChat.queueNote`），不在这里。
         static func of(_ request: DeliveryRequest, session: PiSessionState?) -> Transit {
             if session?.state == .known(.ended) { return .waking }
-            let busy = session.map { $0.isWorking || $0.state == .known(.waitingForUser) } ?? false
-            if busy, request.mode == .known(.followUp) { return .queued }
             return request.isWithdrawable ? .sending : .delivering
         }
     }
 
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 送到了的请求过一会儿就被执行它的 Mac 清理，"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
+    /// 送到了的请求过一会儿就被执行它的 Mac 清理（排在 Agent 队列里的留到被读到或会话停下，那时会话在忙，这里已让位），"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
@@ -147,7 +142,7 @@ nonisolated struct PiShown: Hashable, Sendable {
     }
 
     let status: Status
-    /// 会话在跑时还在路上的话："你的话排队中"（等这一轮做完再送）、"你的话发送中"。
+    /// 会话在跑时还在路上的话："你的话发送中"、"你的话送达中"。
     var note: String?
     /// 计时；只有状态、没有会话的（子代理、样板）没有。
     var clock: PiClock?

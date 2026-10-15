@@ -112,6 +112,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var lastPrompt: String?
   public var lastReply: String?
   public var pendingPrompt: String?
+  public var pendingTools: PiChatMessage.Tools?
   public var question: PiQuestion?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
@@ -144,7 +145,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
-    subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
+    subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil
   ) {
     self.id = id
@@ -167,6 +168,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.hosted = hosted
     self.subagents = subagents
     self.pendingPrompt = pendingPrompt
+    self.pendingTools = pendingTools
     self.model = model
     self.thinking = thinking
     self.context = context
@@ -205,7 +207,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   }
 
   /// 记录上的摘要（对话的投影）。
-  public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt) }
+  public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt, pendingTools: pendingTools) }
 
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
@@ -224,16 +226,16 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
   /// 对话的投影（见 `PiRecap`），只由 `writePiTranscript` 写
-  static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt"]
+  static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools"]
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID",
+    "model", "thinking", "context", "agent", "catalogID", "pendingTools",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
-     model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID]
+     model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored]
   }
   init(row: Row) {
     self.init(
@@ -246,6 +248,7 @@ extension PiSessionState: Record {
       // 列里是会话文件的投影原样（最后一句可能是上次中途退出、没等到回答的）；已结束的会话没有正在处理的提问，
       // 会话重新连上时又是它——不必等文件再追加
       pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19),
+      pendingTools: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(25).flatMap(PiChatMessage.Tools.init(stored:)),
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
       agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24))
