@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用法：xc.sh perf mac [次数=3]
+# 用法：xc.sh perf mac [次数=3] [启动参数…]   启动参数原样传给 App，如只量几项：xc.sh perf mac 3 -CuePadInteractOnly 会话页,长文打字·回复框
 #   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）、合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   与交互预算（docs/verify.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
@@ -13,6 +13,7 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_lock.sh"
 xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
+extra=("${@:2}")
 
 DERIVED="$APPLE_DIR/.derived-perf-release"
 EXE="$DERIVED/Build/Products/Release/CuePad.app/Contents/MacOS/CuePad"
@@ -51,7 +52,7 @@ fi
 collect() {
   local label="$1"; shift
   for _ in $(seq "$runs"); do
-    launch "$@" -CuePadBench interact -CuePadWindowSize 1440x900 2>/dev/null | sed -n 's/^INTERACT //p' | sed "s/^{/{\"库\":\"$label\",/"
+    launch "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} 2>/dev/null | sed -n 's/^INTERACT //p' | sed "s/^{/{\"库\":\"$label\",/"
   done
 }
 rows="$DERIVED/interact.jsonl"

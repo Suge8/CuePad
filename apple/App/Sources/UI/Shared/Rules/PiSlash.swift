@@ -41,10 +41,12 @@ nonisolated enum PiSlash {
     /// 草稿是一条已知的斜杠命令时，要发出的整行；否则为 nil（当普通消息发）。
     /// 命令行是输入的文字（首个词是清单里的名字），带上的卡片文字接在后面当参数（发给 Agent 时）；带图片的不算命令，命令不能携带图片。
     @MainActor static func line(of draft: ComposerDraft, in commands: [PiSlashCommand]) -> String? {
-        let typed = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard typed.hasPrefix("/"), !draft.hasImages else { return nil }
-        let name = typed.dropFirst().prefix { !$0.isWhitespace }
+        // 回复框每次重算都问一遍：先只看开头，是命令再整串修剪（长草稿每次都整串复制一遍，打一个字就要几毫秒）
+        let start = draft.text.drop { $0.isWhitespace }
+        guard start.hasPrefix("/"), !draft.hasImages else { return nil }
+        let name = start.dropFirst().prefix { !$0.isWhitespace }
         guard commands.contains(where: { $0.name == name }) else { return nil }
+        let typed = start.trimmingCharacters(in: .whitespacesAndNewlines)
         return ([typed] + draft.attachments.map(\.content)).joined(separator: "\n\n")
     }
 }

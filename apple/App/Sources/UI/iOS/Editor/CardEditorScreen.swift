@@ -27,7 +27,6 @@ struct CardEditorScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: EditorData?
     @State private var initialText: String?
-    @State private var liveText = ""
     @State private var handle = IOSEditorHandle()
     @State private var autosave: Autosave?
     @State private var pickingImage = false
@@ -48,7 +47,7 @@ struct CardEditorScreen: View {
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }
             .sheet(isPresented: $editingVariables) {
-                if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? liveText)) }
+                if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: currentText)) }
             }
             // 提示词送达就用掉（资料库里删了）：卡没了就收起，不当错误
             .observing(services.store, id: cardID, into: $data, onError: { error in
@@ -62,7 +61,6 @@ struct CardEditorScreen: View {
             .onChange(of: data?.card.id, initial: true) {
                 guard initialText == nil, let card = data?.card else { return }
                 initialText = card.body
-                liveText = card.body
             }
             .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
             .onAppear(perform: makeAutosave)
@@ -101,10 +99,7 @@ struct CardEditorScreen: View {
                     initialText: initialText,
                     theme: .editor(palette, horizontalInset: inset),
                     handle: handle,
-                    onChange: { next in
-                        liveText = next
-                        autosave?.changed(next)
-                    },
+                    onChange: { autosave?.changed($0) },
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
                     onSend: hand(data.card),
@@ -178,9 +173,13 @@ struct CardEditorScreen: View {
         return CardMenu.handsToAgent(card) ? [hand, tasks] : [tasks]
     }
 
-    /// 当前编辑中的整张正文（未保存的也算），变量已填。
+    /// 当前编辑中的整张正文（未保存的也算）：编辑器是正文的唯一写者，从它读；编辑器还没建好时是打开时的正文。
+    /// 不另存一份跟着每个字更新的状态：存了就是每敲一个字整页重算一遍。
+    private var currentText: String { handle.text ?? initialText ?? "" }
+
+    /// 当前编辑中的整张正文，变量已填。
     private func outgoing(_ card: Card) -> String {
-        Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
+        Outgoing.text(body: currentText, values: card.variableValues)
     }
 
     private func insertPicked() {

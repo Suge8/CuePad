@@ -39,15 +39,22 @@ struct ComposerField: UIViewRepresentable {
         context.coordinator.parent = self
         // 组合期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
         // 外部写进来的光标放到末尾、排好后让末尾露出来：接着写的地方在末尾，撑满行数时看见的是最后几行而不是开头
-        if view.text != text, view.markedTextRange == nil {
+        if text != context.coordinator.sent, view.markedTextRange == nil {
+            context.coordinator.sent = text
             view.text = text
+            view.textChanged()
+            view.layOutAll()
             view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
             view.revealsEnd = true
             view.setNeedsLayout()
         }
         view.placeholder.text = prompt
         view.placeholder.isHidden = !view.text.isEmpty
-        view.textColor = UIColor(ink)
+        // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色、作废排版（每次更新都设时，几百行的草稿每个字多花好几毫秒）
+        if ink != context.coordinator.ink {
+            context.coordinator.ink = ink
+            view.textColor = UIColor(ink)
+        }
         view.placeholder.textColor = UIColor(palette.placeholder)
         view.accessibilityLabel = label
         view.maxLines = maxLines
@@ -58,17 +65,24 @@ struct ComposerField: UIViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }
-        return CGSize(width: width, height: min(view.contentHeight(width: width), view.maxHeight))
+        return CGSize(width: width, height: view.fittingHeight(width: width))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerField
+        /// 上次交给 `text` 的那一串：绑定原样传回时是同一块存储，比较不用逐字（更新时拿它判断是不是外部改写，不拿文字区的字比）。
+        var sent = ""
+        var ink: Color?
         init(_ parent: ComposerField) { self.parent = parent }
 
         func textViewDidChange(_ view: UITextView) {
-            (view as? GrowingTextView)?.placeholder.isHidden = !view.text.isEmpty
+            guard let view = view as? GrowingTextView else { return }
+            view.placeholder.isHidden = !view.text.isEmpty
+            view.textChanged()
+            let text = String(native: view.textStorage.string as NSString)
+            sent = text
             // 高度跟着文字一起走动画：拼音换行、定字收回每次都差一整行
-            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = view.text }
+            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = text }
         }
     }
 }
@@ -79,8 +93,10 @@ final class GrowingTextView: UITextView {
     var animatesScroll = true
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 外部刚写进文字：下一次排版后滚到末尾。
-    var revealsEnd = false
+    /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
+    var revealsEnd = false { didSet { revealedHeight = nil } }
+    /// 上次对齐末尾时的高度。
+    private var revealedHeight: CGFloat?
 
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
     /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
@@ -110,16 +126,35 @@ final class GrowingTextView: UITextView {
     private struct RulerKey: Hashable { var lines: Int; var size: CGFloat }
     private static var rulerHeights: [RulerKey: CGFloat] = [:]
 
-    /// 这些字在这个宽度下排出来多高。SwiftUI 一次排版里会问好几遍（每层容器量一次），文字与宽度没变时用上次量的
-    /// （每量一次都是一遍 TextKit 排版，进会话页时这里占主线程一成；Mac 的那份同样记着）。
-    func contentHeight(width: CGFloat) -> CGFloat {
-        let size = font?.pointSize ?? 0
-        if let last = measured, last.text == text, last.width == width, last.size == size { return last.height }
-        let height = sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        measured = (text, width, size, height)
-        return height
+    /// 文字区在这个宽度下要多高：排出来的高度，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
+    func fittingHeight(width: CGFloat) -> CGFloat {
+        heights.height(of: textStorage.string as NSString, width: width, em: font?.pointSize ?? 0, limit: maxHeight) { prefix in
+            Self.ruler.font = font
+            Self.ruler.text = prefix
+            return Self.ruler.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        }
     }
-    private var measured: (text: String, width: CGFloat, size: CGFloat, height: CGFloat)?
+    private var heights = ComposerHeight()
+
+    /// 文字变了（打字、外部写入）。宽度变过（形态动画、转屏）之后头一次打字时整篇重排一遍（见 `layOutAll`）。
+    func textChanged() {
+        heights.textChanged()
+        if laidOutWidth != bounds.width { layOutAll() }
+    }
+
+    /// 上次整篇排一遍时的宽度；nil 是要重排。文字区自己只排看得见的那段、其余的高度是估的，估的高度随排开的段越来越准，
+    /// 光标在末尾时系统就跟着一帧帧地追着滚（几百行时每敲一个字都追好几帧）。外部写进、粘贴进一大段之后整篇排一遍，
+    /// 之后打字只重排改动的那段。宽度变了不马上重排：形态动画里一帧一个宽度，每帧整篇排就卡住动画。
+    private var laidOutWidth: CGFloat?
+    func layOutAll() {
+        laidOutWidth = nil
+        setNeedsLayout()
+    }
+
+    override func paste(_ sender: Any?) {
+        super.paste(sender)
+        layOutAll()
+    }
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -132,16 +167,25 @@ final class GrowingTextView: UITextView {
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
 
     override func layoutSubviews() {
+        if laidOutWidth == nil, window != nil, let manager = textLayoutManager {
+            laidOutWidth = bounds.width
+            manager.ensureLayout(for: manager.documentRange)
+        }
         super.layoutSubviews()
         // 占位从光标右边起：光标画在第一个字上会压住它（系统输入框同样留出光标的宽度）
         let caret = caretRect(for: beginningOfDocument).maxX + 1
         placeholder.frame = CGRect(x: caret, y: 0, width: bounds.width - caret, height: placeholder.font.lineHeight)
         // 没撑满行数时没有可滚的：滚动条只在内容比框高出半行以上时开（尺寸为 0 的滚动条会作为"0页"滑块进读屏树）
         showsVerticalScrollIndicator = contentSize.height - bounds.height > (font?.lineHeight ?? 0) / 2
-        // 高度定下来之后才知道末尾在哪；还没有窗口（未上屏）时等上屏后的那次排版
+        // 外部写进文字后让末尾露出来：按末尾的位置滚，不按内容高度（高度只量了开头，见 `ComposerHeight`；文字区自己只排看得见的那段，
+        // 内容高度是估的）。高度还在随形态动画变的时候每次排版都对齐一次，高度不再变了才算完；还没有窗口（未上屏）时等上屏后的那次排版
         if revealsEnd, window != nil, bounds.height > 0 {
-            revealsEnd = false
-            super.contentOffset = CGPoint(x: 0, y: max(0, contentSize.height - bounds.height))
+            if bounds.height == revealedHeight {
+                revealsEnd = false
+            } else {
+                revealedHeight = bounds.height
+                super.contentOffset = CGPoint(x: 0, y: max(0, caretRect(for: endOfDocument).maxY - bounds.height))
+            }
         }
     }
 
