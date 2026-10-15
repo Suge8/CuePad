@@ -70,12 +70,28 @@ nonisolated enum PiChat {
         return PiClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 一轮经过的一句（`RoundProcess` 的标题行，做完的回答与在跑的这一轮同一种写法）："跑了 12 步 · 改了 3 个文件"。
-    /// 步数是各类调用的合计（读、改同一个文件只算一步，与清单的行同一口径）；没改文件的那一截不写。不写出错几处：中途出的错它多半自己解决了，
+    /// 一轮经过的一句（`RoundProcess` 的标题行；会话与 Cue、做完的与在跑的同一种写法）："跑了 12 步 · 改了 3 个文件"、
+    /// "跑了 6 步 · 对 2 个会话说话 · 收下 1 件"。步数是调用数（读、改同一个文件只算一步，与清单的行同一口径）；
+    /// 后面逐类写落了结果的几步（`Kind.acts`，做成了的，没有的那类不写；对会话说话按会话算）。不写出错几处：中途出的错它多半自己解决了，
     /// 没解决的回答里会说；哪步出错展开清单在原位标着。没调过工具的一轮没有这一句。
     static func processLine(_ tools: PiChatMessage.Tools?) -> Dotted? {
-        guard let tools, tools.total > 0 else { return nil }
-        return Dotted("跑了 \(tools.total) 步", tools.edits > 0 ? "改了 \(tools.edits) 个文件" : nil)
+        guard let tools, tools.steps > 0 else { return nil }
+        let acts = tools.items.filter { $0.kind.acts && !$0.failed }
+        func phrase(_ kind: PiChatMessage.Tools.Kind, _ write: (Int) -> String) -> String? {
+            let done = acts.filter { $0.kind == kind }
+            let count = kind == .talk ? Set(done.map { $0.task?.uuidString ?? $0.target }).count : done.count
+            return count > 0 ? write(count) : nil
+        }
+        return Dotted([
+            "跑了 \(tools.steps) 步",
+            phrase(.edit) { "改了 \($0) 个文件" },
+            phrase(.add) { "建了 \($0) 件任务" },
+            phrase(.start) { "开工 \($0) 件" },
+            phrase(.talk) { "对 \($0) 个会话说话" },
+            phrase(.stop) { "停下 \($0) 个会话" },
+            phrase(.done) { "收下 \($0) 件" },
+            phrase(.ask) { "问你 \($0) 件" },
+        ])
     }
 
     /// 改文件的行数："+12 −3"；没有增或没有删的那一半不写，算不出的也不写。

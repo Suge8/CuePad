@@ -1,9 +1,11 @@
 #if os(macOS)
 import CueAgent
+import CueStore
 import Foundation
 
-/// Cue 的一轮经过（Cue 页的"运行情况"读它）：为什么醒、交给大脑的话、调了哪些工具（参数、结果、耗时）、出没出错、做完时上下文用了多少。
-/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一看得到经过的地方；不入库、不同步，App 重启就没了。
+/// Cue 的一轮经过：为什么醒、交给大脑的话、调了哪些工具（参数、结果、耗时）、出没出错、做完时上下文用了多少。
+/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一的事实源。Mac 的"运行情况"读它的全部；
+/// 给人看的那一份由它推出（`process`）：在跑时写进 Cue 此刻的状态、做完时落在这一轮写下的那一行上，随库同步到各端。
 struct CueRound: Identifiable {
     let id: Int
     /// 为什么醒；没有醒来就开始的一轮（插进来的话恰好赶上这一轮结束）记作你发来消息
@@ -24,11 +26,21 @@ struct CueRound: Identifiable {
     /// 正在调的那个工具（最后一个还没做完的）
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
-    mutating func finish(_ id: String, result: String, failed: Bool) {
+    /// 给人看的经过：做完的调用按先后（还在跑的不算，它是此刻在做的）；一个都没做完为 nil。
+    var process: PiChatMessage.Tools? {
+        let items = calls.compactMap(\.item)
+        guard !items.isEmpty else { return nil }
+        var tools = PiChatMessage.Tools()
+        for item in items { tools.record(item) }
+        return tools
+    }
+
+    mutating func finish(_ id: String, result: String, failed: Bool, item: PiChatMessage.Tools.Item) {
         guard let index = calls.lastIndex(where: { $0.id == id && $0.finishedAt == nil }) else { return }
         calls[index].finishedAt = .now
         calls[index].result = result.count <= Self.resultLimit ? result : String(result.prefix(Self.resultLimit)) + "\n…"
         calls[index].failed = failed
+        calls[index].item = item
     }
 }
 
@@ -41,5 +53,7 @@ struct CueToolCall: Identifiable {
     var finishedAt: Date?
     var result: String?
     var failed = false
+    /// 做完后在经过清单里的那一条（`CueActivity.item`）
+    var item: PiChatMessage.Tools.Item?
 }
 #endif

@@ -135,7 +135,8 @@ struct CuePreviewThumb: View {
     private static let side: CGFloat = 44
 }
 
-/// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字（最新一条的首行与条数），点开看全——展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
+/// 连着的几条动态（Cue 自己醒来的那几轮）：折成一行灰字（最新一条的首行，没有正文的写它的经过，与条数），点开看全——
+/// 每条上方是那一轮的经过（`RoundProcess`，同回答注脚），下面是它说的那句。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
 struct CueNotes: View {
     let notes: [CueMessage]
     @State private var expanded = false
@@ -147,7 +148,7 @@ struct CueNotes: View {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Text(expanded ? "\(notes.count) 条动态" : Dotted(PiProgress.firstLine(CueFormat.plainText(notes.last?.text ?? "")), notes.count > 1 ? "\(notes.count) 条" : nil))
+                    Text(expanded ? "\(notes.count) 条动态" : Dotted(notes.last.flatMap(Self.line), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }
@@ -159,9 +160,15 @@ struct CueNotes: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(notes) { note in
-                        Text(CueFormat.plainText(note.text)).font(Typography.meta).foregroundStyle(palette.ink3)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .selectable()
+                        VStack(alignment: .leading, spacing: 4) {
+                            RoundProcess(tools: note.tools, ending: .took(nil))
+                            let text = CueFormat.plainText(note.text)
+                            if !text.isEmpty {
+                                Text(text).font(Typography.meta).foregroundStyle(palette.ink3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .selectable()
+                            }
+                        }
                     }
                 }
                 .padding(.leading, 15)
@@ -170,10 +177,15 @@ struct CueNotes: View {
         }
         .transition(.entry)
     }
+
+    /// 一条动态收成一行：它说的那句的首行；只有经过的写经过那一句。
+    private static func line(_ note: CueMessage) -> String? {
+        PiProgress.firstLine(CueFormat.plainText(note.text)) ?? PiChat.processLine(note.tools)?.visible
+    }
 }
 
-/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、你选了的下面一行写你选的那一项（还在等的不在对话里，见 `CueThread.rows`；
-/// 关掉或撤回的只剩这句话）。
+/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答），上方是那一轮的经过（`RoundProcess`）；问过你的、你选了的下面一行写你选的那一项
+/// （还在等的不在对话里，见 `CueThread.rows`；关掉或撤回的只剩这句话）。
 struct CueSays: View {
     let message: CueMessage
     /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
@@ -182,6 +194,7 @@ struct CueSays: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            RoundProcess(tools: message.tools, ending: .took(nil))
             MarkdownText(source: message.text).equatable()
             if let answer = message.answer {
                 Label(answer, systemImage: "arrowshape.turn.up.left").font(Typography.meta).foregroundStyle(palette.ink3)

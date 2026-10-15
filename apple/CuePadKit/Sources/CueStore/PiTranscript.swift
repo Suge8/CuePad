@@ -196,14 +196,24 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
-  /// 一轮的经过：各类工具调用的次数（失败的也算，读、改文件按文件算；合计就是界面上的"跑了 N 步"）和一份按先后的清单——
-  /// 每次调用一条（自己标成败），中途说的每段话也一条（`said`，不计步数）；最后那段话是回答，不在清单里。
-  /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
+  /// 一轮的经过：调了几次工具（失败的也算，读、改同一个文件只算一次；界面上的"跑了 N 步"）和一份按先后的清单——
+  /// 每次调用一条（自己标成败），中途说的每段话也一条（`said`，不是调用）；最后那段话是回答，不在清单里。
+  /// Agent 会话的由 Mac 从会话文件汇出，Cue 的由值班的管理器从这一轮的调用汇出（`CueActivity`）；同步记录里存为 JSON（加密字段）。
   public struct Tools: StoredJSON, Equatable, Sendable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
       case edit, command, read, search, other
-      /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"）：不是工具调用，`target` 是那段话
+      /// 中途说的一段话（调工具前后说的"先看看…""测试挂了，查一下"；Cue 用 tell 对你说的）：`target` 是那段话
       case said
+      /// Cue 的动作：对会话说话、开工、建任务、收下、停下会话、问你（`target` 写哪件任务与说了什么，`task` 是那件任务）
+      case talk, start, add, done, stop, ask
+
+      /// 落了结果的一步（改文件与 Cue 的动作）：清单里总列上，标题行逐类写个数。
+      public var acts: Bool {
+        switch self {
+        case .edit, .talk, .start, .add, .done, .stop, .ask: true
+        case .command, .read, .search, .other, .said: false
+        }
+      }
     }
 
     public struct Item: Codable, Equatable, Sendable {
@@ -214,20 +224,22 @@ extension PiChatMessage {
       /// 改文件：新增、删除的行数；算不出为 nil
       public var added: Int?
       public var removed: Int?
+      /// Cue 动到的任务：清单里点这一条打开它
+      public var task: UUID?
 
-      public init(kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil) {
+      public init(kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil) {
         self.kind = kind
         self.target = target
         self.failed = failed
         self.added = added
         self.removed = removed
+        self.task = task
       }
     }
 
-    /// 各类的调用数，失败的也算在自己那一类里（与清单的行同一口径）
-    public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
-    /// 清单，按发生先后。改了的文件与说的话总在里面（展开的清单不漏改了哪些文件）；
-    /// 其余调用至多列到 `itemLimit` 条，超出的只进计数
+    /// 调用数（与清单的行同一口径；说的话不算）
+    public var steps: Int
+    /// 清单，按发生先后。落了结果的（`Kind.acts`）与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
     public static let itemLimit = 30
@@ -236,17 +248,17 @@ extension PiChatMessage {
     /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大
     public static let saidLimit = 200
 
-    public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, items: [Item] = []) {
-      self.edits = edits
-      self.commands = commands
-      self.reads = reads
-      self.searches = searches
-      self.others = others
+    public init(steps: Int = 0, items: [Item] = []) {
+      self.steps = steps
       self.items = items
     }
 
-    /// 调用总数
-    public var total: Int { edits + commands + reads + searches + others }
+    /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满或它落了结果（`Kind.acts`）就列上。
+    public mutating func record(_ item: Item) {
+      guard item.kind != .said else { return items.append(item) }
+      steps += 1
+      if item.kind.acts || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
+    }
   }
 }
 

@@ -43,12 +43,30 @@ extension DebugScene {
             }
             if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
             try await you("圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发")
-            _ = try await store.addCueMessage(.cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id)
-            for note in [
-                "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间",
-                "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试",
-                "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说",
-            ] { _ = try await store.addCueMessage(.note, text: note) }
+            // 每一轮的经过（同值班的管理器写下的样子，`CueRound.process`）：动到的任务带着 id，清单里点它打开
+            func step(_ kind: PiChatMessage.Tools.Kind, _ target: String, _ task: Card? = nil) -> PiChatMessage.Tools.Item {
+                .init(kind: kind, target: target, task: task?.id)
+            }
+            func process(_ items: PiChatMessage.Tools.Item...) -> PiChatMessage.Tools {
+                var tools = PiChatMessage.Tools()
+                for item in items { tools.record(item) }
+                return tools
+            }
+            _ = try await store.addCueMessage(
+                .cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id,
+                tools: process(
+                    step(.read, "看板"), step(.add, "建任务「发言轮次乱序」", order), step(.other, "改「发言轮次乱序」", order), step(.start, "开工「发言轮次乱序」", order),
+                    step(.talk, "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序", order)))
+            for (note, tools) in [
+                ("看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
+                ("让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", process(
+                    step(.read, "看「发言轮次乱序」的近况", order), step(.talk, "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍", order))),
+                ("CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", process(
+                    step(.read, "看板"), step(.read, "看「导入旧数据」的近况", importing), step(.search, "导入旧数据 prompt 太长"))),
+                ("", process(
+                    step(.read, "看「README 截图」的近况", panel), step(.talk, "对「README 截图」说：深色那张也按参考图拍，拍完发给我", panel),
+                    step(.other, "记下：README 截图要浅色深色各一张"))),
+            ] { _ = try await store.addCueMessage(.note, text: note, tools: tools) }
             // 上下文到了换新线：写下交接，从这里起换了新上下文（对话里一条分隔，点开是这份备忘）
             _ = try await store.addCueMessage(.handoff, text: """
                 **在做**
@@ -91,7 +109,8 @@ extension DebugScene {
                 try await store.setCueState(.thinking)
             case "tool":
                 try await you("顺便看看登录回调那个超时")
-                try await store.setCueState(.tool, detail: "看进展")
+                try await store.setCueState(.tool, detail: "跟会话说话", pendingTools: process(
+                    step(.read, "看板"), step(.search, "登录回调 超时"), step(.add, "建任务「登录回调超时」"), step(.start, "开工「登录回调超时」")))
             case "sending":
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
             case "asleep":
