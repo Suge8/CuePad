@@ -270,7 +270,7 @@ extension CueStore {
   /// 1. 会话在等 CuePad 能代答的提问（`PiSessionState.answerableQuestion`）时，这句就是答案（`answerValue`）；答不上抛 `invalidAnswer`，什么都不写。
   /// 2. 否则按 `mode` 发出：`send` 直接发送、`followUp` 等它做完再说、`steer` 马上说（规则见 `say`）。
   /// 带 `config`（模型、思考强度）时先请会话换上（与界面换模型同一种请求），两条按先后执行；换不了模型抛 `cannotChangeModel`，什么都不写。
-  /// 会话已结束也照说：执行它的 Mac 先恢复它。它做的已完成的事回到进行中（`insertDelivery`）。`card` 是这句带着的卡，
+  /// 会话已结束也照说：执行它的 Mac 先恢复它。送到时它做的已完成的事回到进行中（`finishDelivery`），没送到什么都不变。`card` 是这句带着的卡，
   /// `name` 是会话记录还没到时对它的称呼，`host` 是记录还没到时由哪台 Mac 执行。
   public func speak(
     _ content: String, to sessionID: String, name: String = "", mode: DeliveryMode = .send, card: UUID? = nil, config: PiConfig? = nil,
@@ -438,7 +438,8 @@ extension CueStore {
     }
   }
 
-  /// 已完成的任务来了新活，回到进行中：对它的会话说话或作答（`insertDelivery`）、给它加步骤（`createTask(_:under:)`）都经这里。
+  /// 已完成的任务来了新活，回到进行中：对它的会话说的话或答案送到时（`finishDelivery`，与提示词用掉同一次写入）、
+  /// 给它加步骤时（`createTask(_:under:)`，写入时）都经这里。
   /// `tasks` 连同各自已完成的上级回到进行中；回到进行中的事在归档里的，整件连同下级取回。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
     var tops: [UUID] = []

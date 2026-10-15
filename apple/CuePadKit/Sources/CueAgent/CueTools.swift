@@ -40,11 +40,11 @@ public struct CueTools: Sendable {
           add{title,project?,steps?,prompt?,session?} 建任务；带 session 把一个没绑任务的会话绑到新建的任务上（你要为它的结果负责时；不写 prompt，话用 say 说；project 缺省是会话所在的项目）；
           edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤（已完成的任务回到进行中）或挪到项目；
           start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，哪怕它已结束（执行时恢复），上下文太长或要换 Agent 时用 fresh:true（上一步的会话随之结束）；
-          say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它；任务已完成的回到进行中；
+          say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它；送到后任务已完成的回到进行中，没送到什么都不变；
           say 与把草稿发进已有会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?} 只读：都不带看所有没做完的事与没绑任务的活会话（"在做"的归你管），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与预览，带 session 看那个会话；
           stop{task|session} 停下这一轮；
-          done{task,evidence?} 收尾：你按证据验收过就完成，不请用户收下。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；结束的会话照样能 say，CuePad 先恢复它，任务回到进行中；
+          done{task,evidence?} 收尾：你按证据验收过就完成，不请用户收下。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；结束的会话照样能 say，CuePad 先恢复它，送到后任务回到进行中；
           顶层任务（步骤要都完成）要 evidence：1–\(evidenceCount) 条结论（如"\(evidenceExample)"）、每条宽不过 \(evidenceLimit)（约 20 个汉字），超了退回；完成时 CuePad 把标题与证据拼成结果告诉用户，不用再 tell。
           """,
         "inputSchema": schema(

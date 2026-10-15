@@ -46,8 +46,8 @@ struct SessionTaskTests {
     }
 
     /// 回复框与 Cue 的 say 同一条规则：会话在等 CuePad 答得了的提问时，说的话就是答案（选项原文或序号），否则照常发出；
-    /// 已完成的任务来了新活（对它的会话说话或作答、给它加步骤）回到进行中。
-    @Test func 对已完成任务的会话说话_任务回到进行中_会话在等提问时说的话就是答案() async throws {
+    /// 已完成的任务来了新活回到进行中：说的话或答案送到时（会话所在的 Mac 记下送达），加步骤时当场。
+    @Test func 对已完成任务的会话说话_送到后任务回到进行中_会话在等提问时说的话就是答案() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录", in: nil)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
@@ -57,31 +57,57 @@ struct SessionTaskTests {
         try await workspace.toggle(task.id)
         #expect(try await store.card(task.id)?.status == .done)
 
-        let box = services.settings.replyDraftBinding(for: PiSessionState.recordID(sessionID: "s1"))
-        func reply(_ text: String) async throws {
-            let session = try #require(try await store.piSessions(sessionIDs: ["s1"])["s1"]?.state)
-            box.wrappedValue = ComposerDraft(text: text)
-            await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }?.value
-        }
-        try await reply("登录后还是白屏")
+        try await reply("登录后还是白屏", to: "s1", in: workspace)
+        let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
+        #expect(sent.mode == .known(.send) && sent.status == .known(.pending))
+        #expect(try await store.card(task.id)?.status == .done)  // 还没送到
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+        try await executor.start()
+        defer { Task { await executor.stop() } }
+        _ = try await store.outcome(of: sent.id)
         #expect(try await store.card(task.id)?.status == .inProgress)
-        #expect(try await store.deliveryRequests(toSession: "s1").last?.mode == .known(.send))
 
         let question = PiQuestion(promptID: "p1", kind: .select, text: "旧数据怎么办？", options: ["覆盖", "跳过"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
-        try await reply("2")
+        try await reply("2", to: "s1", in: workspace)
         #expect(try await store.deliveryRequests(toSession: "s1").last?.answer == PiAnswer(promptID: "p1", value: .option("跳过")))
 
         try await store.setStatus(task.id, .done)
         let cue = CueTools(store: store, wait: 0)
         let answered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "覆盖"]))
         #expect(!answered.isError && answered.structured["mode"] as? String == DeliveryMode.answer.rawValue)
-        #expect(try await store.deliveryRequests(toSession: "s1").last?.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
+        let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)
+        #expect(answer.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
+        _ = try await store.outcome(of: answer.id)
         #expect(try await store.card(task.id)?.status == .inProgress)
 
         try await store.setStatus(task.id, .done)
         _ = try await store.createTask("补测试", under: task.id)
         #expect(try await store.card(task.id)?.status == .inProgress)
+    }
+
+    /// 会话恢复不了（如那家 Agent 没接入、会话文件不在这台 Mac 上），说的话没送到：任务保持完成，什么都不变。
+    @Test func 说的话没送到_任务保持完成() async throws {
+        try await enableCue()
+        let task = try await store.createTask("修登录", in: nil)
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
+        let workspace = Workspace(services: services)
+        try await workspace.bind("s1", to: task.id)
+        try await workspace.toggle(task.id)
+        try await recorder.end(sessionID: "s1")
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in
+            .failed("Agent 会话「修登录」已经结束，或不在这台 Mac 上")
+        }
+        try await executor.start()
+        defer { Task { await executor.stop() } }
+
+        try await reply("登录后还是白屏", to: "s1", in: workspace)
+        let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
+        #expect(try await store.outcome(of: sent.id).status == .known(.failed))
+        let said = try #require(await CueTools(store: store, wait: 5).call("task", ["action": "say", "task": task.id.uuidString, "text": "接着修"]))
+        #expect(said.isError && said.text.contains("没送到"))
+        #expect(try await store.card(task.id)?.status == .done)
     }
 
     /// 下一步"开始"接着用上一步的会话，哪怕它已结束：话照样发进那个会话（执行的 Mac 先恢复它），不开新会话。
@@ -255,6 +281,14 @@ struct SessionTaskTests {
         for old in ["s1", "s2"] {
             #expect(try await store.tasks(boundTo: old).map(\.task.id) == [leaf.id])
         }
+    }
+
+    /// 在会话页的回复框里写下 `text` 发出（与界面的发送按钮同一条路）。
+    private func reply(_ text: String, to sessionID: String, in workspace: Workspace) async throws {
+        let session = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state)
+        let box = services.settings.replyDraftBinding(for: session.id)
+        box.wrappedValue = ComposerDraft(text: text)
+        await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }?.value
     }
 
     private func enableCue() async throws {
