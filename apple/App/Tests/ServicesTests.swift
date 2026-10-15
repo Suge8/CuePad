@@ -205,20 +205,23 @@ struct AgentIndexingTests {
     }
 }
 
-/// 启用只是"住到这台、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了才换成第一家能用的，
-/// 模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
+/// 启用只是"住到这台、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了（不在这台 Mac 写下的能用的 Agent 里）
+/// 才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。全新的设置强度是"低"（大脑默认要快）。
 struct CueEnableTests {
+    private func usable(_ kinds: [AgentKind], in app: TestApp) async throws {
+        try await app.services.store.recordMacAgents(host: TestApp.hostID, kinds.map { MacAgent(kind: $0, model: nil, models: []) })
+    }
+
     @Test func 全新设置启用后强度是低() async throws {
-        let app = TestApp(cue: CueDependencies(
-            scan: { [.pi] }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let app = TestApp()
+        try await usable([.pi], in: app)
         try await app.services.cue.enable()
         #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
     }
 
     @Test func 启用不动你选的Agent与模型() async throws {
-        let available = Mutex<[AgentKind]>([.pi])
-        let app = TestApp(cue: CueDependencies(
-            scan: { available.withLock { $0 } }, launch: { _, _ in nil }, helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let app = TestApp()
+        try await usable([.pi], in: app)
         let cue = app.services.cue, store = app.services.store
         func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
 
@@ -237,7 +240,7 @@ struct CueEnableTests {
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
 
         try await app.services.updateCue { $0.runtime = .known(.claudeCode) }
-        available.withLock { $0 = [.codex, .pi] }
+        try await usable([.codex, .opencode], in: app)
         try await cue.enable()
         now = try await profile()
         #expect(now.runtime == .known(.codex) && now.model == nil && now.effort == .known(.high))

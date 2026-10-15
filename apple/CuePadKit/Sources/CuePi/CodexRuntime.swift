@@ -798,6 +798,8 @@ struct CodexModel {
     let efforts: [PiThinkingLevel]
     /// 能看图（`inputModalities` 里有 image）
     let seesImages: Bool
+    /// 用户没配模型时 Codex 用的那个
+    let isDefault: Bool
 
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
@@ -823,7 +825,9 @@ struct CodexModel {
             let efforts = (entry["supportedReasoningEfforts"]?.array ?? []).compactMap { $0["reasoningEffort"]?.string }
             // 没写 inputModalities 的按协议缺省（文字与图片）
             let seesImages = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
-            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, seesImages: seesImages)
+            return CodexModel(
+                id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, seesImages: seesImages,
+                isDefault: entry["isDefault"]?.bool == true)
         }
     }
 }

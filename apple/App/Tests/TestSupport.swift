@@ -225,8 +225,7 @@ final class TestApp {
             hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,
-            cue: cue ?? CueDependencies(
-                scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
+            cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services

@@ -107,14 +107,6 @@ extension CueStore {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))?.model?.key
   }
 
-  /// `host` 那台 Mac 上每家 Agent 最近有动静的那个会话记录里的模型（没记下模型的不算）：Cue 开工时可选的模型。
-  public func latestModels(on host: String) throws -> [AgentKind: PiModelKey] {
-    let rows = try db.query(
-      "SELECT \(Self.agentColumn) AS kind, model, max(stateSince) FROM piSessionStates WHERE hostID = ? AND model IS NOT NULL GROUP BY kind", [host]
-    ) { (Open<AgentKind>(rawValue: $0.text(0)).known, JSONColumn.decode(PiModelOption.self, from: $0.textOrNil(1))) }
-    return Dictionary(uniqueKeysWithValues: rows.compactMap { agent, model in agent.flatMap { agent in model.map { (agent, $0.key) } } })
-  }
-
   /// `host` 那台 Mac 上每家 Agent 最近有动静的、指向带模型清单的目录记录（`AgentCatalog`）的那个会话的清单：两端 Cue 页模型菜单的可选模型。
   /// 按 Agent 聚合成几行，几千条历史不整表读；清单为空的目录记录列里是 NULL（`JSONColumn.encodeList`）。
   public func modelLists(on host: String) throws -> [AgentKind: [PiModelOption]] {

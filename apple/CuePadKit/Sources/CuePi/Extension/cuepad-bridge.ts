@@ -74,6 +74,11 @@ function entriesOnDisk(file: string): number {
 /** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，值是空闲多少秒后自己退出（格式见 CuePi README「协议」）；
  * 扩展在 hello 里带回"托管"。托管的只是这个进程：读出后存进进程内（/reload 重新载入扩展时还认得出）并从环境里删掉，
  * 否则 Agent 起的子进程（命令、里面再起的 pi）都继承它，也自认托管、空闲到点自己退出。 */
+/** CuePad 问这台 Mac 上的 Pi 能用哪些模型时（`AgentIntegration.available`）带这个环境变量：会话一开始就把模型配置写成一行
+ * `{"cuepadProbe": {model, models}}`，不连 CuePad、不做别的；与会话上报的是同一份（`modelInfo`），没登录时都空。直接写描述符 1：RPC 模式把
+ * `process.stdout` 改道到标准错误，护着它的协议输出。不调 `ctx.shutdown()`：RPC 模式只在读到下一条命令时才看退出请求，
+ * 进程靠标准输入读到 EOF 退出 */
+const PROBE_ENV = "CUEPAD_PROBE";
 const HOSTED_ENV = "CUEPAD_HOSTED";
 const HOSTED_KEY = Symbol.for("cuepad.hostedIdleSeconds");
 const processScope = globalThis as { [HOSTED_KEY]?: number };
@@ -994,6 +999,12 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", (_event, context) => {
 		ctx = context;
+		if (process.env[PROBE_ENV]) {
+			// 没有配好密钥的模型（没登录）时 Pi 仍给出一个占位的当前模型，报成没有模型
+			const { model, models } = ctx.modelRegistry.getAvailable().length > 0 ? modelInfo() : { model: null, models: [] };
+			fs.writeSync(1, JSON.stringify({ cuepadProbe: { model, models } }) + "\n");
+			return;
+		}
 		tracker = new StateTracker();
 		beforeCompaction = null;
 		manualCompaction = false;

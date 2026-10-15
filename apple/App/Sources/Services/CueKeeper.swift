@@ -95,7 +95,7 @@ final class CueKeeper {
     struct Setup {
         var store: CueStore
         /// 找起大脑要的可执行文件等（不问登录）
-        var launch: @Sendable (AgentKind) async -> CueLaunch?
+        var launch: @Sendable (AgentKind) async throws -> CueLaunch?
         /// `cuepad` 命令行（MCP 服务）
         var helper: URL
         /// App 正在用的资料库目录：MCP 服务经 `CUEPAD_LIBRARY_DIR` 打开同一个库
@@ -360,7 +360,7 @@ final class CueKeeper {
         do {
             let profile = try await setup.store.cueProfile() ?? CueProfile()
             brainSettings = BrainSettings(profile)
-            guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
+            guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
                 return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
             }
             let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
