@@ -128,6 +128,7 @@ struct TaskFlowTests {
     /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
     /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
     @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
+        try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
@@ -170,6 +171,7 @@ struct TaskFlowTests {
 
     /// 灵感到 Agent 两下：灵感设为任务（第一行做任务名，其余成了它的草稿），行尾那一格就是"开始"；点它把草稿交出去，开一个以任务命名的会话。
     @Test func 灵感设为任务_行尾是开始_点开始交给Agent() async throws {
+        try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
