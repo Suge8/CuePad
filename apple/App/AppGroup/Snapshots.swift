@@ -12,7 +12,7 @@ nonisolated struct ProjectsSnapshot: Codable, Equatable, Sendable {
     var projects: [Project]
 }
 
-/// 收件箱快照：主 App 写，小组件读。
+/// 未分类快照：主 App 写，小组件读。
 nonisolated struct UnfiledSnapshot: Codable, Equatable, Sendable {
     struct Card: Codable, Equatable, Sendable {
         var id: UUID

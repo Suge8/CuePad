@@ -24,7 +24,7 @@ private struct ShareForm: View {
                     }
                 }
                 Picker("存到", selection: $model.selectedProject) {
-                    Text("收件箱").tag(UUID?.none)
+                    Text("未分类").tag(UUID?.none)
                     ForEach(model.projects, id: \.id) { Text($0.name).tag(UUID?.some($0.id)) }
                 }
             }

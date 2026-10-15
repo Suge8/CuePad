@@ -3,16 +3,17 @@ import SwiftUI
 /// Cue 的头像（全 App 只此一份）：吉祥物的表情（`CueMood`）外面一圈状态环，呼应它腰上那个环。
 /// 颜色与会话状态标同一套（`PiShown.tint`）：在做事（想、用工具）时环是晴蓝、一段弧在转（`LoopLayer` 的 `orbit`），里面的它上下跳（`float`）；
 /// 话在路上时晴蓝实环；等你时赭黄实环；空闲时一圈淡墨静止；睡着或起不来时整个头像变暗。
-/// 两档尺寸：行内（任务行、会话标题旁，只露上半身：纸面、折角和眼睛，不跳）、页头与侧栏的一行。
+/// 三档尺寸：行内（任务行、会话标题旁，只露上半身：纸面、折角和眼睛，不跳）、侧栏与 Mac 页头的一行、手机 Cue 页头（`header`）。
 /// `size` 是里面那张脸的直径，环画在它外面（外框大一圈）。减弱动态效果时在做事是一段静止的弧，它不跳。
 struct CueAvatar: View {
     enum Size {
-        case inline, row
+        case inline, row, header
 
         var face: CGFloat {
             switch self {
             case .inline: 16
             case .row: 28
+            case .header: 36
             }
         }
 
@@ -20,6 +21,7 @@ struct CueAvatar: View {
             switch self {
             case .inline: 1.5
             case .row: 2.5
+            case .header: 3
             }
         }
 

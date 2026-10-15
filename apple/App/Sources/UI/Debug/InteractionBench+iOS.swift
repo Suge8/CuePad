@@ -11,7 +11,7 @@ import UIKit.UIGestureRecognizerSubclass
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、底部栏换标签的 `select`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
-/// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说、随手记）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
+/// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
 ///   走键盘输入同一条路（`paste`、`UITextInput.insertText`），每个字一项；编辑页是正文已有那一大段时打字。`-CuePadPasteFile <路径>` 换成那个文件的内容。
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
 /// - 合计、最重一圈：动作后 800ms 里主线程 CPU 的总数与最重的一圈；指令数（百万条）是进程在这 800ms 里执行的，不随机器忙闲变。
@@ -71,25 +71,29 @@ enum IOSInteractionBench {
         navigation.projectsPath.removeAll()
         // 底部栏换标签（含推移）
         for _ in 0..<2 {
-            await step("换到 Agent") { DebugScene.selectTab(.agent) }
+            await step("换到 Cue") { DebugScene.selectTab(.cue) }
             await step("换回灵感") { DebugScene.selectTab(.projects) }
         }
-        // Agent 页点会话（先读出这一页再推入）→ 返回
-        DebugScene.selectTab(.agent)
+        // Cue 页头开合面板（点页头的那条路）
+        DebugScene.selectTab(.cue)
+        try? await Task.sleep(for: .seconds(1))
+        for _ in 0..<2 {
+            await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
+            await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
+        }
+        // Agent 整页（从 Cue 页头面板的"全部会话"推入）点会话（先读出这一页再推入）→ 返回
+        navigation.show(.agent)
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {
             await step("进会话页") { navigation.openSession(id, store: store) }
-            await step("返回 Agent") { navigation.agentPath.removeAll() }
+            await step("返回 Agent") { navigation.cuePath = [.agent] }
         }
         // Agent 列表滚动：每帧 40pt 往下再往上
         guard let scroll = Self.scrollView(in: Self.window) else { fail("Agent 页上找不到可滚的列表") }
         for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: { name, action in await step(name, action) }) }
+        navigation.cuePath.removeAll()
         DebugScene.selectTab(.projects)
         try? await Task.sleep(for: .seconds(1))
-        for _ in 0..<2 {
-            await step("打开随手记") { navigation.startCapture() }
-            await step("收起随手记") { navigation.endCapture() }
-        }
         for _ in 0..<2 {
             await step("打开任务页") { navigation.projectsPath.append(.card(task)) }
             await step("返回（任务页）") { navigation.projectsPath.removeAll() }
@@ -159,23 +163,16 @@ enum IOSInteractionBench {
             navigation.projectsPath.removeAll()
         }
         if wants("长文打字·回复框") || wants("长文粘贴·回复框") {
-            DebugScene.selectTab(.agent)
+            DebugScene.selectTab(.cue)
             navigation.openSession(session, store: workspace.services.store)
             await type("回复框", into: GrowingTextView.self)
             workspace.services.settings.setReplyDraft(ComposerDraft(), for: session)
-            navigation.agentPath.removeAll()
+            navigation.cuePath.removeAll()
         }
         if wants("长文打字·对 Cue 说") || wants("长文粘贴·对 Cue 说") {
             DebugScene.selectTab(.cue)
             await type("对 Cue 说", into: GrowingTextView.self)
             workspace.cue.draft = ComposerDraft()
-        }
-        if wants("长文打字·随手记") || wants("长文粘贴·随手记") {
-            DebugScene.selectTab(.projects)
-            navigation.startCapture()
-            await type("随手记", into: GrowingTextView.self)
-            navigation.capture = CaptureState()
-            navigation.endCapture()
         }
     }
 

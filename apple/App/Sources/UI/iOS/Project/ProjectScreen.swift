@@ -44,10 +44,6 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
-        .cardSearch(
-            project: projectID, available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
-            ready: page != nil)
         .floatingHeader(project?.name ?? "", detail: detail.isEmpty ? nil : detail) { actions }
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
@@ -72,7 +68,7 @@ struct ProjectScreen: View {
                 if data.cards.isEmpty {
                     // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
                     let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false
-                    EmptyIdeas(compact: busy) { navigation.startCapture(project: .some(projectID)) }.padding(.bottom, busy ? 0 : 24)
+                    EmptyIdeas(compact: busy, write: newCard).padding(.bottom, busy ? 0 : 24)
                 }
                 if !arrangement.pinned.isEmpty {
                     // 资料：长期参考的灵感，一行一条压在任务区下面

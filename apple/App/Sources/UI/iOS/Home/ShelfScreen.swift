@@ -2,11 +2,11 @@
 import CueStore
 import SwiftUI
 
-/// iPhone 首页：项目书架。顶上一排：左"⋯"（未分类、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
-/// iPad 分栏里这些都在侧栏，顶上不放。这一页只管写灵感、看任务，Agent 的事都在 Agent 标签（这里不写会话在做什么）：
+/// iPhone 的灵感标签：项目书架。顶上一排（`RootBar`）：左设置，右"新建项目"；搜索在右下的搜索圆钮。
+/// iPad 分栏里这些都在侧栏，顶上不放。这一页只管灵感与任务，Agent 的事都在 Cue 页（这里不写会话在做什么）：
 /// 最上面是"正在推进"：进行中的任务排在一张纸上（点开推入任务页），标题右边是全部任务的计数、点它进任务页；
-/// 没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行。
-/// 宽屏（iPad）放得下时，上面这几样与置顶项目并排两栏。
+/// 没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行；
+/// 页末一行归档与回收站（同 Mac 侧栏的底栏）。宽屏（iPad）放得下时，上面这几样与置顶项目并排两栏。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -14,44 +14,27 @@ struct ShelfScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
-    @State private var query = PaletteQuery()
-    @FocusState private var searchFocused: Bool
-    @State private var searchHidden = false
     @Environment(\.tabPageReady) private var tabPageReady
 
-    /// 一张卡都没有时没什么可搜，不放搜索框。
-    private var searchable: Bool { workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true }
-    private var searching: Bool { searchFocused || !query.text.isEmpty }
-
     var body: some View {
-        Group {
-            if searching {
-                CardSearchResults(query: $query, scope: .all)
-            } else {
-                ScrollView {
-                    // 读到数据时整页淡入，不是一帧里突然铺满
-                    if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
-                }
-                .animation(Motion.quick, value: data == nil)
-                .refreshable { await services.syncNow() }
-                .hidingSearch($searchHidden, searching: searching)
-            }
+        ScrollView {
+            // 读到数据时整页淡入，不是一帧里突然铺满
+            if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
         }
+        .animation(Motion.quick, value: data == nil)
+        .refreshable { await services.syncNow() }
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
         .safeAreaBar(edge: .top) {
-            if navigation.layout == .tabs { row }
+            if navigation.layout == .tabs {
+                RootBar { EmptyView() } trailing: {
+                    Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+                }
+            }
         }
         .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
-        .onAppear(perform: focusIfRequested)
-        .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-        .onAppear {
-            guard DebugHooks.preset.focusedSearch == .shelf else { return }
-            query.text = DebugHooks.preset.searchText
-            searchFocused = true
-        }
         .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
@@ -106,6 +89,7 @@ struct ShelfScreen: View {
                     .paper(radius: 16)
                 }
             }
+            if navigation.layout == .tabs { BinsRow(trashCount: data.trashCount) }
         }
         .padding(.horizontal, 16)
         .padding(.top, Bars.contentGap)
@@ -161,42 +145,29 @@ struct ShelfScreen: View {
         }
     }
 
-    /// 左"⋯"（未分类、回收站、设置），中间搜索（什么都没有时没什么可搜，不放），右"新建项目"。
-    private var row: some View {
-        SearchRow(
-            search: searchable ? SearchCapsule(prompt: "搜索灵感与任务", query: $query.text, focus: $searchFocused) : nil,
-            searchHidden: searchHidden
-        ) {
-            menu
-        } trailing: {
-            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
-        }
-    }
-
-    private var menu: some View {
-        Menu {
-            Button { navigation.push(.unfiled) } label: { Label { Text(count(CaptureCopy.unfiled, workspace.catalog?.unfiledCount)) } icon: { Image(systemName: "tray") } }
-            Button("归档", systemImage: "archivebox") { navigation.push(.archive) }
-            Button { navigation.push(.trash) } label: { Label { Text(count("回收站", data?.trashCount)) } icon: { Image(systemName: "trash") } }
-            Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
-        } label: {
-            Label("更多", systemImage: "ellipsis")
-        }
-    }
-
-    private func count(_ title: String, _ n: Int?) -> Dotted {
-        Dotted(title, n.flatMap { $0 > 0 ? "\($0)" : nil })
-    }
-
-    /// ⌘K 指名书架时聚焦搜索框（标签栏布局，见 `Navigation.searchCurrentPage`）。
-    private func focusIfRequested() {
-        guard navigation.pendingPageSearch == .shelf else { return }
-        navigation.pendingPageSearch = nil
-        searchFocused = true
-    }
 }
 
 /// 书架顶上的一行：图标、标题、说明，点进一页。
+/// 页末一行：归档、回收站（有东西时写条数），同 Mac 侧栏的底栏；iPad 的在侧栏里。低频，只用次要墨色的小字。
+private struct BinsRow: View {
+    let trashCount: Int
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 20) {
+            NavigationLink(value: Route.archive) { Label("归档", systemImage: "archivebox") }
+            NavigationLink(value: Route.trash) {
+                Label { Text(Dotted("回收站", trashCount > 0 ? "\(trashCount)" : nil)) } icon: { Image(systemName: "trash") }
+            }
+        }
+        .buttonStyle(PressStyle(.control))
+        .font(.subheadline)
+        .foregroundStyle(palette.ink2)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+    }
+}
+
 private struct ShelfLine: View {
     let route: Route
     let symbol: String

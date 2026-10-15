@@ -27,7 +27,6 @@ final class AppSettings {
         static let replyDrafts = "replyDrafts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
-        static let agentProject = "agentProject"
         static let holdSendLearned = "holdSendLearned"
         static let lastAgent = "lastAgent"
     }
@@ -56,9 +55,6 @@ final class AppSettings {
 
     /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
-
-    /// iOS Agent 页上次选的项目筛选；nil 是全部。存储属性：选的那一刻页面就跟着变。
-    var agentProject: UUID? { didSet { defaults.set(agentProject?.uuidString, forKey: Key.agentProject) } }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -148,7 +144,6 @@ final class AppSettings {
         #endif
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
-        agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
             .mapValues(ReplyDraftSlot.init)

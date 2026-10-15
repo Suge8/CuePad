@@ -75,8 +75,9 @@ struct CueStatusLine: View {
     }
 }
 
-/// Cue 页的页头，一直在（Mac 窗口工具栏居中、手机顶栏、iPad 面板顶上；玻璃由放它的地方给）：头像，名字与此刻在做什么。
-/// 排法同会话页的顶栏：Mac 一行（名字接状态），手机两行；左边让头像贴着玻璃的圆头。输入框里有没说出去的话时头像露"在听"。
+#if os(macOS)
+/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行。输入框里有没说出去的话时头像露"在听"。
+/// 手机与 iPad 的页头是 `CueHeader`。
 struct CueTitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -85,28 +86,18 @@ struct CueTitle: View {
         let cue = workspace.cue
         HStack(spacing: 8) {
             CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .row)
-                #if os(iOS)
-                .padding(.leading, 4)
-                #endif
-            #if os(macOS)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)
             }
             .padding(.trailing, 14)
-            #else
-            VStack(alignment: .leading, spacing: 1) {
-                Text(cue.name).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(font: .caption).lineLimit(1)
-            }
-            .padding(.trailing, 16)
-            #endif
         }
         .animation(Motion.quick, value: cue.presence)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
 }
+#endif
 
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }

@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页的状态（iOS 与 Mac 同一份）：搜索词、翻到第几页、读到的会话列表，以及正在确认结束或改名的会话。
-/// 项目筛选不在这里：iOS 根页的筛选记在偏好里（`AppSettings.agentProject`），Mac 与推入页自己存；页面把它交给 `.agentList`。
+/// Agent 页的状态（iOS 与 Mac 同一份，iOS 的搜索页会话一栏也是它）：搜索词、翻到第几页、读到的会话列表，以及正在确认结束或改名的会话。
+/// 项目筛选不在这里：页面自己存（只留在那一页上），交给 `.agentList`。
 /// 换搜索词或筛选时回到第一页；历史按页读，滑到列表底再读下一页（`loadMore`）。
 @Observable
 final class AgentListModel {

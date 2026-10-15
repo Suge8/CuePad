@@ -44,16 +44,12 @@ enum DebugHooks {
         var showsDone = false
         /// 设置页"Pi 通知"一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
-        /// 一出现就聚焦并预填的搜索框：书架顶上的，或项目页的下拉搜索。
-        var focusedSearch: SearchFocus?
-        /// Agent 页一出现就填进搜索框的字（`agent` 画面）。
-        var agentQuery: String?
+        /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
+        var searchScope = SearchScreen.Scope.cards
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
+        var cuePanelOpen = false
         #endif
     }
-
-    #if os(iOS)
-    enum SearchFocus { case shelf, project }
-    #endif
 
     #if os(macOS)
     /// 这张卡或这条任务是否按 `Preset.hovered` 一出现就画成悬停的样子。
@@ -237,6 +233,17 @@ extension View {
     func debugExposesTabSelect(_ select: @escaping (Navigation.Tab) -> Void) -> some View {
         #if DEBUG
         onAppear { DebugScene.selectTab = select }
+        #else
+        self
+        #endif
+    }
+    #endif
+
+    #if os(iOS)
+    /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
+    func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.toggleCuePanel = toggle }
         #else
         self
         #endif

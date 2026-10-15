@@ -113,7 +113,7 @@ enum Mascot: String {
 }
 
 /// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。
-/// iOS 浮起随手记，Mac 聚焦底部输入栏；两端按钮、图标、按压与出现动效共用。
+/// iOS 新建一条并打开它的纸页，Mac 聚焦底部输入栏；两端按钮、图标、按压与出现动效共用。
 struct EmptyIdeas: View {
     var compact = false
     let write: () -> Void
@@ -126,11 +126,17 @@ struct EmptyIdeas: View {
     }
 }
 
-/// 空库首次打开：Mac 与 iOS 同一段话；动作按钮由平台给。
+/// 空库首次打开：两端同一套图标与标题，动作按钮由平台给；说法按平台的写入口（Mac 下方的随手记，手机的"对 Cue 说"）。
 struct EmptyLibrary<Action: View>: View {
     @ViewBuilder let action: Action
 
+    #if os(macOS)
+    private static var message: String { "建一个项目放灵感，或者先在下方随手记一条" }
+    #else
+    private static var message: String { "建一个项目放灵感，要做的事对 Cue 说" }
+    #endif
+
     var body: some View {
-        EmptyState(mascot: .welcome, title: "还没有项目", message: "建一个项目放灵感，或者先在下方随手记一条") { action }
+        EmptyState(mascot: .welcome, title: "还没有项目", message: Self.message) { action }
     }
 }

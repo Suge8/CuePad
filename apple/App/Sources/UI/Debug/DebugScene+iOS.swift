@@ -4,8 +4,8 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开）、cuememory（再打开"Cue 记得什么"）、project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
-/// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
+/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合）、cuememory（再打开"Cue 记得什么"）、project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent（Agent 整页，iPhone 推在 Cue 标签里）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
+/// search 是搜索页（iPhone 的搜索标签），出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// task 在书架上推入"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -69,6 +69,7 @@ extension DebugScene {
             navigation.show(.cue)
             if split { navigation.sidebar = .all }
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+            if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
         case "cuepanel":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             if let project { open(.project(project)) }
@@ -85,7 +86,7 @@ extension DebugScene {
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
             if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { open(.card(task.id)) }
         case "session":
-            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
+            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 推在 Cue 标签的 Agent 整页上
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
@@ -118,13 +119,9 @@ extension DebugScene {
             if let project { open(.project(project)); navigation.push(.projectSessions(project)) }
         case "agent":
             if let project { open(.project(project)) }
-            if split { navigation.select(.agent) } else { navigation.tab = .agent }
+            navigation.show(.agent)
         case "search":
-            // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
-            if split { navigation.select(.search) } else if let project { open(.project(project)) }
-        case "capture":
-            if let project { open(.project(project)) }
-            navigation.startCapture()
+            navigation.openSearch()
         default:
             if let project, split { open(.project(project)) }
         }
@@ -142,6 +139,15 @@ extension DebugScene {
         case "registerFailed": PiAlertStatus(authorization: .authorized, registration: .failed("没有连接到 Apple 推送服务"), subscription: .off)
         case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed("iCloud 账号不可用"))
         default: nil
+        }
+    }
+
+    /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。
+    private static func cyclePanel() async {
+        try? await Task.sleep(for: .seconds(4))
+        for _ in 0..<8 {
+            toggleCuePanel()
+            try? await Task.sleep(for: .seconds(1.5))
         }
     }
 

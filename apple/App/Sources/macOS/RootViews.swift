@@ -44,7 +44,7 @@ private struct MainRoot: View {
                 switch link {
                 case .cue: workspace.show(.cue)
                 case .project(let id): workspace.show(.project(id))
-                case .card, .capture: break  // 小组件与分享扩展只在 iOS
+                case .card, .speak: break  // 小组件与分享扩展只在 iOS
                 }
             }
             .modifier(PaletteProvider())

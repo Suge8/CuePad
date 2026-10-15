@@ -1,22 +1,23 @@
 import CueStore
 import SwiftUI
 
+#if os(macOS)
 /// 随手记正在写的这一条：草稿与手动换过的落点（`.some(nil)` 是未分类；nil 时落在调用方给的默认落点）。
-/// iOS 存在 `Navigation.capture`（输入框收起后留着），Mac 的底部输入栏与菜单栏面板各留一份。
+/// Mac 的底部输入栏与菜单栏面板各留一份。
 struct CaptureState {
     var draft = ComposerDraft()
     var project: UUID??
 }
 
-/// 随手记（iOS 浮起的输入框、Mac 底部输入栏与菜单栏面板共用）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
+/// 随手记（Mac 底部输入栏与菜单栏面板共用；手机上随手记在"对 Cue 说"里，见 `CueComposer`）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
 /// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感：它要发给 Agent 先挂到任务，所以这里没有发送；记下后提示落点、点提示去那里。
-/// 文案与存法见 `CaptureCopy`、`CaptureDraft`。两端只差：Mac 底部输入栏平时收成一行、占位带上落点（`pinnedOpen` 为 false），
+/// 文案与存法见 `CaptureCopy`、`CaptureDraft`。两处只差：Mac 底部输入栏平时收成一行、占位带上落点（`pinnedOpen` 为 false），
 /// 菜单栏面板的提示写在头部右边。
 struct CaptureComposer: View {
     @Binding var state: CaptureState
-    /// 没手动换过落点时落在哪（iOS 与 Mac 主窗口是正在看的项目，菜单栏面板是上次打开的项目）。
+    /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是上次打开的项目）。
     let defaultProject: UUID?
-    /// 一直展开、出现即聚焦（iOS 浮起的输入框、Mac 菜单栏面板，形态 `.open`）；否则聚焦或有内容时才展开。
+    /// 一直展开、出现即聚焦（菜单栏面板，形态 `.open`）；否则聚焦或有内容时才展开。
     let pinnedOpen: Bool
     /// 记下之后（iOS 收起输入框）；草稿在这之前已清空。
     var saved: () -> Void = {}
@@ -36,25 +37,21 @@ struct CaptureComposer: View {
             focus: $focused, accepts: .images, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
-        // 一直展开的浮起的同一刻聚焦：键盘与输入框一起上来
+        // 一直展开的出现的同一刻聚焦
         .onAppear { if pinnedOpen { focused = true } }
-        #if os(macOS)
         .onChange(of: workspace.captureFocusRequests) { focused = true }
-        #endif
     }
 
     private var header: some View {
         HStack(spacing: 8) {
             destinationMenu
             Spacer(minLength: 8)
-            #if os(macOS)
             if pinnedOpen, let notice = workspace.notice {
                 Text(notice.text).font(Typography.meta)
                     .foregroundStyle(notice.isError ? palette.failure : palette.ink3)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
-            #endif
         }
         .animation(Motion.quick, value: workspace.notice)
         .padding(.horizontal, 12).padding(.top, 10)
@@ -91,6 +88,8 @@ struct CaptureComposer: View {
         }
     }
 }
+
+#endif
 
 /// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 任务页的快速添加写"→ 项目图标 项目名"（init(project:)），
 /// 新会话与发给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。

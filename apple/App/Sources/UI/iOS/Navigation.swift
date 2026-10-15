@@ -5,13 +5,13 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签（Cue / Agent / 灵感）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
+/// iOS 的导航状态：标签（Cue / 灵感 / 搜索）、各标签的推入路径、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。当前项目只从路径推出（`currentProject`）。
 @Observable
 final class Navigation {
-    /// 底部从左到右的顺序就是声明的顺序；打开 App 先到 Cue。
+    /// 底部从左到右的顺序就是声明的顺序；打开 App 先到 Cue。搜索是右下那颗圆钮（同 Mac 的 ⌘K），Agent 整页从 Cue 页头的面板推入。
     enum Tab: Hashable, CaseIterable {
-        case cue, agent, projects
+        case cue, projects, search
     }
 
     /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
@@ -71,17 +71,15 @@ final class Navigation {
     var layout: Layout = .tabs
     var tab: Tab = .cue
     var cuePath: [Route] = []
-    var agentPath: [Route] = []
     var projectsPath: [Route] = []
-    /// 随手记里正在写的这一条：输入框收起后仍留着（见 `endCapture`）；没换过落点时落在正在看的项目（`currentProject`）。
-    var capture = CaptureState()
-    /// 随手记输入框浮在键盘上方。
-    private(set) var capturing = false
+    var searchPath: [Route] = []
+    /// 每次请"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）加一：Cue 页的输入框看它变了就聚焦。
+    private(set) var cueFocusRequests = 0
 
     /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
     var menuOpen = false
-    /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent）。
-    var floating: Bool { capturing || newSession != nil || outbox != nil }
+    /// 有浮在键盘上方的输入框（新会话、发给 Agent）。
+    var floating: Bool { newSession != nil || outbox != nil }
     var outbox: Outbox? {
         didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
     }
@@ -104,7 +102,7 @@ final class Navigation {
     }
 
     /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页、项目页进的任务页），否则没有（未分类）。iOS 上"在哪个项目"
-    /// 只有这一份——书架点进项目只改路径；随手记、任务页新建任务、⌘N 的默认落点都读它。
+    /// 只有这一份——书架点进项目只改路径；任务页新建任务、⌘N 的默认落点都读它。
     var currentProject: UUID? {
         let visible: [Route] = switch layout {
         case .split: [splitRoot] + splitPath
@@ -121,15 +119,15 @@ final class Navigation {
         get {
             switch tab {
             case .cue: cuePath
-            case .agent: agentPath
             case .projects: projectsPath
+            case .search: searchPath
             }
         }
         set {
             switch tab {
             case .cue: cuePath = newValue
-            case .agent: agentPath = newValue
             case .projects: projectsPath = newValue
+            case .search: searchPath = newValue
             }
         }
     }
@@ -190,24 +188,20 @@ final class Navigation {
     /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
     private var beforeSearch: (root: Route, path: [Route])?
 
-    /// 每次 ⌘K（或点侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    /// 每次 ⌘K（或点搜索圆钮、侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
     private(set) var searchFocusRequests = 0
-    /// 标签栏布局下 ⌘K 要聚焦哪一页的搜索（灵感根页顶上一排，或某个项目页的下拉搜索）；那一页聚焦后清掉。
-    var pendingPageSearch: Route?
 
-    /// 标签栏布局的 ⌘K：有下拉搜索的只有项目页，正看着它就聚焦它的；其余页回到灵感根页，聚焦顶上一排的搜索框。
-    func searchCurrentPage() {
-        if tab == .projects, case .project? = projectsPath.last {
-            pendingPageSearch = projectsPath.last
-        } else {
-            tab = .projects
-            projectsPath = []
-            pendingPageSearch = .shelf
-        }
-    }
+    /// 搜索页聚焦它的搜索框（点搜索圆钮时）。
+    func focusSearch() { searchFocusRequests += 1 }
 
+    /// 去搜索页并聚焦搜索框：iPhone 换到搜索标签（回到它的根页），iPad 选中侧栏的搜索。
     func openSearch() {
-        searchFocusRequests += 1
+        focusSearch()
+        guard layout == .split else {
+            tab = .search
+            searchPath = []
+            return
+        }
         guard splitRoot != .search else { return }
         beforeSearch = (splitRoot, splitPath)
         select(.search)
@@ -226,17 +220,17 @@ final class Navigation {
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.cuePath, \.agentPath, \.projectsPath, \.splitPath] {
+        for path in [\Navigation.cuePath, \.projectsPath, \.searchPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
         if splitRoot == gone { select(.shelf) }
     }
 
-    /// 小组件与分享扩展的链接：随手记、项目、卡片。
+    /// 小组件与分享扩展的链接：对 Cue 说、项目、卡片。
     func open(_ link: DeepLink) {
         switch link {
-        case .capture(let project):
-            startCapture(project: .some(project))
+        case .speak:
+            speakToCue()
         case .project(let id):
             show(.project(id))
         case .card(let id):
@@ -252,19 +246,24 @@ final class Navigation {
         if let tap { show(.session(tap.sessionState)) }
     }
 
-    /// 去一页（通知、小组件、侧栏共用）：Cue 是 Cue 标签的根，会话的近况在 Agent 标签里（iPad 推入详情栏），其余在灵感标签里（iPad 选中侧栏）。
-    /// 在项目页里要能返回项目的入口（任务页）用 `push`。
+    /// 去 Cue 页并让"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）：要做事、随手记都从这里说。
+    func speakToCue() {
+        show(.cue)
+        cueFocusRequests += 1
+    }
+
+    /// 去一页（通知、小组件、侧栏共用）：Cue、Agent 整页与会话的近况在 Cue 标签里（Agent 整页从 Cue 页头的面板进，
+    /// iPad 推入详情栏），搜索在搜索标签，其余在灵感标签里（iPad 选中侧栏）。在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
         switch (route, layout) {
         case (.cue, .tabs):
             tab = .cue
             cuePath = []
-        case (.agent, .tabs):
-            tab = .agent
-            agentPath = []
-        case (.session, .tabs):
-            tab = .agent
-            agentPath = [route]
+        case (.agent, .tabs), (.session, .tabs):
+            tab = .cue
+            cuePath = [route]
+        case (.search, .tabs):
+            openSearch()
         case (.session, .split):
             if splitPath.last != route { splitPath.append(route) }
         case (_, .split): select(route)
@@ -283,10 +282,10 @@ final class Navigation {
         return top == .session(id)
     }
 
-    /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
+    /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 整页（那一行已经在变）时不弹。
     func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
-        case .tabs: tab == .agent && agentPath.isEmpty
+        case .tabs: tab == .cue && cuePath.last == .agent
         case .split: splitRoot == .agent && splitPath.isEmpty
         }
         return !onAgentList && !isViewing(session: session)
@@ -315,33 +314,6 @@ final class Navigation {
         }
     }
 
-    /// Agent 标签页的项目筛选：上次选的（本机偏好）；选中的项目不在项目目录里（进了回收站）时是全部。
-    func agentFilter(catalog: ProjectCatalog?) -> UUID? {
-        settings.agentProject.flatMap { catalog?.project($0)?.id }
-    }
-
-    /// 在 Agent 标签页选了筛选：记下来。
-    func chooseAgentFilter(_ project: UUID?) { settings.agentProject = project }
-
-    /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。
-    func startCapture(project: UUID?? = nil) {
-        if let project { capture.project = project }
-        capturing = true
-    }
-
-
-    /// 收起随手记：写了东西就留着下次接着写，空的连同换过的种类与落点一起丢掉。
-    func endCapture() {
-        capturing = false
-        if capture.draft.isEmpty(accepting: .images) { capture = CaptureState() }
-    }
-
-    /// 记下了：清空并收起。
-    func finishCapture() {
-        capture = CaptureState()
-        capturing = false
-    }
-
 }
 
 extension Route {
@@ -355,10 +327,10 @@ extension Route {
         }
     }
 
-    /// 页顶上自带一排搜索与圆钮（`SearchRow`）：内容让到那一排下面，离栏的距离由那一页自己给。
-    var hasSearchRow: Bool {
+    /// 页顶上自带一排（标签根页的 `RootBar`、Cue 页头）：内容让到那一排下面，离栏的距离由那一页自己给。
+    var ownsTopBar: Bool {
         switch self {
-        case .shelf, .agent, .projectSessions: true
+        case .shelf, .search, .cue: true
         default: false
         }
     }
