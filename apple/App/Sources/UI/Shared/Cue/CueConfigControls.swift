@@ -25,7 +25,7 @@ struct CueConfigControls: View {
     private func groups(_ menu: CueBrainMenu) -> [PiModelGroup] {
         menu.brains.map { brain in
             let agent = brain.kind
-            let items = brain.choices.map { model in
+            let items = brain.models.map { model in
                 let ref = agent.modelRef(model.key)
                 let isDefault = model.key == brain.model
                 return PiModelGroup.Item(id: ref, model: model, isDefault: isDefault, checked: menu.runtime == agent && menu.model?.key == model.key) {
@@ -66,7 +66,7 @@ nonisolated struct CueBrainMenu: Equatable, Sendable {
 
     /// 菜单里的几家：能当大脑、那台上能用、有模型可选。
     var brains: [MacAgent] {
-        CueProfile.runtimes.compactMap { kind in agents.first { $0.kind == kind } }.filter { !$0.choices.isEmpty }
+        CueProfile.runtimes.compactMap { kind in agents.first { $0.kind == kind } }.filter { !$0.models.isEmpty }
     }
 
     private var brain: MacAgent? { runtime.flatMap { kind in agents.first { $0.kind == kind } } }
@@ -88,12 +88,4 @@ nonisolated struct CueBrainMenu: Equatable, Sendable {
     }
 
     var thinking: PiThinkingLevel? { profile.effort?.known.map { $0.clamped(to: levels) } }
-}
-
-nonisolated extension MacAgent {
-    /// 菜单里列的模型：清单；默认模型不在清单里时（清单没报全）也列上它，不然选不回"跟着默认"。
-    var choices: [PiModelOption] {
-        guard let fallback = defaultModel, !models.contains(where: { $0.key == fallback.key }) else { return models }
-        return [fallback] + models
-    }
 }
