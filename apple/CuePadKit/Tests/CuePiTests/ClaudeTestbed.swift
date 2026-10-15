@@ -184,6 +184,14 @@ final class ClaudeTestbed {
         try await store.upsertPiSessions([PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
+    /// 像 App 的记录器那样记下桥上这个会话此刻的样子（状态与模型）。
+    func record(_ id: PiSession.ID) async throws {
+        let session = try #require(bridge.session(id: id))
+        try await PiStateRecorder(store: store, hostID: "mac").update(
+            sessionID: session.sessionID, state: session.state,
+            modelState: PiModelState(model: session.model, thinking: session.thinking, models: session.availableModels), agent: .claudeCode)
+    }
+
     /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
     func stop() async {
         let pids = Set(terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid))

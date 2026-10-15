@@ -134,7 +134,8 @@ struct RealClaudeHostTests {
             .map { ($0["message"]?["model"]?.string, $0["effort"]?.string) }
     }
 
-    /// 结束托管的会话：进程退出、下桥；之后在后台接着它，上一轮说过的它还记得。
+    /// 结束托管的会话：进程退出、下桥；之后在后台接着它，上一轮说过的它还记得，模型是在 CuePad 里最后选的那个（不回到配置里的）。
+    /// 结束前停下的那一轮，Claude Code 接着时补写的助手消息（"No response requested."）不算它的回答。
     @Test func anEndedHostedSessionIsResumedWithItsHistory() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
@@ -143,6 +144,13 @@ struct RealClaudeHostTests {
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
+            let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
+            try await testbed.bridge.configure(model: other, in: id)
+            _ = try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id)
+            try await eventually("开始这一轮", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state.isWorking == true }
+            try await testbed.bridge.abort(id)
+            try await eventually("停下", timeout: .seconds(30)) { testbed.bridge.session(id: id)?.state == .settled }
+            try await testbed.record(id)
             let log = ChangeLog(testbed.bridge)
 
             try await testbed.bridge.end(id)
@@ -157,9 +165,15 @@ struct RealClaudeHostTests {
             let asked = Date()
             _ = try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
             try await testbed.waitForTurn(resumed, since: asked)
+            #expect(testbed.bridge.session(id: resumed)?.model?.key == other, "\(String(describing: testbed.bridge.session(id: resumed)?.model))")
             // 接着的会话仍叫它的第一句，不是接着说的这句
             #expect(testbed.bridge.session(id: resumed)?.firstMessage == "记住暗号 BANANA42，只回复 OK")
-            #expect(try testbed.transcript(first.sessionFile).recap.lastReply?.contains("BANANA42") == true)
+            let transcript = try testbed.transcript(first.sessionFile)
+            #expect(transcript.recap.lastReply?.contains("BANANA42") == true)
+            let file = try #require(first.sessionFile)
+            #expect(lastAnswer(in: file)?.model?.contains(claudeOtherModel) == true)
+            let replies = transcript.messages.filter { $0.role == .known(.pi) }.map(\.text)
+            #expect(!replies.contains("No response requested."), "\(replies)")
         }
     }
 

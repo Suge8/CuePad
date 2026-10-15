@@ -49,8 +49,11 @@ final class ClaudeHostedSession: SessionLink {
     /// 托管的进程（退出原因、进程号）
     var process: ChildProcess { stream.process }
 
-    /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息。
-    func connect(cwd: URL, sessionFile: URL, launchToken: String?, known: (name: String?, firstMessage: String?)?) async throws -> PiSession {
+    /// 握手（`initialize` 拿到可换的模型与命令）并上桥；接着已结束的会话时 `known` 是索引里记下的名字与首条消息，
+    /// `model` 是起进程时指定的模型（几个别名解析到同一个 id 时，之后报的 id 认回它）。
+    func connect(
+        cwd: URL, sessionFile: URL, model: PiModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
+    ) async throws -> PiSession {
         let info = try await stream.request(["subtype": "initialize"])
         let models = (info["models"]?.array ?? []).compactMap { model -> PiModelOption? in
             guard let value = model["value"]?.string else { return nil }
@@ -74,6 +77,7 @@ final class ClaudeHostedSession: SessionLink {
         session.name = known?.name
         session.firstMessage = known?.firstMessage
         session.availableModels = models
+        session.model = models.first { $0.key == model }
         session.commands = listed
         id = session.id
         bridge?.attach(session, via: self)

@@ -103,6 +103,11 @@ extension CueStore {
       orderBy: "stateSince DESC, id", limit: limit)
   }
 
+  /// 一个会话记录里最后的模型（在 CuePad 里看到、选的那个；会话结束后仍留着）。
+  public func lastModel(ofSession sessionID: String) throws -> PiModelKey? {
+    try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))?.model?.key
+  }
+
   /// `host` 那台 Mac 上每家 Agent 最近有动静的那个会话记录里的模型（没记下模型的不算）：Cue 开工时可选的模型。
   public func latestModels(on host: String) throws -> [AgentKind: PiModelKey] {
     let rows = try db.query(

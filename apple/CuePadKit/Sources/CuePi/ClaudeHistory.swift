@@ -41,7 +41,8 @@ enum ClaudeHistory {
             let delivery = attachment.origin?.kind == "human" ? nil : attachment.sourceUUID
             try said(prompt, peer: attachment.origin?.kind == "peer", entry, deliveryID: delivery, into: &cp, transcript: &transcript)
         case "assistant":
-            guard let message = line.message, case .blocks(let blocks) = message.content ?? .blocks([]) else { return }
+            guard let message = line.message, case .blocks(let blocks) = message.content ?? .blocks([]),
+                  message.model != syntheticModel || line.isApiErrorMessage == true else { return }
             for call in blocks where call.type == "tool_use" {
                 cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments())
             }
@@ -119,6 +120,9 @@ enum ClaudeHistory {
     }
 
     private static let interruptedMarker = "[Request interrupted by user"
+    /// Claude Code 自己补写的助手消息的模型（不是模型说的）：接着被停下的那一轮时补的"No response requested."等不算回答，
+    /// 只留出错的（`isApiErrorMessage`，"API Error: …"、额度用完）
+    private static let syntheticModel = "<synthetic>"
     /// 你在终端里对权限确认答"否"时工具结果的开头（2.1.299，后面跟"停下"或你说的怎么做）
     private static let declinedResult = "The user doesn't want to proceed with this tool use."
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
@@ -139,6 +143,7 @@ enum ClaudeHistory {
         var isSidechain: Bool?
         var isMeta: Bool?
         var isCompactSummary: Bool?
+        var isApiErrorMessage: Bool?
         var customTitle: String?
         var promptSource: String?
         var origin: Origin?
@@ -150,9 +155,10 @@ enum ClaudeHistory {
 
     private struct Message: Decodable {
         var content: Content?
+        var model: String?
         var stopReason: String?
         enum CodingKeys: String, CodingKey {
-            case content
+            case content, model
             case stopReason = "stop_reason"
         }
     }
