@@ -11,7 +11,7 @@ struct CueConfigControls: View {
     @State private var menu: CueBrainMenu?
 
     var body: some View {
-        let menu = menu ?? CueBrainMenu(profile: CueProfile(), agents: [])
+        let menu = menu ?? CueBrainMenu(profile: CueProfile(), agents: MacAgents(hostID: "", agents: [], modifiedAt: .distantPast))
         PiConfigControls(
             groups: groups(menu), shown: PiConfigShown(model: menu.model, thinking: menu.thinking, pending: false),
             unnamed: menu.runtime?.name ?? "模型", levels: menu.levels, opening: opening
@@ -53,12 +53,13 @@ struct CueConfigControls: View {
 ///   清单也没有时是全部档——大脑起来时各家都按模型夹取（`PiThinkingLevel.clamped`），选了也不会出错；显示的当前档同样按这一集合夹取。
 nonisolated struct CueBrainMenu: Equatable, Sendable {
     var profile: CueProfile
-    /// Cue 住的那台上能用的几家。
-    var agents: [MacAgent]
+    /// Cue 住的那台上的 Agent；还没选住哪台时一家都没有。
+    var agents: MacAgents
 
     static func read(from store: isolated CueStore) throws -> CueBrainMenu {
         let profile = try store.cueProfile() ?? CueProfile()
-        return CueBrainMenu(profile: profile, agents: try profile.hostID.map { try store.macAgents(on: $0).agents } ?? [])
+        let host = profile.hostID ?? ""
+        return CueBrainMenu(profile: profile, agents: try store.macAgents(on: host))
     }
 
     /// 用哪家；更新的版本写的、不认识的为 nil（菜单里哪项都不打勾）。
@@ -66,10 +67,10 @@ nonisolated struct CueBrainMenu: Equatable, Sendable {
 
     /// 菜单里的几家：能当大脑、那台上能用、有模型可选。
     var brains: [MacAgent] {
-        CueProfile.runtimes.compactMap { kind in agents.first { $0.kind == kind } }.filter { !$0.models.isEmpty }
+        CueProfile.runtimes.compactMap(agents.agent).filter { !$0.models.isEmpty }
     }
 
-    private var brain: MacAgent? { runtime.flatMap { kind in agents.first { $0.kind == kind } } }
+    private var brain: MacAgent? { runtime.flatMap(agents.agent) }
 
     var model: PiModelOption? {
         guard let runtime else { return nil }

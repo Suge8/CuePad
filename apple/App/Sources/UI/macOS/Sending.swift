@@ -173,8 +173,9 @@ extension Workspace {
             // 会话名由带着的提示词定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
             let projectName = try await services.store.project(project)?.name
             let title = plan.name ?? projectName ?? CaptureCopy.unfiled
-            guard let agent = try await services.store.macAgents(on: host).preferred(services.settings.lastAgent) else {
-                say("\(host == services.hostID ? "这台" : "那台") Mac 上还没有能用的 Agent，开不了会话", isError: true)
+            let agents = try await services.store.macAgents(on: host)
+            guard let agent = agents.preferred(services.settings.lastAgent) else {
+                say("\(host == services.hostID ? "这台" : "那台") Mac 上开不了会话：\(agents.whyNone)", isError: true)
                 return
             }
             _ = try await startSession(in: project, prompt: text?.nonEmpty, title: title, on: host, card: prompt, agent: agent) {}

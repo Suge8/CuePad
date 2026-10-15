@@ -61,17 +61,14 @@ struct CaptureComposer: View {
     }
 
     private var destinationMenu: some View {
-        Menu {
-            Button(CaptureCopy.unfiled) { state.project = .some(nil) }
-            Divider()
-            ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { state.project = .some(item.id) } }
-        } label: {
+        MenuButton(sections: [
+            ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: CaptureCopy.unfiled, checked: project == nil) { state.project = .some(nil) }]),
+            ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
+                ChoiceMenu.Choice(title: item.name, checked: item.id == project) { state.project = .some(item.id) }
+            }),
+        ], accessibilityLabel: "记到 \(destination)") {
             DestinationChip(project: workspace.catalog?.project(project))
         }
-        #if os(macOS)
-        .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
-        #endif
-        .accessibilityLabel("记到 \(destination)")
     }
 
     private var saveButton: some View {

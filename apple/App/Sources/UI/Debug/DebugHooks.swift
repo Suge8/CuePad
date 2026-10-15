@@ -337,7 +337,7 @@ struct DebugStage<Main: View>: View {
         case "menubar": DebugMenuBarStage().environment(workspace)
         case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
         case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        case "newsession": NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case "newsession": DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         default: main()
         }
         #else

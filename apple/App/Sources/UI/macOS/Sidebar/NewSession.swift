@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Agent 分组标题旁与 Agent 整页右上的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
 /// 开好后关掉表单、在内容区打开新会话的整页。还没有项目时从这里新建的项目，建好回到这张表单（它默认选最近活跃的，就是新建的那个）。
-/// 这台 Mac 上一家 Agent 都不能用（`MacAgents`）时置灰，悬停说原因。
+/// 这台 Mac 上一家 Agent 都不能用（`MacAgents`）时置灰，悬停说为什么（`whyNone`）；读到的这一份交给表单。
 struct NewSessionButton: View {
     @Binding var showing: Bool
     @Environment(Workspace.self) private var workspace
@@ -16,10 +16,10 @@ struct NewSessionButton: View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .disabled(none)
-            .help(none ? "这台 Mac 上还没有能用的 Agent" : "开一个新的 Agent 会话")
+            .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
             .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
             .panel(isPresented: $showing) {
-                NewSessionForm(createProject: {
+                NewSessionForm(agents: agents, createProject: {
                     showing = false
                     workspace.projectForm = .init(created: { _ in showing = true })
                 }) { id in
@@ -31,9 +31,12 @@ struct NewSessionButton: View {
 }
 
 /// 新会话开在哪、用哪个 Agent：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
-/// Agent 只列这台 Mac 上能用的（`MacAgents`），默认上次用的（`MacAgents.preferred`）；只有一家时只写它的名字，一家都没有时说明、开不了。
+/// Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），默认上次用的（`MacAgents.preferred`）；只有一家时只写它的名字，
+/// 一家都不能用时写为什么（`whyNone`）、开不了。
 /// 还没有项目时说一句为什么，主按钮是"新建项目"（关掉表单、打开新建项目）。
 struct NewSessionForm: View {
+    /// 这台 Mac 上的 Agent；还没读到为 nil。
+    let agents: MacAgents?
     var createProject: () -> Void = {}
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
@@ -42,7 +45,6 @@ struct NewSessionForm: View {
     @State private var chosen: String?
     /// 这次选的；没选过跟着默认。
     @State private var picked: AgentKind?
-    @State private var agents: MacAgents?
     @State private var prompt = ""
     @State private var stage = Stage.idle
 
@@ -99,8 +101,8 @@ struct NewSessionForm: View {
             HStack(spacing: 8) {
                 switch stage {
                 case .idle:
-                    if agents?.agents.isEmpty == true {
-                        Text("这台 Mac 上还没有能用的 Agent").font(Typography.meta).foregroundStyle(palette.ink3)
+                    if let agents, agents.agents.isEmpty {
+                        Text(agents.whyNone).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
                     } else if let place {
                         Text(place.binding == nil ? "「\(place.project.name)」还没有文件夹" : "在后台开，不占终端")
                             .font(Typography.meta).foregroundStyle(palette.ink3)
@@ -137,7 +139,6 @@ struct NewSessionForm: View {
         .padding(16)
         .frame(width: Self.width)
         .background(palette.desk)
-        .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
     }
 
     private func row(_ place: ProjectFolders.LaunchPlace, selected: Bool) -> some View {

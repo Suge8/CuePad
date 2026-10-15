@@ -197,22 +197,16 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 
     private var plus: some View {
-        Menu {
-            if accepts.contains(.cards) { Button("选灵感或任务", systemImage: "rectangle.on.rectangle") { source = .cards } }
-            if accepts.contains(.images) {
-                ForEach(ComposerSource.imageChoices, id: \.source) { choice in
-                    Button(choice.title, systemImage: choice.symbol) { source = choice.source }
-                }
-            }
-        } label: {
+        let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .symbol("rectangle.on.rectangle")) { source = .cards }] : []
+        let images = accepts.contains(.images) ? ComposerSource.imageChoices.map { choice in
+            ChoiceMenu.Choice(title: choice.title, image: .symbol(choice.symbol)) { source = choice.source }
+        } : []
+        return MenuButton(sections: [ChoiceMenu.Section(choices: cards + images)], press: .button, accessibilityLabel: "添加") {
             CircleGlyph(fill: palette.fill) { Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
                 .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
                 .matchedGeometryEffect(id: "plus", in: layout)
         }
-        .menuStyle(.button).menuIndicator(.hidden)
-        .buttonStyle(.plain)
         .fixedSize()
-        .accessibilityLabel("添加")
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按是预览与"展开编辑"。
