@@ -54,16 +54,16 @@ struct ReplyBlock: View {
 }
 
 
-/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一张卡片：一行是谁发来的（FireCode 的子代理、审查、观察员，别的写信封名）与正文首行，
-/// 其余收着、点开看全文（Markdown）。它在对话里落在被读到的位置，与回答同一列、全宽，淡底与经过那一块同一套。
+/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一张卡片（`MachineNote`）：一行是谁发来的与它交回了什么，其余收着、点开看全文（Markdown）。
+/// 它在对话里落在被读到的位置，与回答同一列、全宽，淡底与经过那一块同一套。
 struct MachineCards: View {
     let text: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // 存进对话时总是整块的信封；认不出时整条当一块正文，不丢字
+            // 存进对话时总是整块的信封；认不出时（别的扩展的纯文字）整条当一块，不丢字
             ForEach(Array((PiEnvelope.parse(text) ?? [PiEnvelope(name: "", body: text)]).enumerated()), id: \.offset) { _, envelope in
-                MachineCard(envelope: envelope)
+                MachineCard(note: MachineNote(envelope))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,46 +72,33 @@ struct MachineCards: View {
 }
 
 private struct MachineCard: View {
-    let envelope: PiEnvelope
+    let note: MachineNote
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = false
 
     var body: some View {
-        let lines = envelope.body.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-        let title = lines.first.map(String.init) ?? ""
-        let rest = lines.count > 1 ? lines[1].trimmingCharacters(in: .whitespacesAndNewlines) : ""
         VStack(alignment: .leading, spacing: 8) {
             Button { open.toggle() } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: "flame").font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                    Text(Self.label(envelope.name)).font(Typography.caption).foregroundStyle(palette.ink3).fixedSize()
-                    Text(PiProgress.firstLine(title) ?? title).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+                    Image(systemName: note.fromFireCode ? "flame" : "puzzlepiece.extension").font(Typography.caption).foregroundStyle(palette.ink3)
+                        .accessibilityHidden(true)
+                    Text(note.who).font(Typography.caption).foregroundStyle(palette.ink3).fixedSize()
+                    Text(note.line).font(Typography.secondary).foregroundStyle(note.failed ? palette.failure : palette.ink)
                         .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
-                    if !rest.isEmpty { DisclosureChevron(open: open) }
+                    if !note.detail.isEmpty { DisclosureChevron(open: open) }
                 }
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .disabled(rest.isEmpty)
-            .accessibilityLabel("\(Self.label(envelope.name))：\(title)")
-            .accessibilityValue(rest.isEmpty ? "" : open ? "已展开" : "已收起")
-            if open { MarkdownText(source: rest).equatable().transition(.opacity) }
+            .disabled(note.detail.isEmpty)
+            .accessibilityLabel("\(note.who)：\(note.line)")
+            .accessibilityValue(note.detail.isEmpty ? "" : open ? "已展开" : "已收起")
+            if open { MarkdownText(source: note.detail).equatable().transition(.opacity) }
         }
         .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 8)
         .background(palette.fill, in: ChatBlock.shape)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
-    }
-
-    /// 谁发来的：FireCode 的三种信封写成人话，别的照信封名；没有信封（别的扩展投进来的纯文字）写扩展。
-    static func label(_ name: String) -> String {
-        switch name {
-        case "firecode_master_event": "FireCode 子代理"
-        case "firecode_review": "FireCode 审查"
-        case "firecode_watcher": "FireCode 观察员"
-        case "": "扩展"
-        default: name
-        }
     }
 }
 
@@ -133,7 +120,7 @@ struct DraftReply<Header: View>: View {
 }
 
 
-/// Pi 此刻在做什么，接在对话末尾、与回答同一列：这一轮的经过（`RoundProcess`，已做完的几步收成一行、改动与出错列出，
+/// Pi 此刻在做什么，接在对话末尾、与回答同一列：这一轮的经过（`RoundProcess`，已做完的几步收成一行，
 /// 正在跑的那一步实时展开；计时已在顶上一行），有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换；
 /// 怎么出现、怎么拿掉由放它的地方定。Mac 上正在说的话出字时这一块是草稿的标题（`SessionDraft`，`ending(of:speaking:)`）。
 struct LiveStatus: View {

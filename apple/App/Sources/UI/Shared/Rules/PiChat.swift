@@ -70,23 +70,12 @@ nonisolated enum PiChat {
         return PiClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 一轮经过的一句（`RoundProcess` 的标题行，做完的回答与在跑的这一轮同一种写法）："跑了 12 步 · 改了 3 个文件 · 1 处出错"。
-    /// 步数是各类调用的合计（读、改同一个文件只算一步，与清单的行同一口径）；没改文件、没出错的那一截不写。出错的那一截要标胭脂，单独给出。
-    struct ProcessLine: Equatable {
-        var steps: Dotted
-        var failures: String?
-    }
-
-    static func processLine(_ tools: PiChatMessage.Tools) -> ProcessLine {
-        let failures = tools.items.count(where: \.failed)
-        return ProcessLine(
-            steps: Dotted("跑了 \(tools.total) 步", tools.edits > 0 ? "改了 \(tools.edits) 个文件" : nil),
-            failures: failures > 0 ? "\(failures) 处出错" : nil)
-    }
-
-    /// 经过收起时也列出的几步：改了的文件与出错的调用（清单里总有它们，见 `PiChatMessage.Tools.items`），按先后。
-    static func pinned(_ tools: PiChatMessage.Tools) -> [PiChatMessage.Tools.Item] {
-        tools.items.filter { $0.failed || $0.kind == .edit }
+    /// 一轮经过的一句（`RoundProcess` 的标题行，做完的回答与在跑的这一轮同一种写法）："跑了 12 步 · 改了 3 个文件"。
+    /// 步数是各类调用的合计（读、改同一个文件只算一步，与清单的行同一口径）；没改文件的那一截不写。不写出错几处：中途出的错它多半自己解决了，
+    /// 没解决的回答里会说；哪步出错展开清单在原位标着。没调过工具的一轮没有这一句。
+    static func processLine(_ tools: PiChatMessage.Tools?) -> Dotted? {
+        guard let tools, tools.total > 0 else { return nil }
+        return Dotted("跑了 \(tools.total) 步", tools.edits > 0 ? "改了 \(tools.edits) 个文件" : nil)
     }
 
     /// 改文件的行数："+12 −3"；没有增或没有删的那一半不写，算不出的也不写。
