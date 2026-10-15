@@ -12,14 +12,12 @@ struct MasonryLayout: Layout {
     private static let idealWidth: CGFloat = 900
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        // 问理想尺寸（nil）或最大尺寸（无穷）时给一个常规宽度：墙本身没有固有宽度，无穷宽会让列数换算崩溃
-        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? Self.idealWidth
-        let frames = place(subviews, width: width)
+        let (width, frames) = place(subviews, width: proposal.width)
         return CGSize(width: width, height: frames.map(\.maxY).max() ?? 0)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, frame) in zip(subviews, place(subviews, width: bounds.width)) {
+        for (subview, frame) in zip(subviews, place(subviews, width: bounds.width).frames) {
             subview.place(
                 at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
                 proposal: ProposedViewSize(width: frame.width, height: frame.height))
@@ -30,17 +28,17 @@ struct MasonryLayout: Layout {
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
 
-    private func place(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
-        let columns = max(1, min(maxColumns, Int((width + spacing) / (minColumnWidth + spacing))))
+    private func place(_ subviews: Subviews, width proposed: CGFloat?) -> (width: CGFloat, frames: [CGRect]) {
+        let (width, columns) = WallColumns.fit(proposed, ideal: Self.idealWidth, columnWidth: minColumnWidth, spacing: spacing, limit: maxColumns)
         let columnWidth = (width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
         var heights = Array(repeating: CGFloat(0), count: columns)
-        return subviews.map { subview in
+        return (width, subviews.map { subview in
             let column = heights.indices.min { heights[$0] < heights[$1] } ?? 0
             let height = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
             let frame = CGRect(x: CGFloat(column) * (columnWidth + spacing), y: heights[column], width: columnWidth, height: height)
             heights[column] += height + spacing
             return frame
-        }
+        })
     }
 }
 

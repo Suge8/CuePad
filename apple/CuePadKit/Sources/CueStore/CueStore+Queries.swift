@@ -35,6 +35,10 @@ extension CueStore {
     """
   }
 
+  /// 任务（`t`，左连接项目 `p`）按所属项目排：项目顺序同 `projectOrder`，未分类在后。项目还没同步到的任务（引用先于项目送达）
+  /// 项目那几个键全是空值，再按 `t.projectID` 排：同一项目的任务总是连在一起，按项目分组时每个项目只成一组。
+  static let taskProjectOrder = "t.projectID IS NULL, \(projectOrder("p")), t.projectID"
+
   /// 回收站里的条数：删除的项目加单独删除的卡片（`trashedProjects()` 与 `trashedCards()` 的个数之和），只数不读正文。
   public func trashCount() throws -> Int {
     try db.first(
@@ -185,7 +189,7 @@ extension CueStore {
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID IS ?")
-      ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
+      ORDER BY \(Self.taskProjectOrder), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
     var groups: [TaskGroup] = []
@@ -257,7 +261,7 @@ extension CueStore {
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) \(Self.taskWithParent)
       WHERE \(visibleTask) AND t.startedAt IS NOT NULL AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "")
-      ORDER BY t.startedAt DESC, t.projectID IS NULL, \(Self.projectOrder("p")), t.sortKey, t.id
+      ORDER BY t.startedAt DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
     ) { Card(row: $0) }
   }

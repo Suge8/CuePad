@@ -90,8 +90,12 @@ private struct ColumnsLayout: Layout {
     func makeCache(subviews: Subviews) -> Memo { Memo() }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGSize {
-        let width = proposal.width ?? idealColumnWidth
+        let width = fit(proposal.width).width
         return CGSize(width: width, height: frames(width: width, subviews: subviews, memo: cache).values.map(\.maxY).max() ?? 0)
+    }
+
+    private func fit(_ proposed: CGFloat?) -> (width: CGFloat, count: Int) {
+        WallColumns.fit(proposed, ideal: idealColumnWidth, columnWidth: idealColumnWidth, spacing: spacing, limit: arrangements.keys.max() ?? 1)
     }
 
     // 没有对齐参考线：默认实现会把问题递归问遍墙上每张卡的子树，侧栏开合时每帧一次
@@ -116,7 +120,7 @@ private struct ColumnsLayout: Layout {
     }
 
     private func frames(width: CGFloat, subviews: Subviews) -> [Int: CGRect] {
-        let count = min(WallColumns.count(for: width, idealColumnWidth: idealColumnWidth, spacing: spacing), arrangements.keys.max() ?? 1)
+        let count = fit(width).count
         guard let columns = arrangements[count] else { return [:] }
         let index = Dictionary(subviews.indices.compactMap { i in subviews[i][CardIDKey.self].map { ($0, i) } }, uniquingKeysWith: { first, _ in first })
         let columnWidth = max((width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)

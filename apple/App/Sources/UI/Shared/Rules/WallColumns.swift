@@ -50,9 +50,11 @@ nonisolated struct WallColumns: Equatable, Sendable {
         heights.indices.min { heights[$0] < heights[$1] } ?? 0
     }
 
-    /// 列数：列宽落在理想宽度附近，窗口越宽列越多。
-    static func count(for width: Double, idealColumnWidth: Double, spacing: Double) -> Int {
-        max(1, Int(((width + spacing) / (idealColumnWidth + spacing)).rounded(.down)))
+    /// 墙（Mac 的卡片墙、手机项目页的瀑布墙）排在多宽里、分几列：列不窄于 `columnWidth`，越宽列越多，最多 `limit` 列。
+    /// 墙没有固有宽度：问理想尺寸（nil）或最大尺寸（无穷）时按 `ideal` 宽排——无穷宽换算列数会让整数转换崩溃。
+    static func fit(_ proposed: CGFloat?, ideal: CGFloat, columnWidth: CGFloat, spacing: CGFloat, limit: Int) -> (width: CGFloat, count: Int) {
+        let width = proposed.flatMap { $0.isFinite ? $0 : nil } ?? ideal
+        return (width, max(1, min(limit, Int(((width + spacing) / (columnWidth + spacing)).rounded(.down)))))
     }
 
     /// 卡片高度的估计：标题与摘要按每行字数折行，有图加图的高度。

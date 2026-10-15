@@ -796,7 +796,7 @@ extension CueStore {
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
         AND \(condition)
-      ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), t.sortKey, t.id
+      ORDER BY \(Self.taskProjectOrder), t.sortKey, t.id
       """, arguments
     ) { Card(row: $0) }
   }

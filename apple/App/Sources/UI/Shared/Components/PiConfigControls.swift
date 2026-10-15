@@ -97,8 +97,8 @@ struct PiConfigControls<Trailing: View>: View {
     private func row(wordy: Bool) -> some View {
         HStack(spacing: 6) {
             modelCapsule
-            if !levels.isEmpty {
-                PiThinkingDial(meter: PiThinkingMeter(levels: levels, current: shown.thinking), pending: shown.pending, wordy: wordy, choose: chooseThinking)
+            if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
+                PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
                     .popUpAnchor(anchors[.thinking])
             }
             trailing
