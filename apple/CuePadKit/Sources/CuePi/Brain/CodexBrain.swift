@@ -9,6 +9,10 @@ import Foundation
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
 /// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
+/// - 模型看到的输入只有系统提示、沙箱说明与环境（工作目录、日期）：用户的 skill 清单（`skills.include_instructions`）、
+///   工作目录里的 AGENTS.md（`project_doc_max_bytes` 为 0）、子代理的角色说明与工具（`agents.enabled`；只停用 `multi_agent` 功能不够，
+///   模型表声明了 v2 的模型照样开着）、协作模式说明（`include_collaboration_mode_instructions`）都关掉，见 `overrides`；
+///   `<CODEX_HOME>/AGENTS.md` 没有开关（只换配置目录才挡得住，换了会丢登录），用户写了就会进来；
 /// - 图以 data URL 随输入交；模型能不能看图、支持哪些强度都看 `model/list` 里的这个模型；
 /// - 模型与思考强度每轮随 `turn/start` 给（就地换就是改下一轮给的）：强度按 `model/list` 里这个模型支持的档位夹取（`PiThinkingLevel.clamped`）；
 /// - 正忙时说的话经 `turn/steer` 并进当前这一轮；这一轮恰好已经结束（steer 被拒）就开新的一轮；
@@ -32,13 +36,18 @@ final class CodexBrain: CueBrain {
     }
 
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
-    /// 或会给模型加上读文件以外的能力（apps、plugins、computer_use、browser_use、image_generation、multi_agent）。
-    static let disabledFeatures = ["memories", "chronicle", "hooks", "apps", "plugins", "computer_use", "browser_use", "image_generation", "multi_agent"]
+    /// 或会给模型加上读文件以外的能力（apps、plugins、computer_use、browser_use、image_generation）。
+    static let disabledFeatures = ["memories", "chronicle", "hooks", "apps", "plugins", "computer_use", "browser_use", "image_generation"]
+    /// 盖过用户配置的项（`-c`，值是 TOML），键名见 Codex 的 config.schema.json。
+    static let overrides = [
+        "notify=[]", #"web_search="disabled""#, "skills.include_instructions=false", "project_doc_max_bytes=0", "agents.enabled=false",
+        "include_collaboration_mode_instructions=false",
+    ]
 
     func start(_ config: CueBrainConfig) async throws {
         do {
             let rpc = try await CodexRPC.launch(
-                config.executable, arguments: ["-c", "notify=[]", "-c", "web_search=\"disabled\""] + Self.disabledFeatures.flatMap { ["--disable", $0] },
+                config.executable, arguments: Self.overrides.flatMap { ["-c", $0] } + Self.disabledFeatures.flatMap { ["--disable", $0] },
                 environment: BrainSession.environment(config), directory: config.workingDirectory)
             self.rpc = rpc
             rpc.onNotification = { [weak self] in self?.notification($0, $1) }
