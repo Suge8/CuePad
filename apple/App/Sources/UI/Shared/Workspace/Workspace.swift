@@ -264,10 +264,10 @@ final class Workspace {
         }
     }
 
-    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
+    /// 点任务的圆圈：待办与进行中都变完成，完成的不再算做完（开始过的回到进行中）。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
     /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
     /// 完成就是做完了：它（和它的步骤）绑着的会话里，绑着的事都做完了的一起结束——结束哪些只由 Store 定（`CueStore.toggleDone`，
-    /// 与 Cue 收尾同一条规则），结束请求写下就上传。
+    /// 与 Cue 的 done 同一条规则），结束请求写下就上传。
     func toggle(_ id: UUID) async throws {
         let (status, ended) = try await services.store.toggleDone(id)
         for request in ended { _ = services.uploaded(request) }

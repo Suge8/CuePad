@@ -56,10 +56,11 @@ import Testing
     try await store.setStatus(top.id, .todo)
     #expect(try await card(second.id).status == .done)
 
-    // 给用户看的数字只按顶层任务计：上级已完成而自己重新打开的步骤算顶层
+    // 步骤不再算做完，已完成的上级跟着不再算做完；给用户看的数字只按顶层任务计
     try await store.setStatus(top.id, .done)
     try await store.setStatus(second.id, .todo)
-    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 1))
+    #expect(try await card(top.id).status == .todo)
+    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 0))
   }
 
   @Test func 移动_不能成环或任务超两级_换项目带着子树_取消要做与进回收站时下级上提() async throws {

@@ -38,7 +38,7 @@ public struct CueTools: Sendable {
         "description": """
           任务与会话（你不写代码，活交给会话做）。task 写任务的 id 前缀或标题；session 写会话 id 前缀或会话名（信封与 peek 里有）。标题与步骤名宽不过 \(CueName.limit)（汉字算 2，约 12 个汉字），超了整件退回。prompt、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
           add{title,project?,steps?,prompt?,session?} 建任务；带 session 把会话绑到新建的任务上：没绑任务的会话（你要为它的结果负责时），或已完成的事用过的会话（在它上面做别的事，旧任务照旧完成）；不写 prompt，话用 say 说；project 缺省是会话所在的项目；
-          edit{task,title?,prompt?,steps?,project?,reopen?} 改标题、草稿、追加步骤（已完成的任务回到进行中）或挪到项目；reopen:true 把已完成的任务改回没做完（同用户点掉圆圈），只在确认它其实没做完时用；
+          edit{task,title?,prompt?,steps?,project?,reopen?} 改标题、草稿、追加步骤或挪到项目；追加步骤与 reopen:true 都让已完成的任务不再算做完（同用户点掉圆圈），只在确认它其实没做完时用；
           start{task,agent?,model?,effort?,fresh?} 开工（先 edit 写好草稿）：叶子绑着会话就把草稿发进去，没绑就在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；同一任务的下一步默认接着用上一步的会话，哪怕它已结束（执行时恢复），上下文太长或要换 Agent 时用 fresh:true（上一步的会话随之结束）；
           say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它。说话不改任务的状态；
           say 与把草稿发进已有会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
@@ -231,7 +231,7 @@ public struct CueTools: Sendable {
     }
     var done: [String] = []
     if reopen {
-      _ = try await store.toggleDone(card.id)
+      try await store.reopenTask(card.id)
       done.append("改回了没做完")
     }
     if let heading {

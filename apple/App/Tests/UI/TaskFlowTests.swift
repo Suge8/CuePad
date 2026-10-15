@@ -242,10 +242,12 @@ struct TaskFlowTests {
         try await store.setStatus(publish.id, .done)
         let fix = try await store.createTask("修重连", in: project)
         try await store.setStatus(fix.id, .done)
+        let shipped = try await store.createTask("发版", in: project)
+        try await store.setStatus(shipped.id, .done)
         let closed = try await store.createTask("收尾", in: project)
         let reopened = try await store.createTask("补文档", under: closed.id)
         try await store.setStatus(closed.id, .done)
-        try await store.setStatus(reopened.id, .todo)
+        try await store.setStatus(reopened.id, .todo)  // 上级跟着不再算做完
         let archived = try await store.createTask("旧的", in: project)
         _ = try await store.createTask("旧的步骤", under: archived.id)
         try await store.archive(archived.id)
@@ -260,14 +262,14 @@ struct TaskFlowTests {
         let page = try await ProjectPageData.read(project, from: store)
         let board = try await TaskBoard.read(from: store)
 
-        let open = [release.id, reopened.id, orphan.id]
+        let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
         #expect(catalog.openTasks[project] == open.count && board.counts.open == open.count)
         #expect(board.inProgress.count + board.todo.count == open.count)
-        let done = [fix.id, closed.id]
+        let done = [fix.id, shipped.id]
         #expect(Set(board.done.map(\.id)) == Set(done) && board.counts.done == done.count)
         #expect(page.taskCounts == board.counts)
-        #expect(board.done.first?.task.id == closed.id)  // 最近完成按完成时间排，不按项目分组
+        #expect(board.done.first?.task.id == shipped.id)  // 最近完成按完成时间排，不按项目分组
     }
 
     /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
@@ -331,6 +333,23 @@ struct TaskFlowTests {
     }
 
     /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
+    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回。
+    @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
+        let task = try await store.createTask("发布", in: nil)
+        let step = try await store.createTask("跑检查", under: task.id)
+        try await store.setStatus(step.id, .inProgress)
+        let workspace = Workspace(services: rig.services)
+        try await workspace.toggle(task.id)
+        try await workspace.archive(task.id)
+        #expect(try await store.card(step.id)?.status == .done)
+        #expect(try await store.archived().count == 1)
+
+        try await workspace.toggle(step.id)
+        #expect(try await store.card(step.id)?.status == .inProgress)
+        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.archived().isEmpty)
+    }
+
     @Test func 带着已完成步骤的任务不能再缩进_拖起来放回原处不换项目() async throws {
         let second = try await store.createTask("发布", in: nil)
         let first = try await store.createTask("备份", in: nil)

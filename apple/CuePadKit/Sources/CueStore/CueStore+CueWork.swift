@@ -75,7 +75,7 @@ public struct CueBoardLeaf: Equatable, Sendable {
   public var isActive: Bool { launching || sending || session.map { $0.state != .known(.ended) } ?? false }
 }
 
-/// 某时刻之后，有会话的事或没绑任务的会话里的一处变化。
+/// 某时刻之后，有会话的事或不归没做完的事的会话里的一处变化。
 public struct CueChange: Equatable, Sendable {
   public enum Kind: String, Sendable, CaseIterable {
     /// 会话停下：这一轮做完歇下，或做到一半被打断（`interrupted`，会话状态是 `PiWorkState.interrupted`）
@@ -433,32 +433,38 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// 点任务的圆圈：待办与进行中都变完成（连同结束做完了的会话，同 `finishTask`），完成的回到待办。下一个状态按库里此刻的值决定，
+  /// 点任务的圆圈：待办与进行中都变完成（连同结束做完了的会话，同 `finishTask`），完成的不再算做完（`reopen`）。下一个状态按库里此刻的值决定，
   /// 读与改在一个事务里——界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
   public func toggleDone(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      let status = try applyStatus(id, current == .done ? .todo : .done)
-      return (status, status == .done ? try endUnusedSessions(of: id, cue: false) : [])
+      guard current != .done else {
+        try reopen([id])
+        return (try find(Card.self, id)?.status ?? .todo, [])
+      }
+      return (try applyStatus(id, .done), try endUnusedSessions(of: id, cue: false))
     }
   }
 
-  /// 已完成的任务加了步骤，回到进行中（`createTask(_:under:)`，写入时）。说话不经这里：任务的状态只由明确的动作改
-  /// （点圆圈、Cue 的 done 与 edit 的 reopen、加步骤）。
-  /// `tasks` 连同各自已完成的上级回到进行中；回到进行中的事在归档里的，整件连同下级取回。必须在写事务内调用。
+  /// Cue 的 edit reopen：把已完成的事改回没做完（`reopen`，同点掉圆圈）；没完成的什么都不改。
+  public func reopenTask(_ id: UUID) throws {
+    try write { try reopen([id]) }
+  }
+
+  /// 不再算做完，只在这里写：点掉圆圈（`toggleDone`）、Cue 的 edit reopen（`reopenTask`）、给已完成的事加步骤（`createTask(_:under:)`）、
+  /// 把完成的改成别的状态（`applyStatus`）。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；
+  /// 在归档里的，整件连同下级取回。说话不经这里：任务的状态只由明确的动作改。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
-    var tops: [UUID] = []
-    for task in tasks {
-      let chain = [task] + (try ancestors(of: task))
-      let done = try select(
-        Card.self, where: "id IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND completedAt IS NOT NULL", [Self.idList(chain)])
-      guard !done.isEmpty else { continue }
-      for card in done { try applyStatus(card.id, .inProgress) }
-      tops.append(chain.last!)
-    }
-    let archived = try select(Card.self, where: "id IN (SELECT value FROM json_each(?)) AND archivedAt IS NOT NULL", [Self.idList(tops)])
-    try setArchived(archived.map(\.id), at: nil)
+    let chains = try tasks.map { [$0] + (try ancestors(of: $0)) }
+    let done = try select(
+      Card.self, where: "id IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND completedAt IS NOT NULL",
+      [Self.idList(chains.flatMap { $0 })])
+    guard !done.isEmpty else { return }
+    let reopened = Set(done.map(\.id))
+    try db.run(
+      "UPDATE cards SET completedAt = NULL, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))", [Date.stamp, Self.idList(reopened)])
+    try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
   /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 做完 `finishTask`），或叶子换去别的会话的那一刻

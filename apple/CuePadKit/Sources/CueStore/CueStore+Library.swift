@@ -144,7 +144,7 @@ extension CueStore {
 
   /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   /// 上级原本是叶子时，它的草稿与会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）。
-  /// 上级已完成的回到进行中（`reopen`）：加步骤是明说还有活。
+  /// 上级已完成的不再算做完（`reopen`）：加步骤是明说还有活。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -314,7 +314,8 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
+  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办清掉开始时间；
+  /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
   /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
@@ -328,10 +329,10 @@ extension CueStore {
     guard let current = card.status else { throw CueStoreError.notATask }
     guard current != status else { return status }
     let now = Date.stamp
+    if current == .done { try reopen([id]) }
     switch status {
-    case .todo: try db.run("UPDATE cards SET startedAt = NULL, completedAt = NULL, modifiedAt = ? WHERE id = ?", [now, id])
-    case .inProgress:
-      try db.run("UPDATE cards SET startedAt = COALESCE(startedAt, ?1), completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+    case .todo: try db.run("UPDATE cards SET startedAt = NULL, modifiedAt = ? WHERE id = ? AND startedAt IS NOT NULL", [now, id])
+    case .inProgress: try db.run("UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND startedAt IS NULL", [now, id])
     case .done:
       try db.run(
         """

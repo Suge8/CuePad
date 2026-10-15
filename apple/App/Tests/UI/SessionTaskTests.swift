@@ -83,7 +83,7 @@ struct SessionTaskTests {
 
         let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(!reopened.isError)
-        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.card(task.id)?.status == .inProgress)  // 绑过会话就是开始过
         let again = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(again.isError)
 
