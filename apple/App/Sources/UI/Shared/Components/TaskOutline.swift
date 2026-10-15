@@ -35,16 +35,18 @@ struct TaskOutline<Line: View>: View {
     /// 这个大纲显示的范围：行、缩进与反缩进按它算。
     private let tree: TaskTree
     private let line: (TaskTree.Row) -> Line
-    /// 行按需建（只建看得见的）：外面给了固定高度的滚动区、行数多到一屏放不下时用，否则整列的行都要在打开的那一圈里量一遍。
-    private let lazy: Bool
+    /// 从第几行起按需建（只建看得见的），nil 是都直接建：外面给了固定高度的滚动区、行数多到一屏放不下时用，否则整列的行都要在打开的那一圈里量一遍。
+    /// 前面那几行总在普通栈里：项目页折起时列出的行放这里，收起后大纲的高度当场是准的（懒加载栈对没建的行只报估算的高度，`TaskFoldAnchor`），
+    /// 展开、收起也不重建它们。
+    private let lazyAfter: Int?
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drag = OutlineDrag()
     @State private var commits = 0
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
-    init(tree: TaskTree, roots: [UUID]? = nil, lazy: Bool = false, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
-        self.lazy = lazy
+    init(tree: TaskTree, roots: [UUID]? = nil, lazyAfter: Int? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+        self.lazyAfter = lazyAfter
         whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
@@ -59,12 +61,17 @@ struct TaskOutline<Line: View>: View {
     // 视图体不读落点（拖动时每移一下都变）：只有高亮与插入线两个小视图读它，拖动期间列表本身不重算
     var body: some View {
         let rows = tree.rows()
-        let list = ForEach(rows) { item($0) }
         Group {
-            if lazy {
-                LazyVStack(alignment: .leading, spacing: 0) { list }
+            if let lazyAfter {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows.prefix(lazyAfter)) { item($0) }
+                    // 没有后面的行时不留空的懒加载栈：它会先报一次上回估算的高度
+                    if rows.count > lazyAfter {
+                        LazyVStack(alignment: .leading, spacing: 0) { ForEach(rows.dropFirst(lazyAfter)) { item($0) } }
+                    }
+                }
             } else {
-                VStack(alignment: .leading, spacing: 0) { list }
+                VStack(alignment: .leading, spacing: 0) { ForEach(rows) { item($0) } }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

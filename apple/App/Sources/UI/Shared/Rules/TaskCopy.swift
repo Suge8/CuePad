@@ -17,6 +17,11 @@ nonisolated struct TaskFold: Equatable, Sendable {
     func shown(_ roots: [UUID], limit: Int) -> [UUID] {
         showsAll || Self.hidden(roots.count, limit: limit) == 0 ? roots : Array(roots.prefix(limit))
     }
+
+    /// 折起时列出几行（前几条顶层任务连同步骤）。
+    static func foldedRows(_ tree: TaskTree, limit: Int) -> Int {
+        tree.rows(of: Array(tree.roots.prefix(limit))).count
+    }
 }
 
 /// 步骤进度与完成上级时的确认，项目页任务纸底的开合（Mac 与 iOS 同一套）。草稿不写条数：写好了的在行尾是"开始"（`TaskNext`）。

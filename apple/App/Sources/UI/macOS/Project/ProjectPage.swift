@@ -35,7 +35,7 @@ struct ProjectPage: View {
         ScrollViewReader { proxy in
             ZStack(alignment: .top) {
                 ScrollView {
-                    content.id("top").taskFoldContent()
+                    content.id("top")
                 }
                 .scrollPosition($position)
                 .taskFoldScroll(anchor)

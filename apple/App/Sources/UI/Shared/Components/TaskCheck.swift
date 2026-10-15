@@ -42,6 +42,7 @@ extension Workspace {
 }
 
 /// 完成圈的按钮：`TaskRingView` 加点按区（`target` 比圈大，圈在其中居中）与 `TaskCheck` 的确认、停留与写入。
+/// Mac 上不用 Button（`ListPress`）：成百上千地出现在任务行里，每颗 Button 一套焦点、按键与读屏的机器，150 条任务点开"还有 N 条"多约 55M 指令。
 struct TaskCheckButton: View {
     let task: Card
     var subtasks: TaskProgress?
@@ -49,15 +50,12 @@ struct TaskCheckButton: View {
     let size: CGFloat
     let target: CGSize
     @Binding var check: TaskCheck
+    /// 点进没激活的窗口的那一下落到哪（Mac，同系统按钮不接首击、落到下面的行上）。
+    var rowTap: () -> Void = {}
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: agentBusy) } label: {
-            TaskRingView(status: task.status, ring: TaskRing(subtasks), done: check.done(task), size: size)
-                .frame(width: target.width, height: target.height)
-                .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.button))
+        trigger
         .accessibilityLabel(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
         .dialog(TaskCopy.openSubtasks(subtasks), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
@@ -74,6 +72,20 @@ struct TaskCheckButton: View {
         .onDisappear { if check.phase == .pending { commit() } }
         .onChange(of: task.completedAt) { check.phase = .idle }
     }
+
+    private var ring: some View {
+        TaskRingView(status: task.status, ring: TaskRing(subtasks), done: check.done(task), size: size)
+            .frame(width: target.width, height: target.height)
+            .contentShape(.rect)
+    }
+
+    #if os(macOS)
+    private var trigger: some View { ring.modifier(ListPress(slop: target.width, action: tap, firstClick: rowTap)) }
+    #else
+    private var trigger: some View { Button(action: tap) { ring }.buttonStyle(PressStyle(.button)) }
+    #endif
+
+    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: agentBusy) }
 
     private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
         Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })

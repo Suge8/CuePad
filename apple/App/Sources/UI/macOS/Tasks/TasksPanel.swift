@@ -100,7 +100,7 @@ struct TasksPanel: View {
             .font(Typography.label).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-            TaskOutline(tree: board.tree, roots: items.map(\.id), lazy: lazy) { row in
+            TaskOutline(tree: board.tree, roots: items.map(\.id), lazyAfter: lazy ? 0 : nil) { row in
                 TaskRow(
                     task: row.task, project: row.depth == 0 ? board.rows[row.id]?.project : nil,
                     subtasks: board.subtasks[row.id], draft: board.drafts[row.id])

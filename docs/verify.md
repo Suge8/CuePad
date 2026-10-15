@@ -61,6 +61,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 测量只有一个入口：单次交互（`-CuePadBench interact`）。`xc.sh perf mac`、`xc.sh perf ios`（独占机器；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
+- 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
 - Instruments 用 Release 优化构建并保留测量代码：`xc.sh perf mac` 构建的 `apple/.derived-perf-release` 就是这份。

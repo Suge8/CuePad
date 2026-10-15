@@ -35,7 +35,7 @@ struct TaskRow: View {
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
             TaskCheckButton(
                 task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 15,
-                target: CGSize(width: Self.ringColumn, height: 15), check: $check)
+                target: CGSize(width: Self.ringColumn, height: 15), check: $check, rowTap: open)
             Text(task.title)
                 .font(Typography.body.weight(.medium))
                 .strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
@@ -141,4 +141,5 @@ struct NewTaskField: View {
         }
     }
 }
+
 #endif
