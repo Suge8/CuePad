@@ -21,7 +21,7 @@ public final class Fixture: @unchecked Sendable {
 
 /// 测试用资料库的临时目录。库会被测试里的观察流、协调器、执行器一直持有到它们自己结束，
 /// 删掉仍打开的库文件时 SQLite 报 "database integrity compromised … vnode unlinked while in use"；
-/// 所以本次运行不删自己的目录，而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录。
+/// 所以本次运行不删自己的目录，而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录，连同还在里面跑的进程（`TestProcesses`）。
 public enum TestLibraries {
   private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-libraries", directoryHint: .isDirectory)
   private static let run: URL = {
@@ -40,6 +40,9 @@ public enum TestLibraries {
     let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
     for name in runs {
       guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
+      #if os(macOS)
+      TestProcesses.stop(under: root.appending(path: name))
+      #endif
       try? FileManager.default.removeItem(at: root.appending(path: name))
     }
   }
