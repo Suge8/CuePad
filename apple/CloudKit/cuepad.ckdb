@@ -256,6 +256,7 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         hostID        STRING,
         agents        ENCRYPTED STRING,
+        problems      ENCRYPTED STRING,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

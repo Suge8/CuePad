@@ -44,7 +44,9 @@ extension AppServices {
         follow(reporting: { .syncUnavailable("这台 Mac 在线的记录没能写下：\($0)") }) { [presence, wakeNotifications] in
             try await presence.keep(notifications: wakeNotifications)
         }
-        follow(reporting: { .syncUnavailable("这台 Mac 上能用的 Agent 没能写下：\($0)") }) { try await self.recordMacAgents() }
+        follow(reporting: { .syncUnavailable("这台 Mac 上能用的 Agent 没能写下：\($0)") }) { [macAgents, wakeNotifications] in
+            try await macAgents.keep(notifications: wakeNotifications)
+        }
         startCue()
         startSync()
         startSpeechClock()
@@ -70,31 +72,6 @@ extension AppServices {
         } catch where !Task.isCancelled {
             reportIssue(.piBridgeUnavailable("CuePad 写给 Agent 的技能或扩展没能升级：\(error.localizedDescription)"))
         } catch {}
-    }
-
-    /// 这台 Mac 上能用的 Agent 与各家的模型写进同步表 macAgents（`CueStore.recordMacAgents`，内容变了才写，写了立即上传），直到任务取消：
-    /// 各家的接入状态都检测出来之后问一次（启动时就是接入刷新之后），之后能不能开新会话（`AgentStatus.canLaunch`）变了、系统唤醒时
-    /// （睡着时可能登录、换了模型配置）再问。一次问完再问下一次，后问的结果不会被先问的覆盖；问的时候又来的几次并成一次。
-    private func recordMacAgents() async throws {
-        let (requests, request) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        let launchable = Observations { [agents] in AgentKind.allCases.map { agents.status($0)?.canLaunch } }
-        try await withThrowingDiscardingTaskGroup { group in
-            group.addTask { [wakeNotifications] in
-                for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { request.yield() }
-            }
-            group.addTask {
-                var asked: [Bool?]?
-                for await now in launchable where !now.contains(nil) && now != asked {
-                    asked = now
-                    request.yield()
-                }
-            }
-            group.addTask { [agents, store, sync, hostID] in
-                for await _ in requests {
-                    if let id = try await store.recordMacAgents(host: hostID, await agents.probe()) { await sync?.upload(id) }
-                }
-            }
-        }
     }
 
     /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。

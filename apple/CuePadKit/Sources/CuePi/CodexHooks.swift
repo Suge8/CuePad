@@ -13,6 +13,8 @@ import Foundation
 ///   装之前没有 `config.toml`、删完只剩空白的删掉文件（装之前的样子记在 `HookFile.Footprint.config`）。
 struct CodexHooks: AgentHookConfig {
     let home: URL
+    /// 写、删信任时起的 `codex`（检测时挑中的那个）；没有时要写、删信任就报没找到
+    let codex: URL?
     let locate: @Sendable () async -> ExecutableLocator
     /// 起 codex 时的基础环境（`AgentPaths.environment`），在它之上换掉配置目录与查找路径
     let environment: [String: String]
@@ -31,8 +33,11 @@ struct CodexHooks: AgentHookConfig {
     /// 权限确认的钩子挂住等 CuePad 时（人不在这台 Mac 前），Codex 终端里那一行显示它（钩子拿着这次确认，终端里不弹框）。
     static let waitingMessage = "等你在 CuePad 里确认"
 
-    init(home: URL, skillDirectory: URL, locate: @escaping @Sendable () async -> ExecutableLocator, environment: [String: String]) {
+    init(
+        home: URL, skillDirectory: URL, codex: URL?, locate: @escaping @Sendable () async -> ExecutableLocator, environment: [String: String]
+    ) {
         self.home = home
+        self.codex = codex
         self.locate = locate
         self.environment = environment
         hooks = HookFile(agent: .codex, file: home.appending(path: "hooks.json"), skillDirectory: skillDirectory, events: Self.events)
@@ -141,8 +146,8 @@ struct CodexHooks: AgentHookConfig {
 
     /// 起一个指向这个配置目录的 `codex app-server`，用完关掉并等它退出。
     private func withCodex(_ body: @MainActor (CodexRPC) async throws -> Void) async throws {
+        guard let codex else { throw CodexHooksError.codexNotFound }
         let locator = await locate()
-        guard let codex = locator.executable(.codex) else { throw CodexHooksError.codexNotFound }
         var environment = environment
         environment["CODEX_HOME"] = home.path
         environment["PATH"] = locator.environment(launching: codex, overrides: self.environment)["PATH"]

@@ -9,7 +9,8 @@ struct MacDependencies {
     var pi: PiBridge
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
-    var agents: AgentIntegration
+    /// 各家的接入状态（检测出的可执行文件也在里面：各家的接入、Cue 的大脑都从这里取）。
+    var agents: AgentIntegrations
     var terminal: PiTerminalJumper
     var hostID: String
     /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
@@ -42,7 +43,7 @@ struct MacDependencies {
         let commandLineTool = location.isIsolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
-        let agents = AgentIntegration(paths: paths, cuepad: commandLineTool.helper, isolated: location.isIsolated)
+        let agents = AgentIntegrations(AgentIntegration(paths: paths, cuepad: commandLineTool.helper, isolated: location.isIsolated))
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,
@@ -56,15 +57,18 @@ struct MacDependencies {
             updater: location.isIsolated ? DebugHooks.updater : SparkleUpdater(),
             hooks: hooks,
             runtimes: { store in [
-                .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.locatePi() }),
-                .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks, store: store),
-                .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks),
+                .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.executable(.pi) }),
+                .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks, store: store, claude: { await agents.executable(.claudeCode) }),
+                .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
-                    bridge: pi, paths: paths, store: store, hostID: hostID, transcriptWindow: PiHistoryPersistence.transcriptWindow),
+                    bridge: pi, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
+                    transcriptWindow: PiHistoryPersistence.transcriptWindow),
             ] },
             pasteboard: .general,
             cue: CueDependencies(
-                launch: { try await CueLaunch.local($0, store: $1, host: hostID) },
+                launch: { runtime, store in
+                    try await CueLaunch.local(executable: await agents.executable(runtime), store: store, host: hostID)
+                },
                 helper: commandLineTool.helper,
                 notifier: alerts))
     }

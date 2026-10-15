@@ -152,7 +152,7 @@ struct RealOpenCodeTests {
         let sandbox = try await OpenCodeSandbox()
         let store = try Fixture().store
         let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
-        let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+        let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
         let outcome: Result<Void, any Error>
         do {
             try runtime.start()
@@ -319,7 +319,7 @@ struct RealOpenCodeTests {
             #expect(sandbox.service?.pid == terminalService.pid && kill(terminalService.pid, 0) == 0, "终端拉起的服务不动")
             // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
             for _ in 0..<2 {
-                let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+                let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
                 try reconnected.start()
                 try await eventually("重新接上", timeout: .seconds(60)) { session(bridge) != nil }
                 try await Task.sleep(for: .seconds(2))
@@ -329,7 +329,7 @@ struct RealOpenCodeTests {
 
             try await sandbox.run(["service", "stop"])
             try await eventually("服务停了") { kill(terminalService.pid, 0) != 0 }
-            let host = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+            let host = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
             try host.start()
             _ = try await host.open(in: sandbox.work, launchToken: "t-service", name: nil, model: nil, thinking: nil)
             let started = try #require(sandbox.service)

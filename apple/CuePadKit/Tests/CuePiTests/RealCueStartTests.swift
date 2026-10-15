@@ -85,7 +85,7 @@ struct RealCueStartTests {
         case .opencode:
             let sandbox = try await OpenCodeSandbox()
             let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
-            let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: try Fixture().store, hostID: "mac")
+            let runtime = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: try Fixture().store, hostID: "mac", opencode: { await ExecutableLocator.system.candidates("opencode").first })
             let outcome: Result<Void, any Error>
             do {
                 try runtime.start()

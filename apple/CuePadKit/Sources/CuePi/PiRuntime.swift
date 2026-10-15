@@ -24,7 +24,7 @@ public final class PiRuntime: AgentRuntime {
     private let extraArguments: [String]
     private var watcher: Task<Void, Never>?
 
-    /// - Parameter pi: 这台 Mac 上够新的 `pi`（没有为 nil）。
+    /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     /// - Parameter idleLimit: 托管进程空闲多久自己退出（交给扩展计时）。
     /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(

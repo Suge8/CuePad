@@ -3,8 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 新会话：只有一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部一颗落点胶囊"新会话 · 项目名"，点开换在哪开
-/// （只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）；工具排里是用哪个 Agent 开（`AgentChoice`，
-/// 回复框在这里放模型与思考强度）：只列那台 Mac 上能用的（`MacAgents`），默认上次用的（`MacAgents.preferred`），一家都不能用时头部写明、开不了。发送钮就是开始：
+/// （只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名），旁边一颗胶囊选用哪个 Agent 开：
+/// 只列那台 Mac 上能用的（`MacAgents`），默认上次用的（`MacAgents.preferred`）；只有一家时只写它的名字，一家都不能用时头部写那台为什么（`whyNone`）、开不了。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
 /// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
 /// 没有项目时不出这个输入框，先新建项目（`Navigation.startNewSession`）。
@@ -48,11 +48,7 @@ struct NewSessionInput: View {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
             },
-            tools: {
-                if chosen?.binding != nil, let agents {
-                    AgentChoice(kinds: agents.kinds, selected: agent) { services.settings.lastAgent = $0 }.padding(.leading, 4)
-                }
-            },
+            tools: { EmptyView() },
             send: {
                 Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
                     .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
@@ -85,21 +81,33 @@ struct NewSessionInput: View {
     /// 头部：落点胶囊；进度或原因在它下面单独一行（放在右边会挤成两行、和胶囊对不齐）。
     private var header: some View {
         HStack(spacing: 8) {
-            Menu {
-                Picker("在哪开", selection: Binding(get: { chosen?.id }, set: { choice = $0 })) {
-                    ForEach(places) { place in
-                        Text(Dotted(place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)))
-                            .tag(Optional(place.id))
-                    }
-                }
-            } label: {
+            MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
+                ChoiceMenu.Choice(
+                    title: Dotted(place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)).visible,
+                    checked: place.id == chosen?.id) { choice = place.id }
+            })], accessibilityLabel: "在哪开：\(chosen?.project.name ?? "没选")") {
                 DestinationChip(title: Text(Dotted("新会话", chosen?.project.name ?? "选在哪开"))) {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }
             .disabled(inFlight)
-            .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
+            if chosen?.binding != nil, let agents, let agent { agentChip(agents.kinds, agent) }
             Spacer(minLength: 0)
+        }
+    }
+
+    /// 用哪个 Agent：能用的不止一家时是菜单，只有一家时只写它。
+    @ViewBuilder private func agentChip(_ kinds: [AgentKind], _ agent: AgentKind) -> some View {
+        let title = BrandMark.label(agent.mark, agent.name)
+        if kinds.count > 1 {
+            MenuButton(sections: [ChoiceMenu.Section(choices: kinds.map { kind in
+                ChoiceMenu.Choice(title: kind.name, image: .brand(kind.mark), checked: kind == agent) { services.settings.lastAgent = kind }
+            })], accessibilityLabel: "用哪个 Agent：\(agent.name)") {
+                DestinationChip(title: title) { EmptyView() }
+            }
+            .disabled(inFlight)
+        } else {
+            title.font(.subheadline.weight(.medium)).foregroundStyle(palette.ink3).accessibilityLabel("用 \(agent.name) 开")
         }
     }
 
@@ -118,10 +126,11 @@ struct NewSessionInput: View {
             case .sending(let transit):
                 HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             case .idle:
-                if !services.reachesPiHost {
+                // 那台一家都不能用时先说它：同步通了也开不了
+                if let binding = chosen?.binding, let agents, agents.agents.isEmpty {
+                    Text("\(binding.hostName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
+                } else if !services.reachesPiHost {
                     SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
-                } else if let binding = chosen?.binding, agents?.agents.isEmpty == true {
-                    Text("\(binding.hostName) 上还没有能用的 Agent").foregroundStyle(palette.ink3)
                 }
             }
         }
@@ -135,61 +144,6 @@ struct NewSessionInput: View {
             defer { sending = false }
             launched = try await start.launch(in: place.project, binding: binding, draft: draft, agent: agent, services: services)
         }
-    }
-}
-
-/// 用哪家开：那台 Mac 上能用的几家并排，选中的铺浅底、写出名字（放不下时都只有标志），点一下就换；只有一家时只是标示，不能点。
-/// 不用菜单：输入框浮在键盘上，系统菜单一弹出输入法的候选栏就收起，键盘矮一截、输入框跟着往下掉，选完候选栏回来又弹上去，
-/// 胶囊还要从菜单变形回来（选 Agent 时跳动、和后面的列表叠在一起、闪一下）。
-private struct AgentChoice: View {
-    let kinds: [AgentKind]
-    let selected: AgentKind?
-    let choose: (AgentKind) -> Void
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// 与模型胶囊（`PiModelCapsule`）同高。
-    private static let height: CGFloat = 30
-
-    var body: some View {
-        Group {
-            if kinds.count == 1, let only = kinds.first {
-                BrandMark.label(only.mark, only.name).foregroundStyle(palette.ink3).padding(.horizontal, 6)
-                    .accessibilityLabel("用 \(only.name) 开")
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    row(named: true)
-                    row(named: false)
-                }
-            }
-        }
-        .font(Typography.meta.weight(.medium))
-        .lineLimit(1)
-    }
-
-    private func row(named: Bool) -> some View {
-        HStack(spacing: 2) {
-            ForEach(kinds) { kind in
-                let on = kind == selected
-                Button { choose(kind) } label: {
-                    HStack(spacing: 5) {
-                        kind.mark.image
-                        if on, named { Text(kind.name).transition(.opacity) }
-                    }
-                    .foregroundStyle(on ? palette.ink : palette.ink3)
-                    .padding(.horizontal, on && named ? 11 : 0)
-                    .frame(minWidth: Self.height, minHeight: Self.height)
-                    .background(on ? palette.selection : .clear, in: .capsule)
-                    .frame(minHeight: 44)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel("用 \(kind.name) 开")
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .fixedSize()
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: selected)
     }
 }
 #endif

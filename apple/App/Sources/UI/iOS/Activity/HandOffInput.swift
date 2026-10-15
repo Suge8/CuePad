@@ -103,21 +103,17 @@ struct HandOffInput: View {
     /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；送不到 Mac 时的原因在它下面单独一行。
     private var header: some View {
         HStack(spacing: 8) {
-            Menu {
-                // 新会话放最上面：会话多了也不用往下翻
-                Button("新会话…", systemImage: "plus", action: newSession)
-                Divider()
-                ForEach(sessions) { item in
-                    Button { choice = item.state.id } label: {
-                        Label { Text(title(item)) } icon: { Image(systemName: item.state.id == chosen?.state.id ? "checkmark" : "") }
-                    }
-                }
-            } label: {
+            // 新会话放最上面：会话多了也不用往下翻
+            MenuButton(sections: [
+                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .symbol("plus"), choose: newSession)]),
+                ChoiceMenu.Section(choices: sessions.map { item in
+                    ChoiceMenu.Choice(title: title(item).visible, checked: item.state.id == chosen?.state.id) { choice = item.state.id }
+                }),
+            ], accessibilityLabel: chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话") {
                 DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
                     if let chosen { PiStateDot(shown: workspace.shown(chosen), size: 7) }
                 }
             }
-            .accessibilityLabel(chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话")
             Spacer(minLength: 0)
         }
     }

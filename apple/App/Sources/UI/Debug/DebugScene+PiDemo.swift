@@ -443,20 +443,28 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示的几台 Mac 上能用的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 住在这台）与 Mac 上的这台本机
-    /// 有 Pi、Claude Code、Codex（OpenCode 没装：新会话里不列它），MacBook Air（demo-air，只绑了 CuePad）只有 Pi，demo-mini 有 Claude Code 与 Codex。
-    /// 各家的模型与不指定时用的那个照演示会话报的（`demoModels(for:)`）。Mac 本机的会被它自己的探测改写成隔离目录里真实的样子。
+    /// 演示的几台 Mac 上的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 住在这台）与 Mac 上的这台本机
+    /// 有 Pi、Claude Code、Codex（OpenCode 没装：新会话里不列它），demo-mini 有 Claude Code 与 Codex；
+    /// MacBook Air（demo-air，只绑了 CuePad）一家都不能用，各有原因（新会话里选"CuePad · MacBook Air"看为什么）。
+    /// Mac 上给 `-CuePadHost bare` 时本机是一家都不能用的那台（看 + 的悬停与表单里的原因）；本机的记录会被它自己的探测改写成隔离目录里真实的样子。
+    /// 各家的模型与不指定时用的那个照演示会话报的（`demoModels(for:)`）。
     static func seedMacAgents(_ services: AppServices) async {
         func agent(_ kind: AgentKind) -> MacAgent {
             let state = demoModels(for: kind)
             return MacAgent(kind: kind, model: state.model?.key, models: state.models)
         }
         let full = [agent(.pi), agent(.claudeCode), agent(.codex)]
-        var hosts: [(String, [MacAgent])] = [("demo-mac", full), ("demo-air", [agent(.pi)]), ("demo-mini", [agent(.claudeCode), agent(.codex)])]
+        let bare = [
+            MacAgentProblem(kind: .pi, reason: "没登录"), MacAgentProblem(kind: .claudeCode, reason: "没装"), MacAgentProblem(kind: .codex, reason: "没装"),
+        ]
+        let store = services.store
+        _ = try? await store.recordMacAgents(host: "demo-mac", full)
+        _ = try? await store.recordMacAgents(host: "demo-mini", [agent(.claudeCode), agent(.codex)])
+        _ = try? await store.recordMacAgents(host: "demo-air", [], problems: bare)
         #if os(macOS)
-        hosts.append((services.hostID, full))
+        let local = services.hostID
+        _ = try? await store.recordMacAgents(host: local, local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
         #endif
-        for (host, agents) in hosts { _ = try? await services.store.recordMacAgents(host: host, agents) }
     }
 
     /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），

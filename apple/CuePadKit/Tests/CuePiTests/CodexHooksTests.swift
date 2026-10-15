@@ -56,7 +56,7 @@ struct CodexHooksTests {
             #expect(hooks.filter { $0.command == "\(moved.path) hook codex" }.allSatisfy { $0.trust == "trusted" })
             #expect(!hooks.contains { $0.command == command })
 
-            try await integration(cuepad: moved).uninstall(.codex)
+            try await integration(cuepad: moved).uninstall(.codex, executable: codex.locator.candidates("codex").first)
 
             #expect(try Data(contentsOf: hooksFile) == before.0)
             #expect(try Data(contentsOf: configFile) == before.1)
@@ -78,7 +78,7 @@ struct CodexHooksTests {
 
             try await integration().install(.codex)
             #expect(await integration().status(of: .codex).files == .current)
-            try await integration().uninstall(.codex)
+            try await integration().uninstall(.codex, executable: codex.locator.candidates("codex").first)
 
             #expect(try String(contentsOf: hooksFile, encoding: .utf8) == hooks)
             #expect(try String(contentsOf: configFile, encoding: .utf8) == config)
@@ -90,7 +90,7 @@ struct CodexHooksTests {
         try await codex.using {
             try await integration().install(.codex)
             #expect(try await codex.hookTrust().filter { $0.command == command && $0.trust == "trusted" }.count == 12)
-            try await integration().uninstall(.codex)
+            try await integration().uninstall(.codex, executable: codex.locator.candidates("codex").first)
 
             #expect(!FileManager.default.fileExists(atPath: hooksFile.path))
             #expect(!FileManager.default.fileExists(atPath: configFile.path))

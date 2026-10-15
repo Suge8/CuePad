@@ -80,13 +80,15 @@ struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
-extension View {
-    /// 带上的卡片的长按菜单：长按时浮起的预览是卡片的全文。
-    func attachmentContextMenu(_ outbox: Outbox, shape: some Shape, @ViewBuilder menu: @escaping () -> some View) -> some View {
-        contentShape(.contextMenuPreview, shape)
-            .contextMenu(menu: menu) {
-                AttachmentBody(content: outbox.content).frame(width: 340).frame(maxHeight: 460)
-            }
+/// 带上的卡片：点一下看全文（`open`），长按出它的菜单。走 `MenuButton`（菜单开着时输入框不随键盘跳），所以长按不浮起全文预览：点一下就是全文。
+struct AttachmentButton<Label: View>: View {
+    let label: String
+    let menu: [ChoiceMenu.Section]
+    let open: () -> Void
+    @ViewBuilder let content: () -> Label
+
+    var body: some View {
+        MenuButton(sections: menu, primary: open, press: .wide, accessibilityLabel: label, hint: "看全文", label: content)
     }
 }
 

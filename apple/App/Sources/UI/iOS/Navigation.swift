@@ -78,6 +78,8 @@ final class Navigation {
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
 
+    /// 这个窗口有系统菜单开着（`MenuButton`）：这段里贴着键盘的那一层不跟键盘走（`KeyboardHold`）。
+    var menuOpen = false
     /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent）。
     var floating: Bool { capturing || newSession != nil || outbox != nil }
     var outbox: Outbox? {

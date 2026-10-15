@@ -88,7 +88,8 @@ public enum CuePrompt {
       let models = (agent.model.map { [agent.kind.modelRef($0) + "（默认）"] } ?? []) + others.map(agent.kind.modelRef)
       return "  - agent=\(agent.kind.rawValue)" + (models.isEmpty ? "" : ", model=" + models.joined(separator: "、"))
     }
-    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个）：\n" + lines.joined(separator: "\n")
-      + "\n  没说就用 pi 和它的默认模型。"
+    // start 不写 agent 就是 pi（`CueTools`）：Pi 这台用不了时要写明
+    let fallback = agents.contains { $0.kind == .pi } ? "没说就用 pi 和它的默认模型。" : "pi 这台用不了，start 要写明 agent。"
+    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个）：\n" + lines.joined(separator: "\n") + "\n  " + fallback
   }
 }

@@ -93,7 +93,8 @@ final class ClaudeTestbed {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, store: store, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
+            bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { [bin] in bin.appending(path: "claude") },
+            locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
             presence: presence)
         if installHooks { try await integration.install(.claudeCode) }
     }

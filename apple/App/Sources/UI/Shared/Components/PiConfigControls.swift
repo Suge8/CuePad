@@ -33,6 +33,20 @@ struct PiModelGroup: Identifiable {
     }
 }
 
+extension [PiModelGroup] {
+    /// 模型菜单的内容，两端同一份：没给组名的写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）。
+    func menu(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
+        map { group in
+            ChoiceMenu.Section(
+                title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.mark.map(ChoiceMenu.Glyph.brand),
+                choices: group.items.map { item in
+                    ChoiceMenu.Choice(
+                        title: item.name, subtitle: item.note, image: item.mark.map(ChoiceMenu.Glyph.brand), checked: item.checked, choose: item.choose)
+                })
+        }
+    }
+}
+
 extension PiModelOption {
     /// 有显示名用显示名，没有用 id。
     var displayName: String { name.isEmpty ? key.id : name }

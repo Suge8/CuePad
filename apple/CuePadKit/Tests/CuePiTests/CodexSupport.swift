@@ -212,7 +212,7 @@ final class CodexRig {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
             locator = ExecutableLocator(searchDirectories: [bin])
         }
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator] in locator }, presence: presence)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper).install(.codex)

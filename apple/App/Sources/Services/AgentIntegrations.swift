@@ -15,13 +15,9 @@ final class AgentIntegrations {
     @ObservationIgnored private let integration: AgentIntegration
     /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
-    /// 这台 Mac 上能用的 Agent 与各家的模型（`AgentIntegration.available`，各起一个进程问，慢）：只交给写同步表 macAgents 的那一处，
-    /// 界面读库。测试换成给定的。
-    @ObservationIgnored var probe: @Sendable () async -> [MacAgent]
 
     init(_ integration: AgentIntegration) {
         self.integration = integration
-        probe = { await integration.available() }
     }
 
     func status(_ kind: AgentKind) -> AgentStatus? { statuses[kind] }
@@ -40,11 +36,32 @@ final class AgentIntegrations {
         statuses[kind] = await integration.status(of: kind)
     }
 
+    /// 这家的可执行文件：检测时挑中的那个（`AgentStatus.executable`），开会话、起大脑、问模型都用它；还没检测过先检测。
+    func executable(_ kind: AgentKind) async -> URL? {
+        if statuses[kind] == nil { await detect(kind) }
+        return statuses[kind]?.executable
+    }
+
+    /// 重新检测全部 Agent，测完一次换上（状态只变一次）。不写任何文件。
+    func redetect() async {
+        let integration = integration
+        statuses = await withTaskGroup(of: (AgentKind, AgentStatus).self) { group in
+            for kind in AgentKind.allCases { group.addTask { (kind, await integration.status(of: kind)) } }
+            var found: [AgentKind: AgentStatus] = [:]
+            for await (kind, status) in group { found[kind] = status }
+            return found
+        }
+    }
+
+    /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态。能开新会话的几家各起一个进程问，慢；
+    /// 只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
+    func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
+        await integration.probe(statuses)
+    }
+
     /// 启动时：检测全部 Agent，装过而内容不同的升级到这个版本。升级失败抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
-        await withDiscardingTaskGroup { group in
-            for kind in AgentKind.allCases { group.addTask { await self.detect(kind) } }
-        }
+        await redetect()
         var failure: (any Error)?
         for kind in AgentKind.allCases
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
@@ -60,7 +77,8 @@ final class AgentIntegrations {
 
     /// 删掉 CuePad 写给它的全部文件。
     func uninstall(_ kind: AgentKind) async throws {
-        try await change(kind) { try await $0.uninstall(kind) }
+        let executable = statuses[kind]?.executable
+        try await change(kind) { try await $0.uninstall(kind, executable: executable) }
         await uninstalled(kind)
     }
 

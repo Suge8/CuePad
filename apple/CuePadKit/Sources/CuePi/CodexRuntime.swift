@@ -33,6 +33,8 @@ public final class CodexRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
+    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
+    private let codex: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let gate: PresenceGate
     private var tracked: [PiSession.ID: Tracked] = [:]
@@ -50,9 +52,10 @@ public final class CodexRuntime: AgentRuntime {
     private var stopped = true
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer,
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
     ) {
+        self.codex = codex
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
@@ -144,8 +147,8 @@ public final class CodexRuntime: AgentRuntime {
 
     /// `codex` 与给它的环境：配置目录与钩子 socket 目录照 `AgentPaths` 定（隔离测试里指到临时目录）。
     private func executable() async throws -> (url: URL, environment: [String: String]) {
+        guard let codex = await codex() else { throw AgentRuntimeError.notInstalled(.codex) }
         let locator = await locate()
-        guard let codex = locator.executable(.codex) else { throw AgentRuntimeError.notInstalled(.codex) }
         return (codex, locator.environment(launching: codex, overrides: paths.environment.merging([
             "CODEX_HOME": paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
         ]) { $1 }))
