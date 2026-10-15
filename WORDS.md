@@ -18,6 +18,6 @@
 - **拉取**（`ZonePuller`，Mac 上按等待理由的节奏）是别的设备的请求到 Mac 的唯一通路；避免：兜底轮询、主动拉取
 - **项目**只是容器（可选一句 `intro`）；避免：目标卡（已退役）
 - **Cue**（总控 Agent）：界面上显示用户起的名字（`CueProfile.name`）；避免：管家、助手、总控
-- **等你**：要用户拍板的事——Cue 请他允许收不回的事（只有 `CueAsk` 那几类）、还没结束（用户选了、关掉或 Cue 撤回都算结束）、关联任务还没结束的消息（`cueMessagesWaitingForYou`），加上会话里等回答、CuePad 答不了或 Cue 没在值班的（`PiSessionState.asksYou`；它住的那台 Mac 不在线也不算值班，见 `CueProfile.onDuty`）；避免：待办、审批
+- **等你**：要用户拍板的事——Cue 请他允许收不回的事（只有 `CueAsk` 那几类）、还没结束（用户选了、关掉或 Cue 撤回才算结束，关联任务做完不算）的消息（`cueMessagesWaitingForYou`），加上会话里等回答、CuePad 答不了或 Cue 没在值班的（`PiSessionState.asksYou`；它住的那台 Mac 不在线也不算值班，见 `CueProfile.onDuty`）；避免：待办、审批
 - **记忆**（`cueLines`，Cue 的）vs **资料**（项目里的灵感）；记忆里长期生效的叫“一直记着”；避免：笔记、规矩（界面上）
 - **班次**（`CueKeeper` 起的一个大脑进程，换新就是开新班次）：只在代码、文档与 Mac 给开发者看的“运行情况”里；其余界面上不出现班次、换新、token。对话里只有一处说上下文：换新的位置一条分隔“从这里起 Cue 换了新上下文”（会话页的压缩同一条分隔），点开是那次写下的**交接备忘**
