@@ -398,7 +398,7 @@ private struct FilterBar: View {
             Button("发给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
             if !targets.isEmpty {
                 Divider()
-                ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                ForEach(targets, id: \.filterID) { target in
                     Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                 }
             }

@@ -82,11 +82,9 @@ struct CameraPicker: UIViewControllerRepresentable {
 
 extension View {
     /// 带上的卡片的长按菜单：长按时浮起的预览是卡片的全文。
-    func attachmentContextMenu(_ outbox: Outbox, shape: some Shape, @ViewBuilder menu: () -> some View) -> some View {
+    func attachmentContextMenu(_ outbox: Outbox, shape: some Shape, @ViewBuilder menu: @escaping () -> some View) -> some View {
         contentShape(.contextMenuPreview, shape)
-            .contextMenu {
-                menu()
-            } preview: {
+            .contextMenu(menu: menu) {
                 AttachmentBody(content: outbox.content).frame(width: 340).frame(maxHeight: 460)
             }
     }

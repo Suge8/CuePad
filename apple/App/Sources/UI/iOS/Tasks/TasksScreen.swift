@@ -141,10 +141,8 @@ struct TaskLine: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             // 预览的外形也要说给系统：不说时它按自己的默认把预览裁成两端全圆
             .contentShape(.contextMenuPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
-            .contextMenu { CardActions(card: task) } preview: {
-                // 预览是另起的一层，不继承外面的环境：调色板要带进去，否则深色下圈与字按浅色的墨画，几乎看不见
-                line(next: next, done: done).frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
-                    .environment(\.palette, palette)
+            .contextMenu { CardActions(card: task) } lifting: {
+                line(next: next, done: done, lifted: true).frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
             }
             // 读屏把一行当一个元素："任务内容，步骤，项目，下一步"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
@@ -163,12 +161,17 @@ struct TaskLine: View {
             }
     }
 
-    private func line(next: TaskNext?, done: Bool) -> some View {
+    /// `lifted`：长按浮起的预览。圈画成静止的：预览里再放一颗完成圈，就多一份停留与写入，勾了没到写入就长按，两颗各写一次会把完成又切回去。
+    private func line(next: TaskNext?, done: Bool, lifted: Bool = false) -> some View {
         // 圈与右边那一格都对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
         HStack(alignment: .firstTextBaseline, spacing: 2) {
-            TaskCheckButton(
-                task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 20,
-                target: CGSize(width: 44, height: 44), check: $check)
+            if lifted {
+                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: 20).frame(width: 44, height: 44)
+            } else {
+                TaskCheckButton(
+                    task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: 20,
+                    target: CGSize(width: 44, height: 44), check: $check)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(task.title.textGlyphs)

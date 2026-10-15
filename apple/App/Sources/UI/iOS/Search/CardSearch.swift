@@ -212,7 +212,7 @@ private struct FilterChips: View {
                 Button("交给过 Agent") { query.sent = .sent() }
                 if !targets.isEmpty {
                     Divider()
-                    ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                    ForEach(targets, id: \.filterID) { target in
                         Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                     }
                 }

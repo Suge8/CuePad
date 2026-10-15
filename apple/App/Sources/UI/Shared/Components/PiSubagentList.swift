@@ -17,7 +17,7 @@ struct PiSubagentList: View {
             VStack(alignment: .leading, spacing: 8) {
                 header(summary)
                 if expanded {
-                    ForEach(agents, id: \.name) { row($0) }
+                    ForEach(agents.identified, id: \.id) { row($0.agent) }
                 }
             }
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)

@@ -19,7 +19,8 @@ nonisolated struct QuotaMeter: Equatable {
         let level: PiContextMeter.Level
         /// 过了重置时间、还没有新的观测：下一次什么时候重置不知道，只写"已重置"
         let hasReset: Bool
-        var id: String { name }
+        /// 窗口长度与模型（`QuotaWindow.isSameWindow`）：名字是给人看的，不同长度可能写成同一个"N 小时"。
+        let id: String
 
         var percent: String { "\(Int((used * 100).rounded()))%" }
         var isSpent: Bool { used >= 1 }
@@ -32,6 +33,7 @@ nonisolated struct QuotaMeter: Equatable {
             exhaustion = window.exhaustion(at: now)
             level = PiContextMeter.level(of: used)
             hasReset = now >= window.resetsAt
+            id = "\(window.seconds)/\(window.model ?? "")"
         }
 
         /// 照这速度还能用多久的短语："约 2 小时 10 分钟"（读数时刻定下，不跟着走；与"5 小时"同一种写法，取两个单位）。

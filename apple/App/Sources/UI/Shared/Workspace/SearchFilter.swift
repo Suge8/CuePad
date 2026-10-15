@@ -38,3 +38,8 @@ nonisolated struct PaletteQuery: Equatable {
         return query
     }
 }
+
+nonisolated extension SendTarget {
+    /// "发给过谁"筛选菜单里的一项（`CueStore.sendTargets` 按种类与名字各出一条）。
+    var filterID: String { "\(kind.rawValue)/\(name)" }
+}

@@ -136,7 +136,7 @@ struct PiThinkingDial: View {
     private nonisolated static let space = "thinking-dial"
 
     /// 此刻画的样子：按着时是指到的那档。
-    private var drawn: PiThinkingMeter { touched.map { PiThinkingMeter(levels: meter.levels, current: $0) } ?? meter }
+    private var drawn: PiThinkingMeter { touched.map(meter.pointing(at:)) ?? meter }
 
     var body: some View {
         let drawn = drawn
