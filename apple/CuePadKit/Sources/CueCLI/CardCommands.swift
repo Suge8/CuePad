@@ -4,7 +4,7 @@ import Foundation
 extension Command {
   static let card: [Command] = [
     Command(
-      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与提示词；默认所有项目，项目内按手动顺序）",
+      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与挂在任务下的；默认所有项目，项目内按手动顺序）",
       options: [
         .project("只列该项目"), .unfiled, .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
         Opt("archived", "列归档的灵感与任务"), Opt("trash", "列回收站里单独删除的灵感与任务"),
@@ -70,7 +70,7 @@ extension Command {
     Command(
       path: ["card", "todo"], summary: "设为任务（待办）；--off 改回灵感", arguments: "<灵感或任务>",
       options: [Opt("off", "改回灵感：状态与会话关联清掉，它的下级提到它的位置")],
-      notes: "多行正文设为任务时，第一行留作任务，其余成为它的第一条提示词。\n" + Schema.output("更新后的 Card", Schema.card)
+      notes: "设为任务时第一行是标题，其余是它的正文。\n" + Schema.output("更新后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])

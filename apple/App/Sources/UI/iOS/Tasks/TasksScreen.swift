@@ -54,7 +54,7 @@ struct TasksScreen: View {
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
                     TaskLine(
                         task: row.task, project: row.depth == 0 ? board.rows[row.id]?.project : nil,
-                        subtasks: board.subtasks[row.id], draft: board.drafts[row.id])
+                        subtasks: board.subtasks[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -115,10 +115,8 @@ struct TaskLine: View {
     let task: Card
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
-    /// 步骤进度：元信息一行与完成圈由它推出。
+    /// 步骤进度：元信息一行与完成圈由它推出（有它的不是叶子，不给"开始"）。
     var subtasks: TaskProgress?
-    /// 写好了还没交出去的草稿（行尾的"开始"）。
-    var draft: Card?
     @State private var check = TaskCheck()
     /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
     @State private var width: CGFloat = 0
@@ -133,7 +131,7 @@ struct TaskLine: View {
     private static let liftRadius: CGFloat = 16
 
     var body: some View {
-        let next = workspace.next(for: task, agent: agents.items[task.id], draft: draft)
+        let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
         line(next: next, done: done)
             // 长按提起的是一张纸：预览是同一行垫一块纸色圆角底、与原来的行同宽。不给行本身垫底——行放在纸上，
@@ -154,7 +152,7 @@ struct TaskLine: View {
             .accessibilityActions {
                 Button("打开") { navigation.push(.card(task.id)) }
                 switch next {
-                case .start(let draft): Button("开始") { navigation.handToAgent(draft) }
+                case .start(let leaf): Button("开始") { navigation.handToAgent(leaf) }
                 case .agent(_, let session): Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) }
                 case nil: EmptyView()
                 }

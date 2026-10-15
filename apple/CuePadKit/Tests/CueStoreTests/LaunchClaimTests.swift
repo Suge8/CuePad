@@ -34,7 +34,7 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     try await store.setDirectory("/work", for: project.id)
     let bound = try await store.createTask("修乱序", in: project.id), handed = try await store.createTask("改文案", in: project.id)
-    for leaf in [bound, handed] {  // 同界面没有草稿时的"开新会话"：请求带着叶子自己
+    for leaf in [bound, handed] {  // 同界面的"开新会话"：请求带着叶子自己
       _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: UUID().uuidString), title: "圆桌", on: "mac-a", card: leaf.id)
     }
     #expect(try await store.launchingLeaves([bound.id, handed.id]) == [bound.id, handed.id])

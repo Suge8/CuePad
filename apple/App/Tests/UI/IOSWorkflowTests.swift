@@ -42,20 +42,20 @@ struct IOSWorkflowTests {
 
     // MARK: 发给 Agent
 
-    /// 一条叶子任务与它的提示词，和带着提示词的发给 Agent 输入框草稿（`Navigation.handToAgent` 带进来的那样）。
-    private func prompt(in project: UUID?) async throws -> (prompt: Card, draft: ComposerDraft) {
-        let task = try await store.createTask("修乱序", in: project)
-        let prompt = try await store.createCard(body: "先复现", under: task.id)
-        return (prompt, ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: prompt), card: prompt.id, project: prompt.projectID)]))
+    /// 一条带着正文的叶子任务，和带着它的发给 Agent 输入框草稿（`Navigation.handToAgent` 带进来的那样）。
+    private func leaf(in project: UUID?) async throws -> (task: Card, draft: ComposerDraft) {
+        let task = try await store.createTask("修乱序\n先复现", in: project)
+        return (task, ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)]))
     }
 
-    /// 默认目标是新会话时点发送：未分类的提示词开不了会话，说一句、不写任何请求、不换成新会话输入框。
+    /// 默认目标是新会话时点发送：未分类的任务开不了会话，说一句、不写任何请求、不换成新会话输入框。
     @Test func 发给Agent默认开新会话_未分类的开不了_不写请求() async throws {
-        let (prompt, draft) = try await prompt(in: nil)
+        let (task, draft) = try await leaf(in: nil)
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
         HandOffInput.startDefault(
-            draft, card: prompt.id, plan: try await store.handOffPlan(prompt.id, host: nil), workspace: workspace, navigation: navigation)
+            draft, card: task.id, plan: try await store.handOffPlan(task.id, host: nil), opening: try await store.opening(of: task.id, true),
+            workspace: workspace, navigation: navigation)
 
         #expect(workspace.notice?.isError == true && workspace.notice?.text == "未分类的任务没有文件夹，开不了会话")
         #expect(navigation.newSession == nil)
@@ -69,12 +69,13 @@ struct IOSWorkflowTests {
         try await store.setDirectory("/work/table", for: project.id)
         try await store.publishDirectoryBindings(host: "mac-z", hostName: "Zulu")
         try await store.publishDirectoryBindings(host: "mac-a", hostName: "Alpha")
-        let (prompt, draft) = try await prompt(in: project.id)
-        let plan = try await store.handOffPlan(prompt.id, host: nil)
+        let (task, draft) = try await leaf(in: project.id)
+        let plan = try await store.handOffPlan(task.id, host: nil)
         #expect(plan.destination == .launch(project: project.id, host: "mac-a") && plan.name == "修乱序")
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
-        HandOffInput.startDefault(draft, card: prompt.id, plan: plan, workspace: workspace, navigation: navigation)
+        HandOffInput.startDefault(
+            draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace, navigation: navigation)
 
         let start = try #require(navigation.newSession)
         let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)
@@ -82,7 +83,8 @@ struct IOSWorkflowTests {
         _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, services: app.services)
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.launch?.project == project.id && request.hostID == "mac-a")
-        #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == prompt.id)
+        #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)
+        #expect(request.launch?.prompt == "修乱序\n先复现")
     }
 
     // MARK: Agent 页

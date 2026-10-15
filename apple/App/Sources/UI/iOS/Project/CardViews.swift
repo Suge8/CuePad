@@ -45,7 +45,6 @@ struct CardTileView: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace), clipped: false)
         .contextMenu { CardActions(card: card) }
-        .ideaDrag(card.id)
     }
 }
 
@@ -124,7 +123,6 @@ struct OlderRow: View {
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace))
         .contextMenu { CardActions(card: card) }
-        .ideaDrag(card.id)
     }
 }
 

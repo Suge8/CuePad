@@ -11,7 +11,7 @@ struct Outbox: Identifiable {
     var project: UUID?
 }
 
-/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那条提示词）、
+/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那件任务）、
 /// 对 Agent 回答的批注（只有会话的回复框有，按在对话里的先后）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
@@ -45,6 +45,14 @@ struct ComposerDraft {
     mutating func attach(_ card: Card) {
         guard !attachments.contains(where: { $0.card == card.id }) else { return }
         attachments.append(Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID))
+    }
+
+    /// 带着的 `card` 那一张换成 `content`（开新会话时，任务的第一句换成带着顶层任务作背景的那句，`CueStore.opening`）。
+    func retelling(_ card: UUID?, as content: String?) -> ComposerDraft {
+        guard let card, let content else { return self }
+        var draft = self
+        for index in draft.attachments.indices where draft.attachments[index].card == card { draft.attachments[index].content = content }
+        return draft
     }
 
     /// 把存储格式正文放回输入框（编辑后重发）：文字接在已写的字后面（空一行），图片接进图片条。本机没有文件的图片略过。

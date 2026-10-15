@@ -21,7 +21,7 @@ nonisolated struct TaskDrop: Equatable, Sendable {
 }
 
 /// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`（提示词不在树里，不算一级）。
+/// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
@@ -133,13 +133,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
             return TaskDrop(move: move, mark: .gap(after: previous?.id, depth: depth))
         }
         return nil
-    }
-
-    /// 灵感拖到任务上成为提示词：落在哪一行就挂到它下面（整行都算，没有插入线——灵感不进任务的层级），排在它的下级之后；行外不接。
-    /// 命中哪一行与任务拖放同一套（`hit`）。
-    func drop(idea: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint) -> TaskDrop? {
-        let candidates = rows.filter { frames[$0.id] != nil }
-        return hit(point, in: candidates, frames: frames).map { onto(candidates[$0.index].id, dragged: idea) }
     }
 
     /// 点落在哪一行、在这一行的上下哪个位置（0 上沿，1 下沿）。

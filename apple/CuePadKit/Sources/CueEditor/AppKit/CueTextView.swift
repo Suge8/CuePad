@@ -19,7 +19,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public var selectionActions: [CueSelectionAction] = []
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
-    /// ⌘↩ 的主动作（发给 Agent、挂到任务）：编辑器自己接，不靠外面按钮的快捷键——浮层开着时窗口不接 ⌘ 组合键，
+    /// ⌘↩ 的主动作（任务正文的"开始"）：编辑器自己接，不靠外面按钮的快捷键——浮层开着时窗口不接 ⌘ 组合键，
     /// 只交给主菜单与焦点所在的视图（`PanelHost`）。nil 时 ⌘↩ 照常往下传。
     public var onSubmit: (() -> Void)?
 

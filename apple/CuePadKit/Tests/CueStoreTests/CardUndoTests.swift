@@ -17,20 +17,6 @@ import Testing
     return all.sorted { ($0.sortKey, $0.id.uuidString) < ($1.sortKey, $1.id.uuidString) }.map(\.id)
   }
 
-  @Test func 设为任务拨回_多行正文与变量取值合回_拆出的提示词删掉() async throws {
-    let idea = try await store.createCard(in: nil, body: "上线前检查\n把 changelog 过一遍\n看下崩溃率")
-    try await store.updateCard(idea.id) { $0.variableValues = ["分支": "main"] }
-    let before = try await card(idea.id)
-
-    let change = try #require(try await store.setTodo(idea.id, true))
-    #expect(try await store.children(of: idea.id).count == 1)  // 拆出一条提示词
-    try await store.undo(change)
-
-    let back = try await card(idea.id)
-    #expect(back.isTask == false && back.body == before.body && back.variableValues == ["分支": "main"])
-    #expect(try await store.children(of: idea.id).isEmpty)
-  }
-
   @Test func 批量删除一次撤销_全部回到原处() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let ideas = [try await store.createCard(in: project.id, body: "一"), try await store.createCard(in: project.id, body: "二"),
@@ -65,8 +51,8 @@ import Testing
 
   @Test func 删除拨回_下级按原顺序回到它下面() async throws {
     let task = try await store.createTask("上线", in: nil)
-    let c = try await store.createCard(body: "回滚方案", under: task.id)
-    try await store.updateCard(c.id) { $0.isPinned = true }  // 资料挂在有步骤的任务下也不动
+    let c = try await store.createCard(in: nil, body: "回滚方案")
+    try await store.moveCard(c.id, to: .under(task.id), after: nil)
     let a = try await store.createTask("清单", under: task.id)
     let b = try await store.createTask("备份", under: task.id)
 
@@ -82,9 +68,9 @@ import Testing
 
   @Test func 删除与改回灵感拨回_归档的下级也回到它下面() async throws {
     let task = try await store.createTask("上线", in: nil)
-    let old = try await store.createCard(body: "旧的备忘", under: task.id)
-    try await store.updateCard(old.id) { $0.isPinned = true }
-    let live = try await store.createCard(body: "清单", under: task.id)
+    let old = try await store.createCard(in: nil, body: "旧的备忘")
+    let live = try await store.createCard(in: nil, body: "清单")
+    for idea in [old, live] { try await store.moveCard(idea.id, to: .under(task.id), after: nil) }
     try await store.archive(old.id)
 
     let trash = try #require(try await store.trashCard(task.id))

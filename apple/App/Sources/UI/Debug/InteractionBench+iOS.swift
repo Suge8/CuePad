@@ -94,10 +94,6 @@ enum IOSInteractionBench {
             await step("打开任务页") { navigation.projectsPath.append(.card(task)) }
             await step("返回（任务页）") { navigation.projectsPath.removeAll() }
         }
-        for _ in 0..<2 {
-            await step("挂到任务面板") { workspace.attaching = idea }
-            await step("关挂到任务面板") { workspace.attaching = nil }
-        }
         await typeLong(workspace, navigation, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起

@@ -173,10 +173,8 @@ final class CueKeeper {
         var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: (wake: CueWake, extra: String?)?
-        /// 这一轮里交出去的你的消息、回答与关掉的提问：大脑中途退出时清掉送达
+        /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达。Cue 自己醒来的一轮里有它，就是中途插进了你的话
         var delivered: [UUID] = []
-        /// 这一轮中途插进了你的话（`delivered` 不算数：随信封记下送达的还有你关掉的提问，那不是在等回答）
-        var youSpoke = false
         /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
         var speaking: PiDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
@@ -186,7 +184,7 @@ final class CueKeeper {
         /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
         var answersYou: Bool {
             guard let wake = selfStarted?.wake else { return true }
-            return youSpoke || (wake != .enabled && author == .cue)
+            return !delivered.isEmpty || (wake != .enabled && author == .cue)
         }
     }
 
@@ -558,7 +556,6 @@ final class CueKeeper {
                     }
                     updateShift {
                         $0.turn?.author = .cue
-                        $0.turn?.youSpoke = true
                         $0.turn?.delivered += ids
                         $0.turn?.round.sent.append(said)
                     }

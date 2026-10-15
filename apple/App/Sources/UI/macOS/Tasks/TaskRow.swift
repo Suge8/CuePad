@@ -6,16 +6,14 @@ import SwiftUI
 /// （`TaskNextChip`：Agent 要你看的、正在做的，或"开始"；指针停在行上时"开始"亮成靛青），行尾是步骤进度与所在项目的图标
 /// （面板里跨项目时；悬停写全名）。"下一步"是要你动手的，跟着标题走：放在行尾时宽窗口里离标题一千多点，一眼看不到；
 /// 进度与项目只是旁注，留在行尾成一列。
-/// 一个叶子任务一个 Agent 会话，它此刻怎样只在这一格说；要 Agent 做什么写在任务浮窗里。点行的其余地方弹出任务浮窗（`TaskSheet`）。
+/// 一个叶子任务一个 Agent 会话，它此刻怎样只在这一格说；要 Agent 做什么写在任务的正文里（任务浮窗）。点行的其余地方弹出任务浮窗（`TaskSheet`）。
 /// 右键是 `CardActions`。
 struct TaskRow: View {
     let task: Card
     /// 跨项目列着时给出所在项目（行尾画它的图标）；项目页里不给。
     var project: Project?
-    /// 步骤勾了几个（完成圈与进度由它推出）。
+    /// 步骤勾了几个（完成圈与进度由它推出；有它的不是叶子，不给"开始"）。
     var subtasks: TaskProgress?
-    /// 写好了要 Agent 做什么、还没交出去的草稿（行尾的"开始"）。
-    var draft: Card?
     @Environment(\.taskStructure) private var structure
     @Environment(\.cardAgents) private var agents
     @Environment(Workspace.self) private var workspace
@@ -23,14 +21,14 @@ struct TaskRow: View {
     @State private var hovering = false
     @State private var check = TaskCheck()
 
-    /// 圈那一列多宽：浮窗里提示词与新建行按它缩进，字与任务标题对齐。
+    /// 圈那一列多宽：浮窗里的新建行按它缩进，字与任务标题对齐。
     static let ringColumn: CGFloat = 16
     static let columnGap: CGFloat = 10
     /// 行的内边距（悬停的淡底也在这里）。
     static let inset: CGFloat = 8
 
     var body: some View {
-        let next = workspace.next(for: task, agent: agents.items[task.id], draft: draft)
+        let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
             TaskCheckButton(

@@ -32,12 +32,10 @@ extension CueStore {
     return request
   }
 
-  /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。
+  /// 卡所在的叶子：任务干活的叶子（`homeLeaf`）；灵感为 nil。
   private func leaf(holding card: UUID) throws -> UUID? {
-    guard let found = try link(of: card) else { return nil }
-    if found.isTask { return try promptHome(card) }
-    guard let parent = found.parent, try link(of: parent)?.isTask == true else { return nil }
-    return try promptHome(parent)
+    guard try link(of: card)?.isTask == true else { return nil }
+    return try homeLeaf(card)
   }
 
   /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
@@ -79,14 +77,18 @@ extension CueStore {
       launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card, cue: cue)
   }
 
-  /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：卡所在的任务的标题——任务是它自己，
-  /// 提示词是它挂着的任务——超长的截断（`CueName.clipped`）；散放的灵感、没有标题的任务为 nil（Pi 的默认名）。
+  /// 从这张卡开的新会话叫什么（唯一的规则，`requestLaunch` 与 `handOffPlan` 都读它）：任务的标题，超长的截断（`CueName.clipped`）；
+  /// 灵感、没有标题的任务为 nil（Pi 的默认名）。
   func sessionName(forCard card: UUID) throws -> String? {
-    guard let card = try find(Card.self, card) else { return nil }
-    let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
-    guard let title = task?.heading, !title.isEmpty else { return nil }
-    return CueName.clipped(title)
+    guard let card = try find(Card.self, card), card.isTask, !card.heading.isEmpty else { return nil }
+    return CueName.clipped(card.heading)
   }
+
+  /// 开新会话的请求（`deliveryRequests` 里的一行）还没等到那个会话的记录：认领（`claimLaunchedCards`）要等它。
+  static let launchUnclaimed = """
+    NOT EXISTS (SELECT 1 FROM piSessionStates s
+      WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
+    """
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
   /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
@@ -206,7 +208,7 @@ extension CueStore {
 
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败；Agent 收下的话把方式改写成它实际收下的（`accepted`）。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
-  /// 发给会话（或开新会话）成功时，在同一个事务里把它带着的提示词用掉（`consumePrompt`）。任务的状态不因说话而变。
+  /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let (status, detail, mode): (DeliveryStatus, String?, DeliveryMode?) =
       switch outcome {
@@ -214,16 +216,12 @@ extension CueStore {
       case .accepted(let mode): (.succeeded, nil, mode)
       case .failed(let reason), .transient(let reason): (.failed, reason, nil)
       }
-    try reportingFileFailures {
-      try write {
-        try db.run(
-          """
-          UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
-          WHERE id = ? AND status IN ('pending', 'executing')
-          """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
-        guard status == .succeeded, db.changes > 0 else { return [] }
-        return try reclaimAttachments(consumePrompt(deliveredBy: id))
-      }
+    try write {
+      try db.run(
+        """
+        UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
+        WHERE id = ? AND status IN ('pending', 'executing')
+        """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
     }
   }
 

@@ -37,11 +37,11 @@ final class Navigation {
         let id = UUID()
         var project: UUID?
         var launched: Launched?
-        /// 从"发给 Agent"选了新会话：提示词的正文与补的话带过来作开场。
+        /// 从"发给 Agent"选了新会话：任务的正文与补的话带过来作开场。
         var draft: ComposerDraft?
-        /// 为哪条提示词开的（发给 Agent 时定下）：开好后关联它。
+        /// 为哪件任务开的（发给 Agent 时定下）：开好后关联它。
         var card: UUID?
-        /// 显示的目标名：为提示词开的是它的任务的标题（`CueStore.handOffPlan`，与会话名同一条规则）；nil 时以项目名称呼。
+        /// 显示的目标名：为任务开的是它的标题（`CueStore.handOffPlan`，与会话名同一条规则）；nil 时以项目名称呼。
         var name: String?
         /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
         var host: String?
@@ -85,7 +85,7 @@ final class Navigation {
     var outbox: Outbox? {
         didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
     }
-    /// 发给 Agent 输入框的草稿（换了一条提示词就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
+    /// 发给 Agent 输入框的草稿（换了一件任务就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
     var projectForm: ProjectForm?
     var newSession: NewSession?

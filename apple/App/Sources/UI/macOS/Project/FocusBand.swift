@@ -5,7 +5,7 @@ import SwiftUI
 /// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进，同任务面板）；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、
 /// 各自开合（规则见 `TaskFold`）。按 ui.md 的 Mac 开合规则一步到位：新行直接出现，同访达展开，不淡入、不挪动。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
-/// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。每行标题后一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了的"开始"；要 Agent 做什么在任务浮窗里写。
+/// 段标题"任务 N"在纸外，与"资料""最近"同一个样子。每行标题后一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或还没交出去的"开始"；要 Agent 做什么写在任务的正文里（任务浮窗）。
 /// 会话的全部列表在侧栏，这里不另开一栏。
 /// 项目还没绑文件夹时，任务下面接一行绑定引导（`ProjectFolderGuide`，有同名建议、正在绑时才出现，见 `FolderGuide.shows`）。
 /// 纸与下面的资料、卡片墙同宽，行铺满纸：行尾的进度贴着纸的右边成一列，与任务面板的行同一个样子。
@@ -57,7 +57,7 @@ struct FocusBand: View {
                 tree: data.tasks, roots: shown,
                 lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
             ) { row in
-                TaskRow(task: row.task, subtasks: data.subtasks[row.id], draft: data.drafts[row.id])
+                TaskRow(task: row.task, subtasks: data.subtasks[row.id])
             }
             if hidden > 0 || done > 0 {
                 HStack(spacing: 6) {

@@ -55,7 +55,7 @@ struct SessionTaskTests {
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
-        try await workspace.bind("s1", to: task.id)
+        try await store.bindSession("s1", to: task.id)
         try await workspace.toggle(task.id)
         #expect(try await store.card(task.id)?.status == .done)
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
@@ -83,7 +83,7 @@ struct SessionTaskTests {
 
         let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(!reopened.isError)
-        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.card(task.id)?.status == .inProgress)  // 绑过会话就是开始过
         let again = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(again.isError)
 
@@ -102,7 +102,7 @@ struct SessionTaskTests {
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
-        try await workspace.bind("s1", to: old.id)
+        try await store.bindSession("s1", to: old.id)
         let mark = try await store.lastWrite()
         try await recorder.update(sessionID: "s1", state: .thinking)
         try await recorder.update(sessionID: "s1", state: .settled)
@@ -119,7 +119,7 @@ struct SessionTaskTests {
         let first = try await store.createTask("加 --lang", under: stepped.id)
         let second = try await store.createTask("写 README", under: stepped.id)
         try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang")
-        try await workspace.bind("s2", to: first.id)
+        try await store.bindSession("s2", to: first.id)
         try await workspace.toggle(first.id)
         try await workspace.toggle(second.id)
         try await workspace.toggle(stepped.id)
@@ -150,11 +150,11 @@ struct SessionTaskTests {
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "加 --lang")
         let workspace = Workspace(services: services)
-        try await workspace.bind("s1", to: first.id)
+        try await store.bindSession("s1", to: first.id)
         try await workspace.toggle(first.id)
         try await recorder.end(sessionID: "s1")
 
-        workspace.handOff(try await store.createCard(body: "照 --lang 的用法写 README", under: second.id))
+        workspace.handOff(second)
         let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
         #expect(sent?.target.ref == "s1")
         #expect(try await store.deliveryRequests().allSatisfy { $0.mode != .known(.start) })
@@ -327,7 +327,7 @@ struct SessionTaskTests {
         // 开新会话两次：Mac 开好的会话带着认领标识记下
         var used: Set<String> = []
         for session in ["s1", "s2"] {
-            workspace.startFresh(leaf.id)
+            workspace.startFresh(leaf)
             let launch = try await eventually(store, { [used] in
                 try $0.deliveryRequests().compactMap(\.launch).first { !used.contains($0.token) }
             }) { $0 != nil }
@@ -337,7 +337,7 @@ struct SessionTaskTests {
             _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == session }
         }
         // 改绑到另一个会话
-        try await workspace.bind("s3", to: leaf.id)
+        try await store.bindSession("s3", to: leaf.id)
         try await recorder.update(sessionID: "s3", state: .settled, title: "修登录")
 
         #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).map(\.id) == [leaf.id])

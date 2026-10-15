@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 任务行上"下一步"那一格（`TaskNext`）画成一颗胶囊，Mac 与手机同一份（宽的地方紧跟标题，手机在行尾：屏窄，行尾就在眼前）：会话那边的事写状态标、状态词（要你看的用状态色，Mac 上在做时加计时），
-/// 点了打开会话；写好了草稿的是"▶ 开始"，点了把草稿交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
+/// 点了打开会话；还没交出去的叶子是"▶ 开始"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
 /// 胶囊是墨色淡底：一屏可能有好几颗"开始"，靛青只给指针停着的那一行（`lit`）或那一颗（ui.md：签名色只落在焦点上）。
 struct TaskNextChip: View {
     let next: TaskNext
@@ -69,7 +69,7 @@ struct TaskNextChip: View {
     private var help: String {
         switch next {
         case .agent: "打开这件事的 Agent 会话"
-        case .start: "把写好的话交给 Agent，开始做"
+        case .start: "把任务的正文交给 Agent，开始做"
         }
     }
 
@@ -81,11 +81,11 @@ struct TaskNextChip: View {
             #else
             navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
             #endif
-        case .start(let draft):
+        case .start(let leaf):
             #if os(macOS)
-            workspace.handOff(draft)
+            workspace.handOff(leaf)
             #else
-            navigation.handToAgent(draft)
+            navigation.handToAgent(leaf)
             #endif
         }
     }

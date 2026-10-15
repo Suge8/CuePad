@@ -2,16 +2,16 @@ import CueStore
 
 /// 任务行上"下一步"那一格：一件事此刻要你做什么，最多一个，点了就去那一步（Mac 与手机同一个判断，`Workspace.next(for:)`）。
 /// 一个叶子任务一个 Agent 会话：会话那边有事（等你确认、出错、话没送到、有新回复、正在做）就是它，点了打开会话；
-/// 否则写好了草稿还没交出去就是"开始"，点了把草稿交给 Agent；都没有就空着。会话的状态只经 `PiShown` 判定。
+/// 叶子还没交给过会话（没绑会话、没在开）就是"开始"，点了把任务的正文作为第一句交给 Agent；都没有就空着。会话的状态只经 `PiShown` 判定。
 nonisolated enum TaskNext: Equatable, Sendable {
     case agent(PiShown, session: PiSessionState)
-    case start(draft: Card)
+    case start(leaf: Card)
 
-    init?(shown: PiShown?, session: PiSessionState?, draft: Card?) {
+    init?(shown: PiShown?, session: PiSessionState?, startable leaf: Card?) {
         if let shown, let session, Self.wantsLook(shown) {
             self = .agent(shown, session: session)
-        } else if let draft {
-            self = .start(draft: draft)
+        } else if let leaf, session == nil {
+            self = .start(leaf: leaf)
         } else {
             return nil
         }
@@ -38,19 +38,22 @@ nonisolated enum TaskNext: Equatable, Sendable {
     var speech: String {
         switch self {
         case .agent(let shown, _): shown.label
-        case .start: "写好了，可以开始"
+        case .start: "可以开始"
         }
     }
 }
 
 extension Workspace {
-    /// 一条任务"下一步"那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`AgentLinks`），
-    /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。
-    func next(for task: Card, agent: PiSessionListItem?, draft: Card?) -> TaskNext? {
+    /// 一条任务"下一步"那一格（任务行、步骤行都走这里，两端不各自判断）：会话取窗口那一份交给的会话（`agents`，行从环境里取），
+    /// Mac 上本机在线的会话换上桥上的实时状态；完成了的不写。有步骤（`steps` 不为 nil）的不是叶子，不开工；正在开会话的不再给"开始"。
+    func next(for task: Card, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
         guard task.status != .done else { return nil }
         #if os(macOS)
-        let agent = agent.map(withLiveState)
+        let agent = agents.items[task.id].map(withLiveState)
+        #else
+        let agent = agents.items[task.id]
         #endif
-        return TaskNext(shown: agent.map(shown), session: agent?.state, draft: draft)
+        let startable = steps == nil && !agents.launching.contains(task.id) ? task : nil
+        return TaskNext(shown: agent.map(shown), session: agent?.state, startable: startable)
     }
 }

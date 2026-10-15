@@ -4,9 +4,9 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开）、cuememory（再打开"Cue 记得什么"）、project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开）、cuememory（再打开"Cue 记得什么"）、project、older、unfiled、editor、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
 /// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
-/// task 在书架上推入"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
+/// task 在书架上推入"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条；`-CuePadBrief YES` 再弹出正文的编辑页）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
@@ -47,10 +47,6 @@ extension DebugScene {
         case "archive": open(.archive)
         case "settings": open(.settings)
         case "editor": await openCard()
-        case "attach":
-            await openCard()
-            try? await Task.sleep(for: .seconds(1))
-            if let id = await card(in: project, store: workspace.services.store) { workspace.attaching = try? await workspace.services.store.card(id) }
         case "send":
             await openCard()
             if let id = await card(in: project, store: workspace.services.store),

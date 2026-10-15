@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 发给 Agent（话在路上、没送到可重发、送达后提示词用掉）→ 完成并归档；中途撤销；整理任务的层级；
+/// 任务优先的主动线，按用户走的路写：灵感设为任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销；整理任务的层级；
 /// 各处写的任务数是同一批。规则单测（行的状态怎么推、任务树怎么算）都从这些动作里走一遍，不单独测。
 struct TaskFlowTests {
     let rig = TestApp()
@@ -13,61 +13,42 @@ struct TaskFlowTests {
 
     // MARK: 灵感走完全程
 
-    @Test func 灵感挂成提示词_发给Agent_没送到可重发_送达后用掉_完成并归档() async throws {
+    @Test func 设为任务_开始把正文交给Agent_没送到在会话里看_送达后正文留着_完成并归档() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let first = try await store.createCard(in: project.id, body: "日志在 logs/0918.txt")
-        let second = try await store.createCard(in: project.id, body: "再改排序")
+        let idea = try await store.createCard(in: project.id, body: "修乱序\n日志在 logs/0918.txt")
         let workspace = Workspace(services: rig.services)
 
-        // 挂到新建的任务（建在灵感所在的项目），再挑一条灵感挂上来，排在最后
-        try await workspace.attachToNewTask(first.id, title: "修乱序")
-        let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.title == "修乱序" })
-        #expect(task.projectID == project.id && workspace.notice?.text == "已成为任务的提示词")
-        try await workspace.attach(second.id, to: task.id)  // 一个叶子一条草稿：并进去，灵感删掉
-        let third = try await store.createCard(body: "补用例", under: task.id)
-        #expect(third.id == first.id)
-        #expect(try await store.children(of: task.id).map(\.id) == [first.id])
-        #expect(try await store.card(first.id)?.body == "日志在 logs/0918.txt\n\n再改排序\n\n补用例")
-        #expect(try await store.card(second.id) == nil)
-        #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(try await primary(task) == first.id)
-        let neighbour = try await store.createTask("改文案", in: project.id)
-        let waiting = try await store.createCard(body: "别的任务的话", under: neighbour.id)
+        // 设为任务：第一行是标题，其余是它的正文，不拆出别的卡
+        try await workspace.setTodo(idea.id, true)
+        let task = try #require(try await store.card(idea.id))
+        #expect(task.title == "修乱序" && task.rest == "日志在 logs/0918.txt")
+        #expect(try await store.children(of: task.id).isEmpty)
+        #expect(try await next(task) == .start(leaf: task))
 
-        // 话在路上是发送中；没送到的带原因、留在原地，只有它能重发，别的提示词不受影响
+        // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
-        #expect(try await delivery(of: first) == .unsent)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request in
             guard delivers.withLock({ $0 }) else { return .failed("会话在送达前关掉了") }
             _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
             return .succeeded
         }
-        let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
-        #expect(try await delivery(of: first) == .sending)
-        // Mac 一直没领取：过了等回执的时限是"Mac 迟迟没收下"，可以重发（issue #5）
-        let late = request.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        let timedOut = try await delivery(of: first, at: late)
-        #expect(timedOut.canSend)
-        #expect(try await failure(of: first, at: late) == .timedOut)
+        let request = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        guard case .agent(let sending, _) = try await next(task) else { throw Unexpected.next }
+        #expect(sending.isLive && sending.undelivered == nil)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
-        #expect(try await failure(of: first) == .reported("会话在送达前关掉了"))
-        #expect(try await delivery(of: waiting) == .unsent)
-        #expect(try await primary(neighbour) == waiting.id)
+        guard case .agent(let failed, _) = try await next(task) else { throw Unexpected.next }
+        #expect(failed.undelivered != nil)
 
-        // 重发送达：提示词用掉（不进归档、回收站），任务进行中并记着会话，发送记录留着话
+        // 重发送达：任务进行中并记着会话，正文留在任务上，发送记录留着话
         delivers.withLock { $0 = true }
-        try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
-        _ = try await eventually(store, { try $0.card(first.id) }) { $0 == nil }
+        try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         await executor.stop()
-        #expect(try await store.children(of: task.id).isEmpty)
-        #expect(try await store.children(of: neighbour.id).map(\.id) == [waiting.id])
-        #expect(try await store.trashedCards().isEmpty)
-        #expect(try await store.archived().isEmpty)
         let started = try #require(try await store.card(task.id))
-        #expect(started.status == .inProgress && started.piSessionID == "s1")
-        #expect(try await store.sendRecords().map(\.content) == [first.body])
+        #expect(started.status == .inProgress && started.body == "修乱序\n日志在 logs/0918.txt")
+        #expect(try await store.sendRecords().map(\.content) == ["修乱序\n日志在 logs/0918.txt"])
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)
@@ -80,42 +61,21 @@ struct TaskFlowTests {
 
     // MARK: 会话与任务
 
-    /// 灵感挂到绑了会话的任务上：不成为提示词，接到那个会话回复框已写的字后面；撤销时灵感回来、回复框回到挂之前。
-    @Test func 灵感挂到绑了会话的任务上_接进回复框_撤销都还原() async throws {
-        let workspace = Workspace(services: rig.services)
-        let settings = rig.services.settings, box = PiSessionState.recordID(sessionID: "s1")
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let task = try await store.createTask("修乱序", in: project.id)
-        try await store.bindSession("s1", to: task.id)
-        settings.setReplyDraft(ComposerDraft(text: "先跑一遍测试"), for: box)
-        let idea = try await store.createCard(in: project.id, body: "顺便看下重连日志")
-
-        try await workspace.attach(idea.id, to: task.id)
-        #expect(workspace.notice?.text == "已放进会话的回复框")
-        #expect(settings.replyDraft(for: box).text == "先跑一遍测试\n\n顺便看下重连日志")
-        #expect(try await store.children(of: task.id).isEmpty)
-        #expect(try await store.card(idea.id) == nil)
-
-        try await #require(workspace.notice?.action).run()
-        #expect(settings.replyDraft(for: box).text == "先跑一遍测试")
-        #expect(try await store.card(idea.id)?.parentID == nil)
-    }
-
     #if os(macOS)
-    /// 一个会话绑两件事：写好的草稿接进回复框；做完一件会话照常，都做完才请它所在的 Mac 结束。
-    @Test func 一个会话绑两件事_草稿接进回复框_都做完才结束会话() async throws {
+    /// 一个会话绑两件事：绑定不发正文（话在会话里说）；做完一件会话照常，都做完才请它所在的 Mac 结束。
+    @Test func 一个会话绑两件事_绑定不发正文_都做完才结束会话() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let first = try await store.createTask("复现乱序", in: project.id)
+        let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        _ = try await store.createCard(body: "先复现，别改代码", under: first.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
 
-        try await workspace.bind("s1", to: first.id)
-        try await workspace.bind("s1", to: second.id)
-        #expect(rig.services.settings.replyDraft(for: PiSessionState.recordID(sessionID: "s1")).text == "先复现，别改代码")
-        #expect(try await store.children(of: first.id).isEmpty)
+        try await store.bindSession("s1", to: first.id)
+        try await store.bindSession("s1", to: second.id)
+        #expect(rig.services.settings.replyDraft(for: PiSessionState.recordID(sessionID: "s1")).isEmpty(accepting: .images))
+        #expect(try await store.deliveryRequests().isEmpty)
+        #expect(try await store.card(first.id)?.rest == "先复现，别改代码")
         #expect(try await Set(store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
 
         let ends = { [store] in try await store.deliveryRequests().filter { $0.mode == .known(.end) }.map(\.target.ref) }
@@ -125,34 +85,35 @@ struct TaskFlowTests {
         #expect(try await ends() == ["s1"])
     }
 
-    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
-    /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
+    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——只发这一步的标题与正文，不开新会话；
+    /// 要新会话就在"绑定会话"里选"开新会话"：第一句先带顶层任务的标题与正文作背景，再接这一步的；最后一步做完，会话才结束。
     @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
-        let task = try await store.createTask("加语言参数", in: project.id)
+        let task = try await store.createTask("加语言参数\n命令行要能切中英文", in: project.id)
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
-        let third = try await store.createTask("发版", under: task.id)
+        let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
-        try await workspace.bind("s1", to: first.id)
+        try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
         try await workspace.toggle(first.id)
         #expect(try await requests(.end).isEmpty)
 
-        let draft = try await store.createCard(body: "照 --lang 的用法写 README", under: second.id)
-        workspace.handOff(draft)
+        try await store.updateCard(second.id) { $0.rest = "照 --lang 的用法写 README" }
+        workspace.handOff(try #require(try await store.card(second.id)))
         let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
-        #expect(sent?.target.ref == "s1" && sent?.content == "照 --lang 的用法写 README")
+        #expect(sent?.target.ref == "s1" && sent?.content == "写 README\n照 --lang 的用法写 README")
         #expect(try await requests(.start).isEmpty)
 
-        workspace.startFresh(third.id)
+        workspace.startFresh(third)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
+        #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
         // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话
@@ -169,7 +130,7 @@ struct TaskFlowTests {
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 
-    /// 灵感到 Agent 两下：灵感设为任务（第一行做任务名，其余成了它的草稿），行尾那一格就是"开始"；点它把草稿交出去，开一个以任务命名的会话。
+    /// 灵感到 Agent 两下：灵感设为任务（第一行是标题，其余是正文），行尾那一格就是"开始"；点它把标题连同正文交出去，开一个以任务命名的会话。
     @Test func 灵感设为任务_行尾是开始_点开始交给Agent() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
@@ -179,29 +140,35 @@ struct TaskFlowTests {
         try await workspace.setTodo(idea.id, true)
 
         let task = try #require(try await store.card(idea.id))
-        let draft = try #require(try await store.drafts(in: project.id)[task.id])
-        #expect(task.title == "修发言乱序" && draft.body == "按首次加入时间排")
-        let next = workspace.next(for: task, agent: nil, draft: draft)
-        #expect(next == .start(draft: draft))
+        #expect(task.title == "修发言乱序" && task.rest == "按首次加入时间排")
+        let chip = try await next(task)
+        #expect(chip == .start(leaf: task))
 
-        guard case .start(let handed) = next else { return }
+        guard case .start(let handed) = chip else { return }
         workspace.handOff(handed)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
         let spec = try #require(launch?.launch)
-        #expect(spec.project == project.id && spec.prompt == "按首次加入时间排" && spec.name == "修发言乱序")
-        _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：交出去的去向核对完即可
+        #expect(spec.project == project.id && spec.prompt == "修发言乱序\n按首次加入时间排" && spec.name == "修发言乱序")
+        #expect(try await self.next(task) == nil)  // 正在开会话：不再给"开始"
+
+        // 没开成：不算交给过，行尾重新给"开始"
+        let request = try #require(launch)
+        let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上开不了会话") }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
+        await executor.stop()
+        #expect(try await self.next(task) == .start(leaf: task))
     }
     #endif
 
     // MARK: 撤销与批量
 
-    @Test func 设为任务_删除_挂成提示词_都能撤销_勾选以最新状态为准() async throws {
+    @Test func 设为任务_删除_都能撤销_勾选以最新状态为准() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍\n看下崩溃率"
         let multi = try await store.createCard(in: nil, body: body)
-        try await workspace.setTodo(multi.id, true)  // 多行：第一行是任务，其余成了它的提示词
+        try await workspace.setTodo(multi.id, true)
         #expect(workspace.notice?.text == "已设为任务")
-        #expect(try await store.children(of: multi.id).count == 1)
         try await #require(workspace.notice?.action).run()
         #expect(try await store.cards(in: nil).map(\.body) == [body])
         #expect(try await store.card(multi.id)?.isTask == false)
@@ -214,14 +181,6 @@ struct TaskFlowTests {
         #expect(try await store.trashedCards().isEmpty)
 
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let task = try await store.createTask("修乱序", in: project.id)
-        let moved = try await store.createCard(in: project.id, body: "日志")
-        let before = try await store.cards(in: project.id).map(\.id)
-        try await workspace.attach(moved.id, TaskMove(slot: .under(task.id), after: nil))
-        try await #require(workspace.notice?.action).run()
-        #expect(try await store.children(of: task.id).isEmpty)
-        #expect(try await store.cards(in: project.id).map(\.id) == before)
-
         let stale = try await store.createTask("续费域名", in: nil)
         try await workspace.toggle(stale.id)
         try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
@@ -242,10 +201,12 @@ struct TaskFlowTests {
         try await store.setStatus(publish.id, .done)
         let fix = try await store.createTask("修重连", in: project)
         try await store.setStatus(fix.id, .done)
+        let shipped = try await store.createTask("发版", in: project)
+        try await store.setStatus(shipped.id, .done)
         let closed = try await store.createTask("收尾", in: project)
         let reopened = try await store.createTask("补文档", under: closed.id)
         try await store.setStatus(closed.id, .done)
-        try await store.setStatus(reopened.id, .todo)
+        try await store.setStatus(reopened.id, .todo)  // 上级跟着不再算做完
         let archived = try await store.createTask("旧的", in: project)
         _ = try await store.createTask("旧的步骤", under: archived.id)
         try await store.archive(archived.id)
@@ -260,14 +221,14 @@ struct TaskFlowTests {
         let page = try await ProjectPageData.read(project, from: store)
         let board = try await TaskBoard.read(from: store)
 
-        let open = [release.id, reopened.id, orphan.id]
+        let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
         #expect(catalog.openTasks[project] == open.count && board.counts.open == open.count)
         #expect(board.inProgress.count + board.todo.count == open.count)
-        let done = [fix.id, closed.id]
+        let done = [fix.id, shipped.id]
         #expect(Set(board.done.map(\.id)) == Set(done) && board.counts.done == done.count)
         #expect(page.taskCounts == board.counts)
-        #expect(board.done.first?.task.id == closed.id)  // 最近完成按完成时间排，不按项目分组
+        #expect(board.done.first?.task.id == shipped.id)  // 最近完成按完成时间排，不按项目分组
     }
 
     /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
@@ -316,21 +277,33 @@ struct TaskFlowTests {
         #expect(try await store.card(b.id)?.parentID == nil)
         #expect(try await tree().outdent(b.id) == nil)
 
-        // 拖到一行中部成为它的步骤；不能拖进自己的子树；灵感拖到任务行上成为提示词、行外不接
+        // 拖到一行中部成为它的步骤；不能拖进自己的子树
         let rows = try await tree().rows()
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         let middle = CGPoint(x: 100, y: 66)
         try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move, b.id)
         #expect(try await store.card(b.id)?.parentID == a.id)
         #expect(try await tree().drop(a.id, rows: rows, frames: frames, at: middle, depthShift: 0) == nil)
-        let idea = try await store.createCard(in: nil, body: "日志")
-        let onto = try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 46))
-        try await apply(onto?.move, idea.id)
-        #expect(try await store.card(idea.id)?.parentID == a1.id)  // 拖到步骤上：步骤是叶子，草稿挂在它下面
-        #expect(try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 400)) == nil)
     }
 
     /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
+    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回。
+    @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
+        let task = try await store.createTask("发布", in: nil)
+        let step = try await store.createTask("跑检查", under: task.id)
+        try await store.setStatus(step.id, .inProgress)
+        let workspace = Workspace(services: rig.services)
+        try await workspace.toggle(task.id)
+        try await workspace.archive(task.id)
+        #expect(try await store.card(step.id)?.status == .done)
+        #expect(try await store.archived().count == 1)
+
+        try await workspace.toggle(step.id)
+        #expect(try await store.card(step.id)?.status == .inProgress)
+        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.archived().isEmpty)
+    }
+
     @Test func 带着已完成步骤的任务不能再缩进_拖起来放回原处不换项目() async throws {
         let second = try await store.createTask("发布", in: nil)
         let first = try await store.createTask("备份", in: nil)
@@ -356,15 +329,11 @@ struct TaskFlowTests {
 
     // MARK: 共用的小件
 
-    private func primary(_ task: Card) async throws -> UUID? {
-        try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store))
-    }
+    private enum Unexpected: Error { case next }
 
-    private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), at: .always(at: now))
-    }
-
-    private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {
-        if case .failed(_, let failure) = try await delivery(of: prompt, at: now) { failure } else { nil }
+    /// 任务行"下一步"那一格（叶子，与行上读的同一份交给的会话）。
+    private func next(_ task: Card) async throws -> TaskNext? {
+        let agents = try await AgentLinks.read(from: store)
+        return Workspace(services: rig.services).next(for: task, in: agents, steps: nil)
     }
 }
