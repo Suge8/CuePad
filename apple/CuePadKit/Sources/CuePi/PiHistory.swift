@@ -463,7 +463,7 @@ public enum PiHistory {
 /// 下一句你的话（`said`，含一轮在跑时插进来的）或这一轮结束（`answered`）时，最后那段归给前一句。
 /// 没有回答就结束的一轮按现有规则：被停下留"已停止"（`interrupted`）。
 extension PiHistoryCheckpoint {
-    /// 写到会话记录上的摘要：问答，加上进行中这一轮已做完的工具活动（`PiRecap.pendingTools`，由轮次推出、不另存）。
+    /// 写到会话记录上的摘要：问答，加上进行中这一轮到目前为止的经过（`PiRecap.pendingTools`，由轮次推出、不另存）。
     var projectedRecap: PiRecap {
         var projected = recap
         projected.pendingTools = round?.tools.settled
@@ -507,10 +507,14 @@ extension PiHistoryCheckpoint {
         round?.declined = true
     }
 
-    /// 助手说了一段（中途调工具前说的、插话后答的、这一轮最后的回答都是）：空白的不算。
+    /// 助手说了一段（中途调工具前说的、插话后答的、这一轮最后的回答都是）：空白的不算。每段都按先后记进这一轮的经过，
+    /// 最后那段在这一轮做完时成为回答、从经过里拿掉（`PiToolLog.summary`）。
     mutating func spoke(_ text: String, _ entry: PiHistory.Entry) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        var current = round ?? Round(startedAt: nil)
+        current.tools.say(text)
+        round = current
         reply = Reply(text: text, id: entry.id, seq: entry.seq, at: entry.at)
     }
 

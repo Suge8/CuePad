@@ -180,8 +180,8 @@ enum Schema {
       ALTER TABLE piSessionStates ADD COLUMN catalogID TEXT;
       \(catalogIndex)
       """),
-    // 44：会话记录加进行中这一轮已做完的工具活动（`PiRecap.pendingTools`）
-    "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT;",
+    // 44：会话记录加进行中这一轮到目前为止的经过（`PiRecap.pendingTools`）；经过里多了中途说的话，已有的对话按新规则重读一遍
+    "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT; UPDATE piSessions SET checkpoint = NULL;",
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，

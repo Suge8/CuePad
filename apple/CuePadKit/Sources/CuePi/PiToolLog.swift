@@ -4,8 +4,9 @@ import Foundation
 
 typealias Tools = PiChatMessage.Tools
 
-/// 一轮里还在累计的工具活动（检查点里跨读文件带着）：调用在助手消息里，成败在后面的工具结果行里，所以调用先挂起，
-/// 结果到了再落进 `PiChatMessage.Tools`（给对话里那条回答的"读了 3 个文件，改了 2 个文件"一行和点开的清单用；只记是什么，不记工具输出）；一轮结束时没等到结果的（被中止）按成功算。
+/// 一轮里还在累计的经过（检查点里跨读文件带着）：调用在助手消息里，成败在后面的工具结果行里，所以调用先挂起，
+/// 结果到了再落进 `PiChatMessage.Tools`（只记是什么，不记工具输出）；助手说的每段话说出时就落进去。一轮结束时没等到结果的（被中止）按成功算，
+/// 最后那段话是回答，从经过里拿掉。
 struct PiToolLog: Codable, Equatable {
     private var activity = Tools()
     private var pending: [String: Call] = [:]
@@ -32,18 +33,25 @@ struct PiToolLog: Codable, Equatable {
         settle(call, failed: failed)
     }
 
-    /// 已做完的调用（还在跑的不算）；还没有做完的为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
+    /// 助手说了一段话（空白的不来）。
+    mutating func say(_ text: String) {
+        let clipped = text.count <= Tools.saidLimit ? text : String(text.prefix(Tools.saidLimit - 1)) + "…"
+        activity.items.append(.init(kind: .said, target: clipped))
+    }
+
+    /// 到目前为止做完的调用与说过的话（还在跑的调用不算）；什么都还没有为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
     var settled: Tools? { activity == Tools() ? nil : activity }
 
-    /// 这一轮的活动；一次工具都没调为 nil。
+    /// 这一轮做完时的经过：最后那段话是回答，不在经过里；什么都没有为 nil。
     func summary() -> Tools? {
         var log = self
         for (_, call) in log.pending.sorted(by: { $0.key < $1.key }) { log.settle(call, failed: false) }
+        if let answer = log.activity.items.lastIndex(where: { $0.kind == .said }) { log.activity.items.remove(at: answer) }
         return log.activity == Tools() ? nil : log.activity
     }
 
     /// 失败的调用与成功的一样按类计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
-    /// 清单满了以后改文件与失败的照样列（界面收起时也要列出它们），其余只计数。
+    /// 清单里的调用满了以后改文件与失败的照样列（界面收起时也要列出它们），其余只计数；说的话不占调用的名额。
     private mutating func settle(_ call: Call, failed: Bool) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
@@ -53,7 +61,7 @@ struct PiToolLog: Codable, Equatable {
             return
         }
         activity.add(call.kind)
-        if activity.items.count < Tools.itemLimit || failed || call.kind == .edit {
+        if activity.items.count(where: { $0.kind != .said }) < Tools.itemLimit || failed || call.kind == .edit {
             activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
         }
     }
@@ -67,6 +75,7 @@ private extension Tools {
         case .read: reads += 1
         case .search: searches += 1
         case .other: others += 1
+        case .said: break
         }
     }
 }
