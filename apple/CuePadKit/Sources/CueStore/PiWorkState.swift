@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pi 会话的工作状态。
+/// Pi 会话的工作状态。工作中不调工具就是思考：正在出字（"输出中"）不是同步的状态，只是 Mac 上读正在说的话（`PiDraft`）的显示。
 public enum PiWorkState: String, Sendable, CaseIterable {
-  case thinking, outputting, tool, waitingForUser, settled, error
+  case thinking, tool, waitingForUser, settled, error
   /// 自己这轮已经歇下，还有子代理在跑：仍在处理
   case delegating
   /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档，Pi 忙着，停止会中止压缩
@@ -14,14 +14,24 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 或 App 启动对账时发现它已经不在（`PiStateRecorder.exited`、`reset`）。与已结束一样只存在于记录里，会话再动起来时换成新状态；
   /// 发话照常（Mac 在后台把它恢复起来再送达）。不进历史，留在"现在"等人接着做。
   case interrupted
-  /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
-  /// 它不是"已结束"，不进历史。
+  /// 会话还在跑，但它加载的扩展协议与 Mac 上的 CuePad 不同：读不到状态、发不了命令。
+  /// 会自己重载的扩展等空闲后换上新版本；更早的要在终端里 /reload。不是"已结束"，不进历史。
   case incompatible
 
-  /// 正在干活（思考、输出、调用工具）。
+  /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
+  public var phase: Int {
+    if isWorking { return 0 }
+    switch self {
+    case .waitingForUser: return 1
+    case .error: return 2
+    default: return 3
+    }
+  }
+
+  /// 正在干活（思考、调用工具、等子代理、压缩）。
   public var isWorking: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .delegating, .compacting: true
+    case .thinking, .tool, .delegating, .compacting: true
     case .waitingForUser, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }
@@ -29,7 +39,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能马上说或等它做完再说。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
   public var isTurnRunning: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .waitingForUser, .compacting: true
+    case .thinking, .tool, .waitingForUser, .compacting: true
     case .delegating, .settled, .error, .ended, .interrupted, .incompatible: false
     }
   }

@@ -7,7 +7,7 @@ import SwiftUI
 /// （列全部，默认上次用的 `AppSettings.lastAgent`；那台 Mac 没接入它时由 Mac 写回原因）。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
 /// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
-/// 没有项目时输入框换成一句说明。
+/// 没有项目时不出这个输入框，先新建项目（`Navigation.startNewSession`）。
 struct NewSessionInput: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
@@ -29,7 +29,7 @@ struct NewSessionInput: View {
         let places = places
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
-    private var phase: LaunchProgress.Phase { progress?.phase ?? .idle }
+    private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
     /// 发出且还没失败：输入框锁住，等它开好。
     private var inFlight: Bool {
         if case .failed = phase { return sending }
@@ -38,28 +38,19 @@ struct NewSessionInput: View {
     private var canStart: Bool { chosen?.binding != nil && services.reachesPiHost && !inFlight }
 
     var body: some View {
-        Group {
-            if places.isEmpty {
-                Label("先新建一个项目，再给它选文件夹，就能在这里开会话", systemImage: "folder")
-                    .font(.subheadline).foregroundStyle(palette.ink2)
-                    .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                    .glass(in: .rect(cornerRadius: 25, style: .continuous))
-            } else {
-                Composer(
-                    draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-                    cardsFrom: chosen?.project.id, submitsEmpty: true,
-                    header: {
-                        header.padding(.horizontal, 12).padding(.top, 10)
-                        status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
-                    },
-                    tools: { EmptyView() },
-                    send: {
-                        Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
-                            .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
-                    })
-                .disabled(inFlight)
-            }
-        }
+        Composer(
+            draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
+            cardsFrom: chosen?.project.id, submitsEmpty: true,
+            header: {
+                header.padding(.horizontal, 12).padding(.top, 10)
+                status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
+            },
+            tools: { EmptyView() },
+            send: {
+                Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
+                    .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
+            })
+        .disabled(inFlight)
         // 浮在 `FloatingInput` 里（与随手记同一种）；发出后等它开好时不让收起
         .floatingInputLocked(inFlight)
         .onAppear {
@@ -98,10 +89,10 @@ struct NewSessionInput: View {
             .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
             Menu {
                 Picker("用哪个 Agent", selection: Bindable(services.settings).lastAgent) {
-                    ForEach(AgentKind.allCases) { (kind: AgentKind) in Label { Text(kind.name) } icon: { kind.icon }.tag(kind) }
+                    ForEach(AgentKind.allCases) { (kind: AgentKind) in AgentLabel(kind: kind).tag(kind) }
                 }
             } label: {
-                DestinationChip(title: Text("\(services.settings.lastAgent.icon) \(services.settings.lastAgent.name)")) { EmptyView() }
+                DestinationChip(title: Text("\(services.settings.lastAgent.mark.image) \(services.settings.lastAgent.name)")) { EmptyView() }
             }
             .disabled(inFlight)
             .accessibilityLabel("用哪个 Agent：\(services.settings.lastAgent.name)")
@@ -119,9 +110,10 @@ struct NewSessionInput: View {
             }
         } else {
             switch phase {
-            case .failed(let reason): Text(reason).foregroundStyle(palette.failure)
+            case .failed(let failure): Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure)
             case .opening, .claimed: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
-            case .sending(let request): DeliveryStatusLabel(request: request)
+            case .sending(let transit):
+                HStack(spacing: 6) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             case .idle: if !services.reachesPiHost { SyncHint(status: services.syncStatus, consequence: "发不到 Mac") }
             }
         }

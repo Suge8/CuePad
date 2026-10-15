@@ -23,7 +23,6 @@ enum PiWire {
             switch kind {
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
-            case "outputting": (.outputting, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
             case "delegating": (.delegating, nil)  // 子代理在 `subagents` 里
             case "compacting": (.compacting, nil)
@@ -79,11 +78,13 @@ enum PiWire {
     }
 
     /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
-    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiHost`）。
+    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiBridge`）。
+    /// `sessionFile` 也读：/reload 时旧连接告别，说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
         var extensionVersion: Int
         var sessionId: String
+        var sessionFile: String?
         var pid: Int32
         var cwd: String
         var name: String?
@@ -92,7 +93,7 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, pid, cwd, name, firstMessage, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
         }
 
         init(from decoder: any Decoder) throws {
@@ -100,6 +101,7 @@ enum PiWire {
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
             extensionVersion = (try? c.decode(Int.self, forKey: .extensionVersion)) ?? 0
             sessionId = try c.decode(String.self, forKey: .sessionId)
+            sessionFile = try? c.decode(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
             cwd = try c.decode(String.self, forKey: .cwd)
             name = try? c.decode(String.self, forKey: .name)

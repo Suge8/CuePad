@@ -3,16 +3,14 @@ import CueStore
 import CueTestSupport
 import Foundation
 import ImageIO
+import Network
 import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（不在就跳过真 Codex 的测试）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
+/// 本机装的 Codex（录制时用）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-/// 真 Codex 的用例开了（`RealAgents`）且本机装了 codex
-let realCodexAvailable = RealAgents.on(.codex) && realCodexURL != nil
 let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
-let realCodexSignedIn = realCodexAvailable && FileManager.default.fileExists(atPath: realCodexAuth.path)
 /// 账号里最便宜的模型
 let codexTestModel = "gpt-6-luna"
 
@@ -27,6 +25,7 @@ func copyCodexAuth(to file: URL) throws {
     let format = ISO8601DateFormatter()
     format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     auth["last_refresh"] = format.string(from: .now)
+    AgentTape.current?.secret(tokens: auth)
     try JSONSerialization.data(withJSONObject: auth).write(to: file, options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
 }
@@ -57,7 +56,7 @@ struct CodexHome {
     var paths: AgentPaths {
         AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
     }
-    var locator: ExecutableLocator { ExecutableLocator(searchDirectories: [realCodexURL!.deletingLastPathComponent()]) }
+    var locator: ExecutableLocator { AgentTape.locator("codex") }
     var environment: [String: String] {
         let isolated = ["CUEPAD_", "HERDR", "TMUX", "XDG_", "CLAUDE_", "OPENCODE_", "CODEX_", "PI_"]
         func path(_ name: String) -> String { root.appending(path: name).path }
@@ -74,11 +73,12 @@ struct CodexHome {
         for directory in [home, work, root.appending(path: "user")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
+        AgentTape.current?.watch(home.appending(path: "sessions"), home.appending(path: "config.toml"), work)
     }
 
     /// 能跑模型的配置：复制凭据、最便宜的模型、不检查更新、常驻服务不自动升级、工作目录受信任。
     func signIn(approvals: String = "never") throws {
-        try copyCodexAuth(to: home.appending(path: "auth.json"))
+        if AgentTape.current?.mode != .replay { try copyCodexAuth(to: home.appending(path: "auth.json")) }
         let config = """
             model = "\(codexTestModel)"
             model_reasoning_effort = "low"
@@ -86,7 +86,7 @@ struct CodexHome {
             sandbox_mode = "workspace-write"
             check_for_update_on_startup = false
 
-            [projects."\(CodexHooks.realPath(work))"]
+            [projects."\(work.realPath.path)"]
             trust_level = "trusted"
 
             """
@@ -96,35 +96,61 @@ struct CodexHome {
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
-    /// 删掉临时目录（含复制的凭据）。
-    func remove() {
+    /// 模型改走本机的假提供方（`RejectingProvider`）。
+    func use(_ provider: RejectingProvider) throws {
+        let config = home.appending(path: "config.toml")
+        let text = try String(contentsOf: config, encoding: .utf8)
+        try ("model_provider = \"rejecting\"\n" + text + """
+
+            [model_providers.rejecting]
+            name = "rejecting"
+            base_url = "http://127.0.0.1:\(provider.port)/v1"
+            wire_api = "responses"
+
+            """).write(to: config, atomically: true, encoding: .utf8)
+    }
+
+    /// 停掉在里面跑的进程（终端界面拉起的常驻服务与它的升级进程、它们起的 git，见 `TestProcesses`），再删掉临时目录（含复制的凭据）。
+    @concurrent func remove() async {
+        TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
+    }
+
+    /// 跑 `body`，不论成败都 `remove`。
+    func using(_ body: () async throws -> Void) async throws {
+        do {
+            try await body()
+        } catch {
+            await remove()
+            throw error
+        }
+        await remove()
     }
 
     /// 经 Codex 自己的 app-server 读它此刻看到的钩子（命令 → 信任状态）。
     @MainActor func hookTrust() async throws -> [(command: String, event: String, trust: String)] {
-        try await listedHooks().map { ($0["command"] as? String ?? "", $0["eventName"] as? String ?? "", $0["trustStatus"] as? String ?? "") }
+        try await listedHooks().map { ($0["command"]?.string ?? "", $0["eventName"]?.string ?? "", $0["trustStatus"]?.string ?? "") }
     }
 
     /// 像用户在 Codex 的 /hooks 里点了信任：把 Codex 列出的条目全部信任。
     @MainActor func trustEverything() async throws {
-        var state: CodexRPC.Object = [:]
-        for entry in try await listedHooks() { state[entry["key"] as! String] = ["trusted_hash": entry["currentHash"] as! String] }
-        try await withCodex { try await $0.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": state, "mergeStrategy": "upsert"]]]) }
+        var state: [String: JSONValue] = [:]
+        for entry in try await listedHooks() { state[entry["key"]!.string!] = ["trusted_hash": entry["currentHash"]!] }
+        try await withCodex { try await $0.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": .object(state), "mergeStrategy": "upsert"]]]) }
     }
 
-    @MainActor private func listedHooks() async throws -> [CodexRPC.Object] {
-        var entries: [CodexRPC.Object] = []
+    @MainActor private func listedHooks() async throws -> [JSONValue] {
+        var entries: [JSONValue] = []
         try await withCodex { rpc in
-            let list = try await rpc.call("hooks/list", ["cwds": [home.path]])
-            entries = ((list["data"] as? [CodexRPC.Object])?.first?["hooks"] as? [CodexRPC.Object]) ?? []
+            let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
+            entries = list["data"]?.array?.first?["hooks"]?.array ?? []
         }
         return entries
     }
 
     /// 起一个指向这个配置目录的 app-server，用完（失败也一样）等它退出。
     @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
-        let rpc = try await CodexRPC.launch(realCodexURL!, environment: environment)
+        let rpc = try await CodexRPC.launch(AgentTape.executable("codex"), environment: environment)
         do {
             try await body(rpc)
         } catch {
@@ -137,8 +163,8 @@ struct CodexHome {
 
 /// 起一整套接入交给 `body`，结束后（失败也一样）停掉它起的进程、删掉临时目录。
 @MainActor
-func withCodexRig(approvals: String = "never", _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals)
+func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
+    let rig = try await CodexRig(approvals: approvals, wrapped: wrapped)
     do {
         try await body(rig)
     } catch {
@@ -158,16 +184,38 @@ final class CodexRig {
     /// 人在不在这台 Mac 前：默认不在（确认交给 CuePad）
     let presence: TestPresence
 
+    /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
+    /// 固定的 /tmp 链接，指向本次构建的 cuepad（录制时真钩子经它跑）。
+    static let hookHelper: URL = {
+        let link = URL(filePath: "/tmp/cuepad-test-helper/cuepad")
+        try! FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? link.checkResourceIsReachable()) != nil || (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) != nil {
+            try! FileManager.default.removeItem(at: link)
+        }
+        try! FileManager.default.createSymbolicLink(at: link, withDestinationURL: PiProcess.cuepad)
+        return link
+    }()
+
     /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
-    init(approvals: String = "never") async throws {
+    /// - Parameter wrapped: CuePad 起的 `codex` 是一层外壳、真 codex 是它的子进程（npm 装的 `codex` 就是 node 外壳），钩子的父进程不是 CuePad 起的那个。
+    init(approvals: String = "never", wrapped: Bool = false) async throws {
         let codex = try CodexHome()
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator, presence: presence)
+        var locator = codex.locator
+        if wrapped {
+            let bin = codex.root.appending(path: "wrapper", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let script = bin.appending(path: "codex")
+            try "#!/bin/sh\n'\(AgentTape.executable("codex").path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            locator = ExecutableLocator(searchDirectories: [bin])
+        }
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locate: { [locator] in locator }, presence: presence)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()
@@ -175,31 +223,22 @@ final class CodexRig {
             await runtime.stop()()
             hooks.stop()
             bridge.stop()
-            codex.remove()
+            await codex.remove()
             throw error
         }
         (self.codex, self.hooks, self.bridge, self.runtime, self.presence) = (codex, hooks, bridge, runtime, presence)
     }
 
-    /// 关掉托管的进程；终端测试起的常驻服务与它的升级进程按登记的进程号停掉，删掉它在共用的 /tmp/codex-daemon-<uid> 里留下的
-    /// socket 与锁文件（控制 socket 是指向那里的符号链接）；删掉临时目录（含凭据）。
+    /// 关掉托管的进程；停掉终端测试起的常驻服务等、删掉临时目录（含凭据，`CodexHome.remove`），再删常驻服务在共用的
+    /// /tmp/codex-daemon-<uid> 里留下的 socket 与锁文件（控制 socket 是指向那里的符号链接）。
     func stop() async {
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
         let control = codex.home.appending(path: "app-server-control/app-server-control.sock").path
         let shared = try? FileManager.default.destinationOfSymbolicLink(atPath: control)
-        // 先停升级进程：它会把停掉的常驻服务再拉起来
-        for file in ["daemon-updater.pid", "daemon.pid"] {
-            let url = codex.home.appending(path: "app-server-daemon/\(file)")
-            guard let data = try? Data(contentsOf: url), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let pid = (object["pid"] as? NSNumber)?.int32Value else { continue }
-            // 常驻服务收到 SIGTERM 后要收尾一会儿，等它真的退出再删目录
-            guard kill(pid, SIGTERM) == 0 else { continue }
-            try? await eventually("进程 \(pid) 退出") { kill(pid, 0) != 0 }
-        }
+        await codex.remove()
         for leftover in shared.map({ [$0, $0 + ".lock"] }) ?? [] { try? FileManager.default.removeItem(atPath: leftover) }
-        codex.remove()
     }
 
     var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
@@ -211,6 +250,14 @@ final class CodexRig {
 
     func replies(_ session: PiSession) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map(\.text)
+    }
+
+    /// 正在说的话已换下：没有，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
+    func draftLanded(_ id: PiSession.ID) -> Bool {
+        guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
+        let session = bridge.session(id: id)
+        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }?.at
+        return draft.landed(newestReply: newest)
     }
 }
 
@@ -239,9 +286,9 @@ final class CodexTerminal: @unchecked Sendable {
     private let output = Pipe()
     private let screen = Mutex(Data())
 
-    init(_ codex: CodexHome) throws {
+    init(_ codex: CodexHome, arguments: [String] = []) throws {
         process.executableURL = URL(filePath: "/usr/bin/script")
-        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\"", realCodexURL!.path]
+        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", realCodexURL!.path] + arguments
         process.environment = codex.environment.merging(["TERM": "xterm-256color"]) { $1 }
         process.currentDirectoryURL = codex.work
         process.standardInput = input
@@ -286,5 +333,33 @@ final class CodexTerminal: @unchecked Sendable {
         for child in children.prefix(Int(max(count, 0))) where child > 0 { kill(child, SIGTERM) }
         if process.isRunning { process.terminate() }
     }
+}
+/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
+final class RejectingProvider: Sendable {
+    static let reason = "bad things happened"
+    private let listener: NWListener
+    let port: UInt16
+
+    init() async throws {
+        listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: .global())
+            // 请求读一块就够了：不论问什么都拒绝
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
+                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
+                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
+                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        let ready = AsyncStream<UInt16>.makeStream()
+        listener.stateUpdateHandler = { [listener] state in
+            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
+        }
+        listener.start(queue: .global())
+        var iterator = ready.stream.makeAsyncIterator()
+        port = try #require(await iterator.next())
+    }
+
+    func stop() { listener.cancel() }
 }
 #endif

@@ -16,17 +16,28 @@ struct PiChatTests {
             tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
+    /// 系统行有三种：压缩是上下文换了（分隔、刻度滑条上一个点），停下与拒绝只是这一轮怎么结束的（不是分隔、不打点）。
+    @Test func 只有压缩是换上下文_停下与拒绝不是() {
+        let entries = PiChat.entries([
+            message(1, .user, "第一问"), message(2, .system, "已停止"), message(3, .user, "第二问"), message(4, .system, "已拒绝"),
+            message(5, .system, "已压缩上下文"),
+        ])
+
+        #expect(ChatScrubber.marks(entries).map { "\($0.kind)" } == ["said", "said", "boundary"])
+        #expect(entries.map(\.role) == [.user, .notice(.stopped), .user, .notice(.declined), .notice(.compacted)])
+    }
+
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {
         let app = TestApp()
         let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")
         try await recorder.update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let sent = try await app.services.requestMacDelivery("把断言也改了", to: session, mode: .send)
-        let waiting = try await app.services.requestMacDelivery("再跑一遍", to: session, mode: .send)
+        let sent = try await app.services.store.requestDelivery("把断言也改了", to: session.target, on: session.hostID, mode: .send)
+        let waiting = try await app.services.store.requestDelivery("再跑一遍", to: session.target, on: session.hostID, mode: .send)
         let answer = try await app.services.store.requestAnswer(
             PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
 
-        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
+        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)], at: .always())
 
         #expect(shown.map(\.id) == [waiting.id])
     }
@@ -37,10 +48,10 @@ struct PiChatTests {
         let app = TestApp()
         try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let said = try await app.services.requestMacDelivery("先说一句", to: session, mode: .send)
-        let command = try await app.services.requestMacDelivery("/compact", to: session, mode: .command)
+        let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
+        let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
-        #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
+        #expect(PiChat.outgoing([said, command], messages: [], at: .always()).map(\.id) == [said.id])
     }
 
     /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，
@@ -53,7 +64,7 @@ struct PiChatTests {
         let lost = try await store.requestDelivery("改完再跑一遍", to: target, on: "mac-fail", mode: .send)
         _ = try await store.requestDelivery("还在路上的一句", to: target, on: "mac-wait", mode: .send)
         func item() async throws -> PiSessionListItem { try #require(try await store.piSessionPage(PiSessionQuery()).items.first) }
-        #expect(try await item().undelivered == 0)
+        #expect(try await item().undelivered(at: .always()) == 0)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
@@ -61,12 +72,12 @@ struct PiChatTests {
         await executor.stop()
 
         let failed = try await item()
-        #expect(failed.undelivered == 1 && PiChat.undeliveredNote(failed.undelivered) == "1 句没送到")
-        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
+        #expect(failed.undelivered(at: .always()) == 1 && PiChat.undeliveredNote(failed.undelivered(at: .always())) == "1 句没送到")
+        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered(at: .always()) == 1)
 
         app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
-        #expect(Workspace(services: app.services).shown(try await item()).status != .delivery(.failed))
-        #expect(try await item().undelivered == 1)
+        #expect(Workspace(services: app.services).shown(try await item()).undelivered == nil)
+        #expect(try await item().undelivered(at: .always()) == 1)
     }
 
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {

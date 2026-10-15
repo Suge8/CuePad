@@ -143,17 +143,15 @@ public struct PiTerminalJumper: Sendable {
     }
 }
 
-/// 生产实现：`tmux` 走 PATH（额外加上 Homebrew 目录，GUI 应用的 PATH 很短）、AppleScript 在主线程执行、
+/// 生产实现：`tmux` 按 `ExecutableLocator.standard` 的 PATH 找（GUI 应用的 PATH 很短）、AppleScript 在主线程执行、
 /// 应用激活走 `NSRunningApplication`。首次控制某个应用时系统会弹"自动化"授权，App 需要在
 /// Info.plist 里写 `NSAppleEventsUsageDescription`。
 public struct LivePiTerminalSystem: PiTerminalSystem {
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
-        let extra = "/opt/homebrew/bin:/usr/local/bin"
-        let environment = ProcessInfo.processInfo.environment.merging(
-            ["PATH": (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin") + ":" + extra]) { _, new in new }
-        return await runCapturing(URL(filePath: "/usr/bin/env"), [executable] + arguments, environment: environment) ?? (-1, "")
+        let env = URL(filePath: "/usr/bin/env")
+        return await ChildProcess.run(env, [executable] + arguments, environment: ExecutableLocator.standard.environment(launching: env)) ?? (-1, "")
     }
 
     public func appleScript(_ source: String) async throws -> String {

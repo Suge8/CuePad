@@ -4,7 +4,8 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing, succeeded, failed
 }
 
-/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。
+/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
+/// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   case send, steer, followUp
@@ -91,10 +92,15 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public static let unexplainedFailure = "Mac 没有说明原因"
 
-  /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束：还在路上的，或没能结束、之后也没再发过别的；结束成功或没请求过是 nil。
-  public static func shownEnd(in requests: [DeliveryRequest]) -> DeliveryRequest? {
+  /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束到哪了（`Speech`）：还在路上的，或没能结束、之后也没再发过别的；
+  /// 结束成功或没请求过是 nil。
+  public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
     guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
-    return end.isOpen || (end.failure != nil && end.id == requests.last?.id) ? end : nil
+    switch Speech.trip(end, at: moment) {
+    case .sending: return .sending
+    case .delivered: return nil
+    case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
+    }
   }
 
   /// 新会话请求的内容；其他方式为 nil。
@@ -122,9 +128,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
+/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
+/// （会话正在起、还没连上桥，清单在 App 的执行器里）。暂时没成由 `DeliveryExecutor` 隔 `Speech.retryDelay` 再执行一次，
+/// 再不成就按失败写回；终态只由执行器写这一处。
 public enum DeliveryOutcome: Sendable {
   case succeeded
   case failed(String)
+  case transient(String)
 }
 
 extension DeliveryRequest: Record {

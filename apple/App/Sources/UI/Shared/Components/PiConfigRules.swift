@@ -3,14 +3,8 @@ import SwiftUI
 
 
 
-/// 模型菜单怎么写：按提供方（`PiProvider`）分组，每个模型下面写它支持的思考强度；胶囊上的短名见 `PiModelName`。
+/// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带用量；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
-    /// 模型菜单里每个模型下面那一行：它支持的思考强度。
-    static func levels(_ model: PiModelOption) -> Dotted {
-        let labels = model.thinkingLevels.map(\.label)
-        return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
-    }
-
     /// 分组标题：这家有订阅额度时写"Claude · 5 小时 14% · 本周 8%"（`QuotaMeter.menuTitle`），否则是提供方名。
     static func title(_ provider: PiProvider, quotas: [AccountQuota], at now: Date) -> String {
         quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
@@ -43,6 +37,8 @@ nonisolated struct PiThinkingMeter: Equatable {
     var bars: [PiThinkingLevel] { levels.filter { $0 != .off } }
     var filled: Int { current.flatMap { bars.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
+    /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
+    var label: String { current?.label ?? "默认" }
     /// 填到最高一档。
     var isMax: Bool { !bars.isEmpty && filled == bars.count }
 

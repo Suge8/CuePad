@@ -55,6 +55,7 @@ extension CueStore {
   /// 你结束了这个会话：记为已结束、进历史（不算被打断）；已结束、被打断的也改记为已结束。
   func endPiState(host: String, sessionID: String, at now: Date) throws {
     try write {
+      try dropCatalogModels(where: "id = ? AND state != ?", [PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue], at: now)
       try db.run(
         "UPDATE piSessionStates SET state = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
         [PiWorkState.ended.rawValue, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue])
@@ -66,40 +67,52 @@ extension CueStore {
   /// 启动对账：只收尾这台 Mac 上记下的进程确实没了的记录（`running` 判断记下的进程是不是还是那一个），按进程没了收尾
   /// （`losePiState`），手上还有活的记为被打断。其余一律不动：记下的进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着），
   /// 与没记下进程、不知道还在不在的（如刚升级、本机进程表还空着），都由桥重新连上后接着写，或在进程退出时收尾。
-  func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws {
+  /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ），重新接上时沿用（`PiStateRecorder.update`）。
+  func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
     try write {
+      let finals = [PiWorkState.ended, .interrupted].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+      let before = try db.query(
+        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE hostID = ? AND state NOT IN (\(finals))", [host]
+      ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3))) }
+      let open = Dictionary(before.compactMap { id, state, times in state.map { (id, ($0, times)) } }) { $1 }
       let processes = try db.query(
         "SELECT p.sessionID, p.pid, p.startedAt FROM piProcesses p JOIN piSessionStates s ON s.sessionID = p.sessionID WHERE s.hostID = ?",
         [host]
       ) { (sessionID: $0.text(0), process: PiProcess(pid: Int32($0.int(1)), startedAt: $0.int(2))) }
       let gone = processes.filter { !running($0.process) }.map(\.sessionID)
-      guard !gone.isEmpty else { return }
+      guard !gone.isEmpty else { return open }
       let among = "(\(gone.map { _ in "?" }.joined(separator: ", ")))"
       try close(where: "hostID = ? AND sessionID IN \(among)", [host] + gone.map { $0 as any SQLBindable }, at: now)
       try db.run("DELETE FROM piProcesses WHERE sessionID IN \(among)", gone.map { $0 as any SQLBindable })
       try dropUnusedCatalogs(host: host)
+      return open
     }
   }
 
   /// 进程没了的收尾（见 `losePiState`），只动还没收尾的（不是已结束、被打断）：托管的歇着，其余已结束，手上还有活的记为被打断。
-  /// 被打断与已结束的起点是此刻；托管的本来就歇着的不动起点（"多久前"仍从它歇下算起）。
+  /// 托管的上一轮出错的仍是出错、原因留着（进程退出不改变那一轮的结果）。
+  /// 被打断与已结束的起点是此刻；托管的本来就歇着或出错的不动起点（"多久前"仍从那时算起）。
   /// 托管标记照旧：托管的被打断了也由本机在后台唤醒。
   private func close(where condition: String, _ arguments: [any SQLBindable], at now: Date) throws {
     let finals = [PiWorkState.ended, .interrupted].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let failed = "(hosted = 1 AND state = '\(PiWorkState.error.rawValue)')"
     let state = """
-      CASE WHEN \(Self.hadWork) THEN '\(PiWorkState.interrupted.rawValue)' WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)'
-        ELSE '\(PiWorkState.ended.rawValue)' END
+      CASE WHEN \(Self.hadWork) THEN '\(PiWorkState.interrupted.rawValue)' WHEN \(failed) THEN state
+        WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)' ELSE '\(PiWorkState.ended.rawValue)' END
       """
+    let kept = "((state = '\(PiWorkState.settled.rawValue)' AND NOT \(Self.hadWork)) OR \(failed))"
+    try dropCatalogModels(where: "state NOT IN (\(finals)) AND \(condition)", arguments, at: now)
     try db.run(
       """
-      UPDATE piSessionStates SET stateSince = CASE WHEN state = '\(PiWorkState.settled.rawValue)' AND NOT \(Self.hadWork) THEN stateSince ELSE ? END,
-        state = \(state), \(Self.cleared), modifiedAt = ?
+      UPDATE piSessionStates SET stateSince = CASE WHEN \(kept) THEN stateSince ELSE ? END,
+        state = \(state), \(Self.cleared), detail = CASE WHEN \(failed) THEN detail END, modifiedAt = ?
       WHERE state NOT IN (\(finals)) AND \(condition)
       """, [now, Date.stamp] + arguments)
   }
 
-  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理、可选模型与命令（目录记录）。
-  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, catalogID = NULL"
+  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理，还有目录里的可选模型（`dropCatalogModels`）。
+  /// 它报过的斜杠命令留着：发话会在后台唤醒它，回复框认命令只看这份清单（`PiSlash.line`），清掉了 "/default" 就会当普通的话发给模型。
+  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
   private static let hadWork: String = {
@@ -108,14 +121,15 @@ extension CueStore {
     return "(state IN (\(pending)) OR \(running))"
   }()
 
-  /// 删掉这台 Mac 上歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
-  func deleteUnindexedHostedStates(host: String, except live: Set<String>) throws {
+  /// 删掉这台 Mac 上这家 Agent 歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
+  func deleteUnindexedHostedStates(host: String, agent: AgentKind, except live: Set<String>) throws {
     let refs = live.isEmpty ? "" : "AND sessionID NOT IN (\(Array(repeating: "?", count: live.count).joined(separator: ", ")))"
-    var arguments: [any SQLBindable] = [host, PiWorkState.ended.rawValue]
+    var arguments: [any SQLBindable] = [host, agent.rawValue, PiWorkState.ended.rawValue]
     arguments += live.sorted().map { $0 as any SQLBindable }
     try write {
       try dropSessionRecords(
-        where: "hostID = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)", arguments)
+        where: "hostID = ? AND COALESCE(agent, 'pi') = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
+        arguments)
       try dropUnusedCatalogs(host: host)
     }
   }
@@ -237,7 +251,7 @@ public actor PiStateRecorder {
     agent: AgentKind? = nil, process: PiProcess? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
-    // 托管着的旧扩展会话（App 更新后）：读不到它在做什么，PiHost 马上让它退出，下次发话用新扩展恢复。
+    // 托管着的旧扩展会话（App 更新后）：读不到它在做什么，PiRuntime 马上让它退出，下次发话用新扩展恢复。
     // 不写：记录留着上一次读到的样子，退出时据此分清是不是做到一半被打断（`exited`）
     if state == .incompatible, hosted ?? session.content?.hosted ?? false { return nil }
     let now = timing.now()
@@ -302,9 +316,10 @@ public actor PiStateRecorder {
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
   /// 它们的记录由状态变化自己写，对账与写入在这里排在同一条任务链上，不会删掉刚建立的会话。
-  public func dropUnindexedHosted() async throws {
+  /// 只对账这一家（它的索引刚回填完）：别家的索引此刻可能不在（没接入的不建索引），它们的记录不动。
+  public func dropUnindexedHosted(of agent: AgentKind) async throws {
     let live = Set(sessions.keys)
-    try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, except: live) }
+    try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, agent: agent, except: live) }
   }
 
   /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——
@@ -326,13 +341,19 @@ public actor PiStateRecorder {
 
   /// App 启动时对账这台 Mac 上次留下的记录：记下的进程确实没了的按 `exited` 收尾（手上还有活的记为被打断），其余不动——
   /// 进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着）与没记下进程的，由桥重新连上后接着写。`running` 判断记下的进程是不是还是那一个。
-  public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws {
+  /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ）：桥据此让重新接上的会话沿用原来的起点（`PiBridge.carryOver`）。
+  @discardableResult
+  public func reset(running: @escaping @Sendable (PiProcess) -> Bool) async throws -> [String: (state: PiWorkState, times: PiTimes)] {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
     let now = timing.now()
-    try await persist { [store, hostID] in try await store.reconcilePiStates(host: hostID, running: running, at: now) }
+    let before = Before()
+    try await persist { [store, hostID] in before.value = try await store.reconcilePiStates(host: hostID, running: running, at: now) }
+    return before.value
   }
+
+  private final class Before: @unchecked Sendable { var value: [String: (state: PiWorkState, times: PiTimes)] = [:] }
 
   private func flush(_ sessionID: String) async {
     guard var session = sessions[sessionID], session.timer != nil, let content = session.content else { return }

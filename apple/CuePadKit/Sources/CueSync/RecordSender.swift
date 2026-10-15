@@ -174,6 +174,7 @@ actor RecordSender {
           await coordinator.handle(.zoneMissing(deletedByUser: true))
           return .halted
         }
+        await coordinator.reached(error)  // 网络类失败：连不上 iCloud
         guard let error = error as? CKError, Self.retryable.contains(error.code) else {
           if let error = error as? CKError { await coordinator.uploadFailed(error) }
           blockedUntil = .now + Self.blockedPause

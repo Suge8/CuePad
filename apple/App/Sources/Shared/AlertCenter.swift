@@ -108,7 +108,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         guard !enabled else { return }
         enabled = true
         await refresh()
-        if authorization == .notDetermined { await requestAuthorization() }
+        if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
         // 无论是否授权都注册：同步区有变化的静默推送不要通知权限（`AlertSubscriptions.changesID`）
         UIApplication.shared.registerForRemoteNotifications()
     }

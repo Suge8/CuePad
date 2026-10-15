@@ -65,9 +65,11 @@ actor ZonePuller {
       try await drainPages()
     } catch {
       await showBusy(false)
+      await coordinator.reached(error)  // 网络类失败：连不上 iCloud
       throw error
     }
     await showBusy(false)
+    await coordinator.reached(nil)
   }
 
   /// 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪。

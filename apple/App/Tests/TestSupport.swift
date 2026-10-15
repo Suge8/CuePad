@@ -4,10 +4,13 @@ import CueSync
 @_exported import CueTestSupport
 import Foundation
 import Synchronization
+import SwiftUI
+import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
-import CuePi
+@testable import CuePi
+import Testing
 #else
 import UIKit
 #endif
@@ -110,22 +113,25 @@ final class TestApp {
 
     /// 同步的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
+    /// App 的钟（资料库、在线记录续期、说的话到点翻状态、主动拉取）；要推进时间的测试给 `ManualTiming` 的。
+    private let timing: Timing
 
     #if os(macOS)
     /// Cue 的依赖；默认本机没有能用的运行时（Cue 一直睡着）。
     private let cue: CueDependencies?
     /// 自动更新器；默认没有（同隔离模式）。
     private let updater: (any AppUpdater)?
-
-    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         self.cue = cue
         self.updater = updater
         services = makeServices()
     }
     #else
-    init(sync source: AppServices.SyncSource? = nil) {
+    init(sync source: AppServices.SyncSource? = nil, timing: Timing = .system) {
         syncSource = source
+        self.timing = timing
         services = makeServices()
     }
     #endif
@@ -146,6 +152,9 @@ final class TestApp {
         return services
     }
 
+    /// 隔离库的文件（直接改库里的时刻，演"很久以前"）。
+    var databaseURL: URL { isolatedLocation.databaseURL }
+
     private var isolatedLocation: LibraryLocation {
         try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
     }
@@ -156,6 +165,44 @@ final class TestApp {
     }
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
+
+    /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
+    /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
+    func connect(_ kind: AgentKind, version: String = "2.1.0") async throws {
+        let bin = directory.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let executable = bin.appending(path: kind.command)
+        try "#!/bin/sh\necho '\(version)'\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        if kind == .codex { try installCodexTrustedLikeCodex() }
+        else { try await services.agents.install(kind) }
+        await services.agents.detect(kind)
+        #expect(services.agents.status(kind)?.files == .current)
+    }
+
+    /// CuePad 写技能与钩子，信任写成 Codex 记下的样子（`[hooks.state."<键>"]` 下一行 `trusted_hash`）。
+    private func installCodexTrustedLikeCodex() throws {
+        let integration = agentIntegration
+        let hooks = try #require(integration.hooks(.codex) as? CodexHooks).hooks
+        let command = integration.hookCommand(.codex)
+        let skill = integration.skillFile(.codex)
+        try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try AgentSkill.text(for: .codex, cuepad: helper).write(to: skill, atomically: true, encoding: .utf8)
+        try hooks.install(command: command)
+        let path = hooks.file.realPath.path
+        let trust = try hooks.ourGroups(in: JSONSourceTree(Data(contentsOf: hooks.file))).map { group in
+            let event = try #require(CodexHooks.events.first { $0.name == group.event })
+            let hash = try #require(CodexHooks.hash(event, command: command, hooks: hooks))
+            return "[hooks.state.\"\(CodexHooks.key(path, group.event, group.index))\"]\ntrusted_hash = \"\(hash)\"\n"
+        }
+        try trust.joined(separator: "\n").write(to: hooks.file.deletingLastPathComponent().appending(path: "config.toml"), atomically: true, encoding: .utf8)
+    }
+
+    var agentIntegration: AgentIntegration {
+        AgentIntegration(
+            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
+            cuepad: helper)
+    }
 
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
@@ -168,12 +215,11 @@ final class TestApp {
             pi: pi,
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
-            agents: AgentIntegration(
-                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
-                cuepad: helper),
+            agents: agentIntegration,
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
+            timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
             hooks: AgentHookServer(path: piPaths.hookSocket),
@@ -189,9 +235,20 @@ final class TestApp {
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
+        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard, timing: timing)
     }
     #endif
+}
+
+extension Workspace {
+    /// 像回复框那样从一份草稿发给会话（`speak`，关联带上的第一张卡），等写库与上传走完，返回写下的那条请求。
+    func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
+        var box = draft
+        let files = services.store.files
+        let binding = Binding(get: { box }, set: { box = $0 })
+        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        return try #require(try await services.store.deliveryRequests().first)
+    }
 }
 
 extension CueStore {

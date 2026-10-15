@@ -126,13 +126,17 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 40：撤掉 41（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema41 = """
+  /// 把新建的库退回结构 42：撤掉 43（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema43 = """
     DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
     ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
     """
-  /// 退回结构 39：40（同步元数据换形）从哪种形状都能重建，不用撤。
-  static let undoSchema40 = undoSchema41
+  /// 退回结构 41：42（同步元数据换形）从哪种形状都能重建，不用撤。
+  static let undoSchema42 = undoSchema43
+  /// 退回结构 40：再撤掉 41（每台 Mac 的在线记录）。
+  static let undoSchema41 = undoSchema42 + "DROP TABLE macPresence;"
+  /// 退回结构 39：再撤掉 40（请求上记 Cue 已知道没送到，本机列）。
+  static let undoSchema40 = undoSchema41 + "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
   /// 退回结构 38：再撤掉 39（卡片上的跟进标记下线；盖序号的触发器去掉它后重建，退回时留着新的也照样能升级）。
   static let undoSchema39 = undoSchema40 + "ALTER TABLE cards ADD COLUMN cueFollows INTEGER NOT NULL DEFAULT 0;"
   /// 退回结构 37：再撤掉 38（本机写入序号：计数器、各表的序号列与盖序号的触发器）。
@@ -164,10 +168,10 @@ import Testing
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
 
-  /// 结构 40 的库升到 41：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
-  @Test func schema40LibraryMovesModelListsOffSessionRecords() async throws {
+  /// 结构 42 的库升到 43：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
+  @Test func schema42LibraryMovesModelListsOffSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
-    try RawDB(fixture.url).exec(Self.undoSchema41 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 40;")
+    try RawDB(fixture.url).exec(Self.undoSchema43 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 42;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])

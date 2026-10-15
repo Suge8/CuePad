@@ -63,11 +63,45 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
     var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true, "delivered": "immediate"] }
 
+    /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
+    /// 回 ack 与另一条线程上的告别关闭（`close(bye:)`）会交错，关闭后再写会落到已关掉的连接或被复用的描述符上，
+    /// 曾以 SIGPIPE 杀掉整个测试宿主（同 `PiSocket` 的写法）。
     private final class Connection: @unchecked Sendable {
         let fd: Int32
         var source: DispatchSourceRead?
         var buffer = Data()
-        init(fd: Int32) { self.fd = fd }
+        /// 已关闭
+        private let closed = Mutex(false)
+
+        init(fd: Int32) {
+            self.fd = fd
+            var one: Int32 = 1
+            setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
+        }
+
+        func write(_ data: Data) {
+            closed.withLock { closed in
+                guard !closed else { return }
+                data.withUnsafeBytes { raw in
+                    var off = 0
+                    while off < raw.count {
+                        let n = Darwin.write(fd, raw.baseAddress! + off, raw.count - off)
+                        if n <= 0 { return }
+                        off += n
+                    }
+                }
+            }
+        }
+
+        func close() {
+            closed.withLock { closed in
+                guard !closed else { return }
+                closed = true
+                source?.cancel()
+                shutdown(fd, SHUT_RDWR)
+                Darwin.close(fd)
+            }
+        }
     }
 
     init(directory: URL, sessionID: String = UUID().uuidString.lowercased(), pid: Int32 = getpid(), options: Options = Options()) {
@@ -180,14 +214,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private func write(_ object: [String: Any], to conn: Connection) {
         guard var data = try? JSONSerialization.data(withJSONObject: object) else { return }
         data.append(0x0A)
-        data.withUnsafeBytes { raw in
-            var off = 0
-            while off < raw.count {
-                let n = Darwin.write(conn.fd, raw.baseAddress! + off, raw.count - off)
-                if n <= 0 { return }
-                off += n
-            }
-        }
+        conn.write(data)
     }
 
     private func broadcast(_ object: [String: Any]) {
@@ -212,6 +239,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "info"].merging(fields) { $1 })
     }
 
+    /// 发 `quota`：订阅额度的一次观测（`windows` 按线上格式：`seconds`、`used`、`resetsAt` 秒、可选 `model`、`binding`）。
+    func sendQuota(provider: String, windows: [[String: Any]], complete: Bool) {
+        broadcast(["t": "quota", "provider": provider, "windows": windows, "complete": complete])
+    }
+
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。
     func setState(_ state: [String: Any]) {
         var s = state
@@ -228,6 +260,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         try? FileManager.default.removeItem(at: socketURL)
     }
 
+    /// 回完手上这条命令再告别退出（Pi 收到 end 也是先回 ack 再走）：排在处理命令的同一条队列上，ack 一定先于 bye 写出。
+    func closeAfterReply(bye reason: String) {
+        queue.async { [weak self] in self?.close(bye: reason) }
+    }
+
     /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。
     func crash() {
         let (listener, open): (Int32, [Connection]) = shared.withLock {
@@ -237,19 +274,12 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         source?.cancel()
         source = nil
         if listener >= 0 { Darwin.close(listener) }
-        for conn in open {
-            conn.source?.cancel()
-            shutdown(conn.fd, SHUT_RDWR)
-            Darwin.close(conn.fd)
-        }
+        for conn in open { conn.close() }
     }
 
     /// 直接写任意一行到所有连接（协议损坏测试）
     func sendRaw(_ line: String) {
-        for conn in shared.withLock({ $0.connections }) {
-            let data = Array((line + "\n").utf8)
-            _ = data.withUnsafeBytes { Darwin.write(conn.fd, $0.baseAddress!, $0.count) }
-        }
+        for conn in shared.withLock({ $0.connections }) { conn.write(Data((line + "\n").utf8)) }
     }
 
     deinit { crash() }

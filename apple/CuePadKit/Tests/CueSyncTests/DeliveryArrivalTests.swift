@@ -6,13 +6,14 @@ import Testing
 @testable import CueSync
 
 /// Mac 上的拉取是别的设备写来的请求到达的唯一通路：请求一经拉到，执行器必须马上领取并执行，
-/// 执行器正忙于上一条时新来的也不能被漏掉或拖着。
-@Suite struct DeliveryArrivalTests {
+/// 执行器正忙于上一条时新来的也不能被漏掉或拖着。"马上"按执行器的时钟判断：时钟停着不走，链路上有定时等待就执行不完；
+/// 执行完记下的完成时刻就是拉到（或放行）的那一刻。不看墙上时钟，机器再忙也不影响结论。
+@Suite(.timeLimit(.minutes(1))) struct DeliveryArrivalTests {
   private static let target = SendTarget(kind: .piSession, name: "video", ref: "s1")
-  private static let promptly: Duration = .seconds(1)
 
   let mac = try! Rig()
   let phone = try! Rig()
+  let time = ManualTiming()
 
   /// 记下被交给 App 层的请求；第一条可以挂起，直到放行。
   actor Handler {
@@ -39,7 +40,7 @@ import Testing
   private func start(holdingFirst: Bool = false) async throws -> (executor: DeliveryExecutor, handler: Handler, started: AsyncStream<UUID>) {
     let (started, continuation) = AsyncStream.makeStream(of: UUID.self)
     let handler = Handler(holdsFirst: holdingFirst, started: continuation)
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", onIssue: { Issue.record("执行器意外上报：\($0)") }) { await handler.handle($0) }
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: time.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) { await handler.handle($0) }
     try await executor.start()
     return (executor, handler, started)
   }
@@ -55,26 +56,26 @@ import Testing
     await mac.coordinator.handle(.fetched(modifications: records, deletions: []))
   }
 
-  private func finished(_ id: UUID) async throws {
-    _ = try await eventually(mac.store, { try $0.deliveryRequest(id)?.status }) { $0 == .known(.succeeded) }
+  /// 执行成功时执行器记下的完成时刻。
+  private func completion(of id: UUID) async throws -> Date? {
+    try await eventually(mac.store, { try $0.deliveryRequest(id).flatMap { $0.status == .known(.succeeded) ? $0.completedAt : nil } }) {
+      $0 != nil
+    }
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func aRequestPulledForThisMacIsExecutedWithinASecond() async throws {
+  @Test func aRequestPulledForThisMacIsExecutedRightAway() async throws {
     let (executor, handler, _) = try await start()
     let (id, record) = try await sentByPhone("继续")
 
-    let began = ContinuousClock.now
+    let pulledAt = time.now
     await pulled([record])
-    try await finished(id)
 
-    #expect(ContinuousClock.now - began < Self.promptly)
+    #expect(try await completion(of: id) == pulledAt)
     #expect(await handler.seen == [id])
     await executor.stop()
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func aRequestPulledWhileThePreviousOneIsRunningIsExecutedRightAfterIt() async throws {
+  @Test func aRequestPulledWhileThePreviousOneIsRunningIsExecutedRightAfterIt() async throws {
     let (executor, handler, started) = try await start(holdingFirst: true)
     let (first, firstRecord) = try await sentByPhone("第一条")
     let (second, secondRecord) = try await sentByPhone("第二条")
@@ -85,11 +86,10 @@ import Testing
     await pulled([secondRecord])
     _ = try await eventually(mac.store, { try $0.deliveryRequest(second)?.status }) { $0 == .known(.pending) }  // 第二条已到本机，排着
 
-    let released = ContinuousClock.now
+    let releasedAt = time.now
     await handler.release()
-    try await finished(second)
 
-    #expect(ContinuousClock.now - released < Self.promptly)
+    #expect(try await completion(of: second) == releasedAt)
     #expect(await handler.seen == [first, second])
     await executor.stop()
   }

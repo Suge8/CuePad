@@ -9,7 +9,7 @@ extension Command {
     path: ["show"], summary: "把文件发到用户手机上的 CuePad：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…>",
     options: [Opt("title", "卡片标题（默认用文件名）", value: "标题")],
     notes: """
-      会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话。
+      会话从 Agent 给每条命令带的环境变量认出（\(sessionVariables.joined(separator: "、"))）；不在 Agent 的命令里运行会报错，不猜是哪个会话；在一家的命令里又起了另一家时，按上面的先后取第一个。
       一次给几个文件是同一张卡，点开后左右切换。
       可发：\(PiPreviewKind.supportedList)。网页与 Markdown 在 CuePad 里打开，其余用系统的快速查看；单个文件不超过 \(PiPreview.maxBytes / 1_000_000) MB。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、手机上因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。

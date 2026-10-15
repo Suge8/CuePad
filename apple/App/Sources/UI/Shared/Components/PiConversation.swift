@@ -26,6 +26,7 @@ struct PiConversation: View {
     #endif
     @Environment(\.chatHighlight) private var highlight
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @State private var opened: PreviewOpening?
     /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
     @State private var sizes: [Int: CGSize] = [:]
@@ -50,7 +51,7 @@ struct PiConversation: View {
                         if visible { onScreen.insert(index) } else { onScreen.remove(index) }
                     }
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
             ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -67,6 +68,21 @@ struct PiConversation: View {
             guard let title = DebugHooks.preset.openPreview else { return }
             opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews) } }
                 .first { $0.preview.title == title }
+        }
+    }
+
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
+    private func outgoing(_ request: DeliveryRequest) -> some View {
+        let session = session, said = Said.request(request)
+        return SpeechBubble(
+            said: said, box: services.settings.replyDraftBinding(for: session.id),
+            transit: .of(request, session: session), fromCue: request.isFromCue
+        ) { trip in
+            let failed = if case .failed = trip { true } else { false }
+            MessageActions(
+                text: request.content, kind: .outgoing(failed: failed), session: session,
+                resend: { workspace.resend(said, restoringInto: services.settings.replyDraftBinding(for: session.id)) },
+                remove: { workspace.remove(said) })
         }
     }
 
@@ -96,6 +112,7 @@ struct PiConversation: View {
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
     static let firstWindow = 4, segment = 5
+    static let paging = ChatPaging(first: firstWindow, step: segment)
 
     static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
 
@@ -111,7 +128,7 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因。
+    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
@@ -122,8 +139,8 @@ struct PiConversation: View {
         #else
         liveStatus
         #endif
-        if session.state == .known(.error) {
-            Callout(.failure, text: session.detail ?? "Mac 没有说明原因")
+        if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
+            Callout(.failed, text: session.detail ?? "Mac 没有说明原因")
         }
     }
 
@@ -135,9 +152,9 @@ struct PiConversation: View {
 
 #if os(macOS)
 /// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方一行是此刻的进展），
-/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。只有这个视图读草稿：出字时对话列表不重算。
-/// 草稿落库了（`PiDraft.landed`）就不再显示：它与对话在同一次更新里拿到同一份对话，换下是同一帧里的一减一加。会话文件先到时状态还是"输出中"，
-/// 这时也不冒出进展那一行（正文已经说完）；状态先到时草稿照常留着、等文件——两种先后都只换一次。进展那一行被草稿换下时直接拿掉，不与草稿叠着淡出。
+/// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
+/// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
+/// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
 struct SessionDraft: View {
     let slot: PiBridge.Slot
     let session: PiSessionState
@@ -152,18 +169,12 @@ struct SessionDraft: View {
                 DraftReply(text: draft.text) { DraftProgress(session: session) }
                 PiSubagentList(agents: session.subagents)
             }
-        } else if landed, session.state == .known(.outputting) {
+        } else if landed, session.state.known?.isTurnRunning == true {
             PiSubagentList(agents: session.subagents)
         } else if session.state.isWorking || !session.subagents.isEmpty {
             LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
-}
-
-extension PiDraft {
-    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
-    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
-    func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
 }
 #endif
 
@@ -176,7 +187,6 @@ private struct ChatSegment: View, Equatable {
     let notes: [ReplyNote]
     let swapsInPlace: Bool
     @Binding var opened: PreviewOpening?
-    @Environment(\.palette) private var palette
 
     init(items: [PiChatEntry], session: PiSessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
         self.items = items
@@ -211,16 +221,30 @@ private struct ChatSegment: View, Equatable {
         case .pi:
             ReplyBlock(
                 text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
-        case .system:
-            // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
-            Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity).padding(.vertical, 4)
+        case .notice(let notice) where notice.changesContext:
+            // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
+            ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
+        case .notice(let notice):
+            RoundEndNote(notice: notice)
         case .preview:
             PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
     }
 }
 
+
+/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行小字，不是分隔（上下文没换），刻度滑条上也没有它。
+private struct RoundEndNote: View {
+    let notice: PiNotice
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Label(notice.rawValue, systemImage: notice == .declined ? "hand.raised" : "stop.circle")
+            .font(Typography.meta).foregroundStyle(palette.ink3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.entry)
+    }
+}
 
 /// 排开的最上面一行：还有更早的对话。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {
@@ -238,29 +262,25 @@ struct EarlierRow: View {
 
 
 extension PiConversation {
-    /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
-    static func window(reaching id: UUID, in items: [PiChatEntry]) -> Int? {
-        items.firstIndex { $0.id == id }.map { items.count - $0 }
-    }
-
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
     struct FollowKey: Equatable {
         var messages: Int
         var previews: Int
-        var outgoing: [Open<DeliveryStatus>]
+        var outgoing: [Speech.Trip]
         var state: Open<PiWorkState>?
     }
 
-    static func followKey(session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest]) -> FollowKey {
-        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
+    static func followKey(
+        session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest], at moment: Speech.Moment
+    ) -> FollowKey {
+        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages, at: moment).map { Speech.trip($0, at: moment) }, state: session?.state)
     }
 }
 
 
 /// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
 /// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
-/// 不是 Pi 的会话最前面写是哪家 Agent（`AgentMark`），歇着时也写。
-/// 歇着（该你了、新会话、有新回复）的 Pi 会话什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
@@ -268,8 +288,7 @@ struct PiSessionSubtitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: workspace.cueOnDuty)
+        let shown = workspace.shownInHeader(session)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {
@@ -296,6 +315,7 @@ struct PiSessionSubtitle: View {
     }
 
     private static let font = Typography.caption
+
 }
 
 
@@ -329,7 +349,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(.question, text: session.question?.displayText ?? session.detail ?? "", docked: true)
+                Callout(.asking, text: session.question?.displayText ?? session.detail ?? "", docked: true)
             }
         }
     }

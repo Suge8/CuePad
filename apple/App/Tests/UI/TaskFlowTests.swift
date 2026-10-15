@@ -30,7 +30,6 @@ struct TaskFlowTests {
         #expect(try await store.card(first.id)?.body == "日志在 logs/0918.txt\n\n再改排序\n\n补用例")
         #expect(try await store.card(second.id) == nil)
         #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(TaskCopy.counts(prompts: 1, subtasks: nil)?.visible == "1 条提示词")
         #expect(try await primary(task) == first.id)
         let neighbour = try await store.createTask("改文案", in: project.id)
         let waiting = try await store.createCard(body: "别的任务的话", under: neighbour.id)
@@ -46,9 +45,14 @@ struct TaskFlowTests {
         }
         let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
         #expect(try await delivery(of: first) == .sending)
+        // Mac 一直没领取：过了等回执的时限是"Mac 迟迟没收下"，可以重发（issue #5）
+        let late = request.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
+        let timedOut = try await delivery(of: first, at: late)
+        #expect(timedOut.canSend)
+        #expect(try await failure(of: first, at: late) == .timedOut)
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
-        #expect(try await delivery(of: first) == .failed("会话在送达前关掉了"))
+        #expect(try await failure(of: first) == .reported("会话在送达前关掉了"))
         #expect(try await delivery(of: waiting) == .unsent)
         #expect(try await primary(neighbour) == waiting.id)
 
@@ -106,7 +110,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("补重连用例", in: project.id)
         _ = try await store.createCard(body: "先复现，别改代码", under: first.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
 
         try await workspace.bind("s1", to: first.id)
         try await workspace.bind("s1", to: second.id)
@@ -132,7 +136,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版", under: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
         try await workspace.bind("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
@@ -162,6 +166,28 @@ struct TaskFlowTests {
         #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
         try await workspace.toggle(third.id)
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
+    }
+
+    /// 灵感到 Agent 两下：灵感设为任务（第一行做任务名，其余成了它的草稿），行尾那一格就是"开始"；点它把草稿交出去，开一个以任务命名的会话。
+    @Test func 灵感设为任务_行尾是开始_点开始交给Agent() async throws {
+        let workspace = Workspace(services: rig.services)
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/tmp/roundtable", for: project.id)
+        let idea = try await store.createCard(in: project.id, body: "修发言乱序\n按首次加入时间排")
+        try await workspace.setTodo(idea.id, true)
+
+        let task = try #require(try await store.card(idea.id))
+        let draft = try #require(try await store.drafts(in: project.id)[task.id])
+        #expect(task.title == "修发言乱序" && draft.body == "按首次加入时间排")
+        let next = workspace.next(for: task, agent: nil, draft: draft)
+        #expect(next == .start(draft: draft))
+
+        guard case .start(let handed) = next else { return }
+        workspace.handOff(handed)
+        let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
+        let spec = try #require(launch?.launch)
+        #expect(spec.project == project.id && spec.prompt == "按首次加入时间排" && spec.name == "修发言乱序")
+        _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：交出去的去向核对完即可
     }
     #endif
 
@@ -332,7 +358,11 @@ struct TaskFlowTests {
         try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store))
     }
 
-    private func delivery(of prompt: Card) async throws -> PromptDelivery {
-        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store))
+    private func delivery(of prompt: Card, at now: Date = .now) async throws -> PromptDelivery {
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store), at: .always(at: now))
+    }
+
+    private func failure(of prompt: Card, at now: Date = .now) async throws -> Speech.Failure? {
+        if case .failed(_, let failure) = try await delivery(of: prompt, at: now) { failure } else { nil }
     }
 }

@@ -100,6 +100,8 @@ extension DebugScene {
             }
         default: break
         }
+        if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
+        await presetSpeech(workspace)
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)
@@ -114,7 +116,7 @@ extension DebugScene {
         try? await Task.sleep(for: delay)
         guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: .push),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices, task: nil)
         guard !alerts.isWatchingCue else { return }
         await alerts.post(title: content.title, body: content.body)
     }
@@ -136,8 +138,7 @@ extension DebugScene {
 
     private static func connectAgents(_ services: AppServices) async {
         for kind in AgentKind.allCases {
-            let skill = URL(filePath: (services.agents.skillPath(kind) as NSString).expandingTildeInPath)
-            try? FileManager.default.createDirectory(at: skill.deletingLastPathComponent().deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
             await services.agents.detect(kind)
             try? await services.agents.install(kind)
         }

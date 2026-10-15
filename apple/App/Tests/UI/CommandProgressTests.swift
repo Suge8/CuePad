@@ -3,48 +3,46 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 斜杠命令不进对话、不进发送记录；它的进度只在回复框上方一行短暂显示（一处规则 `MacDelivery.commandProgress`）：
-/// 在路上写"正在执行 /compact…"，没成功写原因，成功就消失（结果若在会话文件里，对话里自然有）。只看最近一条命令。
+#if os(macOS)
+/// 斜杠命令的进度一行（一处规则 `MacDelivery.commandProgress`）：失败写原因，之后有新的请求或对话就收起。
 struct CommandProgressTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
-    private let target = SendTarget(kind: .piSession, name: "atlas", ref: "atlas")
 
-    private func command(_ line: String, on host: String = "mac-wait") async throws -> DeliveryRequest {
-        try await store.requestDelivery(line, to: target, on: host, mode: .command)
+    private func progress() async throws -> MacDelivery.CommandProgress? {
+        MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"), messages: try await store.piMessages(of: "atlas"), at: app.services.speech)
     }
 
-    private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, host: String) async throws {
-        let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { _ in outcome }
-        try await executor.start()
-        defer { Task { await executor.stop() } }
-        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.isOpen }) { $0 == false }
-    }
+    /// 扩展执行失败（它报 `failed: <原因>`）：写"/compact 没执行成功：<原因>"；之后有新的请求、对话里多了话（终端里又说了一句），就收起。
+    @Test func 命令失败写原因_之后有新请求或对话就收起() async throws {
+        let services: AppServices = app.services
+        let ext = try await app.host.connect("atlas", cwd: "/work/atlas")
+        ext.onCommand = { _, command in
+            command["t"] as? String == "command" ? ["ok": false, "error": "failed: Nothing to compact (session too small)"] : ["ok": true, "delivered": "immediate"]
+        }
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+        let local = SendTarget(kind: .piSession, name: "atlas", ref: "atlas")
 
-    @Test func 在路上写正在执行_只取命令的名字() async throws {
-        _ = try await command("/greet 很长很长的参数")
+        let compact = try await store.requestDelivery("/compact", to: local, on: TestApp.hostID, mode: .command)
+        let failed = try await services.store.outcome(of: compact.id)
+        #expect(try await progress()?.text(sync: app.services.syncStatus) == "/compact 没执行成功：Nothing to compact (session too small)")
 
-        #expect(MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas")) == .running("/greet"))
-        #expect(MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"))?.text == "正在执行 /greet…")
-    }
+        let said = try #require(failed.completedAt).addingTimeInterval(0.001)
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "atlas", messages: [PiChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "终端里说的", at: said)],
+            recap: PiRecap()))
+        #expect(try await progress() == nil)
 
-    @Test func 没成功写原因_成功就消失_只看最近一条() async throws {
-        let failing = try await command("/compact", on: "mac-fail")
-        try await finish(failing, .failed("没有可压缩的内容"), host: "mac-fail")
-        var progress = MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"))
-        #expect(progress == .failed(command: "/compact", reason: "没有可压缩的内容"))
-        #expect(progress?.text == "/compact 没执行成功：没有可压缩的内容")
-
-        let done = try await command("/reload", on: "mac-ok")
-        try await finish(done, .succeeded, host: "mac-ok")
-        progress = MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"))
-        #expect(progress == nil)  // 最近一条成功了：旧的失败不再提示
-    }
-
-    @Test func 说话与设置请求不算命令() async throws {
-        _ = try await store.requestDelivery("你好", to: target, on: "mac-wait", mode: .send)
-        _ = try await store.requestConfig(PiConfig(thinking: .low), to: target, on: "mac-wait")
-
-        #expect(MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas")) == nil)
+        let again = try await store.requestDelivery("/compact", to: local, on: TestApp.hostID, mode: .command)
+        _ = try await services.store.outcome(of: again.id)
+        #expect(try await progress() != nil)
+        _ = try await services.store.outcome(of: try await store.requestDelivery("你好", to: local, on: TestApp.hostID, mode: .send).id)
+        #expect(try await progress() == nil)
+        // 时间只到毫秒：同一毫秒里先命令后说话，按写下的先后，最新的仍是那句话
+        var requests = try await store.deliveryRequests(toSession: "atlas")
+        requests[requests.count - 1].createdAt = requests[requests.count - 2].createdAt
+        #expect(MacDelivery.commandProgress(requests, messages: try await store.piMessages(of: "atlas"), at: app.services.speech) == nil)
     }
 }
+#endif

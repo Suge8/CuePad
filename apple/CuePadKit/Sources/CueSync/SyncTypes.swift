@@ -8,6 +8,9 @@ public enum SyncStatus: Equatable, Sendable {
   /// 空闲（已同步，或尚无可同步的内容）。
   case idle
   case syncing
+  /// 连不上 iCloud（没有网络、服务暂不可用）：最近一次拉取或上传因网络失败。本机改动留在库里待推送，发送者按退避重试；
+  /// 下一次拉取或上传成功时回到空闲。
+  case offline
   /// 未登录 iCloud。
   case noAccount
   /// iCloud 账号受限（家长控制或设备管理）。

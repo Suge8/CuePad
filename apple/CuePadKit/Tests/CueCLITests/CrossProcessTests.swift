@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Testing
 
@@ -16,10 +17,7 @@ import Testing
     process.executableURL = binary
     process.arguments = arguments
     process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
-    return try await withCheckedThrowingContinuation { continuation in
-      process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
-      do { try process.run() } catch { continuation.resume(throwing: error) }
-    }
+    return try await process.runToExit()
   }
 
   @Test func observerSeesCardWrittenByCLIProcess() async throws {

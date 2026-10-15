@@ -50,6 +50,19 @@ extension CueStore {
     _ = try insert(catalog, ignoringExisting: true)
   }
 
+  /// 进程不在了的会话（`condition` 选出的）不再能换模型、命令还认：指向换成只有命令的那一份（没有命令就不指向），
+  /// 原来那份没人用了由 `dropUnusedCatalogs` 回收。
+  func dropCatalogModels(where condition: String, _ arguments: [any SQLBindable], at now: Date) throws {
+    let pointed = try db.query(
+      "SELECT DISTINCT catalogID FROM piSessionStates WHERE catalogID IS NOT NULL AND \(condition)", arguments) { $0.uuid(0) }
+    for id in pointed {
+      guard let full = try agentCatalog(id), !full.models.isEmpty else { continue }
+      let kept = full.commands.isEmpty ? nil : AgentCatalog(host: full.hostID, models: [], commands: full.commands, at: now)
+      if let kept { try writeCatalog(kept) }
+      try db.run("UPDATE piSessionStates SET catalogID = ? WHERE catalogID = ? AND \(condition)", [kept?.id, id] + arguments)
+    }
+  }
+
   /// 删掉这台 Mac 写的、已没有会话记录指向的目录记录（同步删除）。只动本机的：别的 Mac 的会话记录可能还在路上。
   func dropUnusedCatalogs(host: String) throws {
     try db.run(

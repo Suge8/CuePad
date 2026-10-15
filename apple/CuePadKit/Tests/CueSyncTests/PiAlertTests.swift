@@ -111,7 +111,7 @@ import Testing
   }
 
   /// Cue 的消息：值班的 Mac 置位的推送标志是明文字段、随那一次上传送出，服务端收下后本机清掉，之后的改动（你回答了）不再带它；
-  /// 远端带回来的标志不留。文案由通知服务扩展改写成 Cue 的名字与它说的话、附上选项。
+  /// 远端带回来的标志不留。文案由通知服务扩展改写成 Cue 的名字与要你定什么（不露原话）、附上选项。
   @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     try await rig.store.updateCueProfile { $0.name = "小管家" }
@@ -121,8 +121,9 @@ import Testing
     let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？")
     let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
-    let text = try #require(CueAlertText.content(message: record, profile: profile))
-    #expect(text.title == "小管家" && text.body == "要合并到 main 吗？\n允许一次 / 以后合并到共享分支都不用问 / 拒绝")
+    #expect(CueAlertText.task(of: record) == nil)
+    let text = try #require(CueAlertText.content(message: record, profile: profile, task: nil))
+    #expect(text.title == "小管家" && text.body == "要不要把改动合并到共享分支？\n允许一次 / 以后合并到共享分支都不用问 / 拒绝")
 
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))

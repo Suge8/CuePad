@@ -23,6 +23,8 @@ final class Navigation {
     struct ProjectForm: Identifiable {
         let id = UUID()
         var project: Project?
+        /// 新建好之后接着做的（从新会话来的：开新会话的输入框）。
+        var created: ((UUID) -> Void)?
     }
 
     /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
@@ -78,7 +80,11 @@ final class Navigation {
 
     /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent）。
     var floating: Bool { capturing || newSession != nil || outbox != nil }
-    var outbox: Outbox?
+    var outbox: Outbox? {
+        didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
+    }
+    /// 发给 Agent 输入框的草稿（换了一条提示词就重来）：放在这里而不在输入框里，发出即收起后写库失败还能放回、重新浮起。
+    var handOffDraft = ComposerDraft()
     var projectForm: ProjectForm?
     var newSession: NewSession?
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
@@ -136,6 +142,15 @@ final class Navigation {
         case .split: splitPath.append(route)
         case .tabs: path.append(route)
         }
+    }
+
+    /// 开新会话的输入框。会话开在项目的文件夹里：还没有项目时先新建项目，建好接着开这个项目的新会话（入口只有这一处，输入框不再另写没有项目的样子）。
+    func startNewSession(_ start: NewSession = .init(), hasProjects: Bool) {
+        guard hasProjects else {
+            projectForm = ProjectForm(created: { [weak self] id in self?.newSession = NewSession(project: id) })
+            return
+        }
+        newSession = start
     }
 
     /// 发给 Agent：浮起发给 Agent 的输入框，正文带在里面（`HandOffInput`）。

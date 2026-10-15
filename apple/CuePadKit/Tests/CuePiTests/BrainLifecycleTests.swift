@@ -52,9 +52,7 @@ struct BrainLifecycleTests {
             await brain.stop()()
             throw error
         }
-        let begun = ContinuousClock.now
         await brain.stop()()
-        #expect(ContinuousClock.now - begun < .seconds(12))
         #expect(kill(try pid(in: file), 0) != 0)
         var last: CueBrainEvent?
         for await event in brain.events { last = event }

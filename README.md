@@ -42,7 +42,7 @@ cuepad task done <id>
 
 Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. `cuepad --help` and `cuepad <command> --help` are the full reference.
 
-**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch (and any time in Settings → Agent) flip a switch per agent. CuePad then sees that agent's sessions live, sends your prompts into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode needs nothing more — CuePad talks to its background server. Nothing is written until you flip it, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
+**Works with Pi, Claude Code, Codex and OpenCode — both ways.** On first launch (and any time in Settings → Agent) flip a switch per agent. CuePad then sees that agent's sessions live, sends your prompts into them, answers its questions and permission requests from your Mac or phone, starts sessions in the background, and the agent can put ideas, tasks and phone previews into CuePad with `cuepad`. Each agent gets one small skill in its own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`); Pi also gets the bridge extension, Claude Code and Codex get hooks in their settings, and OpenCode (version 2) needs nothing more — CuePad talks to its background server. Nothing is written until you flip it, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
 
 ## Download
 
@@ -56,7 +56,7 @@ Requires Xcode 27. Local builds are ad-hoc signed, so no developer account is ne
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
-cd apple/CuePadKit && swift test
+apple/scripts/xc.sh test kit     # shared package tests
 ```
 
 Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).

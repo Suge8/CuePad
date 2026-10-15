@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState。约束：
+/// cueMessages、cueLines、cueProfile、cueState、macPresence。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -12,7 +12,7 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt；piSessionStates、cards、deliveryRequests、
+/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到，见 40）；piSessionStates、cards、deliveryRequests、
 /// piMessages 的 writeSeq（本机写入序号，见 38）。
 ///
 /// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
@@ -157,7 +157,11 @@ enum Schema {
     ALTER TABLE cards DROP COLUMN cueFollows;
     \(stampOnChange("cards", cardChanges))
     """,
-    // 40：同步不再用 CKSyncEngine，只有一条上传通路：引擎状态换成同步区令牌（没有令牌时按版本对一遍账，不全量下载）；
+    // 40：Cue 已经知道没送到的请求（本机）：说话工具当场报给它、那一轮好好做完时记下；没记下的失败写进它下一轮的变化
+    "ALTER TABLE deliveryRequests ADD COLUMN cueToldAt INTEGER;",
+    // 41：每台 Mac 的在线记录（它自己写，各端读）：Mac 在不在、Cue 在不在值班的唯一信号
+    Upgrade(stringLiteral: macPresence),
+    // 42：同步不再用 CKSyncEngine，只有一条上传通路：引擎状态换成同步区令牌（没有令牌时按版本对一遍账，不全量下载）；
     // 交出去还没落账的版本只记一个修改时间，从没被服务器收下过的记录也要记，所以系统字段与推送时间可空
     Upgrade(stringLiteral: """
       DELETE FROM syncState; DROP TABLE IF EXISTS syncSent;
@@ -167,7 +171,7 @@ enum Schema {
         SELECT recordName, recordType, systemFields, pushedModifiedAt FROM syncRecordsOld;
       DROP TABLE syncRecordsOld;
       """),
-    // 41：可换的模型与斜杠命令从会话记录拆成按内容共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
+    // 43：可换的模型与斜杠命令从会话记录拆成按内容共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
     // 在线会话的目录由桥重新连上后的第一次写入补上
     Upgrade(stringLiteral: """
       \(agentCatalogs)
@@ -225,7 +229,7 @@ enum Schema {
     CREATE TABLE agentCatalogs (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, models TEXT, commands TEXT, modifiedAt INTEGER NOT NULL) STRICT;
     """
 
-  /// 指向目录记录的只有在线会话：回收没人用的目录时不必翻全部历史
+  /// 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
   private static let catalogIndex = "CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;"
 
   private static let piProcesses = """
@@ -237,6 +241,8 @@ enum Schema {
     ALTER TABLE cards ADD COLUMN formerSessionIDs TEXT;
     CREATE INDEX cards_formerSessionIDs ON cards(id) WHERE formerSessionIDs IS NOT NULL;
     """
+
+  private static let macPresence = "CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
@@ -366,7 +372,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 
@@ -393,6 +399,7 @@ enum Schema {
     \(formerSessions)
     \(cueState)
     \(writeSeq)
+    \(macPresence)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

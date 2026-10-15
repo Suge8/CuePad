@@ -2,26 +2,26 @@
 import CueStore
 import Foundation
 
-/// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`LineProcess`）。
+/// Pi 当大脑：RPC 模式（`pi --mode rpc`，协议见 Pi 的 docs/rpc.md），一行一条 JSON（`ChildProcess`）。
 /// - 不落会话（`--no-session`）；不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
 ///   只加载内置的 MCP 支持与一个临时扩展，后者用 `pi.registerMcpServer` 登记 CuePad 的 MCP 服务（工具直接声明给模型）；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 工具只有 `read,grep,find,ls` 与 `mcp__cuepad__*`：清单里有 `mcp__` 开头的项时，其余 MCP 服务的工具都不给；
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
-/// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；
+/// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
+///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
-/// - 正在说的话从 `message_update` 的逐字增量累积（RPC 只发增量，见 Pi 的 docs/json.md「Reconstruct streaming messages」）：文字块按
-///   `contentIndex` 分开、换行连接（同会话文件里取回答的规则），`text_end` 与 `message_end` 给的是定稿、照它换；开出工具调用后这条不再算。
+/// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
+///   「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿；开出工具调用、停下或出错后这条不再算。
 @MainActor
 final class PiBrain: CueBrain {
     private let session = BrainSession()
     var events: AsyncStream<CueBrainEvent> { session.events }
-    private var process: LineProcess?
-    /// 等回应的命令；交回整行原文，在主线程上再解析（`[String: Any]` 不能跨隔离传）
-    private var waiting: [String: CheckedContinuation<Data, any Error>] = [:]
+    private var process: ChildProcess?
+    /// 等回应的命令
+    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CueBrainError.rejected("没有及时回应"))
     private var nextID = 0
-    private var closed = false
     private var window: Int?
     private(set) var seesImages = false
     /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
@@ -29,10 +29,8 @@ final class PiBrain: CueBrain {
     private struct Turn {
         var error: String?
     }
-    /// 正在说的这条助手消息的各文字块（按 `contentIndex`）；开出工具调用后为 nil，直到下一条消息
-    private var blocks: [Int: String]?
-    /// 报出去的正在说的话
-    private var spoken: PiDraft?
+    /// 正在说的这条助手消息（段号是 `contentIndex`）；开出工具调用、停下或出错后为 nil，直到下一条消息
+    private var speech: DraftParts?
 
     func start(_ config: CueBrainConfig) async throws {
         do {
@@ -51,17 +49,16 @@ final class PiBrain: CueBrain {
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
-            let process = try LineProcess(
-                executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: BrainSession.environment(config))
+            let process = try ChildProcess(
+                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config),
+                placement: .group, input: .pipe, output: .lines)
             self.process = process
             Task {
-                for await line in process.lines { received(line) }
+                for await line in process.output { received(line) }
                 ended(await process.exited())
             }
             let state = try await command(["type": "get_state"])
-            let model = (state["data"] as? [String: Any])?["model"] as? [String: Any]
-            window = model?["contextWindow"] as? Int
-            seesImages = (model?["input"] as? [String])?.contains("image") == true
+            adopt(state["data"]?["model"])
         } catch {
             await session.abandon(stop())
             throw error
@@ -69,8 +66,23 @@ final class PiBrain: CueBrain {
     }
 
     func send(_ text: String, images: [PiImage]) async throws {
-        let images = images.map { ["type": "image", "data": $0.data.base64EncodedString(), "mimeType": $0.mimeType] }
-        _ = try await command(["type": "prompt", "message": text, "images": images, "streamingBehavior": "steer"])
+        let images = images.map { ["type": "image", "data": .string($0.data.base64EncodedString()), "mimeType": .string($0.mimeType)] as JSONValue }
+        _ = try await command(["type": "prompt", "message": .string(text), "images": .array(images), "streamingBehavior": "steer"])
+    }
+
+    func configure(model: String?, effort: PiThinkingLevel?) async throws {
+        if let model {
+            let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { throw CueBrainError.rejected("Pi 的模型要写成 提供方/模型：\(model)") }
+            adopt(try await command(["type": "set_model", "provider": .string(parts[0]), "modelId": .string(parts[1])])["data"])
+        }
+        if let effort { _ = try await command(["type": "set_thinking_level", "level": .string(effort.rawValue)]) }
+    }
+
+    /// 在用的模型（Pi 的 Model 对象）：上下文窗口与能不能看图。
+    private func adopt(_ model: JSONValue?) {
+        window = model?["contextWindow"]?.int
+        seesImages = model?["input"]?.array?.contains("image") == true
     }
 
     func abort() async throws {
@@ -83,52 +95,45 @@ final class PiBrain: CueBrain {
     }
 
     /// 发一条命令、等它的回应；回应 `success: false` 抛 `rejected`。
-    private func command(_ command: [String: Any]) async throws -> [String: Any] {
-        guard let process, !closed else { throw CueBrainError.notRunning }
+    private func command(_ command: [String: JSONValue]) async throws -> JSONValue {
+        guard let process else { throw CueBrainError.notRunning }
         nextID += 1
         let id = "cue-\(nextID)"
-        let line = try await withCheckedThrowingContinuation { continuation in
-            waiting[id] = continuation
-            process.write(Data(jsonString(command.merging(["id": id]) { _, id in id }).utf8))
-        }
-        let reply = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any] ?? [:]
-        guard reply["success"] as? Bool == true else { throw CueBrainError.rejected(reply["error"] as? String ?? "未知错误") }
+        let reply = try await replies.request(id) { process.write(JSONValue.object(command.merging(["id": .string(id)]) { $1 }).data) }
+        guard reply["success"]?.bool == true else { throw CueBrainError.rejected(reply["error"]?.string ?? "未知错误") }
         return reply
     }
 
     /// 进程退出：等着的命令以 `notRunning` 失败，报退出。
     private func ended(_ reason: String?) {
-        closed = true
-        for continuation in waiting.values { continuation.resume(throwing: CueBrainError.notRunning) }
-        waiting = [:]
+        replies.closeAll(CueBrainError.notRunning)
         session.exited(reason)
     }
 
     private func received(_ line: Data) {
-        guard let event = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any], let type = event["type"] as? String else { return }
+        guard let event = JSONValue.parse(line), let type = event["type"]?.string else { return }
         switch type {
         case "response":
-            if let id = event["id"] as? String { waiting.removeValue(forKey: id)?.resume(returning: line) }
+            if let id = event["id"]?.string { replies.resolve(id, with: .success(event)) }
         case "agent_start":
             guard turn == nil else { return }
             turn = Turn()
             session.emit(.turnStarted)
         // 嵌套的调用（工具里再调工具）带 parentToolCallId，不报
         case "tool_execution_start" where event["parentToolCallId"] == nil:
-            guard turn != nil, let id = event["toolCallId"] as? String, let name = event["toolName"] as? String else { return }
-            session.emit(.tool(id: id, name: brainToolName(name), arguments: jsonString(event["args"] ?? [:])))
+            guard turn != nil, let id = event["toolCallId"]?.string, let name = event["toolName"]?.string else { return }
+            session.emit(.tool(id: id, name: brainToolName(name), arguments: String(decoding: (event["args"] ?? [:]).data, as: UTF8.self)))
         case "tool_execution_end" where event["parentToolCallId"] == nil:
-            guard turn != nil, let id = event["toolCallId"] as? String else { return }
-            let result = event["result"] as? [String: Any]
-            session.emit(.toolDone(id: id, result: brainText(result?["content"]), failed: event["isError"] as? Bool == true))
+            guard turn != nil, let id = event["toolCallId"]?.string else { return }
+            session.emit(.toolDone(id: id, result: brainText(event["result"]?["content"]), failed: event["isError"]?.bool == true))
         case "message_start":
-            guard (event["message"] as? [String: Any])?["role"] as? String == "assistant" else { return }
-            blocks = [:]
+            guard event["message"]?["role"]?.string == "assistant" else { return }
+            speech = DraftParts()
             speak()
         case "message_update":
-            streamed(event["assistantMessageEvent"] as? [String: Any] ?? [:])
+            streamed(event["assistantMessageEvent"] ?? [:])
         case "message_end":
-            guard let message = event["message"] as? [String: Any], message["role"] as? String == "assistant" else { return }
+            guard let message = event["message"], message["role"]?.string == "assistant" else { return }
             assistantMessage(message)
         case "agent_settled":
             guard let finished = turn else { return }
@@ -140,43 +145,32 @@ final class PiBrain: CueBrain {
         }
     }
 
-    private func assistantMessage(_ message: [String: Any]) {
-        if let usage = message["usage"] as? [String: Any] {
-            let used = ["input", "cacheRead", "cacheWrite"].reduce(0) { $0 + (usage[$1] as? Int ?? 0) }
+    private func assistantMessage(_ message: JSONValue) {
+        if let usage = message["usage"] {
+            let used = ["input", "cacheRead", "cacheWrite"].reduce(0) { $0 + (usage[$1]?.int ?? 0) }
             if used > 0 { session.emit(.context(used: used, window: window)) }
         }
-        let stop = message["stopReason"] as? String
+        let stop = message["stopReason"]?.string
         // 被 abort 停下的是 "aborted"，不算出错；之后成功的请求（重试）清掉前面的错
-        turn?.error = stop == "error" ? (message["errorMessage"] as? String ?? "未知错误") : nil
-        if stop == "error" || stop == "aborted" {
-            blocks = nil
-        } else if blocks != nil {
-            let content = message["content"] as? [[String: Any]] ?? []
-            blocks = Dictionary(uniqueKeysWithValues: content.enumerated().compactMap { index, block in
-                block["type"] as? String == "text" ? (block["text"] as? String).map { (index, $0) } : nil
-            })
+        turn?.error = stop == "error" ? (message["errorMessage"]?.string ?? "未知错误") : nil
+        if stop == "error" || stop == "aborted" { speech = nil }
+        for (index, block) in (message["content"]?.array ?? []).enumerated() where block["type"]?.string == "text" {
+            speech?.finish(index, with: block["text"]?.string ?? "")
         }
         speak()
     }
 
-    private func streamed(_ update: [String: Any]) {
-        guard blocks != nil, let index = update["contentIndex"] as? Int else { return }
-        switch update["type"] as? String {
-        case "text_delta": blocks?[index, default: ""] += update["delta"] as? String ?? ""
-        case "text_end": blocks?[index] = update["content"] as? String ?? blocks?[index]
-        case "toolcall_start": blocks = nil
+    private func streamed(_ update: JSONValue) {
+        guard let index = update["contentIndex"]?.int else { return }
+        switch update["type"]?.string {
+        case "text_delta": speech?.append(update["delta"]?.string ?? "", to: index)
+        case "text_end": if let text = update["content"]?.string { speech?.finish(index, with: text) }
+        case "toolcall_start": speech = nil
         default: return
         }
         speak()
     }
 
-    /// 按此刻的文字块报正在说的话（没变不报）：起点是这条第一次有字的时刻；还没字、开出了工具调用、停下或出错的报 nil。
-    private func speak() {
-        let text = blocks.map { $0.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n") } ?? ""
-        let next = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : PiDraft(text: text, since: spoken?.since ?? .now)
-        guard next != spoken else { return }
-        spoken = next
-        session.emit(.speaking(next))
-    }
+    private func speak() { session.emit(.speaking(speech?.draft)) }
 }
 #endif

@@ -39,7 +39,7 @@ struct SettingsScreen: View {
                 if !services.startupIssues.isEmpty {
                     Section("没能完成的事") {
                         ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
-                            Label(issue.text, systemImage: "exclamationmark.triangle").font(.footnote)
+                            Label { Text(issue.text) } icon: { FailureMark() }.font(.footnote)
                         }
                     }
                 }

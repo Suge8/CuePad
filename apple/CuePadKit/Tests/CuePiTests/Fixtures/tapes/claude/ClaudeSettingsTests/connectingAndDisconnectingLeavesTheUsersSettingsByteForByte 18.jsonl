@@ -1,0 +1,20 @@
+{"a":["--version"],"c":"p1","d":"claude","k":"spawn","p":"{pwd}"}
+{"c":"p1","k":"eof"}
+{"c":"p1","d":"2.1.299 (Claude Code)","k":"stdout"}
+{"c":"p1","k":"exit","n":0}
+{"a":["--version"],"c":"p2","d":"claude","k":"spawn","p":"{pwd}"}
+{"c":"p2","k":"eof"}
+{"c":"p2","d":"2.1.299 (Claude Code)","k":"stdout"}
+{"c":"p2","k":"exit","n":0}
+{"a":["--version"],"c":"p3","d":"claude","k":"spawn","p":"{pwd}"}
+{"c":"p3","k":"eof"}
+{"c":"p3","d":"2.1.299 (Claude Code)","k":"stdout"}
+{"c":"p3","k":"exit","n":0}
+{"a":["--version"],"c":"p4","d":"claude","k":"spawn","p":"{pwd}"}
+{"c":"p4","k":"eof"}
+{"c":"p4","d":"2.1.299 (Claude Code)","k":"stdout"}
+{"c":"p4","k":"exit","n":0}
+{"a":["--version"],"c":"p5","d":"claude","k":"spawn","p":"{pwd}"}
+{"c":"p5","k":"eof"}
+{"c":"p5","d":"2.1.299 (Claude Code)","k":"stdout"}
+{"c":"p5","k":"exit","n":0}

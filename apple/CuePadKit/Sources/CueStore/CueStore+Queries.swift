@@ -264,7 +264,7 @@ extension CueStore {
 
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
   /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
-  /// 提示词不在其中：提示词只表示发没发出去（见 `prompts()` 与 `handedSessions()`），不算任务的进度。
+  /// 提示词不在其中：提示词只表示发没发出去（见 `drafts()` 与 `handedSessions()`），不算任务的进度。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
   public func subtaskProgress(of parent: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND parentID = ?", [parent]) }
@@ -282,17 +282,17 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
-  /// 任务下的提示词（挂在任务下的灵感），按上级分组、同级手动顺序：任务列表在每条任务下直接列出它们，不必打开任务。
+  /// 各叶子的草稿（同 `draft(of:)`：它下面第一条不是资料的提示词），按叶子取：任务行据此给"开始"。
   /// 不带参数读全库；`in` 只读一个项目（nil = 未分类）里的。归档、回收站里的不列。
-  public func prompts() throws -> [UUID: [Card]] { try prompts(scope: "", []) }
+  public func drafts() throws -> [UUID: Card] { try drafts(scope: "", []) }
 
-  public func prompts(in project: UUID?) throws -> [UUID: [Card]] { try prompts(scope: "AND projectID IS ?", [project]) }
+  public func drafts(in project: UUID?) throws -> [UUID: Card] { try drafts(scope: "AND projectID IS ?", [project]) }
 
-  private func prompts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: [Card]] {
+  private func drafts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: Card] {
     let cards = try select(
-      Card.self, where: "parentID IS NOT NULL AND todoAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)", arguments,
+      Card.self, where: "parentID IS NOT NULL AND todoAt IS NULL AND isPinned = 0 AND deletedAt IS NULL AND archivedAt IS NULL \(scope)", arguments,
       orderBy: "parentID, sortKey, id")
-    return Dictionary(grouping: cards) { $0.parentID! }
+    return Dictionary(cards.map { ($0.parentID!, $0) }, uniquingKeysWith: { first, _ in first })
   }
 
   /// 发送记录，最近的在前（同一毫秒按写入先后）。
@@ -339,6 +339,14 @@ extension CueStore {
   /// 会话的检查点（服务层存入的不透明字节）；会话不存在或尚未索引返回 nil。
   public func piCheckpoint(of session: String) throws -> Data? {
     try db.first("SELECT checkpoint FROM piSessions WHERE id = ?", [session]) { $0.blobOrNil(0) } ?? nil
+  }
+
+  /// 全部会话索引各从哪接着读（按会话文件路径）：检查点，与本机有没有它的对话。历史索引启动时一次读出，不逐个文件查。
+  public func piIndexStarts() throws -> [String: IndexedSessionStart] {
+    let rows = try db.query(
+      "SELECT path, id, checkpoint, EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = s.id) FROM piSessions s"
+    ) { ($0.text(0), IndexedSessionStart(id: $0.text(1), checkpoint: $0.blobOrNil(2), hasMessages: $0.int(3) != 0)) }
+    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 
   public func piSessions() throws -> [IndexedSession] {

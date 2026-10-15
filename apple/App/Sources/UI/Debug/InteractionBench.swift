@@ -44,9 +44,11 @@ enum InteractionBench {
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
               let view = window.contentView
         else { return }
-        // 前台才有玻璃等实际合成，后台量的数字偏乐观
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        // 前台才有玻璃等实际合成，后台量的数字偏乐观；给了 CUEPAD_SHOT_READY 时留在后台（不抢用户的前台，指令数仍可前后对比）
+        if !DebugHooks.staysInBackground {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
         try? await Task.sleep(for: .seconds(1))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)

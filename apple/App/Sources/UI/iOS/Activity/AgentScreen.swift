@@ -53,10 +53,6 @@ struct AgentScreen: View {
 
     var body: some View {
         List {
-            if !services.accountQuotas.items.isEmpty {
-                QuotaStrip().padding(.horizontal, 4).padding(.vertical, 2)
-                    .listRowInsets(.init()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-            }
             if let list = model.list { sessions(list) }
         }
         // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
@@ -126,11 +122,12 @@ struct AgentScreen: View {
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         let filtered = list.filter.project != nil
         if list.isEmpty {
+            if !services.accountQuotas.items.isEmpty { header(quotas: true) { EmptyView() } }
             empty.listRowBackground(Color.clear)
         } else {
             Group {
                 if !list.now.isEmpty {
-                    header { SectionTitle(text: "现在") }
+                    header(quotas: true) { SectionTitle(text: "现在") }
                     ForEach(list.nowRows) { nowRow in
                         switch nowRow {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
@@ -143,7 +140,7 @@ struct AgentScreen: View {
                     }
                 }
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
-                    header {
+                    header(quotas: index == 0 && list.now.isEmpty) {
                         VStack(alignment: .leading, spacing: 10) {
                             if index == 0 { SectionTitle(text: "历史") }
                             Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
@@ -161,20 +158,26 @@ struct AgentScreen: View {
             .animation(Motion.snappy, value: list.now.map(\.id))
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
-            .animation(Motion.quick, value: list.ends.mapValues(\.status))
+            .animation(Motion.quick, value: list.ends)
         }
     }
 
-    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。
-    private func header(@ViewBuilder _ title: () -> some View) -> some View {
-        title().frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 4, trailing: 0))
-            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+    /// 分组标题：与卡片左缘对齐，上面多留一段把分组分开。列表的第一个标题（`quotas`）上头挂订阅额度的总览：
+    /// 总览不单独占一行——多一行在第一次换到这页时要多建一个单元格，实测比放进已有的这一行多一两亿条指令。
+    private func header(quotas: Bool = false, @ViewBuilder _ title: () -> some View) -> some View {
+        let strip = quotas && !services.accountQuotas.items.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
+            if strip { QuotaStrip().padding(.horizontal, 4).padding(.bottom, 22) }
+            title()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets(top: strip ? 2 : 14, leading: 0, bottom: 4, trailing: 0))
+        .listRowBackground(Color.clear).listRowSeparator(.hidden)
     }
 
     /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
-    private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
-        let endable = item.state.canEnd && end?.isOpen != true
+    private func row(_ item: PiSessionListItem, filtered: Bool, end: Speech.Trip?) -> some View {
+        let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { model.confirmingEnd = item.state }] : [])
@@ -205,8 +208,14 @@ struct AgentScreen: View {
             }
             .padding(.top, 40)
         case .none(inProject: false):
-            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 的终端里开一个 Agent，或在这里开新会话") {
-                EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init() })
+            let hasProjects = workspace.catalog?.projects.isEmpty == false
+            EmptyState(
+                mascot: .empty, title: "还没有 Agent 会话",
+                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话"
+            ) {
+                EmptyStateButton(
+                    title: hasProjects ? "新会话" : "新建项目", systemImage: hasProjects ? "plus" : "folder.badge.plus",
+                    action: { navigation.startNewSession(hasProjects: hasProjects) })
             }
             .padding(.top, 40)
         }
@@ -329,9 +338,12 @@ private struct Header: ViewModifier {
 private struct NewSessionButton: View {
     let project: UUID?
     @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新会话", systemImage: "plus") { navigation.newSession = .init(project: project) }
+        Button("新会话", systemImage: "plus") {
+            navigation.startNewSession(.init(project: project), hasProjects: workspace.catalog?.projects.isEmpty == false)
+        }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }
@@ -376,14 +388,14 @@ private struct SessionRow: View {
     let item: PiSessionListItem
     let filtered: Bool
     /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
-    var end: DeliveryRequest?
+    var end: Speech.Trip?
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
 
     var body: some View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
+            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))

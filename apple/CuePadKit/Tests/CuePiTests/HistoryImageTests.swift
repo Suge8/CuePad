@@ -27,7 +27,7 @@ struct HistoryImageTests {
             SessionFile.assistant("a1", "u1", text: "看到了", at: 2),
             SessionFile.user("u2", "a1", [imageBlock(pasted)], at: 3))
 
-        let update = try PiHistory.index(file: file.url, from: nil, files: store.files)
+        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
         try await store.writePiTranscript(update.transcript)
 
         let users = update.messages.filter { $0.role == .known(.user) }
@@ -53,7 +53,7 @@ struct HistoryImageTests {
         var file = SessionFile(directory: dir)
         let png = pngData()
         try file.append(SessionFile.header(), SessionFile.user("u1", nil, [["type": "text", "text": "看"], imageBlock(png)], at: 1))
-        let update = try PiHistory.index(file: file.url, from: nil, files: store.files)
+        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
         let current = try #require(update.messages.first)
         var old = current
         old.text = "看"
@@ -69,7 +69,7 @@ struct HistoryImageTests {
         try file.append(
             SessionFile.header(),
             SessionFile.user("u1", nil, [["type": "text", "text": "坏图"], ["type": "image", "data": Data("not an image".utf8).base64EncodedString()]], at: 1))
-        let update = try PiHistory.index(file: file.url, from: nil, files: store.files)
+        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
         #expect(update.messages.map(\.text) == ["坏图"])
     }
 }

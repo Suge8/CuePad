@@ -9,13 +9,59 @@ import Observation
 /// 这条开始出字时设上、随增量更新；它转成工具调用、这一轮被停下或出错、下一轮开始时清掉；正常说完的留着，由界面在对话里出现它之后换下。
 public struct PiDraft: Equatable, Sendable {
     public var text: String
-    /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻，界面据此认出它已落库（`landed`）。
-    /// 对话里回答的时刻是写完那一刻的（Pi、Claude Code、Codex 与 Cue 的对话）取开始出字；是消息建立那一刻的（OpenCode）取那一刻
+    /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻（各家都是说完那一刻），界面据此认出它已落库（`landed`）。
+    /// 一律取 Agent 自己的时钟（与会话文件同一个）：Pi 扩展里开始出字、Codex 的 `item/started` 的 `emittedAtMs`、OpenCode 的步骤开始、
+    /// Claude Code 第一段定稿那一行的 `timestamp`（就是会话文件里那一行的；它先于 `message_start` 到这里，最多早几十毫秒，
+    /// 定稿之前只能先用收到 `message_start` 的时刻）。不用本机收到事件的时刻：Agent 写下的时刻可能早于事件到这里，
+    /// 落库了也认不出来，草稿一直挂在对话下面
     public var since: Date
 
     public init(text: String, since: Date) {
         self.text = text
         self.since = since
+    }
+
+    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点。
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
+    public func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
+}
+
+/// 一条回答正在说的话怎么拼（各家协议层共用，各自只把事件映射到这几个动作）：依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；
+/// 说到一半的段由增量追加，说完的段换成运行时给的定稿（不发增量也照样有全文）；起点是第一次出字的时刻，或由调用方给，
+/// 定稿带着运行时记下的时刻时改用其中最早的（`PiDraft.since`）；全是空白时没有。
+/// 换一条回答（`message` 变了）、转成工具调用等就新建一个。没变也照样交出去：去重只在下游一处（`PiDraftFeed`）。
+struct DraftParts {
+    /// 这条回答的标识（消息、项）；不分条的为 nil
+    let message: String?
+    private var parts: [Int: String] = [:]
+    private var since: Date?
+    /// 定稿带来的运行时时刻里最早的
+    private var stamped: Date?
+
+    init(message: String? = nil, since: Date? = nil) {
+        self.message = message
+        self.since = since
+    }
+
+    /// 最后一段的段号
+    var lastPart: Int? { parts.keys.max() }
+
+    mutating func append(_ delta: String, to part: Int) {
+        parts[part, default: ""] += delta
+        since = since ?? .now
+    }
+
+    /// `at` 是运行时把这段记进会话文件的时刻（给得出的才给）。
+    mutating func finish(_ part: Int, with text: String, at time: Date? = nil) {
+        parts[part] = text
+        since = since ?? .now
+        if let time { stamped = min(stamped ?? time, time) }
+    }
+
+    var draft: PiDraft? {
+        let text = parts.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n")
+        guard let since = stamped ?? since, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return PiDraft(text: text, since: since)
     }
 }
 
@@ -24,6 +70,8 @@ public struct PiDraft: Equatable, Sendable {
 @MainActor @Observable
 public final class PiDraftFeed {
     public private(set) var draft: PiDraft?
+    /// `draft != nil`，只在有无变化时通知
+    public private(set) var speaking = false
     /// 最近交来、还没显示的与等着显示它的那一拍
     @ObservationIgnored private var offered: PiDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
@@ -53,6 +101,7 @@ public final class PiDraftFeed {
         flush = nil
         shownAt = now
         if draft != offered { draft = offered }
+        if speaking != (offered != nil) { speaking = offered != nil }
     }
 }
 #endif

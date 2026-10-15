@@ -42,12 +42,12 @@ extension CueStore {
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
-    let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
+    let unsettled = try unsettledTalk(to: states.map(\.sessionID))
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
           state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
+          unsettled: unsettled[$0.sessionID] ?? [])
       },
       total: total)
   }
@@ -63,20 +63,19 @@ extension CueStore {
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
   }
 
-  /// 发给这些会话、没能送达的话各有几句，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里失败的。失败的话不会进对话，
-  /// 一直留到你重发（新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
-  func undeliveredCounts(to sessionIDs: [String]) throws -> [String: Int] {
+  /// 发给这些会话、可能没能送达的话，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里还没被领取的与失败的——
+  /// 哪几句此刻算没能送达由说的话那条规则定（`PiSessionListItem.undelivered`）。失败的话不会进对话，一直留到你重发
+  /// （新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
+  func unsettledTalk(to sessionIDs: [String]) throws -> [String: [DeliveryRequest]] {
     guard !sessionIDs.isEmpty else { return [:] }
     let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
-    let rows = try db.query(
-      """
-      SELECT targetRef, count(*) FROM deliveryRequests
-      WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND status = '\(DeliveryStatus.failed.rawValue)'
-        AND targetRef IN (\(refs))
-      GROUP BY targetRef
-      """, sessionIDs
-    ) { ($0.text(0), Int($0.int(1))) }
-    return Dictionary(rows, uniquingKeysWith: +)
+    let requests = try select(
+      DeliveryRequest.self,
+      where: """
+        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk)))
+          AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (\(refs))
+        """, sessionIDs, orderBy: "createdAt, rowid")
+    return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }
 
   /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。
@@ -103,13 +102,30 @@ extension CueStore {
       orderBy: "stateSince DESC, id", limit: limit)
   }
 
+  /// 一个会话记录里最后的模型（在 CuePad 里看到、选的那个；会话结束后仍留着）。
+  public func lastModel(ofSession sessionID: String) throws -> PiModelKey? {
+    try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))?.model?.key
+  }
+
   /// `host` 那台 Mac 上每家 Agent 最近有动静的那个会话记录里的模型（没记下模型的不算）：Cue 开工时可选的模型。
   public func latestModels(on host: String) throws -> [AgentKind: PiModelKey] {
     let rows = try db.query(
-      "SELECT agent, model, max(stateSince) FROM piSessionStates WHERE hostID = ? AND model IS NOT NULL GROUP BY agent", [host]
-    ) { (Open<AgentKind>(rawValue: $0.textOrNil(0) ?? AgentKind.pi.rawValue).known, JSONColumn.decode(PiModelOption.self, from: $0.textOrNil(1))) }
-    return Dictionary(rows.compactMap { agent, model in agent.flatMap { agent in model.map { (agent, $0.key) } } }) { first, _ in first }
+      "SELECT \(Self.agentColumn) AS kind, model, max(stateSince) FROM piSessionStates WHERE hostID = ? AND model IS NOT NULL GROUP BY kind", [host]
+    ) { (Open<AgentKind>(rawValue: $0.text(0)).known, JSONColumn.decode(PiModelOption.self, from: $0.textOrNil(1))) }
+    return Dictionary(uniqueKeysWithValues: rows.compactMap { agent, model in agent.flatMap { agent in model.map { (agent, $0.key) } } })
   }
+
+  /// `host` 那台 Mac 上每家 Agent 最近有动静的、带模型清单的那个会话记录里的清单（`PiSessionState.models`）：两端 Cue 页模型菜单的可选模型。
+  /// 按 Agent 聚合成几行，几千条历史不整表读；清单为空的记录列里是 NULL（`JSONColumn.encodeList`）。
+  public func modelLists(on host: String) throws -> [AgentKind: [PiModelOption]] {
+    let rows = try db.query(
+      "SELECT \(Self.agentColumn) AS kind, models, max(stateSince) FROM piSessionStates WHERE hostID = ? AND models IS NOT NULL GROUP BY kind", [host]
+    ) { (Open<AgentKind>(rawValue: $0.text(0)).known, JSONColumn.decodeList(PiModelOption.self, from: $0.textOrNil(1))) }
+    return Dictionary(uniqueKeysWithValues: rows.compactMap { agent, models in agent.map { ($0, models) } })
+  }
+
+  /// 会话记录是哪家 Agent 的：旧版本写的没有这一列，是 Pi（与 `AgentKind` 的说明同一条），按 Agent 聚合时并进 Pi。
+  private static let agentColumn = "coalesce(agent, '\(AgentKind.pi.rawValue)')"
 
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。

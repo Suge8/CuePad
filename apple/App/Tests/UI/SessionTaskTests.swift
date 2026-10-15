@@ -26,7 +26,7 @@ struct SessionTaskTests {
         try await bridge(.appeared(session))
 
         let row = try #require(try await TaskBoard.read(from: store).inProgress.first)
-        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.session?.sessionID == "s1")
+        #expect(row.task.title == "修登录" && row.project?.id == project.id && row.task.piSessionID == "s1")
         let overview = try #require(await CueTools(store: store).call("task", ["action": "peek"]))
         #expect(!overview.isError && overview.text.contains("在做 1 件：\n圆桌：\n- 修登录（\(row.task.id.shortID)） · 歇着"))
 
@@ -37,6 +37,27 @@ struct SessionTaskTests {
 
         try await bridge(.ended(session, reason: .closed(reason: "quit")))
         #expect(try await store.card(row.task.id) == nil)
+    }
+
+    /// 会话页标题下那一行写它在做的事；不经任务开的会话挂的是同名任务（改名时跟着改），那一段与会话名重复就不写，什么都不剩就没有这一行。
+    /// 长名字（终端会话的名字常是第一句话）挂的任务名是截短的，同样不写。
+    @Test(arguments: ["Pi 验收", String(repeating: "Run the shell command: sleep 30 && echo done. ", count: 8)])
+    func 会话名与它挂的同名任务不在标题里写两遍(name: String) async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
+        try await services.resetPiState()
+        var session = CuePi.PiSession(
+            id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
+            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version,
+            state: .settled, stateSince: .now)
+        session.name = name
+        try await bridge(.appeared(session))
+
+        let link = try await SessionTaskLink.read(sessionID: "s1", project: project.id, from: store)
+        #expect(link.path(below: name) == nil)
+
+        // 名字不同（经任务开、会话另起了名）时照写那件事
+        #expect(link.path(below: "登录页改版")?.visible == link.primary?.task.title)
     }
 
     @Test func 只在会话文件里的历史会话_启动时不建任务_从头重读也不改写记录() async throws {
@@ -52,7 +73,7 @@ struct SessionTaskTests {
         // 没有检查点、从头读：首次回填，或升级作废检查点之后
         func backfill() async {
             await services.consumePiHistory(AsyncStream { continuation in
-                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: false, files: store.files)))
+                continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
                 continuation.yield(.backfillFinished(sessionFiles: [file]))
                 continuation.finish()
             }, agent: .pi)
@@ -113,11 +134,18 @@ struct SessionTaskTests {
 
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
     /// Cue 停用后，答得了的那个也回到"等你确认"。
-    @Test func Cue值班时_答得了的提问等Cue_答不了的和停用后等你() async throws {
+    /// 它住的那台 Mac 不在线（在线记录过了期限没续：崩溃、断电、断网）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
+    /// 到期自己变，不用等库里再写什么；那台 Mac 续上在线，又归 Cue。
+    @Test(.timeLimit(.minutes(1)))
+    func Cue值班时_答得了的提问等Cue_答不了的_那台Mac不在线与停用后等你() async throws {
+        let clock = ManualTiming()
+        let app = TestApp(timing: clock.timing)
+        let services: AppServices = app.services, store = services.store
         try await store.updateCueProfile {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
         }
+        try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         let questions = [("s1", PiQuestion(promptID: "p", kind: .confirm, text: "继续？")), ("s2", PiQuestion(promptID: nil, kind: .confirm, text: "在终端里确认"))]
         for (session, question) in questions {
@@ -126,7 +154,7 @@ struct SessionTaskTests {
         }
         let workspace = Workspace(services: services)
         func shown() async throws -> [String: String] {
-            services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+            services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
             return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
         }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])
@@ -135,9 +163,25 @@ struct SessionTaskTests {
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
         #expect(states["s2"]?.state.notify == .known(.waitingForUser))
 
-        try await store.updateCueProfile { $0.enabledAt = nil }
+        // mac-b 之后再没续期：期限（`MacPresence.lifetime`）一到"等你"自己从 1 变 2
+        var counts = store.observe({ try CueWaiting.count(in: $0) }).makeAsyncIterator()
+        #expect(try await counts.next() == 1)
+        await clock.waitForSleeper()
+        clock.advance(.seconds(MacPresence.lifetime))
+        #expect(try await counts.next() == 2)
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
-        #expect(try await CueWaiting.count(in: store) == 2)
+        try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
+        try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
+        #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .known(.waitingForUser))
+
+        // mac-b 续上在线：又在值班
+        try await store.recordMacPresence(host: "mac-b") { true }
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
+        #expect(try await CueWaiting.count(in: store) == 1)
+
+        try await store.updateCueProfile { $0.enabledAt = nil }
+        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认", "s3": "等你确认"])
+        #expect(try await CueWaiting.count(in: store) == 3)
     }
 
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下_不长新任务() async throws {

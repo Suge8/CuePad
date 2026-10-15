@@ -146,6 +146,7 @@ actor SyncCoordinator {
       guard needsDecision == nil else { return }
       try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）留在库里待推送
       if case .failed = status { status = .idle }
+      reached(nil)
     case .sent(let sent):
       guard needsDecision == nil else { return }
       _ = try await processSent(sent)
@@ -164,11 +165,13 @@ actor SyncCoordinator {
       throw error
     }
     if case .failed = status { status = .idle }
+    reached(nil)
   }
 
   /// 上传结果：记账，并告诉发送者这批有没有进展、要不要停下来等。
   func sent(_ sent: SentRecords) async -> SendOutcome {
     guard needsDecision == nil else { return SendOutcome(progressed: false, blocked: true, zoneMissing: false) }
+    reached(nil)
     do {
       return try await processSent(sent)
     } catch {
@@ -339,12 +342,34 @@ actor SyncCoordinator {
     case .notAuthenticated:
       status = .noAccount
       return true
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited, .operationCancelled,
-      .serverResponseLost, .accountTemporarilyUnavailable, .limitExceeded:
+    case .networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost:
+      reached(error)
+      return false
+    case .zoneBusy, .requestRateLimited, .operationCancelled, .accountTemporarilyUnavailable, .limitExceeded:
       return false
     default:
       report(error, recordType: recordType, recordName: recordName)
       return true
+    }
+  }
+
+  /// 一次拉取或上传的结果（nil 是成功）：网络类失败时连不上 iCloud（`SyncStatus.offline`），之后任何一次成功回到空闲。
+  /// 只在正常状态之间切换：账号、配额、要你决定这些更要紧的状态不被它盖过。
+  func reached(_ error: (any Error)?) {
+    if let error {
+      guard Self.isOffline(error), status == .idle || status == .syncing || status == .starting else { return }
+      status = .offline
+    } else if status == .offline {
+      status = sending || catchingUp ? .syncing : .idle
+    }
+  }
+
+  private static func isOffline(_ error: any Error) -> Bool {
+    guard let error = error as? CKError else { return (error as? URLError) != nil }
+    switch error.code {
+    case .networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost: return true
+    case .partialFailure: return error.partialErrorsByItemID?.values.contains { isOffline($0) } ?? false
+    default: return false
     }
   }
 

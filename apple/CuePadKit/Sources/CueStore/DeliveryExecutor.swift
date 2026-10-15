@@ -124,6 +124,16 @@ extension CueStore {
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
 
+  /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
+  /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+  public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {
+    for try await current in observe({ try $0.deliveryRequest(request) }) {
+      guard let current else { throw CueStoreError.notFound }
+      if !current.isOpen { return current }
+    }
+    throw CancellationError()
+  }
+
   /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
   public func deliveryRequests(toSession sessionID: String) throws -> [DeliveryRequest] {
     try select(
@@ -201,7 +211,7 @@ extension CueStore {
     let (status, detail): (DeliveryStatus, String?) =
       switch outcome {
       case .succeeded: (.succeeded, nil)
-      case .failed(let reason): (.failed, reason)
+      case .failed(let reason), .transient(let reason): (.failed, reason)
       }
     try reportingFileFailures {
       try write {
@@ -253,9 +263,11 @@ extension CueStore {
 /// 把结果写回请求；完成的请求保留 `retention` 后清理（等认领的开新会话请求最多留到 `maxAge`，见 `deleteCompletedDeliveries`）。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
+/// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
 /// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
-/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，排在其余待推送前面）。
+/// - 领取与写回结果后各调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）：发起的设备据领取知道 Mac 接手了，
+///   执行得久的（唤醒已结束的会话）不会被它报成超时没送到。领取的那次不等上传完就开始执行。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
@@ -263,7 +275,7 @@ public actor DeliveryExecutor {
   private let retention: Duration
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
-  private let onFinished: @Sendable (DeliveryRequest.ID) async -> Void
+  private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
   private var watcher: Task<Void, Never>?
@@ -274,7 +286,7 @@ public actor DeliveryExecutor {
   public init(
     store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
-    onFinished: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
+    onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -283,7 +295,7 @@ public actor DeliveryExecutor {
     self.retention = retention
     self.timing = timing
     self.onIssue = onIssue
-    self.onFinished = onFinished
+    self.onWritten = onWritten
     self.handler = handler
   }
 
@@ -335,19 +347,25 @@ public actor DeliveryExecutor {
       if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
+        Task { [onWritten] in await onWritten(request.id) }
         return request
       }
     }
     return nil
   }
 
+  /// 执行一条；暂时没成的隔 `Speech.retryDelay` 再执行一次（一条条按先后执行，等的这一下会拖住后面的请求，所以只重试一次）。
   private func run(_ request: DeliveryRequest) async {
-    await finish(request, await handler(request))
+    var outcome = await handler(request)
+    if case .transient = outcome, (try? await timing.sleep(Speech.retryDelay)) != nil {
+      outcome = await handler(request)
+    }
+    await finish(request, outcome)
   }
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
     if await reporting({ try await store.finishDelivery(request.id, outcome, at: timing.now()) }) != nil {
-      await onFinished(request.id)
+      await onWritten(request.id)
     }
     scheduleCleanup()
   }

@@ -5,13 +5,12 @@ import Synchronization
 import Testing
 @testable import CuePi
 
-/// 真实 Pi（`~/.local/bin/pi`，RPC 模式）的测试驱动。
+/// Pi（RPC 模式）的测试驱动：起的是录像带里的替身（`AgentTape`），录制时背后是真实 Pi（`~/.local/bin/pi`）。
 /// 所有状态落在临时 agent 目录（`PI_CODING_AGENT_DIR`），绝不碰真实 ~/.pi；模型是假模型扩展，零网络。
 let realPiURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
-/// 真 Pi 的用例开了（`RealAgents`）且本机装了 Pi
-let realPiAvailable = RealAgents.on(.pi) && FileManager.default.isExecutableFile(atPath: realPiURL.path)
+let realPiInstalled = FileManager.default.isExecutableFile(atPath: realPiURL.path)
 
-private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures")
+private let fixtures = fixturesDirectory
 
 /// 本机装的 FireCode（用户的 Pi 扩展）源码；只读，测试里软链进临时 agent 目录。`CUEPAD_FIRECODE_SOURCE` 指向另一份 FireCode 检出时用它（验证还没合并的 FireCode 改动）。
 let firecodeSource = (ProcessInfo.processInfo.environment["CUEPAD_FIRECODE_SOURCE"].map { URL(filePath: $0) }
@@ -25,7 +24,6 @@ struct PiEvent: @unchecked Sendable {
 
 final class PiProcess: @unchecked Sendable {
     let root: URL
-    private let ownsRoot: Bool
     let paths: PiPaths
     let cwd: URL
     private let process = Process()
@@ -58,7 +56,6 @@ final class PiProcess: @unchecked Sendable {
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
          alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil) async throws {
-        ownsRoot = other == nil
         let (exit, ended) = AsyncStream<Void>.makeStream()
         process.terminationHandler = { _ in ended.finish() }
         exited = Task { for await _ in exit {} }
@@ -67,10 +64,13 @@ final class PiProcess: @unchecked Sendable {
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
         paths = other?.paths ?? PiPaths(
             agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
+        let tape = AgentTape.active
         if installBridge && other == nil {
-            let agents = AgentIntegration(
-                paths: AgentPaths(pi: paths, environment: [:]), locator: ExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), cuepad: Self.cuepad)
+            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: [:]), locate: { AgentTape.locator("pi") }, cuepad: Self.cuepad)
             try await agents.install(.pi)
+        }
+        if other == nil {
+            tape.watch(paths.sessionsDirectory, paths.agentDirectory.appending(path: "fake-model-gate"), cwd)
         }
 
         if let settings {
@@ -96,8 +96,10 @@ final class PiProcess: @unchecked Sendable {
         environment["TMUX_PANE"] = "%9"
         environment["TMUX"] = "/tmp/tmux-test/default,1,0"
         environment.merge(env) { _, new in new }
+        // 测试只读标准输出里的这几类事件（弹窗与提示、工具结束、一轮结束）
+        environment[AgentTape.stdoutTypesVariable] = "extension_ui_request,tool_execution_end,agent_end"
 
-        process.executableURL = realPiURL
+        process.executableURL = tape.executable("pi")
         process.arguments = args
         process.environment = environment
         process.currentDirectoryURL = cwd
@@ -116,7 +118,7 @@ final class PiProcess: @unchecked Sendable {
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
-    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiHost` 的 `extraArguments`）。
+    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiRuntime` 的 `extraArguments`）。
     static let quietArguments = [
         "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off",
     ]
@@ -162,7 +164,6 @@ final class PiProcess: @unchecked Sendable {
 
     func stop() {
         if process.isRunning { process.terminate() }
-        if ownsRoot { try? FileManager.default.removeItem(at: root) }
     }
 
     deinit { stop() }
@@ -229,8 +230,12 @@ final class PiProcess: @unchecked Sendable {
 
     /// 放行一次停住（先放后停也算）。
     func release() throws {
-        try FileManager.default.createDirectory(at: gate, withIntermediateDirectories: true)
-        try Data().write(to: gate.appending(path: "release-\(UUID().uuidString)"))
+        let tape = AgentTape.active
+        if tape.mode == .record {
+            try FileManager.default.createDirectory(at: gate, withIntermediateDirectories: true)
+            try Data().write(to: gate.appending(path: "release-\(UUID().uuidString)"))
+        }
+        tape.mark("release")
     }
 
     /// 等到某条 Pi 事件（stdout 上的 JSON 行）出现

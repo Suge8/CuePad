@@ -16,9 +16,10 @@ struct SessionGroup: Equatable {
     let sessions: [PiSessionState]
 
     static func grouped(
-        live: [PiSessionState], ended: [PiSessionState], cueOnDuty: Bool = false, now: Date, calendar: Calendar = .current
+        live: [PiSessionState], ended: [PiSessionState], cueOnDuty: Bool = false, now: Date, at moment: Speech.Moment,
+        calendar: Calendar = .current
     ) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, cueOnDuty: cueOnDuty))]
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, cueOnDuty: cueOnDuty, at: moment))]
         let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
@@ -47,16 +48,16 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     var endedTotal: Int
     /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
-    /// 没能送达的话有几句（会话行的小标记）。
+    /// 此刻没能送达的话有几句（会话行的小标记）。
     var undelivered: [String: Int]
 
-    static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
+    static func read(text: String, pages: Int, at moment: Speech.Moment, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: PiSessionList.pageSize * pages))
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-            undelivered: PiSessionListItem.undelivered(live.items + ended.items))
+            undelivered: PiSessionListItem.undelivered(live.items + ended.items, at: moment))
     }
 }
 

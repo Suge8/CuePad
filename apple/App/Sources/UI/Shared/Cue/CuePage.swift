@@ -7,7 +7,8 @@ import CuePi
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 连着的动态折成一行灰字（`CueNotes`），末尾是它此刻在做什么（`CueEnding`）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 连着的动态折成一行灰字（`CueNotes`），它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
+/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
@@ -23,11 +24,10 @@ struct CuePage: View {
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
-    @State private var window = Self.firstWindow
     @State private var opened: PreviewOpening?
 
-    /// 最初排开最近几格，往上翻快到头时再排开一段（同 `SessionChat`）。
-    private static let firstWindow = 40
+    /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
+    private static let paging = ChatPaging(first: 40, step: 40)
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
@@ -55,7 +55,7 @@ struct CuePage: View {
     private var page: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                chat.fadesUnderBars().frame(maxHeight: .infinity)
+                chat.modifier(BelowHeader()).frame(maxHeight: .infinity)
                 bottom
                     .padding(.horizontal, Self.inset).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
@@ -73,6 +73,7 @@ struct CuePage: View {
     #else
     @ViewBuilder private var page: some View {
         let body = chat
+            .modifier(BelowHeader())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
             .safeAreaBar(edge: .bottom, spacing: 0) {
@@ -119,22 +120,29 @@ struct CuePage: View {
     private var chat: some View {
         let thread = thread
         let rows = thread?.rows ?? []
-        let first = max(0, rows.count - window)
-        return ChatScroll(followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow) {
+        return ChatColumn(
+            followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
+            marks: thread?.marks ?? [], count: rows.count, position: { id in rows.firstIndex { $0.id == id } }, paging: Self.paging
+        ) { window, showEarlier in
+            let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:]) }
+                let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
+            // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
+            .scrollTargetLayout()
             .animation(Motion.quick, value: cue.presence.progress)
         }
-        .onChange(of: follow.nearOldest) { _, near in if near { showEarlier() } }
     }
 
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef]) -> some View {
+    /// `lastYou`：你最后一句，只在它下面写"已送达"。
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?) -> some View {
         switch row {
         case .you(let message):
-            UserBubble(stored: message.text).padding(.top, 14)
+            SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
+                .padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
                 CueSays(message: message, fadesIn: !swapsInPlace)
@@ -142,6 +150,8 @@ struct CuePage: View {
             }
         case .notes(let notes):
             CueNotes(notes: notes)
+        case .renewed(let handoff):
+            CueRenewal(handoff: handoff, name: cue.name)
         }
     }
 
@@ -152,12 +162,6 @@ struct CuePage: View {
         #else
         false
         #endif
-    }
-
-    private func showEarlier() {
-        guard window < (thread?.rows.count ?? 0) else { return }
-        follow.willPrepend()
-        window += Self.firstWindow
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -192,6 +196,17 @@ struct CuePage: View {
     }
 }
 
+/// Cue 从这里起换了新上下文：与会话页的压缩同一条分隔（`ContextBoundary`），点开是换新时写下的交接备忘；从刻度滑条跳过来时描一圈。
+private struct CueRenewal: View {
+    let handoff: CueMessage
+    let name: String
+    @Environment(\.chatHighlight) private var highlight
+
+    var body: some View {
+        ContextBoundary(title: "从这里起 \(name) 换了新上下文", time: handoff.createdAt, memo: handoff.text, highlighted: highlight == handoff.id)
+    }
+}
+
 /// Cue 页对话的末尾：它在做事时一行进展（`LiveLine`，同会话页）。Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -220,6 +235,24 @@ private struct CueEnding: View {
         let presence = workspace.cue.presence
         if let shown = presence.shown, let progress = presence.progress {
             LiveLine(shown: shown, text: progress).transition(.asymmetric(insertion: .entry, removal: .identity))
+        }
+    }
+}
+
+/// 对话从页头下面开始，不滚到它后面（Mac 是窗口工具栏，手机是名牌与它下面的提示）：名牌是一颗小胶囊、提示是一整条，
+/// 气泡滚过去时两层字叠在一起读不清，也看不出提示后面还有没有话（别的沉浸式页照 `fadesUnderBars`）。
+/// 上安全区里含页头与 safeAreaBar 里的提示：那一段全透，下沿往下 `Bars.contentGap` 淡回，滚出去的字不是一刀切断。
+private struct BelowHeader: ViewModifier {
+    func body(content: Content) -> some View {
+        content.mask {
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: proxy.safeAreaInsets.top)
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Bars.contentGap)
+                    Rectangle()
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 }

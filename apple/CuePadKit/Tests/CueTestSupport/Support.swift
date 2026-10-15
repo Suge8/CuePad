@@ -21,11 +21,12 @@ public final class Fixture: @unchecked Sendable {
 
 /// 测试用资料库的临时目录。库会被测试里的观察流、协调器、执行器一直持有到它们自己结束，
 /// 删掉仍打开的库文件时 SQLite 报 "database integrity compromised … vnode unlinked while in use"；
-/// 所以本次运行不删自己的目录，而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录。
+/// 所以本次运行不删自己的目录，而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录，连同还在里面跑的进程（`TestProcesses`）。
 public enum TestLibraries {
   private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-libraries", directoryHint: .isDirectory)
   private static let run: URL = {
-    removeFinishedRuns()
+    // 清理与本次运行无关，不挡着第一个要库的用例（可能在主线程上）
+    Thread.detachNewThread { removeFinishedRuns() }
     return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
   }()
 
@@ -37,11 +38,13 @@ public enum TestLibraries {
   }
 
   private static func removeFinishedRuns() {
-    let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
-    for name in runs {
-      guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
-      try? FileManager.default.removeItem(at: root.appending(path: name))
-    }
+    let finished = ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []).filter { name in
+      Int32(name).map { kill($0, 0) == -1 && errno == ESRCH } ?? false
+    }.map { root.appending(path: $0) }
+    #if os(macOS)
+    TestProcesses.stop(under: finished)
+    #endif
+    for directory in finished { try? FileManager.default.removeItem(at: directory) }
   }
 }
 
@@ -176,10 +179,13 @@ public struct TimedOut: Error, CustomStringConvertible {
   public let description: String
 }
 
+/// 条件等待的默认上限。条件本该几毫秒就成立（替身、手动时钟、回放），上限只是"确实不会来了"的兜底：写错的测试几秒内就红，
+/// 不空等到测试时限。录制真 Agent（CUEPAD_AGENT_TESTS，见 CuePiTests 的 RealAgents）时每一步等的是真进程与真模型，放宽到一分钟。
+public let conditionTimeout: Duration = ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS", default: ""].isEmpty ? .seconds(5) : .seconds(60)
+
 /// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
-/// 条件一成立马上返回，到了上限抛 `TimedOut`。上限只是"确实不会来了"的兜底：机器负载高时一步会慢上几十秒，
-/// 所以取得宽，各处不另写。库里的变化用下面按读取订阅的那个。
-public func eventually(_ what: String, timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
+/// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
+public func eventually(_ what: String, timeout: Duration = conditionTimeout, _ condition: () async throws -> Bool) async throws {
   let deadline = ContinuousClock.now + timeout
   while try await !condition() {
     guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
@@ -193,13 +199,23 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
-/// 订阅读取直到条件成立（事件驱动，配合测试的时间限制，不轮询）。
+/// 订阅读取直到条件成立（事件驱动，不轮询），到了上限抛 `TimedOut`。
 public func eventually<T: Sendable & Equatable>(
-  _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
-  until predicate: @Sendable (T) -> Bool
+  _ store: CueStore, timeout: Duration = conditionTimeout, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
+  until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
-  for try await value in store.observe(read) where predicate(value) { return value }
-  throw CancellationError()
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask {
+      for try await value in store.observe(read) where predicate(value) { return value }
+      throw CancellationError()
+    }
+    group.addTask {
+      try await Task.sleep(for: timeout)
+      throw TimedOut(description: "等不到：库里的读取在 \(timeout) 内满足条件")
+    }
+    defer { group.cancelAll() }
+    return try await group.next()!
+  }
 }
 
 public struct RawError: Error { public let message: String }

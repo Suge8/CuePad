@@ -9,7 +9,6 @@ import Testing
 /// "什么算历史"的两条规则，端到端用真实 Pi：一句话没说过的会话关掉后不进历史；CuePad 后台托管的会话闲置退出不算结束，
 /// 仍在"现在"，Mac 本机与手机两条路发话都会唤醒它，只有用户结束它才进历史。
 /// 真实 Pi 与真实后台托管（闲置 2 秒退出），全部状态落在临时目录，假模型零网络；不碰真实资料库与 ~/.pi。
-nonisolated private let realPi = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
 
@@ -17,7 +16,7 @@ nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComp
 struct HistoryRulesTests {
     final class Rig {
         let cwd: URL
-        let host: PiHost
+        let host: PiRuntime
         let bridge: PiBridge
         let services: AppServices
         var store: CueStore { services.store }
@@ -36,7 +35,7 @@ struct HistoryRulesTests {
                 "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
             ])
             let agents = AgentIntegration(
-                paths: agentPaths, locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+                paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) },
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
             try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
@@ -44,8 +43,8 @@ struct HistoryRulesTests {
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiHost(
-                bridge: bridge, paths: paths, idleLimit: .seconds(2),
+            host = PiRuntime(
+                bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2),
                 extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: agents, terminal: PiTerminalJumper(),
@@ -54,12 +53,12 @@ struct HistoryRulesTests {
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
                 updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
-                runtimes: { [host] _ in [.pi: PiRuntime(host: host, locate: { realPi })] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
+                runtimes: { [host] _ in [.pi: host] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
                 cue: CueDependencies(scan: { [] }, launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
             services.start()
-            try await until("执行器在运行") { services.executor.isRunning }
+            try await eventually("执行器在运行", timeout: HistoryRulesTests.piStep) { services.executor.isRunning }
         }
 
         func shutdown() {
@@ -86,27 +85,20 @@ struct HistoryRulesTests {
         }
     }
 
-    /// 没有事件可订阅的跨进程等待（进程退出、文件落盘、索引跟上）：有界条件等待。
-    private static func until(_ what: String, timeout: Duration = .seconds(40), _ check: () async throws -> Bool) async throws {
-        let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            if try await check() { return }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        Issue.record("等不到：\(what)")
-    }
+    /// 跨进程的一步（真 Pi 起进程、闲置退出、文件落盘、索引跟上）要几秒，比默认的条件等待宽
+    private static let piStep: Duration = .seconds(15)
 
     // MARK: 一句话没说过的会话
 
     @Test func 一句话没说过的会话关掉后不进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", executable: realPi).id
-        try await Self.until("会话记录写出") { try await rig.records(.all).count == 1 }
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", name: nil, model: nil, thinking: nil)
+        try await eventually("会话记录写出", timeout: Self.piStep) { try await rig.records(.all).count == 1 }
 
-        try await rig.host.end(id)
+        try await rig.bridge.end(id)
 
-        try await Self.until("没说过话的会话记录被删（同步删除）") { try await rig.records(.all).isEmpty }
+        try await eventually("没说过话的会话记录被删（同步删除）", timeout: Self.piStep) { try await rig.records(.all).isEmpty }
     }
 
     // MARK: 后台托管的会话闲置退出
@@ -114,34 +106,34 @@ struct HistoryRulesTests {
     @Test func 托管会话闲置退出后仍在现在_发话唤醒回复_用户结束才进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", executable: realPi).id
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
-        try await Self.until("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
+        try await eventually("回答落盘、索引跟上", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 开场 IMAGES[]" }
 
         // 闲置退出：进程不在了，会话仍在"现在"，歇着，不进历史
-        try await Self.until("闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await eventually("闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
-        try await rig.services.send("本机来的话", toEnded: sessionID, named: "x", card: nil)
-        try await Self.until("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
-        try await Self.until("再次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        #expect(Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID)))
+        try await eventually("本机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
+        try await eventually("再次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
         let resting = try await expectResting(rig, sessionID)
 
         // 手机发话（投送请求写给这台 Mac）
-        let request = try await rig.services.requestMacDelivery("手机来的话", to: resting, mode: .send)
-        let result = try await rig.services.outcome(of: request.id)
+        let request = try await rig.store.requestDelivery("手机来的话", to: resting.target, on: resting.hostID, mode: .send)
+        let result = try await rig.services.store.outcome(of: request.id)
         #expect(result.failure == nil)
-        try await Self.until("手机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
-        try await Self.until("又一次闲置退出") { rig.bridge.session(sessionID: sessionID) == nil }
+        try await eventually("手机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 手机来的话 IMAGES[]" }
+        try await eventually("又一次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
         let again = try await expectResting(rig, sessionID)
 
         // 用户在 CuePad 里结束它：这时才进历史
         let end = try await rig.services.end(again)
-        #expect(try await rig.services.outcome(of: end.id).failure == nil)
-        try await Self.until("结束后进历史") { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
+        #expect(try await rig.services.store.outcome(of: end.id).failure == nil)
+        try await eventually("结束后进历史", timeout: Self.piStep) { try await rig.records(.ended).map(\.sessionID) == [sessionID] }
         #expect(try await rig.records(.live).isEmpty)
     }
 
@@ -199,9 +191,9 @@ struct HostedLaunchTests {
         let bridge = PiBridge(socketDirectory: paths.socketDirectory)
         try bridge.start()
         defer { bridge.stop() }
-        let host = PiHost(bridge: bridge, paths: paths)
+        let host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
         await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
-            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), executable: realPi)
+            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), thinking: nil)
         }
         #expect(bridge.sessions.isEmpty)
     }

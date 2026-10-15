@@ -185,6 +185,10 @@ private struct MarkdownTableView: View {
         }
         .clipShape(shape)
         .overlay(shape.strokeBorder(palette.hair))
+        // 表格的宽只由各格定（每格最宽 `cellWidth`）：横向滚动区量高度时不给宽（按理想宽排），摆放时却可能给可见宽——
+        // 长对话首次打开时就是这样，各列被挤窄、格里换行，画出来比量好的高，压到下面的回答上，滚一下重排才好。
+        // 不接受给的宽，量与摆就是同一张表
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func cells(_ texts: [String], header: Bool) -> some View {
@@ -231,7 +235,7 @@ private extension MarkdownTable.Alignment {
 }
 
 /// 只有一个子视图：按它的理想宽度排，但不超过 `cap`（超过就在这个宽度里换行）。`.frame(maxWidth:)` 做不到：
-/// 横向滚动里没有建议宽度，它会把子视图按一整行排开再截断。
+/// 表格不接受给的宽（`fixedSize`），格子量的时候没有建议宽度，它会把子视图按一整行排开再截断。
 private struct CappedWidth: Layout {
     let cap: CGFloat
 

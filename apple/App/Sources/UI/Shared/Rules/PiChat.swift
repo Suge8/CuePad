@@ -5,7 +5,7 @@ import Foundation
 /// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
 /// 或 Agent 一次发到手机上看的几个文件（一张预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
-    enum Role: Sendable { case user, pi, system, preview }
+    enum Role: Equatable, Sendable { case user, pi, notice(PiNotice), preview }
 
     let id: UUID
     let role: Role
@@ -24,11 +24,13 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
 }
 
 private nonisolated extension PiChatEntry.Role {
-    init(_ role: PiChatRole) {
-        self = switch role {
-        case .user: .user
-        case .pi: .pi
-        case .system: .system
+    /// 认不出的（别的版本写的系统行）为 nil。
+    init?(_ message: PiChatMessage) {
+        switch message.role.known {
+        case .user: self = .user
+        case .pi: self = .pi
+        case .system: guard let notice = message.notice else { return nil }; self = .notice(notice)
+        case nil: return nil
         }
     }
 }
@@ -51,10 +53,10 @@ nonisolated enum PiChat {
             }
         }
         for message in messages {
-            guard let role = message.role.known else { continue }
+            guard let role = PiChatEntry.Role(message) else { continue }
             place(before: message.at)
             entries.append(PiChatEntry(
-                id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools,
+                id: message.id, role: role, text: message.text, meta: meta(message), tools: message.tools,
                 fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
@@ -108,18 +110,18 @@ nonisolated enum PiChat {
     /// 你发出、还没出现在对话里的话（对话里还没有 `deliveryID` 等于它的消息）：作为你的气泡接在末尾，写送达情况。
     /// 排队的话（`queued`）不在这里：它们在回复框上方一叠，同一句话只出现一处。
     /// 作答、斜杠命令、设置、开新会话、补写对话这些不是你说的话，不算（命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉）。
-    static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
-        unanswered(deliveries, messages: messages).filter { !isQueued($0) }
+    static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> [DeliveryRequest] {
+        unanswered(deliveries, messages: messages).filter { !isQueued($0, at: moment) }
     }
 
-    /// 排队的话：Agent 在跑时"等它做完再说"发出、还没进对话（它还没开始处理）的，按发出先后。没能送达的不算——它是对话末尾的气泡，
+    /// 排队的话：Agent 在跑时"等它做完再说"发出、还没进对话（它还没开始处理）的，按发出先后。没能送达的（`Speech`，含超时）不算——它是对话末尾的气泡，
     /// 在那里重发或移除。显示在回复框上方一叠（`PiQueueStack`）；还没被 Mac 领取的能撤回或改为马上说（`DeliveryRequest.isWithdrawable`）。
-    static func queued(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
-        unanswered(deliveries, messages: messages).filter(isQueued)
+    static func queued(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> [DeliveryRequest] {
+        unanswered(deliveries, messages: messages).filter { isQueued($0, at: moment) }
     }
 
-    private static func isQueued(_ request: DeliveryRequest) -> Bool {
-        request.mode == .known(.followUp) && request.status != .known(.failed)
+    private static func isQueued(_ request: DeliveryRequest, at moment: Speech.Moment) -> Bool {
+        request.mode == .known(.followUp) && Speech.trip(request, at: moment).failure == nil
     }
 
     private static func unanswered(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {

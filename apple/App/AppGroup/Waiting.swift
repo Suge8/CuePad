@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// "等你"（WORDS.md）的样子，App 与小组件只此一份：颜色是赭黄，全 App 只有等你用它——它一出现就是"有事要你拍板"。
-/// 别的"要你处理"（同步、连接、崩溃）按 `StatusTone.notice` 用墨色，出错是胭脂。赭黄的色值只写在这里，别处写会被源码检查拦下（`lint.sh`）。
-/// 表达等你只经这里：会话状态色与 Cue 头像的环取 `tint`，状态图形取 `symbol`；现成的几件是"等你 N"（`WaitingCount`）、
-/// iPhone 底栏的角标（`WaitingBadge`）、iPad 工具栏钮上的点（`WaitingDot`）与问题前面的问号（`WaitingMark`）。
+/// 别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色；出错（含崩溃）是胭脂圆叹号（`Failure`）。赭黄的色值只写在这里，别处写会被源码检查拦下（`lint.sh`）。
+/// 表达等你只经这里：会话状态色与 Cue 头像的环取 `tint`，状态图形取 `symbol`（App 里的状态图形经 `PiShown.symbol` 取它）；
+/// 现成的几件是"等你 N"（`WaitingCount`）、iPhone 底栏的角标（`WaitingBadge`）与 iPad 工具栏钮上的点（`WaitingDot`）。
 /// 颜色只随深浅色变，增强对比度时不变（深浅两档对纸的对比度已够）。
 enum Waiting {
     static func tint(dark: Bool) -> Color { Color(hex: dark ? 0xEDBD57 : 0xA8740A) }
@@ -53,11 +53,3 @@ struct WaitingDot: View {
     }
 }
 
-/// 问题前面的赭黄问号圆（问题卡、Cue 的"等你"），跟着旁边的字号；读屏跳过。
-struct WaitingMark: View {
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        Image(systemName: Waiting.symbol).foregroundStyle(Waiting.tint(dark: scheme == .dark)).accessibilityHidden(true)
-    }
-}

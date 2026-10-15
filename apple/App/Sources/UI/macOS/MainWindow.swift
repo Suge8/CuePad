@@ -87,7 +87,7 @@ private struct WindowPanels: View {
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
             .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
             .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
+            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
             .dialog(
                 "Agent 正在工作", isPresented: busy,
                 message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
@@ -416,7 +416,7 @@ private struct NoticeView: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
-                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
+                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? Failure.symbol : "checkmark.circle.fill") }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))

@@ -27,6 +27,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk` 给出、Cue 不能自拟，
   /// 所以你选的那一项就说明了是哪类事（`CueAsk.always`）。
   public var choices: [String]?
+  /// 带选项的是哪一类"等你"（`CueAsk.init(choices:)`）。
+  public var ask: CueAsk? { choices.map(CueAsk.init(choices:)) }
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
@@ -43,6 +45,22 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
+}
+
+/// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
+public struct CueResume: Equatable, Sendable {
+  /// 没写过交接为 nil
+  public var handoff: CueMessage?
+  /// 交接之后的对话，从早到晚
+  public var messages: [CueMessage]
+  /// 更早的还有，没取
+  public var truncated: Bool
+
+  public init(handoff: CueMessage?, messages: [CueMessage], truncated: Bool) {
+    self.handoff = handoff
+    self.messages = messages
+    self.truncated = truncated
+  }
 }
 
 extension CueMessage: Record {
@@ -152,8 +170,9 @@ public struct CueProfile: Equatable, Sendable {
   public var name: String
   /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
-  /// 大脑跑在哪家 Agent 里（OpenCode 不能当大脑）
+  /// 大脑跑在哪家 Agent 里（`runtimes` 之一）
   public var runtime: Open<AgentKind>
+  /// 大脑用的模型，按 `runtime` 那家的写法（`AgentKind.modelRef`）；nil 是用这家自己的默认。
   public var model: String?
   /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<PiThinkingLevel>?
@@ -164,11 +183,13 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue
-  /// （`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
-  public func onDuty(_ state: CueState?) -> Bool { activeHost != nil && state?.state != .known(.error) }
+  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
+  /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
+  public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
+  /// 能当大脑的几家，按启用时挑选的顺序（OpenCode 不能当大脑）：Mac 查本机能用的、两端 Cue 页的模型菜单都按它。
+  public static let runtimes: [AgentKind] = [.pi, .codex, .claudeCode]
   /// 只有一行：任何设备上都是这个 id。
   public static let recordID = DeterministicID.uuid("cue-profile")
   /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。
@@ -252,6 +273,26 @@ public enum CueAsk: String, CaseIterable, Sendable {
 
   public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) + [Self.deny] }
 
+  /// 由一条"等你"的选项认出是哪一类：选项只由 `choices` 写出，带"以后……都不用问"的是那一类，不带的是规矩那一类。
+  public init(choices: [String]) {
+    self = Self.allCases.first { $0.always.map(choices.contains) ?? false } ?? .rule
+  }
+
+  /// 一条"等你"在 Cue 页以外的说法（卡片第一句、侧栏与菜单栏的摘要、小组件、本机与手机通知同一句）：要你定什么，
+  /// 按类别与关联任务的标题（`Card.heading`，没有或空白时不写）由代码写出；Cue 的原话只在 Cue 页的卡片里点开看。
+  public func question(task: String?) -> String {
+    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" } ?? ""
+    return switch self {
+    case .push: "要不要推送\(named)？"
+    case .merge: "要不要把\(named.isEmpty ? "改动" : named)合并到共享分支？"
+    case .release: "要不要发布或部署\(named)？"
+    case .delete: "\(named)要删除东西，允许吗？"
+    case .outside: "\(named)要动项目以外的东西，允许吗？"
+    case .budget: "\(named)要超出预算，允许吗？"
+    case .rule: "\(named)这一步按你的规矩要先问，允许吗？"
+    }
+  }
+
   /// "以后都不用问"记成的规矩原文；问的事关联的任务在项目里时只管这个项目。Cue 再问同一类事，库里有这一行（没忘掉、一直记着）就拒绝。
   public func rule(project: String?) -> String? {
     always.map { always in project.map { "\(always)（项目「\($0)」）" } ?? always }
@@ -265,15 +306,19 @@ public enum CueReport {
   }
 }
 
-/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`），
-/// 正文是那条消息的文字（去掉图片，至多 `bodyLimit` 字），"等你"再附上选项。
+/// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
+/// "等你"的正文是要你定什么（`CueAsk.question`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, choices: [String]?) -> (title: String, body: String) {
-    var body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-    if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
-    if let choices, !choices.isEmpty { body += "\n" + choices.joined(separator: " / ") }
+  public static func content(name: String?, text: String, choices: [String]?, task: String?) -> (title: String, body: String) {
+    var body: String
+    if let choices {
+      body = CueAsk(choices: choices).question(task: task) + "\n" + choices.joined(separator: " / ")
+    } else {
+      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
+      if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
+    }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)
   }

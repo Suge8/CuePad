@@ -12,8 +12,10 @@ struct MacDependencies {
     var agents: AgentIntegration
     var terminal: PiTerminalJumper
     var hostID: String
-    /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
+    /// 系统睡眠与唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
+    /// 资料库里随时间变的读与在线记录续期用的时钟（`CueStore.timing`）；测试换成手动推进的。
+    var timing: Timing = .system
     /// 命令行工具 `cuepad` 的链接（设置里的开关；Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖它）。
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。
@@ -29,14 +31,18 @@ struct MacDependencies {
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
-        let paths = AgentPaths()
+        let environment = ProcessInfo.processInfo.environment
+        let sockets = AgentHookEnvelope.socketDirectory(environment: environment, isolatedLibrary: location.isIsolated ? location.directory : nil)
+        // 隔离运行另起的连接目录也交给 CuePad 起的每个子进程（托管的 Agent 的钩子、Cue 的大脑），它们才连回这个 App 而不是正式版
+        if location.isIsolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
+        let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets))
         let pi = PiBridge(socketDirectory: paths.pi.socketDirectory)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 隔离运行（开发构建）不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = location.isIsolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
-        let agents = AgentIntegration(paths: paths, cuepad: commandLineTool.helper)
+        let agents = AgentIntegration(paths: paths, cuepad: commandLineTool.helper, isolated: location.isIsolated)
         let hostID = (location.isIsolated ? DebugHooks.hostID : nil) ?? HostIdentity.current()
         return MacDependencies(
             pi: pi,
@@ -50,8 +56,8 @@ struct MacDependencies {
             updater: location.isIsolated ? DebugHooks.updater : SparkleUpdater(),
             hooks: hooks,
             runtimes: { store in [
-                .pi: PiRuntime(host: PiHost(bridge: pi, paths: paths.pi), locate: { await agents.locatePi() }),
-                .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks),
+                .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.locatePi() }),
+                .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks, store: store),
                 .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks),
                 .opencode: OpenCodeRuntime(
                     bridge: pi, paths: paths, store: store, hostID: hostID, transcriptWindow: PiHistoryPersistence.transcriptWindow),

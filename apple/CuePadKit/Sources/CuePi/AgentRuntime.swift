@@ -48,8 +48,15 @@ public struct AgentPaths: Sendable, Equatable {
     }
 }
 
-/// 一个 Agent 在这台 Mac 上的接入：发现它的会话、接上桥（`PiBridge.attach`），在后台开新会话、接着已结束的会话，结束会话。
-/// 投送执行器只经这里（按会话的 Agent 找到它），界面与记录器只看桥。
+/// CuePad 托管的 Claude Code、Codex 进程在环境里带的标记（钩子转发 `CUEPAD_` 前缀的变量）：钩子按它认回托管会话。
+/// 不按进程号认：可执行文件可能是外壳（npm 装的 codex 是 node 脚本），钩子的父进程是外壳起的子进程。
+/// Agent 在托管会话里再起的进程也继承它，所以认的时候还要对上会话。
+enum HostMark {
+    static let variable = "CUEPAD_HOST"
+}
+
+/// 一个 Agent 在这台 Mac 上的接入：发现它的会话、接上桥（`PiBridge.attach`），在后台开新会话、接着已结束的会话。
+/// 投送执行器开会话、接着会话只经这里（按会话的 Agent 找到它）；对在线会话的一切（含结束）经桥。
 @MainActor
 public protocol AgentRuntime: AnyObject {
     /// 开始发现与跟随这台 Mac 上的会话。
@@ -64,8 +71,6 @@ public protocol AgentRuntime: AnyObject {
     ) async throws -> PiSession.ID
     /// 在后台接着一个已结束的会话（本机会话索引里的）；等它上了桥，返回桥上的 id。
     func resume(_ session: IndexedSession) async throws -> PiSession.ID
-    /// 结束一个在线会话，等它真的下了桥。
-    func end(_ id: PiSession.ID) async throws
     /// 一个会话从头到尾的对话与摘要（补写很久以前的会话时用）。
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript
 }
@@ -75,11 +80,12 @@ extension AgentRuntime {
     func configure(
         opened id: PiSession.ID, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, on bridge: PiBridge
     ) async throws -> PiSession.ID {
+        let name = name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         guard name != nil || model != nil || thinking != nil else { return id }
         do {
             try await bridge.configure(model: model, thinking: thinking, name: name, in: id)
         } catch {
-            try? await end(id)
+            try? await bridge.end(id)
             throw error
         }
         return id
@@ -96,6 +102,8 @@ public enum AgentRuntimeError: Error, Equatable {
     case notInstalled(AgentKind)
     /// 等它启动、上桥超时
     case launchTimedOut(AgentKind)
+    /// 启动失败（原因）
+    case launchFailed(AgentKind, String)
     /// 这个会话此刻开在别处（如终端里），后台不能再开一份（两边会各写各的）
     case openElsewhere
 }
@@ -105,6 +113,7 @@ extension AgentRuntimeError: LocalizedError {
         switch self {
         case .notInstalled(let kind): "这台 Mac 上没有找到 \(kind.name)"
         case .launchTimedOut(let kind): "\(kind.name) 没有及时启动"
+        case .launchFailed(let kind, let reason): "\(kind.name) 没能启动：\(reason)"
         case .openElsewhere: "这个会话正开在别处（如终端里），先在那里退出再从 CuePad 接着说"
         }
     }

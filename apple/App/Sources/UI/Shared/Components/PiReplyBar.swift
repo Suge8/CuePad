@@ -10,8 +10,8 @@ import SwiftUI
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
-/// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
-/// 发出后清空，请求马上贴到对话末尾。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
+/// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
+/// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，在线会话聚焦就展开（已结束的没有工具排，打了字再长），在看历史时收成短胶囊（停止钮在时不收）。
 /// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
@@ -24,7 +24,7 @@ struct PiReplyBar: View {
     var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
-    /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
+    /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方显示一行，成功、之后有新请求或对话时就收起。
     var commandProgress: MacDelivery.CommandProgress?
     /// 排队的话（`PiChat.queued`，页面传进来）。
     var queued: [DeliveryRequest] = []
@@ -38,7 +38,6 @@ struct PiReplyBar: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
-    @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
@@ -77,7 +76,7 @@ struct PiReplyBar: View {
     private var commands: [PiSlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
-    private var canSend: Bool { hasDraft && reachable && !sending }
+    private var canSend: Bool { hasDraft && reachable }
     private var canStop: Bool { session.canStop }
     /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
     private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
@@ -113,12 +112,12 @@ struct PiReplyBar: View {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if form == .open || focused, let failure = config?.failure {
-                        Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
+                        Text("没换成：\(failure.text(sync: services.syncStatus))").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
                             .padding(.horizontal, 18).padding(.top, 12)
                     }
                 },
                 tools: {
-                    if hasTools, let config { PiConfigControls(session: session, models: models, shown: config, opening: $opening) }
+                    if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, opening: $opening) }
                 },
                 send: { sendControl }
             )
@@ -132,7 +131,7 @@ struct PiReplyBar: View {
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
         HStack(spacing: 6) {
             if case .running = progress { Spinner(.mini) }
-            Text(progress.text).lineLimit(2)
+            Text(progress.text(sync: services.syncStatus)).lineLimit(2)
         }
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
         .padding(.horizontal, 18)
@@ -264,7 +263,7 @@ struct PiReplyBar: View {
 
     /// 占位只说这里写什么；忙时点发送与长按各是什么由发送钮自己说（读屏标签与长按菜单）。
     private var placeholder: String {
-        if answering != nil { return "回答上面的问题" }
+        if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
         return replyPrompt
     }
@@ -275,24 +274,23 @@ struct PiReplyBar: View {
         session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
+    /// 作答框只收文字：答完文字清空，其余（别处带进草稿的卡片、图片）留着。
     private func answer() {
-        let value = PiAnswerValue.text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard canSend else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            _ = try await services.answer(value, to: session)
-            draft.text = ""
-            didSend()
+        guard canSend, let promptID = answering?.promptID else { return }
+        let written = workspace.speak(to: .session(session, mode: .answer), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+            PiAnswer(promptID: promptID, value: .text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))).stored
         }
+        if written != nil { didSend() }
     }
+
+    private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
 
     /// 停止这一轮：写一条停止请求，等 Mac 受理；没受理（不在线、出错）时提示原因。受理之后转圈到这一轮歇下（看状态）。
     private func stop() {
         let session = session
         workspace.attempt {
             let request = try await services.stop(session)
-            if let failure = try await services.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
+            if let failure = try await services.store.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
         }
     }
 
@@ -300,25 +298,21 @@ struct PiReplyBar: View {
         services.settings.setReplyNotes(draft.notes.filter { $0.id != note.id }, for: session.id)
     }
 
-    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说（`MacDelivery.button`）。
-    /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
+    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行），不分马上说还是等它做完再说：是不是命令只在发出这一刻按草稿与会话报的清单认
+    /// （`commandLine`），不看按钮上次排版时带来的方式。`held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
-        let outgoing = draft.accepting(accepts), line = commandLine
         guard canSend else { return }
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            if mode == .command, let line {
-                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outgoing.attachments.first?.card)
-                // 命令不是说的话：批注留着，跟下一句发
-                draft = ComposerDraft(notes: outgoing.notes)
-            } else {
-                _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
-                draft = ComposerDraft()
-            }
-            didSend()
+        let accepts = accepts, files = services.store.files
+        let card = draft.attachments.first?.card
+        let written = if let line = commandLine {
+            // 命令不是说的话：批注留着，跟下一句发
+            workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
+        } else {
+            workspace.speak(to: .session(session, mode: mode, card: card), from: box) { try $0.accepting(accepts).stored(in: files) }
         }
+        // 图片存不进图片库时什么都没发：不收键盘、不当作发出
+        if written != nil { didSend() }
     }
 }
 

@@ -74,7 +74,7 @@ import Testing
     // 对账之后才连上桥的新会话（还没有会话文件）：记录器正在跟它，对账不删
     try await recorder.update(sessionID: "live-new", state: .settled, title: "live-new", hosted: true)
     try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], agent: .pi, host: host)
-    try await recorder.dropUnindexedHosted()
+    try await recorder.dropUnindexedHosted(of: .pi)
     #expect(Set(try await states().keys) == ["terminal", "hosted", "live-new"], "没有会话文件的已结束与歇着的托管记录被清掉，有的与在线的留着")
   }
 }

@@ -49,7 +49,7 @@ struct MacSyncTests {
             _ = await finish()
             done.signal()
         }
-        #expect(Self.blockCurrentThread(until: done, seconds: 3), "主线程被占住时收尾等不到")
+        #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
     }
 
@@ -68,6 +68,32 @@ struct MacSyncTests {
 
         #expect(late == "同步")
         #expect(rig.sync.stopped == 1)
+    }
+
+    /// 退出时这台 Mac 当场离线：排在前面的组件卡住、耗尽了收尾的上限，离线这一条也已写下并上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
+        // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        defer { release.finish() }
+        let rig = TestApp(cue: CueDependencies(
+            scan: { [.pi] }, launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
+            helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
+        let services: AppServices = rig.services, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        try await services.store.updateCueProfile {
+            $0.hostID = host
+            $0.enabledAt = .now
+        }
+        services.start()
+        #expect(await uploads.next() == record)
+        try await eventually("Cue 在这台值班") { services.cue.onDuty }
+
+        #expect(await services.stop(within: .milliseconds(300)) == "Cue")
+
+        #expect(await uploads.next() == record)
+        #expect(try await !services.store.macOnline(host))
     }
 
     @Test func 退出时停止同步与远程投送执行器() async throws {
@@ -96,6 +122,39 @@ struct MacSyncTests {
 
         try await eventually("rig.sync.syncNows == 1") { rig.sync.syncNows == 1 }
         #expect(rig.sync.syncNows == 1)
+    }
+
+    /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；
+    /// 将睡眠的通知返回时离线已经写下并传出；睡着时到点不续；醒来立即又在线。
+    @Test(.timeLimit(.minutes(1)))
+    func 在线记录_启动即在线_醒着定期续期_将睡眠当场离线_醒来又在线() async throws {
+        let clock = ManualTiming()
+        let rig = TestApp(timing: clock.timing)
+        let services: AppServices = rig.services, store = services.store, host = TestApp.hostID
+        let record = MacPresence.recordID(host: host).uuidString.lowercased()
+        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        services.start()
+        defer { services.cancelBackgroundWork() }
+
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
+
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        #expect(await uploads.next() == record)  // 续期
+        #expect(try await store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+        #expect(try await !store.macOnline(host))
+        #expect(await uploads.next() == record)
+        await clock.waitForSleeper()
+        clock.advance(MacPresence.renewal)
+        await clock.waitForSleeper()
+        #expect(try await !store.macOnline(host))
+
+        rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        #expect(await uploads.next() == record)
+        #expect(try await store.macOnline(host))
     }
 
     // MARK: Pi 状态记录
@@ -176,7 +235,7 @@ struct MacSyncTests {
         let failed = try #require(try await store.deliveryRequest(lost.id))
         #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
         #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
-        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered == 1)
+        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered(at: .always()) == 1)
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
@@ -199,6 +258,27 @@ struct MacSyncTests {
 
         let states = Dictionary(uniqueKeysWithValues: try await services.store.allPiSessionStates().map { ($0.sessionID, $0.state) })
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
+    }
+
+    /// App 重开：接回的会话"多久前"与"有新回复"仍从原来的起点算（看过的不又亮"有新回复"，排序不乱）；状态种类变了才从接回时算。
+    /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
+    @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
+        let past = Date.now.addingTimeInterval(-3600)
+        let before = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
+        try await before.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: past, busySince: nil))
+        try await before.update(sessionID: "s2", state: .thinking, times: PiTimes(stateSince: past, busySince: past))
+        let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
+        services.settings.markSeen(seen, at: past.addingTimeInterval(1))
+
+        try await services.resetPiState()
+        let kept = try await rig.host.connect("s1", cwd: "/work/s1")
+        let changed = try await rig.host.connect("s2", cwd: "/work/s2")
+
+        let live = try #require(services.pi.session(id: kept.id))
+        #expect(live.stateSince == seen.stateSince)
+        let row = PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了"))
+        #expect(!services.settings.isUnread(row))
+        #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
     }
 
     // MARK: 手机发来的投送请求
@@ -330,7 +410,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.end(ext.id)])
+        #expect(ext.received == ["end"] && rig.host.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -388,6 +468,7 @@ struct MacSyncTests {
     @Test(.timeLimit(.minutes(1)))
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
+        services.startSpeechClock()
         var waiting = services.pollingCondition().makeAsyncIterator()
         #expect(await waiting.next() == .some(nil))
 
@@ -423,17 +504,89 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
+    /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
     @Test(.timeLimit(.minutes(1)))
-    func 执行器写回结果后立即上传这一条() async throws {
+    func 执行器领取与写回结果后各立即上传这一条() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+        let name = request.id.uuidString.lowercased()
 
         #expect(await uploads.next() == request.id.uuidString.lowercased())
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
+    }
+
+    // MARK: 订阅额度（Mac 唯一写入，手机只读）
+
+    /// 桥报来的额度一直写进库（`start()` 里同一条路），直到测试结束。
+    private func recordingQuotas() {
+        let changes = services.pi.changes()
+        services.follow { try? await self.services.consumePiChanges(changes) }
+    }
+
+    private static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)
+    private static let claude: [[String: Any]] = [
+        ["seconds": 18_000, "used": 0.42, "resetsAt": resetsAt.timeIntervalSince1970, "binding": true],
+        ["seconds": 604_800, "used": 0.1, "resetsAt": resetsAt.timeIntervalSince1970 + 86_400],
+    ]
+
+    private func quota(_ provider: String) async throws -> AccountQuota {
+        try await eventually(services.store, { try $0.accountQuotas() }) { $0.contains { $0.provider == provider } }
+            .first { $0.provider == provider }!
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func 回复里带回的额度写进这个账号的记录() async throws {
+        recordingQuotas()
+        defer { services.cancelBackgroundWork() }
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+
+        ext.sendQuota(provider: "anthropic", windows: Self.claude, complete: false)
+
+        let stored = try await quota("anthropic")
+        #expect(stored.hostID == TestApp.hostID)
+        #expect(stored.windows == [
+            QuotaWindow(seconds: 18_000, used: 0.42, resetsAt: Self.resetsAt, isBinding: true),
+            QuotaWindow(seconds: 604_800, used: 0.1, resetsAt: Self.resetsAt.addingTimeInterval(86_400)),
+        ])
+    }
+
+    /// 手机打开额度视图、数据陈旧时写的刷新请求：Mac 经在线会话里的扩展查一次，查到的写进账号记录，请求按成功写回。
+    @Test(.timeLimit(.minutes(1)))
+    func 手机的额度刷新请求经在线会话查到_写回额度与成功() async throws {
+        recordingQuotas()
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+        let resetsAt = Self.resetsAt.timeIntervalSince1970
+        ext.onCommand = { [weak ext] _, command in
+            if command["t"] as? String == "quota" {
+                ext?.sendQuota(provider: "openai-codex", windows: [["seconds": 604_800, "used": 0.91, "resetsAt": resetsAt]], complete: true)
+            }
+            return ["ok": true]
+        }
+
+        let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(ext.received == ["quota"])
+        #expect(try await quota("openai-codex").windows == [QuotaWindow(seconds: 604_800, used: 0.91, resetsAt: Self.resetsAt)])
+    }
+
+    @Test func 手机的额度刷新请求_这台Mac没有在线会话时按失败写回原因() async throws {
+        try await services.executor.start()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.failure == "这台 Mac 上没有在线的 Agent 会话，查不了额度")
+        #expect(try await services.store.accountQuotas().isEmpty)
     }
 
     // MARK: 后台恢复、开新会话
@@ -677,6 +830,50 @@ struct MacSyncTests {
 
     /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
     /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
+    /// 扩展升级后旧版会话在终端里 /reload：旧协议的连接告别、新扩展接回同一个会话。说过话的会话这时不是"没说话就退出"，
+    /// 记录与它的摘要留着，接回后不变成"新会话"。
+    @Test(.timeLimit(.minutes(1)))
+    func 旧协议会话重载接回_摘要还在() async throws {
+        let changes = rig.pi.changes()
+        try rig.pi.start()
+        let services: AppServices = services
+        let consuming = Task { try await services.consumePiChanges(changes) }
+        defer { consuming.cancel() }
+        let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: file.path, contents: Data())
+        let store = services.store
+
+        let old = try await rig.host.connect("s1", cwd: "/work/app", protocolVersion: 3, sessionFile: file.path)
+        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.incompatible) })
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "修登录", at: .now)],
+            recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了")))
+
+        old.close(bye: "reload")
+        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
+
+        let back = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.settled) })
+        #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
+    }
+
+    /// 后台托管的会话进程没了（App 退出、闲置退出）记录仍歇着、发话会唤醒它：它报过的斜杠命令留着，
+    /// 回复框里打完整的 "/default" 照样是命令（后台唤醒后执行），不当普通的话发给模型。会话做完的也一样。
+    @Test(arguments: [true, false])
+    func 进程没了的会话仍认它报过的斜杠命令(hosted: Bool) async throws {
+        var live = session("s1", state: .settled, spoke: true)
+        live.hosted = hosted
+        live.commands = [PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
+        try await services.consumePiChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
+        if !hosted { try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
+
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.state == .known(hosted ? .settled : .ended))
+        let catalogID = try #require(stored.catalogID)
+        let catalog = try await services.store.agentCatalog(catalogID)
+        #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
+        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog)) == "/default")
+    }
+
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true

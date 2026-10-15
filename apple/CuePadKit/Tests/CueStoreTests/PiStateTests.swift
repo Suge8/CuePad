@@ -35,7 +35,7 @@ import Testing
     let firstWrite = try #require(try await states()["s1"]).modifiedAt
 
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")
-    try await recorder.update(sessionID: "s1", state: .outputting)
+    try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "edit")
     #expect(try await states()["s1"]?.state == .known(.thinking))  // 最短间隔内不写
     #expect(try await states()["s1"]?.modifiedAt == firstWrite)
@@ -158,6 +158,20 @@ import Testing
     let all = try await states()
     #expect(all["s1"]?.state == .known(.ended) && all["s1"]?.lastPrompt == "上次的")
     #expect(all["s2"]?.state == .known(.thinking))
+  }
+
+  /// App 重开：进程随上次退出了的托管会话原本出错的，仍是出错、原因与起点留着。
+  @Test func aHostedErrorStaysAcrossARestart() async throws {
+    let before = clock.now
+    try await recorder().update(
+      sessionID: "failed", state: .error, detail: "额度用完", times: PiTimes(stateSince: before, busySince: nil), hosted: true,
+      process: PiProcess(pid: 1, startedAt: 1))
+    clock.advance(.seconds(60))
+
+    try await recorder().reset { _ in false }
+
+    let failed = try await states()["failed"]
+    #expect(failed?.state == .known(.error) && failed?.detail == "额度用完" && failed?.stateSince == before)
   }
 
   @Test func unknownStatesFromNewerVersionsAreKept() async throws {

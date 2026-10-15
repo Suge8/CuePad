@@ -14,7 +14,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸。
 - 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
 - 裁图、缩放用系统自带的 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
-- 模拟器（选哪台、启停、隔离库）只经 `xc.sh`，规则见它的头注释。
+- 模拟器（选哪台、启停、隔离库）只经 `xc.sh`，规则见它与 `_sim.sh` 的头注释。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。
 - 验收用户装着的版本前，核对装着的 App 构建号（`defaults read ~/Applications/CuePad.app/Contents/Info CFBundleVersion`）与 `~/.pi/agent/extensions/cuepad-bridge.ts` 里的 `EXTENSION_VERSION` 是否就是要验的那一版：旧包或旧扩展上验出的结论不算数。
 
@@ -44,26 +44,27 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 - `projectagent` 场景带演示会话（另一台 Mac 上在线的），任务、步骤与会话的绑定都有。
 - SwiftUI 输入框用 `setText` 只改了无障碍的值、进不了绑定（不保存）：先 `click` 再 `typeText`（状态要 `--image always`）。
 - 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
-- 让 Cue 真跑（看 Mac 的“运行情况”，`-CuePadScene cuerun` 直接开着）：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），点启用后在设置里把 Agent 换成 Claude Code：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
+- 让 Cue 真跑（看 Mac 的“运行情况”，`-CuePadScene cuerun` 直接开着）：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），点启用后在 Cue 页输入框的模型菜单里选 Claude Code 那一组：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
 - 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
-- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。模拟器用 `xc.sh` 给这个产物目录建的那台（名为 "CuePad <机型> @ <产物目录>"，见 `_sim.sh`），不碰别人的。
+- iOS 没有 Simulator.app 窗口可给 bcu 操作：点按用 `axe tap -x <x> -y <y> --udid <模拟器>`（坐标是点，`xcrun simctl io <模拟器> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素），起画面用 `xcrun simctl launch` 带同一组启动参数。模拟器用 `xc.sh shot` 刚用过的那台（名为 "CuePad <机型> #<号>"，见 `_sim.sh`），不碰别人的；这一池是共用的，别的任务随时会在上面装包重跑，要连续操作就尽快做完。
 
 ## 通知（Mac）
 
 - 隔离库默认不发系统通知（只记日志），也不要权限、不装提示音、不设角标：权限、提示音与角标按 bundle id 记，与正式版同一个。验收时给 Debug 启动参数 `-CuePadNotifications YES` 才真发，提示音这时装进真实的 ~/Library/Sounds。
-- /tmp 下的构建（含 `CUEPAD_DERIVED=/tmp/…` 的产物）拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications，改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 AGENTS.md 要的几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
+- /tmp 下的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications，改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 AGENTS.md 要的几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
 - 触发：本机会话在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）切它的状态；Cue 来问用 `-CuePadSampleCue <秒>`（隔离库里 Cue 不值班）。
 - 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，本机实测有时要 20 秒；横幅 5 秒就收，按横幅要边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
 - 实际播了哪个文件看 `systemsoundserverd` 日志里的 `mAudioToken`（通知中心那行 `Playing notification sound` 只有声音名，找不到文件时也照样打，实际播的是系统兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
 
 ## 性能测量
 
-测量只有一个入口：单次交互（`-CuePadBench interact`）。Mac 是 `apple/scripts/perf-mac.sh`，iOS 是 `apple/scripts/perf-ios.sh`（口径与限制见各自头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
+测量只有一个入口：单次交互（`-CuePadBench interact`）。`xc.sh perf mac`、`xc.sh perf ios`（独占机器；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
+- 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
-- Instruments 用 Release 优化构建并保留测量代码（`xcodebuild -configuration Release … 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG'`）。
+- Instruments 用 Release 优化构建并保留测量代码：`xc.sh perf mac` 构建的 `apple/.derived-perf-release` 就是这份。
 - `xctrace record --template 'Time Profiler' --attach <pid>`；`--launch` 按 bundle id 找进程，机器上有别的 CuePad 时报 ambiguous。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
 - `Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。

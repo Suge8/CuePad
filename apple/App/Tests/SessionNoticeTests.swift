@@ -15,7 +15,7 @@ struct SessionNoticeTests {
 
     /// 前台提示读的版本：`LiveSessions` 里在线的（`startSessionAlerts` 同一条路）。
     private func live() async throws -> [PiSessionListItem] {
-        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
         return app.services.liveSessions.live
     }
 

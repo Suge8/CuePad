@@ -8,7 +8,7 @@ import CueStore
 /// 斜杠命令与上下文余量的端到端：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
 /// 提示词模板与 skill 用 Pi 的显式路径参数加载，扩展命令来自测试夹具。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealSlashTests {
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
         let resources = try makeTempDirectory()
@@ -109,7 +109,7 @@ struct RealSlashTests {
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/settings", in: s.id) }  // 纯终端交互的内置命令
             await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.command("hello", in: s.id) }
             await #expect(throws: PiBridgeError.rejected("missing_argument")) { try await bridge.command("/name", in: s.id) }
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) { try await bridge.command("/model fake/nope", in: s.id) }
+            await #expect(throws: PiBridgeError.unknownModel(.pi)) { try await bridge.command("/model fake/nope", in: s.id) }
             await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.command("/thinking ultra", in: s.id) }
         }
     }
@@ -157,7 +157,7 @@ struct RealSlashTests {
     @Test func cloneOpensACopyOfTheSession() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("要克隆的一句")
-            try await eventually("歇下") { bridge.sessions.first?.state == .settled }
+            try await eventually("答完歇下") { recap(of: s)?.lastReply != nil && bridge.sessions.first?.state == .settled }
             try await bridge.command("/clone", in: s.id)
             try await eventually("克隆出新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
             try await eventually("克隆带着历史") { self.userTexts(of: bridge.sessions[0]) == ["要克隆的一句"] }

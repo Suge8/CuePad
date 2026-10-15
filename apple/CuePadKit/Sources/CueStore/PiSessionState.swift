@@ -66,19 +66,23 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var delivery: DeliveryRequest?
   /// 发给它的最近一条改名请求（带名字的配置请求）：改名在路上、没改成都由它推出。
   public var rename: DeliveryRequest?
-  /// 发给它、没能送达的话有几句（说话的方式里失败、还没重发或移除的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
-  public var undelivered: Int
+  /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
+  public var unsettled: [DeliveryRequest]
   public var id: UUID { state.id }
 
   public init(
-    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
+    unsettled: [DeliveryRequest] = []
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
-    self.undelivered = undelivered
+    self.unsettled = unsettled
   }
+
+  /// 此刻没能送达的话有几句（`Speech`：失败的与超时的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
+  public func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(unsettled, at: moment) }
 }
 
 /// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。
@@ -171,12 +175,13 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   }
 
   /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
-  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted) } ?? [] }
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted, model: model) } ?? [] }
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时直接发送会被拒绝，只能等它做完再说（默认，不打断）或马上说（次级，
-  /// 只给做得到的会话，见 `AgentCapabilities.steer`）。已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
+  /// 此刻可用的发送方式，第一个是默认：正在跑一轮时让你选等它做完再说（默认，不打断）或马上说（次级，只给做得到的会话，
+  /// 见 `AgentCapabilities.steer`）——要不要打断是你的意图，记录推不出来；没在跑时直接发送（执行时撞上会话刚开始一轮也按等它做完再说送达）。
+  /// 已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
   public var deliveryModes: [DeliveryMode] {
     guard state.known?.isTurnRunning == true else { return [.send] }
     return capabilities.contains(.steer) ? [.followUp, .steer] : [.followUp]

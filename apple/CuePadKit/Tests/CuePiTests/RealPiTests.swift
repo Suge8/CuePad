@@ -10,7 +10,7 @@ private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 
 /// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
-@Suite(.enabled(if: realPiAvailable, RealAgents.skipped(.pi, needs: "~/.local/bin/pi")))
+@Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     private func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
@@ -71,9 +71,19 @@ struct RealPiTests {
             try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high, in: s.id)
             try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.key.id == "echo" && bridge.sessions.first?.thinking == .known(.off) }
 
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.pi)) {
                 try await bridge.configure(model: PiModelKey(provider: "fake", id: "nope"), in: s.id)
             }
+
+            // 换到不能看图的模型：不能再发图片（界面的"图片文件…"跟着能力表收起），换回来又能
+            #expect(bridge.sessions.first?.capabilities.contains(.images) == true)
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo-b"), in: s.id)
+            try await eventually("不能看图") { bridge.sessions.first?.capabilities.contains(.images) == false }
+            await #expect(throws: PiBridgeError.unsupported) {
+                try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: Data([0x89]))]), to: s.id)
+            }
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), in: s.id)
+            try await eventually("又能看图") { bridge.sessions.first?.capabilities.contains(.images) == true }
 
             // 改名同一条路（Pi 设置会话名的接口），会话名随即上报；空名拒绝
             try await bridge.configure(name: "登录修复", in: s.id)
@@ -93,13 +103,14 @@ struct RealPiTests {
     }
 
     /// 终端里开的会话（扩展接口 `ctx.shutdown`）：正在等你确认时，结束会取消这个弹窗，让会话能收尾（弹窗不取消，Pi 会一直等下去）。
-    /// 测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求，所以这里只验证弹窗被取消、会话回到空闲。
+    /// 测试驱动的是 RPC 进程，它在下一条命令后才检查退出请求（结束等不到它下线），所以这里只验证弹窗被取消、会话回到空闲。
     @Test func endingASessionCancelsItsPendingDialog() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/ask")
             try await eventually("确认框") { bridge.sessions.first?.question?.kind == .known(.confirm) }
 
-            try await bridge.end(s.id)
+            let ending = Task { try await bridge.end(s.id) }
+            defer { ending.cancel() }
 
             _ = try await pi.waitForEvent("扩展拿到取消") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:false" }
             try await eventually("弹窗收起") { bridge.sessions.first?.question == nil }
@@ -119,6 +130,18 @@ struct RealPiTests {
 
             try pi.prompt("接着说")
             try await eventually("还能接着说") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说 IMAGES[]" }
+        }
+    }
+
+    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（Pi 1.2 在工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
+    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错。
+    @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
+        try await withRig { pi, bridge, s in
+            try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
+            try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
+            try await bridge.abort(s.id)
+            try await eventually("这一轮结束", timeout: .seconds(30)) { [.settled, .error].contains(bridge.sessions.first?.state) }
+            #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
         }
     }
 
@@ -143,8 +166,6 @@ struct RealPiTests {
 
             let states = log.states
             #expect(states.first == .thinking)
-            let outputting = try #require(states.firstIndex(of: .outputting))
-            #expect(outputting < states.count - 1, "outputting 在 done 之前")
 
             try await eventually("会话文件写入回复") { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
             #expect(try history(of: s).displayName == "hello")
@@ -173,7 +194,7 @@ struct RealPiTests {
     @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
             let ended = ChangeLog(bridge)
-            let history = HistoryEventLog(PiHistoryIndexer(root: pi.paths.sessionsDirectory) { _ in nil })
+            let history = HistoryEventLog(PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!)
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")
@@ -197,7 +218,7 @@ struct RealPiTests {
             let working = log.changes.compactMap { change -> PiSession? in
                 guard case .stateChanged(let session, _) = change else { return nil }
                 switch session.state {
-                case .thinking, .outputting, .tool: return session
+                case .thinking, .tool: return session
                 default: return nil
                 }
             }
@@ -227,6 +248,7 @@ struct RealPiTests {
         (cjkCommand, String(cjkCommand.prefix(119)) + "…"),
     ])
     func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
+        AgentTape.variant("\(command.count)")
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:\(command)]]")

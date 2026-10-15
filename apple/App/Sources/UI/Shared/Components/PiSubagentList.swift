@@ -57,7 +57,7 @@ struct PiSubagentList: View {
             HStack(spacing: 6) {
                 PiStateDot(shown: agent.shown, size: 7)
                 Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                Text("\(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(PiProvider(reference: model)?.image ?? PiProvider.unknown) \(PiModelName.short(model))") } ?? Text(verbatim: ""))")
+                Text("\(agent.role)\(agent.model.map { model in Text("\(Dotted.separator)\(BrandMark.model(reference: model).image) \(PiModelName.short(model))") } ?? Text(verbatim: ""))")
                     .foregroundStyle(palette.ink3).lineLimit(1)
                 Spacer(minLength: 8)
                 if let clock = PiSubagentClock(agent) { Elapsed(clock: clock) }

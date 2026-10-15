@@ -1,3 +1,6 @@
+#if os(macOS)
+import CuePi
+#endif
 import CueStore
 import Foundation
 import Synchronization
@@ -20,7 +23,7 @@ struct AgentDayTests {
 
     /// 行上状态词后面的短词（"有草稿""没能改名"……）。
     private func note(_ item: PiSessionListItem) -> PiRowFacts.Note? {
-        settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename).note
+        settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename, at: .always()).note
     }
 
     @discardableResult
@@ -35,6 +38,21 @@ struct AgentDayTests {
         try await executor.start()
         for try await open in store.observe({ try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
         await executor.stop()
+    }
+
+    /// 在等你时按它问的是什么说：要你填一段文字是"等你回答"，是或否、从选项里选是"等你确认"。
+    @Test func 文字题等你回答_确认与选择题等你确认() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let questions: [(String, PiQuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
+        for (id, kind) in questions {
+            try await recorder.update(
+                sessionID: id, state: .waitingForUser, title: id,
+                question: PiQuestion(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
+        }
+
+        #expect(try await label("words") == "等你回答")
+        #expect(try await label("yesno") == "等你确认")
+        #expect(try await label("pick") == "等你确认")
     }
 
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话_排队() async throws {
@@ -67,6 +85,22 @@ struct AgentDayTests {
         #expect(queued.note == "你的话排队中")
     }
 
+    #if os(macOS)
+    /// 这台 Mac 上它正在出字：会话行与会话页顶栏同一个说法"输出中"，说完（正在说的话清掉）回到"思考中"。
+    @Test func 正在出字时列表与顶栏都写输出中() async throws {
+        let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "atlas", state: .thinking, title: "atlas")
+
+        app.services.pi.setDraft(ext.id, PiDraft(text: "先看", since: .now))
+        let row = try await item("atlas")
+        #expect(workspace.shown(row).label == "输出中")
+        #expect(workspace.shownInHeader(row.state).label == "输出中")
+
+        app.services.pi.setDraft(ext.id, nil)
+        #expect(workspace.shown(row).label == "思考中")
+    }
+    #endif
+
     @Test func 没能送达留到看过为止_发给已结束的会话是正在唤醒() async throws {
         let beta = PiStateRecorder(store: store, hostID: "mac-b")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
@@ -89,17 +123,17 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "delta", state: .settled, title: "delta")
         func title() async throws -> String {
             let item = try await item("delta")
-            return PiRename.title(of: item.state, request: item.rename)
+            return PiRename.title(of: item.state, request: item.rename, at: .always())
         }
 
         let request = try await app.services.rename(try await item("delta").state, to: "  排队调度\n")
-        #expect(request.config == PiConfig(name: "排队调度") && PiChat.outgoing([request], messages: []).isEmpty)  // 不算发给会话的话
+        #expect(request.config == PiConfig(name: "排队调度") && PiChat.outgoing([request], messages: [], at: .always()).isEmpty)  // 不算发给会话的话
         #expect(try await title() == "排队调度")
         #expect(try await item("delta").delivery == nil)
 
         try await macAnswers(request, host: "mac-d", .failed("Pi 已经退出"))
         let failed = try await item("delta")
-        #expect(PiRename.title(of: failed.state, request: failed.rename) == "delta")
+        #expect(PiRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
         #expect(note(failed) == .renameFailed)
         settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
         #expect(note(failed) == nil)  // 看过就不再写
@@ -122,12 +156,12 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "ask", state: .waitingForUser, detail: "要覆盖吗？", title: "ask")
         try await recorder.update(sessionID: "broken", state: .error, title: "broken")
 
-        let all = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, from: store)
+        let all = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(all.now.map(\.state.sessionID) == ["ask", "broken", "busy", "idle"])
         #expect(all.ended.map(\.state.sessionID) == ["done"])
-        let inTable = try await PiSessionList.read(text: "", project: table.id, historyLimit: PiSessionList.pageSize, from: store)
+        let inTable = try await PiSessionList.read(text: "", project: table.id, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(inTable.now.map(\.state.sessionID) == ["busy"])
-        let found = try await PiSessionList.read(text: "bro", historyLimit: PiSessionList.pageSize, from: store)
+        let found = try await PiSessionList.read(text: "bro", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
         #expect(found.now.map(\.state.sessionID) == ["broken"])
     }
 
@@ -137,16 +171,16 @@ struct AgentDayTests {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "deploy", state: .waitingForUser, title: "deploy")
         let session = try await item("deploy").state
         let workspace = Workspace(services: app.services)
-        func list() async throws -> PiSessionList { try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, from: store) }
+        func list() async throws -> PiSessionList { try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store) }
 
         await workspace.end(session)
         await workspace.end(session)
         let ends = try await store.deliveryRequests(toSession: "deploy").filter { $0.mode == .known(.end) }
         #expect(ends.count == 1)
-        #expect(try await list().ends[session.id]?.isOpen == true)
+        #expect(try await list().ends[session.id] == .sending)
 
         try await macAnswers(ends[0], host: "mac-a", .failed("会话没有按时结束，可能还在等你在终端里处理"))
-        #expect(try await list().ends[session.id]?.failure == "会话没有按时结束，可能还在等你在终端里处理")
+        #expect(try await list().ends[session.id]?.failure == .reported("会话没有按时结束，可能还在等你在终端里处理"))
 
         await workspace.end(session)
         let retry = try #require(try await store.deliveryRequests(toSession: "deploy").last { $0.mode == .known(.end) })

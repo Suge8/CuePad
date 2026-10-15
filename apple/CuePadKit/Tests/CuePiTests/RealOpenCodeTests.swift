@@ -6,14 +6,15 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 本机装的 OpenCode（`brew install opencode`）；没装就跳过。
-/// 真 OpenCode 的用例开了（`RealAgents`）时，本机装的 OpenCode
-let realOpenCodeURL = RealAgents.on(.opencode) ? ExecutableLocator.standard.candidates("opencode").first : nil
-private let freeModel = PiModelKey(provider: "opencode", id: "big-pickle")
+/// 本机装的 OpenCode（`brew install opencode`）
+let realOpenCodeURL = ExecutableLocator.standard.candidates("opencode").first
+/// 测试用的免费模型：缺省 big-pickle，限流时用 `CUEPAD_OPENCODE_MODEL` 换成别的免费模型（`opencode` 提供方下的 id）
+let openCodeTestModel = PiModelKey(provider: "opencode", id: ProcessInfo.processInfo.environment["CUEPAD_OPENCODE_MODEL"] ?? "big-pickle")
 
 /// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
 /// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。
-/// 默认模型是免费的 big-pickle。
+/// 像用过 OpenCode 的机器：先起一次服务、等它取到模型表（存进它的库）再停。从没取过表的头一次启动用随包的旧表，
+/// 配置的默认模型不在旧表里时它改用表里第一个（README"已知边界"）。
 final class OpenCodeSandbox {
     let root: URL
     let work: URL
@@ -35,9 +36,40 @@ final class OpenCodeSandbox {
         for directory in [work, config, root.appending(path: "home")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        let settings: [String: Any] = ["model": "\(freeModel.provider)/\(freeModel.id)"]
+        let settings: [String: Any] = ["model": "\(openCodeTestModel.provider)/\(openCodeTestModel.id)"]
         try JSONSerialization.data(withJSONObject: settings).write(to: config.appending(path: "opencode.json"))
         try await run(["service", "set", "port", String(try Self.freePort())])
+        try await run(["service", "start"])
+        try await refreshed()
+        let pid = try #require(service?.pid)
+        try await run(["service", "stop"])
+        try await eventually("OpenCode 服务退出") { kill(pid, 0) == -1 && errno == ESRCH && self.service == nil }
+    }
+
+    /// 让服务取到模型表：头一回有人要模型表时它才联网取（实测 0.6～2 秒），存进它库里的 `kv`（`models-dev:catalog`）后发
+    /// `models-dev.refreshed`。先连上事件流再要一次模型表；连上时与之后每来一行（含每 15 秒的心跳）都看一眼库里存了没有。
+    private func refreshed() async throws {
+        let service = try #require(service)
+        var request = URLRequest(url: URL(string: service.url + "/api/event")!)
+        request.setValue("Basic " + Data("opencode:\(service.password)".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
+        let events = request
+        request.url = URL(string: service.url + "/api/model")!
+        let models = request
+        let database = root.appending(path: "xd/opencode/opencode.db").path
+        try await withDeadline(.seconds(60), orThrow: CancellationError()) {
+            let (bytes, _) = try await URLSession.shared.bytes(for: events)
+            var asked = false
+            for try await _ in bytes.lines {
+                if !asked {
+                    _ = try await URLSession.shared.data(for: models)
+                    asked = true
+                }
+                let stored = await ChildProcess.run(
+                    URL(filePath: "/usr/bin/sqlite3"), ["-readonly", database, "SELECT count(*) FROM kv WHERE key = 'models-dev:catalog'"],
+                    timeout: .seconds(10))
+                if stored?.output.trimmingCharacters(in: .whitespacesAndNewlines) == "1" { return }
+            }
+        }
     }
 
     /// 跑一条 opencode 命令（在 `directory` 里），要它成功。
@@ -45,7 +77,7 @@ final class OpenCodeSandbox {
     func run(_ arguments: [String], in directory: URL? = nil) async throws -> String {
         let opencode = try #require(realOpenCodeURL)
         let result = try #require(
-            await runCapturing(opencode, arguments, environment: environment, directory: directory ?? work, timeout: .seconds(180)),
+            await ChildProcess.run(opencode, arguments, directory: directory ?? work, environment: environment, timeout: .seconds(180)),
             "opencode \(arguments) 没跑完")
         try #require(result.status == 0, "opencode \(arguments) 失败：\(result.output)")
         return result.output
@@ -69,6 +101,19 @@ final class OpenCodeSandbox {
         let (data, response) = try await URLSession.shared.data(for: request)
         try #require((response as! HTTPURLResponse).statusCode < 300, "\(method) \(path)：\(String(decoding: data, as: UTF8.self))")
         return data.isEmpty ? [:] : (try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:])
+    }
+
+    /// 失败现场：服务里每个会话的消息与待答表单、桥上的会话，写进临时目录外的一个文件（临时目录随后删掉），路径记进测试结果。
+    @MainActor func dump(_ bridge: PiBridge) async {
+        guard let sessions = try? await api("GET", "/api/session?limit=100")["data"] as? [[String: Any]] else { return }
+        var dump: [String: Any] = ["sessions": sessions, "bridge": String(describing: bridge.sessions.filter { $0.agent == .opencode })]
+        for id in sessions.compactMap({ $0["id"] as? String }) {
+            dump[id] = (try? await api("GET", "/api/session/\(id)/message?limit=100&order=asc"))?["data"]
+            dump[id + ".form"] = (try? await api("GET", "/api/session/\(id)/form"))?["data"]
+        }
+        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-opencode-\(UUID().uuidString).json")
+        guard (try? JSONSerialization.data(withJSONObject: dump, options: [.prettyPrinted]).write(to: file)) != nil else { return }
+        Issue.record("OpenCode 现场：\(file.path)")
     }
 
     /// 停掉这台的后台服务（按登记文件里的确切 pid），删掉临时目录。
@@ -98,7 +143,7 @@ final class OpenCodeSandbox {
 /// 端到端：真 OpenCode 的后台服务、真模型（免费的 big-pickle，要联网）。CuePad 看得到它的会话、在 CuePad 里跟它说话与作答，
 /// 也能在服务没开时自己把它拉起来开新会话、接着已结束的会话。
 @MainActor
-@Suite(.enabled(if: realOpenCodeURL != nil, RealAgents.skipped(.opencode, needs: "opencode")), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.live(.opencode, "录不出录像带：要 OpenCode v2，它的免费模型拒绝自行构建的 v2，见 RealAgents"), .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     private func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
@@ -113,7 +158,10 @@ struct RealOpenCodeTests {
             try runtime.start()
             try await body(sandbox, store, bridge, runtime)
             outcome = .success(())
-        } catch { outcome = .failure(error) }
+        } catch {
+            outcome = .failure(error)
+            await sandbox.dump(bridge)
+        }
         await runtime.stop()()
         try await sandbox.stop()
         try outcome.get()
@@ -126,13 +174,13 @@ struct RealOpenCodeTests {
     /// 终端里（`opencode run`，连着后台服务）说过话的会话出现在 CuePad：实时状态、对话进资料库；CuePad 接着跟它说、改名、换模型与强度、
     /// 回答它要你确认的命令；服务停了会话就下线。
     @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
-        try await withOpenCode { sandbox, store, bridge, _ in
+        try await withOpenCode { sandbox, store, bridge, runtime in
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
             try await eventually("终端里的会话上了桥、歇下", timeout: .seconds(60)) { session(bridge)?.state == .settled }
             let live = try #require(session(bridge))
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
-            #expect(live.model?.key == freeModel && live.context?.window != nil)
+            #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
             try await eventually("对话进了资料库", timeout: .seconds(60)) {
                 try await replies(store, live.sessionID).last?.contains("PONG") == true
@@ -155,11 +203,11 @@ struct RealOpenCodeTests {
             let stored = try await sandbox.api("GET", "/api/session/\(live.sessionID)")["data"] as? [String: Any]
             let model = stored?["model"] as? [String: Any]
             #expect(model?["id"] as? String == thinker.id && model?["variant"] as? String == "high" && stored?["title"] as? String == "改过的名字")
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
                 try await bridge.configure(model: PiModelKey(provider: "opencode", id: "no-such-model"), in: live.id)
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
-            try await bridge.configure(model: freeModel, in: live.id)
+            try await bridge.configure(model: openCodeTestModel, in: live.id)
 
             // 用户给这个会话定了规矩：跑命令要先问
             try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
@@ -168,6 +216,7 @@ struct RealOpenCodeTests {
             try await eventually("在等你确认这条命令", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
             let question = try #require(session(bridge)?.question)
             #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch approved.txt"))
+            #expect(question.text.hasPrefix("允许 OpenCode 使用 shell？"), "四家同一句式：\(question.text)")
             try await bridge.answer(.option(question.options[0]), to: question.promptID!, in: live.id)
             try await eventually("答了之后命令跑了、这一轮做完", timeout: .seconds(90)) {
                 FileManager.default.fileExists(atPath: marker.path) && session(bridge)?.state == .settled
@@ -178,16 +227,121 @@ struct RealOpenCodeTests {
                 try await store.piMessages(of: live.sessionID).contains { $0.role == .known(.system) }
             }
 
+            // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
+            await runtime.stop()()
+            #expect(session(bridge) == nil)
+            try await store.deletePiSessions(of: .opencode)
+            try runtime.start()
+            try await eventually("再接入后会话回来、索引写回", timeout: .seconds(60)) {
+                let indexed = try await store.piSession(live.sessionID)
+                return session(bridge) != nil && indexed != nil
+            }
+
             try await sandbox.run(["service", "stop"])
             try await eventually("服务停了，会话下线") { session(bridge) == nil }
         }
     }
 
+    /// 忙的时候先排一句、再插一句：OpenCode 按送进对话的先后排（插的话先进），排队那句的消息 id 却在入队时就定了、比插话的早。
+    /// CuePad 的对话按对话里的位置读，三句话与两次回答一条不少、先后与终端里一致。
+    @Test func aQueuedAndASteeredMessageKeepTheirPlaceInTheConversation() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 20 . Then reply SLEPT."), to: id)
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
+            _ = try await bridge.send(PiMessage(text: "Queued: reply LATER", whenBusy: .followUp), to: id)
+            _ = try await bridge.send(PiMessage(text: "Steer: what is 6+6", whenBusy: .steer), to: id)
+
+            try await eventually("排队那句也答完", timeout: .seconds(180)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
+                    && messages.contains { $0.role == .known(.user) && $0.text.contains("Queued") }
+            }
+            let messages = try await store.piMessages(of: sessionID)
+            let said = messages.filter { $0.role == .known(.user) }.map(\.text)
+            #expect(said.count == 3 && said[1].contains("Steer") && said[2].contains("Queued"), "\(said)")
+            let steer = try #require(messages.firstIndex { $0.text.contains("Steer") })
+            let queued = try #require(messages.firstIndex { $0.text.contains("Queued") })
+            #expect(messages[steer..<queued].contains { $0.role == .known(.pi) }, "插话的回答在排队那句之前")
+            #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
+        }
+    }
+
+    /// 在 CuePad 里停下跑着的一轮：没有回答，对话里留一行"已停止"（四家同一规则）。
+    @Test func aStoppedRoundLeavesAStoppedLine() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
+            // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
+            try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state == .tool }
+            try await bridge.abort(id)
+            try await eventually("停下了，对话里留下'已停止'", timeout: .seconds(60)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+        }
+    }
+
+    /// 在 CuePad 里拒绝它要跑的命令：OpenCode 随之停下这一轮，对话里写"已拒绝"，不写"已停止"（读起来不像你按了停止）。
+    @Test func aRoundEndedByARejectedPermissionSaysDeclined() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
+            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch declined.txt . Then reply DONE."), to: id)
+            try await eventually("在等你确认", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
+            let question = try #require(session(bridge)?.question)
+            try await bridge.answer(.confirmed(false), to: try #require(question.promptID), in: id)
+
+            try await eventually("停下了，对话里写'已拒绝'", timeout: .seconds(60)) {
+                let messages = try await store.piMessages(of: sessionID)
+                return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已拒绝"]
+            }
+            #expect(!FileManager.default.fileExists(atPath: sandbox.work.appending(path: "declined.txt").path))
+        }
+    }
+
     /// 服务没开：CuePad 自己拉起后台服务开新会话、带图发话、派子代理、远程作答它的提问；停止一轮、结束会话，再接着这个已结束的会话说。
+    /// 重新接上（App 重开）：没有标题的会话（模型不存在，这一轮出错，OpenCode 不起标题）仍以首条消息作名字。
+    /// 停止接入时只停 CuePad 拉起的服务：终端拉起的不动，CuePad 拉起的停掉。
+    @Test func reconnectingKeepsTheFirstMessageAndOnlyTheServiceCuePadStartedIsStopped() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let opencode = try #require(realOpenCodeURL)
+            _ = await ChildProcess.run(
+                opencode, ["run", "-m", "opencode/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
+                timeout: .seconds(120))
+            try await eventually("终端的会话出现、名字是首条消息", timeout: .seconds(60)) { session(bridge)?.displayName.contains("say hi") == true }
+            let terminalService = try #require(sandbox.service)
+
+            await runtime.stop()()
+            #expect(sandbox.service?.pid == terminalService.pid && kill(terminalService.pid, 0) == 0, "终端拉起的服务不动")
+            // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
+            for _ in 0..<2 {
+                let reconnected = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+                try reconnected.start()
+                try await eventually("重新接上", timeout: .seconds(60)) { session(bridge) != nil }
+                try await Task.sleep(for: .seconds(2))
+                #expect(session(bridge)?.displayName.contains("say hi") == true, "名字仍是首条消息：\(String(describing: session(bridge)?.displayName))")
+                await reconnected.stop()()
+            }
+
+            try await sandbox.run(["service", "stop"])
+            try await eventually("服务停了") { kill(terminalService.pid, 0) != 0 }
+            let host = OpenCodeRuntime(bridge: bridge, paths: sandbox.paths, store: store, hostID: "mac")
+            try host.start()
+            _ = try await host.open(in: sandbox.work, launchToken: "t-service", name: nil, model: nil, thinking: nil)
+            let started = try #require(sandbox.service)
+            await host.stop()()
+            try await eventually("CuePad 拉起的服务停掉了") { kill(started.pid, 0) != 0 && sandbox.service == nil }
+        }
+    }
+
     /// 开会话时模型配不上：开会话整体失败，这个会话不留在桥上，也不留在 OpenCode 的后台服务里。
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
                 _ = try await runtime.open(
                     in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: "opencode", id: "no-such-model"), thinking: nil)
             }
@@ -202,7 +356,7 @@ struct RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             #expect(sandbox.service == nil)
 
-            let id = try await runtime.open(in: sandbox.work, launchToken: "token-1")
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
 
             let opened = try #require(bridge.session(id: id))
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
@@ -216,10 +370,19 @@ struct RealOpenCodeTests {
             }
             #expect(store.files.fileURL(for: hash) != nil)
 
+            let answered = try await replies(store, opened.sessionID).count
             _ = try await bridge.send(PiMessage(text: "Use the subagent tool with agent explore and description find-readme, prompt: list the files in the current directory. Wait for its result, then reply DONE."), to: id)
-            try await eventually("子代理出现、做完", timeout: .seconds(180)) {
+            @MainActor func explored() -> Bool {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
+            // 免费模型偶尔不派子代理就答（实测 big-pickle 说"没有 subagent 工具"）：那样当场报出它的回答，不干等
+            try await eventually("子代理出现、做完", timeout: .seconds(180)) {
+                if explored() { return true }
+                guard session(bridge)?.state == .settled else { return false }
+                return try await replies(store, opened.sessionID).count > answered
+            }
+            let reply = try await replies(store, opened.sessionID).last?.prefix(200)
+            #expect(explored(), "模型没派子代理：\(String(describing: reply))")
             try await eventually("这一轮做完", timeout: .seconds(180)) { session(bridge)?.state == .settled }
 
             _ = try await bridge.send(PiMessage(text: "Use the question tool to ask me one question with header Color and question Which color? with options Red and Blue. After I answer, reply with exactly the color I chose."), to: id)
@@ -230,6 +393,17 @@ struct RealOpenCodeTests {
             try await eventually("按你的回答接着做完", timeout: .seconds(90)) {
                 let reply = try await replies(store, opened.sessionID).last
                 return session(bridge)?.state == .settled && reply?.contains("Blue") == true
+            }
+
+            // OpenCode 的选择题本身允许自己填：从 CuePad 写一个不在选项里的答案
+            _ = try await bridge.send(PiMessage(text: "Use the question tool once more: header Color, question Which color now? with options Red and Blue. After I answer, reply with exactly the color I gave."), to: id)
+            try await eventually("又在等你回答", timeout: .seconds(90)) { session(bridge)?.question?.kind == .known(.select) }
+            let open = try #require(session(bridge)?.question)
+            #expect(open.allowsOther)
+            try await bridge.answer(.text("Green"), to: open.promptID!, in: id)
+            try await eventually("按你自己填的接着做完", timeout: .seconds(90)) {
+                let reply = try await replies(store, opened.sessionID).last
+                return session(bridge)?.state == .settled && reply?.contains("Green") == true
             }
 
             let long = PiMessage(text: "Write the numbers from 1 to 400, one per line, each with a long sentence about it.")
@@ -249,7 +423,7 @@ struct RealOpenCodeTests {
             try await bridge.abort(id)
             try await eventually("停下了") { session(bridge)?.state == .settled }
 
-            try await runtime.end(id)
+            try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)
             let indexed = try #require(try await store.piSession(opened.sessionID))
             #expect(indexed.agent == .opencode)
@@ -257,8 +431,12 @@ struct RealOpenCodeTests {
             let resumed = try await runtime.resume(indexed)
             #expect(bridge.session(id: resumed)?.sessionID == opened.sessionID)
             let before = try await replies(store, opened.sessionID).count
-            _ = try await bridge.send(PiMessage(text: "Reply with exactly the word BACK."), to: resumed)
-            try await eventually("接着说的回答到了", timeout: .seconds(90)) { try await replies(store, opened.sessionID).count > before }
+            // 停得早时那句长的还没回答就留在上下文里：不说明作废，模型会把两句当一个矛盾的要求、用提问工具反问（实测 big-pickle）
+            _ = try await bridge.send(PiMessage(text: "The earlier unfinished request is cancelled, do not do it. Reply with exactly the word BACK."), to: resumed)
+            try await eventually("接着说的回答到了", timeout: .seconds(90)) {
+                try await replies(store, opened.sessionID).count > before || session(bridge)?.question != nil
+            }
+            #expect(session(bridge)?.question == nil, "模型反问了而没回答：\(String(describing: session(bridge)?.question?.text))")
 
             try await sandbox.api("DELETE", "/api/session/\(opened.sessionID)")
             try await eventually("删掉的会话下线、索引也删了") {

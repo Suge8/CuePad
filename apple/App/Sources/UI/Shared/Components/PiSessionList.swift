@@ -12,9 +12,11 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         var project: UUID?
     }
 
+    /// 重读的条件：筛选、页数，与此刻（到点、同步通断时次序与"没能送达"随之变，`AppServices.speech`）。
     struct Key: Equatable {
         var filter: Filter
         var limit: Int
+        var moment: Speech.Moment
     }
 
     var filter: Filter
@@ -23,22 +25,24 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var total: Int
     /// 能按它筛的项目：在 Mac 上绑了文件夹的（会话按工作目录归入项目，没绑的不会有会话）。
     var projects: Set<UUID>
-    /// 在线会话此刻要显示的结束请求（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
-    var ends: [UUID: DeliveryRequest] = [:]
+    /// 在线会话此刻要显示的那次结束到哪了（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
+    var ends: [UUID: Speech.Trip] = [:]
 
     var loaded: Int { ended.count }
     var isEmpty: Bool { now.isEmpty && total == 0 }
 
-    static func read(text: String, project: UUID? = nil, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
+    static func read(
+        text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
+    ) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cueOnDuty: try store.cueOnDuty()).enumerated().map { ($1.id, $0) })
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cueOnDuty: try store.cueOnDuty(), at: moment).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)),
             ends: try live.reduce(into: [:]) { ends, item in
-                ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID))
+                ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
     }
 }
@@ -49,7 +53,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
 ///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
-/// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
+/// 名字后是哪家 Agent 只放标志（`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
 /// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
 /// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
@@ -60,7 +64,7 @@ struct PiSessionRow: View {
     let project: Project?
     /// 发给它的最近一条投送请求（显示状态见 `PiDelivery`）。
     let delivery: DeliveryRequest?
-    var end: DeliveryRequest?
+    var end: Speech.Trip?
     /// 发给它的最近一条改名（`PiSessionListItem.rename`）：名字与"正在改名""没能改名"由它推出（`PiRename`）。
     var rename: DeliveryRequest?
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
@@ -90,7 +94,7 @@ struct PiSessionRow: View {
 
     var body: some View {
         let shown = workspace.shown(session, delivery: delivery)
-        let facts = services.settings.facts(session, shown: shown, end: end, rename: rename)
+        let facts = services.settings.facts(session, shown: shown, end: end, rename: rename, at: services.speech)
         if style.card {
             card(shown: shown, facts: facts)
         } else {
@@ -155,16 +159,16 @@ struct PiSessionRow: View {
     /// 第一层：名字（有新回复时加粗）、"后台"小签、没送到的折回箭头、右上的时长。
     private func headline(shown: PiShown) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight))
+            Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
-            // 是哪家 Agent（Pi 不标）：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
+            // 是哪家 Agent：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
             if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)
-            if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
-                Image(systemName: "arrow.uturn.backward").font(style.meta.weight(.semibold)).foregroundStyle(palette.failure)
-                    .accessibilityLabel(unsent)
+            if shown.undelivered == nil, let unsent = PiChat.undeliveredNote(undelivered) {
+                PiStateGlyph.undelivered.font(style.meta.weight(.semibold))
+                    .accessibilityHidden(false).accessibilityLabel(unsent)
             }
             // 时间只占它要的宽度，名字拿剩下的
             PiElapsed(shown: shown, font: style.meta, style: .span).fixedSize()
@@ -305,7 +309,7 @@ private struct FactColumns: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            (facts.model.map { Text("\($0.provider.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
+            (facts.model.map { Text("\($0.mark.image) \($0.name)") } ?? Text(verbatim: "")).foregroundStyle(palette.ink2).frame(width: modelWidth, alignment: .leading)
                 .accessibilityLabel(facts.model.map { "模型 \($0.name)" } ?? "")
             if let subagents = facts.subagents { SubagentRoster(summary: subagents) }
             Spacer(minLength: 0)

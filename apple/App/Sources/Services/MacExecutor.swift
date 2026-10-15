@@ -4,21 +4,21 @@ import CueStore
 import Foundation
 
 /// 这台 Mac 上的投送请求执行器：领取发给本机的请求（手机发来的与本机界面写的），按发送方式执行，把结果写回。
-/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止，经各 Agent 的接入在后台开会话、接着会话、结束会话的只有这里；成功送出的话记发送记录。
+/// 全 App 经桥给 Agent 会话发消息、作答、改配置、停止、结束，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     private let store: CueStore
     private let pi: PiBridge
     private let runtimes: [AgentKind: any AgentRuntime]
     private let hostID: String
     private let recorder: PiStateRecorder
-    private let uploadResult: @Sendable (UUID) async -> Void
+    private let upload: @Sendable (UUID) async -> Void
     private let refreshQuota: @MainActor () async throws -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, recorder: PiStateRecorder,
-        uploadResult: @escaping @Sendable (UUID) async -> Void,
+        upload: @escaping @Sendable (UUID) async -> Void,
         refreshQuota: @escaping @MainActor () async throws -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -27,7 +27,7 @@ final class MacExecutor {
         self.runtimes = runtimes
         self.hostID = hostID
         self.recorder = recorder
-        self.uploadResult = uploadResult
+        self.upload = upload
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
     }
@@ -38,7 +38,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [reportIssue] error in
             let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
             Task { @MainActor in reportIssue(message) }
-        }, onFinished: uploadResult) { [weak self] request in
+        }, onWritten: upload) { [weak self] request in
             guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
             return await self.run(request)
         }
@@ -53,7 +53,9 @@ final class MacExecutor {
         return { await executor?.stop() }
     }
 
+    /// 执行一次，把错误归类交给 `DeliveryExecutor`（重试与写回在那里）：暂时性错误（`isTransient`）是暂时没成，其余是失败；
     /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
+    /// 开新会话的错不算暂时性：起得慢的那个之后还会连上，再开一个就是两个会话。
     private func run(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
             try await perform(request)
@@ -62,8 +64,21 @@ final class MacExecutor {
             // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
             reportIssue("处理投送请求时读写资料库失败：\(reason)")
             return .succeeded
+        } catch where request.mode != .known(.start) && Self.isTransient(error) {
+            return .transient(error.localizedDescription)
         } catch {
             return .failed(error.localizedDescription)
+        }
+    }
+
+    /// 暂时性错误：会话正在起、还没连上桥，话还没交出去，过一会儿再试不会说两遍。唤醒超时的几种都已让起到一半的进程退出，
+    /// 重试不会多出一份。没等到确认（`ackTimeout`）、等确认时断开（`sessionEnded`）不算：话可能已经收下了，重试会说两遍。
+    static func isTransient(_ error: any Error) -> Bool {
+        switch error {
+        case PiBridgeError.unknownSession: true  // 会话刚唤醒，桥还没发现它的 socket
+        case PiHostError.notConnected: true  // 唤醒已结束的 Pi 会话，它没及时连上桥
+        case AgentRuntimeError.launchTimedOut: true  // 唤醒其余几家的会话，它没及时起来
+        default: false
         }
     }
 
@@ -81,7 +96,7 @@ final class MacExecutor {
         case .answer: try await answer(request)
         case .config: try await configure(request)
         case .command: try await runCommand(request)
-        case .send: try await deliver(request, whenBusy: nil)
+        case .send: try await deliver(request, whenBusy: nil)  // 桥缺省按等它做完再说入队：写请求时看到的"歇着"可能已过时
         case .steer: try await deliver(request, whenBusy: .steer)
         case .followUp: try await deliver(request, whenBusy: .followUp)
         }
@@ -89,12 +104,11 @@ final class MacExecutor {
 
     // MARK: 发给 Agent 会话
 
-    /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时报错。
+    /// 发出的话：桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说），`whenBusy` 为 nil 的直接发送在会话正忙时按等它做完再说。
     /// 会话已结束时先在后台恢复；送出后记发送记录（带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上）。
     private func deliver(_ request: DeliveryRequest, whenBusy: PiQueueMode?) async throws {
         let (_, id) = try await connect(request.target)
         guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
-        if whenBusy == nil, session.state.isTurnRunning { throw SendError.piSessionBusy }
         let content = SendContent(stored: request.content)
         try await pi.send(
             PiMessage(text: content.plainText, images: try content.piImages(from: store.files), whenBusy: whenBusy, deliveryID: request.id.uuidString), to: id)
@@ -132,7 +146,7 @@ final class MacExecutor {
     /// 不能为了结束它而恢复它。两种都由这里记为已结束、进历史——托管的会话闲置退出不算结束，只有用户的结束请求才算。
     private func end(_ target: SendTarget) async throws {
         let ref = try sessionID(of: target)
-        if let live = pi.session(sessionID: ref) { try await runtime(live.agent).end(live.id) }
+        if let live = pi.session(sessionID: ref) { try await pi.end(live.id) }
         try await recorder.end(sessionID: ref)
     }
 
@@ -166,7 +180,7 @@ final class MacExecutor {
 
     // MARK: 不指向某个会话的请求（除开新会话的开场白外不写发送记录）
 
-    /// 开新会话：在后台托管（`PiHost`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
+    /// 开新会话：在后台托管（各家的 `AgentRuntime`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
     /// 带上发起方的认领标识与会话名、模型、思考强度（Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话），
     /// 连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它），并记发送记录（同 `deliver`：请求清理后对话仍认得出是谁说的）。
     private func startSession(_ request: DeliveryRequest) async throws {
