@@ -20,7 +20,7 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
   public var kind: Open<PiQuestionKind>
   /// 标题与说明，换行分隔，至多 500 字符。
   public var text: String
-  /// 选择框的选项原文，作答时按原文回传。
+  /// 选择框的选项原文，作答时按原文回传：原文相同的两项答出去是同一个答案，只留第一项。
   public var options: [String]
   /// 选择题也能自己填（Agent 本身就给"其他"的：Claude Code 的提问、Codex 带 `isOther` 的、OpenCode 带 `custom` 的）
   public var allowsOther: Bool
@@ -29,7 +29,8 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
     self.promptID = promptID
     self.kind = kind
     self.text = text
-    self.options = options
+    var seen: Set<String> = []
+    self.options = options.filter { seen.insert($0).inserted }
     self.allowsOther = allowsOther
   }
 
@@ -47,12 +48,11 @@ public struct PiQuestion: Sendable, Equatable, StoredJSON {
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    promptID = try container.decodeIfPresent(String.self, forKey: .promptID)
-    kind = try container.decode(Open<PiQuestionKind>.self, forKey: .kind)
-    text = try container.decode(String.self, forKey: .text)
-    options = try container.decodeIfPresent([String].self, forKey: .options) ?? []
-    // 旧版本写的记录没有这个键
-    allowsOther = try container.decodeIfPresent(Bool.self, forKey: .allowsOther) ?? false
+    try self.init(
+      promptID: container.decodeIfPresent(String.self, forKey: .promptID), kind: container.decode(Open<PiQuestionKind>.self, forKey: .kind),
+      text: container.decode(String.self, forKey: .text), options: container.decodeIfPresent([String].self, forKey: .options) ?? [],
+      // 旧版本写的记录没有这个键
+      allowsOther: container.decodeIfPresent(Bool.self, forKey: .allowsOther) ?? false)
   }
 
   /// 同步记录里的 `question` 字段（通知扩展也读它）；读不成 JSON 按没有提问处理，不让整条记录解码失败。

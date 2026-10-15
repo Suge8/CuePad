@@ -2,6 +2,19 @@ import CueStore
 import Foundation
 
 /// 子代理（FireCode 的子代理名册，经同步记录到手机）的展示规则，Mac 与手机同一份。
+nonisolated extension [PiSubagentState] {
+    /// 名册里每一个配上列表用的标识：名字可能重复（别家 Agent 的子代理按角色起名，同一个角色派了几个），同名的按出现先后编号。
+    /// 名册只往后添，已有的编号不变。
+    var identified: [(id: String, agent: PiSubagentState)] {
+        var seen: [String: Int] = [:]
+        return map { agent in
+            let n = seen[agent.name, default: 0]
+            seen[agent.name] = n + 1
+            return ("\(agent.name)#\(n)", agent)
+        }
+    }
+}
+
 nonisolated extension PiSubagentState {
     /// 在跑：自己在工作，或在被审查（审查期间它自己是闲的，但这件事还没完）。
     var isRunning: Bool { phase == .known(.running) || phase == .known(.review) }

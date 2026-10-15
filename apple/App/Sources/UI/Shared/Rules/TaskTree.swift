@@ -32,14 +32,12 @@ nonisolated struct TaskTree: Equatable, Sendable {
         var id: UUID { task.id }
     }
 
-    private(set) var roots: [UUID] = []
-    private var children: [UUID: [UUID]] = [:]
-    private var parents: [UUID: UUID] = [:]
+    private var links = Links([])
     private var tasks: [UUID: Card] = [:]
     private var order: [Card] = []
     /// 层级限制按库里的整棵树算（含已完成、不显示的步骤）：与 Store 写入时的校验同一口径。
     private var everything: [Card] = []
-    private var structure = Structure([])
+    private var structure = Links([])
 
     /// 最深一级任务的缩进层数（0 起）。
     private static let deepest = Card.maxTaskDepth - 1
@@ -48,23 +46,13 @@ nonisolated struct TaskTree: Equatable, Sendable {
     init(_ ordered: [Card], all: [Card]? = nil) {
         order = ordered
         everything = all ?? ordered
-        structure = Structure(everything)
+        structure = Links(everything)
+        links = Links(ordered)
         tasks = Dictionary(ordered.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        for task in ordered {
-            if let parent = task.parentID, tasks[parent] != nil, parent != task.id {
-                parents[task.id] = parent
-                children[parent, default: []].append(task.id)
-            } else {
-                roots.append(task.id)
-            }
-        }
-        // 环（远端并发、还没收敛）里的任务从顶层走不到：当顶层显示
-        let reachable = Set(roots.flatMap { [$0] + descendants(of: $0) })
-        for task in ordered where !reachable.contains(task.id) {
-            parents[task.id] = nil
-            roots.append(task.id)
-        }
     }
+
+    var roots: [UUID] { links.roots }
+    private var parents: [UUID: UUID] { links.parents }
 
     var isEmpty: Bool { tasks.isEmpty }
     /// 要显示的任务，按输入顺序。
@@ -76,15 +64,9 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
     }
     func task(_ id: UUID) -> Card? { tasks[id] }
-    func children(of id: UUID) -> [UUID] { children[id] ?? [] }
-
-    func depth(of id: UUID) -> Int {
-        var depth = 0, cursor = parents[id]
-        while let parent = cursor { depth += 1; cursor = parents[parent] }
-        return depth
-    }
-
-    func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
+    func children(of id: UUID) -> [UUID] { links.children(of: id) }
+    func depth(of id: UUID) -> Int { links.depth(of: id) }
+    func descendants(of id: UUID) -> [UUID] { links.descendants(of: id) }
 
     /// 可见的行：从 `roots`（默认全部顶层）往下，先序。
     func rows(of roots: [UUID]? = nil) -> [Row] {
@@ -203,30 +185,36 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
 }
 
-/// 库里的层级（含不显示的任务）：只用来量深度与高度。
-nonisolated private struct Structure: Equatable, Sendable {
-    private var parents: [UUID: UUID] = [:]
+/// 一组任务的上下级（要显示的那组，或库里含已完成的整棵树）：上级不在这组里的当顶层。
+/// 库里没有环（本机写入校验、远端变更在同一事务里收敛，见 `CardLinks.repairs`），上级链与子树都走得到头。
+nonisolated private struct Links: Equatable, Sendable {
+    private(set) var roots: [UUID] = []
+    private(set) var parents: [UUID: UUID] = [:]
     private var children: [UUID: [UUID]] = [:]
 
     init(_ tasks: [Card]) {
         let ids = Set(tasks.map(\.id))
         for task in tasks {
-            guard let parent = task.parentID, ids.contains(parent), parent != task.id else { continue }
-            parents[task.id] = parent
-            children[parent, default: []].append(task.id)
+            if let parent = task.parentID, ids.contains(parent) {
+                parents[task.id] = parent
+                children[parent, default: []].append(task.id)
+            } else {
+                roots.append(task.id)
+            }
         }
     }
 
-    /// 0 起；远端并发留下的环走到重复处为止。
+    func children(of id: UUID) -> [UUID] { children[id] ?? [] }
+
+    func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
+
+    /// 0 起。
     func depth(of id: UUID) -> Int {
-        var seen: Set<UUID> = [id], cursor = parents[id]
-        while let parent = cursor, seen.insert(parent).inserted { cursor = parents[parent] }
-        return seen.count - 1
+        var depth = 0, cursor = parents[id]
+        while let parent = cursor { depth += 1; cursor = parents[parent] }
+        return depth
     }
 
     /// 连自己在内往下有几级。
-    func height(of id: UUID, seen: Set<UUID> = []) -> Int {
-        guard !seen.contains(id) else { return 0 }
-        return 1 + ((children[id] ?? []).map { height(of: $0, seen: seen.union([id])) }.max() ?? 0)
-    }
+    func height(of id: UUID) -> Int { 1 + (children(of: id).map(height(of:)).max() ?? 0) }
 }

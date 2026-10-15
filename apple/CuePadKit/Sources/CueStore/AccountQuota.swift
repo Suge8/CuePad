@@ -13,9 +13,10 @@ public struct QuotaWindow: Sendable, Equatable, Codable {
   /// 提供方说此刻卡着的就是这个窗口（Claude 响应头的 representative-claim）；提供方没说的（用量接口、Codex）为 false
   public var isBinding: Bool
 
+  /// 报不出有限值的已用比例（NaN、无穷）按 0 记：界面按它换算百分比与弧长，非有限值在整数转换处会崩溃。
   public init(seconds: Int, used: Double, resetsAt: Date, model: String? = nil, isBinding: Bool = false) {
     self.seconds = seconds
-    self.used = used
+    self.used = used.isFinite ? used : 0
     self.resetsAt = resetsAt
     self.model = model
     self.isBinding = isBinding
@@ -29,11 +30,9 @@ public struct QuotaWindow: Sendable, Equatable, Codable {
   /// 线上与存储里 `binding` 只在为真时出现。
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
-    seconds = try c.decode(Int.self, forKey: .seconds)
-    used = try c.decode(Double.self, forKey: .used)
-    resetsAt = try c.decode(Date.self, forKey: .resetsAt)
-    model = try c.decodeIfPresent(String.self, forKey: .model)
-    isBinding = try c.decodeIfPresent(Bool.self, forKey: .isBinding) ?? false
+    try self.init(
+      seconds: c.decode(Int.self, forKey: .seconds), used: c.decode(Double.self, forKey: .used), resetsAt: c.decode(Date.self, forKey: .resetsAt),
+      model: c.decodeIfPresent(String.self, forKey: .model), isBinding: c.decodeIfPresent(Bool.self, forKey: .isBinding) ?? false)
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -131,8 +130,10 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
 
   /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。这次观测没说哪个卡着（用量接口、Codex）时，沿用已存的那个说法：
   /// 提供方的判定只来自 Claude 的响应头，下一次回复会更新它。
+  /// 同一个窗口报了几次的只留第一次：存下的窗口一个窗口一条（界面按窗口认圈与明细的行）。
   func merged(into stored: [QuotaWindow]) -> [QuotaWindow] {
-    var reported = windows
+    var reported: [QuotaWindow] = []
+    for window in windows where !reported.contains(where: { $0.isSameWindow(as: window) }) { reported.append(window) }
     if !reported.contains(where: \.isBinding), let claimed = stored.first(where: \.isBinding),
       let index = reported.firstIndex(where: { $0.isSameWindow(as: claimed) })
     {

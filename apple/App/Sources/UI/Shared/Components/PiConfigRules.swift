@@ -32,7 +32,21 @@ nonisolated enum PiModelLabel {
 /// 拖动时按横向位置均分所有档（含"关"，在最左）。
 nonisolated struct PiThinkingMeter: Equatable {
     let levels: [PiThinkingLevel]
-    let current: PiThinkingLevel?
+    private(set) var current: PiThinkingLevel?
+
+    /// 模型不报档位时没有这个条：拖动换算档位要从档位里取。
+    init?(levels: [PiThinkingLevel], current: PiThinkingLevel?) {
+        guard !levels.isEmpty else { return nil }
+        self.levels = levels
+        self.current = current
+    }
+
+    /// 同一组档位、指着 `level`（按着拖动时先在条上预览）。
+    func pointing(at level: PiThinkingLevel) -> PiThinkingMeter {
+        var meter = self
+        meter.current = level
+        return meter
+    }
 
     var bars: [PiThinkingLevel] { levels.filter { $0 != .off } }
     var filled: Int { current.flatMap { bars.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
