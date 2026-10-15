@@ -217,6 +217,27 @@ struct SessionTaskTests {
         }
     }
 
+    /// 带着草稿开新会话（任务的"开始"、Cue 开工）：Mac 开好的会话的记录先于开会话请求的结果写下，认领先落在草稿上；
+    /// 结果写下时草稿用掉、任务绑上会话。从头到尾只有这一件任务，不另长同名任务。
+    @Test func 带着草稿开新会话_会话记录先于请求结果写下_不另长同名任务() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
+        try await services.resetPiState()  // Mac 启动
+        let leaf = try await store.createTask("修登录", in: project.id)
+        let draft = try await store.createCard(body: "把回调改走统一网关", under: leaf.id)
+        Workspace(services: services).handOff(draft)
+        let launch = try await eventually(store, { try $0.deliveryRequests().compactMap(\.launch).first }) { $0 != nil }
+
+        try await PiStateRecorder(store: store, hostID: services.hostID)
+            .update(sessionID: "s1", state: .thinking, title: "修登录", launchToken: try #require(launch).token)
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.card(leaf.id)?.piSessionID }) { $0 == "s1" }
+        await executor.stop()
+
+        #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).map(\.id) == [leaf.id])
+    }
+
     private func bridge(_ change: PiSessionChange) async throws {
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(change)
