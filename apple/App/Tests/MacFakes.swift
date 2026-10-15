@@ -76,7 +76,9 @@ final class RecordingHost: AgentRuntime {
         if busy { ext.setState(["kind": "thinking"]) }
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
-            return ["ok": true, "delivered": "immediate"]
+            // 与真扩展一样：正忙时说的话排进 Pi 的队列，回报按什么方式排的
+            let queued = busy && command["t"] as? String == "send"
+            return ["ok": true, "delivered": queued ? command["deliverAs"] as? String ?? "followUp" : "immediate"]
         }
         try bridge.start()
         try ext.start()

@@ -83,7 +83,7 @@ public struct PiHistoryUpdate: Sendable {
     public var isSession: Bool
     /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
-    public var recap: PiRecap { checkpoint.recap }
+    public var recap: PiRecap { checkpoint.projectedRecap }
     /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
     /// 这次新消费的字节数（半行不算）
@@ -463,6 +463,13 @@ public enum PiHistory {
 /// 下一句你的话（`said`，含一轮在跑时插进来的）或这一轮结束（`answered`）时，最后那段归给前一句。
 /// 没有回答就结束的一轮按现有规则：被停下留"已停止"（`interrupted`）。
 extension PiHistoryCheckpoint {
+    /// 写到会话记录上的摘要：问答，加上进行中这一轮已做完的工具活动（`PiRecap.pendingTools`，由轮次推出、不另存）。
+    var projectedRecap: PiRecap {
+        var projected = recap
+        projected.pendingTools = round?.tools.settled
+        return projected
+    }
+
     /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮；机器消息（扩展投进来的信封，
     /// `PiSessionName.isMachineMessage`）只开始一轮，其余进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
     /// 一轮在跑时插进来的话：前一句已有的回答先归给前一句，之后的话与工具活动算这一句的。

@@ -334,16 +334,13 @@ private enum CueRunFormat {
         }
     }
 
-    /// Cue 自己的三个工具各一个图标，读文件类与会话里的工具清单同一套（`ToolActivityLine.symbol`）。
+    /// Cue 自己的三个工具各一个图标，读文件类与会话里的工具清单同一套（`RoundProcess.symbol`）。
     static func symbol(tool: String) -> String {
         switch tool {
         case "task": "checklist"
         case "tell": "text.bubble"
         case "memory": "brain"
-        case "bash": ToolActivityLine.symbol(.command)
-        case "read": ToolActivityLine.symbol(.read)
-        case "grep", "find", "glob", "ls": ToolActivityLine.symbol(.search)
-        default: ToolActivityLine.symbol(.other)
+        default: RoundProcess.symbol(tool: tool)
         }
     }
 

@@ -5,9 +5,10 @@ import CuePi
 #endif
 
 
-/// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
-/// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
-/// Pi 在处理时末尾一行流光的进展（当前动作；计时在顶上一行），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
+/// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（一直展开），
+/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到也不在排队的话接在末尾，气泡下写送达情况，失败的可重发
+/// （排队的在回复框上方，`PiQueueStack`）；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
+/// 有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
 /// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
@@ -151,7 +152,7 @@ struct PiConversation: View {
 
 
 #if os(macOS)
-/// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方一行是此刻的进展），
+/// 会话页对话的末尾（Mac，本机在线的会话）：正在说的话（`PiBridge.Slot.draft`）出字时逐字长出来（`DraftReply`，上方是这一轮的经过，标题行末写"输出中"），
 /// 没有时是进展那一行（`LiveStatus`）——中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
 /// 草稿落库了（`PiDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展那一行（正文已经说完）；
 /// 状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展行被草稿换下时直接拿掉，不叠着淡出。
@@ -166,7 +167,11 @@ struct SessionDraft: View {
         let landed = draft?.landed(newestReply: newestReply) ?? false
         if let draft, !landed {
             VStack(alignment: .leading, spacing: 8) {
-                DraftReply(text: draft.text) { DraftProgress(session: session) }
+                DraftReply(text: draft.text) {
+                    if let ending = LiveStatus.ending(of: session, speaking: true) {
+                        RoundProcess(tools: session.pendingTools, ending: ending)
+                    }
+                }
                 PiSubagentList(agents: session.subagents)
             }
         } else if landed, session.state.known?.isTurnRunning == true {
@@ -220,7 +225,7 @@ private struct ChatSegment: View, Equatable {
                 .padding(.top, Self.turnGap)
         case .pi:
             ReplyBlock(
-                text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
+                text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
             // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
             ContextBoundary(title: entry.text, highlighted: entry.id == highlight)

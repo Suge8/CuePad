@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 42：撤掉 43（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema43 = """
+  /// 把新建的库退回结构 43：撤掉 44（会话记录上这一轮已做完的工具活动）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema44 = "ALTER TABLE piSessionStates DROP COLUMN pendingTools;"
+  /// 退回结构 42：再撤掉 43（模型与命令的目录记录）。
+  static let undoSchema43 = undoSchema44 + """
     DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
     ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
     """

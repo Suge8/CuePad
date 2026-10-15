@@ -25,7 +25,7 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
-/// - `-CuePadToolsOpen YES`：会话页每一轮回答上方的工具清单一开始就展开（`ToolActivityLine`）；
+/// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡或那条任务一出现就画成指针停着的样子（"设为任务"、亮起的"开始"）；

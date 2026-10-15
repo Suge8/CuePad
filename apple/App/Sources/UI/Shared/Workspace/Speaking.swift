@@ -49,6 +49,15 @@ extension Workspace {
         }
     }
 
+    /// 撤回一句排队的话、放回输入框（`box`，接在已有的字后面）改了再发；Mac 已领取（交给了 Agent）的撤不回，提示原因。
+    func takeBack(_ request: DeliveryRequest, into box: Binding<ComposerDraft>) {
+        let services = services
+        attempt {
+            try await services.withdraw(.request(request))
+            box.wrappedValue.append(stored: request.content, files: services.store.files)
+        }
+    }
+
     /// 移除一句没能送达的话（同样先撤回）。
     func remove(_ said: Said) {
         let services = services

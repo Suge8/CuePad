@@ -73,7 +73,7 @@ struct AgentDayTests {
         settings.setReplyDraft(ComposerDraft(text: "  \n"), for: done.state.id)
         #expect(note(done) == nil)
 
-        // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时排队的话只是个小标记
+        // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时还在路上的话只是个小标记（排进 Agent 队列后怎么说在会话页）
         try await say("看看 scheduler", to: "atlas")
         #expect(try await label("atlas") == "发送中")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
@@ -82,7 +82,7 @@ struct AgentDayTests {
         try await say("改完再看看登录回调", to: "gamma", mode: .followUp)
         let queued = workspace.shown(try await item("gamma"))
         #expect(queued.label == "运行工具")
-        #expect(queued.note == "你的话排队中")
+        #expect(queued.note == "你的话发送中")
     }
 
     #if os(macOS)

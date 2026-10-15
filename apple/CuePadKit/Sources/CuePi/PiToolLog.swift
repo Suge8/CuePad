@@ -32,6 +32,9 @@ struct PiToolLog: Codable, Equatable {
         settle(call, failed: failed)
     }
 
+    /// 已做完的调用（还在跑的不算）；还没有做完的为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
+    var settled: Tools? { activity == Tools() ? nil : activity }
+
     /// 这一轮的活动；一次工具都没调为 nil。
     func summary() -> Tools? {
         var log = self
@@ -40,6 +43,7 @@ struct PiToolLog: Codable, Equatable {
     }
 
     /// 失败的调用与成功的一样按类计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
+    /// 清单满了以后改文件与失败的照样列（界面收起时也要列出它们），其余只计数。
     private mutating func settle(_ call: Call, failed: Bool) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
@@ -49,7 +53,7 @@ struct PiToolLog: Codable, Equatable {
             return
         }
         activity.add(call.kind)
-        if activity.items.count < Tools.itemLimit {
+        if activity.items.count < Tools.itemLimit || failed || call.kind == .edit {
             activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
         }
     }

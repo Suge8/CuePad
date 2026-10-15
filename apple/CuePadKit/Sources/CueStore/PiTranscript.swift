@@ -33,14 +33,18 @@ public struct PiRecap: Sendable, Equatable, Codable {
   /// 进行中的提问：你说了、这一轮还没做完（单行，至多 `promptLimit` 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
   /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
   public var pendingPrompt: String?
+  /// 进行中这一轮已做完的工具调用（还在跑的不算，它在会话状态的 `detail` 里）：会话页末尾实时列出这一轮做到哪了；
+  /// 这一轮做完时随回答一起归进那条回答的 `PiChatMessage.tools`，这里清空。没在跑一轮、或这一轮还没做完过工具调用时为 nil。
+  public var pendingTools: PiChatMessage.Tools?
 
   public static let promptLimit = 500
   public static let replyLimit = 1_200
 
-  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil) {
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil) {
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
     self.pendingPrompt = pendingPrompt
+    self.pendingTools = pendingTools
   }
 }
 
@@ -48,7 +52,8 @@ public struct PiRecap: Sendable, Equatable, Codable {
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
-/// 只记这一轮的工具活动摘要（`tools`：分类计数与一份紧凑清单，不含工具输出）和从你说话起做了多久（界面写"改了 2 个文件，运行了 5 条命令 · 2 分钟"）。
+/// 只记这一轮的工具活动（`tools`：分类计数与一份紧凑清单，不含工具输出）和从你说话起做了多久（界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。
+/// 还在跑的这一轮已做完的工具活动在会话记录上（`PiRecap.pendingTools`）。
 public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
@@ -150,7 +155,7 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
-  /// 一轮里 Agent 的工具活动：各类调用的次数（失败的也算，读、改文件按文件算）和一份按先后的清单（每条自己标成败）。
+  /// 一轮里 Agent 的工具活动：各类调用的次数（失败的也算，读、改文件按文件算；合计就是界面上的"跑了 N 步"）和一份按先后的清单（每条自己标成败）。
   /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
   public struct Tools: StoredJSON, Equatable, Sendable {
     /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说
@@ -178,7 +183,8 @@ extension PiChatMessage {
 
     /// 各类的调用数，失败的也算在自己那一类里（与清单的行同一口径）
     public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
-    /// 清单，按发生先后，至多 `itemLimit` 条；超出的只进计数
+    /// 清单，按发生先后。改了的文件与失败的调用总在里面（界面收起时也列出它们，不能被埋掉；出错几处就数它们）；
+    /// 其余至多列到清单满 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
     public static let itemLimit = 30
@@ -260,10 +266,11 @@ extension CueStore {
     let recap = transcript.recap
     try db.run(
       """
-      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, modifiedAt = ?4
-      WHERE id = ?5 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3)
+      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, pendingTools = ?4, modifiedAt = ?5
+      WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3 OR pendingTools IS NOT ?4)
       """,
-      [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, Date.stamp, PiSessionState.recordID(sessionID: transcript.sessionID)])
+      [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, recap.pendingTools?.stored, Date.stamp,
+       PiSessionState.recordID(sessionID: transcript.sessionID)])
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

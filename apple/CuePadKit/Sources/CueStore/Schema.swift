@@ -180,6 +180,8 @@ enum Schema {
       ALTER TABLE piSessionStates ADD COLUMN catalogID TEXT;
       \(catalogIndex)
       """),
+    // 44：会话记录加进行中这一轮已做完的工具活动（`PiRecap.pendingTools`）
+    "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT;",
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -337,7 +339,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT,
+      pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;

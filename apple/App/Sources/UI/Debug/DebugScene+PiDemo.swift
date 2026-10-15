@@ -14,7 +14,7 @@ extension DebugScene {
         var answered: Date
     }
 
-    /// 把几轮写成会话的对话与摘要（最后一轮没答完，它的话是进行中的提问）。演示对话与大库的长对话共用。
+    /// 把几轮写成会话的对话与摘要（最后一轮没答完，它的话是进行中的提问、它的工具活动是这一轮已做完的几步）。演示对话与大库的长对话共用。
     static func writeChat(_ sessionID: String, _ turns: [ChatTurn], store: CueStore) async throws {
         var messages: [PiChatMessage] = []
         for (index, turn) in turns.enumerated() {
@@ -26,9 +26,10 @@ extension DebugScene {
             }
         }
         let done = turns.last { $0.pi != nil }
-        let pending = turns.last.flatMap { $0.pi == nil ? $0.you : nil }
+        let pending = turns.last.flatMap { $0.pi == nil ? $0 : nil }
         try await store.writePiTranscript(PiTranscript(
-            sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
+            sessionID: sessionID, messages: messages,
+            recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
 
     /// 两台 Mac 的项目目录绑定：工作室的 Mac 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
@@ -243,7 +244,12 @@ extension DebugScene {
         await seedPreviews(store, now: now)
         await chat("atlas", [
             ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", Self.testRun, 2),
-            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, nil, 0),
+            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, .init(
+                edits: 2, commands: 1, reads: 1,
+                items: [
+                    .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.ts", added: 3, removed: 1),
+                    .init(kind: .edit, target: "scheduler/queue.test.ts", added: 8, removed: 2), .init(kind: .command, target: "pnpm tsc --noEmit", failed: true),
+                ]), 0),
         ], startedMinutesAgo: 6)
         await chat("homepage", [
             ("把 RSS 输出改成全文", nil, nil, 0),
