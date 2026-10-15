@@ -59,6 +59,15 @@ forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
   '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
 
+# 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
+hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
+  -e '\.contextMenu\s*(?:\(menuItems:|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*preview:)' -- App CuePadKit)" && rc=0 || rc=$?
+[ "$rc" -le 1 ] || exit "$rc"
+if [ "$rc" = 0 ]; then
+  printf '%s\n  → 带预览的长按菜单用 contextMenu(menu:lifting:)（iOS/Components.swift）：预览是系统另起的一层宿主、不继承环境，读 Workspace 这类对象直接 fatalError（2610152015 长按任务崩溃）\n\n' "$hits"
+  status=1
+fi
+
 # 调试目录与产品同一个 target：文件不整个包在 DEBUG 里，Debug 构建与测试照过，Release 编不过或把调试代码发出去（350b9a47）。
 # DebugHooks.swift 是两种构建共用的入口，例外
 for file in App/Sources/UI/Debug/*.swift; do

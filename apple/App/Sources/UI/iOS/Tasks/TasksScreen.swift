@@ -141,10 +141,8 @@ struct TaskLine: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             // 预览的外形也要说给系统：不说时它按自己的默认把预览裁成两端全圆
             .contentShape(.contextMenuPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
-            .contextMenu { CardActions(card: task) } preview: {
-                // 预览是另起的一层，不继承外面的环境：调色板要带进去，否则深色下圈与字按浅色的墨画，几乎看不见
+            .contextMenu { CardActions(card: task) } lifting: {
                 line(next: next, done: done).frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
-                    .environment(\.palette, palette)
             }
             // 读屏把一行当一个元素："任务内容，步骤，项目，下一步"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
