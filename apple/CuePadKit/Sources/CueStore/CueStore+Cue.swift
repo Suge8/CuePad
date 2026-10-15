@@ -8,46 +8,56 @@ extension CueStore {
   /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"，选项是 `CueAsk.choices`）：
   /// 你已说过这类事以后不用问（库里有它的规矩行，`CueAsk.rule`）就抛 `alreadyAllowed`、什么都不写。
   @discardableResult
-  /// `tools`：这一轮的经过（值班的管理器在一轮做完时写）；有经过的动态可以没有正文。
-  public func addCueMessage(
-    _ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil
-  ) throws -> CueMessage {
-    guard tools != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
+  public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+    guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
       if let ask, let allowed = try allowingLine(ask, task: task) { throw CueStoreError.alreadyAllowed(allowed) }
-      return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task, tools: tools)
+      return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task)
     }
   }
 
-  /// 写一条对话（在写事务内调用）。
+  /// 写一条对话（在写事务内调用）。`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   func insertCueMessage(
-    _ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil
+    _ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil,
+    at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     let message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: choices, urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, tools: tools, notify: false)
+      answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
     try insert(message)
     try registerImages(in: text)
     return message
   }
 
-  /// 一轮做完时写下它留下的那一行（值班的管理器调），经过（`tools`）落在这一轮最后写下的那一行上：
-  /// - 有回复就写回复，带上经过；但不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、收尾的结果），最后那句只是复述，不写；
-  /// - 没写回复：经过补在这一轮里它对你说的最后一条上；也没说过而这一轮做了事（`Kind.acts`），写一条只有经过的动态。只看了看的一轮不留一行。
-  public func settleCueRound(startedAt: Date, reply: String?, as author: CueAuthor, answersYou: Bool, tools: PiChatMessage.Tools?) throws {
-    try write {
-      let told = try db.first(
-        "SELECT id FROM cueMessages WHERE author = 'cue' AND createdAt >= ? ORDER BY createdAt DESC, rowid DESC LIMIT 1", [startedAt]
-      ) { $0.uuid(0) }
-      if let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, answersYou || told == nil {
-        _ = try insertCueMessage(author, text: reply, tools: tools)
-      } else if let tools, let told {
-        try db.run("UPDATE cueMessages SET tools = ?, modifiedAt = ? WHERE id = ?", [tools.stored, Date.stamp, told])
-      } else if let tools, tools.items.contains(where: \.kind.acts) {
-        _ = try insertCueMessage(.note, text: "", tools: tools)
-      }
+  /// 一轮的经过那一行（值班的管理器写，`CueMessage.tools`）：这一轮第一次调工具时在它开始的位置写下（`id` 为 nil，返回新行的 id），
+  /// 之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。
+  /// 这一轮说的话与结果都在它之后。你发起的写成 `round`；Cue 自己醒来的写成没有正文的动态（`note`），跟着动态收起。
+  @discardableResult
+  public func recordCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?) throws -> UUID {
+    let author: CueAuthor = answersYou ? .round : .note
+    return try write {
+      guard let id else { return try insertCueMessage(author, text: "", tools: tools, at: startedAt).id }
+      try db.run(
+        "UPDATE cueMessages SET author = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (author IS NOT ?1 OR tools IS NOT ?2)",
+        [author.rawValue, tools?.stored, Date.stamp, id])
+      return id
     }
+  }
+
+  /// 一轮做完时它的回复（值班的管理器调）：不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、收尾的结果），最后那句只是复述，不写。
+  public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
+    guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    try write {
+      let told = try db.first("SELECT 1 FROM cueMessages WHERE author = 'cue' AND createdAt >= ? LIMIT 1", [startedAt]) { _ in true } ?? false
+      guard answersYou || !told else { return }
+      _ = try insertCueMessage(author, text: reply)
+    }
+  }
+
+  /// Cue 说的、正文就是 `text` 的最近一条（经过清单里"对你说"那一条点它跳回原处）。
+  public func latestCueMessage(saying text: String) throws -> CueMessage? {
+    try select(CueMessage.self, where: "author = 'cue' AND text = ?", [text], orderBy: "createdAt DESC, rowid DESC", limit: 1).first
   }
 
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。结局照常交给 Cue（`toDeliver`），撤回的不交。
@@ -157,7 +167,7 @@ extension CueStore {
   public func cueResume(limit: Int) throws -> CueResume {
     let handoff = try select(CueMessage.self, where: "author = 'handoff'", orderBy: "createdAt DESC, rowid DESC", limit: 1).first
     let after = try select(
-      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
+      CueMessage.self, where: "author IN ('you', 'cue', 'note') AND text != '' AND createdAt > ?", [handoff?.createdAt ?? .distantPast],
       orderBy: "createdAt DESC, rowid DESC", limit: limit + 1)
     return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
   }
@@ -343,15 +353,14 @@ extension CueStore {
   }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
-  public func setCueState(_ state: PiWorkState, detail: String? = nil, pendingTools: PiChatMessage.Tools? = nil) throws {
+  public func setCueState(_ state: PiWorkState, detail: String? = nil, round: UUID? = nil) throws {
     try write {
-      let next = CueState(state: .known(state), detail: detail, pendingTools: pendingTools, modifiedAt: Date.stamp)
-      if let current = try cueState(), current.state == next.state, current.detail == next.detail, current.pendingTools == next.pendingTools { return }
+      let next = CueState(state: .known(state), detail: detail, round: round, modifiedAt: Date.stamp)
+      if let current = try cueState(), current.state == next.state, current.detail == next.detail, current.round == next.round { return }
       try db.run(
         """
         INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt,
-          pendingTools = excluded.pendingTools
+        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round
         """, next.bindings)
     }
   }

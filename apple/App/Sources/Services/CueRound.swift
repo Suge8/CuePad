@@ -5,7 +5,7 @@ import Foundation
 
 /// Cue 的一轮经过：为什么醒、交给大脑的话、调了哪些工具（参数、结果、耗时）、出没出错、做完时上下文用了多少。
 /// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一的事实源。Mac 的"运行情况"读它的全部；
-/// 给人看的那一份由它推出（`process`）：在跑时写进 Cue 此刻的状态、做完时落在这一轮写下的那一行上，随库同步到各端。
+/// 给人看的那一份由它推出（`process`），写在对话里这一轮开始的位置那一行上（`row`），随库同步到各端。
 struct CueRound: Identifiable {
     let id: Int
     /// 为什么醒；没有醒来就开始的一轮（插进来的话恰好赶上这一轮结束）记作你发来消息
@@ -19,6 +19,8 @@ struct CueRound: Identifiable {
     var failure: String?
     /// 做完时上下文用了多少 token
     var context: Int?
+    /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）；还没调过工具时没有
+    var row: UUID?
 
     /// 记下的结果至多这么多字符：记忆、看板的结果可能很长，留住开头够排查
     static let resultLimit = 20_000

@@ -226,14 +226,19 @@ extension PiChatMessage {
       public var removed: Int?
       /// Cue 动到的任务：清单里点这一条打开它
       public var task: UUID?
+      /// Cue 对你说的那条（`CueMessage`）：清单里只留一行，点它跳回对话里的原处
+      public var message: UUID?
 
-      public init(kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil) {
+      public init(
+        kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, message: UUID? = nil
+      ) {
         self.kind = kind
         self.target = target
         self.failed = failed
         self.added = added
         self.removed = removed
         self.task = task
+        self.message = message
       }
     }
 

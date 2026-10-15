@@ -26,7 +26,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
             case .renewed(let handoff):
                 ChatMark(id: handoff.id, kind: .boundary, preview: Dotted("换了新上下文", handoff.createdAt.formatted(date: .omitted, time: .shortened)).visible)
-            case .cue, .notes: nil
+            case .cue, .notes, .process: nil
             }
         })
     }
@@ -46,18 +46,21 @@ nonisolated struct CueThread: Equatable, Sendable {
         return CueThread(messages: messages, tasks: tasks, waiting: waiting)
     }
 
-    /// 对话里的一格：你的话、Cue 的话（第一次提到一件活时下面一行这件活），连着的几条动态收成一格，换新的地方一条分隔（点开是交接备忘）。
+    /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活），
+    /// 连着的几条动态（含 Cue 自己醒来的那几轮的经过）收成一格，换新的地方一条分隔（点开是交接备忘）。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置（选了的带着你选的那一项）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         case cue(CueMessage, task: UUID?)
         case notes([CueMessage])
+        /// 你发起的一轮的经过（`CueAuthor.round`）
+        case process(CueMessage)
         /// Cue 从这里起换了新上下文：写下的那份交接备忘（`CueAuthor.handoff`）就是这里的全部数据。
         case renewed(CueMessage)
 
         var id: UUID {
             switch self {
-            case .you(let message), .cue(let message, _), .renewed(let message): message.id
+            case .you(let message), .cue(let message, _), .renewed(let message), .process(let message): message.id
             case .notes(let group): group[0].id
             }
         }
@@ -82,6 +85,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .note:
                 if case .notes(let group) = rows.last { rows[rows.count - 1] = .notes(group + [message]) } else { rows.append(.notes([message])) }
             case .handoff: rows.append(.renewed(message))
+            case .round: rows.append(.process(message))
             case nil: break
             }
         }

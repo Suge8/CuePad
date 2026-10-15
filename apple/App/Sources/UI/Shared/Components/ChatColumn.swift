@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近 `window` 条，离最早那头不到一屏时
-/// （往上翻、或排开的几条铺不满一屏）再排开 `paging.step` 条；右缘的刻度滑条（`ChatScrubber`）跳到某一条，跳到后描一圈（`chatHighlight`）。
+/// （往上翻、或排开的几条铺不满一屏）再排开 `paging.step` 条；右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
 /// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
 /// 内容只管按 `window` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。
 struct ChatColumn<Content: View, Key: Equatable>: View {
@@ -43,6 +43,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             content(window, showEarlier)
         }
         .environment(\.chatHighlight, highlight.id)
+        .environment(\.chatJump) { follow.seek($0) }
         .overlay(alignment: .trailing) {
             if !marks.isEmpty {
                 ChatScrubber(marks: marks, scrolling: follow.scrolling) { follow.seek($0) }

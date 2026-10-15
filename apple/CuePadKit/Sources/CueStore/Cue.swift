@@ -11,14 +11,17 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case you
   /// Cue 对你说的；带选项的是"等你"
   case cue
-  /// Cue 自己醒来那一轮的动态（折叠显示）
+  /// Cue 自己醒来那一轮的动态（折叠显示）；没有正文的是那一轮的经过（`tools`）
   case note
   /// Cue 请求换新上下文时写的交接备忘
   case handoff
+  /// 你发起的一轮的经过（`tools`，没有正文）：排在这一轮开始的位置，这一轮说的话与结果都在它之后（`CueStore.recordCueRound`）。
+  /// Cue 自己醒来的一轮的经过是一条没有正文的动态（`note`），跟着动态收起
+  case round
 }
 
-/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）、送达（`deliveredAt`）
-/// 与这一轮做完时补上的经过（`tools`，`CueStore.settleCueRound`）会变。动态（`note`）可以没有正文：这一轮只做了事，就只有经过。
+/// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
+/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单。
 /// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueStore.endCueQuestion`，结束了不再变）。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -43,7 +46,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 这一轮的经过（Cue 那一轮调过的工具，`CueActivity`）：落在这一轮最后写下的那一行上（`CueStore.settleCueRound`），与回答注脚同一个样子。
+  /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`），与回答注脚同一个样子；别的行没有。
   public var tools: PiChatMessage.Tools?
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
@@ -231,14 +234,14 @@ public struct CueState: Equatable, Sendable {
   public var state: Open<PiWorkState>
   /// 正在跑的那一步（"动作 · 目标"，`CueActivity.detail`）
   public var detail: String?
-  /// 在跑的这一轮已做完的几步（同会话的 `PiRecap.pendingTools`）；歇着时没有
-  public var pendingTools: PiChatMessage.Tools?
+  /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
+  public var round: UUID?
   public var modifiedAt: Date
 
-  public init(state: Open<PiWorkState>, detail: String? = nil, pendingTools: PiChatMessage.Tools? = nil, modifiedAt: Date = .now) {
+  public init(state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, modifiedAt: Date = .now) {
     self.state = state
     self.detail = detail
-    self.pendingTools = pendingTools
+    self.round = round
     self.modifiedAt = modifiedAt
   }
 
@@ -247,13 +250,9 @@ public struct CueState: Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "pendingTools"]
-  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, pendingTools?.stored] }
-  init(row: Row) {
-    self.init(
-      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), pendingTools: row.textOrNil(4).flatMap(PiChatMessage.Tools.init(stored:)),
-      modifiedAt: row.date(3))
-  }
+  static let columns = ["id", "state", "detail", "modifiedAt", "round"]
+  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round] }
+  init(row: Row) { self.init(state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), modifiedAt: row.date(3)) }
 }
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
