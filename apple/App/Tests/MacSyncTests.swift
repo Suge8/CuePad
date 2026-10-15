@@ -202,6 +202,23 @@ struct MacSyncTests {
         #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-1")).items.map(\.state.sessionID) == ["s1"])
     }
 
+    /// Cue 页输入框的模型菜单：值班那台 Mac 上这家 Agent 最近的会话报的模型（读的是会话指向的目录记录）。
+    @Test func Cue页模型菜单列出值班的Mac上会话报的模型() async throws {
+        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
+        var live = session("s1")
+        live.availableModels = [sonnet]
+        try await services.consumePiChanges(changes([.appeared(live)]))
+        let host = TestApp.hostID
+        try await services.updateCue {
+            $0.hostID = host
+            $0.runtime = .known(.pi)
+            $0.model = "anthropic/sonnet"
+        }
+
+        let menu = try await CueBrainMenu.read(from: services.store)
+        #expect(menu.lists[.pi] == [sonnet] && menu.model == sonnet)
+    }
+
     @Test func 会话按工作目录归入项目_结束后记录保留为已结束() async throws {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory("/work", for: project.id)

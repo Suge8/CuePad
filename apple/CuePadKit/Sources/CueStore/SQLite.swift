@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SQLite3
 
 /// 绑定到语句的值。只有 CueStore 用到的三种存储类。
@@ -35,10 +36,12 @@ extension Optional: SQLBindable where Wrapped: SQLBindable {
   var sqlValue: SQLValue { map(\.sqlValue) ?? .null }
 }
 
-struct SQLiteError: Error, CustomStringConvertible {
+/// 提示里只给 SQLite 的原因；连同出错的语句记进日志（`SQLite.error`）。
+struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
   var description: String { "SQLite: \(message) [\(sql)]" }
+  var errorDescription: String? { "资料库读写出错：\(message)" }
 }
 
 /// 一行结果，按列序号读取。只在 `query` 的回调里有效。
@@ -95,6 +98,7 @@ final class SQLite {
   /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
+  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sqlite")
   /// `tracking` 期间读到的表。
   private var tracked: Set<Table>?
 
@@ -220,7 +224,9 @@ final class SQLite {
 
   private func error(_ sql: String) -> any Error {
     if sqlite3_errcode(handle) & 0xff == SQLITE_READONLY { return CueStoreError.readOnlyLibrary }
-    return SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
+    let error = SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
+    Self.log.error("\(error.description, privacy: .public)")
+    return error
   }
 }
 
