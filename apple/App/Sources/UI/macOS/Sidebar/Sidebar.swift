@@ -488,7 +488,7 @@ private struct AgentConnectCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("接入 Agent").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text("看会话、发话、作答、后台开").font(Typography.meta).foregroundStyle(palette.ink3)
+                Text("终端里的会话也看得到、能发话作答").font(Typography.meta).foregroundStyle(palette.ink3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
@@ -501,7 +501,7 @@ private struct AgentConnectCard: View {
         }
         .padding(10)
         .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("接入 Pi、Claude Code、Codex 或 OpenCode：它们的会话出现在这里，在 Mac 和手机上看进展、发话、回答提问，也能在后台开会话。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
+        .help("接入 Pi、Claude Code、Codex 或 OpenCode：在终端里开的会话也出现在这里，在 Mac 和手机上看进展、发话、回答提问。CuePad 往它的配置目录写技能（Claude Code、Codex 另写钩子），在设置里关掉即删除。")
         .transition(.opacity)
     }
 }

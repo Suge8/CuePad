@@ -2,7 +2,7 @@ import Foundation
 
 /// 一台 Mac 上的 Agent 能不能用、各家的模型（同步表 `macAgents`，每台 Mac 一条，只由它自己写；各端只读）：
 /// 开新会话能选哪几家、默认哪家、Cue 的大脑能选哪几家哪些模型、不指定模型时实际用哪个、一家都不能用时为什么，两端都只从这里推出。
-/// 能用 = 装着、接入了（`AgentStatus.canLaunch`），并且问得出它的模型（登录了）；探测与写的时机在 App 的 Mac 端。
+/// 能用 = 开得出会话（装着；Pi 还要接入 CuePad）并且问得出它的模型（登录了），规则在 `AgentProbe`；探测与写的时机在 App 的 Mac 端。
 /// 内容没变不写（不触发同步）。没有记录（还没探测完，或更旧版本的 Mac）是一家都不能用。
 public struct MacAgents: Equatable, Sendable {
   public var hostID: String
