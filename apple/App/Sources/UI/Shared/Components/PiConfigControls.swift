@@ -19,15 +19,17 @@ struct PiModelGroup: Identifiable {
 
     var mark: BrandMark? { agent?.mark ?? provider?.mark }
 
-    /// 一项：一个模型，或这一组没有清单时的"默认"（`model` 为 nil）。名字与标志都按模型定（`BrandMark.model`），这里一处。
+    /// 一项：一个模型。名字与标志都按模型定（`BrandMark.model`），这里一处；不指定模型时用的那项（Cue 页）在名字下注"默认"。
     struct Item: Identifiable {
         let id: String
-        let model: PiModelOption?
+        let model: PiModelOption
+        var isDefault = false
         let checked: Bool
         let choose: () -> Void
 
-        var name: String { model.map(\.displayName) ?? "默认" }
-        var mark: BrandMark? { model.map(BrandMark.model) }
+        var name: String { model.displayName }
+        var note: String? { isDefault ? "默认" : nil }
+        var mark: BrandMark? { BrandMark.model(model) }
     }
 }
 

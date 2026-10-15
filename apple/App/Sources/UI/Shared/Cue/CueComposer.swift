@@ -34,7 +34,7 @@ struct CueComposer: View {
                     .help("发送（\(ReplyShortcut.send.symbols)）")
                     #endif
             })
-            .onChange(of: opens, initial: true) { if opens != nil { focused = true } }
+            .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
     }
 
     private var form: ComposerForm {

@@ -12,7 +12,7 @@ nonisolated struct PiRowFacts: Equatable {
 
     /// 会话的模型：标志（`BrandMark.model`）与短名（`PiModelName`），与回复框的模型胶囊同一种写法。
     struct Model: Equatable {
-        let mark: BrandMark
+        let mark: BrandMark?
         let name: String
     }
 

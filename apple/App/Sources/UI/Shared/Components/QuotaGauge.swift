@@ -191,7 +191,7 @@ private struct QuotaDial: View {
 
     var body: some View {
         let line = max(1.5, Self.size * 0.064)
-        QuotaRings(Array(meter.rings.prefix(2)), line: line, gap: line * 0.95, showsPace: true, mark: PiProvider(id: meter.provider).image)
+        QuotaRings(Array(meter.rings.prefix(2)), line: line, gap: line * 0.95, showsPace: true, mark: PiProvider(id: meter.provider).mark?.image)
             .frame(width: Self.size, height: Self.size)
             .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: meter.rings)
     }

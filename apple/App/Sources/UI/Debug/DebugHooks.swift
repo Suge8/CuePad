@@ -30,6 +30,8 @@ enum DebugHooks {
         var quotaDetail: String?
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
+        /// Cue 页的输入框一出现就聚焦（`-CuePadCueFocus`）。
+        var cueFocus = false
         /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
         var taskFold = TaskFold()
         #if os(macOS)

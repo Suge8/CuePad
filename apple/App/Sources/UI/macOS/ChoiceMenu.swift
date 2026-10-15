@@ -13,6 +13,7 @@ enum ChoiceMenu {
 
     struct Choice {
         let title: String
+        var subtitle: String? = nil
         var image: NSImage? = nil
         let checked: Bool
         let choose: () -> Void
@@ -40,6 +41,7 @@ enum ChoiceMenu {
         item.target = handler
         // 菜单项只弱引用目标：由它自己留住
         item.representedObject = handler
+        item.subtitle = choice.subtitle
         show(choice.image, on: item)
         item.state = choice.checked ? .on : .off
         return item

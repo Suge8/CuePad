@@ -35,6 +35,7 @@ struct PiModelCapsule: View {
                     ForEach(group.items) { item in
                         Toggle(isOn: Binding(get: { item.checked }, set: { if $0 { item.choose() } })) {
                             Text(item.name)
+                            if let note = item.note { Text(note) }
                             item.mark?.image
                         }
                     }
@@ -51,16 +52,20 @@ struct PiModelCapsule: View {
     }
 
     private func label(at now: Date) -> some View {
-        HStack(spacing: 5) {
+        let mark = current.flatMap(BrandMark.model), binding = binding(at: now)
+        let badged = mark != nil || binding != nil
+        return HStack(spacing: 5) {
             // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
-            ModelBadge(mark: current.map(BrandMark.model) ?? .unknown, binding: binding(at: now))
-                .modifier(Breathing(active: pending))
-                .accessibilityHidden(true)
+            if badged {
+                ModelBadge(mark: mark, binding: binding)
+                    .modifier(Breathing(active: pending))
+                    .accessibilityHidden(true)
+            }
             Text(current.map(PiModelName.short) ?? unnamed).lineLimit(1).truncationMode(.tail)
                 .contentTransition(.opacity)
         }
         .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        .padding(.leading, 6).padding(.trailing, 11)
+        .padding(.leading, badged ? 6 : 11).padding(.trailing, 11)
         // 按内容宽，最宽 `maxWidth`，再长截断
         .frame(maxWidth: maxWidth, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
@@ -84,9 +89,9 @@ struct PiModelCapsule: View {
 
 
 /// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaRings`，不画匀速刻度），
-/// 没有额度的只有标志、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标。
+/// 没有额度的只有标志、占同样大，换模型时不跳。认不出的模型（`BrandMark`）只有环；两样都没有时胶囊上不放它。
 struct ModelBadge: View {
-    let mark: BrandMark
+    let mark: BrandMark?
     let binding: QuotaMeter.Window?
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -97,7 +102,7 @@ struct ModelBadge: View {
                 QuotaRings([binding], line: 1.5, showsPace: false)
                     .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: binding)
             }
-            mark.image
+            mark?.image
                 .font(.system(size: side * 0.52))
                 .contentTransition(.opacity)
         }

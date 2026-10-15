@@ -369,7 +369,7 @@ extension DebugScene {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels)
     }
 
-    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里是通用图标）；
+    /// 演示会话的模型配置，按哪家 Agent：Pi 的模型带提供方（几家各一两个，最后一个是用户自定义的提供方，菜单里不带标志）；
     /// OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）；
     /// Codex 与 Claude Code 是它们自己报的清单，照录像带里 Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）
     /// 与 Claude Code 的 `initialize`（Claude 系），提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。
@@ -442,6 +442,22 @@ extension DebugScene {
         "rename": PiContextUsage(tokens: 188_000, window: 200_000),
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
+
+    /// 演示的几台 Mac 上能用的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 住在这台）与 Mac 上的这台本机
+    /// 有 Pi、Claude Code、Codex（OpenCode 没装：新会话里不列它），MacBook Air（demo-air，只绑了 CuePad）只有 Pi，demo-mini 有 Claude Code 与 Codex。
+    /// 各家的模型与不指定时用的那个照演示会话报的（`demoModels(for:)`）。Mac 本机的会被它自己的探测改写成隔离目录里真实的样子。
+    static func seedMacAgents(_ services: AppServices) async {
+        func agent(_ kind: AgentKind) -> MacAgent {
+            let state = demoModels(for: kind)
+            return MacAgent(kind: kind, model: state.model?.key, models: state.models)
+        }
+        let full = [agent(.pi), agent(.claudeCode), agent(.codex)]
+        var hosts: [(String, [MacAgent])] = [("demo-mac", full), ("demo-air", [agent(.pi)]), ("demo-mini", [agent(.claudeCode), agent(.codex)])]
+        #if os(macOS)
+        hosts.append((services.hostID, full))
+        #endif
+        for (host, agents) in hosts { _ = try? await services.store.recordMacAgents(host: host, agents) }
+    }
 
     /// 不是 Pi 的演示会话（其余是 Pi）：都开在终端里，能做的按各家（`AgentCapabilities`）——cuepad 是 Claude Code（回复框只有文字、没有停止与模型），
     /// homepage 是 Codex（能作答、换模型，没有斜杠命令），billing 是 OpenCode，历史里的 weekly 是 Claude Code。

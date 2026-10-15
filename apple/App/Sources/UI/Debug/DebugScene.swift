@@ -25,6 +25,7 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
+/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦（手机上聚焦才展开出模型与思考强度的胶囊）；
 /// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
@@ -81,6 +82,7 @@ enum DebugScene {
         if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().isEmpty) == true {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }
+        if defaults.bool(forKey: "CuePadDemo") { await seedMacAgents(workspace.services) }
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -160,6 +162,7 @@ enum DebugScene {
         preset.alwaysReachable = preset.demoMac && defaults.string(forKey: "CuePadSync") == nil
         preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
+        preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")
