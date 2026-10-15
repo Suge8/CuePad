@@ -3,9 +3,8 @@ import Foundation
 
 /// Cue 一个班次的系统提示：说明加记忆视图，班次内不变（提示缓存的前缀因此稳定）；此刻的状态每一轮由信封（`CueEnvelope`）带来。
 public enum CuePrompt {
-  /// `agents` 是开会话时可选的 Agent 与模型，一项一行、能照抄进 start（如"agent=pi, model=anthropic/claude-opus-5-5（默认）"）；
-  /// 空时不列，开工不指定、用默认。
-  public static func system(name: String, memory: CueMemoryView, agents: [String] = []) -> String {
+  /// `agents` 是这台 Mac 上开会话时能用的 Agent 与模型（同步表 macAgents 里这台的那条）；空时不列，开工不指定、用默认。
+  public static func system(name: String, memory: CueMemoryView, agents: [MacAgent]) -> String {
     """
     你是 \(name)，用户在 CuePad 里的 Cue。他工作和生活里的事都可以交给你：你把他说的话变成任务，派给 Agent 会话，一路推进到做完，再用一两句告诉他结果。衡量你的只有一件事：每做成一件事打扰他几次，越少越好，但收不回的事一定先问。看到明显该做的下一步，直接做或点出来，不等他开口。
 
@@ -77,9 +76,19 @@ public enum CuePrompt {
   private static let allowed = CueAsk.push.rule(project: nil) ?? ""
   private static let allowedInProject = CueAsk.push.rule(project: "名字") ?? ""
 
-  private static func agentsSection(_ agents: [String]) -> String {
+  /// 清单多于这么多个就只写默认的：Pi 没配范围时可选的是已配好密钥的全部，可能几百个，而系统提示每个班次都带着它。
+  private static let modelsListed = 20
+
+  /// 一家一行，能照抄进 start（如"agent=pi, model=anthropic/claude-opus-5-5（默认）、openai-codex/gpt-6.1-sol"）：
+  /// 模型按这家的写法（`AgentKind.modelRef`），默认的在前；没有模型清单的只写 agent（用它自己的默认）。
+  private static func agentsSection(_ agents: [MacAgent]) -> String {
     guard !agents.isEmpty else { return "" }
-    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model）：\n" + agents.map { "  - \($0)" }.joined(separator: "\n")
+    let lines = agents.map { agent in
+      let others = agent.models.count > modelsListed ? [] : agent.models.map(\.key).filter { $0 != agent.model }
+      let models = (agent.model.map { [agent.kind.modelRef($0) + "（默认）"] } ?? []) + others.map(agent.kind.modelRef)
+      return "  - agent=\(agent.kind.rawValue)" + (models.isEmpty ? "" : ", model=" + models.joined(separator: "、"))
+    }
+    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个）：\n" + lines.joined(separator: "\n")
       + "\n  没说就用 pi 和它的默认模型。"
   }
 }

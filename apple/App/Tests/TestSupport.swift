@@ -166,6 +166,11 @@ final class TestApp {
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
 
+    /// 这台 Mac 写下自己能用 Pi（开新会话只从 macAgents 选 Agent）：探测本身起真 Agent，只在 Kit 的 Real* 测试里验，这里直接写下它的结果。
+    func offersPi() async throws {
+        try await services.store.recordMacAgents(host: Self.hostID, [MacAgent(kind: .pi, model: nil, models: [])])
+    }
+
     /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
     /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
     func connect(_ kind: AgentKind, version: String = "2.1.0") async throws {
@@ -225,8 +230,7 @@ final class TestApp {
             hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,
-            cue: cue ?? CueDependencies(
-                scan: { [] }, launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
+            cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services

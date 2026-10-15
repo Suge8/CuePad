@@ -11,36 +11,31 @@ struct CueConfigControls: View {
     @State private var menu: CueBrainMenu?
 
     var body: some View {
-        let menu = menu ?? CueBrainMenu(profile: CueProfile(), lists: [:])
+        let menu = menu ?? CueBrainMenu(profile: CueProfile(), agents: [])
         PiConfigControls(
             groups: groups(menu), shown: PiConfigShown(model: menu.model, thinking: menu.thinking, pending: false),
-            unnamed: menu.runtime.map { "\($0.name) 默认" } ?? "默认", levels: menu.levels, opening: opening
+            unnamed: menu.runtime?.name ?? "模型", levels: menu.levels, opening: opening
         ) { level in
             update { $0.effort = .known(level) }
         }
         .observing(services.store, into: $menu, onError: workspace.fail) { try CueBrainMenu.read(from: $0) }
     }
 
-    /// 一家一组；选了别家的模型就是换 Agent。
+    /// 一家一组；选了别家的模型就是换 Agent。选标着默认的那项写回 nil：跟着这家的默认走，它换了默认也跟着换。
     private func groups(_ menu: CueBrainMenu) -> [PiModelGroup] {
-        CueProfile.runtimes.map { agent in
-            let mine = menu.runtime == agent
-            let fallback = PiModelGroup.Item(id: "default", model: nil, checked: mine && menu.profile.model == nil) {
-                update {
-                    $0.runtime = .known(agent)
-                    $0.model = nil
-                }
-            }
-            let models = (menu.lists[agent] ?? []).map { model in
+        menu.brains.map { brain in
+            let agent = brain.kind
+            let items = brain.choices.map { model in
                 let ref = agent.modelRef(model.key)
-                return PiModelGroup.Item(id: ref, model: model, checked: mine && menu.model?.key == model.key) {
+                let isDefault = model.key == brain.model
+                return PiModelGroup.Item(id: ref, model: model, isDefault: isDefault, checked: menu.runtime == agent && menu.model?.key == model.key) {
                     update {
                         $0.runtime = .known(agent)
-                        $0.model = ref
+                        $0.model = isDefault ? nil : ref
                     }
                 }
             }
-            return PiModelGroup(id: agent.rawValue, title: agent.name, agent: agent, items: models.isEmpty ? [fallback] : models)
+            return PiModelGroup(id: agent.rawValue, title: agent.name, agent: agent, items: items)
         }
     }
 
@@ -49,42 +44,56 @@ struct CueConfigControls: View {
     }
 }
 
-/// Cue 的模型菜单读的：设置（`CueProfile`）与 Cue 住的那台 Mac 上各家可选的模型。
-/// - 按能当大脑的几家分组（`CueProfile.runtimes`）：组里是这家在那台 Mac 上最近一个报了模型清单的会话的清单（`CueStore.modelLists`）；
-///   这家在那台上没有清单（没跑过、或还没选住在哪台）时只有一项"默认"，用这家自己的默认模型。
-/// - 当前模型：清单里有就是那一项；不在清单里（清单变了）照设置的写法读出、只显示它的 id；用默认为 nil。
-/// - 思考强度的档跟着当前模型：在清单里就是它支持的档；不在清单里（默认或清单变了）不知道它支持什么，取这家清单里各模型支持的档的并集，
+/// Cue 的模型菜单读的：设置（`CueProfile`）与 Cue 住的那台 Mac 上能用的 Agent（`MacAgents`，各端只读它）。
+/// - 按能当大脑、那台上又能用的几家分组（`CueProfile.runtimes` 里那台有的），组里是这家在那台上能选的模型，不指定时用的那项标着默认；
+///   还没选住在哪台、那台还没报过时一组都没有。
+/// - 当前模型：设置里没指定就是这家的默认模型（那台报的具体模型）；指定了且在清单里是那一项，不在清单里（清单变了）照设置的写法读出、只显示它的 id；
+///   这家在那台上不能用、又没指定时为 nil（胶囊写这家的名字）。
+/// - 思考强度的档跟着当前模型：在清单里就是它支持的档；不知道它支持什么时（不在清单里），取这家清单里各模型支持的档的并集，
 ///   清单也没有时是全部档——大脑起来时各家都按模型夹取（`PiThinkingLevel.clamped`），选了也不会出错；显示的当前档同样按这一集合夹取。
 nonisolated struct CueBrainMenu: Equatable, Sendable {
     var profile: CueProfile
-    var lists: [AgentKind: [PiModelOption]]
+    /// Cue 住的那台上能用的几家。
+    var agents: [MacAgent]
 
     static func read(from store: isolated CueStore) throws -> CueBrainMenu {
         let profile = try store.cueProfile() ?? CueProfile()
-        return CueBrainMenu(profile: profile, lists: try profile.hostID.map { try store.modelLists(on: $0) } ?? [:])
+        return CueBrainMenu(profile: profile, agents: try profile.hostID.map { try store.macAgents(on: $0).agents } ?? [])
     }
 
     /// 用哪家；更新的版本写的、不认识的为 nil（菜单里哪项都不打勾）。
     var runtime: AgentKind? { profile.runtime.known }
 
-    private var list: [PiModelOption] { runtime.flatMap { lists[$0] } ?? [] }
+    /// 菜单里的几家：能当大脑、那台上能用、有模型可选。
+    var brains: [MacAgent] {
+        CueProfile.runtimes.compactMap { kind in agents.first { $0.kind == kind } }.filter { !$0.choices.isEmpty }
+    }
+
+    private var brain: MacAgent? { runtime.flatMap { kind in agents.first { $0.kind == kind } } }
 
     var model: PiModelOption? {
-        guard let runtime, let ref = profile.model else { return nil }
-        return listed ?? PiModelOption(key: runtime.modelKey(ref) ?? PiModelKey(provider: "", id: ref), name: "", thinkingLevels: [])
+        guard let runtime else { return nil }
+        guard let ref = profile.model else { return brain?.defaultModel }
+        return brain?.models.first { runtime.modelRef($0.key) == ref }
+            ?? PiModelOption(key: runtime.modelKey(ref) ?? PiModelKey(provider: "", id: ref), name: "", thinkingLevels: [])
     }
 
-    /// 设置里的模型在清单里的那一项：按这家的写法比（`AgentKind.modelRef`，选的时候就是这样写进去的）。
-    private var listed: PiModelOption? {
-        guard let runtime, let ref = profile.model else { return nil }
-        return list.first { runtime.modelRef($0.key) == ref }
-    }
+    /// 当前模型在清单里的那一项（知道它支持哪些档）。
+    private var listed: PiModelOption? { model.flatMap { model in brain?.models.first { $0.key == model.key } } }
 
     var levels: [PiThinkingLevel] {
         if let listed { return listed.thinkingLevels }
-        let supported = Set(list.flatMap(\.thinkingLevels))
+        let supported = Set((brain?.models ?? []).flatMap(\.thinkingLevels))
         return supported.isEmpty ? PiThinkingLevel.allCases : PiThinkingLevel.allCases.filter(supported.contains)
     }
 
     var thinking: PiThinkingLevel? { profile.effort?.known.map { $0.clamped(to: levels) } }
+}
+
+nonisolated extension MacAgent {
+    /// 菜单里列的模型：清单；默认模型不在清单里时（清单没报全）也列上它，不然选不回"跟着默认"。
+    var choices: [PiModelOption] {
+        guard let fallback = defaultModel, !models.contains(where: { $0.key == fallback.key }) else { return models }
+        return [fallback] + models
+    }
 }

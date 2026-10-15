@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import CueStore
 import CueText
 import Foundation
@@ -7,14 +8,29 @@ import os
 
 /// 管理器的外部依赖；`MacDependencies.cue` 给出，测试换成替身。
 struct CueDependencies {
-    /// 查本机装了且登录了的运行时（生产是 `CueRuntimes.scan`，慢）
-    var scan: @Sendable () async -> [AgentKind]
-    /// 起大脑前找可执行文件与可选的 Agent 和模型（生产是 `CueRuntimes.launch`，不问登录）
-    var launch: @Sendable (AgentKind, CueStore) async -> CueLaunch?
+    /// 起大脑前找可执行文件与可选的 Agent 和模型（生产是 `CueLaunch.local`，不问登录）
+    var launch: @Sendable (AgentKind, CueStore) async throws -> CueLaunch?
     /// App 里的 `cuepad` 命令行：Cue 的 MCP 服务
     var helper: URL
     var notifier: any CueNotifying
     var timing = CueTiming()
+}
+
+/// 起一个大脑要的本机信息。
+nonisolated struct CueLaunch: Equatable, Sendable {
+    var executable: URL
+    /// 给大脑与 MCP 服务的 PATH（`ExecutableLocator.system`）：App 自己的 PATH 很短，运行时起的 node 等靠它找到。
+    var path: String
+    /// 开会话能用的 Agent 与模型（`CuePrompt.system` 的 `agents`）
+    var agents: [MacAgent]
+
+    /// 这台 Mac 上起 `runtime` 的大脑：按 `ExecutableLocator.system` 找可执行文件，不问登录（登录不了大脑起不来或一轮出错，由管理器报出）；
+    /// 能用的 Agent 与模型是这台 Mac 写下的那条（`CueStore.macAgents`）。没装为 nil。
+    @concurrent static func local(_ runtime: AgentKind, store: CueStore, host: String) async throws -> CueLaunch? {
+        let locator = await ExecutableLocator.system
+        guard let executable = locator.executable(runtime) else { return nil }
+        return CueLaunch(executable: executable, path: locator.path, agents: try await store.macAgents(on: host).agents)
+    }
 }
 
 /// Cue 的通知出口（Mac 本机）：生产是 `AlertCenter`（点开去哪、开关、提示音、前台怎么呈现都在那里），测试换成记录型替身。
@@ -26,11 +42,10 @@ protocol CueNotifying: AnyObject {
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
 /// - 启用、停用经这里写，与别处改设置同一个写入口（`AppServices.updateCue`，写完立即上传）。
-/// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（没装或没登录）才换成
-///   `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
+/// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（不在这台 Mac 写下的能用的 Agent 里，
+///   `CueStore.macAgents`）才换成 `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
 ///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
-/// - 本机哪几家装了且登录了（`CueDependencies.scan`，状态命令慢）只在启用时查。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
 ///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 ///   免打扰只认系统的专注模式，不看打扰时段（那只管 Cue 自己巡视，`CueTiming.quietHours`）。
@@ -66,7 +81,8 @@ final class CueService {
     /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）：只改住在哪、启用时刻。选的 Agent 这台用不了才换成第一家能用的，
     /// 模型属于原来那家，一并清掉；强度留着（运行时自己取档）。
     func enable() async throws {
-        let available = await dependencies.scan()
+        let usable = try await store.macAgents(on: hostID).kinds
+        let available = CueProfile.runtimes.filter(usable.contains)
         guard let first = available.first else { throw EnableError.noRuntime }
         try await update { [hostID] profile in
             profile.hostID = hostID
@@ -115,7 +131,7 @@ final class CueService {
         guard duty == nil else { return }
         let keeper = CueKeeper(
             CueKeeper.Setup(
-                store: store, launch: { [launch = dependencies.launch, store] in await launch($0, store) },
+                store: store, launch: { [launch = dependencies.launch, store] in try await launch($0, store) },
                 helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
                 upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))

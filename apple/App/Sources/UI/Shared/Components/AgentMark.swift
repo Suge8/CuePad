@@ -23,6 +23,11 @@ struct AgentLabel: View {
     }
 }
 
+nonisolated extension MacAgents {
+    /// 开新会话默认用哪家：上次用的（`AppSettings.lastAgent`）这台还能用就是它，否则第一家；一家都不能用为 nil。
+    func preferred(_ last: AgentKind) -> AgentKind? { kinds.contains(last) ? last : kinds.first }
+}
+
 nonisolated extension PiSessionState {
     /// 标出是哪家 Agent 的会话时写的名字（`AgentKind.name`）：每个会话都标，Pi 也标。其他版本写的、不认识的不标。
     var agentMark: String? { agent.known?.name }

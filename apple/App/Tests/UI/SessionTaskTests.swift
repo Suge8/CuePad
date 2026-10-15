@@ -289,6 +289,7 @@ struct SessionTaskTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await services.resetPiState()  // Mac 启动
+        try await rig.offersPi()
         let leaf = try await store.createTask("修登录", in: project.id)
         let workspace = Workspace(services: services)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)

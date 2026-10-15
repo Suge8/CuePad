@@ -19,6 +19,7 @@ struct SendTargetTests {
     init() async throws {
         project = try await rig.services.store.createProject(name: "Work", color: "blue")
         try await rig.services.store.setDirectory("/work", for: project.id)
+        try await rig.offersPi()
         workspace = Workspace(services: rig.services)
         let changes = rig.pi.changes()  // 先订阅再连上会话：桥的变化写成同步记录
         try rig.pi.start()
