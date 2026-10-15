@@ -42,7 +42,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .answer]
 
   /// 你说的话的几种方式（直接说、马上说、等它做完再说）：没能送达时留着等你重发。
-  static let talk: [DeliveryMode] = [.send, .steer, .followUp]
+  public static let talk: [DeliveryMode] = [.send, .steer, .followUp]
 
   /// SQL `mode IN (…)` 里的列表。
   static func sqlList(_ modes: some Sequence<DeliveryMode>) -> String {

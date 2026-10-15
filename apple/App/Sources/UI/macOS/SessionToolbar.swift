@@ -151,7 +151,7 @@ struct PageTitleSlot: View {
 }
 
 /// "⋯"里会话页的那几项：最上面写所在；绑着的每件没完成的事一项"完成"；"绑定到任务"再绑一件（本项目还没绑会话的叶子任务）；
-/// 属于好几件时"解除绑定"其中正在用它的一件（会话总要留一件事，见 `CueStore.adoptSessions`；以前用过它的不在这里解）；
+/// "解除绑定"正在用它的那几件（以前用过它的不在这里解）；
 /// 下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
 struct SessionMenuItems: View {
     let state: SessionHeader.State
@@ -173,7 +173,7 @@ struct SessionMenuItems: View {
                 }
             }
             let using = link.tasks.filter { $0.task.piSessionID == session.sessionID }
-            if link.tasks.count > 1, !using.isEmpty {
+            if !using.isEmpty {
                 Menu("解除绑定", systemImage: "link.badge.minus") {
                     ForEach(using) { item in
                         Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
@@ -205,12 +205,11 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
     /// 标题里写的那一件：还没做完的第一件，都做完了是第一件。
     var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
 
-    /// 会话名下面那一行"任务 · 步骤"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（不经任务开的会话挂的是同名任务，
-    /// 名字取法见 `CueStore.taskTitle`，改名时跟着改），什么都不剩时没有这一行。
+    /// 会话名下面那一行"任务 · 步骤"（绑着好几件时后面"等 N 件"）：与会话名相同的一段不再写（从任务开的会话以叶子的标题命名），
+    /// 什么都不剩时没有这一行。
     func path(below title: String) -> Dotted? {
         guard let primary else { return nil }
-        let own = CueStore.taskTitle(title)
-        let named = [primary.parent?.title, primary.task.title].filter { $0 != own }
+        let named = [primary.parent?.title, primary.task.title].filter { $0 != title }
         return Dotted(named + [tasks.count > 1 ? "等 \(tasks.count) 件" : nil]).nonEmpty
     }
 

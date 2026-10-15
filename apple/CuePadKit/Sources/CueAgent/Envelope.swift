@@ -21,7 +21,7 @@ public enum CueWake: Equatable, Sendable {
 }
 
 /// 交给 Cue 的大脑的一轮输入：一个 `<cue>` 块，你的话（若有）接在块后面。
-/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（`CueBoardItem.isActive`）、等你、
+/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（在做的任务与没绑任务的活会话，`CueBoard`）、等你、
 /// 接上的（新上下文第一次醒来才有）、醒来的原因。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
@@ -42,7 +42,7 @@ public enum CueEnvelope {
     /// 你关掉、还没告诉 Cue 的提问（`CueStore.cueMessagesToDeliver` 里没选就结束的）：写在变化里。
     public var dismissed: [CueMessage]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
-    public var board: [CueBoardItem]
+    public var board: CueBoard
     public var waiting: [CueMessage]
     public var wake: CueWake
     /// 新上下文第一次醒来：接上的交接与对话（不含这次交出去的话）；其余为 nil
@@ -52,7 +52,7 @@ public enum CueEnvelope {
 
     public init(
       now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
-      dismissed: [CueMessage], board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
+      dismissed: [CueMessage], board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
     ) {
       self.resume = resume
       self.now = now
@@ -81,9 +81,10 @@ public enum CueEnvelope {
     lines += input.changes.map { "- \(change($0))" }
     lines += input.dismissed.map { "- [关掉提问] 他没选就关掉了「\(clip(CueFormat.plainText($0.text), 80))」（\($0.id.shortID)）" }
 
-    let active = input.board.filter(\.isActive)
-    lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
+    let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
+    lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
     lines += active.map { "- \(boardLine($0, now: input.now))" }
+    lines += sessions.map { "- \(sessionLine($0, now: input.now))" }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { message in
@@ -142,7 +143,7 @@ public enum CueEnvelope {
       case .undelivered: "发送失败"
       case .done: "完成"
       }
-    var text = "[\(label)] \(where_(change))"
+    var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
@@ -161,6 +162,16 @@ public enum CueEnvelope {
       "  - " + leafParts(leaf, named: "\(leaf.leaf.heading)（\(leaf.leaf.id.shortID)）", now: now).joined(separator: " · ")
     }).joined(separator: "\n")
   }
+
+  /// 看板上一个没绑任务的活会话（信封与 peek 共用）：名字与短 id、状态与多久、近况。
+  static func sessionLine(_ session: PiSessionState, now: Date) -> String {
+    var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
+    if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
+    return parts.joined(separator: " · ")
+  }
+
+  /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
+  static func sessionName(_ session: PiSessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
 
   private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date) -> [String] {
     let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
@@ -192,8 +203,9 @@ public enum CueEnvelope {
   }
 
   private static func where_(_ change: CueChange) -> String {
-    let base = "\(change.task.heading)（\(change.task.id.shortID)）"
-    guard let leaf = change.leaf, leaf.id != change.task.id else { return base }
+    guard let task = change.task else { return change.session.map(sessionName) ?? "" }
+    let base = "\(task.heading)（\(task.id.shortID)）"
+    guard let leaf = change.leaf, leaf.id != task.id else { return base }
     return "\(base) › \(leaf.heading)"
   }
 

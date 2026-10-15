@@ -170,9 +170,6 @@ final class SQLite {
   /// 最近一条语句改动的行数。
   var changes: Int { Int(sqlite3_changes(handle)) }
 
-  /// 进行中的事务到此为止改动过的行。
-  var pendingChanges: Changes { changeLog.changes }
-
   /// 提交后返回本事务改动过的行；回滚则丢弃。
   func transaction<T>(_ body: () throws -> T) throws -> (result: T, changes: Changes) {
     try exec("BEGIN IMMEDIATE")

@@ -14,8 +14,8 @@ extension CueStore {
   }
 
   /// `requestDelivery` 的事务内部分：必须在写事务内调用。带着任务里的卡开新会话或交话，是叶子换会话的那一刻：
-  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。
-  private func insertDelivery(
+  /// 这件事里没人再用的会话随之结束（`endUnusedSessions`）。对会话说话、作答是它来了新活：它做的已完成的事回到进行中（`reopenWork`）。
+  func insertDelivery(
     _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode, card: UUID? = nil, cue: Bool
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
@@ -29,7 +29,18 @@ extension CueStore {
     if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
       try endUnusedSessions(of: leaf, cue: cue)
     }
+    if DeliveryMode.toSession.contains(mode), let session = target.ref { try reopenWork(on: session, card: card) }
     return request
+  }
+
+  /// 会话来了新活：带着任务里的卡的，那张卡所在的叶子回到进行中；其余在会话没有没做完的叶子绑着时，绑着它、最近完成的那个叶子回到进行中
+  /// （`reopen`）。
+  private func reopenWork(on session: String, card: UUID?) throws {
+    if let card, let leaf = try leaf(holding: card) { return try reopen([leaf]) }
+    let bound = try select(
+      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [session], orderBy: "completedAt DESC, id")
+    guard let latest = bound.first, bound.allSatisfy({ $0.completedAt != nil }) else { return }
+    try reopen([latest.id])
   }
 
   /// 卡所在的叶子：任务就是它的叶子（`promptHome`），挂在任务下的灵感是它的上级；散放的灵感为 nil。

@@ -144,6 +144,7 @@ extension CueStore {
 
   /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   /// 上级原本是叶子时，它的草稿与会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）。
+  /// 上级已完成的回到进行中（`reopen`）。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -152,6 +153,7 @@ extension CueStore {
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       let step = try splittingPrompt(insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last)))
       try settle(around: [parent])  // 叶子加了第一个步骤：它的草稿与会话移到这个步骤上
+      try reopen([parent])
       return try find(Card.self, step.id) ?? step
     }
   }
@@ -303,7 +305,7 @@ extension CueStore {
   }
 
   /// 这些卡片连同各自的下级一起归档或取回。
-  private func setArchived(_ roots: [UUID], at time: Date?) throws {
+  func setArchived(_ roots: [UUID], at time: Date?) throws {
     let now = Date.stamp
     try db.run(
       """
@@ -313,8 +315,7 @@ extension CueStore {
   }
 
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
-  /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）；
-  /// 唯一的例外是会话的外壳，它跟着会话收尾（`CueStore+SessionTasks`）。
+  /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write { _ = try applyStatus(id, status) }
@@ -726,6 +727,20 @@ extension CueStore {
       """, [session, now] + targets)
   }
 
+  /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
+  /// 换上的（以前用过又换回来的）从里面拿掉，正在用的不在里面。只记任务的：灵感交给别的会话不算用过。
+  static func keepingFormerSession(_ new: String) -> String {
+    """
+    formerSessionIDs = CASE WHEN cards.todoAt IS NULL THEN cards.formerSessionIDs ELSE (
+      SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE json_group_array(sid) END FROM (
+        SELECT f.value AS sid FROM json_each(COALESCE(cards.formerSessionIDs, '[]')) f WHERE f.value <> \(new)
+        UNION ALL
+        SELECT cards.piSessionID WHERE cards.piSessionID <> \(new)
+          AND NOT EXISTS (SELECT 1 FROM json_each(COALESCE(cards.formerSessionIDs, '[]')) f WHERE f.value = cards.piSessionID)))
+    END
+    """
+  }
+
   /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有步骤的任务，有步骤的抛 `notALeaf`，不是任务抛 `notATask`。
   /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子。任务置为进行中（完成了的重新打开）。
   /// 绑了会话的叶子不留提示词（话在会话里说）：有草稿时交出去（`handOut`）、返回它的正文，界面把它接进这个会话的回复框，不自动发。
@@ -750,7 +765,7 @@ extension CueStore {
     return card
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常；会话没结束又没有别的叶子了，记录它的 Mac 给它另挂同名任务（`adoptSessions`）。
+  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
   public func unbindSession(from task: UUID) throws {
     try write {
       try forgetLaunches(of: task)
@@ -839,9 +854,9 @@ extension CueStore {
       let orphans = shared.flatMap { path, rows in rows.filter { $0.0 == URL(filePath: path).deletingPathExtension().lastPathComponent } }
       let stale = indexed.filter { !paths.contains($0.1) } + orphans
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
-      try dropSessionRecords(
-        where: """
-          hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)
+      try db.run(
+        """
+          DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)
           """,
         [host, PiWorkState.ended.rawValue, PiWorkState.interrupted.rawValue, agent.rawValue])
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
@@ -910,7 +925,6 @@ extension CueStore {
       return
     }
     guard existing.state == .known(.ended) else { return }
-    try followTitle(of: session.id, to: title)
     try db.run(
       """
       UPDATE piSessionStates SET title = ?1, folder = ?2, projectID = ?3, stateSince = MAX(stateSince, ?4), modifiedAt = ?5

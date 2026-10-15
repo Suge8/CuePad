@@ -276,11 +276,11 @@ struct PiReplyBar: View {
         session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
-    /// 作答框只收文字：答完文字清空，其余（别处带进草稿的卡片、图片）留着。
+    /// 作答框只收文字：说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、图片）留着。
     private func answer() {
-        guard canSend, let promptID = answering?.promptID else { return }
-        let written = workspace.speak(to: .session(session, mode: .answer), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
-            PiAnswer(promptID: promptID, value: .text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))).stored
+        guard canSend, answering != nil else { return }
+        let written = workspace.speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) { draft in
+            draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if written != nil { didSend() }
     }

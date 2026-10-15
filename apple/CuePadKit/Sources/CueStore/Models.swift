@@ -108,7 +108,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
-  /// 它仍属于这个叶子、不另长任务（`CueStore+SessionTasks`）。正在用的只在 `piSessionID`，不在这里。
+  /// 它仍属于这个叶子（不算没绑任务的会话，`CueStore.cueBoard`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
 
   /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
@@ -412,9 +412,9 @@ public enum CueStoreError: Error, Equatable {
   case launching(String)
   /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
   case noFolder(String)
-  /// 会话此刻没有能从 CuePad 作答的提问。
-  case nothingToAnswer
+  /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
+  /// 会话换不了模型（参数是会话名）。
   case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
   case invalidAnswer([String])
@@ -464,10 +464,9 @@ extension CueStoreError: LocalizedError {
       project.isEmpty
         ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
         : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
-    case .nothingToAnswer: "会话此刻没有等回答的提问（或只能在 Agent 那边答）：用 say 说话"
-    case .cannotChangeModel(let title): "「\(title)」的会话换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
-    case .cannotStop(let title): "「\(title)」的会话现在停不了：没在跑一轮、在等你回答，或它在终端里开、不能从 CuePad 停止"
-    case .invalidAnswer(let options): "答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
+    case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
+    case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
+    case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"

@@ -183,6 +183,7 @@ import Testing
     let store = sandbox.store
     let task = try await store.createTask("跑测试", in: nil)
     try await store.linkCard(task.id, toSession: "s1")
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
     let older = String(repeating: "旧", count: 500), output = "全部通过 " + String(repeating: "过", count: 4500) + "尾巴"
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1",
@@ -343,7 +344,7 @@ import Testing
       defer { Task { await executor.stop() } }
       let changes = try await eventually(store, { try $0.cueChanges(after: since) }) { !$0.isEmpty }
       #expect(changes.map(\.kind) == [.failed] && changes.map(\.detail) == ["开工：这台 Mac 上没有找到 Codex"])
-      #expect(changes.first?.task.id == task.id)
+      #expect(changes.first?.task?.id == task.id)
     }
   }
 
@@ -555,19 +556,19 @@ import Testing
       #expect(reason.contains("换不了模型") && reason.contains("fresh"))
       #expect(try await store.deliveryRequests().count == 2)
 
-      // 作答同样先换模型再答；答案无效时什么都不写，换不了模型的会话报错
+      // 会话在等提问时说的话就是答案：同样先换模型再答；答案无效时什么都不写，换不了模型的会话报错
       let question = PiQuestion(promptID: "p", kind: .confirm, text: "继续？")
       try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
       try await recorder.update(sessionID: "c1", state: .waitingForUser, question: question, agent: .claudeCode)
-      let answer = ["action": "say", "task": pi.id.uuidString, "when": "answer", "model": "openai/gpt-6-sol", "effort": "low"]
-      let invalid = try await server.request("tools/call", ["name": "task", "arguments": answer.merging(["value": "也许"]) { $1 }])
+      let answer = ["action": "say", "task": pi.id.uuidString, "model": "openai/gpt-6-sol", "effort": "low"]
+      let invalid = try await server.request("tools/call", ["name": "task", "arguments": answer.merging(["text": "也许"]) { $1 }])
       #expect(invalid["isError"] as? Bool == true)
       #expect(try await store.deliveryRequests().count == 2)
       let claudeAnswer = try await server.request(
-        "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "when": "answer", "value": "yes", "model": "opus"]])
+        "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "text": "yes", "model": "opus"]])
       #expect(((claudeAnswer["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("换不了模型") == true)
       #expect(try await store.deliveryRequests().count == 2)
-      _ = try await server.call("task", answer.merging(["value": "yes"]) { $1 })
+      _ = try await server.call("task", answer.merging(["text": "yes"]) { $1 })
       let answered = try await store.deliveryRequests(toSession: "s1").suffix(2)
       #expect(answered.map(\.mode) == [.known(.config), .known(.answer)] && answered.allSatisfy(\.isFromCue))
       #expect(answered.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-sol"), thinking: .low))
