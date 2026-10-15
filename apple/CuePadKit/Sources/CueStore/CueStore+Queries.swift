@@ -163,7 +163,8 @@ extension CueStore {
 
   /// 一张任务的下级（步骤与提示词），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
-    try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
+    try untangledChildren(
+      select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id"), among: Self.listedTask)
   }
 
   /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未分类的在最后。组内是整棵任务树的先序（同级按手动顺序，
@@ -219,10 +220,24 @@ extension CueStore {
   /// 列得出来的任务（没删除、没归档的要做卡片）：可当上级的就是它们。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
   static let listedTask = "todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL"
 
+  /// 没删除的任务（含归档、完成的）：Cue 那边列步骤、判叶子按这一批的上下级。
+  static let keptTask = "todoAt IS NOT NULL AND deletedAt IS NULL"
+
   /// `condition` 选出的这批卡的上下级（`CardHierarchy.parents`）：只读 id 与 parentID 两列。
   func untangledParents(where condition: String) throws -> [UUID: UUID] {
     CardHierarchy.parents(try db.query("SELECT id, parentID FROM cards WHERE \(condition)") { (id: $0.uuid(0), parent: $0.uuidOrNil(1)) })
   }
+
+  /// 按 parentID 粗选出的下级里，留下断环后（`untangledParents(where: universe)`）仍挂在这个上级下的：成环还没收敛时，
+  /// 断开的那条不再列作别人的步骤，与"步骤 n/m"同一种上下级。提示词不在任务的上下级里，照留。
+  func untangledChildren(_ children: [Card], among universe: String) throws -> [Card] {
+    guard children.contains(where: \.isTask) else { return children }
+    let parents = try untangledParents(where: universe)
+    return children.filter { !$0.isTask || parents[$0.id] == $0.parentID }
+  }
+
+  /// 这一批任务里有步骤的（断环后），其余的是叶子。
+  func tasksWithSteps(among universe: String) throws -> Set<UUID> { Set(try untangledParents(where: universe).values) }
 
   /// 任务（`t`）连着它的项目（`p`）与它的上级完没完成（`u`）：`taskCounts` 与 `startedTasks` 共用，顶层按 `isTopLevel` 判。
   private static let taskWithParent = "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID"
