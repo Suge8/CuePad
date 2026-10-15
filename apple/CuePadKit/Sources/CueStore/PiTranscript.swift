@@ -53,7 +53,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
   public var sessionID: String
-  /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排
+  /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排；同一条里出的两行（被停下时说了一半的话与"已停止"）
+  /// 序号相同，按说话人排：Agent 说的在系统行前
   public var seq: Int64
   public var role: Open<PiChatRole>
   /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，图片是 `![](cuepad://img/<哈希>)`，与投送请求的 content 同一种），
@@ -226,7 +227,7 @@ public struct PiTranscript: Equatable, Sendable {
 extension CueStore {
   /// 一个会话的完整对话，从早到晚。
   public func piMessages(of sessionID: String) throws -> [PiChatMessage] {
-    try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, id")
+    try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
   /// 请 `host` 那台 Mac 把这个会话的对话补写进来（7 天前活跃过、还没同步对话的会话，手机打开时发）。

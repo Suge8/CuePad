@@ -99,8 +99,9 @@ extension CueStore {
       """, [now, Date.stamp] + arguments)
   }
 
-  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理、可选模型与命令。
-  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL"
+  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理、可选模型。
+  /// 它报过的斜杠命令留着：发话会在后台唤醒它，回复框认命令只看这份清单（`PiSlash.line`），清掉了 "/default" 就会当普通的话发给模型。
+  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, models = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
   private static let hadWork: String = {

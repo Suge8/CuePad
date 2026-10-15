@@ -409,10 +409,10 @@ public enum PiHistory {
                 for call in message.content?.toolCalls ?? [] {
                     cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? PiToolArguments())
                 }
-                // 中途调工具前说的一段也是说的话（这一句的回答是最后一段）；被停下（Esc）时那半句不算
+                // 中途调工具前说的一段也是说的话（这一句的回答是最后一段）；被停下（Esc）时说了一半的也是
                 switch message.stopReason {
                 case "toolUse": cp.spoke(message.content?.reply ?? "", entry)
-                case "aborted": cp.interrupted(entry, into: &transcript)
+                case "aborted": cp.interrupted(entry, said: message.content?.reply ?? "", into: &transcript)
                 default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
                 }
             case "toolResult":
@@ -519,10 +519,13 @@ extension PiHistoryCheckpoint {
         round = nil
     }
 
-    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"，或你拒绝了它要用的工具）：已经说了的那段照样是回答，
-    /// 没说的问答不变、提问不再算进行中；对话里在停下的地方留一行系统行，因拒绝而停的写"已拒绝"，其余"已停止"。
-    mutating func interrupted(_ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+    /// 进行中的一轮被停下了（终端里 Esc、CuePad 里"停止这一轮"，或你拒绝了它要用的工具）：已经说出的照样是回答——
+    /// 被停下的那条里说了一半的（`said`）也算，它就是最后一段；什么都没说的问答不变、提问不再算进行中。
+    /// 对话里在回答下面留一行系统行，因拒绝而停的写"已拒绝"，其余"已停止"。系统行用这一条的 id；说了一半的那段与它同在一条里，
+    /// id 后加 `#said`，同序号时说的话排在系统行前（`CueStore.piMessages`）。
+    mutating func interrupted(_ entry: PiHistory.Entry, said: String = "", into transcript: inout PiHistory.Transcript) {
         guard let current = round else { return }
+        spoke(said, PiHistory.Entry(id: entry.id + "#said", seq: entry.seq, at: entry.at))
         if reply != nil { settleReply(into: &transcript) }
         transcript.add(self, entry, role: .system, text: (current.declined ? PiNotice.declined : .stopped).rawValue)
         round = nil

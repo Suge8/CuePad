@@ -54,7 +54,8 @@ extension MacDelivery {
     }
 
     static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> CommandProgress? {
-        guard let latest = deliveries.max(by: { $0.createdAt < $1.createdAt }), latest.mode == .known(.command) else { return nil }
+        // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
+        guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
         switch Speech.trip(latest, at: moment) {
         case .sending: return .running(command)
