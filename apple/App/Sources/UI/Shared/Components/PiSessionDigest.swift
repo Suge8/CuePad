@@ -207,6 +207,10 @@ struct QuestionCard: View {
                 ForEach(Array(question.options.enumerated()), id: \.element) { index, option in
                     choice(.option(option), prominent: false, leading: true, number: index < 9 ? index + 1 : nil)
                 }
+                if question.allowsOther {
+                    Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         case .text, nil:
             // 文字型问题在回复框里答（`MacDelivery.reply`），回复框的占位写着

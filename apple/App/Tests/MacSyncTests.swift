@@ -258,6 +258,27 @@ struct MacSyncTests {
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 
+    /// App 重开：接回的会话"多久前"与"有新回复"仍从原来的起点算（看过的不又亮"有新回复"，排序不乱）；状态种类变了才从接回时算。
+    /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
+    @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
+        let past = Date.now.addingTimeInterval(-3600)
+        let before = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
+        try await before.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: past, busySince: nil))
+        try await before.update(sessionID: "s2", state: .thinking, times: PiTimes(stateSince: past, busySince: past))
+        let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
+        services.settings.markSeen(seen, at: past.addingTimeInterval(1))
+
+        try await services.resetPiState()
+        let kept = try await rig.host.connect("s1", cwd: "/work/s1")
+        let changed = try await rig.host.connect("s2", cwd: "/work/s2")
+
+        let live = try #require(services.pi.session(id: kept.id))
+        #expect(live.stateSince == seen.stateSince)
+        let row = PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了"))
+        #expect(!services.settings.isUnread(row))
+        #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
+    }
+
     // MARK: 手机发来的投送请求
 
     /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。
@@ -387,7 +408,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.end(ext.id)])
+        #expect(ext.received == ["end"] && rig.host.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -807,6 +828,47 @@ struct MacSyncTests {
 
     /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
     /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
+    /// 扩展升级后旧版会话在终端里 /reload：旧协议的连接告别、新扩展接回同一个会话。说过话的会话这时不是"没说话就退出"，
+    /// 记录与它的摘要留着，接回后不变成"新会话"。
+    @Test(.timeLimit(.minutes(1)))
+    func 旧协议会话重载接回_摘要还在() async throws {
+        let changes = rig.pi.changes()
+        try rig.pi.start()
+        let services: AppServices = services
+        let consuming = Task { try await services.consumePiChanges(changes) }
+        defer { consuming.cancel() }
+        let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: file.path, contents: Data())
+        let store = services.store
+
+        let old = try await rig.host.connect("s1", cwd: "/work/app", protocolVersion: 3, sessionFile: file.path)
+        _ = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.incompatible) })
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "修登录", at: .now)],
+            recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了")))
+
+        old.close(bye: "reload")
+        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
+
+        let back = try await eventually(store, { try $0.allPiSessionStates().first }, until: { $0?.state == .known(.settled) })
+        #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
+    }
+
+    /// 后台托管的会话进程没了（App 退出、闲置退出）记录仍歇着、发话会唤醒它：它报过的斜杠命令留着，
+    /// 回复框里打完整的 "/default" 照样是命令（后台唤醒后执行），不当普通的话发给模型。会话做完的也一样。
+    @Test(arguments: [true, false])
+    func 进程没了的会话仍认它报过的斜杠命令(hosted: Bool) async throws {
+        var live = session("s1", state: .settled, spoke: true)
+        live.hosted = hosted
+        live.commands = [PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
+        try await services.consumePiChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
+        if !hosted { try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
+
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.state == .known(hosted ? .settled : .ended))
+        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands) == "/default")
+    }
+
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true

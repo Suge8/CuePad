@@ -37,6 +37,8 @@ nonisolated struct PiThinkingMeter: Equatable {
     var bars: [PiThinkingLevel] { levels.filter { $0 != .off } }
     var filled: Int { current.flatMap { bars.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
+    /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
+    var label: String { current?.label ?? "默认" }
     /// 填到最高一档。
     var isMax: Bool { !bars.isEmpty && filled == bars.count }
 

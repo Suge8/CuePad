@@ -16,7 +16,7 @@ nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComp
 struct HistoryRulesTests {
     final class Rig {
         let cwd: URL
-        let host: PiHost
+        let host: PiRuntime
         let bridge: PiBridge
         let services: AppServices
         var store: CueStore { services.store }
@@ -35,7 +35,7 @@ struct HistoryRulesTests {
                 "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "XDG_STATE_HOME": directory.appending(path: "state").path,
             ])
             let agents = AgentIntegration(
-                paths: agentPaths, locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+                paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) },
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
             try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
@@ -43,8 +43,8 @@ struct HistoryRulesTests {
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
 
             bridge = PiBridge(socketDirectory: paths.socketDirectory)
-            host = PiHost(
-                bridge: bridge, paths: paths, idleLimit: .seconds(2),
+            host = PiRuntime(
+                bridge: bridge, paths: paths, pi: { realPi }, idleLimit: .seconds(2),
                 extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: agents, terminal: PiTerminalJumper(),
@@ -53,7 +53,7 @@ struct HistoryRulesTests {
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
                 updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
-                runtimes: { [host] _ in [.pi: PiRuntime(host: host, locate: { realPi })] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
+                runtimes: { [host] _ in [.pi: host] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
                 cue: CueDependencies(scan: { [] }, launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
@@ -93,10 +93,10 @@ struct HistoryRulesTests {
     @Test func 一句话没说过的会话关掉后不进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", executable: realPi).id
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "silent", name: nil, model: nil, thinking: nil)
         try await eventually("会话记录写出", timeout: Self.piStep) { try await rig.records(.all).count == 1 }
 
-        try await rig.host.end(id)
+        try await rig.bridge.end(id)
 
         try await eventually("没说过话的会话记录被删（同步删除）", timeout: Self.piStep) { try await rig.records(.all).isEmpty }
     }
@@ -106,7 +106,7 @@ struct HistoryRulesTests {
     @Test func 托管会话闲置退出后仍在现在_发话唤醒回复_用户结束才进历史() async throws {
         let rig = try await Rig()
         defer { rig.shutdown() }
-        let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", executable: realPi).id
+        let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
         _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
@@ -191,9 +191,9 @@ struct HostedLaunchTests {
         let bridge = PiBridge(socketDirectory: paths.socketDirectory)
         try bridge.start()
         defer { bridge.stop() }
-        let host = PiHost(bridge: bridge, paths: paths)
+        let host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
         await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
-            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), executable: realPi)
+            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), thinking: nil)
         }
         #expect(bridge.sessions.isEmpty)
     }

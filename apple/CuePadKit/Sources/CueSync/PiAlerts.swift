@@ -26,7 +26,7 @@ public struct PiAlertTap: Equatable, Sendable {
 }
 
 public enum PiAlertRoute {
-  /// 本地化文案 key：App 的 Localizable.strings 里提供"Pi 在等你确认"与"Pi 完成了"。
+  /// 本地化文案 key：App 的 Localizable.strings 里提供"Agent 在等你确认"与"Agent 完成了"。
   public static let waitingLocalizationKey = "pi_alert_waiting"
   public static let settledLocalizationKey = "pi_alert_settled"
 

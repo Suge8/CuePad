@@ -19,6 +19,8 @@ struct OpenCodeMessage: Decodable, Sendable {
     var tokens: OpenCodeTokens?
     /// 助手这一步出错的原因
     var error: OpenCodeFailure?
+    /// `idle` 的：这一轮怎么结束的（`succeeded` / `interrupted` / `failed`）
+    var outcome: String?
     var time: Time
 
     struct Time: Decodable, Sendable {
@@ -55,12 +57,11 @@ struct OpenCodeMessage: Decodable, Sendable {
     struct ToolState: Decodable, Sendable {
         var status: String
         var input: OpenCodeToolInput?
+        var error: OpenCodeFailure?
     }
 
-    /// 在会话里的先后：消息 id 是 `msg_` 加按时间递增的 12 位十六进制（服务按它排序），重读不变。
-    var seq: Int64 { Int64(id.dropFirst(4).prefix(12), radix: 16) ?? 0 }
-
-    var at: Date { Date(timeIntervalSince1970: time.created / 1000) }
+    /// 这条的时刻：助手的一步取说完的那一刻（与各家对话里回答的时刻同一规则，回答上的"用时"从你说话算到它），其余取建立的那一刻。
+    var at: Date { Date(timeIntervalSince1970: (time.completed ?? time.created) / 1000) }
 
     /// 还在写的（助手这一步没完、压缩还在跑）不读：读到它为止，下次从它重读。
     var isComplete: Bool {
@@ -73,21 +74,29 @@ struct OpenCodeMessage: Decodable, Sendable {
 }
 
 /// OpenCode 会话的对话与摘要：消息逐条解码进与 Pi 会话文件同一个检查点与对话模型（`PiHistoryCheckpoint`、`PiHistory.Transcript`），
-/// 轮次、摘要与工具活动的规则与 Pi 一致（见 CuePi README「对话与摘要」）。这里与 Pi 不同的只有：
+/// 轮次、摘要与工具活动的规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……）。这里与 Pi 不同的只有：
 /// - 你的消息是 `user`，文字在前、图片（`files` 里的原图）随后各占一行；CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
 /// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`）。
-/// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）。
+/// - 压缩完成是一条 `compaction`（系统行）；`idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
 /// - 你在终端里直接跑的命令（`shell`）、系统与合成消息、切模型与切 agent 的记录不进对话（终端的对话里它们不是谁说的话）。
 enum OpenCodeHistory {
-    /// 检查点：Pi 的那份，加读到的最后一条消息（之后只读比它新的）。
+    /// 你拒绝了权限确认时工具的出错原因（2.0.29；那一步随之带着 `aborted` 的错误停下）
+    static let declinedTool = "The user declined this tool call"
+
+    /// 检查点：Pi 的那份，加读到哪。先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
+    /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比"读过没有"，也不拿 id 当 seq。
     struct Checkpoint: Codable, Sendable {
-        var last: String?
+        /// 接口给的游标（不透明），指向读过的最后一条之后；从头读为 nil
+        var cursor: String?
+        /// 读过几条：下一条消息的位置，也就是它的 seq
+        var position: Int64 = 0
         var history = PiHistoryCheckpoint()
     }
 
     private static let pageSize = 100
 
-    /// 从 `checkpoint` 往后读完这个会话现有的消息；`files` 是你的消息里的图片存进的附件目录。
+    /// 从 `checkpoint` 往后读完这个会话现有的消息（按对话里的先后，从早到晚）；`files` 是你的消息里的图片存进的附件目录。
+    /// 读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
     @concurrent static func read(
         _ client: OpenCodeClient, _ info: OpenCodeSessionInfo, from checkpoint: Checkpoint?, files: AttachmentFiles
     ) async throws -> (checkpoint: Checkpoint, transcript: PiTranscript) {
@@ -95,80 +104,67 @@ enum OpenCodeHistory {
         next.history.sessionID = info.id
         next.history.cwd = info.location.directory
         var transcript = PiHistory.Transcript(fallbackID: info.id, files: files)
-        for message in try await messages(client, session: info.id, after: next.last) {
-            guard message.isComplete else { break }
-            try ingest(message, &next.history, &transcript)
-            next.last = message.id
+        while true {
+            let page = try await self.page(client, session: info.id, from: next.cursor, limit: pageSize)
+            if let unfinished = page.data.firstIndex(where: { !$0.isComplete }) {
+                for message in page.data[..<unfinished] { try ingest(message, at: &next, &transcript) }
+                if unfinished > 0 { next.cursor = try await self.page(client, session: info.id, from: next.cursor, limit: unfinished).cursor?.next }
+                break
+            }
+            for message in page.data { try ingest(message, at: &next, &transcript) }
+            if let cursor = page.cursor?.next, !page.data.isEmpty { next.cursor = cursor }
+            guard page.data.count == pageSize else { break }
         }
         return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.recap))
     }
 
-    /// 比 `after` 新的消息，从早到晚。接口从新到旧分页，读到 `after` 就停。
-    @concurrent private static func messages(_ client: OpenCodeClient, session: String, after: String?) async throws -> [OpenCodeMessage] {
-        var newer: [OpenCodeMessage] = []
-        var cursor: String?
-        repeat {
-            let query = "limit=\(pageSize)" + (cursor.map { "&cursor=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? "")
-            let page = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(session)/message?\(query)")
-            for message in page.data {
-                if let after, message.id <= after { return newer.reversed() }
-                newer.append(message)
-            }
-            cursor = page.data.isEmpty ? nil : page.cursor?.next
-        } while cursor != nil
-        return newer.reversed()
+    /// `cursor` 之后的一页（从头读时是最早的一页），从早到晚。
+    @concurrent private static func page(
+        _ client: OpenCodeClient, session: String, from cursor: String?, limit: Int
+    ) async throws -> OpenCodePage<OpenCodeMessage> {
+        let from = cursor.map { "cursor=" + ($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0) } ?? "order=asc"
+        return try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(session)/message?limit=\(limit)&\(from)")
     }
 
-    static func ingest(_ message: OpenCodeMessage, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
-        cp.seq = message.seq
+    private static func ingest(_ message: OpenCodeMessage, at checkpoint: inout Checkpoint, _ transcript: inout PiHistory.Transcript) throws {
+        try ingest(message, seq: checkpoint.position, &checkpoint.history, &transcript)
+        checkpoint.position += 1
+    }
+
+    static func ingest(_ message: OpenCodeMessage, seq: Int64, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+        cp.seq = seq
         cp.lastActivity = message.at
+        let entry = PiHistory.Entry(id: message.id, seq: seq, at: message.at)
         switch message.type {
-        case "user": try user(message, &cp, &transcript)
-        case "assistant": assistant(message, &cp, &transcript)
+        case "user":
+            var said = transcript.said()
+            said.text(message.text)
+            for file in message.files ?? [] where file.mime?.hasPrefix("image/") == true {
+                try said.image(file.data.flatMap { Data(base64Encoded: $0) })
+            }
+            cp.said(said, entry, deliveryID: message.metadata?.cuepadDelivery, into: &transcript)
+        case "assistant":
+            for tool in message.content ?? [] where tool.type == "tool" {
+                let id = tool.id ?? ""
+                cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? PiToolArguments())
+                if tool.state?.error?.message == Self.declinedTool {
+                    cp.toolDeclined(id: id)
+                } else if let status = tool.state?.status, status == "completed" || status == "error" {
+                    cp.toolFinished(id: id, failed: status == "error")
+                }
+            }
+            // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
+            let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            if message.error?.type == "aborted" { return cp.interrupted(entry, said: text, into: &transcript) }
+            if message.finish == "tool-calls" { cp.spoke(text, entry) } else { cp.answered(text, entry, into: &transcript) }
         case "compaction" where message.status == "completed":
-            transcript.add(cp, entryID: message.id, seq: message.seq, role: .system, text: "已压缩上下文", at: message.at)
-        case "idle": cp.round = nil
+            cp.compacted(entry, into: &transcript)
+        case "idle":
+            // 一轮彻底结束；还没有回答就结束的：被停下的与各家同一规则，出错的与 Pi 出错一样以空回答结束
+            guard cp.round != nil else { return }
+            if message.outcome == "interrupted" { cp.interrupted(entry, into: &transcript) } else { cp.answered("", entry, into: &transcript) }
         default: break
         }
-    }
-
-    private static func user(_ message: OpenCodeMessage, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
-        if cp.round?.startedAt == nil { cp.round = .init(startedAt: message.at, tools: cp.round?.tools ?? PiToolLog()) }
-        let text = message.text ?? ""
-        var pieces = text.isEmpty ? [] : [text]
-        for file in message.files ?? [] {
-            guard let files = transcript.files, file.mime?.hasPrefix("image/") == true, let data = file.data.flatMap({ Data(base64Encoded: $0) })
-            else { continue }
-            do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage { continue }
-        }
-        if cp.firstMessage == nil, !text.isEmpty { cp.firstMessage = String(text.prefix(PiSessionName.firstMessageLimit)) }
-        transcript.add(
-            cp, entryID: message.id, seq: message.seq, role: .user, text: pieces.joined(separator: "\n"), at: message.at,
-            deliveryID: message.metadata?.cuepadDelivery)
-        cp.recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(text), PiRecap.promptLimit)
-    }
-
-    private static func assistant(_ message: OpenCodeMessage, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) {
-        var round = cp.round ?? .init(startedAt: nil)
-        for tool in message.content ?? [] where tool.type == "tool" {
-            let id = tool.id ?? ""
-            round.tools.start(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? PiToolArguments(), cwd: cp.cwd)
-            if let status = tool.state?.status, status == "completed" || status == "error" { round.tools.finish(id: id, failed: status == "error") }
-        }
-        guard message.finish != "tool-calls" else {
-            cp.round = round
-            return
-        }
-        let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            transcript.add(
-                cp, entryID: message.id, seq: message.seq, role: .pi, text: text, at: message.at, tools: round.tools.summary(),
-                roundStartedAt: round.startedAt)
-        }
-        cp.recap = PiRecap(
-            lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: PiHistory.clip(text, PiRecap.replyLimit), pendingPrompt: nil)
-        cp.round = nil
     }
 }
 #endif

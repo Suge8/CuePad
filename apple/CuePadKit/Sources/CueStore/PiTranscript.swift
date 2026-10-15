@@ -7,8 +7,18 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   case user
   /// Pi 一轮做完的回答
   case pi
-  /// 会话文件里留下的一行系统记录（目前只有压缩：终端对话里那行压缩摘要）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
+  /// 一行系统记录（`PiNotice`：压缩、这一轮被停下或被你拒绝）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
   case system
+}
+
+/// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文就是它显示的那句）。
+/// 只有压缩换了上下文（对话里画分隔、刻度滑条上一个点）；停下与拒绝只是这一轮怎么结束的（行内一句）。
+public enum PiNotice: String, Sendable, CaseIterable {
+  case compacted = "已压缩上下文"
+  case stopped = "已停止"
+  case declined = "已拒绝"
+
+  public var changesContext: Bool { self == .compacted }
 }
 
 /// 会话记录上的摘要（列表预览、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
@@ -43,7 +53,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
   public var sessionID: String
-  /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排
+  /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排；同一条里出的两行（被停下时说了一半的话与"已停止"）
+  /// 序号相同，按说话人排：Agent 说的在系统行前
   public var seq: Int64
   public var role: Open<PiChatRole>
   /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，图片是 `![](cuepad://img/<哈希>)`，与投送请求的 content 同一种），
@@ -81,6 +92,9 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     createdAt = .stamp
     modifiedAt = createdAt
   }
+
+  /// 系统行的种类；不是系统行、或别的版本写的不认识的为 nil。
+  public var notice: PiNotice? { role == .known(.system) ? PiNotice(rawValue: text) : nil }
 
   /// 文字超过上限时截断，图片引用原样保留：切坏引用会让图片变成一段乱码。
   private static func clipped(_ text: String) -> String {
@@ -213,7 +227,7 @@ public struct PiTranscript: Equatable, Sendable {
 extension CueStore {
   /// 一个会话的完整对话，从早到晚。
   public func piMessages(of sessionID: String) throws -> [PiChatMessage] {
-    try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, id")
+    try select(PiChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
   /// 请 `host` 那台 Mac 把这个会话的对话补写进来（7 天前活跃过、还没同步对话的会话，手机打开时发）。

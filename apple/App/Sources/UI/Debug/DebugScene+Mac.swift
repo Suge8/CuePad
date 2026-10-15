@@ -137,8 +137,7 @@ extension DebugScene {
 
     private static func connectAgents(_ services: AppServices) async {
         for kind in AgentKind.allCases {
-            let skill = URL(filePath: (services.agents.skillPath(kind) as NSString).expandingTildeInPath)
-            try? FileManager.default.createDirectory(at: skill.deletingLastPathComponent().deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
             await services.agents.detect(kind)
             try? await services.agents.install(kind)
         }

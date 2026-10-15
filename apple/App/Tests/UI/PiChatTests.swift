@@ -16,6 +16,17 @@ struct PiChatTests {
             tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
+    /// 系统行有三种：压缩是上下文换了（分隔、刻度滑条上一个点），停下与拒绝只是这一轮怎么结束的（不是分隔、不打点）。
+    @Test func 只有压缩是换上下文_停下与拒绝不是() {
+        let entries = PiChat.entries([
+            message(1, .user, "第一问"), message(2, .system, "已停止"), message(3, .user, "第二问"), message(4, .system, "已拒绝"),
+            message(5, .system, "已压缩上下文"),
+        ])
+
+        #expect(ChatScrubber.marks(entries).map { "\($0.kind)" } == ["said", "said", "boundary"])
+        #expect(entries.map(\.role) == [.user, .notice(.stopped), .user, .notice(.declined), .notice(.compacted)])
+    }
+
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {
         let app = TestApp()
         let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")

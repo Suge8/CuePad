@@ -23,14 +23,14 @@ enum ClaudeHistory {
         if cp.sessionID == nil { cp.sessionID = line.sessionId }
         if cp.cwd == nil { cp.cwd = line.cwd }
         guard line.isSidechain != true else { return }
-        let entry = Entry(id: line.uuid ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
+        let entry = PiHistory.Entry(id: line.uuid ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         switch line.type {
         case "custom-title":
             if let title = line.customTitle { cp.name = title }
         case "system":
             switch line.subtype {
-            case "compact_boundary": transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .system, text: "已压缩上下文", at: entry.at)
-            case "stop_hook_summary", "turn_duration": if cp.round != nil { finish(text: "", entry, into: &cp, transcript: &transcript) }
+            case "compact_boundary": cp.compacted(entry, into: &transcript)
+            case "stop_hook_summary", "turn_duration": if cp.round != nil { cp.answered("", entry, into: &transcript) }
             default: break
             }
         case "user":
@@ -41,8 +41,18 @@ enum ClaudeHistory {
             let delivery = attachment.origin?.kind == "human" ? nil : attachment.sourceUUID
             try said(prompt, peer: attachment.origin?.kind == "peer", entry, deliveryID: delivery, into: &cp, transcript: &transcript)
         case "assistant":
-            guard let message = line.message else { return }
-            assistant(message, entry, into: &cp, transcript: &transcript)
+            guard let message = line.message, case .blocks(let blocks) = message.content ?? .blocks([]),
+                  message.model != syntheticModel || line.isApiErrorMessage == true else { return }
+            for call in blocks where call.type == "tool_use" {
+                cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments())
+            }
+            let text = blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            // 一次回答拆成好几行：带文字、不是停下来调工具的那行结束这一轮，其余带文字的是中途说的一段
+            if let stop = message.stopReason, stop != "tool_use", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                cp.answered(text, entry, into: &transcript)
+            } else {
+                cp.spoke(text, entry)
+            }
         default:
             break
         }
@@ -64,17 +74,15 @@ enum ClaudeHistory {
         return (cp.name, cp.firstMessage)
     }
 
-    private struct Entry {
-        var id: String
-        var seq: Int64
-        var at: Date
-    }
-
-    private static func user(_ line: Line, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func user(_ line: Line, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
         guard let content = line.message?.content else { return }
         if case .blocks(let blocks) = content, blocks.contains(where: { $0.type == "tool_result" }) {
             for result in blocks where result.type == "tool_result" {
-                cp.round?.tools.finish(id: result.toolUseID ?? "", failed: result.isError == true)
+                if result.isError == true, result.content?.plainText.hasPrefix(declinedResult) == true {
+                    cp.toolDeclined(id: result.toolUseID ?? "")
+                    continue
+                }
+                cp.toolFinished(id: result.toolUseID ?? "", failed: result.isError == true)
             }
             return
         }
@@ -84,62 +92,39 @@ enum ClaudeHistory {
         try said(content, peer: peer, entry, deliveryID: delivery, into: &cp, transcript: &transcript)
     }
 
-    /// 你说的一句：进对话、成为进行中的提问。命令回显与中断标记不是你说的话；中断标记结束这一轮（没有回答，问答不变）。
+    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。
     private static func said(
-        _ content: Content, peer: Bool, _ entry: Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript
+        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint,
+        transcript: inout PiHistory.Transcript
     ) throws {
-        var said = try content.said(storing: transcript.files)
-        if peer { said = (withoutPeerWrapper(said.text), withoutPeerWrapper(said.stored)) }
+        var said = transcript.said()
+        try content.said(into: &said, peer: peer)
         let trimmed = said.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(interruptedMarker) {
-            cp.round = nil
-            cp.recap.pendingPrompt = nil
-            return
-        }
+        if trimmed.hasPrefix(interruptedMarker) { return cp.interrupted(entry, into: &transcript) }
         guard !commandEchoPrefixes.contains(where: trimmed.hasPrefix) else { return }
-        if cp.firstMessage == nil, !trimmed.isEmpty { cp.firstMessage = String(trimmed.prefix(PiSessionName.firstMessageLimit)) }
-        if cp.round?.startedAt == nil { cp.round = .init(startedAt: entry.at, tools: cp.round?.tools ?? PiToolLog()) }
-        guard !PiHistory.isMachineMessage(said.text) else { return }
-        transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .user, text: said.stored, at: entry.at, deliveryID: deliveryID)
-        cp.recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(said.text), PiRecap.promptLimit)
-    }
-
-    private static func assistant(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) {
-        var round = cp.round ?? .init(startedAt: nil)
-        guard case .blocks(let blocks) = message.content ?? .blocks([]) else { return }
-        for call in blocks where call.type == "tool_use" {
-            round.tools.start(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments(), cwd: cp.cwd)
-        }
-        cp.round = round
-        let text = blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let stop = message.stopReason, stop != "tool_use", !text.isEmpty else { return }
-        finish(text: text, entry, into: &cp, transcript: &transcript)
-    }
-
-    private static func finish(text: String, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) {
-        let round = cp.round ?? .init(startedAt: nil)
-        if !text.isEmpty {
-            transcript.add(
-                cp, entryID: entry.id, seq: entry.seq, role: .pi, text: text, at: entry.at, tools: round.tools.summary(), roundStartedAt: round.startedAt)
-        }
-        cp.recap = PiRecap(
-            lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: PiHistory.clip(text, PiRecap.replyLimit), pendingPrompt: nil)
-        cp.round = nil
+        cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
 
     // MARK: 收件箱送来的话
 
-    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间。
+    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；CuePad 发的正文前还有一句
+    /// `ClaudeInbox.userNote`。
     private static let peerPrefix = "Another Claude session sent a message:\n"
     private static let peerSuffix = "\n\nThis came from another Claude session"
 
     static func withoutPeerWrapper(_ text: String) -> String {
         guard text.hasPrefix(peerPrefix) else { return text }
-        let body = text.dropFirst(peerPrefix.count)
+        var body = text.dropFirst(peerPrefix.count)
+        if body.hasPrefix(ClaudeInbox.userNote) { body = body.dropFirst(ClaudeInbox.userNote.count) }
         return String(body.range(of: peerSuffix).map { body[..<$0.lowerBound] } ?? body)
     }
 
     private static let interruptedMarker = "[Request interrupted by user"
+    /// Claude Code 自己补写的助手消息的模型（不是模型说的）：接着被停下的那一轮时补的"No response requested."等不算回答，
+    /// 只留出错的（`isApiErrorMessage`，"API Error: …"、额度用完）
+    private static let syntheticModel = "<synthetic>"
+    /// 你在终端里对权限确认答"否"时工具结果的开头（2.1.299，后面跟"停下"或你说的怎么做）
+    private static let declinedResult = "The user doesn't want to proceed with this tool use."
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
 
@@ -158,6 +143,7 @@ enum ClaudeHistory {
         var isSidechain: Bool?
         var isMeta: Bool?
         var isCompactSummary: Bool?
+        var isApiErrorMessage: Bool?
         var customTitle: String?
         var promptSource: String?
         var origin: Origin?
@@ -169,9 +155,10 @@ enum ClaudeHistory {
 
     private struct Message: Decodable {
         var content: Content?
+        var model: String?
         var stopReason: String?
         enum CodingKeys: String, CodingKey {
-            case content
+            case content, model
             case stopReason = "stop_reason"
         }
     }
@@ -201,11 +188,13 @@ enum ClaudeHistory {
             var input: PiToolArguments?
             var toolUseID: String?
             var isError: Bool?
+            /// 工具结果的正文
+            var content: Content?
 
             struct Source: Decodable { var data: String? }
 
             enum CodingKeys: String, CodingKey {
-                case type, text, source, id, name, input
+                case type, text, source, id, name, input, content
                 case toolUseID = "tool_use_id"
                 case isError = "is_error"
             }
@@ -216,26 +205,27 @@ enum ClaudeHistory {
             if let s = try? c.decode(String.self) { self = .text(s) } else { self = .blocks(try c.decode([Block].self)) }
         }
 
-        /// 你说的一句：`text` 是文字块用换行连接，`stored` 是文字与图片按原顺序拼成的正文格式（`files` 为 nil 时不存图片，等同 `text`）。
-        func said(storing files: AttachmentFiles?) throws -> (text: String, stored: String) {
-            let blocks: [Block]
+        var plainText: String {
             switch self {
-            case .text(let s): return (s, s)
-            case .blocks(let b): blocks = b
+            case .text(let s): s
+            case .blocks(let blocks): blocks.compactMap(\.text).joined(separator: "\n")
             }
-            var texts: [String] = [], pieces: [String] = []
-            for block in blocks {
-                switch block.type {
-                case "text":
-                    if let piece = block.text, !piece.isEmpty { texts.append(piece); pieces.append(piece) }
-                case "image":
-                    guard let files, let data = block.source?.data.flatMap({ Data(base64Encoded: $0) }) else { continue }
-                    do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage { continue }
-                default: break
+        }
+
+        /// 你说的一句；收件箱送来的（`peer`）剥掉 Claude Code 包的说明。
+        func said(into said: inout PiHistory.Said, peer: Bool) throws {
+            func text(_ s: String?) { said.text(peer ? s.map(ClaudeHistory.withoutPeerWrapper) : s) }
+            switch self {
+            case .text(let s): text(s)
+            case .blocks(let blocks):
+                for block in blocks {
+                    switch block.type {
+                    case "text": text(block.text)
+                    case "image": try said.image(block.source?.data.flatMap { Data(base64Encoded: $0) })
+                    default: break
+                    }
                 }
             }
-            let text = texts.joined(separator: "\n")
-            return (text, files == nil ? text : pieces.joined(separator: "\n"))
         }
     }
 }

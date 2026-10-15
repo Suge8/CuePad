@@ -59,18 +59,21 @@ final class CodexBrain: CueBrain {
 
     private func threadStart(_ config: CueBrainConfig, on rpc: CodexRPC) async throws {
         let effective = try await rpc.call("config/read", [:])
-        let userServers = ((effective["config"] as? [String: Any])?["mcp_servers"] as? [String: Any])?.keys ?? [:].keys
-        var overrides: [String: Any] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
-        overrides["mcp_servers.cuepad"] = ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]
-        var params: [String: Any] = [
-            "cwd": config.workingDirectory.path, "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": true,
-            "baseInstructions": config.systemPrompt, "config": overrides,
+        let userServers = effective["config"]?["mcp_servers"]?.object?.keys ?? [:].keys
+        var overrides: [String: JSONValue] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
+        overrides["mcp_servers.cuepad"] = [
+            "command": .string(config.mcp[0]), "args": .array(config.mcp.dropFirst().map(JSONValue.string)),
+            "env": .object(config.environment.mapValues(JSONValue.string)),
         ]
-        if let model = config.model { params["model"] = model }
-        let started = try await rpc.call("thread/start", params)
-        thread = (started["thread"] as? [String: Any])?["id"] as? String
+        var params: [String: JSONValue] = [
+            "cwd": .string(config.workingDirectory.path), "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": true,
+            "baseInstructions": .string(config.systemPrompt), "config": .object(overrides),
+        ]
+        if let model = config.model { params["model"] = .string(model) }
+        let started = try await rpc.call("thread/start", .object(params))
+        thread = started["thread"]?["id"]?.string
         models = try await CodexModel.list(rpc, hidden: true)
-        model = models.first { $0.id == started["model"] as? String }
+        model = models.first { $0.id == started["model"]?.string }
         level = config.effort
     }
 
@@ -88,24 +91,24 @@ final class CodexBrain: CueBrain {
         let input = CodexRPC.input(text: text, images: images)
         if let active = turn?.id {
             do {
-                try await rpc.call("turn/steer", ["threadId": thread, "input": input, "expectedTurnId": active])
+                try await rpc.call("turn/steer", ["threadId": .string(thread), "input": .array(input), "expectedTurnId": .string(active)])
                 return
             } catch CodexRPCError.server {
                 // 这一轮刚好结束：下面开新的一轮
             }
         }
-        var params: [String: Any] = ["threadId": thread, "input": input]
+        var params: [String: JSONValue] = ["threadId": .string(thread), "input": .array(input)]
         if let model {
-            params["model"] = model.id
-            if let level { params["effort"] = CodexModel.effort(level.clamped(to: model.efforts)) }
+            params["model"] = .string(model.id)
+            if let level { params["effort"] = .string(CodexModel.effort(level.clamped(to: model.efforts))) }
         }
-        let started = try await rpc.call("turn/start", params)
-        if let id = (started["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
+        let started = try await rpc.call("turn/start", .object(params))
+        if let id = started["turn"]?["id"]?.string { beginTurn(id) }
     }
 
     func abort() async throws {
         guard let rpc, let thread, let active = turn?.id else { return }
-        try await rpc.call("turn/interrupt", ["threadId": thread, "turnId": active])
+        try await rpc.call("turn/interrupt", ["threadId": .string(thread), "turnId": .string(active)])
     }
 
     func stop() -> @concurrent @Sendable () async -> Void {
@@ -121,42 +124,41 @@ final class CodexBrain: CueBrain {
         session.emit(.turnStarted)
     }
 
-    private func notification(_ method: String, _ params: CodexRPC.Object) {
+    private func notification(_ method: String, _ params: JSONValue) {
         switch method {
         case "turn/started":
-            if let id = (params["turn"] as? [String: Any])?["id"] as? String { beginTurn(id) }
+            if let id = params["turn"]?["id"]?.string { beginTurn(id) }
         case "item/started":
-            guard turn != nil, let item = params["item"] as? [String: Any] else { return }
-            switch item["type"] as? String {
+            guard turn != nil, let item = params["item"] else { return }
+            switch item["type"]?.string {
             case "mcpToolCall":
-                let name = brainToolName(item["tool"] as? String ?? "?")
-                session.emit(.tool(id: item["id"] as? String ?? "", name: name, arguments: jsonString(item["arguments"] ?? [:])))
+                let name = brainToolName(item["tool"]?.string ?? "?")
+                session.emit(.tool(id: item["id"]?.string ?? "", name: name, arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
             case "commandExecution":
-                let command = jsonString(["command": item["command"] as? String ?? ""])
-                session.emit(.tool(id: item["id"] as? String ?? "", name: "bash", arguments: command))
+                let command = jsonString(["command": item["command"]?.string ?? ""])
+                session.emit(.tool(id: item["id"]?.string ?? "", name: "bash", arguments: command))
             default: break
             }
         case "item/completed":
-            guard let item = params["item"] as? [String: Any] else { return }
-            let id = item["id"] as? String ?? "", failed = ["failed", "declined"].contains(item["status"] as? String)
-            switch item["type"] as? String {
+            guard let item = params["item"] else { return }
+            let id = item["id"]?.string ?? "", failed = ["failed", "declined"].contains(item["status"]?.string)
+            switch item["type"]?.string {
             case "mcpToolCall" where turn != nil:
-                let error = (item["error"] as? [String: Any])?["message"] as? String
-                let result = error ?? brainText((item["result"] as? [String: Any])?["content"])
+                let error = item["error"]?["message"]?.string
+                let result = error ?? brainText(item["result"]?["content"])
                 session.emit(.toolDone(id: id, result: result, failed: failed || error != nil))
             case "commandExecution" where turn != nil:
-                session.emit(.toolDone(id: id, result: item["aggregatedOutput"] as? String ?? "", failed: failed))
+                session.emit(.toolDone(id: id, result: item["aggregatedOutput"]?.string ?? "", failed: failed))
             default: break
             }
         case "thread/tokenUsage/updated":
-            guard let usage = params["tokenUsage"] as? [String: Any], let last = usage["last"] as? [String: Any],
-                  let input = last["inputTokens"] as? Int else { return }
+            guard let usage = params["tokenUsage"], let input = usage["last"]?["inputTokens"]?.int else { return }
             // inputTokens 已含缓存命中（cachedInputTokens 是其中一部分）
-            session.emit(.context(used: input, window: usage["modelContextWindow"] as? Int))
+            session.emit(.context(used: input, window: usage["modelContextWindow"]?.int))
         case "turn/completed":
-            let completed = params["turn"] as? [String: Any]
+            let completed = params["turn"]
             turn = nil
-            if completed?["status"] as? String == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
+            if completed?["status"]?.string == "failed" { session.emit(.failed(CodexModel.failure(of: completed))) }
             session.emit(.turnFinished)
         default:
             break

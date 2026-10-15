@@ -23,13 +23,13 @@ struct ChatScrubber: View {
     /// 指针停在右缘这条上（Mac、iPad 触控板）。
     @State private var hovering = false
 
-    /// 会话的刻度：你发的话与压缩。不到两处为空（没有滑条）。
+    /// 会话的刻度：你发的话与换了上下文的地方（`PiNotice.changesContext`）。不到两处为空（没有滑条）。
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
         ChatMark.enough(entries.compactMap { entry in
             switch entry.role {
             case .user: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
-            case .system: ChatMark(id: entry.id, kind: .boundary, preview: entry.text)
-            case .pi, .preview: nil
+            case .notice(let notice) where notice.changesContext: ChatMark(id: entry.id, kind: .boundary, preview: entry.text)
+            case .notice, .pi, .preview: nil
             }
         })
     }

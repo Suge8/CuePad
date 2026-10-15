@@ -74,7 +74,7 @@ extension CueStore {
 
   /// 会话名作任务标题：只取第一行有字的（任务正文只有标题），超长截断（终端会话的名字常是第一句话）。
   /// 会话名没有文字时（工作目录也不知道）用 `untitledSession`。
-  static func taskTitle(_ title: String) -> String {
+  public static func taskTitle(_ title: String) -> String {
     CueName.clipped(
       title.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? untitledSession)
   }

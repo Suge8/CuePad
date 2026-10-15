@@ -128,7 +128,7 @@ struct PiConversation: View {
         #endif
     }
 
-    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因。
+    /// 对话末尾：正在说的话或处理中的进展（带子代理）、出错的原因（Agent 已把这次错误写成最后一条回答时不再重复）。
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
@@ -139,7 +139,7 @@ struct PiConversation: View {
         #else
         liveStatus
         #endif
-        if session.state == .known(.error) {
+        if session.state == .known(.error), !PiErrorSummary.echoes(messages.last { $0.role == .known(.pi) }?.text, line: session.detail) {
             Callout(.failed, text: session.detail ?? "Mac 没有说明原因")
         }
     }
@@ -175,12 +175,6 @@ struct SessionDraft: View {
             LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }
-}
-
-extension PiDraft {
-    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
-    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
-    func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
 }
 #endif
 
@@ -227,15 +221,30 @@ private struct ChatSegment: View, Equatable {
         case .pi:
             ReplyBlock(
                 text: entry.text, meta: entry.meta, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
-        case .system:
-            // 会话文件里的系统记录（压缩）：上下文从这里起换了，与 Cue 换新同一条分隔
+        case .notice(let notice) where notice.changesContext:
+            // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
             ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
+        case .notice(let notice):
+            RoundEndNote(notice: notice)
         case .preview:
             PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
     }
 }
 
+
+/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行小字，不是分隔（上下文没换），刻度滑条上也没有它。
+private struct RoundEndNote: View {
+    let notice: PiNotice
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Label(notice.rawValue, systemImage: notice == .declined ? "hand.raised" : "stop.circle")
+            .font(Typography.meta).foregroundStyle(palette.ink3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .transition(.entry)
+    }
+}
 
 /// 排开的最上面一行：还有更早的对话。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {
@@ -271,8 +280,7 @@ extension PiConversation {
 
 /// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
 /// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）。Mac 不画状态标，只有着色的字：标题玻璃里唯一的圆是任务的完成圈；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
-/// 不是 Pi 的会话最前面写是哪家 Agent（`AgentMark`），歇着时也写。
-/// 歇着（该你了、新会话、有新回复）的 Pi 会话什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 最前面写是哪家 Agent（`AgentMark`），歇着时也写；歇着（该你了、新会话、有新回复）时只有它。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
@@ -280,8 +288,7 @@ struct PiSessionSubtitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`SpeechBubble`）；正在看的会话没有"有新回复"
-        let shown = PiShown(session, cue: workspace.cueOnDuty).speaking(drafting)
+        let shown = workspace.shownInHeader(session)
         let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
         if speaks || undelivered != nil || mark != nil {
@@ -309,14 +316,6 @@ struct PiSessionSubtitle: View {
 
     private static let font = Typography.caption
 
-    /// 这台 Mac 上它此刻有正在说的话（手机上没有）
-    private var drafting: Bool {
-        #if os(macOS)
-        workspace.services.pi.slot(sessionID: session.sessionID)?.draft != nil
-        #else
-        false
-        #endif
-    }
 }
 
 

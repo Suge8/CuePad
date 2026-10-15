@@ -15,7 +15,7 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 29;
+const EXTENSION_VERSION = 30;
 const PROTOCOL_VERSION = 14;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
@@ -221,6 +221,8 @@ class StateTracker {
 	prompt: { kind: string; title?: string } | null = null;
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
 	outcome: State = { kind: "done", aborted: false };
+	/** 这一轮收到过 CuePad 的停止（`abort` 命令） */
+	stopped = false;
 	settled: State | null = null;
 	/** 在飞子代理数（FireCode 发布） */
 	inFlight = 0;
@@ -350,7 +352,7 @@ function thinkingLevels(model: Model): ThinkingLevel[] {
 }
 
 function describeModel(model: Model) {
-	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model) };
+	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model), images: model.input.includes("image") };
 }
 
 function readTTY(): Promise<string | null> {
@@ -698,9 +700,21 @@ export default function (pi: ExtensionAPI) {
 		runInternal("reload-session");
 	}
 
-	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。 */
+	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。会话正忙时按 followUp 排队（Pi 1.2 起不给就抛错）。 */
 	function runInternal(action: string) {
-		return setImmediate(() => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
+		return later("会话操作", () => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { deliverAs: "followUp", expandPromptTemplates: true }));
+	}
+
+	/** 下一轮事件循环再交给 Pi（返回排好的这一次，可撤）。`sendUserMessage` 不返回结果：异步的失败 Pi 报在它自己的界面里；同步抛出的（本扩展实例已被换掉等）
+	 * 在这里报，不让它在事件循环里成为未捕获的异常。 */
+	function later(what: string, action: () => void) {
+		return setImmediate(() => {
+			try {
+				action();
+			} catch (error) {
+				ctx.ui.notify(`CuePad：${what}没交给 Pi：${reason(error)}`, "error");
+			}
+		});
 	}
 
 	pi.registerCommand(INTERNAL_COMMAND, {
@@ -817,7 +831,7 @@ export default function (pi: ExtensionAPI) {
 	/**
 	 * 结束会话：与用户在 Pi 里退出同一条路（`ctx.shutdown`——TUI 恢复终端并提示怎么恢复会话，退出时发 `bye quit`）。
 	 * 正在跑的一轮先中止、等你回答的弹窗先取消，否则 Pi 要等它们结束才会退出。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，
-	 * 所以后台托管的进程不走这里，由 CuePad 给它发 SIGTERM（`PiHost.end`）。
+	 * 所以后台托管的进程不走这里，由 CuePad 给它发 SIGTERM（`PiBridge.end`）。
 	 */
 	function handleEnd(ack: Ack) {
 		ack({ ok: true });
@@ -833,7 +847,10 @@ export default function (pi: ExtensionAPI) {
 	 */
 	function handleAbort(ack: Ack) {
 		asking?.dismiss?.();
-		if (!ctx.isIdle()) ctx.abort();
+		if (!ctx.isIdle()) {
+			tracker.stopped = true;
+			ctx.abort();
+		}
 		ack({ ok: true });
 	}
 
@@ -1062,6 +1079,7 @@ export default function (pi: ExtensionAPI) {
 		tracker.active = true;
 		tracker.settled = null;
 		tracker.outcome = { kind: "done", aborted: false };
+		tracker.stopped = false;
 		commit();
 		clearDraft();
 	});
@@ -1101,15 +1119,17 @@ export default function (pi: ExtensionAPI) {
 		tracker.compacting = false;
 		commit(resume);
 		// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
-		const waiting = held.splice(0);
-		setImmediate(() => { for (const { deliver } of waiting) deliver(); });
+		for (const { deliver } of held.splice(0)) later("留着的话", deliver);
 	}
 	pi.on("session_compact", finishCompaction);
 	pi.on("session_compact_failed", finishCompaction);
-	pi.on("agent_end", (event) => {
+	// 被停下的一轮有时以 error 结束（Pi 1.2 在工具被中止后再请求模型、请求因中止失败时记成 error）：只认确定的事实——
+	// 这一轮收到过停止、或这一轮的中止信号已触发——按被停下报，不看错误文案
+	pi.on("agent_end", (event, context) => {
 		const last = event.messages.findLast((m) => m.role === "assistant");
-		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
-		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
+		const stopped = tracker.stopped || context.signal?.aborted === true;
+		if (last?.stopReason === "aborted" || (last?.stopReason === "error" && stopped)) tracker.outcome = { kind: "done", aborted: true };
+		else if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 	});
 	pi.events?.on(FIRECODE_WORKERS_CHANNEL, (data) => {
 		const { inFlight } = (data ?? {}) as { inFlight?: unknown };

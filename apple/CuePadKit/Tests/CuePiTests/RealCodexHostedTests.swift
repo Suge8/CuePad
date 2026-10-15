@@ -2,7 +2,6 @@
 import CueStore
 import CueTestSupport
 import Foundation
-import Network
 import Testing
 @testable import CuePi
 
@@ -15,7 +14,7 @@ struct RealCodexHostedTests {
     @Test func aHostedSessionTakesAMessageWithAnImageIsConfiguredEndedAndResumed() async throws {
         try await withCodexRig { rig in
             let log = ChangeLog(rig.bridge)
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-1")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
 
             let opened = try #require(rig.bridge.session(id: id))
             #expect(opened.hosted && opened.agent == .codex && opened.launchToken == "token-1")
@@ -23,11 +22,14 @@ struct RealCodexHostedTests {
             let image = PiImage(mimeType: "image/png", data: try solidPNG(red: 1, green: 0, blue: 0))
             let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString)
             #expect(try await rig.bridge.send(message, to: id) == .immediate)
-            // 上下文余量（`thread/tokenUsage/updated`）与歇下（Stop 钩子）走两条通道，先后不定：一起等
-            try await eventually("这一轮做完、报了上下文余量", timeout: .seconds(120)) {
-                log.states.contains(.thinking) && rig.bridge.session(id: id).map { $0.state == .settled && $0.context?.window ?? 0 > 0 } == true
+            // 上下文余量（`thread/tokenUsage/updated`）、歇下（Stop 钩子）与会话文件里的回答走三条通道，先后不定：一起等
+            try await eventually("这一轮做完、报了上下文余量、回答落盘", timeout: .seconds(120)) {
+                log.states.contains(.thinking) && rig.bridge.session(id: id).map {
+                    $0.state == .settled && $0.context?.window ?? 0 > 0 && rig.replies($0).last?.lowercased().contains("red") == true
+                } == true
             }
 
+            #expect(rig.draftLanded(id))
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
@@ -41,11 +43,11 @@ struct RealCodexHostedTests {
             #expect(rig.bridge.session(id: id)?.model?.key.id == codexTestModel)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
-                try await rig.bridge.configure(model: PiModelKey(provider: CodexModel.provider, id: "no-such-model"), in: id)
-            }
+            // 斜杠命令换到没有的模型：提示点的是这个会话的 Agent
+            let unknown = await #expect(throws: PiBridgeError.unknownModel(.codex)) { try await rig.bridge.command("/model no-such-model", in: id) }
+            #expect(unknown?.localizedDescription == "这台 Mac 上的 Codex 里找不到这个模型")
 
-            try await rig.runtime.end(id)
+            try await rig.bridge.end(id)
             try await eventually("下线") { rig.bridge.session(id: id) == nil }
 
             let file = try #require(session.sessionFile)
@@ -58,17 +60,35 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// CuePad 起的 `codex` 是外壳（npm 装的就是 node 外壳）、真 codex 是它的子进程：钩子仍认回这个托管会话，不另接一个；
+    /// 忙闲来自托管进程自己的通知，第一句照常进入思考、答完歇下。
+    @Test func aWrappedCodexAnswersTheFirstMessage() async throws {
+        try await withCodexRig(wrapped: true) { rig in
+            let log = ChangeLog(rig.bridge)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-wrapped", name: nil, model: nil, thinking: nil)
+            let threadID = try #require(rig.bridge.session(id: id)?.sessionID)
+
+            _ = try await rig.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
+            try await eventually("这一轮做完、回答落盘", timeout: .seconds(120)) {
+                log.states.contains(.thinking)
+                    && rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("WRAPPED") == true } == true
+            }
+            #expect(rig.bridge.sessions.filter { $0.sessionID == threadID }.map(\.id) == [id])
+            #expect(rig.draftLanded(id))
+        }
+    }
+
     /// 需要你确认的命令：会话停在"等你确认"、带着要跑的命令；在 CuePad 里允许后命令照常跑完，这一轮做完。
     @Test func aPermissionRequestIsAnsweredFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request") { rig in
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2", name: nil, model: nil, thinking: nil)
             let page = rig.codex.work.appending(path: "page.html")
 
             _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
             try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
-            #expect(question.kind == .known(.confirm) && question.text.contains("curl"))
+            #expect(question.kind == .known(.confirm) && question.text.hasPrefix("允许 Codex 运行命令？") && question.text.contains("curl"))
 
             try await rig.bridge.answer(.confirmed(true), to: try #require(question.promptID), in: id)
 
@@ -77,10 +97,38 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// Plan 模式里不挡着这一轮的提问（`request_user_input_async`，Codex 问完睡着等）：在 CuePad 里用 /plan 进 Plan 模式说话，
+    /// 会话停在"等你回答"、带着问题与选项（也能自己填），睡着等的那段不显示成在调工具；在 CuePad 里选了，答案当你的下一句话交给它，
+    /// 它接着说。说完的回答落了库，正在说的话随之换下。
+    @Test func aPlanModeQuestionIsAnsweredFromCuePad() async throws {
+        try await withCodexRig { rig in
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
+            try await eventually("命令清单里有 /plan") { rig.bridge.session(id: id)?.commands.contains { $0.name == "plan" } == true }
+            let log = ChangeLog(rig.bridge)
+
+            try await rig.bridge.command("/plan Ask me which drink I want, Tea or Coffee, with the request_user_input tool, and sleep while you wait for my answer instead of ending your turn. Then reply with only the option I chose.", in: id)
+            try await eventually("等你回答", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
+            let question = try #require(rig.bridge.session(id: id)?.question)
+            #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
+            #expect(question.kind == .known(.select) && question.allowsOther)
+            let coffee = try #require(question.options.first { $0.lowercased().contains("coffee") })
+
+            try await rig.bridge.answer(.option(coffee), to: try #require(question.promptID), in: id)
+
+            try await eventually("拿到答案接着说，说完落盘", timeout: .seconds(120)) {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.lowercased().contains("coffee") == true } == true
+            }
+            #expect(rig.bridge.session(id: id)?.question == nil)
+            #expect(rig.draftLanded(id))
+            #expect(!log.details.contains { $0?.contains("clocksleep") == true }, "\(log.details)")
+            try await rig.bridge.command("/default", in: id)
+        }
+    }
+
     /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定。
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig { rig in
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3")
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3", name: nil, model: nil, thinking: nil)
             let log = ChangeLog(rig.bridge)
 
             _ = try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name pong and ask it to reply with the word PONG. Wait for it, then tell me what it said."), to: id)
@@ -96,7 +144,7 @@ struct RealCodexHostedTests {
             let files = try #require(FileManager.default.enumerator(at: rig.codex.home.appending(path: "sessions"), includingPropertiesForKeys: nil))
                 .compactMap { $0 as? URL }.filter { $0.pathExtension == "jsonl" }
             #expect(files.count == 2)
-            let history = HistoryEventLog(PiHistoryIndexer(root: rig.codex.home.appending(path: "sessions"), agent: .codex, files: scratchFiles) { _ in nil })
+            let history = HistoryEventLog(PiHistoryIndexer(agent: .codex, paths: rig.codex.paths, files: scratchFiles) { _ in nil }!)
             try await eventually("回填完") { history.finishedBackfill }
             // 主会话文件在这一轮歇下后可能还在写，会多一次更新：只看更新了哪些会话
             #expect(Set(history.updates.map(\.checkpoint.sessionID)) == [main])
@@ -111,17 +159,8 @@ struct RealCodexHostedTests {
         let provider = try await RejectingProvider()
         defer { provider.stop() }
         try await withCodexRig { rig in
-            let config = rig.codex.home.appending(path: "config.toml")
-            let text = try String(contentsOf: config, encoding: .utf8)
-            try ("model_provider = \"rejecting\"\n" + text + """
-
-                [model_providers.rejecting]
-                name = "rejecting"
-                base_url = "http://127.0.0.1:\(provider.port)/v1"
-                wire_api = "responses"
-
-                """).write(to: config, atomically: true, encoding: .utf8)
-            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4")
+            try rig.codex.use(provider)
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-4", name: nil, model: nil, thinking: nil)
 
             _ = try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
             try await eventually("这一轮失败，带着原因", timeout: .seconds(120)) {
@@ -134,32 +173,4 @@ struct RealCodexHostedTests {
     }
 }
 
-/// 本机的假模型提供方：每个请求都回 400 和一句固定的原因。
-private final class RejectingProvider: Sendable {
-    static let reason = "bad things happened"
-    private let listener: NWListener
-    let port: UInt16
-
-    init() async throws {
-        listener = try NWListener(using: .tcp, on: .any)
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global())
-            // 请求读一块就够了：不论问什么都拒绝
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
-                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
-                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
-                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
-            }
-        }
-        let ready = AsyncStream<UInt16>.makeStream()
-        listener.stateUpdateHandler = { [listener] state in
-            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
-        }
-        listener.start(queue: .global())
-        var iterator = ready.stream.makeAsyncIterator()
-        port = try #require(await iterator.next())
-    }
-
-    func stop() { listener.cancel() }
-}
 #endif

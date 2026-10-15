@@ -10,7 +10,7 @@ import Testing
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(5)))
 struct RealPreviewTests {
     private func sqlite(_ database: URL, _ query: String) async throws -> String {
-        try #require(await runCapturing(URL(filePath: "/usr/bin/sqlite3"), [database.path, query])).output.trimmingCharacters(in: .whitespacesAndNewlines)
+        try #require(await ChildProcess.run(URL(filePath: "/usr/bin/sqlite3"), [database.path, query])).output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
@@ -53,7 +53,7 @@ struct RealPreviewTests {
         let page = library.appending(path: "demo.html")
         try "<h1>x</h1>".write(to: page, atomically: true, encoding: .utf8)
         // 报错在标准错误里：经 sh 并进标准输出
-        let shown = try #require(await runCapturing(
+        let shown = try #require(await ChildProcess.run(
             URL(filePath: "/bin/sh"), ["-c", "exec \"$0\" show \"$1\" 2>&1", PiProcess.cuepad.path, page.path],
             environment: ["CUEPAD_LIBRARY_DIR": library.path]))
         #expect(shown.status != 0)

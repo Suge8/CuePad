@@ -16,7 +16,7 @@ import Testing
 ///
 /// - pi：`~/.local/bin/pi`，假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
-/// - claude：本机的 claude，走 DeepSeek 的 Anthropic 兼容接口（`ClaudeTestbed`）；
+/// - claude：本机的 claude，用 `~/.pi/agent/auth.json` 里的 Claude 订阅令牌、模型 haiku（`ClaudeTestbed`）；
 /// - 大脑（`RealBrainTests`）用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
@@ -24,7 +24,7 @@ import Testing
 /// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
 /// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录），旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后），OpenCode（CuePad 只接 v2
 /// 后台服务，v2 只有 Homebrew 的源码构建版，用例用的免费模型对它回"free tier can only be used from within OpenCode"或限流，
-/// 录不出一盘能回放的；它的 HTTP/SSE 边界也就没接进录像带）。
+/// 录不出一盘能回放的；它的 HTTP/SSE 边界也就没接进录像带；免费模型缺省 big-pickle，限流时 `CUEPAD_OPENCODE_MODEL` 换成别的）。
 enum RealAgents {
     static let recording: Set<AgentKind> = Set((ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] ?? "").split(separator: ",")
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
@@ -39,7 +39,7 @@ enum RealAgents {
         switch agent {
         case .pi: realPiInstalled
         case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path)
-        case .claudeCode: claudeURL != nil && claudeKey != nil
+        case .claudeCode: claudeURL != nil && claudeToken != nil
         case .opencode: realOpenCodeURL != nil
         }
     }

@@ -104,7 +104,7 @@ extension DebugScene {
                     sheet.launched = .init(request: request.id, token: token)
                 }
             }
-            navigation.newSession = sheet
+            navigation.startNewSession(sheet, hasProjects: workspace.catalog?.projects.isEmpty == false)
         case "folderpicker":
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
             let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"

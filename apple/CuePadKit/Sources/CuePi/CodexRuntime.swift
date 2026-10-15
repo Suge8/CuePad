@@ -5,9 +5,11 @@ import OSLog
 
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
-/// - 状态来自钩子（托管的会话也一样，钩子在承载线程的进程里跑）：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，
-///   `Stop`/`Interrupt` 歇下，`SessionEnd` 下线。会话 id 是线程 id，承载进程是钩子的父进程（终端会话是常驻服务，托管的是 CuePad 起的进程）。
-///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置 30 分钟才卸载并报 `SessionEnd`），
+/// - 状态来自钩子：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，`Stop`/`Interrupt` 歇下，`SessionEnd` 下线。
+///   托管的会话另有自己进程的 `turn/started`、`turn/completed` 通知管忙闲（钩子没装好时也对）。
+///   会话 id 是 `<线程 id>.<承载进程>`：终端会话的承载进程是钩子的父进程（常驻服务）；托管的是 CuePad 起的进程，它的钩子按环境里的
+///   `HostMark` 认回（`codex` 可能是外壳，钩子的父进程是外壳起的子进程，不按进程号认）。
+///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置后才卸载并报 `SessionEnd`），
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
 /// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好（回答项说完换成全文）交给桥；
 ///   终端里的会话不订阅，也就没有。
@@ -15,61 +17,63 @@ import OSLog
 ///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
 ///   `thread/name/updated`、`thread/closed` 广播给所有连接：钩子漏掉的歇下（出错时没有 `Stop`）与改名靠它们补上。
-/// - 权限确认经 `PermissionRequest` 钩子：Codex 先问钩子、钩子没给决定才在终端里弹框。终端会话按人在不在（`UserPresence`）分：
-///   人在就当场放行钩子，终端弹框，CuePad 里的问题只能在终端里答；人不在就挂住钩子等 CuePad 作答（终端里只显示钩子的状态行
-///   `CodexHooks.waitingMessage`），挂住期间人回来了就放行、终端补弹。托管的会话没有终端，总是挂住。在终端里按 Esc 停下这一轮
-///   会收回挂住的调用。Plan 模式的提问只发给订阅者（终端界面），CuePad 只显示、在终端里答；CuePad 开的会话不进 Plan 模式。
+///   常驻服务的控制 socket 在哪由 `codex app-server daemon version` 告诉（服务在跑时才有），不自己拼路径。
+/// - 权限确认经 `PermissionRequest` 钩子：Codex 先问钩子、钩子没给决定才在终端里弹框。终端会话按人在不在分（`PresenceGate`）；
+///   托管的会话没有终端，总是挂住。在终端里按 Esc 停下这一轮会收回挂住的调用。
+/// - Plan 模式：托管会话用 `/plan [话]` 进、`/default` 回默认模式（`thread/settings/update` 的 `collaborationMode`，同终端界面的 /plan），
+///   终端会话在终端里切。Plan 模式提问有两种：
+///   - 不挡着这一轮的（`request_user_input_async`，0.162 起 Plan 模式的默认）：Codex 登记了问题就接着做事、睡着等或歇下，你的下一句话就是答案。
+///     终端与托管的会话都经 `PostToolUse` 钩子（工具被接受了才有）显示成等你回答，从 CuePad 作答就是对它说这句话（`deliver`），
+///     你说了下一句（`UserPromptSubmit`）就收起。
+///   - 挡着这一轮的（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
+///     托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
-    private let locator: ExecutableLocator
-    private let presence: any UserPresence
-    /// 有挂住的终端会话确认时等人回来
-    private var returnWatch: Task<Void, Never>?
-    private let idleLimit: Duration
-    private let launchTimeout: Duration
+    private let locate: @Sendable () async -> ExecutableLocator
+    private let gate: PresenceGate
     private var tracked: [PiSession.ID: Tracked] = [:]
     /// CuePad 托管的进程（进程号 → 进程）
     private var hosted: [Int32: CodexRPC] = [:]
-    private var idleTimers: [Int32: Task<Void, Never>] = [:]
+    /// 托管进程环境里的标记（`HostMark`）→ 进程号
+    private var marks: [String: Int32] = [:]
     private var daemon: CodexRPC?
     private var connecting: Task<CodexRPC, any Error>?
+    /// 常驻服务的控制 socket（服务在跑时问到的）
+    private var controlSocket: String?
     private var exitWatchers: [Int32: ProcessExitWatcher] = [:]
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     private var models: [CodexModel]?
     private var stopped = true
 
-    /// - Parameter idleLimit: 托管的会话歇着满这么久就关掉进程（不算结束，发话时再接着）。
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, locator: ExecutableLocator = .standard,
-        presence: any UserPresence = SystemPresence(), idleLimit: Duration = .seconds(30 * 60), launchTimeout: Duration = .seconds(30)
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
     ) {
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
-        self.locator = locator
-        self.presence = presence
-        self.idleLimit = idleLimit
-        self.launchTimeout = launchTimeout
+        self.locate = locate
+        gate = PresenceGate(presence: presence)
     }
 
-    /// 一个在线会话在这里的状态（快照在桥上）。
+    /// 一个在线会话在这里的状态（快照在桥上，由 `facts` 推出）。
     private final class Tracked {
         let id: PiSession.ID
         let threadID: String
         let pid: Int32
-        /// 这一轮的 id（`turn/steer`、`turn/interrupt` 要它）与是否在跑
+        var facts = SessionFacts()
+        /// 这一轮的 id（`turn/steer`、`turn/interrupt` 要它）
         var turnID: String?
-        var turnRunning = false
-        var question: Question? { didSet { onQuestion?() } }
-        var onQuestion: (() -> Void)?
+        /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
+        var reply: Reply?
         /// 发起的子代理的任务名，等 `SubagentStart` 认领（按先后）
         var spawnNames: [String] = []
-        /// 歇着时手动压缩：压完回到压缩前的状态与起点
-        var beforeCompact: (state: PiWorkState, since: Date, busySince: Date?)?
+        /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
+        var lastError: String?
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {
@@ -77,18 +81,12 @@ public final class CodexRuntime: AgentRuntime {
             self.threadID = threadID
             self.pid = pid
         }
-    }
-
-    /// 等你回答的问题与怎么回给 Codex。
-    private struct Question {
-        let question: PiQuestion
-        let reply: Reply
 
         enum Reply {
-            /// 阻塞着的 `PermissionRequest` 钩子
-            case hook(AgentHookCall)
-            /// Plan 模式的提问：只有订阅者（终端界面）收得到，只能在终端里答
-            case terminal
+            /// 阻塞着的 `PermissionRequest` 钩子（人不在而挂住的带着凭据）
+            case hook(AgentHookCall, hold: UUID?)
+            /// 托管线程的 `item/tool/requestUserInput`：服务端请求的 id、问题的 id
+            case request(CodexRPC, id: JSONValue, question: String)
         }
     }
 
@@ -101,40 +99,28 @@ public final class CodexRuntime: AgentRuntime {
             guard let self, !self.stopped else { return call.finish() }
             self.hook(call)
         }
-        guard FileManager.default.fileExists(atPath: controlSocket) else { return }
         Task { await discover() }
     }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
-        for session in tracked.values {
-            if case .hook(let call) = session.question?.reply { call.finish() }
-        }
-        returnWatch?.cancel()
-        returnWatch = nil
-        for timer in idleTimers.values { timer.cancel() }
-        idleTimers = [:]
+        for session in tracked.values { release(session) }
         for watcher in exitWatchers.values { watcher.cancel() }
         exitWatchers = [:]
         daemon?.close()
         daemon = nil
-        let processes = Array(hosted.values)
-        let waits = processes.map { rpc in Task { await rpc.shutdown() } }
+        let waits = hosted.values.map { rpc in Task { await rpc.shutdown() } }
         return { for wait in waits { await wait.value } }
-    }
-
-    public func open(in directory: URL, launchToken: String) async throws -> PiSession.ID {
-        try await withLaunchTimeout { rpc in
-            let started = try await rpc.call("thread/start", ["cwd": directory.path])
-            return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
-        }
     }
 
     public func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> PiSession.ID {
-        try await configure(
-            opened: try await open(in: directory, launchToken: launchToken), name: name, model: model, thinking: thinking, on: bridge)
+        let id = try await launch { rpc in
+            let started = try await rpc.call("thread/start", ["cwd": .string(directory.path)])
+            return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
+        }
+        return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
     /// 接着一个已结束的会话：还在常驻服务里（终端开着它，或终端退出后它还挂着）就经控制 socket 接上，不另开一份；
@@ -143,8 +129,9 @@ public final class CodexRuntime: AgentRuntime {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         if let id = try await adoptFromDaemon(session.id) { return id }
         do {
-            return try await withLaunchTimeout { rpc in
-                let resumed = try await rpc.call("thread/resume", ["threadId": session.id, "path": session.path, "excludeTurns": true])
+            return try await launch { rpc in
+                let resumed = try await rpc.call(
+                    "thread/resume", ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true])
                 return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
             }
         } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
@@ -153,93 +140,71 @@ public final class CodexRuntime: AgentRuntime {
         }
     }
 
-    /// 托管的会话关掉进程并等它下线；终端里的会话 CuePad 结束不了（Codex 没有让终端退出的接口）。
-    public func end(_ id: PiSession.ID) async throws {
-        guard let session = tracked[id] else { return }
-        guard let rpc = hosted[session.pid] else { throw PiBridgeError.unsupported }
-        await rpc.shutdown()
-    }
-
     // MARK: 托管进程
 
-    private var controlSocket: String {
-        paths.home(of: .codex).appending(path: "app-server-control/app-server-control.sock").path
+    /// `codex` 与给它的环境：配置目录与钩子 socket 目录照 `AgentPaths` 定（隔离测试里指到临时目录）。
+    private func executable() async throws -> (url: URL, environment: [String: String]) {
+        let locator = await locate()
+        guard let codex = locator.executable(.codex) else { throw AgentRuntimeError.notInstalled(.codex) }
+        return (codex, locator.environment(launching: codex, overrides: paths.environment.merging([
+            "CODEX_HOME": paths.home(of: .codex).path, "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
+        ]) { $1 }))
     }
 
-    /// 托管进程的环境：`AgentPaths` 的环境（App 里是自己的环境，隔离测试里指到临时目录），配置目录与钩子 socket 目录照它定。
-    private var codexEnvironment: [String: String] {
-        paths.environment.merging([
-            "CODEX_HOME": paths.home(of: .codex).path,
-            "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
-            "PATH": locator.path,
-        ]) { $1 }
-    }
-
-    /// 起一个托管进程交给 `body`；超过 `launchTimeout` 停掉进程（等着的请求随之失败），出错时也停掉。握手由 `CodexRPC.launch` 自己限时。
-    private func withLaunchTimeout(_ body: @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
-        guard let codex = locator.candidates(AgentKind.codex.command).first else { throw AgentRuntimeError.notInstalled(.codex) }
-        let launched = Launched()
-        let timeout = launchTimeout
-        let timer = Task { [launched] in
-            guard (try? await Task.sleep(for: timeout)) != nil else { return }
-            launched.timedOut = true
-            launched.rpc?.terminate()
-        }
-        defer { timer.cancel() }
+    /// 起一个托管进程交给 `body`；连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
+    private func launch(_ body: @escaping @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
+        let codex = try await executable()
+        let mark = UUID().uuidString
+        let rpc = try await CodexRPC.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 })
+        host(rpc, mark: mark)
         do {
-            let rpc = try await CodexRPC.launch(codex, environment: codexEnvironment)
-            launched.rpc = rpc
-            host(rpc)
-            guard !launched.timedOut else { throw AgentRuntimeError.launchTimedOut(.codex) }
-            return try await body(rpc)
+            return try await withDeadline(AgentTimeouts.launch, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(rpc) }
         } catch {
-            if let rpc = launched.rpc { await rpc.shutdown() }
-            throw launched.timedOut || error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
+            await rpc.shutdown()
+            throw error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
         }
     }
 
-    @MainActor private final class Launched {
-        var rpc: CodexRPC?
-        var timedOut = false
-    }
-
-    private func host(_ rpc: CodexRPC) {
+    private func host(_ rpc: CodexRPC, mark: String) {
         let pid = rpc.pid
         hosted[pid] = rpc
+        marks[mark] = pid
         rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
+        rpc.onRequest = { [weak self, weak rpc] method, id, params in
+            guard let self, let rpc, method == "item/tool/requestUserInput" else { return false }
+            return self.userInput(params, id: id, on: rpc)
+        }
         rpc.onDraft = { [weak self] thread, draft in self?.bridge.setDraft("\(thread).\(pid)", draft) }
         rpc.onClose = { [weak self] in self?.processGone(pid) }
     }
 
-    private func attachHosted(_ result: CodexRPC.Object, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
-        let thread = result["thread"] as? CodexRPC.Object ?? [:]
-        var session = makeSession(thread, pid: rpc.pid)
+    private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
+        var session = makeSession(result["thread"] ?? .object([:]), pid: rpc.pid)
         session.hosted = true
         session.launchToken = launchToken
         attach(session)
-        idle(rpc.pid)
         return session.id
-    }
-
-    /// 托管的会话歇下就开始计时，满 `idleLimit` 关掉进程；有活就停表。
-    private func idle(_ pid: Int32) {
-        idleTimers.removeValue(forKey: pid)?.cancel()
-        guard let rpc = hosted[pid], !tracked.values.contains(where: { $0.pid == pid && (bridge.session(id: $0.id)?.state.hasPendingWork ?? false) })
-        else { return }
-        let limit = idleLimit
-        idleTimers[pid] = Task { [weak rpc] in
-            guard (try? await Task.sleep(for: limit)) != nil else { return }
-            rpc?.close()
-        }
     }
 
     // MARK: 常驻服务
 
-    /// 连上常驻服务（已连着就用那条）。
-    private func daemonConnection() async throws -> CodexRPC {
+    /// 常驻服务的控制 socket：`codex app-server daemon version` 在服务跑着时给出它；没跑为 nil（之后再问）。
+    private func daemonSocket() async -> String? {
+        if let controlSocket { return controlSocket }
+        guard let codex = try? await executable(),
+              let result = await ChildProcess.run(codex.url, ["app-server", "daemon", "version"], environment: codex.environment, timeout: .seconds(10)),
+              let info = JSONValue.parse(Data(result.output.utf8)), info["status"]?.string == "running", let path = info["socketPath"]?.string
+        else { return nil }
+        controlSocket = path
+        return path
+    }
+
+    /// 连上常驻服务（已连着就用那条）；服务没跑为 nil。
+    private func daemonConnection() async throws -> CodexRPC? {
         if let daemon, !daemon.isClosed { return daemon }
         if let connecting { return try await connecting.value }
-        let task = Task { try await CodexRPC.connect(socket: controlSocket) }
+        guard let path = await daemonSocket() else { return nil }
+        let task = Task { try await CodexRPC.connect(socket: path) }
         connecting = task
         defer { connecting = nil }
         let rpc = try await task.value
@@ -256,9 +221,9 @@ public final class CodexRuntime: AgentRuntime {
     /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）。子代理的线程不算会话。
     private func discover() async {
         do {
-            let rpc = try await daemonConnection()
+            guard let rpc = try await daemonConnection() else { return }
             let loaded = try await rpc.call("thread/loaded/list", [:])
-            for threadID in loaded["data"] as? [String] ?? [] where tracked["\(threadID).\(rpc.pid)"] == nil {
+            for threadID in loaded["data"]?.array?.compactMap(\.string) ?? [] where tracked["\(threadID).\(rpc.pid)"] == nil {
                 _ = try await adopt(threadID, on: rpc)
             }
         } catch {
@@ -267,9 +232,9 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     private func adoptFromDaemon(_ threadID: String) async throws -> PiSession.ID? {
-        guard FileManager.default.fileExists(atPath: controlSocket), let rpc = try? await daemonConnection() else { return nil }
+        guard let rpc = try? await daemonConnection() else { return nil }
         let loaded = try await rpc.call("thread/loaded/list", [:])
-        guard (loaded["data"] as? [String] ?? []).contains(threadID) else { return nil }
+        guard loaded["data"]?.array?.contains(.string(threadID)) == true else { return nil }
         return try await adopt(threadID, on: rpc)
     }
 
@@ -277,52 +242,52 @@ public final class CodexRuntime: AgentRuntime {
     private func adopt(_ threadID: String, on rpc: CodexRPC) async throws -> PiSession.ID? {
         let id = "\(threadID).\(rpc.pid)"
         if tracked[id] != nil { return id }
-        let read = try await rpc.call("thread/read", ["threadId": threadID])
-        guard let thread = read["thread"] as? CodexRPC.Object, thread["parentThreadId"] is NSNull || thread["parentThreadId"] == nil else { return nil }
-        if tracked[id] != nil { return id }
-        var session = makeSession(thread, pid: rpc.pid)
+        let read = try await rpc.call("thread/read", ["threadId": .string(threadID)])
+        guard let thread = read["thread"], thread["parentThreadId"] == nil || thread["parentThreadId"] == .null else { return nil }
         // 正在跑一轮：停止、插话要这一轮的 id，从最近一轮取（钩子要等下一个事件才带来）
         var running: String?
-        if (thread["status"] as? CodexRPC.Object)?["type"] as? String == "active" {
-            let turns = try await rpc.call("thread/turns/list", ["threadId": threadID, "limit": 1])
-            running = ((turns["data"] as? [CodexRPC.Object])?.first).flatMap { $0["status"] as? String == "inProgress" ? $0["id"] as? String : nil }
+        if thread["status"]?["type"]?.string == "active" {
+            let turns = try await rpc.call("thread/turns/list", ["threadId": .string(threadID), "limit": 1])
+            running = turns["data"]?.array?.first.flatMap { $0["status"]?.string == "inProgress" ? $0["id"]?.string : nil }
         }
         if tracked[id] != nil { return id }
-        if running != nil { Self.move(&session, to: .thinking) }
-        attach(session)
-        tracked[id]?.turnID = running
-        tracked[id]?.turnRunning = running != nil
+        attach(makeSession(thread, pid: rpc.pid)) { session in
+            session.turnID = running
+            if running != nil { session.facts.startTurn() }
+        }
         return id
     }
 
     // MARK: 会话
 
-    private func makeSession(_ thread: CodexRPC.Object, pid: Int32) -> PiSession {
-        let threadID = thread["id"] as? String ?? ""
+    private func makeSession(_ thread: JSONValue, pid: Int32) -> PiSession {
+        let threadID = thread["id"]?.string ?? ""
         var session = PiSession(
-            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: (thread["path"] as? String).map { URL(filePath: $0) },
-            pid: pid, cwd: URL(filePath: thread["cwd"] as? String ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
+            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
+            pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
             extensionVersion: 0, state: .settled, stateSince: .now)
         apply(thread, to: &session)
         return session
     }
 
     /// 线程的名字、首条消息、模型与强度写进快照（`thread/read`、`thread/start`、`thread/resume` 给的都是这个形状）。
-    private func apply(_ thread: CodexRPC.Object, to session: inout PiSession) {
-        session.name = thread["name"] as? String
-        if let preview = thread["preview"] as? String, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
-        if let model = thread["model"] as? String {
+    private func apply(_ thread: JSONValue, to session: inout PiSession) {
+        session.name = thread["name"]?.string
+        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
+        if let model = thread["model"]?.string {
             session.model = models?.first { $0.id == model }?.option
                 ?? PiModelOption(key: PiModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
             session.availableModels = (models ?? []).map(\.option)
         }
-        session.thinking = (thread["reasoningEffort"] as? String).map(CodexModel.thinking)
+        session.thinking = thread["reasoningEffort"]?.string.map(CodexModel.thinking)
     }
 
-    private func attach(_ session: PiSession) {
+    private func attach(_ session: PiSession, prepare: (Tracked) -> Void = { _ in }) {
         let entry = Tracked(id: session.id, threadID: session.sessionID, pid: session.pid)
-        entry.onQuestion = { [weak self] in self?.watchReturn() }
+        prepare(entry)
         tracked[session.id] = entry
+        var session = session
+        entry.facts.publish(to: &session)
         bridge.attach(session, via: CodexLink(runtime: self, id: session.id))
         watchExit(session.pid)
         refresh(session.id, skills: true)
@@ -330,24 +295,21 @@ public final class CodexRuntime: AgentRuntime {
 
     private func watchExit(_ pid: Int32) {
         guard exitWatchers[pid] == nil else { return }
-        exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in
-            Task { @MainActor in self?.processGone(pid) }
-        }
+        exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in self?.processGone(pid) }
     }
 
     /// 承载进程退出了：它上面的会话都下线。
     private func processGone(_ pid: Int32) {
         exitWatchers.removeValue(forKey: pid)?.cancel()
-        idleTimers.removeValue(forKey: pid)?.cancel()
         hosted[pid] = nil
-        for session in tracked.values where session.pid == pid { detach(session.id, reason: .closed(reason: "quit")) }
+        marks = marks.filter { $0.value != pid }
+        for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
-    private func detach(_ id: PiSession.ID, reason: PiSessionEndReason) {
+    private func detach(_ id: PiSession.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
-        if case .hook(let call) = session.question?.reply { call.finish() }
-        bridge.detach(id, reason: reason)
-        watchReturn()
+        release(session)
+        bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
     /// 从 Codex 重新读名字、模型与强度（`thread/read`），可换的模型（`model/list`）与 skill（`skills/list`，斜杠命令）。
@@ -358,21 +320,18 @@ public final class CodexRuntime: AgentRuntime {
                 let rpc = try await control(session)
                 if models == nil { models = try await CodexModel.list(rpc) }
                 if skills, let cwd = bridge.session(id: id)?.cwd {
-                    let listed = try await rpc.call("skills/list", ["cwds": [cwd.path]])
-                    let entries = ((listed["data"] as? [CodexRPC.Object])?.first?["skills"] as? [CodexRPC.Object]) ?? []
-                    session.skills = entries.compactMap { entry in
-                        guard entry["enabled"] as? Bool != false, let name = entry["name"] as? String, let path = entry["path"] as? String else { return nil }
-                        return (name, path)
-                    }
-                    let commands = Self.builtinCommands + entries.compactMap { entry -> PiSlashCommand? in
-                        guard entry["enabled"] as? Bool != false, let name = entry["name"] as? String else { return nil }
-                        return PiSlashCommand(
-                            name: "skill:\(name)", summary: (entry["description"] as? String).map { String($0.prefix(120)) }, source: .known(.skill))
+                    let listed = try await rpc.call("skills/list", ["cwds": [.string(cwd.path)]])
+                    let entries = (listed["data"]?.array?.first?["skills"]?.array ?? []).filter { $0["enabled"]?.bool != false }
+                    session.skills = entries.compactMap { entry in entry["name"]?.string.flatMap { name in entry["path"]?.string.map { (name, $0) } } }
+                    let modes = hosted[session.pid] == nil ? [] : Self.modeCommands
+                    let commands = Self.builtinCommands + modes + entries.compactMap { entry -> PiSlashCommand? in
+                        guard let name = entry["name"]?.string else { return nil }
+                        return PiSlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { ToolDetail.clip($0) }, source: .known(.skill))
                     }
                     bridge.update(id) { $0.commands = commands }
                 }
-                let read = try await rpc.call("thread/read", ["threadId": session.threadID])
-                guard let thread = read["thread"] as? CodexRPC.Object else { return }
+                let read = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])
+                guard let thread = read["thread"] else { return }
                 bridge.update(id) { self.apply(thread, to: &$0) }
             } catch {
                 Self.log.notice("没能读出 Codex 会话的设置：\(String(describing: error))")
@@ -387,285 +346,301 @@ public final class CodexRuntime: AgentRuntime {
         PiSlashCommand(name: "model", summary: "换模型", source: .known(.builtin), hint: "<模型>"),
     ]
 
+    /// 托管会话切协作模式（终端会话的模式归终端界面管）
+    private static let modeCommands = [
+        PiSlashCommand(name: "plan", summary: "进 Plan 模式：先问清楚、出计划，不动手", source: .known(.builtin), hint: "[话]"),
+        PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin)),
+    ]
+
     /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。
     private func control(_ session: Tracked) async throws -> CodexRPC {
         if let rpc = hosted[session.pid] { return rpc }
-        guard FileManager.default.fileExists(atPath: controlSocket) else { throw PiBridgeError.unsupported }
-        let rpc = try await daemonConnection()
-        guard rpc.pid == session.pid else { throw PiBridgeError.unsupported }
+        guard let rpc = try await daemonConnection(), rpc.pid == session.pid else { throw PiBridgeError.unsupported }
         return rpc
     }
 
-    private func change(_ id: PiSession.ID, _ body: (inout PiSession) -> Void) {
-        bridge.update(id, body)
-        if let pid = tracked[id]?.pid, hosted[pid] != nil { idle(pid) }
-    }
-
-    /// 换到 `state`：粗状态（工作中、等你确认、出错、空闲）变了才换起点；离开空闲时开始计"连续处理"，回到空闲或出错时清掉。
-    private static func move(_ session: inout PiSession, to state: PiWorkState, detail: String? = nil, at now: Date = .now) {
-        session.enter(state, detail: detail, at: now)
-        if state != .waitingForUser { session.question = nil }
+    /// 把事实写进桥上的会话。
+    private func publish(_ session: Tracked) {
+        bridge.update(session.id) { session.facts.publish(to: &$0) }
     }
 
     // MARK: 钩子
 
     private func hook(_ call: AgentHookCall) {
-        guard let input = (try? JSONSerialization.jsonObject(with: call.envelope.input)) as? CodexRPC.Object,
-              let event = input["hook_event_name"] as? String, let threadID = input["session_id"] as? String
-        else { return call.finish() }
-        let id = "\(threadID).\(call.envelope.pid)"
+        guard let input = JSONValue.parse(call.envelope.input), let event = input["hook_event_name"]?.string,
+              let threadID = input["session_id"]?.string else { return call.finish() }
+        let pid = hostedPID(of: call.envelope, thread: threadID) ?? call.envelope.pid
+        let id = "\(threadID).\(pid)"
         if event == "SessionEnd" {
             call.finish()
-            return detach(id, reason: .closed(reason: "quit"))
+            return detach(id)
         }
-        let session = tracked[id] ?? adoptFromHook(threadID, pid: call.envelope.pid, input)
-        if let turn = input["turn_id"] as? String, input["agent_id"] == nil { session.turnID = turn }
+        let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input)
+        let agent = input["agent_id"]?.string
+        if let turn = input["turn_id"]?.string, agent == nil { session.turnID = turn }
+        let tool = input["tool_name"]?.string ?? ""
+        let now = Date.now
         switch event {
         case "PermissionRequest":
             // 子代理要的确认也挂在这个会话上问
-            ask(session, call: call, input)
-            return
-        case "SubagentStart", "SubagentStop":
-            subagent(session, event, input)
-        case _ where input["agent_id"] != nil:
+            return ask(session, call: call, input)
+        case "SubagentStart":
+            if let agent {
+                let role = input["agent_type"]?.string ?? "default"
+                session.facts.startSubagent(agent, name: session.spawnNames.isEmpty ? role : session.spawnNames.removeFirst(), role: role, at: now)
+            }
+        case "SubagentStop":
+            if let agent { session.facts.settleSubagent(agent, .done, summary: input["last_assistant_message"]?.string, at: now) }
+        case _ where agent != nil:
             // 子代理自己线程里的事件（session_id 是同一棵树的根，agent_id 是它自己）：只更新它在做什么
-            if event == "PreToolUse", let name = (input["agent_id"] as? String).flatMap({ subagentNames[$0] }) {
-                change(id) { s in
-                    if let index = s.subagents.lastIndex(where: { $0.name == name }) { s.subagents[index].action = Self.toolDetail(input) ?? "" }
+            if event == "PreToolUse", let agent { session.facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
+        case "UserPromptSubmit":
+            session.facts.standingQuestion = nil
+            session.facts.startTurn()
+            bridge.update(id) { s in
+                if s.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
+                    s.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
                 }
             }
+            refresh(id)
+        case "PreToolUse":
+            if tool.hasSuffix("spawn_agent"), let name = input["tool_input"]?["task_name"]?.string { session.spawnNames.append(name) }
+            if tool == "request_user_input", session.reply == nil {
+                // 终端会话的 Plan 模式提问只发给终端界面：CuePad 只显示（托管的经 `item/tool/requestUserInput` 来）
+                session.facts.questions = [Self.userInput(input["tool_input"] ?? .object([:]), promptID: nil)]
+            } else {
+                session.facts.work(.tool, detail: ToolDetail.line(tool, input["tool_input"]))
+            }
+        case "PostToolUse" where tool == Self.asyncQuestionTool:
+            session.facts.standingQuestion = Self.asyncQuestion(input["tool_input"])
+            session.facts.work(.thinking)
+        case "PostToolUse":
+            if session.reply == nil { session.facts.questions = [] }
+            session.facts.work(.thinking)
+        case "PreCompact":
+            session.facts.compacting = true
+        case "PostCompact":
+            session.facts.compacting = false
+        case "Stop", "Interrupt":
+            release(session)
+            session.facts.endTurn()
+            refresh(id)
         default:
-            turn(session, event, input)
+            break
         }
         call.finish()
+        publish(session)
+    }
+
+    /// 钩子来自哪个托管进程：环境里带着它的标记，且线程是它承载的（或它还没有上桥的线程：刚开、刚接着）。
+    /// Agent 在托管会话里再起的 codex 也继承标记，但线程不同，算终端会话。
+    private func hostedPID(of envelope: AgentHookEnvelope, thread: String) -> Int32? {
+        guard let mark = envelope.environment[HostMark.variable], let pid = marks[mark] else { return nil }
+        return tracked["\(thread).\(pid)"] != nil || !tracked.values.contains(where: { $0.pid == pid }) ? pid : nil
     }
 
     /// 钩子先于其他途径报出的会话（终端里刚开、或 CuePad 晚启动）：接上桥，名字与模型随后从 Codex 读。
-    private func adoptFromHook(_ threadID: String, pid: Int32, _ input: CodexRPC.Object) -> Tracked {
+    private func adoptFromHook(_ threadID: String, pid: Int32, _ input: JSONValue) -> Tracked {
         let session = PiSession(
-            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: (input["transcript_path"] as? String).map { URL(filePath: $0) },
-            pid: pid, cwd: URL(filePath: input["cwd"] as? String ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
+            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: input["transcript_path"]?.string.map { URL(filePath: $0) },
+            pid: pid, cwd: URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
             extensionVersion: 0, state: .settled, stateSince: .now)
         attach(session)
         return tracked[session.id]!
     }
 
-    private func turn(_ session: Tracked, _ event: String, _ input: CodexRPC.Object) {
-        let id = session.id
-        switch event {
-        case "UserPromptSubmit":
-            session.turnRunning = true
-            change(id) { s in
-                if s.firstMessage == nil, let prompt = input["prompt"] as? String, !prompt.isEmpty {
-                    s.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
-                }
-                Self.move(&s, to: .thinking)
-            }
-            refresh(id)
-        case "PreToolUse":
-            if (input["tool_name"] as? String)?.hasSuffix("spawn_agent") == true,
-               let name = (input["tool_input"] as? CodexRPC.Object)?["task_name"] as? String {
-                session.spawnNames.append(name)
-            }
-            if input["tool_name"] as? String == "request_user_input" {
-                let question = Self.userInput(input["tool_input"] as? CodexRPC.Object ?? [:], promptID: nil)
-                session.question = Question(question: question, reply: .terminal)
-                change(id) { Self.move(&$0, to: .waitingForUser, detail: question.text.components(separatedBy: "\n").first); $0.question = question }
-                return
-            }
-            change(id) { Self.move(&$0, to: .tool, detail: Self.toolDetail(input)) }
-        case "PostToolUse":
-            if case .terminal = session.question?.reply { session.question = nil }
-            guard session.question == nil else { return }
-            change(id) { Self.move(&$0, to: .thinking) }
-        case "PreCompact":
-            if !session.turnRunning, let s = bridge.session(id: id) { session.beforeCompact = (s.state, s.stateSince, s.busySince) }
-            change(id) { Self.move(&$0, to: .compacting, detail: nil) }
-        case "PostCompact":
-            if let before = session.beforeCompact {
-                session.beforeCompact = nil
-                change(id) { s in
-                    s.state = before.state
-                    s.stateSince = before.since
-                    s.busySince = before.busySince
-                    s.detail = nil
-                }
-            } else {
-                change(id) { Self.move(&$0, to: .thinking) }
-            }
-        case "Stop", "Interrupt":
-            settle(session)
-            refresh(id)
-        default:
-            break
-        }
-    }
-
-    /// 这一轮结束：还有子代理在跑是等子代理，否则歇下。
-    private func settle(_ session: Tracked) {
-        session.turnRunning = false
-        session.beforeCompact = nil
-        if case .hook(let call) = session.question?.reply { call.finish() }
-        session.question = nil
-        change(session.id) { s in
-            Self.move(&s, to: s.subagents.contains { $0.phase == .known(.running) } ? .delegating : .settled)
-        }
-    }
-
-    private func subagent(_ session: Tracked, _ event: String, _ input: CodexRPC.Object) {
-        guard let agent = input["agent_id"] as? String else { return }
-        let role = input["agent_type"] as? String ?? "default"
-        let now = Date.now
-        if event == "SubagentStart" {
-            let name = session.spawnNames.isEmpty ? role : session.spawnNames.removeFirst()
-            change(session.id) { $0.subagents.append(PiSubagentState(name: name, role: role, phase: .known(.running), startedAt: now)) }
-            subagentNames[agent] = name
-            return
-        }
-        let name = subagentNames.removeValue(forKey: agent) ?? role
-        let reply = (input["last_assistant_message"] as? String)?.split(whereSeparator: \.isNewline).first.map { String($0.prefix(120)) } ?? ""
-        change(session.id) { s in
-            if let index = s.subagents.lastIndex(where: { $0.name == name && $0.phase == .known(.running) }) {
-                s.subagents[index].phase = .known(.done)
-                s.subagents[index].action = reply
-                s.subagents[index].settledAt = now
-            }
-            if s.state == .delegating, !s.subagents.contains(where: { $0.phase == .known(.running) }) { Self.move(&s, to: .settled) }
-        }
-    }
-
-    /// 子代理线程 id → 名册里的名字
-    private var subagentNames: [String: String] = [:]
-
-    /// 工具名 · 调用摘要（命令、搜索取首个非空行，文件取文件名），至多 120 字符。
-    private static func toolDetail(_ input: CodexRPC.Object) -> String? {
-        guard let tool = input["tool_name"] as? String else { return nil }
-        let arguments = input["tool_input"] as? CodexRPC.Object ?? [:]
-        let summary = (arguments["command"] as? String ?? arguments["pattern"] as? String ?? arguments["query"] as? String)
-            .flatMap { $0.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } }
-            ?? (arguments["path"] as? String ?? arguments["file_path"] as? String).map { URL(filePath: $0).lastPathComponent }
-        let detail = summary.map { "\(tool) · \($0)" } ?? tool
-        return detail.count <= 120 ? detail : String(detail.prefix(119)) + "…"
-    }
-
     // MARK: 等你回答
 
-    /// 权限确认：终端会话的人在这台 Mac 前就交给终端；否则钩子拿着，等 CuePad 作答，钩子先走了（终端里停下了这一轮）就收起问题。
-    private func ask(_ session: Tracked, call: AgentHookCall, _ input: CodexRPC.Object) {
-        let arguments = input["tool_input"] as? CodexRPC.Object ?? [:]
-        let action = (arguments["command"] as? String).map { "Codex 想运行：\($0)" } ?? "Codex 想用 \(input["tool_name"] as? String ?? "工具")"
-        let text = String([action, arguments["description"] as? String].compactMap { $0 }.joined(separator: "\n").prefix(500))
-        if hosted[session.pid] == nil, presence.isPresent {
-            call.finish()
-            return handBack(session, text)
-        }
-        present(session, PiQuestion(promptID: UUID().uuidString, kind: .confirm, text: text), reply: .hook(call))
-        call.onClose = { [weak self, weak session] in
-            guard let self, let session, case .hook(let held) = session.question?.reply, held === call else { return }
-            self.withdraw(session)
-        }
-    }
-
-    /// 确认交给终端：钩子不给决定（挂着的由 `present` 放行），Codex 在终端里弹框；CuePad 里还显示，只能在终端里答。
-    private func handBack(_ session: Tracked, _ text: String) {
-        present(session, PiQuestion(promptID: nil, kind: .confirm, text: text), reply: .terminal)
-    }
-
-    /// 有终端会话的确认挂着才等人回来，回来了全部交给终端；没有挂着的就停下等待。
-    private func watchReturn() {
-        let held = tracked.values.contains { session in
-            guard case .hook = session.question?.reply else { return false }
-            return hosted[session.pid] == nil
-        }
-        guard held else {
-            returnWatch?.cancel()
-            returnWatch = nil
-            return
-        }
-        guard returnWatch == nil else { return }
-        returnWatch = Task { [weak self, presence] in
-            await presence.untilPresent()
-            guard let self, !Task.isCancelled else { return }
-            for session in self.tracked.values where self.hosted[session.pid] == nil {
-                guard let pending = session.question, case .hook = pending.reply else { continue }
-                self.handBack(session, pending.question.text)
+    /// 权限确认：托管的会话总是挂住等 CuePad 作答；终端会话按人在不在（`PresenceGate`）：人在就放行、终端弹框，CuePad 只显示。
+    /// 钩子先走了（终端里停下了这一轮）就收起问题。
+    private func ask(_ session: Tracked, call: AgentHookCall, _ input: JSONValue) {
+        let arguments = input["tool_input"] ?? .object([:])
+        let command = arguments["command"]?.string
+        let text = PermissionWording.question(
+            .codex, command == nil ? "使用 \(input["tool_name"]?.string.map(ToolDetail.name) ?? "工具")" : "运行命令", [command, arguments["description"]?.string])
+        release(session)
+        let promptID = UUID().uuidString
+        var hold: UUID?
+        if hosted[session.pid] == nil {
+            hold = gate.hold { [weak self, weak session] in
+                guard let self, let session, case .hook(let held, _) = session.reply, held === call else { return }
+                self.handBack(session)
             }
-            self.returnWatch = nil
+            guard hold != nil else {
+                call.finish()
+                session.facts.questions = [PiQuestion(promptID: nil, kind: .confirm, text: text)]
+                return publish(session)
+            }
         }
+        session.reply = .hook(call, hold: hold)
+        session.facts.questions = [PiQuestion(promptID: promptID, kind: .confirm, text: text)]
+        call.onClose = { [weak self, weak session] in
+            guard let self, let session, case .hook(let held, _) = session.reply, held === call else { return }
+            self.release(session)
+            session.facts.questions = []
+            self.publish(session)
+        }
+        publish(session)
     }
 
-    private func present(_ session: Tracked, _ question: PiQuestion, reply: Question.Reply) {
-        if case .hook(let call) = session.question?.reply { call.finish() }
-        session.question = Question(question: question, reply: reply)
-        change(session.id) { s in
-            Self.move(&s, to: .waitingForUser, detail: question.text.components(separatedBy: "\n").first)
-            s.question = question
-        }
+    /// 人回来了：挂住的放行，终端补弹；CuePad 里还显示，只能在终端里答。
+    private func handBack(_ session: Tracked) {
+        guard case .hook(let call, _) = session.reply else { return }
+        session.reply = nil
+        call.finish()
+        session.facts.questions = session.facts.questions.map { PiQuestion(promptID: nil, kind: $0.kind, text: $0.text, options: $0.options) }
+        publish(session)
     }
 
-    /// 问题收起了（答过、被收回）：回到工作中。
-    private func withdraw(_ session: Tracked) {
-        session.question = nil
-        change(session.id) { s in
-            guard s.state == .waitingForUser else { return }
-            Self.move(&s, to: session.turnRunning ? .thinking : .settled)
+    /// 放掉在等的（挂住的钩子放行；托管线程的提问不再等），问题由调用方收起。
+    private func release(_ session: Tracked) {
+        if case .hook(let call, let hold) = session.reply {
+            call.finish()
+            gate.drop(hold)
         }
+        session.reply = nil
     }
 
-    /// Plan 模式的提问（`request_user_input` 的参数，一次可能几个，显示第一个）：有选项是单选，否则填文字；标题与问题换行连接。
-    private static func userInput(_ arguments: CodexRPC.Object, promptID: String?) -> PiQuestion {
-        let first = (arguments["questions"] as? [CodexRPC.Object])?.first ?? [:]
-        let text = [first["header"] as? String, first["question"] as? String].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
-        let options = (first["options"] as? [CodexRPC.Object] ?? []).compactMap { $0["label"] as? String }
-        return PiQuestion(promptID: promptID, kind: options.isEmpty ? .text : .select, text: String(text.prefix(500)), options: options)
+    /// 托管线程的 Plan 模式提问（`item/tool/requestUserInput`）：只有一个问题时能从 CuePad 答（有选项是单选，否则填文字；保密的不答）。
+    private func userInput(_ params: JSONValue, id: JSONValue, on rpc: CodexRPC) -> Bool {
+        guard let threadID = params["threadId"]?.string, let session = tracked["\(threadID).\(rpc.pid)"] else { return false }
+        let questions = params["questions"]?.array ?? []
+        let answerable = questions.count == 1 && questions.first?["isSecret"]?.bool != true
+        let question = Self.userInput(params, promptID: answerable ? UUID().uuidString : nil)
+        release(session)
+        if answerable, let first = questions.first?["id"]?.string { session.reply = .request(rpc, id: id, question: first) }
+        session.facts.questions = [question]
+        publish(session)
+        return answerable
     }
 
-    /// 权限确认的回答写回钩子（允许或拒绝，附一句给模型看的原因）。
-    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) throws {
-        guard let session = tracked[id], let pending = session.question, case .hook(let call) = pending.reply else {
-            throw PiBridgeError.rejected("no_prompt")
+    /// Plan 模式的提问（`request_user_input` 的参数，一次可能几个，显示第一个）：有选项是单选（`isOther` 的还能自己填），否则填文字；
+    /// 标题与问题换行连接。
+    private static func userInput(_ arguments: JSONValue, promptID: String?) -> PiQuestion {
+        let first = arguments["questions"]?.array?.first ?? .object([:])
+        let text = [first["header"]?.string, first["question"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+        let options = (first["options"]?.array ?? []).compactMap { $0["label"]?.string }
+        return PiQuestion(
+            promptID: promptID, kind: options.isEmpty ? .text : .select, text: String(text.prefix(500)), options: options,
+            allowsOther: first["isOther"]?.bool == true)
+    }
+
+    static let asyncQuestionTool = "request_user_input_async"
+
+    /// 不挡着这一轮的提问（`request_user_input_async` 的参数，一次可以几个，标题就是完整的问题）：只有一个时照它的选项单选，
+    /// 也能自己填（Codex 的界面总给自由作答）；几个时合成一道文字题，一行一问、选项写在后面。
+    static func asyncQuestion(_ arguments: JSONValue?) -> PiQuestion? {
+        let questions = (arguments?["questions"]?.array ?? []).compactMap { question -> (title: String, options: [String])? in
+            guard let title = question["title"]?.string, !title.isEmpty else { return nil }
+            return (title, (question["options"]?.array ?? []).compactMap(\.string))
         }
-        guard pending.question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
-        guard case .confirmed(let allowed) = answer else { throw PiBridgeError.rejected("bad_answer") }
-        let decision: CodexRPC.Object = ["behavior": allowed ? "allow" : "deny", "message": allowed ? "在 CuePad 里允许了" : "在 CuePad 里拒绝了"]
-        call.reply(try JSONSerialization.data(withJSONObject: ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]))
-        withdraw(session)
+        guard let first = questions.first else { return nil }
+        guard questions.count > 1 else {
+            return PiQuestion(
+                promptID: UUID().uuidString, kind: first.options.isEmpty ? .text : .select, text: String(first.title.prefix(500)),
+                options: first.options, allowsOther: !first.options.isEmpty)
+        }
+        let text = questions.map { $0.options.isEmpty ? $0.title : "\($0.title)（\($0.options.joined(separator: " / "))）" }.joined(separator: "\n")
+        return PiQuestion(promptID: UUID().uuidString, kind: .text, text: String(text.prefix(500)))
+    }
+
+    /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程挡着这一轮的提问回给服务端请求，
+    /// 不挡着的提问把答案当你的下一句话说给它（在跑就插进这一轮）。
+    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
+        guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
+        guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
+        guard let reply = session.reply else {
+            let text: String
+            switch answer {
+            case .option(let option) where question.options.contains(option): text = option
+            case .text(let written) where question.acceptsText: text = written
+            default: throw PiBridgeError.rejected("bad_answer")
+            }
+            _ = try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: .steer, to: session)
+            session.facts.standingQuestion = nil
+            return publish(session)
+        }
+        switch (reply, answer) {
+        case (.hook(let call, let hold), .confirmed(let allowed)):
+            let decision: JSONValue = ["behavior": allowed ? "allow" : "deny", "message": .string(allowed ? PermissionWording.allowed : PermissionWording.denied)]
+            call.reply(JSONValue.object(["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]).data)
+            gate.drop(hold)
+        case (.request(let rpc, let requestID, let questionID), .option(let text)) where question.options.contains(text),
+             (.request(let rpc, let requestID, let questionID), .text(let text)) where question.acceptsText:
+            rpc.respond(to: requestID, result: ["answers": [questionID: ["answers": [.string(text)]]]])
+        default:
+            throw PiBridgeError.rejected("bad_answer")
+        }
+        session.reply = nil
+        session.facts.questions = []
+        publish(session)
     }
 
     // MARK: 通知
 
-    private func notification(_ method: String, _ params: CodexRPC.Object, from pid: Int32) {
-        guard let threadID = params["threadId"] as? String else { return }
-        let id = "\(threadID).\(pid)"
-        guard let session = tracked[id] else { return }
+    private func notification(_ method: String, _ params: JSONValue, from pid: Int32) {
+        guard let threadID = params["threadId"]?.string, let session = tracked["\(threadID).\(pid)"] else { return }
         switch method {
         case "thread/name/updated":
-            change(id) { $0.name = params["threadName"] as? String }
+            bridge.update(session.id) { $0.name = params["threadName"]?.string }
+            return
         case "thread/status/changed":
-            switch (params["status"] as? CodexRPC.Object)?["type"] as? String {
+            switch params["status"]?["type"]?.string {
             // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次
-            case "idle" where session.turnRunning: settle(session)
+            case "idle" where session.facts.running:
+                release(session)
+                session.facts.endTurn()
             case "systemError":
-                session.turnRunning = false
-                change(id) { Self.move(&$0, to: .error, detail: "Codex 出错了") }
-            default: break
+                release(session)
+                session.facts.endTurn(failure: session.lastError ?? "Codex 出错了")
+                if session.lastError == nil { readFailure(session) }
+            default: return
             }
-        case "turn/completed" where (params["turn"] as? CodexRPC.Object)?["status"] as? String == "failed":
-            // 只有开出这个线程的连接（托管的进程）收得到；失败的一轮没有 Stop 钩子，状态停在这里
-            let text = CodexModel.failure(of: params["turn"] as? CodexRPC.Object)
-            session.turnRunning = false
-            change(id) { s in
-                Self.move(&s, to: .error, detail: PiErrorSummary(text).line)
-                s.errorMessage = text
-            }
+        case "error" where params["willRetry"]?.bool != true:
+            // 出错的原文（常驻服务也广播）；随后的 systemError 或失败的 turn/completed 用它
+            session.lastError = CodexModel.failure(of: params)
+            return
+        // 以下只有开出这个线程的连接（托管的进程）收得到
+        case "turn/started":
+            session.turnID = params["turn"]?["id"]?.string
+            session.lastError = nil
+            guard !session.facts.running else { return }
+            session.facts.startTurn()
+        case "turn/completed" where params["turn"]?["status"]?.string == "failed":
+            // 失败的一轮没有 Stop 钩子，状态停在这里
+            release(session)
+            session.facts.endTurn(failure: session.lastError ?? CodexModel.failure(of: params["turn"]))
+        case "turn/completed":
+            guard session.facts.running else { return }
+            release(session)
+            session.facts.endTurn()
+        case "serverRequest/resolved":
+            // 服务端请求被别处答了或收回了
+            guard case .request = session.reply else { return }
+            session.reply = nil
+            session.facts.questions = []
         case "thread/closed":
-            detach(id, reason: .closed(reason: "quit"))
+            return detach(session.id)
         case "thread/tokenUsage/updated":
-            guard let usage = params["tokenUsage"] as? CodexRPC.Object, let window = usage["modelContextWindow"] as? Int else { return }
-            let used = (usage["last"] as? CodexRPC.Object)?["totalTokens"] as? Int
-            change(id) { $0.context = PiContextUsage(tokens: used, window: window) }
+            guard let usage = params["tokenUsage"], let window = usage["modelContextWindow"]?.int else { return }
+            let used = usage["last"]?["totalTokens"]?.int
+            bridge.update(session.id) { $0.context = PiContextUsage(tokens: used, window: window) }
+            return
         default:
-            break
+            return
+        }
+        publish(session)
+    }
+
+    /// 出错的原文只在开出线程的连接上（`error` 通知），常驻服务只广播 `systemError`：从最近一轮读出它的错误。
+    private func readFailure(_ session: Tracked) {
+        Task {
+            guard let rpc = try? await control(session),
+                  let turns = try? await rpc.call("thread/turns/list", ["threadId": .string(session.threadID), "limit": 1]),
+                  let turn = turns["data"]?.array?.first, turn["status"]?.string == "failed", tracked[session.id] === session,
+                  !session.facts.running else { return }
+            session.facts.failure = CodexModel.failure(of: turn)
+            publish(session)
         }
     }
 
@@ -678,24 +653,25 @@ public final class CodexRuntime: AgentRuntime {
 
     /// 马上说：插进在跑的这一轮；刚好歇下（没有这一轮了）就排进队列。等它做完再说、空闲时都进队列，空闲时再让队列里的这一条开始：
     /// 停下一轮之后 Codex 不自动接着跑队列（终端里的界面会自己开始，外面送进来的要说一声）。
-    private func deliver(_ input: [CodexRPC.Object], clientID: String, whenBusy: PiQueueMode?, to session: Tracked) async throws -> PiDelivery {
+    private func deliver(_ input: [JSONValue], clientID: String, whenBusy: PiQueueMode?, to session: Tracked) async throws -> PiDelivery {
         let rpc = try await control(session)
-        let busy = session.turnRunning
+        let busy = session.facts.running
+        let thread = JSONValue.string(session.threadID), items = JSONValue.array(input), client = JSONValue.string(clientID)
         if busy, whenBusy == .steer, let turn = session.turnID {
             do {
-                try await rpc.call("turn/steer", ["threadId": session.threadID, "expectedTurnId": turn, "clientUserMessageId": clientID, "input": input])
+                try await rpc.call("turn/steer", ["threadId": thread, "expectedTurnId": .string(turn), "clientUserMessageId": client, "input": items])
                 return .queued(.steer)
             } catch CodexRPCError.server(-32600, _) {}
         }
-        let queued: CodexRPC.Object
+        let queued: JSONValue
         do {
-            queued = try await rpc.call("thread/queue/add", ["threadId": session.threadID, "clientUserMessageId": clientID, "input": input])
+            queued = try await rpc.call("thread/queue/add", ["threadId": thread, "clientUserMessageId": client, "input": items])
         } catch CodexRPCError.server(_, let message) {
             throw PiBridgeError.rejected("failed: \(message)")
         }
-        guard !busy, let submission = (queued["queuedSubmission"] as? CodexRPC.Object)?["id"] as? String else { return .queued(.followUp) }
+        guard !busy, let submission = queued["queuedSubmission"]?["id"] else { return .queued(.followUp) }
         do {
-            try await rpc.call("thread/queue/start", ["threadId": session.threadID, "queuedSubmissionId": submission])
+            try await rpc.call("thread/queue/start", ["threadId": thread, "queuedSubmissionId": submission])
         } catch CodexRPCError.server(-32600, _) {
             // 队列自己已经把它取走开始了（"not found"），或刚好有一轮开始（"active or pending turn"）：这一条随它走
         }
@@ -710,63 +686,77 @@ public final class CodexRuntime: AgentRuntime {
         let argument = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
         switch name {
         case "compact":
-            try await call(session, "thread/compact/start", ["threadId": session.threadID])
+            try await call(session, "thread/compact/start", ["threadId": .string(session.threadID)])
         case "name":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
             try await configure(model: nil, thinking: nil, name: argument, in: id)
         case "model":
             guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
             try await configure(model: PiModelKey(provider: CodexModel.provider, id: argument), thinking: nil, name: nil, in: id)
+        case "plan", "default":
+            guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
+            try await collaborate(name == "plan" ? "plan" : "default", in: session)
+            if !argument.isEmpty {
+                _ = try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
+            }
         case _ where name.hasPrefix("skill:"):
             guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
-            var input: [CodexRPC.Object] = [["type": "skill", "name": skill.name, "path": skill.path]]
-            if !argument.isEmpty { input.append(["type": "text", "text": argument, "text_elements": []]) }
+            var input: [JSONValue] = [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]]
+            input += CodexRPC.input(text: argument, images: [])
             _ = try await deliver(input, clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
         default:
             throw PiBridgeError.rejected("unknown_command")
         }
     }
 
+    /// 之后的轮次用的协作模式（实验接口）：模型与强度照会话此刻的，说明用这个模式内置的。
+    private func collaborate(_ mode: String, in session: Tracked) async throws {
+        let current = bridge.session(id: session.id)
+        guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: 不知道这个会话用的模型") }
+        var settings: [String: JSONValue] = ["model": .string(model), "developer_instructions": .null]
+        if case .known(let level)? = current?.thinking { settings["reasoning_effort"] = .string(CodexModel.effort(level)) }
+        try await call(session, "thread/settings/update", [
+            "threadId": .string(session.threadID), "collaborationMode": ["mode": .string(mode), "settings": .object(settings)],
+        ])
+    }
+
     fileprivate func abort(_ id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard session.turnRunning else { return }
+        guard session.facts.running else { return }
         // 在跑的一轮总带着 id（钩子与接上时读到的都有）；没有就是状态坏了，不能当作停下了
         guard let turn = session.turnID else { throw PiBridgeError.rejected("failed: 不知道正在跑的是哪一轮") }
-        try await call(session, "turn/interrupt", ["threadId": session.threadID, "turnId": turn])
+        try await call(session, "turn/interrupt", ["threadId": .string(session.threadID), "turnId": .string(turn)])
     }
 
     /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
     fileprivate func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard model != nil || thinking != nil || name != nil else { throw PiBridgeError.rejected("bad_request") }
         if let name {
-            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { throw PiBridgeError.rejected("bad_request") }
-            try await call(session, "thread/name/set", ["threadId": session.threadID, "name": trimmed])
-            change(id) { $0.name = trimmed }
+            try await call(session, "thread/name/set", ["threadId": .string(session.threadID), "name": .string(name)])
+            bridge.update(id) { $0.name = name }
         }
-        if model != nil || thinking != nil {
-            let rpc = try await control(session)
-            if models == nil { models = try await CodexModel.list(rpc) }
-            let target = model?.id ?? bridge.session(id: id)?.model?.key.id
-            let entry = models?.first { $0.id == target }
-            if model != nil, entry == nil { throw PiBridgeError.rejected("unknown_model") }
-            var settings: CodexRPC.Object = ["threadId": session.threadID]
-            if let model { settings["model"] = model.id }
-            if let thinking { settings["effort"] = CodexModel.effort(thinking.clamped(to: entry?.efforts ?? [])) }
-            try await call(session, "thread/settings/update", settings)
-            let read = try await rpc.call("thread/read", ["threadId": session.threadID])
-            if let thread = read["thread"] as? CodexRPC.Object { change(id) { self.apply(thread, to: &$0) } }
+        guard model != nil || thinking != nil else { return }
+        let rpc = try await control(session)
+        if models == nil { models = try await CodexModel.list(rpc) }
+        let target = model?.id ?? bridge.session(id: id)?.model?.key.id
+        let entry = models?.first { $0.id == target }
+        if model != nil, entry == nil { throw PiBridgeError.unknownModel(.codex) }
+        var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
+        if let model { settings["model"] = .string(model.id) }
+        if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }
+        try await call(session, "thread/settings/update", .object(settings))
+        if let thread = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])["thread"] {
+            bridge.update(id) { self.apply(thread, to: &$0) }
         }
     }
 
-    fileprivate func endLink(_ id: PiSession.ID) throws {
-        guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard let rpc = hosted[session.pid] else { throw PiBridgeError.unsupported }
+    /// 托管的会话关掉进程（app-server 读到 EOF 收尾退出）；终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
+    fileprivate func end(_ id: PiSession.ID) throws {
+        guard let session = tracked[id], let rpc = hosted[session.pid] else { throw PiBridgeError.unsupported }
         rpc.close()
     }
 
-    private func call(_ session: Tracked, _ method: String, _ params: CodexRPC.Object) async throws {
+    private func call(_ session: Tracked, _ method: String, _ params: JSONValue) async throws {
         do {
             try await control(session).call(method, params)
         } catch CodexRPCError.server(_, let message) {
@@ -775,7 +765,7 @@ public final class CodexRuntime: AgentRuntime {
     }
 }
 
-/// 一个 Codex 会话的控制通道：转给接入层。重新载入 Codex 没有对应的东西。
+/// 一个 Codex 会话的控制通道：转给接入。
 @MainActor
 private final class CodexLink: SessionLink {
     weak var runtime: CodexRuntime?
@@ -793,9 +783,9 @@ private final class CodexLink: SessionLink {
 
     func send(_ message: PiMessage) async throws -> PiDelivery { try await live().send(message, in: id) }
     func command(_ line: String, whenBusy: PiQueueMode?) async throws { try await live().command(line, whenBusy: whenBusy, in: id) }
-    func end() async throws { try live().endLink(id) }
+    func end() async throws { try live().end(id) }
     func abort() async throws { try await live().abort(id) }
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try live().answer(answer, to: promptID, in: id) }
+    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await live().answer(answer, to: promptID, in: id) }
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
         try await live().configure(model: model, thinking: thinking, name: name, in: id)
     }
@@ -813,28 +803,27 @@ struct CodexModel {
     static let provider = AgentKind.codex.modelProvider!
 
     var option: PiModelOption {
-        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts)
+        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages)
     }
 
     static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
     static func effort(_ level: PiThinkingLevel) -> String { level == .off ? "none" : level.rawValue }
 
     /// 失败的一轮（`turn/completed` 的 `status` 为 failed）的原因：`turn.error` 的说明，带上补充细节。
-    static func failure(of turn: CodexRPC.Object?) -> String {
-        let error = turn?["error"] as? CodexRPC.Object
-        let message = [error?["message"] as? String, error?["additionalDetails"] as? String].compactMap { $0 }.filter { !$0.isEmpty }
+    static func failure(of turn: JSONValue?) -> String {
+        let message = [turn?["error"]?["message"]?.string, turn?["error"]?["additionalDetails"]?.string].compactMap { $0 }.filter { !$0.isEmpty }
         return message.isEmpty ? "Codex 这一轮失败了" : message.joined(separator: "\n")
     }
 
     /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。
     @MainActor static func list(_ rpc: CodexRPC, hidden: Bool = false) async throws -> [CodexModel] {
         let listed = try await rpc.call("model/list", hidden ? ["includeHidden": true, "limit": 500] : [:])
-        return (listed["data"] as? [CodexRPC.Object] ?? []).compactMap { entry in
-            guard hidden || entry["hidden"] as? Bool != true, let id = entry["id"] as? String else { return nil }
-            let efforts = (entry["supportedReasoningEfforts"] as? [CodexRPC.Object] ?? []).compactMap { $0["reasoningEffort"] as? String }
-            return CodexModel(
-                id: id, name: entry["displayName"] as? String ?? id, efforts: efforts.compactMap { thinking($0).known },
-                seesImages: (entry["inputModalities"] as? [String])?.contains("image") == true)
+        return (listed["data"]?.array ?? []).compactMap { entry in
+            guard hidden || entry["hidden"]?.bool != true, let id = entry["id"]?.string else { return nil }
+            let efforts = (entry["supportedReasoningEfforts"]?.array ?? []).compactMap { $0["reasoningEffort"]?.string }
+            // 没写 inputModalities 的按协议缺省（文字与图片）
+            let seesImages = entry["inputModalities"]?.array.map { $0.contains("image") } ?? true
+            return CodexModel(id: id, name: entry["displayName"]?.string ?? id, efforts: efforts.compactMap { thinking($0).known }, seesImages: seesImages)
         }
     }
 }

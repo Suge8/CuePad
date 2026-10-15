@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 /// 端到端：Cue 用这家开工、说话、歇下。后台开一个带名字、模型、强度的会话（`AgentRuntime.open`，一次生效），开场一句做完歇下，
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 走 DeepSeek，OpenCode 用免费模型。
+/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi 是假模型，Codex 用复制的登录（不刷新），Claude Code 用订阅令牌，OpenCode 用免费模型。
 /// 默认回放录像带（OpenCode 没有录像带，列出它时直连），见 `RealAgents`。
 private let agents = AgentKind.allCases.filter { $0 == .opencode ? RealAgents.mode(of: $0) == .live && RealAgents.installed($0) : RealAgents.runs($0) }
 
@@ -36,7 +36,8 @@ struct RealCueStartTests {
             if agent != .opencode {
                 let file = try #require(bridge.session(id: id)?.sessionFile)
                 let used = try #require(Self.used(in: file, agent), "会话文件里没记下用的模型")
-                #expect(used.model == model.id, "\(used)")
+                // Claude Code 的别名（sonnet）在会话文件里记成它解析到的完整 id（claude-sonnet-…）
+                #expect(agent == .claudeCode ? used.model?.hasPrefix("claude-\(model.id)") == true : used.model == model.id, "\(used)")
                 if agent != .pi { #expect(used.effort == "medium", "\(used)") }
             }
         }
@@ -46,7 +47,7 @@ struct RealCueStartTests {
     /// Pi 是回答上的 `model`。OpenCode 的会话在它的库里，看会话上报的就够了。
     private static func used(in file: URL, _ agent: AgentKind) -> (model: String?, effort: String?)? {
         let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").reversed().lazy
-            .compactMap { ClaudeJSON.parse(Data($0.utf8)) }
+            .compactMap { JSONValue.parse(Data($0.utf8)) }
         switch agent {
         case .claudeCode:
             return lines.first { $0["type"]?.string == "assistant" }.map { ($0["message"]?["model"]?.string, $0["effort"]?.string) }
@@ -69,9 +70,9 @@ struct RealCueStartTests {
             let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let host = PiHost(bridge: bridge, paths: pi.paths, idleLimit: .seconds(120), extraArguments: PiProcess.quietArguments)
-            host.start()
-            try await body(PiRuntime(host: host, locate: { AgentTape.executable("pi") }), bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { AgentTape.executable("pi") }, idleLimit: .seconds(120), extraArguments: PiProcess.quietArguments)
+            runtime.start()
+            try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
         case .codex:
             try await withCodexRig { rig in
                 try await body(rig.runtime, rig.bridge, rig.codex.work, PiModelKey(provider: CodexModel.provider, id: codexTestModel))
@@ -88,7 +89,7 @@ struct RealCueStartTests {
             let outcome: Result<Void, any Error>
             do {
                 try runtime.start()
-                try await body(runtime, bridge, sandbox.work, PiModelKey(provider: "opencode", id: "big-pickle"))
+                try await body(runtime, bridge, sandbox.work, openCodeTestModel)
                 outcome = .success(())
             } catch { outcome = .failure(error) }
             await runtime.stop()()

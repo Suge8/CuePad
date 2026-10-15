@@ -240,6 +240,19 @@ public struct PiSessionUpsert: Sendable {
   }
 }
 
+/// 一条会话索引从哪接着读（`piIndexStarts`）：会话 id、检查点、本机有没有它的对话。
+public struct IndexedSessionStart: Equatable, Sendable {
+  public var id: String
+  public var checkpoint: Data?
+  public var hasMessages: Bool
+
+  public init(id: String, checkpoint: Data?, hasMessages: Bool) {
+    self.id = id
+    self.checkpoint = checkpoint
+    self.hasMessages = hasMessages
+  }
+}
+
 /// 仅本机：Agent 会话历史索引的一条（会话文件路径与工作目录，OpenCode 的是它数据库里的会话）。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
 public struct IndexedSession: Identifiable, Equatable, Sendable {
   public let id: String

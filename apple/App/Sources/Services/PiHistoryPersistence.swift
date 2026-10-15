@@ -4,10 +4,10 @@ import CueStore
 import Foundation
 import os
 
-/// Pi 历史索引的落盘：会话行与检查点都存在 Store（本机表），检查点按会话 id 存放；同一次读出的对话与摘要在同一事务里写
-/// （对话只写最近 `transcriptWindow` 内活跃过的会话，更早的按需补写，见投送方式 `transcript`）。首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：
-/// Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
-/// 索引器按文件查检查点，所以这里维护"文件路径 → 会话 id"。
+/// 历史索引的落盘：会话行与检查点都存在 Store（本机表）；同一次读出的对话与摘要在同一事务里写
+/// （要不要对话由索引器定：最近 `transcriptWindow` 内活跃过的、或本机已存着对话的会话，见 `PiHistoryStart`）。
+/// 首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
+/// 索引器按文件要"从哪接着读"：启动后第一次要时一次读出全部（`CueStore.piIndexStarts`），之后随写入更新。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，回填完成时汇总记一行。
@@ -19,7 +19,8 @@ actor PiHistoryPersistence {
     private let storage: CueStore
     /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
     private let host: String
-    private var idsByPath: [String: String]?
+    /// 会话文件路径 → 它的索引从哪接着读
+    private var starts: [String: IndexedSessionStart]?
     private var blocked: Set<String> = []
     /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：回填完成时汇总记一行
     private var outdated = 0
@@ -30,28 +31,26 @@ actor PiHistoryPersistence {
         self.host = host
     }
 
-    /// Store 读取失败时抛错，并停止该文件的写回；没有检查点或检查点已失效返回 nil。
     /// 回填开始（列目录、取修改时间之前）：汇总日志的用时从这里算。已经开始的不重设。
     func beginBackfill() {
         if backfillStarted == nil { backfillStarted = .now }
     }
 
-    func checkpoint(for file: URL) async throws -> PiHistoryCheckpoint? {
-        let data: Data?
+    /// 这个文件的索引从哪接着读；没索引过为 nil。Store 读取失败时抛错，并停止该文件的写回。
+    func start(for file: URL) async throws -> PiHistoryStart? {
+        let known: IndexedSessionStart?
         do {
-            guard let id = try await sessionIDs()[file.path] else { return nil }
-            data = try await storage.piCheckpoint(of: id)
+            known = try await loadedStarts()[file.path]
         } catch {
             blocked.insert(file.path)
             throw error
         }
-        guard let data else { return nil }
-        do {
-            return try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
-        } catch {
-            outdated += 1
-            return nil
+        guard let known else { return nil }
+        var checkpoint: PiHistoryCheckpoint?
+        if let data = known.checkpoint {
+            do { checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data) } catch { outdated += 1 }
         }
+        return PiHistoryStart(checkpoint: checkpoint, hasTranscript: known.hasMessages)
     }
 
     /// 一批更新在同一事务里写入（会话行、检查点与对话）：中途失败时下次从旧检查点重读，不会漏掉内容。
@@ -81,38 +80,23 @@ actor PiHistoryPersistence {
     }
 
     private func write(_ updates: [PiHistoryUpdate]) async throws {
-        var batch: [PiSessionUpsert] = []
-        for update in updates {
+        let batch = try updates.map { update in
             let history = update.history
-            let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
             let session = IndexedSession(
                 id: update.sessionID,
                 path: update.file.path,
                 cwd: history.cwd ?? "",
                 title: history.displayName,
-                lastActivityAt: history.lastActivity ?? modified ?? .distantPast,
+                lastActivityAt: history.lastActivity ?? update.modified ?? .distantPast,
                 agent: update.agent)
-            batch.append(PiSessionUpsert(
-                session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: try await transcript(of: update)))
+            return PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: update.transcript)
         }
         try await storage.upsertPiSessions(batch, host: host)
-        for item in batch { idsByPath?[item.session.path] = item.session.id }
-    }
-
-    /// 这次读到的对话与摘要。在不在范围内只看读文件时的判定（索引器按文件修改时间，`includesTranscript`），这里不另判：
-    /// 范围外只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，补齐全部消息——
-    /// "范围内的会话有全部消息"不靠读到的那一段碰巧完整。
-    /// 范围外的会话本机却存着它的对话（仍被提示词引用而没清掉，或按需补写的），检查点作废后从头读也整份重读：
-    /// 已存的消息跟着读文件的规则更新，不留旧样子。
-    private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
-        let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
-        func hasStoredMessages() async throws -> Bool { try await !storage.piMessages(of: update.sessionID).isEmpty }
-        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, agent: update.agent, from: nil, files: storage.files).transcript }
-        // 范围内的增量读：本机还没有它的对话就补齐
-        if update.includesTranscript, incremental, try await !hasStoredMessages() { return try wholeFile() }
-        // 范围外的从头读：本机存着它的对话就重写
-        if !update.includesTranscript, !incremental, try await hasStoredMessages() { return try wholeFile() }
-        return update.transcript
+        for (item, update) in zip(batch, updates) {
+            let previous = starts?[item.session.path].flatMap { $0.id == item.session.id ? $0 : nil }
+            starts?[item.session.path] = IndexedSessionStart(
+                id: item.session.id, checkpoint: item.checkpoint, hasMessages: previous?.hasMessages == true || update.includesTranscript)
+        }
     }
 
     /// 清理安静了的会话的对话：现在一次，之后每天一次，直到任务取消。清理失败记日志，下次再来。
@@ -137,17 +121,23 @@ actor PiHistoryPersistence {
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
         let removed = try await storage.retainPiSessions(paths: paths, agent: agent, host: host)
-        idsByPath = idsByPath?.filter { paths.contains($0.key) }
         if removed > 0 {
+            // 删掉的那几条不再是"索引过"：下次要时从 Store 重读
+            starts = nil
             Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")
         }
     }
 
-    private func sessionIDs() async throws -> [String: String] {
-        if let idsByPath { return idsByPath }
-        let rows = try await storage.piSessions()
-        let loaded = Dictionary(rows.map { ($0.path, $0.id) }, uniquingKeysWith: { first, _ in first })
-        idsByPath = loaded
+    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动），下次接入从头回填。
+    func forget(_ agent: AgentKind) async throws {
+        try await storage.deletePiSessions(of: agent)
+        starts = nil
+    }
+
+    private func loadedStarts() async throws -> [String: IndexedSessionStart] {
+        if let starts { return starts }
+        let loaded = try await storage.piIndexStarts()
+        starts = loaded
         return loaded
     }
 }

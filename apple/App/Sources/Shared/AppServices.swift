@@ -325,7 +325,7 @@ final class AppServices {
         terminal = mac.terminal
         hooks = mac.hooks
         runtimes = mac.runtimes(store)
-        agents = AgentIntegrations(mac.agents, isEnabled: !location.isIsolated || mac.paths.pi.isExplicit)
+        agents = AgentIntegrations(mac.agents)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)

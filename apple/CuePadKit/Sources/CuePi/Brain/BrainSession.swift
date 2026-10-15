@@ -2,7 +2,7 @@
 import Foundation
 
 /// 三家大脑共用的部分：事件流、本次运行的临时目录（系统提示等）、给运行时的环境。进程与协议各家用接入里的那一份
-/// （`LineProcess`、`CodexRPC`、`ClaudeStream`）。
+/// （`ChildProcess`、`CodexRPC`、`ClaudeStream`）。
 @MainActor
 final class BrainSession {
     let events: AsyncStream<CueBrainEvent>
@@ -41,21 +41,16 @@ final class BrainSession {
         exited(nil)
     }
 
-    /// 运行时的环境：CuePad 自己的环境加上配置给的与 `extra`；可执行文件所在目录放到 PATH 最前（`pi` 是 node 脚本，
-    /// node 多半与它装在一起）。
+    /// 运行时的环境：CuePad 自己的环境加上配置给的与 `extra`，PATH 按 `ExecutableLocator.environment` 的规则（配置给的 PATH 已是找到它的那组目录）。
     static func environment(_ config: CueBrainConfig, _ extra: [String: String] = [:]) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment.merging(config.environment) { _, new in new }.merging(extra) { _, new in new }
-        let path = environment["PATH"].map { ":" + $0 } ?? ""
-        environment["PATH"] = config.executable.deletingLastPathComponent().path + path
-        return environment
+        ExecutableLocator(searchDirectories: []).environment(launching: config.executable, overrides: config.environment.merging(extra) { $1 })
     }
 }
 
 /// 工具结果里的文字：字符串原样，内容块（`[{"type": "text", "text": …}]`，MCP 与 Pi 同形）只取文字块拼起来。
-func brainText(_ content: Any?) -> String {
-    if let text = content as? String { return text }
-    let blocks = content as? [[String: Any]] ?? []
-    return blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined(separator: "\n")
+func brainText(_ content: JSONValue?) -> String {
+    if let text = content?.string { return text }
+    return (content?.array ?? []).filter { $0["type"]?.string == "text" }.compactMap { $0["text"]?.string }.joined(separator: "\n")
 }
 
 func jsonString(_ object: Any) -> String {

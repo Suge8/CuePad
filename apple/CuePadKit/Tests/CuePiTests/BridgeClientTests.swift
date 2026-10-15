@@ -102,7 +102,7 @@ struct BridgeClientTests {
     }
 
     @Test func staleSocketFromDeadProcessIsRemovedAtStartWithoutBecomingASession() async throws {
-        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try deadPid()).sock")
+        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()
         try await eventually("启动扫描清掉残留") { fileGone(stale) }
@@ -112,7 +112,7 @@ struct BridgeClientTests {
     @Test func unlistenedSocketOfLiveProcessIsKeptWhileDeadOnesAreRemoved() async throws {
         // 进程活着但还没 listen（刚 bind）：不能删，否则会破坏正在启动的会话
         let pending = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock")
-        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try deadPid()).sock")
+        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
         try FakeExtension.makeStaleSocket(at: pending)
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()

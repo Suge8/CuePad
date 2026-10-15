@@ -36,8 +36,9 @@ extension MacDelivery {
         }
     }
 
-    /// 斜杠命令的进度（读投送请求，不另存）：只看最近一条命令——在路上写"正在执行 /compact…"、没成功写原因、成功就消失
-    /// （命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。回复框上方一行显示。
+    /// 斜杠命令的进度（读投送请求与对话，不另存）：最近一条请求是命令时才有——在路上写"正在执行 /compact…"、没成功写原因、
+    /// 成功就消失（命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。失败的在之后有新的请求、对话里多了话时收起。
+    /// 回复框上方一行显示。
     enum CommandProgress: Equatable {
         case running(String)
         case failed(command: String, failure: Speech.Failure)
@@ -52,13 +53,16 @@ extension MacDelivery {
         }
     }
 
-    static func commandProgress(_ deliveries: [DeliveryRequest], at moment: Speech.Moment) -> CommandProgress? {
-        guard let latest = deliveries.last(where: { $0.mode == .known(.command) }) else { return nil }
+    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> CommandProgress? {
+        // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
+        guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
         switch Speech.trip(latest, at: moment) {
         case .sending: return .running(command)
         case .delivered: return nil
-        case .failed(let failure): return .failed(command: command, failure: failure)
+        case .failed(let failure):
+            let failedAt = latest.completedAt ?? latest.modifiedAt
+            return messages.contains { $0.at > failedAt } ? nil : .failed(command: command, failure: failure)
         }
     }
 
@@ -81,7 +85,7 @@ extension MacDelivery {
         guard session.state != .known(.incompatible) else { return .restartPi }
         guard session.state == .known(.waitingForUser) else { return .message(session.deliveryModes) }
         guard let question = session.answerableQuestion else { return .unanswerable }
-        return question.kind == .known(.text) ? .answer(question) : .answerAbove
+        return question.acceptsText ? .answer(question) : .answerAbove
     }
 }
 

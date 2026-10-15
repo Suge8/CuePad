@@ -23,6 +23,8 @@ final class Navigation {
     struct ProjectForm: Identifiable {
         let id = UUID()
         var project: Project?
+        /// 新建好之后接着做的（从新会话来的：开新会话的输入框）。
+        var created: ((UUID) -> Void)?
     }
 
     /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
@@ -140,6 +142,15 @@ final class Navigation {
         case .split: splitPath.append(route)
         case .tabs: path.append(route)
         }
+    }
+
+    /// 开新会话的输入框。会话开在项目的文件夹里：还没有项目时先新建项目，建好接着开这个项目的新会话（入口只有这一处，输入框不再另写没有项目的样子）。
+    func startNewSession(_ start: NewSession = .init(), hasProjects: Bool) {
+        guard hasProjects else {
+            projectForm = ProjectForm(created: { [weak self] id in self?.newSession = NewSession(project: id) })
+            return
+        }
+        newSession = start
     }
 
     /// 发给 Agent：浮起发给 Agent 的输入框，正文带在里面（`HandOffInput`）。

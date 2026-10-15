@@ -53,7 +53,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
 ///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
-/// 名字后是哪家 Agent 只放标志（Pi 不标，`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
+/// 名字后是哪家 Agent 只放标志（`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
 /// 状态标自成一列（固定宽、对着名字那一行的中线），第二层从名字起头；上下文只在快满时出现（`PiRowFacts.context`），
 /// 两种都在第二层落在时长正下方，与时长一样用等宽数字，状态词长短不同也不挪。
@@ -162,7 +162,7 @@ struct PiSessionRow: View {
             Text(Highlight.matches(PiRename.title(of: session, request: rename, at: services.speech), highlight))
                 .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
                 .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
-            // 是哪家 Agent（Pi 不标）：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
+            // 是哪家 Agent：只放标志，名字优先（`AgentMark`）；名字先截断，标志一直留着
             if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             if style.card, session.hosted, !ended { HostedTag() }
             Spacer(minLength: 4)

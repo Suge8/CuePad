@@ -22,7 +22,7 @@ struct PiReplyBar: View {
     var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
-    /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
+    /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方显示一行，成功、之后有新请求或对话时就收起。
     var commandProgress: MacDelivery.CommandProgress?
     /// 排队的话（`PiChat.queued`，页面传进来）。
     var queued: [DeliveryRequest] = []
@@ -259,7 +259,7 @@ struct PiReplyBar: View {
 
     /// 占位只说这里写什么；忙时点发送与长按各是什么由发送钮自己说（读屏标签与长按菜单）。
     private var placeholder: String {
-        if answering != nil { return "回答上面的问题" }
+        if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
         return replyPrompt
     }
@@ -294,14 +294,14 @@ struct PiReplyBar: View {
         services.settings.setReplyNotes(draft.notes.filter { $0.id != note.id }, for: session.id)
     }
 
-    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说（`MacDelivery.button`）。
-    /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
+    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行），不分马上说还是等它做完再说：是不是命令只在发出这一刻按草稿与会话报的清单认
+    /// （`commandLine`），不看按钮上次排版时带来的方式。`held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
         guard canSend else { return }
         let accepts = accepts, files = services.store.files
         let card = draft.attachments.first?.card
-        let written = if mode == .command, let line = commandLine {
+        let written = if let line = commandLine {
             // 命令不是说的话：批注留着，跟下一句发
             workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
         } else {

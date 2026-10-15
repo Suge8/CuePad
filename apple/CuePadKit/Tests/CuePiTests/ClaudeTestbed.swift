@@ -7,21 +7,20 @@ import Testing
 @testable import CuePi
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
-/// 模型走 DeepSeek 的 Anthropic 兼容接口（缺省 `deepseek-flash`，能看图；另有 `deepseek-v4-pro`；强度 low/high/max），
-/// 密钥只在录制与直连时从 ~/.pi/agent/auth.json 读、只放进子进程环境，不落盘，也不进录像带。
+/// 模型走本机用户自己的 Claude 订阅（`haiku`，省额度）：OAuth 令牌约 1 小时过期、由 Pi 自动刷新，所以录制与直连时现从
+/// ~/.pi/agent/auth.json 的 `anthropic.access` 读，只放进子进程环境（`CLAUDE_CODE_OAUTH_TOKEN`），不落盘，也不进录像带。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
-let claudeKey: String? = {
+/// 此刻的订阅令牌（现读：Pi 会换新的）
+var claudeToken: String? {
     let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
-    return (try? Data(contentsOf: auth)).flatMap(ClaudeJSON.parse)?["deepseek"]?["key"]?.string
-}()
+    return (try? Data(contentsOf: auth)).flatMap(JSONValue.parse)?["anthropic"]?["access"]?.string
+}
+/// 测试用的模型与换模型时换到的另一个
+let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
-/// 测试台的缺省模型与另一个能换过去的模型
-let claudeTestModel = "deepseek-flash"
-let claudeOtherModel = "deepseek-v4-pro"
-
-/// 256×256 纯红 PNG（32×32 的经 Claude Code 给 deepseek-flash 看，常被认成别的颜色）
+/// 256×256 纯红 PNG（32×32 的常被模型认成别的颜色）
 let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQkAAAjAwPUvrX8reHAJBmsK3pIAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAJMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAyAASTAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADADHAllMDvLkz2XNAAAAAElFTkSuQmCC")!
 
 @MainActor
@@ -36,17 +35,21 @@ final class ClaudeTestbed {
     let bridge: PiBridge
     let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
+    /// 人在不在这台 Mac 前：默认不在（提问交给 CuePad）
+    let presence: TestPresence
     let files: AttachmentFiles
+    private let store: CueStore
     /// 桥上从测试台起来以后的全部变化
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
 
     var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locator: AgentTape.locator("claude"), cuepad: PiProcess.cuepad)
+        AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
-    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800)) async throws {
+    /// - Parameter wrapped: CuePad 托管时起的 `claude` 是一层外壳、真 claude 是它的子进程（钩子的父进程不是 CuePad 起的那个）。
+    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false) async throws {
         root = try makeTempDirectory()
         config = root.appending(path: "config")
         sockets = root.appending(path: "s")
@@ -57,7 +60,7 @@ final class ClaudeTestbed {
             try FileManager.default.createDirectory(at: root.appending(path: name), withIntermediateDirectories: true)
         }
         // 跳过首次启动的引导与"信任这个目录"的询问
-        let seed: ClaudeJSON = ["hasCompletedOnboarding": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
+        let seed: JSONValue = ["hasCompletedOnboarding": true, "bypassPermissionsModeAccepted": true, "projects": .object([work.path: ["hasTrustDialogAccepted": true]])]
         try seed.data.write(to: config.appending(path: ".claude.json"))
         if let settings { try Data(settings.utf8).write(to: config.appending(path: "settings.json")) }
         AgentTape.current?.watch(config.appending(path: "projects"), work)
@@ -66,28 +69,41 @@ final class ClaudeTestbed {
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic", "ANTHROPIC_AUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : claudeKey ?? "", "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : claudeToken ?? "", "ANTHROPIC_API_KEY": "",
             // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        files = scratchFiles
-        bridge = PiBridge(socketDirectory: sockets)
+        store = try Fixture().store
+        files = store.files
+        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit)
         log = ChangeLog(bridge)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
         try hooks.start()
+        let presence = TestPresence()
+        self.presence = presence
+        var bin = AgentTape.executable("claude").deletingLastPathComponent()
+        if wrapped {
+            let real = bin.appending(path: "claude")
+            bin = root.appending(path: "wrapper", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            let script = bin.appending(path: "claude")
+            try "#!/bin/sh\n'\(real.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, locator: AgentTape.locator("claude"),
-            idleLimit: idleLimit)
+            bridge: bridge, paths: paths, hooks: hooks, store: store, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
+            presence: presence)
         if installHooks { try await integration.install(.claudeCode) }
     }
 
     /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), _ body: (ClaudeTestbed) async throws -> Void
+        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false,
+        _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
-        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit)
+        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapped: wrapped)
         do {
             try await body(testbed)
         } catch {
@@ -97,9 +113,9 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式 default：要用工具就问）。
-    func terminal(_ arguments: [String] = []) async throws -> ClaudeTerminal {
-        let terminal = try await ClaudeTerminal(testbed: self, arguments: arguments)
+    /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
+    func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
+        let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
     }
@@ -160,11 +176,53 @@ final class ClaudeTestbed {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
     }
 
+    /// 像 App 的索引器那样把会话文件读进会话索引（检查点里有会话名与首条消息）。
+    func index(_ file: URL?) async throws {
+        let update = try transcript(file)
+        let session = IndexedSession(
+            id: try #require(update.checkpoint.sessionID), path: update.file.path, cwd: work.path, lastActivityAt: .now, agent: .claudeCode)
+        try await store.upsertPiSessions([PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
+    }
+
+    /// 这一轮的回答落了库，正在说的话就换下：没有了，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
+    /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
+    func waitForDraftLanded(_ id: PiSession.ID) async throws {
+        let file = bridge.session(id: id)?.sessionFile
+        var newest: Date?
+        try await eventually("回答落盘", timeout: .seconds(10)) {
+            newest = (try? transcript(file))?.messages.last { $0.role == .known(.pi) }?.at
+            return newest.map { $0 >= start(of: id) } ?? false
+        }
+        guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return }
+        #expect(draft.landed(newestReply: newest), "正在说的话起点 \(draft.since.timeIntervalSince1970)，最近一条回答 \(String(describing: newest?.timeIntervalSince1970))")
+    }
+
+    /// 这一轮开始（最近一次进入工作）的时刻
+    private func start(of id: PiSession.ID) -> Date {
+        log.changes.compactMap { if case .stateChanged(let session, _) = $0, session.id == id, session.state.isWorking { session.stateSince } else { nil } }
+            .last ?? .distantPast
+    }
+
+    /// 像 App 的记录器那样记下桥上这个会话此刻的样子（状态与模型）。
+    func record(_ id: PiSession.ID) async throws {
+        let session = try #require(bridge.session(id: id))
+        try await PiStateRecorder(store: store, hostID: "mac").update(
+            sessionID: session.sessionID, state: session.state,
+            modelState: PiModelState(model: session.model, thinking: session.thinking, models: session.availableModels), agent: .claudeCode)
+    }
+
+    /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
     func stop() async {
+        let pids = Set(terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid))
         for terminal in terminals { terminal.stop() }
         await runtime.stop()()
         hooks.stop()
         bridge.stop()
+        guard AgentTape.current?.mode != .replay else { return }
+        for pid in pids {
+            try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
+            #expect(!FileManager.default.fileExists(atPath: "/tmp/cc-socks/\(pid).sock"), "Claude Code \(pid) 的收件箱 socket 留下了")
+        }
     }
 }
 
@@ -184,7 +242,7 @@ final class ClaudeTerminal {
         let environment = ProcessInfo.processInfo.environment.filter { key, _ in !["TMUX", "CLAUDE", "CUEPAD", "HERDR"].contains { key.hasPrefix($0) } }
             .merging(testbed.environment) { $1 }
         _ = try await Self.tmux(name, ["-f", "/dev/null", "new-session", "-d", "-x", "200", "-y", "50", "-c", testbed.work.path,
-                                       (["exec", claudeURL!.path, "--permission-mode", "default"] + arguments).joined(separator: " ")], environment: environment)
+                                       (["exec", claudeURL!.path] + arguments).joined(separator: " ")], environment: environment)
         let ids = try await Self.tmux(name, ["display-message", "-p", "#{pane_pid} #{pid}"], environment: environment)
             .split(separator: " ").compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
         guard ids.count == 2 else { throw TmuxFailed(command: "display-message") }
@@ -194,7 +252,7 @@ final class ClaudeTerminal {
 
     @discardableResult
     private static func tmux(_ name: String, _ arguments: [String], environment: [String: String]) async throws -> String {
-        guard let result = await runCapturing(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
+        guard let result = await ChildProcess.run(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
               result.status == 0 else {
             throw TmuxFailed(command: arguments.joined(separator: " "))
         }

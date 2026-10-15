@@ -22,12 +22,12 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
+/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket），
+/// 收到结束命令就像 Pi 那样告别退出。
 final class RecordingHost: AgentRuntime {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
         case open(directory: String, launchToken: String, name: String? = nil, model: String? = nil, thinking: String? = nil)
-        case end(String)
     }
 
     private(set) var calls: [Call] = []
@@ -54,11 +54,6 @@ final class RecordingHost: AgentRuntime {
         return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 
-    func end(_ id: String) async throws {
-        calls.append(.end(id))
-        extensions.values.first { $0.id == id }?.close(bye: "quit")
-    }
-
     func open(
         in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
     ) async throws -> String {
@@ -79,6 +74,10 @@ final class RecordingHost: AgentRuntime {
         if let sessionFile { options.sessionFile = sessionFile }
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
         if busy { ext.setState(["kind": "thinking"]) }
+        ext.onCommand = { [weak ext] _, command in
+            if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
+            return ["ok": true, "delivered": "immediate"]
+        }
         try bridge.start()
         try ext.start()
         extensions[sessionID] = ext

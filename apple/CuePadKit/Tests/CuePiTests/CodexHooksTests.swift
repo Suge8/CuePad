@@ -18,7 +18,7 @@ struct CodexHooksTests {
     init() throws { codex = try CodexHome() }
 
     private func integration(cuepad: URL? = nil) -> AgentIntegration {
-        AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: cuepad ?? self.cuepad)
+        AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: cuepad ?? self.cuepad)
     }
 
     /// 用户自己的钩子（格式随手写）已被信任；接入后 CuePad 的 12 个事件都被 Codex 信任、用户的照旧；

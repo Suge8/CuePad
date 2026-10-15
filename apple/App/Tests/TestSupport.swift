@@ -9,7 +9,8 @@ import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
-import CuePi
+@testable import CuePi
+import Testing
 #else
 import UIKit
 #endif
@@ -165,6 +166,44 @@ final class TestApp {
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
 
+    /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
+    /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
+    func connect(_ kind: AgentKind, version: String = "2.1.0") async throws {
+        let bin = directory.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let executable = bin.appending(path: kind.command)
+        try "#!/bin/sh\necho '\(version)'\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        if kind == .codex { try installCodexTrustedLikeCodex() }
+        else { try await services.agents.install(kind) }
+        await services.agents.detect(kind)
+        #expect(services.agents.status(kind)?.files == .current)
+    }
+
+    /// CuePad 写技能与钩子，信任写成 Codex 记下的样子（`[hooks.state."<键>"]` 下一行 `trusted_hash`）。
+    private func installCodexTrustedLikeCodex() throws {
+        let integration = agentIntegration
+        let hooks = try #require(integration.hooks(.codex) as? CodexHooks).hooks
+        let command = integration.hookCommand(.codex)
+        let skill = integration.skillFile(.codex)
+        try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try AgentSkill.text(for: .codex, cuepad: helper).write(to: skill, atomically: true, encoding: .utf8)
+        try hooks.install(command: command)
+        let path = hooks.file.realPath.path
+        let trust = try hooks.ourGroups(in: JSONSourceTree(Data(contentsOf: hooks.file))).map { group in
+            let event = try #require(CodexHooks.events.first { $0.name == group.event })
+            let hash = try #require(CodexHooks.hash(event, command: command, hooks: hooks))
+            return "[hooks.state.\"\(CodexHooks.key(path, group.event, group.index))\"]\ntrusted_hash = \"\(hash)\"\n"
+        }
+        try trust.joined(separator: "\n").write(to: hooks.file.deletingLastPathComponent().appending(path: "config.toml"), atomically: true, encoding: .utf8)
+    }
+
+    var agentIntegration: AgentIntegration {
+        AgentIntegration(
+            paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { [directory] in ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]) },
+            cuepad: helper)
+    }
+
     /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
     var agentHomes: [String: String] {
         ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
@@ -176,9 +215,7 @@ final class TestApp {
             pi: pi,
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
-            agents: AgentIntegration(
-                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
-                cuepad: helper),
+            agents: agentIntegration,
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,

@@ -4,28 +4,37 @@
 {"c":"p1","k":"exit","n":0}
 {"a":["--mode","rpc","--offline","--no-context-files","--no-skills","--no-prompt-templates","--no-themes","--model","fake/echo","--thinking","off","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:1}/work"}
 {"k":"dir","p":"{tmp:1}/agent/sessions/--private{dtmp:1}-work--"}
-{"c":"s1","k":"listen","p":"{tmp:1}/s/01a13ba6-b860-771c-8cfb-4e2a208c2b54.{pid:p2}.sock"}
+{"c":"s1","k":"listen","p":"{tmp:1}/s/01a13c33-09cf-7334-ace6-1d5f076ab12c.{pid:p2}.sock"}
 {"c":"s1.1","k":"connect"}
-{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":14,\"extensionVersion\":29,\"sessionId\":\"01a13ba6-b860-771c-8cfb-4e2a208c2b54\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-14T18-22-24-352Z_01a13ba6-b860-771c-8cfb-4e2a208c2b54.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:1133},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"]},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"]},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"]}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/pick\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"bbad85b4-c03b-44a1-8323-4baa6c1873c5\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:1207},\"busySince\":{ms:1207}}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"e7066c0a-134c-45b9-b8e4-f3d5bb54193d\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"answer\",\"promptId\":\"bbad85b4-c03b-44a1-8323-4baa6c1873c5\",\"value\":\"Beta\",\"id\":\"c1\"}","k":"send"}
+{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":14,\"extensionVersion\":30,\"sessionId\":\"01a13c33-09cf-7334-ace6-1d5f076ab12c\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-14T20-55-40-240Z_01a13c33-09cf-7334-ace6-1d5f076ab12c.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:191},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"],\"images\":false}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
+{"c":"p2","d":"{\"message\":\"/pick\",\"type\":\"prompt\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"fc40e80b-ab83-4e87-bc0c-568581ecad88\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"4bbcc1a0-125a-437e-8b99-cc42279ce6f1\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:216},\"busySince\":{ms:216}}}","k":"recv"}
+{"c":"s1.1","d":"{\"id\":\"c1\",\"value\":\"Beta\",\"promptId\":\"fc40e80b-ab83-4e87-bc0c-568581ecad88\",\"t\":\"answer\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c1\",\"ok\":true}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"0c776000-41dd-4b3a-923f-f959643d3c58\",\"method\":\"notify\",\"message\":\"picked:Beta\",\"notifyType\":\"info\"}","k":"stdout"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:1252},\"busySince\":null}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"6051e0ee-af00-48e1-8ae9-603618cb2630\",\"method\":\"notify\",\"message\":\"picked:Beta\",\"notifyType\":\"info\"}","k":"stdout"}
-{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/ask\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"d6085234-34b2-493d-bf15-5d629d1528f4\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:1285},\"busySince\":{ms:1285}}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"9286b5a0-1837-4c5e-9bc9-bff1d3590393\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"promptId\":\"d6085234-34b2-493d-bf15-5d629d1528f4\",\"value\":true,\"t\":\"answer\",\"id\":\"c2\"}","k":"send"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:229},\"busySince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"message\":\"/ask\",\"type\":\"prompt\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"16838895-88ba-48c0-a837-8402035752b5\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"1f543ec0-3e8d-4200-ba08-bdc82f65f7e8\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:242},\"busySince\":{ms:242}}}","k":"recv"}
+{"c":"s1.1","d":"{\"id\":\"c2\",\"value\":true,\"promptId\":\"16838895-88ba-48c0-a837-8402035752b5\",\"t\":\"answer\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c2\",\"ok\":true}","k":"recv"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:1312},\"busySince\":null}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"dd673520-fa36-4e03-8f09-358ff10a0963\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"2ff684c8-2667-4560-b0c1-6c97156a02aa\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:253},\"busySince\":null}}","k":"recv"}
 {"c":"s1.1","k":"hangup"}
-{"c":"s1.1","d":"{\"t\":\"bye\",\"reason\":\"quit\",\"undelivered\":[]}","k":"recv"}
+{"c":"s1.2","k":"connect"}
 {"c":"p2","k":"signal","n":15}
 {"c":"s1.1","k":"close"}
+{"c":"s1.2","k":"close"}
+{"c":"s1.2","k":"hangup"}
+{"c":"s1.3","k":"connect"}
+{"c":"s1.3","k":"close"}
+{"c":"s1.4","k":"connect"}
+{"c":"s1.4","k":"close"}
+{"c":"s1.5","k":"connect"}
+{"c":"s1.5","k":"close"}
+{"c":"p2","k":"exit","n":143}

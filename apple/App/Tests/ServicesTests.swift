@@ -67,7 +67,7 @@ struct PiHistoryPersistenceTests {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }
@@ -87,10 +87,10 @@ struct PiHistoryPersistenceTests {
         try handle.close()
         let restarted = rig.relaunch()
         // 索引器按文件路径取检查点：重启后仍能对应到会话
-        #expect(try await restarted.historyStore.checkpoint(for: file) != nil)
+        #expect(try await restarted.historyStore.start(for: file)?.checkpoint != nil)
         let data = try #require(try await restarted.store.piCheckpoint(of: "sess-1"))
         let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
-        let resumed = try PiHistory.index(file: file, from: checkpoint, files: rig.services.store.files)
+        let resumed = try PiHistory.index(file: file, agent: .pi, from: checkpoint, files: rig.services.store.files)
         #expect(resumed.bytesRead == reply.utf8.count + 1)
         #expect(resumed.history.displayName == "fix the build")
     }
@@ -102,7 +102,7 @@ struct PiHistoryPersistenceTests {
         try await rig.services.store.upsertPiSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }
@@ -110,6 +110,22 @@ struct PiHistoryPersistenceTests {
         await rig.services.consumePiHistory(events, agent: .pi)
 
         #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
+    }
+}
+
+/// 设置里四家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
+struct AgentLineTests {
+    @Test func 四家接入后都写已接入与版本() async throws {
+        let rig = TestApp()
+        let versions: [AgentKind: String] = [.pi: "1.2.0", .claudeCode: "2.1.299 (Claude Code)", .codex: "codex-cli 0.162.1", .opencode: "opencode v2.0.29"]
+        var lines: [String] = []
+        for kind in AgentKind.allCases {
+            try await rig.connect(kind, version: versions[kind]!)
+            let agents = rig.services.agents
+            lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind)).1?.visible ?? "")
+        }
+
+        #expect(lines == ["已接入 · Pi 1.2.0", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29"])
     }
 }
 
@@ -131,7 +147,7 @@ struct AgentUpgradeTests {
 
         #expect(rig.services.agents.status(.pi)?.files == .current)
         #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.agentDirectory.appending(path: "skills/cuepad/SKILL.md").path))
     }
 
     /// 没装过的不碰：检测完什么都不写，等用户自己接入。
@@ -143,6 +159,49 @@ struct AgentUpgradeTests {
 
         #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
         #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
+    }
+}
+
+/// "接入"一个开关一个含义：开了 CuePad 才跟这家打交道。会话索引只为接入了的 Agent 建：打开时回填，关掉时删掉这家的本地索引，
+/// 同步出去的会话记录不动。
+struct AgentIndexingTests {
+    /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
+    private func claudeSession(in rig: TestApp, id: String) throws {
+        let project = rig.directory.appending(path: "claude/projects/-work-x")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let stamp = "2026-10-14T01:00:00.000Z"
+        let lines = [
+            #"{"type":"user","uuid":"u1","sessionId":"\#(id)","cwd":"/work/x","timestamp":"\#(stamp)","message":{"role":"user","content":"修一下登录"}}"#,
+            #"{"type":"assistant","uuid":"a1","sessionId":"\#(id)","cwd":"/work/x","timestamp":"\#(stamp)","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"修好了"}]}}"#,
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: project.appending(path: "\(id).jsonl"), atomically: true, encoding: .utf8)
+    }
+
+    @Test func 只有接入了的Agent建会话索引_关掉即删掉本地索引_同步记录留着() async throws {
+        let rig = TestApp()
+        let id = "6f1c0d2e-0000-4000-8000-000000000001"
+        try claudeSession(in: rig, id: id)
+        let services: AppServices = rig.services
+        services.start()
+        defer { services.cancelBackgroundWork() }
+        let store = services.store
+        try await eventually("检测完各家") { AgentKind.allCases.allSatisfy { services.agents.status($0) != nil } }
+
+        // 用过 Claude Code（有配置目录）但没接入：不读它的会话
+        await quietPeriod(.seconds(1))
+        #expect(try await store.piSessions().filter { $0.agent == .claudeCode }.isEmpty)
+
+        try await rig.connect(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id })
+
+        try await services.agents.uninstall(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.count }) { $0 == 0 }
+        #expect(try await store.allPiSessionStates().contains { $0.sessionID == id }, "同步出去的会话记录不动")
+
+        // 再接入：从头回填回来
+        try await services.agents.install(.claudeCode)
+        _ = try await eventually(store, { try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id) }) { $0 == [id] }
     }
 }
 

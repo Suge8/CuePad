@@ -29,7 +29,7 @@ func makeTempDirectory() throws -> URL {
     return dir
 }
 
-/// 托管的 Pi 不随测试进程、桥或 `PiHost` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
+/// 托管的 Pi 不随测试进程、桥或 `PiRuntime` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
 /// 它们都连在本用例的临时 socket 目录里，是本用例启动的；只按这些 pid 发，不碰别的进程。
 @MainActor func stopHostedProcesses(_ bridge: PiBridge) {
     for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
@@ -43,11 +43,10 @@ func makeSocketDirectory() throws -> URL {
 func fileGone(_ url: URL) -> Bool { !FileManager.default.fileExists(atPath: url.path) }
 
 /// 已经退出的进程 pid（用于"残留 socket 的属主已死"）。
-func deadPid() throws -> Int32 {
+func deadPid() async throws -> Int32 {
     let p = Process()
     p.executableURL = URL(filePath: "/usr/bin/true")
-    try p.run()
-    p.waitUntilExit()
+    _ = try await p.runToExit()
     return p.processIdentifier
 }
 
@@ -56,13 +55,15 @@ let scratchFiles = try! Fixture().store.files
 
 extension PiHistory {
     static func index(file: URL, from checkpoint: PiHistoryCheckpoint?, transcript: Bool = true) throws -> PiHistoryUpdate {
-        try index(file: file, from: checkpoint, transcript: transcript, files: scratchFiles)
+        try index(file: file, agent: .pi, from: checkpoint, transcript: transcript, files: scratchFiles)
     }
 }
 
 extension PiHistoryIndexer {
-    init(root: URL, checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?) {
-        self.init(root: root, files: scratchFiles, checkpoint: checkpoint)
+    /// 索引 `sessions` 这个会话目录（Pi 或 Codex 的，名字是 sessions：它的上层就是这家的配置目录）。
+    init(sessions: URL, agent: AgentKind = .pi, start: @escaping @Sendable (URL) async -> PiHistoryStart? = { _ in nil }) {
+        let home = sessions.deletingLastPathComponent()
+        self.init(agent: agent, paths: AgentPaths(pi: PiPaths(agentDirectory: home), environment: ["CODEX_HOME": home.path]), files: scratchFiles, start: start)!
     }
 }
 

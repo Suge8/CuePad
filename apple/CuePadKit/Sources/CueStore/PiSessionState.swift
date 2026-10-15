@@ -177,7 +177,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   }
 
   /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
-  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted) } ?? [] }
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted, model: model) } ?? [] }
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 

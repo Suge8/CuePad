@@ -109,7 +109,7 @@ struct RealSlashTests {
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/settings", in: s.id) }  // 纯终端交互的内置命令
             await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.command("hello", in: s.id) }
             await #expect(throws: PiBridgeError.rejected("missing_argument")) { try await bridge.command("/name", in: s.id) }
-            await #expect(throws: PiBridgeError.rejected("unknown_model")) { try await bridge.command("/model fake/nope", in: s.id) }
+            await #expect(throws: PiBridgeError.unknownModel(.pi)) { try await bridge.command("/model fake/nope", in: s.id) }
             await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.command("/thinking ultra", in: s.id) }
         }
     }

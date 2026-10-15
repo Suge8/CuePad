@@ -153,9 +153,11 @@ nonisolated struct PiShown: Hashable, Sendable {
     var clock: PiClock?
     /// 值班的 Cue 的名字（用户起的）；Cue 不在值班为 nil。
     var cue: String?
+    /// 在等你时问的是要你填一段文字（`PiQuestionKind.text`）："等你回答"；是或否、选一个是"等你确认"。
+    var asksForWords = false
     /// 这台 Mac 上它此刻有正在说的话（会话的 `PiBridge.Slot.draft`、Cue 的 `CueKeeper.speech`）："思考中"说成"输出中"。
-    /// 输出中只是这层显示、不是同步的状态：只有读草稿的视图置位（会话页顶栏与正在说的话上方那一行、Mac 上 Cue 的状态那一句），
-    /// 会话列表与手机不读草稿，照常是思考中。
+    /// 输出中只是这层显示、不是同步的状态：会话的由 `Workspace.shown`、`shownInHeader` 一处置位（列表、顶栏、菜单栏同一个说法），
+    /// 正在说的话上方那一行与 Mac 上 Cue 的状态那一句各自读自己的草稿；手机没有草稿，照常是思考中。
     var speaking = false
 
     func speaking(_ drafting: Bool) -> PiShown {
@@ -189,6 +191,7 @@ nonisolated extension PiShown {
         case nil:
             self.init(status: asked, clock: own, cue: cue)
         }
+        asksForWords = session.question?.kind == .known(.text)
     }
 
     /// 没有发给它的话在路上（会话页顶栏、对话里的会话卡）：只按会话自己的状态，不涉及此刻。
@@ -223,7 +226,7 @@ nonisolated extension PiShown {
         case .working(.delegating): "子代理工作中"
         case .working(.compacting): "正在压缩上下文"
         case .working: speaking ? "输出中" : "思考中"
-        case .asking: "等你确认"
+        case .asking: "等你\(waitWord)"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
         case .restart: "在线，需要 /reload"
@@ -250,7 +253,7 @@ nonisolated extension PiShown {
         case .delivery: "正在发给 Agent"
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
-        case .asking: "Agent 等你确认"
+        case .asking: "Agent 等你\(waitWord)"
         case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
@@ -263,6 +266,9 @@ nonisolated extension PiShown {
         case .unknown: "Agent 状态未知"
         }
     }
+
+    /// 在等你做的事："回答"（填文字）或"确认"（是否、选择）。
+    var waitWord: String { asksForWords ? "回答" : "确认" }
 
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
@@ -324,9 +330,24 @@ extension AppSettings {
 }
 
 extension Workspace {
-    /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"）。
+    /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"），
+    /// 这台 Mac 上它正在出字时说"输出中"（`speaking`）。
     func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        services.settings.shown(session, delivery: delivery, cue: cueOnDuty, at: services.speech)
+        services.settings.shown(session, delivery: delivery, cue: cueOnDuty, at: services.speech).speaking(speaking(session))
+    }
+
+    /// 会话页顶栏的状态：只说会话自己的（你的话到哪了写在气泡下面，正在看的会话没有"有新回复"），其余同 `shown`。
+    func shownInHeader(_ session: PiSessionState) -> PiShown {
+        PiShown(session, cue: cueOnDuty).speaking(speaking(session))
+    }
+
+    /// 这台 Mac 上它此刻有正在说的话（手机上没有）。只随出字开始、结束通知，不随每个增量（`PiBridge.Slot.speaking`）。
+    private func speaking(_ session: PiSessionState) -> Bool {
+        #if os(macOS)
+        services.pi.slot(sessionID: session.sessionID)?.speaking ?? false
+        #else
+        false
+        #endif
     }
 
     /// 值班的 Cue 的名字（`PiShown` 的 `cue`）；Cue 不在值班为 nil。

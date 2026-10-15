@@ -46,9 +46,7 @@ final class AgentTape: @unchecked Sendable {
         let cc = Process()
         cc.executableURL = URL(filePath: "/usr/bin/cc")
         cc.arguments = ["-O2", "-o", building.path, source.path]
-        try cc.run()
-        cc.waitUntilExit()
-        guard cc.terminationStatus == 0 else { throw CocoaError(.executableLoad, userInfo: [NSFilePathErrorKey: source.path]) }
+        guard try ProcessExit(launching: cc).blockingValue == 0 else { throw CocoaError(.executableLoad, userInfo: [NSFilePathErrorKey: source.path]) }
         _ = rename(building.path, binary.path)
         return binary
     }
@@ -355,7 +353,7 @@ final class AgentTape: @unchecked Sendable {
         let stub = Stub(fd: fd, pid: pid)
         switch mode {
         case .record, .live: recordProcess(stub, reader, name: name, arguments: arguments, cwd: cwd, environment: environment)
-        case .replay: replayProcess(stub, reader, name: name, arguments: arguments, cwd: cwd)
+        case .replay: replayProcess(stub, reader, name: name, arguments: arguments, cwd: cwd, mark: environment[HostMark.variable])
         }
     }
 
@@ -384,7 +382,7 @@ final class AgentTape: @unchecked Sendable {
         }
         environment["PATH"] = ((environment["PATH"] ?? "").split(separator: ":").map(String.init).filter { $0 != bin.path }
             + [real.deletingLastPathComponent().path]).joined(separator: ":")
-        record(TapeEvent(k: "spawn", c: channel, d: name, p: cwd, a: arguments))
+        record(TapeEvent(k: "spawn", c: channel, d: name, p: cwd, a: arguments, m: environment[HostMark.variable]))
         /// 只有测试读它的标准输出、且只读这几类事件（`PiProcess`）：别的行照样交出去，不录
         let kept = environment.removeValue(forKey: Self.stdoutTypesVariable).map { Set($0.split(separator: ",").map(String.init)) }
         guard let process = try? RealProcess(real, arguments, cwd: cwd, environment: environment) else {
@@ -448,8 +446,10 @@ final class AgentTape: @unchecked Sendable {
         }
     }
 
-    private func replayProcess(_ stub: Stub, _ reader: LineReader, name: String, arguments: [String], cwd: String) {
-        guard let channel = claim("spawn", where: { $0.d == name }, data: ([cwd] + arguments).joined(separator: "\u{1}"), recorded: { [$0.p ?? ""] + ($0.a ?? []) },
+    /// `mark`：CuePad 给托管进程的标记（`HostMark`，每次一个新的 UUID）。一并比对，回放时录下的钩子环境里那个才换成这次的。
+    private func replayProcess(_ stub: Stub, _ reader: LineReader, name: String, arguments: [String], cwd: String, mark: String?) {
+        guard let channel = claim("spawn", where: { $0.d == name }, data: ([cwd] + arguments + [mark ?? ""]).joined(separator: "\u{1}"),
+                                  recorded: { [$0.p ?? ""] + ($0.a ?? []) + [$0.m ?? ""] },
                                   attach: { state, channel in
                                       state.stubPids[channel] = stub.pid
                                       state.stubs[channel] = stub
@@ -948,6 +948,8 @@ struct TapeEvent: Codable, Sendable {
     var d: String? = nil
     var p: String? = nil
     var a: [String]? = nil
+    /// 启动时环境里 CuePad 给托管进程的标记（`HostMark`）
+    var m: String? = nil
     var n: Int? = nil
     /// d 是 base64（不是文本的文件）
     var b: Bool? = nil
@@ -956,7 +958,7 @@ struct TapeEvent: Codable, Sendable {
     /// 回放时算出的：没人叫它退、自己退出的进程（不进录像带）
     var spontaneous: Bool? = nil
 
-    private enum CodingKeys: String, CodingKey { case k, c, d, p, a, n, b, ap }
+    private enum CodingKeys: String, CodingKey { case k, c, d, p, a, m, n, b, ap }
 
     static let inputs: Set<String> = ["spawn", "stdin", "eof", "signal", "gone", "connect", "send", "hangup", "mark"]
     var isInput: Bool { Self.inputs.contains(k) }

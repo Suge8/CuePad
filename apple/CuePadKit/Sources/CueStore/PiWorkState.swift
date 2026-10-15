@@ -18,6 +18,16 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 会自己重载的扩展等空闲后换上新版本；更早的要在终端里 /reload。不是"已结束"，不进历史。
   case incompatible
 
+  /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
+  public var phase: Int {
+    if isWorking { return 0 }
+    switch self {
+    case .waitingForUser: return 1
+    case .error: return 2
+    default: return 3
+    }
+  }
+
   /// 正在干活（思考、调用工具、等子代理、压缩）。
   public var isWorking: Bool {
     switch self {

@@ -42,7 +42,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
     public let pid: Int32
     public let cwd: URL
-    public let terminal: PiTerminal
+    /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
+    public internal(set) var terminal: PiTerminal
     /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）；只有测试读（核对 /reload 后载入的是随包的扩展）
     public let extensionVersion: Int
     public internal(set) var state: PiWorkState
@@ -78,7 +79,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }
 
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
-    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted) }
+    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
 
     /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
     public var spoke: Bool {
@@ -100,6 +101,23 @@ public enum PiSessionName {
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
         [name, firstMessage.map(withoutImageNotes)].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
     }
+
+    /// 你的一句话当首条消息记下的样子：去掉首尾空白后的开头 `firstMessageLimit` 个字符；没有文字为 nil（接着看下一条）。
+    /// 与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
+    public static func firstMessage(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
+    }
+
+    /// 扩展或 Agent 自己投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成（如 FireCode 的
+    /// `<firecode_master_event>`、Codex 子代理的通知）。块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配。
+    /// 它们不进对话、不是提问，只开始一轮。
+    public static func isMachineMessage(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return machineMessage.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil
+    }
+
+    private static let machineMessage = try! NSRegularExpression(pattern: #"^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n</\1>)[\s\S])*\n</\1>\s*)+$"#)
 
     /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
     /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行（说明行后面的空行不挡），其余原样。
@@ -187,32 +205,41 @@ public enum PiBridgeError: Error, Equatable {
     case sessionEnded
     case ackTimeout
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
-    /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
+    /// `bad_answer`（答案类型或选项不对）；配置时还有 `no_auth`（该提供方没配好密钥）
     case rejected(String)
+    /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
+    case unknownModel(AgentKind)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiWorkState.incompatible`），不发命令
     case incompatibleExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
+    /// 请它结束后一直没下线（多半还卡在需要你在终端里处理的地方）
+    case notEnded
 }
 
 extension PiBridgeError: LocalizedError {
+    private static let failedPrefix = "failed: "
+
     public var errorDescription: String? {
         switch self {
-        case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
-        case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
+        case .insecureSocketDirectory(let path): "Agent 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
+        case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
+        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
-        case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
+        case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
         case .rejected("compacting"): "Agent 正在压缩上下文，压完再发这个命令"
-        case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
+        // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
+        case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): String(reason.dropFirst(Self.failedPrefix.count))
+        case .rejected(let reason): "Agent 没有接受：\(reason)"
         }
     }
 }

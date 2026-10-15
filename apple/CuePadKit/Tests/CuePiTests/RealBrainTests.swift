@@ -235,9 +235,9 @@ struct RealBrainProcessTests {
         ps.arguments = ["-A", "-o", "pid=,ppid=,command="]
         let out = Pipe()
         ps.standardOutput = out
-        try ps.run()
+        let exit = try ProcessExit(launching: ps)
         let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        ps.waitUntilExit()
+        _ = exit.blockingValue
         let rows = text.split(separator: "\n").compactMap { line -> (pid: pid_t, ppid: pid_t, command: String)? in
             let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
             guard parts.count == 3, let pid = pid_t(parts[0]), let ppid = pid_t(parts[1]) else { return nil }

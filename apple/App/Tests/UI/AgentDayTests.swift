@@ -1,3 +1,6 @@
+#if os(macOS)
+import CuePi
+#endif
 import CueStore
 import Foundation
 import Synchronization
@@ -37,6 +40,21 @@ struct AgentDayTests {
         await executor.stop()
     }
 
+    /// 在等你时按它问的是什么说：要你填一段文字是"等你回答"，是或否、从选项里选是"等你确认"。
+    @Test func 文字题等你回答_确认与选择题等你确认() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let questions: [(String, PiQuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
+        for (id, kind) in questions {
+            try await recorder.update(
+                sessionID: id, state: .waitingForUser, title: id,
+                question: PiQuestion(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
+        }
+
+        #expect(try await label("words") == "等你回答")
+        #expect(try await label("yesno") == "等你确认")
+        #expect(try await label("pick") == "等你确认")
+    }
+
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话_排队() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
@@ -66,6 +84,22 @@ struct AgentDayTests {
         #expect(queued.label == "运行工具")
         #expect(queued.note == "你的话排队中")
     }
+
+    #if os(macOS)
+    /// 这台 Mac 上它正在出字：会话行与会话页顶栏同一个说法"输出中"，说完（正在说的话清掉）回到"思考中"。
+    @Test func 正在出字时列表与顶栏都写输出中() async throws {
+        let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "atlas", state: .thinking, title: "atlas")
+
+        app.services.pi.setDraft(ext.id, PiDraft(text: "先看", since: .now))
+        let row = try await item("atlas")
+        #expect(workspace.shown(row).label == "输出中")
+        #expect(workspace.shownInHeader(row.state).label == "输出中")
+
+        app.services.pi.setDraft(ext.id, nil)
+        #expect(workspace.shown(row).label == "思考中")
+    }
+    #endif
 
     @Test func 没能送达留到看过为止_发给已结束的会话是正在唤醒() async throws {
         let beta = PiStateRecorder(store: store, hostID: "mac-b")

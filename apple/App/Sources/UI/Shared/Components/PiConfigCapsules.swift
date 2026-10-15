@@ -137,7 +137,7 @@ struct PiThinkingDial: View {
         let drawn = drawn
         HStack(spacing: 6) {
             // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变
-            Text("\(wordy ? "思考 " : "")\(Text(drawn.current?.label ?? "–").fontWeight(.medium).foregroundStyle(palette.ink2))")
+            Text("\(wordy ? "思考 " : "")\(Text(drawn.label).fontWeight(.medium).foregroundStyle(palette.ink2))")
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 .contentTransition(.opacity)
                 .fixedSize()
@@ -181,7 +181,7 @@ struct PiThinkingDial: View {
         .animation(Motion.quick, value: bubble)
         .accessibilityElement()
         .accessibilityLabel("思考强度")
-        .accessibilityValue(meter.current?.label ?? "未知")
+        .accessibilityValue(meter.label)
         .accessibilityAdjustableAction { direction in
             let next = direction == .increment ? meter.step(1) : meter.step(-1)
             if let next, next != meter.current { choose(next) }
@@ -201,7 +201,10 @@ struct PiThinkingDial: View {
     }
 
     private func meterBars(_ drawn: PiThinkingMeter) -> some View {
-        bars(drawn) { index in index < drawn.filled ? (drawn.isMax ? palette.signature : palette.ink) : palette.ink.opacity(0.14) }
+        // 不知道此刻的档（"默认"）：空格画深一点，不像停用
+        bars(drawn) { index in
+            index < drawn.filled ? (drawn.isMax ? palette.signature : palette.ink) : palette.ink.opacity(drawn.current == nil ? 0.32 : 0.14)
+        }
             .overlay {
                 if drawn.isMax, !reduceMotion {
                     // 最高档：一道亮光从左往右扫过填满的格

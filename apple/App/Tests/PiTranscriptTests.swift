@@ -40,16 +40,21 @@ struct PiTranscriptTests {
         return url
     }
 
-    /// 像索引器那样读：最近 7 天修改过的文件要对话，更早的只读摘要。
-    private func consume(_ files: [URL]) async {
+    /// 像 App 启动时那样回填一次会话目录：索引器定要不要对话（最近 7 天修改过的、本机已存着对话的），落盘照 App 的路子走。
+    private func backfill() async {
+        let indexer = PiHistoryIndexer(
+            agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files
+        ) { [services] in await services.loadHistoryStart(for: $0) }!
+        let source = indexer.events()
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            for file in files {
-                let modified = try! file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
-                let recent = modified > .now.addingTimeInterval(-PiHistoryPersistence.transcriptWindow)
-                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: recent, files: store.files)))
+            let task = Task {
+                for await event in source {
+                    continuation.yield(event)
+                    if case .backfillFinished = event { break }
+                }
+                continuation.finish()
             }
-            continuation.yield(.backfillFinished(sessionFiles: files))
-            continuation.finish()
+            continuation.onTermination = { _ in task.cancel() }
         }
         await services.consumePiHistory(events, agent: .pi)
     }
@@ -74,7 +79,7 @@ struct PiTranscriptTests {
         let recent = try sessionFile("recent", at: .now.addingTimeInterval(-3_600))
         let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
 
-        await consume([recent, old])
+        await backfill()
 
         let messages = try await store.piMessages(of: "recent")
         #expect(messages.map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
@@ -92,7 +97,7 @@ struct PiTranscriptTests {
 
     @Test func 七天外的会话按需补写_手机打开时发的请求由这台Mac从会话文件写出对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
-        await consume([old])
+        await backfill()
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
@@ -110,8 +115,8 @@ struct PiTranscriptTests {
 
     /// 会话所在的 Mac 没回应：补写请求在页面上超时；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。
     @Test func 补写请求还没被领取时再打开会话_不写第二条() async throws {
-        let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
-        await consume([old])
+        _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+        await backfill()
         let session = try await record("old")
 
         let first = try await services.requestTranscript(of: session)
@@ -145,8 +150,14 @@ struct PiTranscriptTests {
             sessionID: "old", entryID: "a1", seq: 2, role: .pi, text: "没通过", at: at.addingTimeInterval(3),
             tools: .init(items: [.init(kind: .command, target: "false", failed: true)]), roundStartedAt: at)
         try await store.writePiTranscript(PiTranscript(sessionID: "old", messages: [stale], recap: PiRecap()))
+        // 旧口径时索引过它：会话行在（索引器认的是真实路径），检查点格式已作废
+        let real = realpath(file.path, nil)!
+        defer { free(real) }
+        try await store.upsertPiSession(
+            IndexedSession(id: "old", path: String(cString: real), cwd: "/work/x", lastActivityAt: at, agent: .pi), checkpoint: Data("旧格式".utf8),
+            host: TestApp.hostID)
 
-        await consume([file])
+        await backfill()
 
         let reply = try #require(try await store.piMessages(of: "old").first { $0.role == .known(.pi) })
         #expect(reply.tools?.commands == 1 && reply.tools?.total == reply.tools?.items.count)
@@ -164,7 +175,7 @@ struct PiTranscriptTests {
             line("u1", nil, at: now, user: "做到一半"),
         ].joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
         let session = try await live("s1", file: file)
-        await consume([file])
+        await backfill()
         #expect(try await record("s1").pendingPrompt == "做到一半")
 
         var idle = session
@@ -176,7 +187,11 @@ struct PiTranscriptTests {
         })
         #expect(try await record("s1").pendingPrompt == nil)
 
-        await consume([file])  // 文件再读一遍：已结束的会话不会重新有进行中的提问
+        // 文件从头再读一遍：已结束的会话不会重新有进行中的提问
+        await services.consumePiHistory(AsyncStream { continuation in
+            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: store.files)))
+            continuation.finish()
+        }, agent: .pi)
         let ended = try await record("s1")
         #expect(ended.pendingPrompt == nil && ended.state == .known(.ended))
     }
@@ -185,7 +200,7 @@ struct PiTranscriptTests {
     @Test(.timeLimit(.minutes(1))) func 文件追加一条用户消息后_摘要与消息随即可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
-        let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory, files: store.files) { _ in nil }
+        let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
         let consuming = Task { await services.consumePiHistory(indexer.events(), agent: .pi) }
         defer { consuming.cancel() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
@@ -208,7 +223,7 @@ struct PiTranscriptTests {
         try handle.write(contentsOf: Data((line("u3", "a2", at: .now, user: "第三问") + "\n").utf8))
         try handle.close()
         _ = try await live("s1", file: file)
-        await consume([file])
+        await backfill()
         #expect(try await record("s1").pendingPrompt == "第三问")
 
         try await services.resetPiState()  // 重启时的启动对账
@@ -220,8 +235,8 @@ struct PiTranscriptTests {
     /// 一直开着的 Mac 也按天清理安静了的会话的对话，不只在启动时。
     @Test func 一直开着的Mac每天清理一次对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
-        await consume([old])
-        try await store.writePiTranscript(try PiHistory.index(file: old, from: nil, files: store.files).transcript)
+        await backfill()
+        try await store.writePiTranscript(try PiHistory.index(file: old, agent: .pi, from: nil, files: store.files).transcript)
         #expect(try await store.piMessages(of: "old").count == 4)
 
         let days = Mutex(0)
@@ -241,8 +256,8 @@ struct PiTranscriptTests {
         let oldInside = try sessionFile("old-inside", at: .now.addingTimeInterval(-30 * 86_400))
         let recentInside = try sessionFile("recent-inside", at: .now.addingTimeInterval(-3_600))
         await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: oldInside, from: nil, transcript: true, files: store.files)))
-            continuation.yield(.updated(try! PiHistory.index(file: recentInside, from: nil, transcript: false, files: store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: oldInside, agent: .pi, from: nil, transcript: true, files: store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: recentInside, agent: .pi, from: nil, transcript: false, files: store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
             continuation.finish()
         }, agent: .pi)

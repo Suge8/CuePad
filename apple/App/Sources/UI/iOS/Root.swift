@@ -50,7 +50,7 @@ struct IOSRoot: View {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
-            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
+            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project, created: $0.created) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }

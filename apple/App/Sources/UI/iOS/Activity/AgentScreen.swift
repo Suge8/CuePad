@@ -208,8 +208,14 @@ struct AgentScreen: View {
             }
             .padding(.top, 40)
         case .none(inProject: false):
-            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 的终端里开一个 Agent，或在这里开新会话") {
-                EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init() })
+            let hasProjects = workspace.catalog?.projects.isEmpty == false
+            EmptyState(
+                mascot: .empty, title: "还没有 Agent 会话",
+                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话"
+            ) {
+                EmptyStateButton(
+                    title: hasProjects ? "新会话" : "新建项目", systemImage: hasProjects ? "plus" : "folder.badge.plus",
+                    action: { navigation.startNewSession(hasProjects: hasProjects) })
             }
             .padding(.top, 40)
         }
@@ -332,9 +338,12 @@ private struct Header: ViewModifier {
 private struct NewSessionButton: View {
     let project: UUID?
     @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新会话", systemImage: "plus") { navigation.newSession = .init(project: project) }
+        Button("新会话", systemImage: "plus") {
+            navigation.startNewSession(.init(project: project), hasProjects: workspace.catalog?.projects.isEmpty == false)
+        }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }

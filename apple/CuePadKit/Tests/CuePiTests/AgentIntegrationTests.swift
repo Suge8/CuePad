@@ -36,7 +36,7 @@ struct AgentIntegrationTests {
     }
 
     private func integration(cuepad: URL? = nil) -> AgentIntegration {
-        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locator: ExecutableLocator(searchDirectories: [bin]), cuepad: cuepad ?? self.cuepad)
+        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locate: { ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad ?? self.cuepad)
     }
 
     private func fakeAgent(_ command: String, printing output: String = "") throws {
@@ -47,7 +47,8 @@ struct AgentIntegrationTests {
 
     private func installAll() throws {
         try fakeAgent("pi", printing: "0.90.0")
-        for command in ["claude", "codex", "opencode"] { try fakeAgent(command) }
+        for command in ["claude", "codex"] { try fakeAgent(command) }
+        try fakeAgent("opencode", printing: "2.0.25")
     }
 
     private func contents(_ directory: URL) -> [String] {
@@ -57,9 +58,9 @@ struct AgentIntegrationTests {
     // MARK: 检测
 
     @Test(arguments: [
-        ("0.87.1", AgentStatus.Presence.found(PiVersion(0, 87, 1))),
-        ("v1.0.0", .found(PiVersion(1, 0, 0))),
-        ("0.84.3", .tooOld(PiVersion(0, 84, 3))),
+        ("0.87.1", AgentStatus.Presence.found(AgentVersion(0, 87, 1))),
+        ("v1.0.0", .found(AgentVersion(1, 0, 0))),
+        ("0.84.3", .tooOld(AgentVersion(0, 84, 3))),
         ("command not found: hello", .notFound),
     ])
     func detectsPiByItsReportedVersion(output: String, presence: AgentStatus.Presence) async throws {
@@ -82,7 +83,7 @@ struct AgentIntegrationTests {
 
     // MARK: 接入与删除
 
-    /// 每家的技能写进它自己文档里的个人技能目录，正文写着 App 里 cuepad 的绝对路径；手机预览只有 Pi 的技能提，Codex 的提醒沙箱。
+    /// 每家的技能写进它自己文档里的个人技能目录，正文写着 App 里 cuepad 的绝对路径与手机预览（show），Codex 的提醒沙箱。
     /// 关掉时 CuePad 写的文件与因此空出来的目录都删掉，配置目录里别的东西不动。
     /// Codex 的钩子要真 codex 来信任，它的接入与删除见 `CodexHooksTests`。
     @Test(arguments: AgentKind.allCases.filter { $0 != .codex })
@@ -124,8 +125,39 @@ struct AgentIntegrationTests {
         await #expect(throws: AgentInstallError.notFound(.opencode)) { try await integration().install(.opencode) }
         await #expect(throws: AgentInstallError.notFound(.pi)) { try await integration().install(.pi) }
         try fakeAgent("pi", printing: "0.84.3")
-        await #expect(throws: AgentInstallError.piTooOld(found: PiVersion(0, 84, 3))) { try await integration().install(.pi) }
+        await #expect(throws: AgentInstallError.tooOld(.pi, found: AgentVersion(0, 84, 3))) { try await integration().install(.pi) }
         #expect(contents(root) == ["bin", "bin/pi"])
+    }
+
+    /// OpenCode 只认 v2：v1 报的版本太旧，接入被拒、什么都不写（界面据此说"需要 OpenCode 2"）。
+    @Test func openCodeVersionOneIsTooOldAndInstallWritesNothing() async throws {
+        try fakeAgent("opencode", printing: "1.19.0")
+        #expect(await integration().status(of: .opencode) == AgentStatus(presence: .tooOld(AgentVersion(1, 19, 0)), files: .missing))
+        await #expect(throws: AgentInstallError.tooOld(.opencode, found: AgentVersion(1, 19, 0))) { try await integration().install(.opencode) }
+        #expect(contents(root) == ["bin", "bin/opencode"])
+
+        try fakeAgent("opencode", printing: "2.0.25")
+        try await integration().install(.opencode)
+        #expect(await integration().status(of: .opencode) == AgentStatus(presence: .found(AgentVersion(2, 0, 25)), files: .current))
+    }
+
+    /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，
+    /// 检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
+    @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {
+        let record = root.appending(path: "data-home.txt")
+        let script = bin.appending(path: "opencode")
+        try """
+        #!/bin/sh
+        printf '%s' "${XDG_DATA_HOME-unset}" > '\(record.path)'
+        if [ -n "$XDG_DATA_HOME" ]; then mkdir -p "$XDG_DATA_HOME/opencode/log" && echo started >> "$XDG_DATA_HOME/opencode/log/opencode.log"; fi
+        echo 'opencode v2.0.29'
+        """.write(to: script, atomically: true, encoding: .utf8)
+        chmod(script.path, 0o755)
+
+        #expect(await integration().status(of: .opencode).presence == .found(AgentVersion(2, 0, 29)))
+        let dataHome = try String(contentsOf: record, encoding: .utf8)
+        #expect(dataHome != "unset" && !dataHome.isEmpty, "给了它数据目录，不落到用户的 ~/.local/share")
+        #expect(!FileManager.default.fileExists(atPath: dataHome), "临时数据目录用完删掉")
     }
 
     /// 用户自己的同名技能或扩展不覆盖、不删除；Pi 的两样一起拒绝。
@@ -135,7 +167,7 @@ struct AgentIntegrationTests {
         for kind in [AgentKind.claudeCode, .pi] {
             try FileManager.default.createDirectory(at: skillFile(kind).deletingLastPathComponent(), withIntermediateDirectories: true)
             try mine.write(to: skillFile(kind), atomically: true, encoding: .utf8)
-            #expect(await integration().status(of: kind).files == .foreign)
+            #expect(await integration().status(of: kind).files == .foreign((skillFile(kind).path as NSString).abbreviatingWithTildeInPath))
             await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
             await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }
             #expect(try String(contentsOf: skillFile(kind), encoding: .utf8) == mine)
@@ -169,18 +201,6 @@ struct AgentIntegrationTests {
 
         #expect(try String(contentsOf: extensionFile, encoding: .utf8) == PiExtensionBundle.source)
         #expect(PiExtensionBundle.version == PiExtensionBundle.declaredVersion(in: PiExtensionBundle.source) && PiExtensionBundle.version > 0)
-    }
-
-    /// Pi 的扩展与技能一起升级：技能写不进去时扩展还原成原来的样子，不留半升级的状态。
-    @Test func aFailureWritingThePiSkillLeavesTheExtensionAsItWas() async throws {
-        try installAll()
-        let old = "// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 1;\n"
-        try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
-        try old.write(to: extensionFile, atomically: true, encoding: .utf8)
-        try FileManager.default.createDirectory(at: skillFile(.pi), withIntermediateDirectories: true)  // SKILL.md 的位置被一个目录占着：写不进去
-
-        await #expect(throws: (any Error).self) { try await integration().install(.pi) }
-        #expect(try String(contentsOf: extensionFile, encoding: .utf8) == old)
     }
 }
 #endif

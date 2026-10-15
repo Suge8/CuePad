@@ -78,7 +78,7 @@ final class ClaudeBrain: CueBrain {
         return { await process?.stop() }
     }
 
-    private func received(_ event: ClaudeJSON) {
+    private func received(_ event: JSONValue) {
         switch event["type"]?.string {
         case "control_request":
             // Claude Code 问的事（批准工具……）一律不答应，回错误免得这一轮卡住
@@ -104,10 +104,7 @@ final class ClaudeBrain: CueBrain {
             // 工具的结果回来了
             guard turn != nil, event["parent_tool_use_id"] == nil || event["parent_tool_use_id"] == .null else { return }
             for block in event["message"]?["content"]?.array ?? [] where block["type"]?.string == "tool_result" {
-                let content = block["content"]
-                let result = content?.string ?? (content?.array ?? []).compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }
-                    .joined(separator: "\n")
-                session.emit(.toolDone(id: block["tool_use_id"]?.string ?? "", result: result, failed: block["is_error"]?.bool == true))
+                session.emit(.toolDone(id: block["tool_use_id"]?.string ?? "", result: brainText(block["content"]), failed: block["is_error"]?.bool == true))
             }
         case "result":
             finish(event)
@@ -116,7 +113,7 @@ final class ClaudeBrain: CueBrain {
         }
     }
 
-    private func finish(_ result: ClaudeJSON) {
+    private func finish(_ result: JSONValue) {
         let finished = turn ?? Turn()
         turn = nil
         let windows = (result["modelUsage"]?.object ?? [:]).values.compactMap { $0["contextWindow"]?.number }

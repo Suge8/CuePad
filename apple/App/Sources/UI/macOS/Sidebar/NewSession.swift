@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// Agent 分组标题旁与 Agent 整页右上的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
-/// 开好后关掉表单、在内容区打开新会话的整页。
+/// 开好后关掉表单、在内容区打开新会话的整页。还没有项目时从这里新建的项目，建好回到这张表单（它默认选最近活跃的，就是新建的那个）。
 struct NewSessionButton: View {
     @Binding var showing: Bool
     @Environment(Workspace.self) private var workspace
@@ -13,7 +13,10 @@ struct NewSessionButton: View {
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .help("开一个新的 Agent 会话")
             .panel(isPresented: $showing) {
-                NewSessionForm { id in
+                NewSessionForm(createProject: {
+                    showing = false
+                    workspace.projectForm = .init(created: { _ in showing = true })
+                }) { id in
                     showing = false
                     workspace.show(.session(id))
                 }
@@ -23,7 +26,9 @@ struct NewSessionButton: View {
 
 /// 新会话开在哪、用哪个 Agent：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
 /// Agent 只列本机接入了的（`AppServices.launchableAgents`），默认上次用的；只接入了一个时不出选择。
+/// 还没有项目时说一句为什么，主按钮是"新建项目"（关掉表单、打开新建项目）。
 struct NewSessionForm: View {
+    var createProject: () -> Void = {}
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -83,8 +88,10 @@ struct NewSessionForm: View {
             HStack(spacing: 8) {
                 switch stage {
                 case .idle:
-                    Text(place.map { $0.binding == nil ? "「\($0.project.name)」还没有文件夹" : "在后台开，不占终端" } ?? "在后台开，不占终端")
-                        .font(Typography.meta).foregroundStyle(palette.ink3)
+                    if let place {
+                        Text(place.binding == nil ? "「\(place.project.name)」还没有文件夹" : "在后台开，不占终端")
+                            .font(Typography.meta).foregroundStyle(palette.ink3)
+                    }
                 case .opening:
                     Spinner(.small)
                     Text("正在开…").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -95,7 +102,11 @@ struct NewSessionForm: View {
                     Text(reason).font(Typography.meta).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                if let place, place.binding == nil {
+                if places.isEmpty {
+                    Button("新建项目", action: createProject)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                } else if let place, place.binding == nil {
                     // 选好文件夹后项目目录刷新，这一处就换成"开始"
                     Button("选文件夹…") { workspace.chooseFolder(for: place.project) }
                         .buttonStyle(.borderedProminent)
