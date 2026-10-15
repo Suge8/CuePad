@@ -52,16 +52,22 @@ struct ComposerField: NSViewRepresentable {
         guard let view = scroll.documentView as? GrowingTextView else { return }
         // 组字期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
         // 外部写进来的光标放到末尾、排好后让末尾露出来（同 iOS 那份）
-        if view.string != text, !view.hasMarkedText() {
+        if text != context.coordinator.sent, !view.hasMarkedText() {
+            context.coordinator.sent = text
             view.string = text
+            view.textChanged()
             view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             view.revealsEnd = true
             scroll.needsLayout = true
         }
         view.placeholder = prompt
         view.placeholderColor = NSColor(palette.placeholder)
-        view.textColor = NSColor(ink)
-        view.insertionPointColor = NSColor(ink)
+        // 只在颜色真的变了时设（同 iOS 那份：设一次就给整篇文字重铺颜色）
+        if ink != context.coordinator.ink {
+            context.coordinator.ink = ink
+            view.textColor = NSColor(ink)
+            view.insertionPointColor = NSColor(ink)
+        }
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
         view.needsDisplay = true
@@ -69,17 +75,22 @@ struct ComposerField: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: ComposerScrollView, context: Context) -> CGSize? {
         guard let width = proposal.width, let view = scroll.documentView as? GrowingTextView else { return nil }
-        return CGSize(width: width, height: min(view.contentHeight(width: width), view.maxHeight))
+        return CGSize(width: width, height: view.fittingHeight(width: width))
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerField
+        /// 上次交给 `text` 的那一串（同 iOS 那份：更新时拿它判断是不是外部改写）。
+        var sent = ""
+        var ink: Color?
         init(_ parent: ComposerField) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? NSTextView else { return }
+            let text = String(native: view.textStorage?.string as NSString? ?? "")
+            sent = text
             // 高度跟着文字一起走动画：换行、删行每次都差一整行
-            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = view.string }
+            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = text }
         }
 
         func textView(_ view: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -134,15 +145,17 @@ final class GrowingTextView: NSTextView {
     /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
     private static var maxHeights: [Int: CGFloat] = [:]
 
-    /// 按给定宽度排下现有文字要多高；空着时是一行的高度。
-    /// SwiftUI 一次排版会问好几遍同一个宽度，字和宽度都没变就不再另起一套排版量一遍。
-    func contentHeight(width: CGFloat) -> CGFloat {
-        if let last = measured, last.string == string, last.width == width { return last.height }
-        let height = Self.height(of: string.isEmpty ? "国" : string, width: width)
-        measured = (string, width, height)
-        return height
+    /// 按给定宽度排下现有文字要多高，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）；空着时是一行的高度。
+    func fittingHeight(width: CGFloat) -> CGFloat {
+        let text = textStorage?.string as NSString? ?? ""
+        return heights.height(of: text.length == 0 ? "国" : text, width: width, em: Self.bodyFont.pointSize, limit: maxHeight) {
+            Self.height(of: $0, width: width)
+        }
     }
-    private var measured: (string: String, width: CGFloat, height: CGFloat)?
+    private var heights = ComposerHeight()
+
+    /// 文字变了（打字、外部写入）。
+    func textChanged() { heights.textChanged() }
 
     private static func height(of string: String, width: CGFloat) -> CGFloat {
         let storage = NSTextStorage(string: string, attributes: [.font: bodyFont])
@@ -187,6 +200,7 @@ final class GrowingTextView: NSTextView {
 
     override func didChangeText() {
         super.didChangeText()
+        textChanged()
         needsDisplay = true
     }
 }

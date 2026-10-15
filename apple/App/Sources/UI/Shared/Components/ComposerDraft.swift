@@ -22,9 +22,13 @@ struct ComposerDraft {
 
     /// 一行的草稿预览（会话行"草稿 …"、看历史时收起的回复框）：文字的第一行，没有文字时写带了什么；空的为 nil。
     var preview: String? {
-        if let line = text.split(whereSeparator: \.isNewline).lazy
-            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
-            return line
+        // 逐行往下找到第一行有字的就停：草稿几百行时不把整串切成行（会话行与回复框每次重算都要问）
+        var rest = text[...]
+        while !rest.isEmpty {
+            let end = rest.firstIndex(where: \.isNewline) ?? rest.endIndex
+            let line = rest[..<end].trimmingCharacters(in: .whitespaces)
+            if !line.isEmpty { return line }
+            rest = end == rest.endIndex ? "" : rest[rest.index(after: end)...]
         }
         let parts = [
             notes.isEmpty ? nil : "\(notes.count) 条批注",

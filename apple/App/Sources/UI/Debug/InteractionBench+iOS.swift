@@ -1,4 +1,5 @@
 #if os(iOS) && DEBUG
+import CueEditor
 import CueStore
 import Darwin
 import QuartzCore
@@ -9,7 +10,9 @@ import UIKit.UIGestureRecognizerSubclass
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、底部栏换标签的 `select`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
-/// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。
+/// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
+/// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说、随手记）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
+///   走键盘输入同一条路（`paste`、`UITextInput.insertText`），每个字一项；编辑页是正文已有那一大段时打字。`-CuePadPasteFile <路径>` 换成那个文件的内容。
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
 /// - 合计、最重一圈：动作后 800ms 里主线程 CPU 的总数与最重的一圈；指令数（百万条）是进程在这 800ms 里执行的，不随机器忙闲变。
 /// - 掉帧：display link 相邻间隔超过 1.5 帧的次数。模拟器的合成与 GPU 和真机不同，只作参考。
@@ -40,8 +43,11 @@ enum IOSInteractionBench {
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
         guard let idea = try? await store.cards(in: nil).first else { fail("演示库里没有未分类的灵感") }
+        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         /// `press`：请测量脚本在这一点真按（长按或轻点由脚本按名字定），从手指按下起量；不给时从 `action` 发出起量。
         func step(_ name: String, window: Duration = .milliseconds(800), press: CGPoint? = nil, _ action: () -> Void = {}) async {
+            guard wants(name) else { return }
             let pressed: (() async -> Void)? = press.map { point in { await Self.touch(write, name, at: point) } }
             var row = await measure(window: window, pressed: pressed, action)
             row["name"] = name
@@ -92,9 +98,10 @@ enum IOSInteractionBench {
             await step("挂到任务面板") { workspace.attaching = idea }
             await step("关挂到任务面板") { workspace.attaching = nil }
         }
+        await typeLong(workspace, navigation, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
         // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起
-        for _ in 0..<2 {
+        for _ in 0..<2 where wants("长按菜单") {
             guard let card = Self.longPressTarget(in: Self.window) else { fail("书架上找不到有长按菜单的项目卡") }
             await step("长按菜单", window: .milliseconds(1500), press: card)
             // 收起菜单不量（模拟器里点空白处、按 Esc 都收不起长按出来的菜单）：在进程里让菜单交互收起
@@ -103,6 +110,80 @@ enum IOSInteractionBench {
         }
         write("DONE")
         exit(0)
+    }
+
+    /// 粘贴进来的一大段：仿诊断 JSON（嵌套的调用栈帧，约 850 行、66 KB），或 `-CuePadPasteFile <路径>` 那个文件。
+    private static var pasted: String {
+        if let path = UserDefaults.standard.string(forKey: "CuePadPasteFile"), let text = try? String(contentsOfFile: path, encoding: .utf8) { return text }
+        func frame(_ depth: Int) -> [String: Any] {
+            var node: [String: Any] = [
+                "binaryUUID": "2B62913E-C889-35F4-98D9-FAC049B8284A", "offsetIntoBinaryTextSegment": 46132, "sampleCount": 1, "binaryName": "CuePad",
+                "address": 4_378_998_836,
+            ]
+            if depth > 0 { node["subFrames"] = [frame(depth - 1)] }
+            return node
+        }
+        let stacks = (0..<4).map { _ in ["threadAttributed": false, "callStackRootFrames": [frame(22)]] as [String: Any] }
+        let tree = ["crashDiagnostics": [["callStackTree": ["callStacks": stacks]]]]
+        return String(decoding: try! JSONSerialization.data(withJSONObject: tree, options: [.prettyPrinted, .sortedKeys]), as: UTF8.self)
+    }
+
+    /// 长文打字：编辑页的正文先写成 `pasted`；输入框（空着）拿到键盘后经剪贴板粘贴进 `pasted`（量这一下：长文粘贴），
+    /// 再一个字一个字地敲（每个字一项）。
+    private static func typeLong(
+        _ workspace: Workspace, _ navigation: Navigation, session: UUID, card: UUID, wants: (String) -> Bool, fail: (String) -> Never,
+        step: (String, () -> Void) async -> Void
+    ) async {
+        let text = pasted
+        func type<View: UITextView>(_ field: String, into _: View.Type, pastes: Bool = true) async {
+            try? await Task.sleep(for: .seconds(2))
+            guard let view = Self.first(View.self, in: Self.window) else { fail("\(field)：找不到输入框") }
+            view.becomeFirstResponder()
+            try? await Task.sleep(for: .seconds(1.5))
+            if pastes {
+                UIPasteboard.general.string = text
+                await step("长文粘贴·" + field) { view.paste(nil) }
+            }
+            view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+            for _ in 0..<5 { await step("长文打字·" + field) { view.insertText("a") } }
+            view.resignFirstResponder()
+            try? await Task.sleep(for: .seconds(1))
+        }
+        if wants("长文打字·编辑页") {
+            // 从它所在的未分类页推入（同点开它的那条路）：直接从书架推入时 UIKit 的交互转场断言崩溃
+            try? await workspace.services.store.updateCard(card) { $0.body = text }
+            navigation.projectsPath = [.unfiled]
+            try? await Task.sleep(for: .seconds(1.5))
+            navigation.projectsPath.append(.card(card))
+            await type("编辑页", into: CueTextView.self, pastes: false)
+            navigation.projectsPath.removeAll()
+        }
+        if wants("长文打字·回复框") || wants("长文粘贴·回复框") {
+            DebugScene.selectTab(.agent)
+            navigation.openSession(session, store: workspace.services.store)
+            await type("回复框", into: GrowingTextView.self)
+            workspace.services.settings.setReplyDraft(ComposerDraft(), for: session)
+            navigation.agentPath.removeAll()
+        }
+        if wants("长文打字·对 Cue 说") || wants("长文粘贴·对 Cue 说") {
+            DebugScene.selectTab(.cue)
+            await type("对 Cue 说", into: GrowingTextView.self)
+            workspace.cue.draft = ComposerDraft()
+        }
+        if wants("长文打字·随手记") || wants("长文粘贴·随手记") {
+            DebugScene.selectTab(.projects)
+            navigation.startCapture()
+            await type("随手记", into: GrowingTextView.self)
+            navigation.capture = CaptureState()
+            navigation.endCapture()
+        }
+    }
+
+    private static func first<View: UIView>(_ type: View.Type, in view: UIView?) -> View? {
+        guard let view, !view.isHidden else { return nil }
+        if let found = view as? View, found.window != nil { return found }
+        for sub in view.subviews { if let found = first(type, in: sub) { return found } }
+        return nil
     }
 
     /// 请测量脚本在 `point` 真按一下（长按或轻点由脚本按名字定），等手指按下那一刻再返回：量从按下起算。
