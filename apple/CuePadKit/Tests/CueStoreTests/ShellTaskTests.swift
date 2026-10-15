@@ -77,4 +77,17 @@ import Testing
     let revived = try await self.shell(shell.id)
     #expect(revived.status == .inProgress && revived.archivedAt == nil)
   }
+
+  @Test func 跟着收尾的外壳_你取回并重新打开_就留着() async throws {
+    let shell = try await openShell()
+    try await recorder.update(sessionID: "s1", state: .settled)
+    try await recorder.end(sessionID: "s1")
+    #expect(try await self.shell(shell.id).archivedAt != nil)
+
+    try await store.unarchive(shell.id)
+    try await store.setStatus(shell.id, .inProgress)
+    try await store.ownSessions(host: host)  // 重开 App：启动时再对一遍账
+    let reopened = try await self.shell(shell.id)
+    #expect(reopened.status == .inProgress && reopened.archivedAt == nil)
+  }
 }
