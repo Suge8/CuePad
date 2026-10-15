@@ -294,14 +294,14 @@ struct PiReplyBar: View {
         services.settings.setReplyNotes(draft.notes.filter { $0.id != note.id }, for: session.id)
     }
 
-    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说（`MacDelivery.button`）。
-    /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
+    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行），不分马上说还是等它做完再说：是不是命令只在发出这一刻按草稿与会话报的清单认
+    /// （`commandLine`），不看按钮上次排版时带来的方式。`held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
         guard canSend else { return }
         let accepts = accepts, files = services.store.files
         let card = draft.attachments.first?.card
-        let written = if mode == .command, let line = commandLine {
+        let written = if let line = commandLine {
             // 命令不是说的话：批注留着，跟下一句发
             workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
         } else {

@@ -854,6 +854,21 @@ struct MacSyncTests {
         #expect(back?.recap == PiRecap(lastPrompt: "修登录", lastReply: "改好了"))
     }
 
+    /// 后台托管的会话进程没了（App 退出、闲置退出）记录仍歇着、发话会唤醒它：它报过的斜杠命令留着，
+    /// 回复框里打完整的 "/default" 照样是命令（后台唤醒后执行），不当普通的话发给模型。会话做完的也一样。
+    @Test(arguments: [true, false])
+    func 进程没了的会话仍认它报过的斜杠命令(hosted: Bool) async throws {
+        var live = session("s1", state: .settled, spoke: true)
+        live.hosted = hosted
+        live.commands = [PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
+        try await services.consumePiChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
+        if !hosted { try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
+
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.state == .known(hosted ? .settled : .ended))
+        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands) == "/default")
+    }
+
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true
