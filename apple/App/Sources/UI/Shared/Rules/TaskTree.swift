@@ -194,10 +194,7 @@ nonisolated private struct Links: Equatable, Sendable {
     private var children: [UUID: [UUID]] = [:]
 
     init(_ tasks: [Card]) {
-        let ids = Set(tasks.map(\.id))
-        let listed = Dictionary(
-            tasks.compactMap { task in task.parentID.flatMap { ids.contains($0) ? (task.id, $0) : nil } }, uniquingKeysWith: { first, _ in first })
-        parents = CardHierarchy.breakingCycles(listed)
+        parents = CardHierarchy.parents(tasks.map { ($0.id, $0.parentID) })
         for task in tasks {
             if let parent = parents[task.id] { children[parent, default: []].append(task.id) } else { roots.append(task.id) }
         }

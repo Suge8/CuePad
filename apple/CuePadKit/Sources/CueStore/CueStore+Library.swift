@@ -292,13 +292,8 @@ extension CueStore {
   /// 没做完的任务下已完成的步骤算在上级的进度里，不单独归档。
   public func archiveCompletedTasks() throws -> Int {
     try write {
-      let done = try db.query(
-        """
-        SELECT t.id FROM cards t
-        WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL
-          AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
-        """
-      ) { $0.uuid(0) }
+      let parents = try untangledParents(where: Self.listedTask)
+      let done = try db.query("SELECT id FROM cards WHERE \(Self.listedTask) AND completedAt IS NOT NULL") { $0.uuid(0) }.filter { parents[$0] == nil }
       try setArchived(done, at: Date.stamp)
       return done.count
     }
