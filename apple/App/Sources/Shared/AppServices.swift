@@ -324,7 +324,7 @@ final class AppServices {
         terminal = mac.terminal
         hooks = mac.hooks
         runtimes = mac.runtimes(store)
-        agents = AgentIntegrations(mac.agents)
+        agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi)

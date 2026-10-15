@@ -36,6 +36,12 @@ final class AgentIntegrations {
         statuses[kind] = await integration.status(of: kind)
     }
 
+    /// 这家的可执行文件：检测时挑中的那个（`AgentStatus.executable`），开会话、起大脑、问模型都用它；还没检测过先检测。
+    func executable(_ kind: AgentKind) async -> URL? {
+        if statuses[kind] == nil { await detect(kind) }
+        return statuses[kind]?.executable
+    }
+
     /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态，还没检测过的先检测。能开新会话的几家各起一个进程问，慢；
     /// 只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
     func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
@@ -65,7 +71,8 @@ final class AgentIntegrations {
 
     /// 删掉 CuePad 写给它的全部文件。
     func uninstall(_ kind: AgentKind) async throws {
-        try await change(kind) { try await $0.uninstall(kind) }
+        let executable = statuses[kind]?.executable
+        try await change(kind) { try await $0.uninstall(kind, executable: executable) }
         await uninstalled(kind)
     }
 

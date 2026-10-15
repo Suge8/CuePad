@@ -224,7 +224,7 @@ final class TestApp {
             pi: pi,
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
-            agents: agentIntegration,
+            agents: AgentIntegrations(agentIntegration),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,

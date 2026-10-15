@@ -19,6 +19,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private let bridge: PiBridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
+    /// 这家的可执行文件（检测时挑中的那个，`AgentStatus.executable`）；没有为 nil
+    private let claude: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let gate: PresenceGate
     private let store: CueStore
@@ -28,9 +30,10 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, store: CueStore,
+        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, store: CueStore, claude: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence()
     ) {
+        self.claude = claude
         self.bridge = bridge
         self.paths = paths
         self.hooks = hooks
@@ -102,8 +105,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     /// `claude` 与给它的环境：`paths` 里指定的（隔离的配置目录等）盖在本进程的环境上。不自己补 `CLAUDE_CONFIG_DIR`：
     /// 设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
     private func executable() async throws -> (url: URL, environment: [String: String]) {
+        guard let claude = await claude() else { throw AgentRuntimeError.notInstalled(.claudeCode) }
         let locator = await locate()
-        guard let claude = locator.executable(.claudeCode) else { throw AgentRuntimeError.notInstalled(.claudeCode) }
         return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 

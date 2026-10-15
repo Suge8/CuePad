@@ -61,10 +61,13 @@ public struct AgentStatus: Sendable, Equatable {
 
     public var presence: Presence
     public var files: Files
+    /// 检测时挑中的可执行文件（`found` 时；只有配置目录、比如只装了桌面版时为 nil）：开会话、起大脑、问模型都用这一个，不另找。
+    public var executable: URL?
 
-    public init(presence: Presence, files: Files) {
+    public init(presence: Presence, files: Files, executable: URL? = nil) {
         self.presence = presence
         self.files = files
+        self.executable = executable
     }
 
     public var isAvailable: Bool { if case .found = presence { true } else { false } }
@@ -126,10 +129,12 @@ public struct AgentIntegration: Sendable {
     }
 
     /// Claude Code、Codex 的钩子配置（其余没有钩子）。
-    func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
+    /// `codex` 是写、删信任时起的 `codex`（检测时挑中的那个）；只看状态时不用。
+    func hooks(_ kind: AgentKind, codex: URL? = nil) -> (any AgentHookConfig)? {
         switch kind {
         case .claudeCode: HookFile.claudeCode(home: home(of: kind), skillDirectory: skillDirectory(of: kind))
-        case .codex: CodexHooks(home: home(of: kind), skillDirectory: skillDirectory(of: kind), locate: locate, environment: paths.environment)
+        case .codex:
+            CodexHooks(home: home(of: kind), skillDirectory: skillDirectory(of: kind), codex: codex, locate: locate, environment: paths.environment)
         case .pi, .opencode: nil
         }
     }
@@ -150,13 +155,15 @@ public struct AgentIntegration: Sendable {
     }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
-        AgentStatus(presence: await detect(kind).presence, files: files(of: kind))
+        let found = await detect(kind)
+        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable)
     }
 
     /// 写入（新装或升级）。隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
     @concurrent public func install(_ kind: AgentKind) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
-        switch await detect(kind).presence {
+        let found = await detect(kind)
+        switch found.presence {
         case .notFound: throw AgentInstallError.notFound(kind)
         case .tooOld(let version): throw AgentInstallError.tooOld(kind, found: version)
         case .found: break
@@ -168,15 +175,16 @@ public struct AgentIntegration: Sendable {
         }
         try FileManager.default.createDirectory(at: skillDirectory(of: kind), withIntermediateDirectories: true)
         try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skillFile(kind), options: .atomic)
-        try await hooks(kind)?.install(command: hookCommand(kind))
+        try await hooks(kind, codex: found.executable)?.install(command: hookCommand(kind))
     }
 
     /// 删掉 CuePad 写给这个 Agent 的全部文件，以及因此空出来的目录（`skills/cuepad`，空了的 `skills`、`extensions`）。
-    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。
-    @concurrent public func uninstall(_ kind: AgentKind) async throws {
+    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。`executable` 是检测时挑中的那个（`AgentStatus.executable`）：
+    /// Codex 删信任要起它，其余不用。
+    @concurrent public func uninstall(_ kind: AgentKind, executable: URL? = nil) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
         if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        try await hooks(kind)?.uninstall()
+        try await hooks(kind, codex: executable)?.uninstall()
         var files = [skillFile(kind)]
         if kind == .pi { files.append(extensionFile) }
         for file in files where FileManager.default.fileExists(atPath: file.path) {
@@ -192,13 +200,6 @@ public struct AgentIntegration: Sendable {
     /// 由检测出的状态（`status(of:)`）得出这台 Mac 上各家能不能用：能开新会话的几家问模型，其余给出原因（`AgentProbe`）。
     @concurrent public func probe(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
         await AgentProbe(paths: paths, locator: await locate()).run(statuses)
-    }
-
-    /// 这台 Mac 上能用的 `pi`（版本够新）；后台托管会话时启动它。
-    @concurrent public func locatePi() async -> URL? {
-        let found = await detect(.pi)
-        guard case .found = found.presence else { return nil }
-        return found.executable
     }
 
     private func files(of kind: AgentKind) -> AgentStatus.Files {
@@ -235,6 +236,7 @@ public struct AgentIntegration: Sendable {
 
     /// 问每家的 `--version`（设置里写出版本）：有版本要求的（Pi、OpenCode）要报得出够新的版本，OpenCode 报的版本太旧是 v1；
     /// 报不出版本的照常算在，只是没有版本。没有可执行文件时，除了 Pi，有配置目录（用过它，含各家的桌面版）也算在。
+    /// 挑中的可执行文件只在算在时给出（太旧的不给）。
     private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
         let locator = await locate()
         let used = FileManager.default.fileExists(atPath: home(of: kind).path)
@@ -243,7 +245,7 @@ public struct AgentIntegration: Sendable {
             guard let output = await Self.capture(executable, ["--version"], locator: locator),
                   let version = AgentVersion(parsing: output) else { continue }
             let tooOld = kind.minimumVersion.map { version < $0 } ?? false
-            return (tooOld ? .tooOld(version) : .found(version), executable)
+            return tooOld ? (.tooOld(version), nil) : (.found(version), executable)
         }
         if kind.minimumVersion == nil, let executable = candidates.first { return (.found(nil), executable) }
         return (kind != .pi && used ? .found(nil) : .notFound, nil)

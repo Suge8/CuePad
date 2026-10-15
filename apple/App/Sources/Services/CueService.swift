@@ -24,12 +24,11 @@ nonisolated struct CueLaunch: Equatable, Sendable {
     /// 开会话能用的 Agent 与模型（`CuePrompt.system` 的 `agents`）
     var agents: [MacAgent]
 
-    /// 这台 Mac 上起 `runtime` 的大脑：按 `ExecutableLocator.system` 找可执行文件，不问登录（登录不了大脑起不来或一轮出错，由管理器报出）；
-    /// 能用的 Agent 与模型是这台 Mac 写下的那条（`CueStore.macAgents`）。没装为 nil。
-    @concurrent static func local(_ runtime: AgentKind, store: CueStore, host: String) async throws -> CueLaunch? {
-        let locator = await ExecutableLocator.system
-        guard let executable = locator.executable(runtime) else { return nil }
-        return CueLaunch(executable: executable, path: locator.path, agents: try await store.macAgents(on: host).agents)
+    /// 这台 Mac 上起大脑：`executable` 是这家检测时挑中的可执行文件（`AgentStatus.executable`，没装为 nil 就起不了），不问登录
+    /// （登录不了大脑起不来或一轮出错，由管理器报出）；能用的 Agent 与模型是这台 Mac 写下的那条（`CueStore.macAgents`）。
+    @concurrent static func local(executable: URL?, store: CueStore, host: String) async throws -> CueLaunch? {
+        guard let executable else { return nil }
+        return CueLaunch(executable: executable, path: await ExecutableLocator.system.path, agents: try await store.macAgents(on: host).agents)
     }
 }
 

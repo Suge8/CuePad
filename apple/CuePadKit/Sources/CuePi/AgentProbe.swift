@@ -16,7 +16,7 @@ import Foundation
 ///   其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。清单去掉 `default` 那项
 ///   （它解析到的是推荐的模型，不一定是配置的），默认落到解析出同一个模型的第一项（`opus` 这样的别名排在完整 id 前面），对不上时只有 id。
 /// - OpenCode：没有模型清单，能开新会话就算能用。
-/// 可执行文件取搜索目录里的第一个（与开会话、起大脑同一个），不再为每家问一遍版本。
+/// 起的是检测时挑中的那个可执行文件（`AgentStatus.executable`，与开会话、起大脑同一个）。
 struct AgentProbe {
     let paths: AgentPaths
     let locator: ExecutableLocator
@@ -46,7 +46,7 @@ struct AgentProbe {
     private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
         if let reason = Self.reason(kind, status) { return .unusable(reason) }
         if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
-        guard let executable = locator.executable(kind) else { return .unusable("没找到它的命令行程序") }
+        guard let executable = status.executable else { return .unusable("没找到它的命令行程序") }
         do {
             let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
                 switch kind {

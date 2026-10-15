@@ -74,7 +74,7 @@ struct AgentIntegrationTests {
         try fakeAgent("claude")
         let before = contents(root)
 
-        #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
+        #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .missing, executable: bin.appending(path: "claude")))
         #expect(await integration().status(of: .codex) == AgentStatus(presence: .found(nil), files: .missing))
         #expect(await integration().status(of: .opencode) == AgentStatus(presence: .notFound, files: .missing))
         #expect(await integration().status(of: .pi) == AgentStatus(presence: .notFound, files: .missing))
@@ -138,7 +138,9 @@ struct AgentIntegrationTests {
 
         try fakeAgent("opencode", printing: "2.0.25")
         try await integration().install(.opencode)
-        #expect(await integration().status(of: .opencode) == AgentStatus(presence: .found(AgentVersion(2, 0, 25)), files: .current))
+        #expect(
+            await integration().status(of: .opencode)
+                == AgentStatus(presence: .found(AgentVersion(2, 0, 25)), files: .current, executable: bin.appending(path: "opencode")))
     }
 
     /// 问版本不在 Agent 自己的数据目录里留东西：OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，

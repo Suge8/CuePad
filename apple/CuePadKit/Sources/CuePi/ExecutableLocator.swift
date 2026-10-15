@@ -14,7 +14,8 @@ extension AgentKind {
     }
 }
 
-/// 在哪里找 Agent 的可执行文件、给 CuePad 起的子进程什么环境：唯一的一处（设置页的检测、Cue、各家接入都经这里）。
+/// 在哪里找 Agent 的可执行文件、给 CuePad 起的子进程什么环境：唯一的一处。挑哪一个只由检测定（`AgentIntegration.status(of:)`，
+/// 结果是 `AgentStatus.executable`），各家的接入、Cue 的大脑、问模型都用检测挑中的那个，不在这里另挑。
 /// GUI 应用的 PATH 很短，所以除了 PATH 还查用户登录 shell 的 PATH 与各家安装脚本的默认位置。
 public struct ExecutableLocator: Sendable, Equatable {
     public var searchDirectories: [URL]
@@ -46,9 +47,6 @@ public struct ExecutableLocator: Sendable, Equatable {
                       home.appending(path: ".bun/bin"), home.appending(path: ".npm-global/bin"), home.appending(path: ".opencode/bin")]
         self.init(searchDirectories: path + common)
     }
-
-    /// 这家 Agent 的可执行文件（搜索目录里第一个）；没装为 nil。
-    public func executable(_ kind: AgentKind) -> URL? { candidates(kind.command).first }
 
     /// 搜索目录里所有叫 `command` 的可执行文件，按目录先后。
     public func candidates(_ command: String) -> [URL] {
