@@ -5,7 +5,7 @@ import Foundation
 ///
 /// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState、macPresence。约束：
+/// cueMessages、cueLines、cueProfile、cueState、macPresence、macAgents。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -208,6 +208,8 @@ enum Schema {
     },
     // 47：Cue 一轮的经过成了对话里的一行（排在这一轮开始的位置）；此刻的状态只记在跑的那一行，不再另存一份清单
     Upgrade(stringLiteral: cueRound),
+    // 48：每台 Mac 上能用的 Agent 与各家的模型（它自己写，各端读）：开新会话与 Cue 可选的 Agent、模型与默认模型的唯一来源
+    Upgrade(stringLiteral: macAgents),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -271,6 +273,8 @@ enum Schema {
     """
 
   private static let macPresence = "CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
+
+  private static let macAgents = "CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
 
@@ -436,6 +440,7 @@ enum Schema {
     \(cueRound)
     \(writeSeq)
     \(macPresence)
+    \(macAgents)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

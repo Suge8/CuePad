@@ -252,6 +252,15 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE macAgents (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        agents        ENCRYPTED STRING,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,
