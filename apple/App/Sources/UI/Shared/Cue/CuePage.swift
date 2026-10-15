@@ -7,7 +7,8 @@ import CuePi
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
 /// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
-/// 每一轮的经过在那一轮写下的那一行上方（`RoundProcess`，同会话页），连着的动态折成一行灰字（`CueNotes`），
+/// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行），这一轮说的话与结果按先后在它之后；
+/// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行灰字（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
@@ -115,8 +116,9 @@ struct CuePage: View {
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
+                let ending = ending
                 let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou) }
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou, ending: ending) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -125,8 +127,19 @@ struct CuePage: View {
         }
     }
 
+    /// 一轮的经过那一行的结尾：在跑的那一行（Cue 此刻的状态记着是哪一行）是此刻在做的，其余的不记用时。
+    private var ending: (CueMessage) -> RoundProcess.Ending {
+        let presence = cue.presence, live = cue.digest.state?.round
+        return { message in
+            guard message.id == live, let shown = presence.shown, let progress = presence.progress else { return .took(nil) }
+            return .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.symbol(.other) : nil)
+        }
+    }
+
     /// `lastYou`：你最后一句，只在它下面写"已送达"。
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?) -> some View {
+    @ViewBuilder private func row(
+        _ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?, ending: @escaping (CueMessage) -> RoundProcess.Ending
+    ) -> some View {
         switch row {
         case .you(let message):
             SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
@@ -137,7 +150,9 @@ struct CuePage: View {
                 if let task, let ref = tasks[task] { CueTaskLine(ref: ref) }
             }
         case .notes(let notes):
-            CueNotes(notes: notes)
+            CueNotes(notes: notes, ending: ending)
+        case .process(let message):
+            RoundProcess(tools: message.tools, ending: ending(message))
         case .renewed(let handoff):
             CueRenewal(handoff: handoff, name: cue.name)
         }
@@ -195,8 +210,8 @@ private struct CueRenewal: View {
     }
 }
 
-/// Cue 页对话的末尾：它在做事时是这一轮的经过（`RoundProcess`，同会话页：做完的几步收成一行，正在跑的那一步实时展开）。
-/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话，上方是这一轮的经过
+/// Cue 页对话的末尾：它在做事、这一轮还没调过工具（经过那一行还没写下）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
+/// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
 /// 中途转成工具调用时让位给进展那一行。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
@@ -211,7 +226,7 @@ private struct CueEnding: View {
         let draft = services.cue.keeper?.speech.draft
         let landed = draft?.landed(newestReply: newestSaid) ?? false
         if let draft, !landed {
-            DraftReply(text: draft.text) { RoundProcess(tools: workspace.cue.digest.state?.pendingTools, ending: .speaking) }
+            DraftReply(text: draft.text) { EmptyView() }
         } else if !landed {
             live
         }
@@ -222,9 +237,8 @@ private struct CueEnding: View {
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
-        if let shown = presence.shown, let progress = presence.progress {
-            let step = presence.isUsingTool ? RoundProcess.symbol(.other) : nil
-            RoundProcess(tools: workspace.cue.digest.state?.pendingTools, ending: .live(shown, doing: progress, step: step))
+        if workspace.cue.digest.state?.round == nil, let shown = presence.shown, let progress = presence.progress {
+            RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }
     }

@@ -6,7 +6,7 @@ import SwiftUI
 ///   做完的收起时只有这一行；点它就地展开整份清单（改动、出错都在原位，出错标胭脂），再点收起。
 /// - 没调过工具的一轮不画：做完的、正在说话的都没有这一块；只有在跑、还没说话时是一行此刻在做的（流光）。
 /// - 在跑时下面是它最近说的那段话（收着时；展开的清单里本来就有）与正在跑的那一步（会话状态里的当前动作），实时展开：
-///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`；Cue 的是它此刻的状态 `CueState.pendingTools`），
+///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`；Cue 的是对话里这一轮的那一行，`CueStore.recordCueRound`），
 ///   正在跑的来自会话状态（`detail`），两者不重叠。
 ///   Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 清单是注脚：小一档的字、次要墨色；调用每条一行，图标、等宽的文件路径或命令、状态——改文件写 +行数 −行数，失败的只把"失败"两个字标胭脂，
@@ -17,6 +17,7 @@ struct RoundProcess: View {
     let ending: Ending
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.chatJump) private var jump
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     enum Ending: Equatable {
@@ -42,7 +43,8 @@ struct RoundProcess: View {
                     .accessibilityValue(expanded ? "已展开" : "已收起")
                 if expanded { list(tools) }
                 if case .live(let shown, let doing, let step) = ending {
-                    if !shown.speaking, !expanded, let said = tools.items.last(where: { $0.kind == .said }) { saidRow(said.target) }
+                    // 它最近说的那段；已在对话里的（Cue 对你说的）不再列一遍
+                    if !shown.speaking, !expanded, let said = tools.items.last(where: { $0.kind == .said }), said.message == nil { saidRow(said.target) }
                     if let step { liveStep(doing, symbol: step) }
                 }
             }
@@ -108,7 +110,13 @@ struct RoundProcess: View {
     }
 
     @ViewBuilder private func row(_ item: PiChatMessage.Tools.Item) -> some View {
-        if item.kind == .said {
+        if let message = item.message, let jump {
+            // 对你说的那条已在对话里：只留一行，点它回到原处
+            Button { jump(message) } label: {
+                if item.kind == .said { saidRow(item.target, lines: 1) } else { toolRow(item) }
+            }
+            .buttonStyle(.plain).accessibilityHint("回到对话里那一条")
+        } else if item.kind == .said {
             saidRow(item.target)
         } else if let task = item.task {
             CueTaskButton(task: task) { toolRow(item) }.accessibilityHint("打开任务")
@@ -126,15 +134,16 @@ struct RoundProcess: View {
         ) { status(item) }
     }
 
-    /// 中途说的一段话：与清单同一列的图标位，正常字形、次要墨色，至多三行。
-    private func saidRow(_ text: String) -> some View {
+    /// 中途说的一段话：与清单同一列的图标位，正常字形、次要墨色，至多三行（已在对话里的只留一行）。
+    private func saidRow(_ text: String, lines: Int = 3) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: Self.symbol(.said)).font(Typography.caption2).foregroundStyle(palette.ink3)
                 .frame(width: 13).accessibilityHidden(true)
-            Text(text).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(3)
+            Text(text).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(lines)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 2)
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .transition(.opacity)
     }

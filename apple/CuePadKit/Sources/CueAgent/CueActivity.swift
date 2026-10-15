@@ -41,6 +41,7 @@ public enum CueActivity {
 
   /// 做完的一次调用在经过清单里的一条：动到的任务按 Cue 写的引用认（与工具同一个认法），清单里点它打开那件任务；
   /// 认不出（写错了、调用失败）就照它写的引用列出，不带任务。给的是会话（say、peek、stop 带 session）就写会话名，不带任务。
+  /// 对你说的话（tell）已在对话里：清单里只留首行，带着那条消息，点它跳回原处。
   public static func item(tool: String, arguments: String, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
     let args = Parsed(arguments)
     let task: Card?
@@ -52,8 +53,8 @@ public enum CueActivity {
     let session = args.line("session")
     let sessionName = await session.asyncMap { ref in (try? await store.sessions(matching: ref).first?.title) ?? ref }
     let named = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
-    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, of card: Card? = task) -> PiChatMessage.Tools.Item {
-      .init(kind: kind, target: clip(target, kind == .said ? PiChatMessage.Tools.saidLimit : PiChatMessage.Tools.targetLimit), failed: failed, task: card?.id)
+    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil) -> PiChatMessage.Tools.Item {
+      .init(kind: kind, target: clip(target, PiChatMessage.Tools.targetLimit), failed: failed, task: task?.id, message: message)
     }
     switch tool {
     case "task":
@@ -68,8 +69,9 @@ public enum CueActivity {
       default: return item(.other, "task")
       }
     case "tell":
-      guard let text = args.line("text") else { return item(.other, "撤回一条提问") }
-      return item(args.raw["ask"] == nil ? .said : .ask, text)
+      guard let line = args.line("text"), let text = args.raw["text"] as? String else { return item(.other, "撤回一条提问") }
+      let message = try? await store.latestCueMessage(saying: text)
+      return item(args.raw["ask"] == nil ? .said : .ask, line, message: message?.id)
     case "memory":
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")

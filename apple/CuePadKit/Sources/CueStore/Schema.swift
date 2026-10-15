@@ -206,6 +206,8 @@ enum Schema {
       guard !shells.isEmpty else { return }
       _ = try CueStore.purgeCards(where: "id IN (SELECT value FROM json_each(?))", [CueStore.idList(shells.map(\.id))], in: db)
     },
+    // 47：Cue 一轮的经过成了对话里的一行（排在这一轮开始的位置）；此刻的状态只记在跑的那一行，不再另存一份清单
+    Upgrade(stringLiteral: cueRound),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -274,6 +276,9 @@ enum Schema {
 
   /// 45 加的列（`cue`、`cueState` 两张表建好之后）。
   private static let cueTools = "ALTER TABLE cueMessages ADD COLUMN tools TEXT; ALTER TABLE cueState ADD COLUMN pendingTools TEXT;"
+
+  /// 47 改的列（45 之后）。
+  private static let cueRound = "ALTER TABLE cueState DROP COLUMN pendingTools; ALTER TABLE cueState ADD COLUMN round TEXT;"
 
   /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -428,6 +433,7 @@ enum Schema {
     \(formerSessions)
     \(cueState)
     \(cueTools)
+    \(cueRound)
     \(writeSeq)
     \(macPresence)
 

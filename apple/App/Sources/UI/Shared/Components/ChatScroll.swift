@@ -99,6 +99,8 @@ enum ChatLayout {
 extension EnvironmentValues {
     /// 刚跳到的那条你的话：短暂描一圈（刻度滑条）。
     @Entry var chatHighlight: UUID?
+    /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
+    @Entry var chatJump: ((UUID) -> Void)?
 }
 
 /// 聊天式的滚动区（iOS 会话页、Mac 会话页共用）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，

@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 44：撤掉 45（Cue 的一轮的经过）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema45 = "ALTER TABLE cueMessages DROP COLUMN tools; ALTER TABLE cueState DROP COLUMN pendingTools;"
+  /// 把新建的库退回结构 46：撤掉 47（Cue 此刻的状态只记在跑的那一行）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema47 = "ALTER TABLE cueState DROP COLUMN round; ALTER TABLE cueState ADD COLUMN pendingTools TEXT;"
+  /// 退回结构 44：46（删掉自动建的外壳任务）只动数据，不用撤；再撤掉 45（Cue 的一轮的经过）。
+  static let undoSchema45 = undoSchema47 + "ALTER TABLE cueMessages DROP COLUMN tools; ALTER TABLE cueState DROP COLUMN pendingTools;"
   /// 退回结构 43：再撤掉 44（会话记录上这一轮已做完的工具活动）。
   static let undoSchema44 = undoSchema45 + "ALTER TABLE piSessionStates DROP COLUMN pendingTools;"
   /// 退回结构 42：再撤掉 43（模型与命令的目录记录）。

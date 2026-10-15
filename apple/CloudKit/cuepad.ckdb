@@ -238,7 +238,7 @@ DEFINE SCHEMA
         state         STRING,
         detail        ENCRYPTED STRING,
         modifiedAt    INT64,
-        pendingTools  ENCRYPTED STRING,
+        round         STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
