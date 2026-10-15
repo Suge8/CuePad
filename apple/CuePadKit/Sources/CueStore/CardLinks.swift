@@ -89,7 +89,7 @@ extension CardLinks {
   }
 
   /// 离线并发的改动合并后可能违反层级规则；按确定的规则收敛，各设备算出同一结果：
-  /// 挂在灵感下的（别处取消了要做）提到那个灵感的位置（挂到它的上级下）；环里 id 最小的回到顶层；
+  /// 挂在灵感下的（别处取消了要做）提到那个灵感的位置（挂到它的上级下）；环按 `CardHierarchy` 断（环里 id 最小的回到顶层）；
   /// 第 `maxTaskDepth + 1` 级的任务改挂到上级的上级；下级跟随上级的项目；
   /// 有步骤的任务下的提示词改挂到 `home(of:)`、记着的会话也交给它；一个叶子多条提示词的，按顺序并进第一条。
   ///
@@ -106,10 +106,8 @@ extension CardLinks {
       let grandparent = fixed.links[stray]?.parent.flatMap { fixed.links[$0]?.parent }
       fixed.relink(stray, parent: grandparent == stray ? nil : grandparent)
     }
-    while let cycle = fixed.firstCycle(from: region) {
-      let breaker = cycle.min { $0.uuidString.lowercased() < $1.uuidString.lowercased() }!
-      fixed.relink(breaker, parent: nil)
-    }
+    let untangled = CardHierarchy.breakingCycles(fixed.links.compactMapValues(\.parent), from: region)
+    for (id, link) in fixed.links where link.parent != nil && untangled[id] == nil { fixed.relink(id, parent: nil) }
     while let deep = region.first(where: { fixed.links[$0]?.isTask == true && fixed.level(of: $0) > Card.maxTaskDepth }) {
       // 最浅的超限任务：它的上级在第 maxTaskDepth 级，改挂到上级的上级
       let chain = fixed.ancestors(of: deep)
@@ -169,18 +167,6 @@ extension CardLinks {
       for child in children[id] ?? [] where seen.insert(child).inserted { pending.append(child) }
     }
     return seen
-  }
-
-  private func firstCycle(from starts: [UUID]) -> [UUID]? {
-    for start in starts where links[start] != nil {
-      var path: [UUID] = [start], cursor = links[start]?.parent
-      while let parent = cursor, links[parent] != nil {
-        if let index = path.firstIndex(of: parent) { return Array(path[index...]) }
-        path.append(parent)
-        cursor = links[parent]?.parent
-      }
-    }
-    return nil
   }
 
   private mutating func relink(_ id: UUID, parent: UUID?) {

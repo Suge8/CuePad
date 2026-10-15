@@ -206,19 +206,20 @@ extension CueStore {
     }
   }
 
-  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环里的（远端并发、还没收敛）接在最后。
+  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环（远端并发、还没收敛）按收敛的规则断开（`CardHierarchy`），
+  /// 排出来的就是收敛后的样子。
   private static func preorder(_ tasks: [Card]) -> [Card] {
     let ids = Set(tasks.map(\.id))
+    let parents = CardHierarchy.breakingCycles(Dictionary(
+      tasks.compactMap { task in task.parentID.flatMap { ids.contains($0) ? (task.id, $0) : nil } }, uniquingKeysWith: { first, _ in first }))
     var children: [UUID: [Card]] = [:]
-    for task in tasks { if let parent = task.parentID, ids.contains(parent) { children[parent, default: []].append(task) } }
-    var ordered: [Card] = [], seen: Set<UUID> = []
+    for task in tasks { if let parent = parents[task.id] { children[parent, default: []].append(task) } }
+    var ordered: [Card] = []
     func visit(_ task: Card) {
-      guard seen.insert(task.id).inserted else { return }
       ordered.append(task)
       for child in children[task.id] ?? [] { visit(child) }
     }
-    for task in tasks where task.parentID.map({ !ids.contains($0) }) ?? true { visit(task) }
-    for task in tasks { visit(task) }
+    for task in tasks where parents[task.id] == nil { visit(task) }
     return ordered
   }
 

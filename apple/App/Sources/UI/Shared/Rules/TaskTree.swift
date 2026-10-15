@@ -185,8 +185,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
 }
 
-/// 一组任务的上下级（要显示的那组，或库里含已完成的整棵树）：上级不在这组里的、挂在自己下面的当顶层。
-/// 远端并发留下的环（还没收敛）在这里断开：按输入顺序，从顶层走不到的第一条当顶层、离开原上级，直到全都走得到。
+/// 一组任务的上下级（要显示的那组，或库里含已完成的整棵树）：上级不在这组里的当顶层。
+/// 远端并发留下的环（还没收敛）按库收敛的同一条规则断开（`CardHierarchy`），收敛前后显示的是同一个样子；
 /// 断开之后上级链与子树都走得到头，取行、取后代、量深度与高度不再各自防环。
 nonisolated private struct Links: Equatable, Sendable {
     private(set) var roots: [UUID] = []
@@ -195,20 +195,11 @@ nonisolated private struct Links: Equatable, Sendable {
 
     init(_ tasks: [Card]) {
         let ids = Set(tasks.map(\.id))
+        let listed = Dictionary(
+            tasks.compactMap { task in task.parentID.flatMap { ids.contains($0) ? (task.id, $0) : nil } }, uniquingKeysWith: { first, _ in first })
+        parents = CardHierarchy.breakingCycles(listed)
         for task in tasks {
-            if let parent = task.parentID, ids.contains(parent), parent != task.id {
-                parents[task.id] = parent
-                children[parent, default: []].append(task.id)
-            } else {
-                roots.append(task.id)
-            }
-        }
-        // 顶层的子树里没有环（环上每条的上级都在环上）：先收下它们，再逐条断开剩下的
-        var reachable = Set(roots.flatMap { [$0] + descendants(of: $0) })
-        for task in tasks where !reachable.contains(task.id) {
-            if let parent = parents.removeValue(forKey: task.id) { children[parent]?.removeAll { $0 == task.id } }
-            roots.append(task.id)
-            reachable.formUnion([task.id] + descendants(of: task.id))
+            if let parent = parents[task.id] { children[parent, default: []].append(task.id) } else { roots.append(task.id) }
         }
     }
 
