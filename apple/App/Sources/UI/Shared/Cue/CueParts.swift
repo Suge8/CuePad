@@ -135,7 +135,7 @@ struct CuePreviewThumb: View {
     private static let side: CGFloat = 44
 }
 
-/// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字，点开看全。
+/// 连着的几条动态（Cue 自己醒来那一轮的经过）：折成一行灰字（最新一条的首行与条数），点开看全——展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
 struct CueNotes: View {
     let notes: [CueMessage]
     @State private var expanded = false
@@ -147,7 +147,7 @@ struct CueNotes: View {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Text(Dotted(PiProgress.firstLine(CueFormat.plainText(notes.last?.text ?? "")), notes.count > 1 ? "\(notes.count) 条" : nil))
+                    Text(expanded ? "\(notes.count) 条动态" : Dotted(PiProgress.firstLine(CueFormat.plainText(notes.last?.text ?? "")), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                 }

@@ -226,7 +226,7 @@ extension PiChatMessage {
 
     /// 各类的调用数，失败的也算在自己那一类里（与清单的行同一口径）
     public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
-    /// 清单，按发生先后。改了的文件、失败的调用与说的话总在里面（界面收起时也列出改动与出错，不能被埋掉；出错几处就数它们）；
+    /// 清单，按发生先后。改了的文件与说的话总在里面（展开的清单不漏改了哪些文件）；
     /// 其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 

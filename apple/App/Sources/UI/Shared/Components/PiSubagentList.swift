@@ -66,7 +66,7 @@ struct PiSubagentList: View {
             .font(Typography.secondary)
             Text("\(Text(agent.label).foregroundStyle(agent.shown.labelTint(palette)))\(Text(agent.action.isEmpty ? "" : "\(Dotted.separator)\(agent.action)").foregroundStyle(palette.ink3))")
                 .font(Typography.meta)
-                .lineLimit(agent.phase == .known(.running) || agent.phase == .known(.review) ? 1 : nil).truncationMode(.tail)
+                .lineLimit(agent.isRunning ? 1 : nil).truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.leading, 13)
                 .accessibilityLabel(Dotted(agent.label, agent.action).spoken)

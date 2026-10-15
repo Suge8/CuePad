@@ -2,9 +2,9 @@ import CueStore
 import SwiftUI
 
 /// 一轮的经过（会话页）：做完的回答上方、在跑的这一轮在对话末尾，同一个样子——与代码块、表格同一套底色与圆角的一块：
-/// - 标题行："跑了 12 步 · 改了 3 个文件 · 1 处出错"（`PiChat.processLine`，出错那一截标胭脂），做完的接用时，在跑的接此刻的状态。
-///   有工具活动时点它就地展开整份清单、再点收起。没调过工具时只有一行：做完的"用时 8 秒"，在跑的是此刻在做的（流光）。
-/// - 收起时也列出改了的文件与出错的那几步（`PiChat.pinned`）：它们不能被埋掉；多了只列前几条，其余写个数、点它展开。
+/// - 标题行："跑了 12 步 · 改了 3 个文件"（`PiChat.processLine`），做完的接用时，在跑的接此刻的状态。
+///   做完的收起时只有这一行；点它就地展开整份清单（改动、出错都在原位，出错标胭脂），再点收起。
+/// - 没调过工具的一轮不画：做完的、正在说话的都没有这一块；只有在跑、还没说话时是一行此刻在做的（流光）。
 /// - 在跑时下面是它最近说的那段话（收着时；展开的清单里本来就有）与正在跑的那一步（会话状态里的当前动作），实时展开：
 ///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`），正在跑的来自会话状态，两者不重叠。
 ///   Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
@@ -26,69 +26,49 @@ struct RoundProcess: View {
         case live(PiShown, doing: String, step: String?)
     }
 
-    /// 收起时最多列几条改动与出错：再多就是一份清单了，写个数、点开看。
-    private static let pinLimit = 4
-
     var body: some View {
-        // 还没调过工具（只说了话）时没有步数可写，标题是此刻在做的
-        let line = tools.flatMap { $0.total > 0 ? PiChat.processLine($0) : nil }
-        VStack(alignment: .leading, spacing: 4) {
-            if let tools, let line {
+        if let line = PiChat.processLine(tools), let tools {
+            VStack(alignment: .leading, spacing: 4) {
                 Button { expanded.toggle() } label: { header(line) }
                     .buttonStyle(.plain)
                     .accessibilityLabel(spoken(line))
                     .accessibilityValue(expanded ? "已展开" : "已收起")
-                rows(tools)
-            } else {
-                bare.accessibilityElement(children: .ignore).accessibilityLabel(spoken(nil))
+                if expanded { list(tools) }
+                if case .live(let shown, let doing, let step) = ending {
+                    if !shown.speaking, !expanded, let said = tools.items.last(where: { $0.kind == .said }) { saidRow(said.target) }
+                    if let step { liveStep(doing, symbol: step) }
+                }
             }
-            if case .live(let shown, let doing, let step) = ending {
-                if !shown.speaking, !expanded, let said = tools?.items.last(where: { $0.kind == .said }) { saidRow(said.target) }
-                if let step, line != nil { liveStep(doing, symbol: step) }
-            }
-        }
-        .roundNoteFrame()
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
-    }
-
-    /// 读屏读的一句：经过与结尾（用时或此刻在做的）。
-    private func spoken(_ line: PiChat.ProcessLine?) -> String {
-        let end: String = switch ending {
-        case .took(let took): line == nil ? "用时 \(took)" : took
-        case .live(_, let doing, _): doing
-        }
-        return ([line?.steps.spoken, line?.failures, end] as [String?]).compactMap { $0 }.joined(separator: "，")
-    }
-
-    /// 没调过工具：做完的是用时，在跑的是此刻在做的。
-    @ViewBuilder private var bare: some View {
-        switch ending {
-        case .took(let took):
-            HStack(spacing: 5) {
-                Image(systemName: "wrench.and.screwdriver").imageScale(.small).accessibilityHidden(true)
-                Text("用时 \(took)")
-            }
-            .roundNoteLine()
-        case .live(let shown, let doing, _):
+            .roundNoteFrame()
+            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
+        } else if case .live(let shown, let doing, _) = ending, !shown.speaking {
+            // 还没调过工具：此刻在做的（在想、只说了话）
             HStack(spacing: 6) {
                 PiStateDot(shown: shown, size: 6)
                 Text(doing).lineLimit(2).shimmering()
             }
             .roundNoteLine()
+            .accessibilityElement(children: .ignore).accessibilityLabel(doing)
+            .roundNoteFrame()
         }
     }
 
-    private func header(_ line: PiChat.ProcessLine) -> some View {
+    /// 读屏读的一句：经过与结尾（用时或此刻在做的）。
+    private func spoken(_ line: Dotted) -> String {
+        let end: String = switch ending {
+        case .took(let took): took
+        case .live(_, let doing, _): doing
+        }
+        return "\(line.spoken)，\(end)"
+    }
+
+    private func header(_ line: Dotted) -> some View {
         HStack(spacing: 5) {
             switch ending {
             case .took: Image(systemName: "wrench.and.screwdriver").imageScale(.small).accessibilityHidden(true)
             case .live(let shown, _, _): PiStateDot(shown: shown, size: 6)
             }
-            Text(line.steps).lineLimit(1).layoutPriority(-1)
-            if let failures = line.failures {
-                Dot()
-                Text(failures).foregroundStyle(palette.failure).fixedSize()
-            }
+            Text(line).lineLimit(1).layoutPriority(-1)
             switch ending {
             case .took(let took):
                 Dot()
@@ -105,28 +85,17 @@ struct RoundProcess: View {
         .contentShape(.rect)
     }
 
-    /// 收起时是改动与出错的那几步，展开是整份清单。
-    @ViewBuilder private func rows(_ tools: PiChatMessage.Tools) -> some View {
-        let pinned = PiChat.pinned(tools)
-        let shown = expanded ? tools.items : Array(pinned.prefix(Self.pinLimit))
-        if !shown.isEmpty || expanded {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(shown.enumerated()), id: \.offset) { _, item in row(item) }
-                let listed = tools.items.count { $0.kind != .said }
-                if expanded, tools.total > listed {
-                    more("另有 \(tools.total - listed) 步未列出")
-                } else if !expanded, pinned.count > Self.pinLimit {
-                    Button { expanded = true } label: { more("还有 \(pinned.count - Self.pinLimit) 处改动或出错") }
-                        .buttonStyle(.plain)
-                }
+    /// 展开的整份清单，按先后。
+    private func list(_ tools: PiChatMessage.Tools) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(tools.items.enumerated()), id: \.offset) { _, item in row(item) }
+            let listed = tools.items.count { $0.kind != .said }
+            if tools.total > listed {
+                Text("另有 \(tools.total - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).padding(.leading, 19)
             }
-            .padding(.bottom, 2)
-            .transition(.opacity)
         }
-    }
-
-    private func more(_ text: String) -> some View {
-        Text(text).font(Typography.caption).foregroundStyle(palette.ink3).padding(.leading, 19).contentShape(.rect)
+        .padding(.bottom, 2)
+        .transition(.opacity)
     }
 
     @ViewBuilder private func row(_ item: PiChatMessage.Tools.Item) -> some View {
