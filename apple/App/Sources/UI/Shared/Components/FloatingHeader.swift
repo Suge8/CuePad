@@ -38,7 +38,7 @@ extension View {
 }
 
 enum FloatingHeaderLayout {
-    /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅让到它下面（`NoticeBanner`）。
+    /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、落在两侧圆钮之间（`NoticeBanner`）。
     static let height: CGFloat = 44
 }
 

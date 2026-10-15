@@ -2,13 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// 顶部的短提示：操作结果与错误，错误伴随触感；带去处的（如随手记的落点）点它过去。
-/// Cue 页在屏上时不浮在顶上，排在 Cue 页的页头下面（`CuePage`）：那一页的页头是 Cue 此刻在做什么，不能被盖住。
+/// 顶部的短提示：操作结果与错误，错误伴随触感；带去处的（如随手记的落点）点它过去。所有页同一个，Cue 页也是：
+/// 只停几秒（`Workspace.noticeDuration`），暂时换下中间的名牌；排在页头下面的一整条会常驻在对话上，挡掉一大块。
 struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 横幅玻璃上垫的页面底色有多实：九成，背后的字只剩看不出的一层。
     /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
     private static let sideClearance: CGFloat = 16 + FloatingHeaderLayout.height + 8
     /// 顶上那一排离上安全区（状态栏下沿）的距离，与 `SearchRow` 同。
@@ -30,28 +29,19 @@ struct NoticeBanner: View {
         // iPad 窄窗口：顶上那一排整排让开左上的窗口钮（`SearchRow`），横幅在同一排里，按同一个窗口角让，不盖住被挪过去的圆钮
         .containerCornerOffset(.horizontal, sizeToFit: true)
         .animation(Motion.quick, value: workspace.notice)
-        .modifier(NoticeFeedback(notice: workspace.notice))
-    }
-}
-
-/// 提示出现时的触感（错误另一种）与读屏播报：浮在顶上的横幅与 Cue 页里排在页头下面的那一条共用。
-struct NoticeFeedback: ViewModifier {
-    let notice: Workspace.Notice?
-
-    func body(content: Content) -> some View {
-        content
-            .sensoryFeedback(trigger: notice) { _, notice in
-                guard let notice else { return nil }
-                return notice.isError ? .error : .success
-            }
-            .onChange(of: notice) { _, notice in
-                if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
-            }
+        // 出现时的触感（错误另一种）与读屏播报
+        .sensoryFeedback(trigger: workspace.notice) { _, notice in
+            guard let notice else { return nil }
+            return notice.isError ? .error : .success
+        }
+        .onChange(of: workspace.notice) { _, notice in
+            if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
+        }
     }
 }
 
 /// 一条提示本身：一块实底玻璃胶囊，带去处的点它过去，右边可有一个动作（撤销、归档）。
-struct NoticeCapsule: View {
+private struct NoticeCapsule: View {
     let notice: Workspace.Notice
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
