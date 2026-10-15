@@ -35,7 +35,7 @@ struct UserBubble<Menu: View>: View {
                 if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: Dotted(text), highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
+                        text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil)
                 }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
@@ -61,7 +61,7 @@ extension UserBubble where Menu == EmptyView {
 struct BubbleText: View {
     static let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
 
-    let text: Dotted
+    let text: String
     var highlighted = false
     var trip = BubbleTrip.arrived
     var lineLimit: Int?
@@ -77,10 +77,8 @@ struct BubbleText: View {
             if trip == .failed {
                 PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
             }
-            Text(text)
+            Paragraphs(verbatim: text, lineLimit: lineLimit)
                 .font(Typography.reading).foregroundStyle(palette.ink)
-                .lineLimit(lineLimit)
-                .selectable()
                 .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
                 .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
                 .padding(.horizontal, 16).padding(.vertical, 11)
@@ -97,8 +95,7 @@ struct BubbleText: View {
     /// 一行至少放得下 40 个字节（窄到手机上的气泡，拉丁字母约 7pt 宽、汉字三字节），没到 `lineLimit` 行的字节数、又没有那么多换行的话排不满。
     private var mayTruncate: Bool {
         guard let lineLimit else { return false }
-        let visible = text.visible
-        return visible.utf8.count > 40 * lineLimit || visible.utf8.lazy.filter { $0 == 10 }.count >= lineLimit
+        return text.utf8.count > 40 * lineLimit || text.utf8.lazy.filter { $0 == 10 }.count >= lineLimit
     }
 
     private func expandButton(_ expand: @escaping () -> Void) -> some View {
@@ -117,7 +114,7 @@ struct BubbleText: View {
     private func fullHeight(_ truncated: Binding<Bool>) -> some View {
         GeometryReader { shown in
             let folded = shown.size.height
-            Text(text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
+            Paragraphs(verbatim: text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
                 .frame(width: shown.size.width, alignment: .leading)
                 .hidden()
                 .onGeometryChange(for: Bool.self) { $0.size.height > folded + 1 } action: { truncated.wrappedValue = $0 }

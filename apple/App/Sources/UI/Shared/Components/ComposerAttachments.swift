@@ -15,7 +15,7 @@ struct AttachmentBody: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
-                    case .text(let text): Text(text).font(Typography.body).foregroundStyle(palette.ink).textSelection(.enabled)
+                    case .text(let text): Paragraphs(verbatim: text).font(Typography.body).foregroundStyle(palette.ink)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
                     case .split: Rectangle().fill(palette.hair).frame(height: 1)
                     }
