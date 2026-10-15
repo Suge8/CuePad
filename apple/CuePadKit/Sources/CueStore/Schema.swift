@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// 表分两类。
@@ -184,6 +185,27 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT; UPDATE piSessions SET checkpoint = NULL;",
     // 45：Cue 的一轮也有经过（对话上的 `tools`、此刻的 `pendingTools`）；经过的计数并成调用数（`Tools.steps`），已有的对话按新写法重读一遍
     Upgrade(stringLiteral: cueTools + " UPDATE piSessions SET checkpoint = NULL;"),
+    // 46：会话是一等对象，不再为不经任务开的会话自动建同名任务（外壳）。还是自动建出来的样子的外壳删掉：id 由会话算出、
+    // 标题还是会话名（第一行有字的，超长截断，没字是"Agent 会话"）、没有下级、还在会话所在的项目（项目删了或没有是未分类）、不在回收站，
+    // 开着时没完成也没归档，收着时是跟着会话收尾的样子（完成与归档同一刻）。人动过的留成普通任务。
+    // 删的是行：同步表的删除由下次对账发现（`pendingDeletes`）
+    Upgrade { db in
+      let shells = try db.query(
+        """
+        SELECT c.id, c.body, s.sessionID, s.title FROM cards c JOIN piSessionStates s ON s.sessionID = c.piSessionID
+        WHERE c.todoAt IS NOT NULL AND c.parentID IS NULL AND c.deletedAt IS NULL
+          AND (c.completedAt IS NULL AND c.archivedAt IS NULL OR c.completedAt IS NOT NULL AND c.archivedAt = c.completedAt)
+          AND c.projectID IS (SELECT id FROM projects WHERE id = s.projectID AND deletedAt IS NULL)
+          AND NOT EXISTS (SELECT 1 FROM cards k WHERE k.parentID = c.id)
+        """
+      ) { (id: $0.uuid(0), body: $0.text(1), session: $0.text(2), title: $0.text(3)) }
+      .filter { shell in
+        let title = shell.title.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+        return shell.id == DeterministicID.uuid("session-task/\(shell.session)") && shell.body == CueName.clipped(title ?? "Agent 会话")
+      }
+      guard !shells.isEmpty else { return }
+      _ = try CueStore.purgeCards(where: "id IN (SELECT value FROM json_each(?))", [CueStore.idList(shells.map(\.id))], in: db)
+    },
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，

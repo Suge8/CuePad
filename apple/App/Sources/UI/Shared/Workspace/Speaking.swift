@@ -84,7 +84,12 @@ extension Workspace {
         case .cue:
             try await store.addCueMessage(.you, text: stored).id
         case .session(let target, let host, let mode, let card):
-            try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
+            // 说的话与 Cue 的 say 同一条规则：会话在等能代答的提问时这句就是答案（`CueStore.speak`）
+            if let session = target.ref, DeliveryMode.talk.contains(mode) {
+                try await store.speak(stored, to: session, name: target.name, mode: mode, card: card, host: host).id
+            } else {
+                try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
+            }
         }
     }
 }

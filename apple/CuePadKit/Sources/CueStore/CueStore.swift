@@ -17,8 +17,6 @@ public actor CueStore {
   private let notificationName: String
   private let changeListener: ChangeListener
   private var lastDataVersion: Int64
-  /// 这个连接是哪台 Mac（`ownSessions`）：它写的会话记录由它挂到任务上；手机与命令行为 nil。
-  var sessionHost: String?
 
   public init(url: URL, timing: Timing = .system) throws {
     try FileManager.default.createDirectory(
@@ -146,13 +144,9 @@ public actor CueStore {
 
   // MARK: 内部：事务与通用行读写
 
-  /// 一个写事务；提交前让会话都挂在任务上（`adoptSessions`），提交后通知订阅者，并把改动的同步记录交给同步订阅者。
+  /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changes) = try db.transaction {
-      let result = try body()
-      try adoptSessions()
-      return result
-    }
+    let (result, changes) = try db.transaction(body)
     let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty { ChangeNotification.post(notificationName) }
     for (_, subscriber) in subscribers where !subscriber.tables.isDisjoint(with: tables) {

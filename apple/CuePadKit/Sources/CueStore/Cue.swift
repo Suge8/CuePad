@@ -3,7 +3,7 @@ import Foundation
 
 // Cue：常驻的总控 Agent。它不写代码，只经 CuePad 的任务派活、跟进、问你、记东西。这里是它的数据：
 // 对话（`cueMessages`）、记忆（`cueLines` 与本机的摘要缓存 `cueSummaries`）、设置（`cueProfile`）、此刻在做什么（`cueState`）。
-// 值班时它管所有有活会话、没做完的事（`CueStore.cueBoard`），不另记"由谁跟进"。
+// 值班时它管所有有活会话、没做完的事与没绑任务的活会话（`CueStore.cueBoard`），不另记"由谁跟进"。
 
 /// Cue 页对话里一行是谁的。
 public enum CueAuthor: String, Sendable, CaseIterable {

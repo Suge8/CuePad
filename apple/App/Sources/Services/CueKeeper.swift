@@ -61,10 +61,10 @@ nonisolated struct CueTiming: Sendable {
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，马上醒来接着做。要换大脑（见上）就醒来请它写交接，请过还没有就直接换。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
-/// 5. 有会话的事有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
+/// 5. 有会话的事或没绑任务的会话有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
 ///    其中有会话在等回答（如"允许使用 Bash？"），或 Cue 说的话没送到而它还不知道（`CueChange.Kind.undelivered`），
 ///    就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
-/// 6. 空闲巡视：没有在做的事（`CueBoardItem.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
+/// 6. 空闲巡视：没有在做的事（`CueBoard.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
 /// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
@@ -207,7 +207,7 @@ final class CueKeeper {
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：记一条、忘掉、合并都可能改变待合并的块。
     private nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]
-        var board: [CueBoardItem]
+        var board: CueBoard
         var memory: CueMemoryVersion
         var profile: CueProfile?
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：变化不一定改动看板（说话、作答没能送达，你在会话里说话），
@@ -624,7 +624,7 @@ final class CueKeeper {
             }
 
             let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
-            if try await !store.cueBoard().contains(where: \.isActive), let due = patrolDue(idleSince: idleSince, now: now) {
+            if try await !store.cueBoard().isActive, let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1

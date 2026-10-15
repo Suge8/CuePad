@@ -19,13 +19,13 @@ import Testing
     }
     try await executor.start()
     defer { Task { await executor.stop() } }
-    _ = try await store.stopLeaf(task.id, host: "mac", cue: true)
+    _ = try await store.stopSession("s1", host: "mac", cue: true)
     let mine = try await store.requestEnd(of: SendTarget(kind: .piSession, name: "发布", ref: "s1"), on: "mac")
     _ = try await eventually(store, { try $0.deliveryRequest(mine.id) }) { $0 == nil }  // 清理过了
 
     let changes = try await store.cueChanges(after: since)
     #expect(changes.map(\.detail) == ["停下：会话已关闭"])
-    #expect(changes.first?.task.id == task.id && changes.first?.leaf?.id == task.id)
+    #expect(changes.first?.task?.id == task.id && changes.first?.leaf?.id == task.id)
   }
 
   /// Cue 收尾整件事：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上的会话请它结束——

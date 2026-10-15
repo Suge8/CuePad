@@ -8,11 +8,9 @@ import SystemConfiguration
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时认下这台 Mac 记录的会话（从此没结束的都挂在任务上，见 `CueStore.ownSessions`），再对账上次留下的会话记录（别的 Mac 的不动）：
-    /// 进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。先认再对账：上次还在跑的游离会话先挂上进行中的任务，收尾成历史后也不丢。
+    /// 启动时对账上次留下的会话记录（别的 Mac 的不动）：进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。
     /// 对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
     func resetPiState() async throws {
-        try await store.ownSessions(host: hostID)
         pi.carryOver(try await piStateRecorder.reset { $0.isRunning })
     }
 

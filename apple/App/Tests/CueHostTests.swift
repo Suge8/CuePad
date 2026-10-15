@@ -70,7 +70,7 @@ struct CueHostTests {
             try await eventually("开工这一轮做完") { try await self.store.cueState()?.state == .known(.settled) && self.model.answered("开新会话") }
             try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
             let session = try #require(app.host.extensions.values.first)
-            let task = try #require(try await store.cueBoard().first?.task)
+            let task = try #require(try await store.cueBoard().tasks.first?.task)
             // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
             try await store.linkCard(task.id, toSession: session.sessionID)
             try await store.updateCard(task.id) { $0.body = title }
@@ -222,7 +222,7 @@ struct CueHostTests {
         #expect(!session.received.contains("config"))
 
         // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
-        let task = try #require(try await rig.store.cueBoard().first?.task)
+        let task = try #require(try await rig.store.cueBoard().tasks.first?.task)
         try await rig.store.linkCard(task.id, toSession: session.sessionID)
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
@@ -520,7 +520,7 @@ struct CueHostTests {
             let step = try await store.createTask(title, under: task.id)
             let file = rig.folder.appending(path: "s\(index).jsonl")
             try Data("{}\n".utf8).write(to: file)
-            // 先绑上再连上（同从任务开会话）：会话一出现就有归处，不另长同名任务
+            // 先绑上再连上（同从任务开会话）：会话一出现就在这一步下
             try await store.linkCard(step.id, toSession: "s\(index)")
             sessions.append(try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path))
         }
