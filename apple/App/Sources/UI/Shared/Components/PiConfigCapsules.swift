@@ -83,16 +83,20 @@ struct PiModelCapsule: View {
 }
 
 
-/// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaArc`，不画匀速刻度），
+/// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaRings`，不画匀速刻度），
 /// 没有额度的只有标志、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标。
 struct ModelBadge: View {
     let mark: BrandMark
     let binding: QuotaMeter.Window?
     @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            if let binding { QuotaArc(window: binding, inset: 0, line: 1.5, showsPace: false) }
+            if let binding {
+                QuotaRings([binding], line: 1.5, showsPace: false)
+                    .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: binding)
+            }
             mark.image
                 .font(.system(size: side * 0.52))
                 .contentTransition(.opacity)
