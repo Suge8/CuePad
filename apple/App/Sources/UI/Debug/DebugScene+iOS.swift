@@ -114,7 +114,7 @@ extension DebugScene {
             if let project { open(.project(project)); navigation.push(.projectSessions(project)) }
         case "agent":
             if let project { open(.project(project)) }
-            if split { navigation.agentPanel = true } else { navigation.tab = .agent }
+            if split { navigation.select(.agent) } else { navigation.tab = .agent }
         case "search":
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
