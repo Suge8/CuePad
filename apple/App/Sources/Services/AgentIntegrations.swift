@@ -42,20 +42,26 @@ final class AgentIntegrations {
         return statuses[kind]?.executable
     }
 
-    /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态，还没检测过的先检测。能开新会话的几家各起一个进程问，慢；
+    /// 重新检测全部 Agent，测完一次换上（状态只变一次）。不写任何文件。
+    func redetect() async {
+        let integration = integration
+        statuses = await withTaskGroup(of: (AgentKind, AgentStatus).self) { group in
+            for kind in AgentKind.allCases { group.addTask { (kind, await integration.status(of: kind)) } }
+            var found: [AgentKind: AgentStatus] = [:]
+            for await (kind, status) in group { found[kind] = status }
+            return found
+        }
+    }
+
+    /// 各家能不能用与模型（`AgentIntegration.probe`）：按此刻检测出的状态。能开新会话的几家各起一个进程问，慢；
     /// 只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
     func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
-        await withDiscardingTaskGroup { group in
-            for kind in AgentKind.allCases where statuses[kind] == nil { group.addTask { await self.detect(kind) } }
-        }
-        return await integration.probe(statuses)
+        await integration.probe(statuses)
     }
 
     /// 启动时：检测全部 Agent，装过而内容不同的升级到这个版本。升级失败抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
-        await withDiscardingTaskGroup { group in
-            for kind in AgentKind.allCases { group.addTask { await self.detect(kind) } }
-        }
+        await redetect()
         var failure: (any Error)?
         for kind in AgentKind.allCases
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
