@@ -37,6 +37,7 @@ import Testing
     try await store.updateCueProfile { $0.hostID = "mac" }
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")
     try await store.recordMacPresence(host: "mac") { true }
+    try await store.recordMacAgents(host: "mac", [MacAgent(kind: .pi, model: nil, models: [])])
     return (card, hash)
   }
 
