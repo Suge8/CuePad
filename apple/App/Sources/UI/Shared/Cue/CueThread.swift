@@ -97,7 +97,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 nonisolated struct CueTaskRef: Equatable, Sendable {
     var task: Card
     var progress: TaskProgress?
-    /// 新的在前，至多 `previewLimit` 份（"等你"放全部：验收看的就是它们）。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
+    /// 新的在前，至多 `previewLimit` 份（"等你"放全部：定不定看的就是它们）。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
     var previews: [PiPreview]
 
     static let previewLimit = 4

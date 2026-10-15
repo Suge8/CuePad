@@ -126,8 +126,10 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 47：撤掉 48（每台 Mac 上能用的 Agent）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema48 = "DROP TABLE macAgents;"
+  /// 把新建的库退回结构 48：撤掉 49（Cue 的允许清单）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema49 = "ALTER TABLE cueProfile DROP COLUMN allows;"
+  /// 退回结构 47：再撤掉 48（每台 Mac 上能用的 Agent）。
+  static let undoSchema48 = undoSchema49 + "DROP TABLE macAgents;"
   /// 退回结构 46：再撤掉 47（Cue 此刻的状态只记在跑的那一行）。
   static let undoSchema47 = undoSchema48 + "ALTER TABLE cueState DROP COLUMN round; ALTER TABLE cueState ADD COLUMN pendingTools TEXT;"
   /// 退回结构 44：46（删掉自动建的外壳任务）只动数据，不用撤；再撤掉 45（Cue 的一轮的经过）。

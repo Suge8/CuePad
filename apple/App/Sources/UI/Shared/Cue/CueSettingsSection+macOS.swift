@@ -6,6 +6,7 @@ import SwiftUI
 /// 下面是名字、住在哪台 Mac（这台与绑过文件夹的别的 Mac）。用哪个 Agent、模型与思考强度在 Cue 页的输入框里选（`CueConfigControls`）。
 /// 都写进同步的 `CueProfile`（`AppServices.updateCue`，写完立即上传），别的设备上看到的是同一份。启用、停用经这台 Mac 的管理器（`services.cue`）：
 /// 启用就是让 Cue 住在这台 Mac，选的 Agent 这台用不了就挑第一家装好并登录了的；这台一家都没有时就地说明。
+/// 下一节是允许清单（`CueProfile.allows`）：每类要先问的事一个"所有项目都不用问"的开关，只管一个项目的那几项各一行、可撤销。
 struct CueSettingsSection: View {
     @Environment(AppServices.self) private var services
     @State private var data: Data?
@@ -18,6 +19,8 @@ struct CueSettingsSection: View {
         var profile: CueProfile
         /// 能住的 Mac：id 与名字（这台排第一）。
         var hosts: [Host]
+        /// 项目的名字（允许清单里只管一个项目的那几项写它的名字）。
+        var projects: [UUID: String] = [:]
     }
 
     nonisolated struct Host: Equatable, Sendable, Identifiable {
@@ -27,20 +30,25 @@ struct CueSettingsSection: View {
 
     var body: some View {
         // 读到之前先按空设置排（行一直在，读库挂在它们上面；不排行时 Section 是空的，读库永远不开始）
+        let shown = data ?? Data(profile: CueProfile(), hosts: [])
         Section {
-            rows(data ?? Data(profile: CueProfile(), hosts: []))
-        }
-        .observing(services.store, into: $data, onError: { failure = $0.localizedDescription }) { [here = services.hostID] store in
-            var hosts = [Host(id: here, name: "这台 Mac")]
-            for binding in try store.directoryBindings() where !hosts.contains(where: { $0.id == binding.hostID }) {
-                hosts.append(Host(id: binding.hostID, name: binding.hostName))
-            }
-            return Data(profile: try store.cueProfile() ?? CueProfile(), hosts: hosts)
+            rows(shown)
         }
         .onChange(of: editing) { left, _ in
             if left, let profile = data?.profile { commit(profile) }
         }
         .onChange(of: data?.profile.name, initial: true) { _, saved in name = saved ?? CueProfile.defaultName }
+        .observing(services.store, into: $data, onError: { failure = $0.localizedDescription }) { [here = services.hostID] store in
+            var hosts = [Host(id: here, name: "这台 Mac")]
+            for binding in try store.directoryBindings() where !hosts.contains(where: { $0.id == binding.hostID }) {
+                hosts.append(Host(id: binding.hostID, name: binding.hostName))
+            }
+            let projects = Dictionary(try store.projects().map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            return Data(profile: try store.cueProfile() ?? CueProfile(), hosts: hosts, projects: projects)
+        }
+        Section("\(shown.profile.name) 不用先问") {
+            allowRows(shown)
+        }
     }
 
     @ViewBuilder private func rows(_ data: Data) -> some View {
@@ -63,6 +71,38 @@ struct CueSettingsSection: View {
                 ForEach(data.hosts) { Text($0.name).tag(Optional($0.id)) }
             }
             .labelsHidden().fixedSize()
+        }
+    }
+
+    /// 允许清单：每类一行"所有项目"的开关，状态写只管哪几个项目；只管一个项目的各一行，可撤销。
+    @ViewBuilder private func allowRows(_ data: Data) -> some View {
+        let allows = data.profile.allows
+        ForEach(CueAsk.allCases.filter { $0.always != nil }, id: \.self) { ask in
+            let all = CueAllow(ask, project: nil)
+            SettingRow(title: ask.name, icon: Image(systemName: "checkmark.shield"), status: Dotted(allows.contains(all) ? "所有项目都不用问" : "先问你")) {
+                Toggle("所有项目都不用问", isOn: Binding(get: { allows.contains(all) }, set: { allow(all, $0) }))
+                    .labelsHidden().toggleStyle(.switch)
+            }
+            ForEach(allows.filter { $0.ask == .known(ask) && $0.project != nil }.sorted { ($0.project?.uuidString ?? "") < ($1.project?.uuidString ?? "") }, id: \.self) { item in
+                SettingRow(
+                    title: "\(item.project.flatMap { data.projects[$0] }.map { "「\($0)」" } ?? "已删的项目")里\(ask.name)",
+                    icon: Image(systemName: "folder"), status: "不用问"
+                ) {
+                    Button("撤销") { allow(item, false) }.settingButton()
+                }
+            }
+        }
+    }
+
+    private func allow(_ item: CueAllow, _ allowed: Bool) {
+        failure = nil
+        let services = services
+        Task {
+            do {
+                if try await services.store.setCueAllow(item, allowed: allowed) { await services.upload(CueProfile.recordID) }
+            } catch {
+                failure = error.localizedDescription
+            }
         }
     }
 

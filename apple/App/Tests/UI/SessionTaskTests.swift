@@ -8,7 +8,8 @@ import Testing
 @testable import CuePad
 
 /// 会话是一等对象：不经任务开的会话（终端里的 Pi）不长任务，Cue 照样看得到、管得到它；要为它的结果负责时再给它建任务。
-/// 说的话与 Cue 的 say 同一条规则：会话在等能代答的提问时说的话就是答案；已完成的事来了新活回到进行中。
+/// 说的话与 Cue 的 say 同一条规则：会话在等能代答的提问时说的话就是答案；说话不改任务的状态。
+/// 已完成的事用过、还活着的会话算在做，Cue 在它上面做别的事是另建任务绑上它。
 /// Cue 值班时管这些会话：CuePad 答得了的提问等 Cue，不算等你。
 struct SessionTaskTests {
     let rig = TestApp()
@@ -29,7 +30,7 @@ struct SessionTaskTests {
 
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], dismissed: [], board: try await store.cueBoard(), waiting: [],
+            now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle, said: nil))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
 
@@ -45,9 +46,10 @@ struct SessionTaskTests {
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
 
-    /// 回复框与 Cue 的 say 同一条规则：会话在等 CuePad 答得了的提问时，说的话就是答案（选项原文或序号），否则照常发出；
-    /// 已完成的任务来了新活回到进行中：说的话或答案送到时（会话所在的 Mac 记下送达），加步骤时当场。
-    @Test func 对已完成任务的会话说话_送到后任务回到进行中_会话在等提问时说的话就是答案() async throws {
+    /// 回复框与 Cue 的 say 同一条规则：会话在等 CuePad 答得了的提问时，说的话就是答案（选项原文或序号），否则照常发出。
+    /// 说话不改任务的状态：对已完成的事的会话说的话、作的答送到了，任务仍是完成。状态只由明确的动作改：
+    /// Cue 的 edit reopen 同你点掉圆圈（没完成的不让改回），加步骤回到进行中。
+    @Test func 对已完成任务的会话说话_任务仍是完成_改回或加步骤才变() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录", in: nil)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
@@ -56,58 +58,86 @@ struct SessionTaskTests {
         try await workspace.bind("s1", to: task.id)
         try await workspace.toggle(task.id)
         #expect(try await store.card(task.id)?.status == .done)
-
-        try await reply("登录后还是白屏", to: "s1", in: workspace)
-        let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
-        #expect(sent.mode == .known(.send) && sent.status == .known(.pending))
-        #expect(try await store.card(task.id)?.status == .done)  // 还没送到
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        _ = try await store.outcome(of: sent.id)
-        #expect(try await store.card(task.id)?.status == .inProgress)
+
+        try await reply("登录后还是白屏", to: "s1", in: workspace)
+        let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
+        #expect(sent.mode == .known(.send))
+        #expect(try await store.outcome(of: sent.id).status == .known(.succeeded))
+        #expect(try await store.card(task.id)?.status == .done)
 
         let question = PiQuestion(promptID: "p1", kind: .select, text: "旧数据怎么办？", options: ["覆盖", "跳过"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         try await reply("2", to: "s1", in: workspace)
         #expect(try await store.deliveryRequests(toSession: "s1").last?.answer == PiAnswer(promptID: "p1", value: .option("跳过")))
 
-        try await store.setStatus(task.id, .done)
         let cue = CueTools(store: store, wait: 0)
         let answered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "覆盖"]))
         #expect(!answered.isError && answered.structured["mode"] as? String == DeliveryMode.answer.rawValue)
         let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(answer.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
-        _ = try await store.outcome(of: answer.id)
-        #expect(try await store.card(task.id)?.status == .inProgress)
+        #expect(try await store.outcome(of: answer.id).status == .known(.succeeded))
+        #expect(try await store.card(task.id)?.status == .done)
 
-        try await store.setStatus(task.id, .done)
+        let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
+        #expect(!reopened.isError)
+        #expect(try await store.card(task.id)?.status == .todo)
+        let again = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
+        #expect(again.isError)
+
+        try await workspace.toggle(task.id)
         _ = try await store.createTask("补测试", under: task.id)
         #expect(try await store.card(task.id)?.status == .inProgress)
     }
 
-    /// 会话恢复不了（如那家 Agent 没接入、会话文件不在这台 Mac 上），说的话没送到：任务保持完成，什么都不变。
-    @Test func 说的话没送到_任务保持完成() async throws {
+    /// 已完成的事用过、还活着的会话不归没做完的事：信封"在做"、不带参数的 peek 都有它，它的动静只报一次；peek 末尾列着最近完成的事和它的会话。
+    /// Cue 在它上面做别的事：add 带 session 另建任务绑上它，旧任务照旧完成、照旧绑着；会话正被没做完的事用着时不让再绑。
+    @Test func 已完成的事的会话还活着_算在做_Cue在它上面另建任务() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
-        let task = try await store.createTask("修登录", in: nil)
+        let old = try await store.createTask("修登录", in: project.id)
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let workspace = Workspace(services: services)
-        try await workspace.bind("s1", to: task.id)
-        try await workspace.toggle(task.id)
-        try await recorder.end(sessionID: "s1")
-        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _ in
-            .failed("Agent 会话「修登录」已经结束，或不在这台 Mac 上")
-        }
-        try await executor.start()
-        defer { Task { await executor.stop() } }
+        try await workspace.bind("s1", to: old.id)
+        let mark = try await store.lastWrite()
+        try await recorder.update(sessionID: "s1", state: .thinking)
+        try await recorder.update(sessionID: "s1", state: .settled)
+        try await workspace.toggle(old.id)
+        #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
-        try await reply("登录后还是白屏", to: "s1", in: workspace)
-        let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
-        #expect(try await store.outcome(of: sent.id).status == .known(.failed))
-        let said = try #require(await CueTools(store: store, wait: 5).call("task", ["action": "say", "task": task.id.uuidString, "text": "接着修"]))
-        #expect(said.isError && said.text.contains("没送到"))
-        #expect(try await store.card(task.id)?.status == .done)
+        let board = try await store.cueBoard()
+        #expect(board.sessions.map(\.sessionID) == ["s1"])
+        let envelope = CueEnvelope.render(CueEnvelope.Input(
+            now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], board: board, waiting: [], wake: .idle, said: nil))
+        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
+        // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
+        let stepped = try await store.createTask("加语言参数", in: project.id)
+        let first = try await store.createTask("加 --lang", under: stepped.id)
+        let second = try await store.createTask("写 README", under: stepped.id)
+        try await recorder.update(sessionID: "s2", state: .settled, title: "加 --lang")
+        try await workspace.bind("s2", to: first.id)
+        try await workspace.toggle(first.id)
+        try await workspace.toggle(second.id)
+        try await workspace.toggle(stepped.id)
+        let cue = CueTools(store: store, wait: 0)
+        let peek = try #require(await cue.call("task", ["action": "peek"]))
+        #expect(peek.text.contains("- 会话「修登录」（s1） · 歇着"))
+        #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 歇着"))
+        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 歇着"))
+
+        let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
+        #expect(!added.isError)
+        let fresh = try #require(try await TaskBoard.read(from: store).inProgress.first?.task)
+        #expect(fresh.title == "补注册页" && fresh.piSessionID == "s1")
+        let kept = try #require(try await store.card(old.id))
+        #expect(kept.status == .done && kept.piSessionID == "s1")
+        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s2"])
+        let taken = try #require(await cue.call("task", ["action": "add", "title": "再补一处", "session": "s1"]))
+        #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }
 
     /// 下一步"开始"接着用上一步的会话，哪怕它已结束：话照样发进那个会话（执行的 Mac 先恢复它），不开新会话。
@@ -217,7 +247,7 @@ struct SessionTaskTests {
             try await recorder.update(sessionID: "s1", state: .settled)
             let changes = try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }
             return CueEnvelope.render(CueEnvelope.Input(
-                now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: changes, dismissed: [], board: try await store.cueBoard(),
+                now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: changes, board: try await store.cueBoard(),
                 waiting: [], wake: .sessionActivity, said: nil))
         }
         #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的] 修登录"))

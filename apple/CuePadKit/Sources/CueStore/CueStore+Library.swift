@@ -144,7 +144,7 @@ extension CueStore {
 
   /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   /// 上级原本是叶子时，它的草稿与会话移到这个新步骤上（这一步就是已经在做的那件事，`CardLinks` 的规则）。
-  /// 上级已完成的回到进行中（`reopen`）。
+  /// 上级已完成的回到进行中（`reopen`）：加步骤是明说还有活。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -703,7 +703,7 @@ extension CueStore {
       [Self.idList(deliveries)]) { $0.uuid(0) })
   }
 
-  /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：
+  /// 把灵感或任务关联到一个会话（没开始的任务进行中，提示词连带它的任务也一样；完成了的不变：说话不改任务的状态），不写发送记录：
   /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。会话只记在叶子上（`promptHome`）；
   /// 一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
@@ -721,8 +721,7 @@ extension CueStore {
     try db.run(
       """
       UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
-        startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
-        completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
+        startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END
       WHERE id IN (\(targets.map { _ in "?" }.joined(separator: ", ")))
       """, [session, now] + targets)
   }
@@ -742,7 +741,7 @@ extension CueStore {
   }
 
   /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有步骤的任务，有步骤的抛 `notALeaf`，不是任务抛 `notATask`。
-  /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子。任务置为进行中（完成了的重新打开）。
+  /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子（已完成的事绑着的会话照样能绑给新的事）。没开始的任务置为进行中，完成了的不变。
   /// 绑了会话的叶子不留提示词（话在会话里说）：有草稿时交出去（`handOut`）、返回它的正文，界面把它接进这个会话的回复框，不自动发。
   @discardableResult
   public func bindSession(_ sessionID: String, to task: UUID) throws -> String? {

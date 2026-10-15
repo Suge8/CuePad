@@ -21,7 +21,7 @@ public enum CueActivity {
       case "say": return line("跟会话说话")
       case "peek": return line("看进展")
       case "stop": return line("停下会话")
-      case "done": return line("收尾")
+      case "done": return line("做完")
       default: return line("看任务")
       }
     case "tell": return line(args.raw["ask"] == nil ? "给你写话" : "问你")
@@ -31,6 +31,7 @@ public enum CueActivity {
       case "note", "pin": return line("记下")
       case "forget": return line("忘掉一条")
       case "remind": return line("定提醒")
+      case "allow": return line("改允许清单")
       default: return line("整理记忆")
       }
     case "bash": return line(tool, args.line("command"))
@@ -65,7 +66,7 @@ public enum CueActivity {
       case "say": return item(.talk, "对\(named)说：\(args.line("text") ?? "")")
       case "peek": return task == nil && session == nil ? item(.read, "看板") : item(.read, "看\(named)的近况")
       case "stop": return item(.stop, "停下\(named)")
-      case "done": return item(.done, "收下\(named)")
+      case "done": return item(.done, "做完\(named)")
       default: return item(.other, "task")
       }
     case "tell":
@@ -78,6 +79,9 @@ public enum CueActivity {
       case "note": return item(.other, "记下：\(args.line("text") ?? "")")
       case "remind": return item(.other, "提醒：\(args.line("text") ?? "")")
       case "renew": return item(.other, "写交接备忘")
+      case "allow":
+        let ask = args.line("ask").map { CueAsk(rawValue: $0)?.name ?? $0 } ?? ""
+        return item(.other, "允许清单：\(ask)" + ((args.raw["allowed"] as? Bool) == false ? "又要先问" : "以后不用问"))
       default: return item(.other, "整理记忆")
       }
     case "bash": return item(.command, args.line("command") ?? tool)

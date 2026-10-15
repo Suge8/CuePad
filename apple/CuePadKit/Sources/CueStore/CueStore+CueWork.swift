@@ -37,12 +37,12 @@ public struct CueProject: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 看板（`CueStore.cueBoard`）：没做完的事，加上没绑任务的活会话。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
+/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
-  /// 没绑任务的活会话（他直接开的，终端里的也算），最近有动静的在前。
+  /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
-  /// 在做的事：有在做的任务，或有没绑任务的活会话。
+  /// 在做的事：有在做的任务，或有不归没做完的事的活会话。
   public var isActive: Bool { !sessions.isEmpty || tasks.contains(where: \.isActive) }
 }
 
@@ -92,7 +92,7 @@ public struct CueChange: Equatable, Sendable {
   }
 
   public var kind: Kind
-  /// 顶层任务；没绑任务的会话的变化为 nil。
+  /// 顶层任务；不归没做完的事的会话的变化为 nil。
   public var task: Card?
   /// 变化所在的叶子；任务本身的变化为 nil。
   public var leaf: Card?
@@ -270,7 +270,7 @@ extension CueStore {
   /// 1. 会话在等 CuePad 能代答的提问（`PiSessionState.answerableQuestion`）时，这句就是答案（`answerValue`）；答不上抛 `invalidAnswer`，什么都不写。
   /// 2. 否则按 `mode` 发出：`send` 直接发送、`followUp` 等它做完再说、`steer` 马上说（规则见 `say`）。
   /// 带 `config`（模型、思考强度）时先请会话换上（与界面换模型同一种请求），两条按先后执行；换不了模型抛 `cannotChangeModel`，什么都不写。
-  /// 会话已结束也照说：执行它的 Mac 先恢复它。送到时它做的已完成的事回到进行中（`finishDelivery`），没送到什么都不变。`card` 是这句带着的卡，
+  /// 会话已结束也照说：执行它的 Mac 先恢复它。说话不改任务的状态：已完成的事收到话仍是完成。`card` 是这句带着的卡，
   /// `name` 是会话记录还没到时对它的称呼，`host` 是记录还没到时由哪台 Mac 执行。
   public func speak(
     _ content: String, to sessionID: String, name: String = "", mode: DeliveryMode = .send, card: UUID? = nil, config: PiConfig? = nil,
@@ -409,7 +409,7 @@ extension CueStore {
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
-  /// Cue 收尾一件事：验收由 Cue 按证据自己定，不请你收下。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
+  /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
   /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤为 nil）与结束请求。
@@ -444,8 +444,8 @@ extension CueStore {
     }
   }
 
-  /// 已完成的任务来了新活，回到进行中：对它的会话说的话或答案送到时（`finishDelivery`，与提示词用掉同一次写入）、
-  /// 给它加步骤时（`createTask(_:under:)`，写入时）都经这里。
+  /// 已完成的任务加了步骤，回到进行中（`createTask(_:under:)`，写入时）。说话不经这里：任务的状态只由明确的动作改
+  /// （点圆圈、Cue 的 done 与 edit 的 reopen、加步骤）。
   /// `tasks` 连同各自已完成的上级回到进行中；回到进行中的事在归档里的，整件连同下级取回。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
     var tops: [UUID] = []
@@ -461,7 +461,7 @@ extension CueStore {
     try setArchived(archived.map(\.id), at: nil)
   }
 
-  /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 收尾 `finishTask`），或叶子换去别的会话的那一刻
+  /// 会话的去留只在这里定。一件事里的叶子做完了（你点圆圈 `toggleDone`、Cue 做完 `finishTask`），或叶子换去别的会话的那一刻
   /// （开工、交话时开新会话或交给别的会话都经 `insertDelivery`，你绑定经 `bindSession`），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束：
   /// 1. 有没做完、也没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去（接着用它时话送到才绑上），留着；
   /// 2. 这件事的下一步（排在最前的没做完的步骤）还没开工、也没在往别处交，照交给的规则（`handOffPlan`）默认接着用它，留着；
@@ -552,25 +552,34 @@ extension CueStore {
     return try projects().map { CueProject(id: $0.id, name: $0.name, hasFolder: bound.contains($0.id)) }
   }
 
-  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上没绑任务的活会话。
-  /// 在做的（`CueBoard.isActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。
+  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
+  /// 在做的（`CueBoard.isActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
       sessions: try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
   }
 
-  /// 表 `alias`（会话记录）里的是没绑任务的活会话：没结束，没有任务绑着它（开会话时替任务占着它的提示词也算绑着），
-  /// 也不是哪个任务以前用过的（`Card.formerSessionIDs`）。回收站里的任务不算。
+  /// 最近完成、绑过会话的 `limit` 件顶层任务（没删除，归档了的也算），最近完成的在前，各带它（自己或步骤）的会话里最近有动静的那个此刻的样子：
+  /// Cue 据此找能接着用的旧会话（不带参数的 peek 末尾列出）。会话记录还没到的不列。
+  public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: PiSessionState)] {
+    try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: "t.completedAt DESC, t.id", limit: limit)
+      .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
+  }
+
+  /// 表 `alias`（会话记录）里不归没做完的事的活会话：没结束，没有没做完的任务绑着它（开会话时替任务占着它的提示词也算绑着），
+  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它。
+  /// 回收站与归档里的任务不算。
   static func isLoose(_ alias: String) -> String {
-    """
-    \(alias).state <> '\(PiWorkState.ended.rawValue)'
-      AND NOT EXISTS (
-        SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND c.deletedAt IS NULL AND (c.todoAt IS NOT NULL OR \(isPrompt("c"))))
-      AND NOT EXISTS (
-        SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE c.formerSessionIDs IS NOT NULL AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND f.value = \(alias).sessionID)
-    """
+    let open = "c.deletedAt IS NULL AND c.completedAt IS NULL AND c.archivedAt IS NULL"
+    return """
+      \(alias).state <> '\(PiWorkState.ended.rawValue)'
+        AND NOT EXISTS (
+          SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(open) AND (c.todoAt IS NOT NULL OR \(isPrompt("c"))))
+        AND NOT EXISTS (
+          SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
+          WHERE c.formerSessionIDs IS NOT NULL AND c.todoAt IS NOT NULL AND \(open) AND f.value = \(alias).sessionID)
+      """
   }
 
   private func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {
@@ -623,7 +632,7 @@ extension CueStore {
   /// Cue 按它分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来。
   public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
 
-  /// 写入序号 `marks` 之后有会话的事与没绑任务的活会话里的变化，按事件时刻从早到晚：会话歇下、等回答、出错，Cue 发起的请求没能执行
+  /// 写入序号 `marks` 之后有会话的事与不归没做完的事的活会话（`isLoose`）里的变化，按事件时刻从早到晚：会话歇下、等回答、出错，Cue 发起的请求没能执行
   /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算）。
   /// 会话里用户说的话不另报：他那一轮歇下时 Cue 照常醒来，变化标着这一轮是他说的（`CueChange.byUser`）。
   public func cueChanges(after marks: CueMarks) throws -> [CueChange] {
@@ -645,10 +654,11 @@ extension CueStore {
       if let change = try sessionChange(session, seq: written, task: task, leaf: leaf) { changes.append(change) }
     }
     let loose = try selectWritten(PiSessionState.self, where: "\(Self.isLoose("piSessionStates"))", [], orderBy: "writeSeq")
-    for (session, written) in loose where written > marks.sessions {
+    // 刚完成的事的会话两边都有：算在那件事上，不报第二遍
+    for (session, written) in loose where written > marks.sessions && sessions[session.sessionID] == nil {
       if let change = try sessionChange(session, seq: written, task: nil, leaf: nil) { changes.append(change) }
     }
-    // 一个会话可以绑好几件事：没带卡的失败算在它绑着的每件事上（同一件事的几个叶子共用它时只报一次）；没绑任务的会话算在它自己上
+    // 一个会话可以绑好几件事：没带卡的失败算在它绑着的每件事上（同一件事的几个叶子共用它时只报一次）；不归没做完的事的会话算在它自己上
     let bySession = Dictionary(grouping: leaves.filter { $0.leaf.piSessionID != nil }, by: { $0.leaf.piSessionID! })
       .mapValues { pairs in pairs.filter { pair in pairs.first { $0.task.id == pair.task.id }!.leaf.id == pair.leaf.id } }
       .mapValues { $0.map { (task: Optional($0.task), leaf: Optional($0.leaf)) } }
@@ -722,12 +732,15 @@ extension CueStore {
   }
 
   /// 任务（自己或它的步骤）的会话里最近有动静的那个的摘要；没有会话为 nil。
-  private func latestRecap(of task: UUID) throws -> PiRecap? {
+  private func latestRecap(of task: UUID) throws -> PiRecap? { try latestSession(of: task)?.recap }
+
+  /// 任务（自己或它的步骤）绑着的会话里最近有动静的那个；没有为 nil。
+  private func latestSession(of task: UUID) throws -> PiSessionState? {
     try select(
       PiSessionState.self,
       where: "sessionID IN (SELECT piSessionID FROM cards WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND piSessionID IS NOT NULL)",
       [task], orderBy: "stateSince DESC, id", limit: 1
-    ).first?.recap
+    ).first
   }
 
   /// 一件事的细节；给步骤也行，按它的顶层任务给。`rounds` 是每个叶子带几轮最近的问答。
@@ -790,13 +803,15 @@ extension CueStore {
     return Dictionary(grouping: rows, by: \.task).mapValues { $0.map(\.preview) }
   }
 
-  private func topTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
+  private func topTasks(
+    where condition: String, _ arguments: [any SQLBindable] = [], orderBy: String? = nil, limit: Int? = nil
+  ) throws -> [Card] {
     try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
         AND \(condition)
-      ORDER BY \(Self.taskProjectOrder), t.sortKey, t.id
+      ORDER BY \(orderBy ?? "\(Self.taskProjectOrder), t.sortKey, t.id")\(limit.map { " LIMIT \($0)" } ?? "")
       """, arguments
     ) { Card(row: $0) }
   }

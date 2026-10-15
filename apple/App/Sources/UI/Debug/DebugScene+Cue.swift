@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
-/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 验收过、做完了（结果带证据与截图）。
+/// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的。
 /// `-CuePadCuePresence <thinking|tool|sending|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
@@ -75,14 +75,14 @@ extension DebugScene {
                 - CuePad「导入旧数据」：会话出错（prompt 太长），等他回来再定怎么拆。
 
                 **下一步**
-                - atlas 测试过了就派「补 3 个重连用例」，然后部署到预发、截图给他验收。
+                - atlas 测试过了就派「补 3 个重连用例」，然后部署到预发、截图给他看。
 
                 **和他之间没了结的**
                 - 推送到 origin/main 要先问他（会触发正式环境部署）。
                 """)
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
-            // Cue 验收过、做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
+            // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
             if let panel { _ = try await store.finishTask(panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"]) }
             _ = try await store.addCueMessage(
                 .cue, text: """

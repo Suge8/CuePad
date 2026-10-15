@@ -55,13 +55,12 @@ nonisolated struct CueTiming: Sendable {
 /// 每次对完账写进库（`CueStore.setCueState`，同步给各端；值班结束时由 `CueService` 写回歇着）。
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账，按先后只做一件事：
-/// 1. 你的消息与"等你"的回答：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
-///    你关掉的提问不叫醒 Cue（`CueMessage.wakesCue`），随下一次醒来的信封写在变化里、记下送达。
+/// 1. 你的消息与"等你"的回答（选的一项或另外说的话）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
 /// 2. 这一轮还没完就等。
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，马上醒来接着做。要换大脑（见上）就醒来请它写交接，请过还没有就直接换。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
-/// 5. 有会话的事或没绑任务的会话有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
+/// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
 ///    其中有会话在等回答（如"允许使用 Bash？"），或 Cue 说的话没送到而它还不知道（`CueChange.Kind.undelivered`），
 ///    就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
 /// 6. 空闲巡视：没有在做的事（`CueBoard.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
@@ -544,7 +543,7 @@ final class CueKeeper {
             let store = setup.store, now = Date.now
             let profile = try await store.cueProfile() ?? CueProfile()
             await follow(BrainSettings(profile))
-            let pending = try await store.cueMessagesToDeliver().filter(\.wakesCue)
+            let pending = try await store.cueMessagesToDeliver()
             if !pending.isEmpty {
                 if case .stuck = phase { await startShift() }
                 guard let shift else { return }
@@ -710,7 +709,7 @@ final class CueKeeper {
     }
 
     /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，
-    /// 连同信封变化里你关掉的提问，发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
+    /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     private func wakeUp(
         _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, images: [PiImage] = [], delivering: [UUID] = [], extra: String? = nil
     ) async throws -> Bool {
@@ -719,8 +718,6 @@ final class CueKeeper {
         let store = setup.store, now = Date.now
         let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
-        let dismissed = try await store.cueMessagesToDeliver().filter { !$0.wakesCue }
-        let delivering = delivering + dismissed.map(\.id)
         var resume: CueResume?
         if !shift.resumed {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
@@ -728,7 +725,7 @@ final class CueKeeper {
         }
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, renewAt: Self.renewAt, projects: try await store.cueProjects(),
-            changes: try await changes(), dismissed: dismissed, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
+            changes: try await changes(), board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
             resume: resume, said: nil))
         var parts = [envelope]
         if let used = shift.context?.used, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
@@ -816,9 +813,12 @@ final class CueKeeper {
     /// 重试可能好的错：额度、登录类的不算。
     private static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
 
+    /// 回答交给 Cue 的说法：选了一项写选的那项；不在选项里的是他没允许、另外说的话。
     private static func answerLine(_ message: CueMessage) -> String {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        return "你回答了「\(question)」：\(message.answer ?? "")"
+        let answer = message.answer ?? ""
+        guard message.choices?.contains(answer) != false else { return "你没允许「\(question)」，另外说：\(answer)" }
+        return "你回答了「\(question)」：\(answer)"
     }
 
     private static func day(_ date: Date) -> String {

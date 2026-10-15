@@ -123,7 +123,7 @@ import Testing
     let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     #expect(CueAlertText.task(of: record) == nil)
     let text = try #require(CueAlertText.content(message: record, profile: profile, task: nil))
-    #expect(text.title == "小管家" && text.body == "要不要把改动合并到共享分支？\n允许一次 / 以后合并到共享分支都不用问 / 拒绝")
+    #expect(text.title == "小管家" && text.body == "要不要把改动合并到共享分支？\n允许一次 / 以后合并到共享分支都不用问")
 
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))

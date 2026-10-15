@@ -210,6 +210,45 @@ enum Schema {
     Upgrade(stringLiteral: cueRound),
     // 48：每台 Mac 上能用的 Agent 与各家的模型（它自己写，各端读）：开新会话与 Cue 可选的 Agent、模型与默认模型的唯一来源
     Upgrade(stringLiteral: macAgents),
+    // 49：允许清单（`CueProfile.allows`）取代记忆里"以后……都不用问"的规矩行：一直记着、没忘掉的规矩行换成清单里的一项，那一行忘掉；
+    // 写着项目名、按名字对不上唯一一个项目的（改了名、删了）留在记忆里。"等你"没有关掉也没有"拒绝"了（不允许在卡片的输入框里另外说）：
+    // 还开着的提问去掉"拒绝"。modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      try db.exec(cueAllows)
+      let now = Date.stamp
+      try db.run(
+        """
+        UPDATE cueMessages SET modifiedAt = MAX(modifiedAt + 1, ?1),
+          choices = (SELECT json_group_array(value) FROM json_each(cueMessages.choices) WHERE value <> '拒绝')
+        WHERE author = 'cue' AND answeredAt IS NULL AND choices IS NOT NULL
+          AND EXISTS (SELECT 1 FROM json_each(cueMessages.choices) WHERE value = '拒绝')
+        """, [now])
+      guard try db.first("SELECT 1 FROM cueProfile", [], { _ in true }) != nil else { return }  // 没设过 Cue 就没有规矩行
+      let projects = try db.query("SELECT id, name FROM projects WHERE deletedAt IS NULL") { (id: $0.uuid(0), name: $0.text(1)) }
+      let lines = try db.query("SELECT id, text FROM cueLines WHERE pinned = 1 AND deletedAt IS NULL") { (id: $0.text(0), text: $0.text(1)) }
+      var allows: Set<CueAllow> = [], converted: [String] = []
+      for line in lines {
+        for ask in CueAsk.allCases {
+          guard let always = ask.always else { continue }
+          var project: UUID?
+          if line.text != always {
+            let head = always + "（项目「", tail = "」）"
+            guard line.text.hasPrefix(head), line.text.hasSuffix(tail) else { continue }
+            let name = String(line.text.dropFirst(head.count).dropLast(tail.count))
+            let hits = projects.filter { $0.name == name }
+            guard hits.count == 1 else { continue }
+            project = hits[0].id
+          }
+          allows.insert(CueAllow(ask, project: project))
+          converted.append(line.id)
+        }
+      }
+      guard !converted.isEmpty else { return }
+      try db.run("UPDATE cueProfile SET allows = ?1, modifiedAt = MAX(modifiedAt + 1, ?2)", [CueAllow.encode(allows), now])
+      try db.run(
+        "UPDATE cueLines SET deletedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id IN (SELECT value FROM json_each(?2))",
+        [now, JSONColumn.encode(converted)])
+    },
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -283,6 +322,9 @@ enum Schema {
 
   /// 47 改的列（45 之后）。
   private static let cueRound = "ALTER TABLE cueState DROP COLUMN pendingTools; ALTER TABLE cueState ADD COLUMN round TEXT;"
+
+  /// 49 加的列：Cue 的允许清单（`CueProfile.allows`）。
+  private static let cueAllows = "ALTER TABLE cueProfile ADD COLUMN allows TEXT;"
 
   /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -438,6 +480,7 @@ enum Schema {
     \(cueState)
     \(cueTools)
     \(cueRound)
+    \(cueAllows)
     \(writeSeq)
     \(macPresence)
     \(macAgents)

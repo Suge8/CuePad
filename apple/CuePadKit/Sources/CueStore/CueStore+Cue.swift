@@ -6,12 +6,14 @@ import Foundation
 
 extension CueStore {
   /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"，选项是 `CueAsk.choices`）：
-  /// 你已说过这类事以后不用问（库里有它的规矩行，`CueAsk.rule`）就抛 `alreadyAllowed`、什么都不写。
+  /// 允许清单里有这类事（`CueProfile.allowing`，按关联任务所在的项目）就抛 `alreadyAllowed`、什么都不写。
   @discardableResult
   public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
-      if let ask, let allowed = try allowingLine(ask, task: task) { throw CueStoreError.alreadyAllowed(allowed) }
+      if let ask, let allowed = try cueProfile()?.allowing(ask, in: try projectID(of: task)) {
+        throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
+      }
       return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task)
     }
   }
@@ -45,7 +47,7 @@ extension CueStore {
     }
   }
 
-  /// 一轮做完时它的回复（值班的管理器调）：不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、收尾的结果），最后那句只是复述，不写。
+  /// 一轮做完时它的回复（值班的管理器调）：不是在回答你的一轮（`answersYou` 为假）里已经对你说过话（tell、done 的结果），最后那句只是复述，不写。
   public func replyCueRound(startedAt: Date, reply: String, as author: CueAuthor, answersYou: Bool) throws {
     guard !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
     try write {
@@ -60,60 +62,60 @@ extension CueStore {
     try select(CueMessage.self, where: "author = 'cue' AND text = ?", [text], orderBy: "createdAt DESC, rowid DESC", limit: 1).first
   }
 
-  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。结局照常交给 Cue（`toDeliver`），撤回的不交。
-  /// 你选"以后……都不用问"（`CueAsk.always`）时，同一个事务里记一条你的、一直记着的规矩（`CueAsk.rule`，已有就不再记），
-  /// 返回它，调用方上传。
+  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。回答交给 Cue（`toDeliver`），撤回的不交。
+  /// 你选"以后……都不用问"（`CueAsk.always`）时，同一个事务里把这类事记进允许清单（关联任务在项目里时只管这个项目）；
+  /// 清单改了返回真，调用方上传设置。
   @discardableResult
-  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> CueMemoryLine? {
+  public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> Bool {
     try write {
       guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
         throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
       }
       guard case .answered(let answer) = end, let ask = CueAsk.allCases.first(where: { $0.always == answer }),
-        let message = try find(CueMessage.self, id), try allowingLine(ask, task: message.taskID) == nil,
-        let rule = ask.rule(project: try projectName(of: message.taskID))
-      else { return nil }
-      return try insertLine(rule, source: .you, pinned: true)
+        let message = try find(CueMessage.self, id)
+      else { return false }
+      return try changeAllows(CueAllow(ask, project: try projectID(of: message.taskID)), allowed: true)
     }
   }
 
-  /// 允许这类事的规矩行（没忘掉、一直记着）的序号：只管任务所在项目的那条，或不分项目的那条。
-  private func allowingLine(_ ask: CueAsk, task: UUID?) throws -> Int? {
-    let rules = [ask.rule(project: nil), ask.rule(project: try projectName(of: task))].compactMap { $0 }
-    guard !rules.isEmpty,
-      let line = try select(
-        CueMemoryLine.self, where: "pinned = 1 AND deletedAt IS NULL AND text IN (SELECT value FROM json_each(?))",
-        [JSONColumn.encode(rules)], orderBy: Self.lineOrder, limit: 1
-      ).first
-    else { return nil }
-    return try index(of: line)
+  /// 允许清单加上或去掉一项（卡片、设置的开关与 Cue 的 `memory allow` 都经这里）；规矩那一类不能放行，抛 `cannotAllowRule`。
+  /// 返回清单改了没有（改了调用方上传设置）。没有设置就从默认值建一行（同 `updateCueProfile`）。
+  @discardableResult
+  public func setCueAllow(_ allow: CueAllow, allowed: Bool) throws -> Bool {
+    try write { try changeAllows(allow, allowed: allowed) }
   }
 
-  /// 任务所在项目的名字；没有任务或任务不在项目里为 nil。
-  private func projectName(of task: UUID?) throws -> String? {
-    try task.flatMap { try find(Card.self, $0) }?.projectID.flatMap { try find(Project.self, $0) }?.name
+  private func changeAllows(_ allow: CueAllow, allowed: Bool) throws -> Bool {
+    guard allow.ask != .known(.rule) else { throw CueStoreError.cannotAllowRule }
+    let before = try cueProfile()?.allows ?? []
+    let after = allowed ? before.union([allow]) : before.subtracting([allow])
+    guard after != before else { return false }
+    _ = try editProfile { $0.allows = after }
+    return true
+  }
+
+  /// 任务所在的项目；没有任务或任务不在项目里为 nil。
+  private func projectID(of task: UUID?) throws -> UUID? {
+    try task.flatMap { try find(Card.self, $0) }?.projectID
   }
 
   /// 还开着的提问（唯一定义）：Cue 带选项问的、还没结束。
   static let openQuestion = "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL"
 
-  /// 结束提问只在这里写：结束的时刻与选的那一项；撤回同时记送达。只动 `predicate` 选中的还开着的提问，返回结束了几条。必须在写事务内调用。
+  /// 结束提问只在这里写：结束的时刻与你的回答（撤回的没有）。只动 `predicate` 选中的还开着的提问，返回结束了几条。必须在写事务内调用。
   func endQuestions(_ end: CueQuestionEnd, where predicate: String, _ bindings: [any SQLBindable]) throws -> Int {
     let now = Date.stamp
-    let answer: String? = if case .answered(let option) = end { option } else { nil }
-    let delivered: Date? = end == .withdrawn ? now : nil
-    let values: [any SQLBindable] = [answer, now, delivered, now]
+    let answer: String? = if case .answered(let text) = end { text } else { nil }
+    let values: [any SQLBindable] = [answer, now, now]
     try db.run(
-      "UPDATE cueMessages SET answer = ?, answeredAt = ?, deliveredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)",
-      values + bindings)
+      "UPDATE cueMessages SET answer = ?, answeredAt = ?, modifiedAt = ? WHERE \(Self.openQuestion) AND \(predicate)", values + bindings)
     return db.changes
   }
 
-  /// 待交给 Cue 的大脑的（唯一定义）：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个结局的提问结局（撤回的结束时就记了送达）。
-  /// 哪些叫醒 Cue 见 `CueMessage.wakesCue`。
+  /// 待交给 Cue 的大脑的（唯一定义），交出去都叫醒它：你说了还没交的话，与还没交、或交过之后又从别处同步来另一个回答的回答。
   private static let toDeliver = """
     ((author = 'you' AND deliveredAt IS NULL)
-      OR (author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
+      OR (author = 'cue' AND answer IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
     """
 
   /// 待交给 Cue 的大脑的你的消息与回答（`toDeliver`），从早到晚。
@@ -172,7 +174,7 @@ extension CueStore {
     return CueResume(handoff: handoff, messages: after.prefix(limit).reversed(), truncated: after.count > limit)
   }
 
-  /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你选了、关掉或 Cue 撤回。
+  /// 在等你回答的消息，从早到晚："在等你"就是还开着的提问（`openQuestion`），直到你回答或 Cue 撤回。
   /// 不看关联任务的状态：要问的几类（`CueAsk`）本来就在任务做完之后问（推送、合并、发布），按任务完成算过期会让刚问的那条立刻消失；
   /// 情况变了由 Cue 撤回。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
@@ -315,19 +317,22 @@ extension CueStore {
   /// 改设置（没有就从默认值建一行）；返回改后的。读、改、写在同一个事务里，`edit` 可按读到的最新值决定改不改；什么都没改就不写。
   @discardableResult
   public func updateCueProfile(_ edit: @Sendable (inout CueProfile) -> Void) throws -> CueProfile {
-    try write {
-      let stored = try cueProfile()
-      var profile = stored ?? CueProfile()
-      edit(&profile)
-      if let stored, profile == stored { return stored }
-      profile.modifiedAt = Date.stamp
-      try db.run(
-        """
-        INSERT INTO cueProfile (\(CueProfile.columns.joined(separator: ", "))) VALUES (\(CueProfile.columns.map { _ in "?" }.joined(separator: ", ")))
-        ON CONFLICT(id) DO UPDATE SET \(CueProfile.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", "))
-        """, profile.bindings)
-      return profile
-    }
+    try write { try editProfile(edit) }
+  }
+
+  /// `updateCueProfile` 的事务内部分：必须在写事务内调用。
+  private func editProfile(_ edit: (inout CueProfile) -> Void) throws -> CueProfile {
+    let stored = try cueProfile()
+    var profile = stored ?? CueProfile()
+    edit(&profile)
+    if let stored, profile == stored { return stored }
+    profile.modifiedAt = Date.stamp
+    try db.run(
+      """
+      INSERT INTO cueProfile (\(CueProfile.columns.joined(separator: ", "))) VALUES (\(CueProfile.columns.map { _ in "?" }.joined(separator: ", ")))
+      ON CONFLICT(id) DO UPDATE SET \(CueProfile.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", "))
+      """, profile.bindings)
+    return profile
   }
 }
 
