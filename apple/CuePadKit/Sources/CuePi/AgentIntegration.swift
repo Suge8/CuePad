@@ -100,9 +100,9 @@ extension AgentInstallError: LocalizedError {
 /// 那里是用户自己维护的，且会被好几家同时读到。OpenCode 也读 `~/.claude/skills`，两份同名同内容，按名字去重。
 /// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
 public struct AgentIntegration: Sendable {
-    let paths: AgentPaths
+    private let paths: AgentPaths
     private var pi: PiPaths { paths.pi }
-    let locate: @Sendable () async -> ExecutableLocator
+    private let locate: @Sendable () async -> ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
     /// 隔离运行（开发构建）：配置目录是缺省真实位置的那几家只检测、不写
@@ -189,6 +189,11 @@ public struct AgentIntegration: Sendable {
         }
     }
 
+    /// 由检测出的状态（`status(of:)`）得出这台 Mac 上各家能不能用：能开新会话的几家问模型，其余给出原因（`AgentProbe`）。
+    @concurrent public func probe(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
+        await AgentProbe(paths: paths, locator: await locate()).run(statuses)
+    }
+
     /// 这台 Mac 上能用的 `pi`（版本够新）；后台托管会话时启动它。
     @concurrent public func locatePi() async -> URL? {
         let found = await detect(.pi)
@@ -196,7 +201,7 @@ public struct AgentIntegration: Sendable {
         return found.executable
     }
 
-    func files(of kind: AgentKind) -> AgentStatus.Files {
+    private func files(of kind: AgentKind) -> AgentStatus.Files {
         let skill = read(skillFile(kind))
         if skill.map({ !$0.contains(AgentSkill.ownershipMarker) }) ?? unreadable(skillFile(kind)) { return .foreign(abbreviated(skillFile(kind))) }
         let skillState: AgentStatus.Files = skill.map { $0 == AgentSkill.text(for: kind, cuepad: cuepad) ? .current : .outdated } ?? .missing
@@ -230,7 +235,7 @@ public struct AgentIntegration: Sendable {
 
     /// 问每家的 `--version`（设置里写出版本）：有版本要求的（Pi、OpenCode）要报得出够新的版本，OpenCode 报的版本太旧是 v1；
     /// 报不出版本的照常算在，只是没有版本。没有可执行文件时，除了 Pi，有配置目录（用过它，含各家的桌面版）也算在。
-    func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
+    private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {
         let locator = await locate()
         let used = FileManager.default.fileExists(atPath: home(of: kind).path)
         let candidates = locator.candidates(kind.command)
@@ -261,7 +266,7 @@ public enum PiExtensionBundle {
     /// 扩展文件首行；用它区分"CuePad 写的"与同名的用户文件
     static let ownershipMarker = "// CuePad Pi bridge extension"
 
-    /// 随包的那份文件：探测模型时 Pi 直接加载它（`AgentIntegration.available`），不经装到 Pi 扩展目录的那份。
+    /// 随包的那份文件：探测模型时 Pi 直接加载它（`AgentIntegration.probe`），不经装到 Pi 扩展目录的那份。
     static let url: URL = {
         guard let url = Bundle.module.url(forResource: "cuepad-bridge", withExtension: "ts", subdirectory: "Extension") else {
             preconditionFailure("bundled cuepad-bridge.ts is missing from the CuePi resource bundle")

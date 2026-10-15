@@ -1,11 +1,11 @@
 #if os(macOS)
 import CueStore
 import Foundation
-import os
 
-/// 问这台 Mac 上的各家 Agent 能不能用、不指定模型时用哪个、能选哪些：得出的就是同步表 macAgents 里这台 Mac 的那条（`MacAgent`）。
-/// 能用 = 能开新会话（`AgentStatus.canLaunch`）并且问得出模型（登录了）。每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出，
-/// 各家并发、各自至多 `AgentTimeouts.probe`；问不出（没登录、出错、超时）就是不能用。只读，不改任何一家的配置。
+/// 由已检测出的接入状态（`AgentIntegration.status(of:)`）得出这台 Mac 上各家能不能用（同步表 macAgents 里这台的那条）：
+/// 能开新会话（`AgentStatus.canLaunch`）的几家问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出才算能用；
+/// 其余与问不出的给出原因（`MacAgentProblem`，接在 Agent 名后面读，用户能照着办）。只读，不改任何一家的配置。
+/// 每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出，各家并发、各自至多 `AgentTimeouts.probe`：
 /// - Pi：RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
 ///   扩展把会话里上报的同一份模型配置写成一行就收尾。可选的与 Pi 的 /model 同一规则，配了范围（`enabledModels`）就是范围内的。
 ///   没有可用的模型是没登录。
@@ -16,48 +16,80 @@ import os
 ///   其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。清单去掉 `default` 那项
 ///   （它解析到的是推荐的模型，不一定是配置的），默认落到解析出同一个模型的第一项（`opus` 这样的别名排在完整 id 前面），对不上时只有 id。
 /// - OpenCode：没有模型清单，能开新会话就算能用。
-extension AgentIntegration {
-    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "agents")
+/// 可执行文件取搜索目录里的第一个（与开会话、起大脑同一个），不再为每家问一遍版本。
+struct AgentProbe {
+    let paths: AgentPaths
+    let locator: ExecutableLocator
 
-    /// 这台 Mac 上能用的 Agent，按 `AgentKind` 的顺序。
-    @concurrent public func available() async -> [MacAgent] {
-        let found = await withTaskGroup(of: MacAgent?.self) { group in
-            for kind in AgentKind.allCases { group.addTask { await self.probe(kind) } }
-            return await group.reduce(into: [MacAgent]()) { if let agent = $1 { $0.append(agent) } }
-        }
-        return AgentKind.allCases.compactMap { kind in found.first { $0.kind == kind } }
+    /// 一家问出的结果：能用，或不能用的原因。
+    private enum Outcome: Sendable {
+        case usable(MacAgent)
+        case unusable(String)
     }
 
-    private func probe(_ kind: AgentKind) async -> MacAgent? {
-        let found = await detect(kind)
-        guard AgentStatus(presence: found.presence, files: files(of: kind)).canLaunch else { return nil }
-        if kind == .opencode { return MacAgent(kind: kind, model: nil, models: []) }
-        guard let executable = found.executable else { return nil }
+    func run(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
+        let outcomes = await withTaskGroup(of: (AgentKind, Outcome).self) { group in
+            for (kind, status) in statuses { group.addTask { (kind, await outcome(kind, status)) } }
+            return await group.reduce(into: [AgentKind: Outcome]()) { $0[$1.0] = $1.1 }
+        }
+        var agents: [MacAgent] = [], problems: [MacAgentProblem] = []
+        for kind in AgentKind.allCases {
+            switch outcomes[kind] {
+            case .usable(let agent)?: agents.append(agent)
+            case .unusable(let reason)?: problems.append(MacAgentProblem(kind: kind, reason: reason))
+            case nil: break
+            }
+        }
+        return (agents, problems)
+    }
+
+    private func outcome(_ kind: AgentKind, _ status: AgentStatus) async -> Outcome {
+        if let reason = Self.reason(kind, status) { return .unusable(reason) }
+        if kind == .opencode { return .usable(MacAgent(kind: kind, model: nil, models: [])) }
+        guard let executable = locator.executable(kind) else { return .unusable("没找到它的命令行程序") }
         do {
-            let agent = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
-                let locator = await locate()
+            let agent: MacAgent? = try await withDeadline(AgentTimeouts.probe, orThrow: ProbeError.timedOut) { [self] in
                 switch kind {
-                case .pi: return await probePi(executable, locator: locator)
-                case .codex: return try await probeCodex(executable, locator: locator)
-                case .claudeCode: return try await probeClaude(executable, locator: locator)
+                case .pi: return try await askPi(executable)
+                case .codex: return try await askCodex(executable)
+                case .claudeCode: return try await askClaude(executable)
                 case .opencode: return nil
                 }
             }
-            if agent == nil { Self.log.notice("\(kind.name, privacy: .public) 没登录") }
-            return agent
+            return agent.map(Outcome.usable) ?? .unusable("没登录")
         } catch {
-            Self.log.error("没问出 \(kind.name, privacy: .public) 的模型：\(error, privacy: .public)")
-            return nil
+            let message = error.localizedDescription
+            return .unusable("问不出模型（\(message.count > Self.messageLimit ? message.prefix(Self.messageLimit - 1) + "…" : message)）")
         }
     }
 
-    private func probePi(_ executable: URL, locator: ExecutableLocator) async -> MacAgent? {
+    /// 原因里错误原话的字符数上限（含省略号）：原因跟着同步记录走，界面只显示一行。
+    private static let messageLimit = 60
+
+    /// 不能开新会话的原因；能开为 nil。
+    private static func reason(_ kind: AgentKind, _ status: AgentStatus) -> String? {
+        switch status.presence {
+        case .notFound: return "没装"
+        case .tooOld(let version): return "版本太旧（\(version)，要 \(kind.minimumVersion.map(\.description) ?? "") 或更新）"
+        case .found: break
+        }
+        switch status.files {
+        case .missing: return "还没接入 CuePad"
+        case .foreign(let path): return "接不上：\(path) 是别人的同名文件"
+        case .current, .outdated: return nil
+        }
+    }
+
+    /// 返回 nil 是没登录；没回答抛错。
+    private func askPi(_ executable: URL) async throws -> MacAgent? {
         let arguments = [
             "--mode", "rpc", "--no-session", "--offline", "--no-extensions", "--extension", PiExtensionBundle.url.path,
             "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
         ]
         let environment = locator.environment(launching: executable, overrides: paths.pi.launchEnvironment.merging(["CUEPAD_PROBE": "1"]) { $1 })
-        guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: AgentTimeouts.probe) else { return nil }
+        guard let result = await ChildProcess.run(executable, arguments, environment: environment, timeout: AgentTimeouts.probe) else {
+            throw ProbeError.timedOut
+        }
         struct Line: Decodable {
             let cuepadProbe: Models
             struct Models: Decodable {
@@ -66,13 +98,13 @@ extension AgentIntegration {
             }
         }
         let decoder = JSONDecoder()
-        guard let reply = result.output.split(separator: "\n").lazy.compactMap({ try? decoder.decode(Line.self, from: Data($0.utf8)) }).first?.cuepadProbe,
-              !reply.models.isEmpty else { return nil }
-        return MacAgent(kind: .pi, model: reply.model?.key, models: reply.models)
+        guard let reply = result.output.split(separator: "\n").lazy.compactMap({ try? decoder.decode(Line.self, from: Data($0.utf8)) }).first?.cuepadProbe
+        else { throw ProbeError.noAnswer(status: result.status) }
+        return reply.models.isEmpty ? nil : MacAgent(kind: .pi, model: reply.model?.key, models: reply.models)
     }
 
-    @MainActor private func probeCodex(_ executable: URL, locator: ExecutableLocator) async throws -> MacAgent? {
-        let environment = paths.environment.merging(["CODEX_HOME": home(of: .codex).path]) { $1 }
+    @MainActor private func askCodex(_ executable: URL) async throws -> MacAgent? {
+        let environment = paths.environment.merging(["CODEX_HOME": paths.home(of: .codex).path]) { $1 }
         let rpc = try await CodexRPC.launch(executable, environment: locator.environment(launching: executable, overrides: environment))
         do {
             let agent = try await Self.codexModels(rpc)
@@ -93,7 +125,7 @@ extension AgentIntegration {
         return MacAgent(kind: .codex, model: model, models: models.map(\.option))
     }
 
-    @MainActor private func probeClaude(_ executable: URL, locator: ExecutableLocator) async throws -> MacAgent? {
+    @MainActor private func askClaude(_ executable: URL) async throws -> MacAgent? {
         let arguments = [
             "-p", "--no-session-persistence", "--settings", #"{"disableAllHooks":true}"#, "--strict-mcp-config", "--disable-slash-commands",
         ]
@@ -122,9 +154,15 @@ extension AgentIntegration {
         return MacAgent(kind: .claudeCode, model: model, models: offered.map(\.option))
     }
 
-    private enum ProbeError: Error, CustomStringConvertible {
+    private enum ProbeError: LocalizedError {
         case timedOut
-        var description: String { "超过 \(AgentTimeouts.probe) 没有回答" }
+        case noAnswer(status: Int32)
+        var errorDescription: String? {
+            switch self {
+            case .timedOut: "\(AgentTimeouts.probe.components.seconds) 秒没回答"
+            case .noAnswer(let status): "没报模型就退出了，退出码 \(status)"
+            }
+        }
     }
 }
 #endif

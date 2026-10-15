@@ -50,9 +50,8 @@ struct CueHostTests {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let project = try await app.services.store.createProject(name: "演示", color: "blue")
             try await app.services.store.setDirectory(folder.path, for: project.id)
-            app.services.agents.probe = { [MacAgent(kind: .pi, model: nil, models: [])] }
+            try await app.connect(.pi)
             app.services.start()
-            try await eventually("这台 Mac 写下能用 Pi") { try await self.app.services.store.macAgents(on: TestApp.hostID).kinds == [.pi] }
             try await app.services.cue.enable()
             try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }

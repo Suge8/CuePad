@@ -71,7 +71,7 @@ type BuiltinCommand = (typeof BUILTIN_COMMANDS)[number];
 function entriesOnDisk(file: string): number {
 	return fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length - 1;
 }
-/** CuePad 问这台 Mac 上的 Pi 能用哪些模型时（`AgentIntegration.available`）带这个环境变量：会话一开始就把模型配置写成一行
+/** CuePad 问这台 Mac 上的 Pi 能用哪些模型时（`AgentIntegration.probe`）带这个环境变量：会话一开始就把模型配置写成一行
  * `{"cuepadProbe": {model, models}}`，不连 CuePad、不做别的；与会话上报的是同一份（`modelInfo`），没登录时都空。直接写描述符 1：RPC 模式把
  * `process.stdout` 改道到标准错误，护着它的协议输出。不调 `ctx.shutdown()`：RPC 模式只在读到下一条命令时才看退出请求，
  * 进程靠标准输入读到 EOF 退出 */

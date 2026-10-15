@@ -119,6 +119,8 @@ final class AppServices {
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 这台 Mac 的在线记录；`start()` 时开始续期，退出时写成离线。
     @ObservationIgnored let presence: MacPresenceKeeper
+    /// 这台 Mac 上的 Agent 能不能用（同步表 macAgents）的唯一写入口；`start()` 时开始跟着接入状态与唤醒问，Cue 启用前也经它问。
+    @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, pi: pi, runtimes: runtimes, hostID: hostID, recorder: piStateRecorder,
@@ -323,11 +325,13 @@ final class AppServices {
         hooks = mac.hooks
         runtimes = mac.runtimes(store)
         agents = AgentIntegrations(mac.agents)
+        macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
-            store: store, sync: self.sync, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
+            store: store, sync: self.sync, hostID: mac.hostID, macAgents: macAgents, library: location.directory,
+            piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(
