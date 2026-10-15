@@ -38,5 +38,9 @@ struct CommandProgressTests {
         #expect(try await progress() != nil)
         _ = try await services.store.outcome(of: try await store.requestDelivery("你好", to: local, on: TestApp.hostID, mode: .send).id)
         #expect(try await progress() == nil)
+        // 时间只到毫秒：同一毫秒里先命令后说话，按写下的先后，最新的仍是那句话
+        var requests = try await store.deliveryRequests(toSession: "atlas")
+        requests[requests.count - 1].createdAt = requests[requests.count - 2].createdAt
+        #expect(MacDelivery.commandProgress(requests, messages: try await store.piMessages(of: "atlas"), at: app.services.speech) == nil)
     }
 }
