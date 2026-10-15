@@ -7,7 +7,8 @@ import Foundation
 ///
 /// 一行是 `{timestamp, type, payload}`。只认 `session_meta`（会话 id、工作目录）与 `event_msg`：
 /// `task_started` 开始一轮；`item_completed` 里 `UserMessage` 是你的话（`client_id` 是 CuePad 发的那条的投送请求，见 `clientID`）、
-/// `AgentMessage` 是说的一段（中途的 `commentary` 与最后的 `final_answer` 都是，`task_complete` 结束这一轮）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
+/// `AgentMessage` 是说的一段（中途的 `commentary`；`final_answer` 是最后一段，结束这一轮：Codex 先报歇下、钩子返回后才写 `task_complete`，
+/// 等它的话歇下时对话里还没有回答；没有回答就结束的轮由 `task_complete` 结束）、`CommandExecution`/`FileChange`/`McpToolCall`/`WebSearch` 记工具活动、
 /// `ContextCompaction` 是压缩；`turn_aborted` 是这一轮被停下（没有回答）。`response_item` 里同一条你的话没有 `client_id`，不读。
 /// 会话名只在 `<CODEX_HOME>/session_index.jsonl` 里，会话文件没有：历史会话的名字退回首条消息。
 enum CodexHistory {
@@ -60,7 +61,8 @@ enum CodexHistory {
             let delivery = item.clientID.flatMap { $0.hasPrefix(clientIDPrefix) ? String($0.dropFirst(clientIDPrefix.count)) : nil }
             cp.said(said, entry, deliveryID: delivery, into: &transcript)
         case "AgentMessage":
-            cp.spoke((item.content ?? []).compactMap(\.text).joined(separator: "\n"), entry)
+            let text = (item.content ?? []).compactMap(\.text).joined(separator: "\n")
+            if item.phase == "final_answer" { cp.answered(text, entry, into: &transcript) } else { cp.spoke(text, entry) }
         case "ContextCompaction":
             cp.compacted(entry, into: &transcript)
         default:
@@ -143,9 +145,11 @@ enum CodexHistory {
         var changes: [String: Change]?
         var tool: String?
         var query: String?
+        /// `AgentMessage`：`commentary` / `final_answer`
+        var phase: String?
 
         private enum CodingKeys: String, CodingKey {
-            case type, id, content, command, status, changes, tool, query
+            case type, id, content, command, status, changes, tool, query, phase
             case clientID = "client_id"
             case exitCode = "exit_code"
         }

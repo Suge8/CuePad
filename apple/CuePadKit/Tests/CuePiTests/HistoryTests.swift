@@ -281,6 +281,17 @@ struct ConversationRuleTests {
         #expect(answer.text == "跑完了" && answer.at.timeIntervalSince(started) == 6)
     }
 
+    /// Codex 先报歇下（`Stop` 钩子）、钩子返回后才往会话文件写 `task_complete`：最后的回答（`final_answer`）一落盘就是这一轮的回答，
+    /// 歇下时对话与摘要里已经有它，不等 `task_complete`。
+    @Test func codexsFinalAnswerIsTheAnswerBeforeTheRoundIsMarkedComplete() throws {
+        let file = try codexFile([["type": "task_started"], user("u1", "Reply with WRAPPED"), agent("m1", "WRAPPED", "final_answer")])
+
+        let read = try PiHistory.index(file: file, agent: .codex, from: nil, files: scratchFiles)
+
+        #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == ["user:Reply with WRAPPED", "pi:WRAPPED"])
+        #expect(read.recap == PiRecap(lastPrompt: "Reply with WRAPPED", lastReply: "WRAPPED", pendingPrompt: nil))
+    }
+
     @Test func aSteeredMessageInTheSameTurnGetsItsOwnAnswer() throws {
         let file = try codexFile([
             ["type": "task_started"], user("u1", "跑 sleep 20，跑完回 LONG-DONE"), agent("m1", "先跑命令。", "commentary"),
