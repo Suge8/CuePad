@@ -64,10 +64,7 @@ struct MacDependencies {
             ] },
             pasteboard: .general,
             cue: CueDependencies(
-                scan: { [runtimes = CueRuntimes(integration: agents, piAgentDirectory: paths.pi.agentDirectory, hostID: hostID)] in await runtimes.scan() },
-                launch: { [runtimes = CueRuntimes(integration: agents, piAgentDirectory: paths.pi.agentDirectory, hostID: hostID)] in
-                    await runtimes.launch($0, store: $1)
-                },
+                launch: { try await CueLaunch.local($0, store: $1, host: hostID) },
                 helper: commandLineTool.helper,
                 notifier: alerts))
     }

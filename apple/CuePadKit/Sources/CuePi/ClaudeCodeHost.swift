@@ -55,12 +55,9 @@ final class ClaudeHostedSession: SessionLink {
         cwd: URL, sessionFile: URL, model: PiModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
     ) async throws -> PiSession {
         let info = try await stream.request(["subtype": "initialize"])
-        let models = (info["models"]?.array ?? []).compactMap { model -> PiModelOption? in
-            guard let value = model["value"]?.string else { return nil }
-            let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
-            resolved[value] = model["resolvedModel"]?.string
-            return ClaudeCode.model(value, name: model["displayName"]?.string, levels: levels)
-        }
+        let offered = ClaudeCode.models(in: info)
+        for model in offered { resolved[model.option.key.id] = model.resolved }
+        let models = offered.map(\.option)
         let listed = (info["commands"]?.array ?? []).compactMap { command -> PiSlashCommand? in
             guard let name = command["name"]?.string else { return nil }
             let hint = command["argumentHint"]?.string.flatMap { $0.isEmpty ? nil : $0 }

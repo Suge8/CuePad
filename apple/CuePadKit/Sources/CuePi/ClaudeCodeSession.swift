@@ -25,6 +25,15 @@ enum ClaudeCode {
         PiModelOption(key: PiModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
     }
 
+    /// 控制请求 `initialize` 回应里的模型清单（`value` 是别名或完整 id，`resolvedModel` 是它此刻解析到的完整 id）。
+    static func models(in info: JSONValue) -> [(option: PiModelOption, resolved: String?)] {
+        (info["models"]?.array ?? []).compactMap { model in
+            guard let value = model["value"]?.string else { return nil }
+            let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
+            return (self.model(value, name: model["displayName"]?.string, levels: levels), model["resolvedModel"]?.string)
+        }
+    }
+
     /// Claude Code 的强度档（`--effort`、`effortLevel`）：没有关掉思考的档，更低的夹到 low。
     static let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
 

@@ -15,9 +15,13 @@ final class AgentIntegrations {
     @ObservationIgnored private let integration: AgentIntegration
     /// 移除成功之后（关掉开关）：收起 CuePad 为它起的东西（如 CuePad 拉起的 OpenCode 服务）
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
+    /// 这台 Mac 上能用的 Agent 与各家的模型（`AgentIntegration.available`，各起一个进程问，慢）：只交给写同步表 macAgents 的那一处，
+    /// 界面读库。测试换成给定的。
+    @ObservationIgnored var probe: @Sendable () async -> [MacAgent]
 
     init(_ integration: AgentIntegration) {
         self.integration = integration
+        probe = { await integration.available() }
     }
 
     func status(_ kind: AgentKind) -> AgentStatus? { statuses[kind] }

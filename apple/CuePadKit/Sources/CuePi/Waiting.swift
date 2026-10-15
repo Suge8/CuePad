@@ -7,6 +7,8 @@ public enum AgentTimeouts {
     public static let ack: Duration = .seconds(10)
     /// Claude Code 的控制请求、Codex 的 RPC 请求（含握手）
     public static let reply: Duration = .seconds(60)
+    /// 问一家 Agent 能不能用、有哪些模型（`AgentIntegration.available`），连同起进程
+    public static let probe: Duration = .seconds(20)
     /// 起进程到上桥、拉起后台服务
     public static let launch: Duration = .seconds(30)
     /// 请会话结束后等它下桥

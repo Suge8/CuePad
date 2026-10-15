@@ -40,7 +40,7 @@ struct CueHostTests {
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
-                scan: { [.pi] }, launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -50,7 +50,9 @@ struct CueHostTests {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let project = try await app.services.store.createProject(name: "演示", color: "blue")
             try await app.services.store.setDirectory(folder.path, for: project.id)
+            app.services.agents.probe = { [MacAgent(kind: .pi, model: nil, models: [])] }
             app.services.start()
+            try await eventually("这台 Mac 写下能用 Pi") { try await self.app.services.store.macAgents(on: TestApp.hostID).kinds == [.pi] }
             try await app.services.cue.enable()
             try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }

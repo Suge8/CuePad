@@ -77,7 +77,7 @@ struct MacSyncTests {
         let (gate, release) = AsyncStream<Void>.makeStream()
         defer { release.finish() }
         let rig = TestApp(cue: CueDependencies(
-            scan: { [.pi] }, launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
+            launch: { _, _ in await Task { for await _ in gate {} }.value; return nil },
             helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
         let services: AppServices = rig.services, host = TestApp.hostID
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
