@@ -1,15 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// 一轮的经过（会话页）：做完的回答上方、在跑的这一轮在对话末尾，同一个样子——与代码块、表格同一套底色与圆角的一块：
+/// 一轮的经过（会话页与 Cue 页）：做完的回答上方、在跑的这一轮在对话末尾，同一个样子——与代码块、表格同一套底色与圆角的一块：
 /// - 标题行："跑了 12 步 · 改了 3 个文件"（`PiChat.processLine`），做完的接用时，在跑的接此刻的状态。
 ///   做完的收起时只有这一行；点它就地展开整份清单（改动、出错都在原位，出错标胭脂），再点收起。
 /// - 没调过工具的一轮不画：做完的、正在说话的都没有这一块；只有在跑、还没说话时是一行此刻在做的（流光）。
 /// - 在跑时下面是它最近说的那段话（收着时；展开的清单里本来就有）与正在跑的那一步（会话状态里的当前动作），实时展开：
-///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`），正在跑的来自会话状态，两者不重叠。
+///   话至多三行，那一步至多两行、文字有流光。做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`；Cue 的是它此刻的状态 `CueState.pendingTools`），
+///   正在跑的来自会话状态（`detail`），两者不重叠。
 ///   Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 清单是注脚：小一档的字、次要墨色；调用每条一行，图标、等宽的文件路径或命令、状态——改文件写 +行数 −行数，失败的只把"失败"两个字标胭脂，
-/// 不显示工具输出；中途说的话按先后夹在调用之间，正常字形、至多三行。
+/// 不显示工具输出；中途说的话按先后夹在调用之间，正常字形、至多三行。Cue 动到任务的那几条点它打开那件任务。
 /// 在跑的与做完后的同一种排法、同样高（同样的步骤时）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
 struct RoundProcess: View {
     let tools: PiChatMessage.Tools?
@@ -19,11 +20,17 @@ struct RoundProcess: View {
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     enum Ending: Equatable {
-        /// 做完了：用时（`PiChat.took`）
-        case took(String)
+        /// 做完了：用时（`PiChat.took`；Cue 的一轮不记，为 nil）
+        case took(String?)
         /// 在跑：状态标按 `shown`；`doing` 是此刻在做的。有 `step`（那一步的图标）时它是正在跑的那一步、单列一行；
         /// 没有时（正在说话、等子代理）只写在标题行末
         case live(PiShown, doing: String, step: String?)
+
+        /// 正在说话（Mac 上逐字长出的草稿上方）：状态标是在说话，标题行末写状态词。
+        static var speaking: Ending {
+            let shown = PiShown(state: .known(.thinking)).speaking(true)
+            return .live(shown, doing: shown.label, step: nil)
+        }
     }
 
     var body: some View {
@@ -55,11 +62,11 @@ struct RoundProcess: View {
 
     /// 读屏读的一句：经过与结尾（用时或此刻在做的）。
     private func spoken(_ line: Dotted) -> String {
-        let end: String = switch ending {
+        let end: String? = switch ending {
         case .took(let took): took
         case .live(_, let doing, _): doing
         }
-        return "\(line.spoken)，\(end)"
+        return [line.spoken, end].compactMap { $0 }.joined(separator: "，")
     }
 
     private func header(_ line: Dotted) -> some View {
@@ -70,9 +77,11 @@ struct RoundProcess: View {
             }
             Text(line).lineLimit(1).layoutPriority(-1)
             switch ending {
-            case .took(let took):
+            case .took(let took?):
                 Dot()
                 Text(took).fixedSize()
+            case .took:
+                EmptyView()
             case .live(_, let doing, nil):
                 Dot()
                 Text(doing).lineLimit(1).shimmering()
@@ -90,8 +99,8 @@ struct RoundProcess: View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(tools.items.enumerated()), id: \.offset) { _, item in row(item) }
             let listed = tools.items.count { $0.kind != .said }
-            if tools.total > listed {
-                Text("另有 \(tools.total - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).padding(.leading, 19)
+            if tools.steps > listed {
+                Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).padding(.leading, 19)
             }
         }
         .padding(.bottom, 2)
@@ -101,9 +110,20 @@ struct RoundProcess: View {
     @ViewBuilder private func row(_ item: PiChatMessage.Tools.Item) -> some View {
         if item.kind == .said {
             saidRow(item.target)
+        } else if let task = item.task {
+            CueTaskButton(task: task) { toolRow(item) }.accessibilityHint("打开任务")
         } else {
-            ToolRow(symbol: Self.symbol(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle) { status(item) }
+            toolRow(item)
         }
+    }
+
+    private func toolRow(_ item: PiChatMessage.Tools.Item) -> some View {
+        // Cue 的动作写的是人话（哪件任务、说了什么），用正文字形；其余是路径、命令，用等宽
+        let prose = item.kind.acts && item.kind != .edit
+        return ToolRow(
+            symbol: Self.symbol(item.kind), target: prose ? Text(item.target).font(Typography.caption) : Text(item.target),
+            truncation: prose || item.kind == .command ? .tail : .middle
+        ) { status(item) }
     }
 
     /// 中途说的一段话：与清单同一列的图标位，正常字形、次要墨色，至多三行。
@@ -159,6 +179,12 @@ struct RoundProcess: View {
         case .search: "magnifyingglass"
         case .other: "wrench.and.screwdriver"
         case .said: "text.bubble"
+        case .talk: "paperplane"
+        case .start: "play.circle"
+        case .add: "plus.circle"
+        case .done: "checkmark.circle"
+        case .stop: "stop.circle"
+        case .ask: "questionmark.bubble"
         }
     }
 }

@@ -182,6 +182,8 @@ enum Schema {
       """),
     // 44：会话记录加进行中这一轮到目前为止的经过（`PiRecap.pendingTools`）；经过里多了中途说的话，已有的对话按新规则重读一遍
     "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT; UPDATE piSessions SET checkpoint = NULL;",
+    // 45：Cue 的一轮也有经过（对话上的 `tools`、此刻的 `pendingTools`）；经过的计数并成调用数（`Tools.steps`），已有的对话按新写法重读一遍
+    Upgrade(stringLiteral: cueTools + " UPDATE piSessions SET checkpoint = NULL;"),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -247,6 +249,9 @@ enum Schema {
   private static let macPresence = "CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
+
+  /// 45 加的列（`cue`、`cueState` 两张表建好之后）。
+  private static let cueTools = "ALTER TABLE cueMessages ADD COLUMN tools TEXT; ALTER TABLE cueState ADD COLUMN pendingTools TEXT;"
 
   /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -400,6 +405,7 @@ enum Schema {
     \(cue)
     \(formerSessions)
     \(cueState)
+    \(cueTools)
     \(writeSeq)
     \(macPresence)
 

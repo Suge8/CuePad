@@ -115,7 +115,7 @@ extension DebugScene {
                 at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-                at: last.addingTimeInterval(2), tools: .init(commands: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(steps: 1, items: [.init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
@@ -124,7 +124,7 @@ extension DebugScene {
 
     /// 演示用的工具活动：一周会议记录那一轮读了资料、改了笔记、跑了脚本。
     private static let notesWeek = PiChatMessage.Tools(
-        edits: 2, commands: 2, reads: 3,
+        steps: 7,
         items: [
             .init(kind: .read, target: "notes/2026-W39.md"), .init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .read, target: "notes/inbox.md"),
             .init(kind: .edit, target: "notes/2026-W40.md", added: 18, removed: 4), .init(kind: .edit, target: "notes/todo.md", added: 3),
@@ -133,7 +133,7 @@ extension DebugScene {
 
     /// 演示用的工具活动：跑测试那一轮读了测试、跑了测试（一次失败），没有改代码。
     private static let testRun = PiChatMessage.Tools(
-        commands: 2, reads: 2,
+        steps: 4,
         items: [
             .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
             .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
@@ -214,8 +214,8 @@ extension DebugScene {
         }
         await chat("notes", [
             ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", Self.notesWeek, 1.5),
-            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", .init(edits: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
-            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", .init(edits: 1, reads: 1, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
+            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", .init(steps: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
+            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", .init(steps: 2, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
             // 最坏的 Markdown：宽表（对齐语法、代码单元格、中英混排长单元格）、引用、嵌套列表、标题、链接、长代码行
             ("把三个排序方案的对比做成表格", """
             ## 对比结果
@@ -239,13 +239,13 @@ extension DebugScene {
             ```ts
             export function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }
             ```
-            """, .init(edits: 1, reads: 2, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
+            """, .init(steps: 3, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
         ], startedMinutesAgo: 20)
         await seedPreviews(store, now: now)
         await chat("atlas", [
             ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", Self.testRun, 2),
             ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, .init(
-                edits: 2, commands: 1, reads: 1,
+                steps: 4,
                 items: [
                     .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.ts", added: 3, removed: 1),
                     .init(kind: .edit, target: "scheduler/queue.test.ts", added: 8, removed: 2), .init(kind: .command, target: "pnpm tsc --noEmit", failed: true),
@@ -255,7 +255,7 @@ extension DebugScene {
             ("把 RSS 输出改成全文", nil, nil, 0),
         ], startedMinutesAgo: 3)
         await chat("relay", [
-            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(commands: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
+            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
         ], startedMinutesAgo: 10)
     }
 

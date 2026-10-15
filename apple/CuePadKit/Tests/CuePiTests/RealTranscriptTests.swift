@@ -39,7 +39,7 @@ struct RealTranscriptTests {
         #expect(messages.map(\.role.known) == [.user, .pi, .user, .pi, .machine, .pi])
         #expect(messages.map(\.text).prefix(4) == ["第一问", "ECHO 第一问 IMAGES[]", "[[tool:echo TOOL-OUTPUT-42]]", "TOOL_DONE"])
         #expect(!messages.contains { $0.text.contains("TOOL-OUTPUT-42\n") || $0.text == "TOOL-OUTPUT-42" })  // 工具输出不进对话
-        #expect(messages.map { $0.tools?.commands } == [nil, nil, nil, 1, nil, nil])
+        #expect(messages.map { $0.tools?.steps } == [nil, nil, nil, 1, nil, nil])
         #expect(messages[3].roundStartedAt.map { $0 <= messages[3].at } == true)
         #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 6)
         // 摘要：最近一轮做完的问答（机器消息那轮沿用你说的那句），没有进行中的提问
@@ -67,7 +67,7 @@ struct RealTranscriptTests {
         try await eventually("失败的一轮落盘") { try roundsDone(file, 3) }
 
         let tools = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.pi) }.map(\.tools)
-        #expect(tools.map { $0?.commands } == [1, 0, 1] && tools.map { $0?.edits } == [0, 1, 0])
+        #expect(tools.map { $0?.items.map(\.kind) } == [[.command], [.edit], [.command]])
         #expect(tools[1]?.items.first?.target == "out.txt" && tools.map { $0?.items.map(\.failed) } == [[false], [false], [true]])
     }
 

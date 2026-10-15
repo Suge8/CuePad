@@ -107,7 +107,7 @@ enum PerfLibrary {
         for _ in 0..<edits { items.append(.init(kind: .edit, target: "src/module\(random.next(40)).swift", added: random.next(60), removed: random.next(20))) }
         for _ in 0..<reads { items.append(.init(kind: .read, target: "docs/note\(random.next(40)).md")) }
         for _ in 0..<commands { items.append(.init(kind: .command, target: "pnpm test --filter pkg\(random.next(9))")) }
-        return .init(edits: edits, commands: commands, reads: reads, items: items)
+        return .init(steps: items.count, items: items)
     }
 
     private static func card(_ random: inout SeededRandom, images: inout ArraySlice<String>, imageShare: Double) -> (days: Double, text: String, favorite: Bool) {

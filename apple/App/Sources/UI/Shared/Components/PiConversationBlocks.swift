@@ -140,10 +140,7 @@ struct LiveStatus: View {
     /// 经过那一块的结尾。正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；
     /// 其余没在跑一轮时没有。在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
     static func ending(of session: PiSessionState, speaking: Bool) -> RoundProcess.Ending? {
-        if speaking {
-            let shown = PiShown(state: .known(.thinking)).speaking(true)
-            return .live(shown, doing: shown.label, step: nil)
-        }
+        if speaking { return .speaking }
         let shown = PiShown(session)
         let delegating = session.state == .known(.delegating) && !session.subagents.isEmpty
         guard session.state.isWorking, !delegating || session.pendingTools != nil else { return nil }
@@ -154,22 +151,6 @@ struct LiveStatus: View {
 }
 
 
-/// 在做事时对话末尾那一行（Cue 页；会话页是这一轮的经过，`LiveStatus`）：与列表同一个转着的状态标（底部这一行和列表里那一行是同一件事在动），
-/// 后面是当前动作（没有动作时是状态词），文字上一道流光。
-struct LiveLine: View {
-    let shown: PiShown
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            PiStateDot(shown: shown, size: 7)
-            Text(text)
-                .font(Typography.secondary.weight(.medium))
-                .lineLimit(1).truncationMode(.middle)
-                .shimmering()
-        }
-    }
-}
 
 extension View {
     /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。
