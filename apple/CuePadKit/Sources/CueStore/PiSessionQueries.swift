@@ -107,21 +107,6 @@ extension CueStore {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))?.model?.key
   }
 
-  /// `host` 那台 Mac 上每家 Agent 最近有动静的、指向带模型清单的目录记录（`AgentCatalog`）的那个会话的清单：两端 Cue 页模型菜单的可选模型。
-  /// 按 Agent 聚合成几行，几千条历史不整表读；清单为空的目录记录列里是 NULL（`JSONColumn.encodeList`）。
-  public func modelLists(on host: String) throws -> [AgentKind: [PiModelOption]] {
-    let rows = try db.query(
-      """
-      SELECT \(Self.agentColumn) AS kind, c.models, max(s.stateSince) FROM piSessionStates s JOIN agentCatalogs c ON c.id = s.catalogID
-      WHERE s.hostID = ? AND c.models IS NOT NULL GROUP BY kind
-      """, [host]
-    ) { (Open<AgentKind>(rawValue: $0.text(0)).known, JSONColumn.decodeList(PiModelOption.self, from: $0.textOrNil(1))) }
-    return Dictionary(uniqueKeysWithValues: rows.compactMap { agent, models in agent.map { ($0, models) } })
-  }
-
-  /// 会话记录是哪家 Agent 的：旧版本写的没有这一列，是 Pi（与 `AgentKind` 的说明同一条），按 Agent 聚合时并进 Pi。
-  private static let agentColumn = "coalesce(agent, '\(AgentKind.pi.rawValue)')"
-
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] {
