@@ -137,9 +137,10 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
 
-        let resumed = try await resume(host, file, in: pi, on: bridge)
+        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了（回放时空闲的那一秒不占时间），所以不再查它在不在
+        let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
 
-        try await eventually("空闲到点后退出") { !bridge.sessions.contains { $0.id == resumed.id } }
+        try await eventually("空闲到点后退出") { bridge.session(id: id) == nil }
     }
 
     /// 后台托管着时，用户在自己的终端里打开同一个会话（同一会话 id 的新进程连上）：后台进程收尾退出，只剩用户那个。

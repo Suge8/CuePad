@@ -5,12 +5,16 @@ import Foundation
 /// 测试起的进程里有些不随测试结束：Codex 终端界面自己拉起的常驻服务与它的 `pid-update-loop`（还会再起 git 拉插件）、
 /// 脱离 App 的托管 Pi。它们的可执行文件、命令行或工作目录都在测试的临时目录里，收尾时按这个找到确切的 PID 停掉，
 /// 不按进程名批量结束。只读本机进程表（libproc 与 sysctl），不起子进程：进程退出前（`atexit`）也能用。
+///
+/// 读一遍进程表要两三百毫秒（两千多个进程时实测），找到进程时还要等它们退出：测试跑着时不在主线程上调。
+/// 主线程一停，同时在跑的回放与 CuePad 跟着停（回放换通道前要等主线程排着的处理跑完），别的用例的等待就此超时。
 public enum TestProcesses {
-  /// 停掉可执行文件、命令行或工作目录在 `directory` 里的进程（不含本进程）：先停 `pid-update-loop`（它守着常驻服务），
-  /// 再停其余的；SIGTERM 后至多等 `grace`，还在的 SIGKILL。停完再看一遍，收掉期间新起的。
-  public static func stop(under directory: URL, grace: Duration = .seconds(3)) {
+  /// 停掉可执行文件、命令行或工作目录在 `directories` 里的进程（不含本进程）：先停 `pid-update-loop`（它守着常驻服务），
+  /// 再停其余的；SIGTERM 后至多等 `grace`，还在的 SIGKILL。停完再看一遍，收掉期间新起的。几个目录一起给，只读一遍进程表。
+  public static func stop(under directories: [URL], grace: Duration = .seconds(3)) {
+    guard !directories.isEmpty else { return }
     for _ in 0..<2 {
-      let found = processes(under: directory)
+      let found = processes(under: directories)
       guard !found.isEmpty else { return }
       let (loops, rest) = (found.filter { $0.arguments.contains(updaterArgument) }, found.filter { !$0.arguments.contains(updaterArgument) })
       for group in [loops, rest] where !group.isEmpty { terminate(group.map(\.pid), grace: grace) }
@@ -43,10 +47,10 @@ public enum TestProcesses {
     }
   }
 
-  static func processes(under directory: URL) -> [Found] {
+  static func processes(under directories: [URL]) -> [Found] {
     // /tmp 是 /private/tmp 的链接：进程表里两种写法都有，比对去掉 /private 的那段
-    let marker = directory.standardizedFileURL.path.replacingOccurrences(of: "/private/tmp/", with: "/tmp/") + "/"
-    func inside(_ path: String) -> Bool { (path + "/").contains(marker) }
+    let markers = directories.map { $0.standardizedFileURL.path.replacingOccurrences(of: "/private/tmp/", with: "/tmp/") + "/" }
+    func inside(_ path: String) -> Bool { markers.contains { (path + "/").contains($0) } }
     return allPIDs().compactMap { pid -> Found? in
       guard pid != getpid(), pid > 0 else { return nil }
       let arguments = self.arguments(of: pid)

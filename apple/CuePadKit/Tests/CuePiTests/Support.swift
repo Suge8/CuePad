@@ -13,28 +13,34 @@ typealias PiSession = CuePi.PiSession
 
 /// 本进程所有临时目录的根：`/tmp/cpt-<本进程 pid>/N`（socket 路径有 104 字节上限，所以路径要短）。进程退出时停掉还在里面跑的进程
 /// （`TestProcesses`）再整体删除；进程被中断（超时被杀、崩溃）来不及收尾的，或删掉目录后才又被拉起的（Codex 的常驻服务），
-/// 下一次运行开始时按路径里的 pid 认出主人已不在，同样收掉。
+/// 下一次运行开始时按路径里的 pid 认出主人已不在，同样收掉（另起线程：不挡着第一个建临时目录的用例）。
 private let temporaryRoot: URL = {
     let parent = URL(filePath: "/tmp", directoryHint: .isDirectory)
+    let root = parent.appending(path: "\(temporaryPrefix)\(getpid())", directoryHint: .isDirectory)
+    Thread.detachNewThread { removeTemporaryRoots(abandonedRoots(in: parent)) }
+    try? FileManager.default.removeItem(at: root)  // 同一 pid 的上一次运行留下的
+    try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    atexit { removeTemporaryRoots([URL(filePath: "/tmp/\(temporaryPrefix)\(getpid())")]) }
+    return root
+}()
+private let temporaryPrefix = "cpt-"
+
+/// 主人已不在的临时根：目录还在的，与目录删了、进程还指着它的。
+private func abandonedRoots(in parent: URL) -> [URL] {
     let marker = "/tmp/\(temporaryPrefix)"
     let listed = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
     let referenced = TestProcesses.referencedPaths(containing: marker).compactMap { path in
         path.range(of: marker).map { String(path[$0.lowerBound...].dropFirst("/tmp/".count).prefix { $0 != "/" }) }
     }
-    for name in Set(listed + referenced) where name.hasPrefix(temporaryPrefix) {
-        guard let owner = pid_t(name.dropFirst(temporaryPrefix.count)), owner == getpid() || (kill(owner, 0) == -1 && errno == ESRCH) else { continue }
-        removeTemporaryRoot(parent.appending(path: name))
-    }
-    let root = parent.appending(path: "\(temporaryPrefix)\(getpid())", directoryHint: .isDirectory)
-    try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    atexit { removeTemporaryRoot(URL(filePath: "/tmp/\(temporaryPrefix)\(getpid())")) }
-    return root
-}()
-private let temporaryPrefix = "cpt-"
+    return Set(listed + referenced).filter { name in
+        guard name.hasPrefix(temporaryPrefix), let owner = pid_t(name.dropFirst(temporaryPrefix.count)) else { return false }
+        return kill(owner, 0) == -1 && errno == ESRCH
+    }.map { parent.appending(path: $0) }
+}
 
-private func removeTemporaryRoot(_ root: URL) {
-    TestProcesses.stop(under: root)
-    try? FileManager.default.removeItem(at: root)
+private func removeTemporaryRoots(_ roots: [URL]) {
+    TestProcesses.stop(under: roots)
+    for root in roots { try? FileManager.default.removeItem(at: root) }
 }
 private let temporaryCounter = Atomic(0)
 

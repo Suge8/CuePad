@@ -25,7 +25,8 @@ public final class Fixture: @unchecked Sendable {
 public enum TestLibraries {
   private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-libraries", directoryHint: .isDirectory)
   private static let run: URL = {
-    removeFinishedRuns()
+    // 清理与本次运行无关，不挡着第一个要库的用例（可能在主线程上）
+    Thread.detachNewThread { removeFinishedRuns() }
     return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
   }()
 
@@ -37,14 +38,13 @@ public enum TestLibraries {
   }
 
   private static func removeFinishedRuns() {
-    let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
-    for name in runs {
-      guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
-      #if os(macOS)
-      TestProcesses.stop(under: root.appending(path: name))
-      #endif
-      try? FileManager.default.removeItem(at: root.appending(path: name))
-    }
+    let finished = ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []).filter { name in
+      Int32(name).map { kill($0, 0) == -1 && errno == ESRCH } ?? false
+    }.map { root.appending(path: $0) }
+    #if os(macOS)
+    TestProcesses.stop(under: finished)
+    #endif
+    for directory in finished { try? FileManager.default.removeItem(at: directory) }
   }
 }
 
