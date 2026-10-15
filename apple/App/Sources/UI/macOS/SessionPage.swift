@@ -81,7 +81,6 @@ struct SessionPage: View {
                     SessionChat(
                         session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
                         .replyNotes(session: session.id, messages: digest.messages)
-                        .fadesUnderBars()
                         .frame(maxHeight: .infinity)
                 } else {
                     Color.clear.frame(maxHeight: .infinity)

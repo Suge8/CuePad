@@ -30,18 +30,18 @@ struct RealTranscriptTests {
         try await eventually("第一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
         try await eventually("工具轮落盘") { try roundsDone(file, 2) }
-        // 机器消息（扩展投进来的信封）不算你说的；它触发的那轮回答照常是一条 Pi 消息
+        // 机器消息（扩展投进来的信封）原样进对话但不算你说的；它触发的那轮回答照常是一条 Pi 消息
         try pi.prompt("<some_event>\n子任务完成\n</some_event>")
         try await eventually("机器消息那轮落盘") { try roundsDone(file, 3) }
 
         let update = try PiHistory.index(file: file, from: nil)
         let messages = update.messages
-        #expect(messages.map(\.role.known) == [.user, .pi, .user, .pi, .pi])
+        #expect(messages.map(\.role.known) == [.user, .pi, .user, .pi, .machine, .pi])
         #expect(messages.map(\.text).prefix(4) == ["第一问", "ECHO 第一问 IMAGES[]", "[[tool:echo TOOL-OUTPUT-42]]", "TOOL_DONE"])
         #expect(!messages.contains { $0.text.contains("TOOL-OUTPUT-42\n") || $0.text == "TOOL-OUTPUT-42" })  // 工具输出不进对话
-        #expect(messages.map { $0.tools?.commands } == [nil, nil, nil, 1, nil])
+        #expect(messages.map { $0.tools?.commands } == [nil, nil, nil, 1, nil, nil])
         #expect(messages[3].roundStartedAt.map { $0 <= messages[3].at } == true)
-        #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 5)
+        #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 6)
         // 摘要：最近一轮做完的问答（机器消息那轮沿用你说的那句），没有进行中的提问
         #expect(update.recap.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]" && update.recap.lastReply?.contains("子任务完成") == true)
         #expect(update.recap.pendingPrompt == nil)

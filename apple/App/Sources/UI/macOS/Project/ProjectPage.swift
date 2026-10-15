@@ -39,7 +39,6 @@ struct ProjectPage: View {
                 }
                 .scrollPosition($position)
                 .taskFoldScroll(anchor)
-                .fadesUnderBars()
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }

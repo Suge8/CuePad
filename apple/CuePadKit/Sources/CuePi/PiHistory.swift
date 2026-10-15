@@ -304,6 +304,9 @@ public enum PiHistory {
         var cwd: String?
         var name: String?
         var message: Message?
+        /// 扩展投进会话的消息（type 为 custom_message）：正文与它在 Pi 的界面上显不显示
+        var content: Content?
+        var display: Bool?
 
         var time: Date? { timestamp.flatMap { try? Date($0, strategy: PiHistory.timestampStyle) } }
     }
@@ -398,6 +401,10 @@ public enum PiHistory {
             cp.name = line.name
         case "compaction":
             cp.compacted(entry, into: &transcript)
+        case "custom_message":
+            // 扩展投进来、在 Pi 里显示的（FireCode 交回子代理结果、审查结论……）；不显示的是只给模型看的上下文，这里也不进
+            guard line.display == true, let text = line.content?.reply.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
+            cp.machine(text, entry, into: &transcript)
         case "message":
             guard let message = line.message else { return }
             switch message.role {
@@ -470,20 +477,26 @@ extension PiHistoryCheckpoint {
         return projected
     }
 
-    /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮；机器消息（扩展投进来的信封，
-    /// `PiSessionName.isMachineMessage`）只开始一轮，其余进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
-    /// 一轮在跑时插进来的话：前一句已有的回答先归给前一句，之后的话与工具活动算这一句的。
+    /// 你说的一句：第一条有文字的成为标题（`PiSessionName.firstMessage`），开始一轮，进对话、成为进行中的提问（单行，≤`PiRecap.promptLimit`）。
+    /// 整条是信封的（`PiEnvelope`）是扩展借你的名义投进来的机器消息，按 `machine` 处理。
+    /// 一轮在跑时插进来的你的话：前一句已有的回答先归给前一句，之后的话与工具活动算这一句的。
     mutating func said(_ said: PiHistory.Said, _ entry: PiHistory.Entry, deliveryID: String?, into transcript: inout PiHistory.Transcript) {
         if firstMessage == nil { firstMessage = PiSessionName.firstMessage(said.text) }
-        let machine = PiSessionName.isMachineMessage(said.text)
-        if !machine, reply != nil {
+        guard PiEnvelope.parse(said.text) == nil else { return machine(said.text, entry, into: &transcript) }
+        if reply != nil {
             settleReply(into: &transcript)
             round = Round(startedAt: entry.at)
         }
         if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
-        guard !machine else { return }
         transcript.add(self, entry, role: .user, text: said.stored, deliveryID: deliveryID)
         recap.pendingPrompt = PiHistory.clip(PiHistory.collapsed(said.text), PiRecap.promptLimit)
+    }
+
+    /// 扩展投进会话的机器消息（FireCode 交回子代理结果、审查结论……）：原样进对话（`machine`），开始一轮（在跑时接着这一轮），
+    /// 但不是提问，也不把前面说的那段归成回答。
+    mutating func machine(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
+        if round?.startedAt == nil { round = Round(startedAt: entry.at, tools: round?.tools ?? PiToolLog()) }
+        transcript.add(self, entry, role: .machine, text: text)
     }
 
     /// 这一轮开始（Agent 自己标出开始的，如 Codex 的 `task_started`）：重新计时、清掉工具活动。

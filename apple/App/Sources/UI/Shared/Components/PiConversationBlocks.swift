@@ -54,6 +54,55 @@ struct ReplyBlock: View {
 }
 
 
+/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一张卡片（`MachineNote`）：一行是谁发来的与它交回了什么，其余收着、点开看全文（Markdown）。
+/// 它在对话里落在被读到的位置，与回答同一列、全宽，淡底与经过那一块同一套。
+struct MachineCards: View {
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // 存进对话时总是整块的信封；认不出时（别的扩展的纯文字）整条当一块，不丢字
+            ForEach(Array((PiEnvelope.parse(text) ?? [PiEnvelope(name: "", body: text)]).enumerated()), id: \.offset) { _, envelope in
+                MachineCard(note: MachineNote(envelope))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.entry)
+    }
+}
+
+private struct MachineCard: View {
+    let note: MachineNote
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var open = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { open.toggle() } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: note.fromFireCode ? "flame" : "puzzlepiece.extension").font(Typography.caption).foregroundStyle(palette.ink3)
+                        .accessibilityHidden(true)
+                    Text(note.who).font(Typography.caption).foregroundStyle(palette.ink3).fixedSize()
+                    Text(note.line).font(Typography.secondary).foregroundStyle(note.failed ? palette.failure : palette.ink)
+                        .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
+                    if !note.detail.isEmpty { DisclosureChevron(open: open) }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(note.detail.isEmpty)
+            .accessibilityLabel("\(note.who)：\(note.line)")
+            .accessibilityValue(note.detail.isEmpty ? "" : open ? "已展开" : "已收起")
+            if open { MarkdownText(source: note.detail).equatable().transition(.opacity) }
+        }
+        .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 8)
+        .background(palette.fill, in: ChatBlock.shape)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
+    }
+}
+
+
 /// 正在说的那条回答（Mac：会话页、Cue 页）：与说完落库后的那条同一套渲染、同一个位置，`header` 占着那条上方经过那一块的位置（同样高，见 `RoundProcess`），
 /// 所以落库时原位换下、正文不动。开始出字时淡入；换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
 struct DraftReply<Header: View>: View {
@@ -71,7 +120,7 @@ struct DraftReply<Header: View>: View {
 }
 
 
-/// Pi 此刻在做什么，接在对话末尾、与回答同一列：这一轮的经过（`RoundProcess`，已做完的几步收成一行、改动与出错列出，
+/// Pi 此刻在做什么，接在对话末尾、与回答同一列：这一轮的经过（`RoundProcess`，已做完的几步收成一行，
 /// 正在跑的那一步实时展开；计时已在顶上一行），有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换；
 /// 怎么出现、怎么拿掉由放它的地方定。Mac 上正在说的话出字时这一块是草稿的标题（`SessionDraft`，`ending(of:speaking:)`）。
 struct LiveStatus: View {

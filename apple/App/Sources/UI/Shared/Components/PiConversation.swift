@@ -231,6 +231,8 @@ private struct ChatSegment: View, Equatable {
             ContextBoundary(title: entry.text, highlighted: entry.id == highlight)
         case .notice(let notice):
             RoundEndNote(notice: notice)
+        case .machine:
+            MachineCards(text: entry.text)
         case .preview:
             PreviewGroup(previews: entry.previews) { opened = PreviewOpening(preview: $0, batch: entry.previews) }
         }
