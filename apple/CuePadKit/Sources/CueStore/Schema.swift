@@ -183,7 +183,9 @@ enum Schema {
       """),
     // 44：会话记录加进行中这一轮到目前为止的经过（`PiRecap.pendingTools`）；经过里多了中途说的话，已有的对话按新规则重读一遍
     "ALTER TABLE piSessionStates ADD COLUMN pendingTools TEXT; UPDATE piSessions SET checkpoint = NULL;",
-    // 45：会话是一等对象，不再为不经任务开的会话自动建同名任务（外壳）。还是自动建出来的样子的外壳删掉：id 由会话算出、
+    // 45：Cue 的一轮也有经过（对话上的 `tools`、此刻的 `pendingTools`）；经过的计数并成调用数（`Tools.steps`），已有的对话按新写法重读一遍
+    Upgrade(stringLiteral: cueTools + " UPDATE piSessions SET checkpoint = NULL;"),
+    // 46：会话是一等对象，不再为不经任务开的会话自动建同名任务（外壳）。还是自动建出来的样子的外壳删掉：id 由会话算出、
     // 标题还是会话名（第一行有字的，超长截断，没字是"Agent 会话"）、没有下级、还在会话所在的项目（项目删了或没有是未分类）、不在回收站，
     // 开着时没完成也没归档，收着时是跟着会话收尾的样子（完成与归档同一刻）。人动过的留成普通任务。
     // 删的是行：同步表的删除由下次对账发现（`pendingDeletes`）
@@ -269,6 +271,9 @@ enum Schema {
   private static let macPresence = "CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
 
   private static let cueState = "CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL) STRICT;"
+
+  /// 45 加的列（`cue`、`cueState` 两张表建好之后）。
+  private static let cueTools = "ALTER TABLE cueMessages ADD COLUMN tools TEXT; ALTER TABLE cueState ADD COLUMN pendingTools TEXT;"
 
   /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -422,6 +427,7 @@ enum Schema {
     \(cue)
     \(formerSessions)
     \(cueState)
+    \(cueTools)
     \(writeSeq)
     \(macPresence)
 

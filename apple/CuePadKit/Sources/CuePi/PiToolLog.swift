@@ -36,7 +36,7 @@ struct PiToolLog: Codable, Equatable {
     /// 助手说了一段话（空白的不来）。
     mutating func say(_ text: String) {
         let clipped = text.count <= Tools.saidLimit ? text : String(text.prefix(Tools.saidLimit - 1)) + "…"
-        activity.items.append(.init(kind: .said, target: clipped))
+        activity.record(.init(kind: .said, target: clipped))
     }
 
     /// 到目前为止做完的调用与说过的话（还在跑的调用不算）；什么都还没有为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
@@ -50,8 +50,7 @@ struct PiToolLog: Codable, Equatable {
         return log.activity == Tools() ? nil : log.activity
     }
 
-    /// 失败的调用与成功的一样按类计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
-    /// 清单里的调用满了以后改文件的照样列（展开的清单不漏改了哪些文件），其余只计数；说的话不占调用的名额。
+    /// 失败的调用与成功的一样计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
     private mutating func settle(_ call: Call, failed: Bool) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
@@ -60,23 +59,7 @@ struct PiToolLog: Codable, Equatable {
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed
             return
         }
-        activity.add(call.kind)
-        if activity.items.count(where: { $0.kind != .said }) < Tools.itemLimit || call.kind == .edit {
-            activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
-        }
-    }
-}
-
-private extension Tools {
-    mutating func add(_ kind: Kind) {
-        switch kind {
-        case .edit: edits += 1
-        case .command: commands += 1
-        case .read: reads += 1
-        case .search: searches += 1
-        case .other: others += 1
-        case .said: break
-        }
+        activity.record(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
     }
 }
 

@@ -72,7 +72,8 @@ nonisolated struct CueTiming: Sendable {
 /// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
 /// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
-/// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写。
+/// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
+/// （连同这一轮的经过落在哪一行，规则在 `CueStore.settleCueRound`）。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
@@ -80,7 +81,8 @@ nonisolated struct CueTiming: Sendable {
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
-/// 运行情况（每一轮的经过 `rounds`、此刻的上下文 `context`）只给 Cue 页看，在跑的一轮就是 `Turn.round`，做完收进最近的几轮。
+/// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它的全部与此刻的上下文 `context`。
+/// 给人看的经过由它推出（`CueRound.process`）：在跑时随此刻在做什么一起写进库，做完时落在这一轮写下的那一行上（`settle`），各端 Cue 页读库。
 @Observable
 final class CueKeeper {
     /// 上下文用到这么多 token 就请 Cue 换新。
@@ -251,14 +253,15 @@ final class CueKeeper {
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
     let speech = PiDraftFeed()
 
-    /// Cue 此刻在做什么：一轮里在想或在用工具，起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
-    private var work: (state: PiWorkState, detail: String?) {
+    /// Cue 此刻在做什么：一轮里在想或在用工具（连同这一轮已做完的几步），起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
+    private var work: (state: PiWorkState, detail: String?, tools: PiChatMessage.Tools?) {
         switch phase {
-        case .starting, .restarting: return (.settled, nil)
-        case .stuck(let reason): return (.error, reason)
+        case .starting, .restarting: return (.settled, nil, nil)
+        case .stuck(let reason): return (.error, reason, nil)
         case .running(let shift):
-            guard let round = shift.turn?.round else { return (.settled, nil) }
-            return round.running.map { (.tool, CueActivity.detail(tool: $0.name, arguments: $0.arguments)) } ?? (.thinking, nil)
+            guard let round = shift.turn?.round else { return (.settled, nil, nil) }
+            let detail = round.running.map { CueActivity.detail(tool: $0.name, arguments: $0.arguments) }
+            return (detail == nil ? .thinking : .tool, detail, round.process)
         }
     }
 
@@ -277,7 +280,8 @@ final class CueKeeper {
 
     private func publish() async {
         do {
-            try await setup.store.setCueState(work.state, detail: work.detail)
+            let work = work
+            try await setup.store.setCueState(work.state, detail: work.detail, pendingTools: work.tools)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -388,6 +392,7 @@ final class CueKeeper {
             if var round = shift.turn?.round {
                 round.failure = round.failure ?? reason
                 archive(round)
+                await settle(round, reply: nil, as: .note, answersYou: false)
             }
             await shift.brain.stop()()
             speech.offer(nil)
@@ -432,7 +437,9 @@ final class CueKeeper {
         case .tool(let id, let name, let arguments):
             updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, startedAt: .now)) }
         case .toolDone(let id, let result, let failed):
-            updateShift { $0.turn?.round.finish(id, result: result, failed: failed) }
+            guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
+            let item = await CueActivity.item(tool: call.name, arguments: call.arguments, failed: failed, store: setup.store)
+            updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
         case .failed(let raw):
             updateShift { $0.turn?.round.failure = raw }
             let summary = PiErrorSummary(raw)
@@ -444,12 +451,9 @@ final class CueKeeper {
             await say(.cue, "这一轮出错了：\(line)")
         case .turnFinished:
             guard let finished = turn else { return }
-            if let reply = finished.speaking?.text.trimmingCharacters(in: .whitespacesAndNewlines), !reply.isEmpty {
-                lastFailure = nil
-                // 不是在回答你的一轮里已经对你说过了：最后那句只是复述（动态那一行、刚启用的开场都一样）
-                let repeated = !finished.answersYou ? await hasTold(since: finished.round.startedAt) : false
-                if !repeated { await say(finished.author, reply) }
-            }
+            let reply = finished.speaking?.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if reply?.isEmpty == false { lastFailure = nil }
+            await settle(finished.round, reply: reply, as: finished.author, answersYou: finished.answersYou)
             archive(finished.round)
             updateShift {
                 $0.turn = nil
@@ -468,6 +472,15 @@ final class CueKeeper {
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
             await broke(reason.map { "大脑退出了（\($0)）" } ?? "大脑退出了")
+        }
+    }
+
+    /// 一轮做完（或断了）时写下它留下的那一行：回复与经过怎么落见 `CueStore.settleCueRound`。
+    private func settle(_ round: CueRound, reply: String?, as author: CueAuthor, answersYou: Bool) async {
+        do {
+            try await setup.store.settleCueRound(startedAt: round.startedAt, reply: reply, as: author, answersYou: answersYou, tools: round.process)
+        } catch {
+            Self.log.error("Cue 这一轮的回复与经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -747,16 +760,6 @@ final class CueKeeper {
         } catch {
             await say(.cue, "你发的图没能交给我：\(error.localizedDescription)")
             return []
-        }
-    }
-
-    /// Cue 在 `since` 之后写过给你的消息（tell）。
-    private func hasTold(since: Date) async -> Bool {
-        do {
-            return try await setup.store.cueMessages(limit: 50).contains { $0.author == .known(.cue) && $0.createdAt >= since }
-        } catch {
-            Self.log.error("Cue 读对话失败：\(error.localizedDescription, privacy: .public)")
-            return false
         }
     }
 

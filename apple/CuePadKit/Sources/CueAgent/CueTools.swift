@@ -634,7 +634,7 @@ public struct CueTools: Sendable {
   }
 
   /// 任务：id、至少 4 位的 id 前缀，或标题（不分大小写，只在没删除的任务里找）。
-  private func task(_ ref: String) async throws -> Card {
+  func task(_ ref: String) async throws -> Card {
     let key = ref.trimmingCharacters(in: .whitespaces)
     if let uuid = UUID(uuidString: key), let card = try await store.card(uuid), card.isTask, card.deletedAt == nil { return card }
     if key.count >= 4, key.allSatisfy({ $0.isHexDigit || $0 == "-" }) {
