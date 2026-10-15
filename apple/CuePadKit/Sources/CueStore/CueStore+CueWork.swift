@@ -19,6 +19,8 @@ public struct HandOffPlan: Equatable, Sendable {
   /// 交给会话的叶子。
   public var leaf: UUID
   public var destination: Destination
+  /// 要开新会话（不是接着用已有的）：开工的第一句据此带不带顶层任务作背景（`CueStore.opening`）。
+  public var opensSession: Bool { if case .session = destination { false } else { true } }
   /// 从这件事开的会话叫什么（`CueStore.sessionName(forCard:)`，`requestLaunch` 起名用的同一条规则）：叶子的标题；没有标题为 nil。
   public var name: String?
 }
@@ -236,7 +238,7 @@ extension CueStore {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
     let card = try requireLeaf(plan.leaf)
     if !fresh, card.piSessionID != nil { throw CueStoreError.alreadyStarted(card.heading) }
-    let content = CueFormat.readable(CueVariables.fill(card.body, values: card.variableValues))
+    let content = try opening(of: plan.leaf, plan.opensSession)
     switch plan.destination {
     case .session(let sessionID, _, _):
       if try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
@@ -250,6 +252,17 @@ extension CueStore {
     case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
     case .unfiled: throw CueStoreError.noFolder("")
     }
+  }
+
+  /// 开工的第一句（界面的"开始"与 Cue 的 start 都按它）：开新会话的步骤先带上顶层任务的标题与正文作背景，空一行接这一步的；
+  /// 接着用已有会话的只发这一步的（上下文已在会话里）。变量已填。
+  public func opening(of leaf: UUID, _ newSession: Bool) throws -> String {
+    guard let card = try find(Card.self, leaf) else { throw CueStoreError.notFound }
+    var parts = [card]
+    if newSession, let top = try find(Card.self, try topTask(of: leaf)), top.id != leaf { parts.insert(top, at: 0) }
+    return parts
+      .map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) }
+      .joined(separator: "\n\n")
   }
 
   /// 同一件事别的步骤绑着、没在被请求结束的会话里最近有动静的那个（`agent` 给了就只要这一家的）：下一步接着用它，上下文不丢。

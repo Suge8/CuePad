@@ -38,7 +38,14 @@ struct TaskPage: View {
         .observing(services.store, id: card.id, into: $detail, onError: workspace.fail) { [id = card.id] in
             try TaskDetail.read(id, from: $0)
         }
-        .sheet(isPresented: $editingBrief) { CardEditorScreen(cardID: card.id, part: .rest) }
+        .sheet(isPresented: $editingBrief) {
+            NavigationStack {
+                CardEditorScreen(cardID: card.id, part: .rest)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成", systemImage: "checkmark") { editingBrief = false } } }
+            }
+            .presentationBackground(palette.paper)
+        }
+        .onAppear { if DebugHooks.preset.briefOpen { editingBrief = true } }
     }
 
     /// 叶子交给 Agent 的那一块：还没交出去是"开始"，绑了会话是会话此刻的样子。

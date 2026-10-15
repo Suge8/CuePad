@@ -97,7 +97,7 @@ import Testing
       let launch = try #require(try await store.deliveryRequests().first)
       let step = try #require(try await store.children(of: task).first)
       #expect(launch.hostID == "mac-a" && launch.isFromCue && launch.target.name == "调研")
-      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "调研\n先读 release.sh")
+      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "重写发布脚本\n\n调研\n先读 release.sh")  // 开新会话：顶层任务作背景在前
       #expect(launch.launch?.model == PiModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
       #expect(try await store.workingLeaf(of: task).id == step.id)
       let starting = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])

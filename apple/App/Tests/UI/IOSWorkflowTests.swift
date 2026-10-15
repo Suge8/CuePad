@@ -54,7 +54,8 @@ struct IOSWorkflowTests {
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
         HandOffInput.startDefault(
-            draft, card: task.id, plan: try await store.handOffPlan(task.id, host: nil), workspace: workspace, navigation: navigation)
+            draft, card: task.id, plan: try await store.handOffPlan(task.id, host: nil), opening: try await store.opening(of: task.id, true),
+            workspace: workspace, navigation: navigation)
 
         #expect(workspace.notice?.isError == true && workspace.notice?.text == "未分类的任务没有文件夹，开不了会话")
         #expect(navigation.newSession == nil)
@@ -73,7 +74,8 @@ struct IOSWorkflowTests {
         #expect(plan.destination == .launch(project: project.id, host: "mac-a") && plan.name == "修乱序")
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
-        HandOffInput.startDefault(draft, card: task.id, plan: plan, workspace: workspace, navigation: navigation)
+        HandOffInput.startDefault(
+            draft, card: task.id, plan: plan, opening: try await store.opening(of: task.id, true), workspace: workspace, navigation: navigation)
 
         let start = try #require(navigation.newSession)
         let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)

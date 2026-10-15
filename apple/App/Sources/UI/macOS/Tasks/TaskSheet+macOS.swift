@@ -249,7 +249,8 @@ private struct BriefComposer: View {
             .overlay(alignment: .topLeading) {
                 if editing?.text.isEmpty ?? true {
                     Text("要 Agent 做什么…").font(Typography.body).foregroundStyle(palette.placeholder)
-                        .padding(.horizontal, 6).padding(.top, 6).allowsHitTesting(false)
+                        // 与编辑器第一行的字对齐（编辑器自己的内边距加上主题的 6）
+                        .padding(.leading, 12).padding(.top, 8).allowsHitTesting(false)
                 }
             }
             HStack(spacing: 10) {

@@ -85,17 +85,17 @@ struct TaskFlowTests {
         #expect(try await ends() == ["s1"])
     }
 
-    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——话发进那个会话，不开新会话；
-    /// 要新会话就在"绑定会话"里选"开新会话"；最后一步做完，会话才结束。
+    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——只发这一步的标题与正文，不开新会话；
+    /// 要新会话就在"绑定会话"里选"开新会话"：第一句先带顶层任务的标题与正文作背景，再接这一步的；最后一步做完，会话才结束。
     @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
-        let task = try await store.createTask("加语言参数", in: project.id)
+        let task = try await store.createTask("加语言参数\n命令行要能切中英文", in: project.id)
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
-        let third = try await store.createTask("发版", under: task.id)
+        let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
         try await store.bindSession("s1", to: first.id)
@@ -113,6 +113,7 @@ struct TaskFlowTests {
         workspace.startFresh(third)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
+        #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
         _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
 
         // 会话所在的 Mac 送到：记下这次发送，这一步绑上会话

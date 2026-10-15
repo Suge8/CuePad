@@ -47,6 +47,14 @@ struct ComposerDraft {
         attachments.append(Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID))
     }
 
+    /// 带着的 `card` 那一张换成 `content`（开新会话时，任务的第一句换成带着顶层任务作背景的那句，`CueStore.opening`）。
+    func retelling(_ card: UUID?, as content: String?) -> ComposerDraft {
+        guard let card, let content else { return self }
+        var draft = self
+        for index in draft.attachments.indices where draft.attachments[index].card == card { draft.attachments[index].content = content }
+        return draft
+    }
+
     /// 把存储格式正文放回输入框（编辑后重发）：文字接在已写的字后面（空一行），图片接进图片条。本机没有文件的图片略过。
     mutating func append(stored: String, files: AttachmentFiles) {
         text = [text, CueFormat.plainText(stored)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")

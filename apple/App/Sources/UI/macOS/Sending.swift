@@ -138,23 +138,25 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 开始：把叶子任务的正文（标题连同下面的话）作为第一句发给 Agent，交到哪只由 `CueStore.handOffPlan` 定（与 Cue 的开工同一份规则）：
+    /// 开始：把叶子任务的第一句（`CueStore.opening`，与 Cue 的开工同一个函数）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定：
     /// 接着用上一步的会话就经本机桥直接发，会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；
     /// 哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。正文发出后留在任务上。
     func handOff(_ leaf: Card) {
-        let text = Outgoing.text(of: leaf), id = leaf.id
-        attempt { try await self.handOff(text, leaf: id) }
+        let id = leaf.id
+        attempt { try await self.handOff(leaf: id) }
     }
 
     /// 给叶子开一个新会话，不接着用绑着的或上一步的会话（"绑定会话"里的"开新会话"；与 Cue 开工带 fresh 同一条规则，
-    /// `CueStore.handOffPlan(fresh:)`）：任务的正文作为第一句。
+    /// `CueStore.handOffPlan(fresh:)`）。
     func startFresh(_ leaf: Card) {
-        let text = Outgoing.text(of: leaf), id = leaf.id
-        attempt { try await self.handOff(text, leaf: id, fresh: true) }
+        let id = leaf.id
+        attempt { try await self.handOff(leaf: id, fresh: true) }
     }
 
-    private func handOff(_ text: String, leaf: UUID, fresh: Bool = false) async throws {
-        let plan = try await services.store.handOffPlan(leaf, host: services.hostID, fresh: fresh)
+    private func handOff(leaf: UUID, fresh: Bool = false) async throws {
+        let store = services.store
+        let plan = try await store.handOffPlan(leaf, host: services.hostID, fresh: fresh)
+        let text = try await store.opening(of: leaf, plan.opensSession)
         switch plan.destination {
         case .session(let session, _, let host):
             send(text, to: AgentTarget(session: session, host: host), card: leaf)
@@ -171,7 +173,7 @@ extension Workspace {
         case .noFolder(let project, _):
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
-            try await handOff(text, leaf: leaf, fresh: fresh)
+            try await handOff(leaf: leaf, fresh: fresh)
         case .unfiled:
             say("未分类的任务没有文件夹，开不了会话", isError: true)
         }

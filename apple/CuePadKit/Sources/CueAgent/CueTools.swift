@@ -37,8 +37,8 @@ public struct CueTools: Sendable {
         "name": "task",
         "description": """
           任务与会话（你不写代码，活交给会话做）。task 写任务的 id 前缀或标题；session 写会话 id 前缀或会话名（信封与 peek 里有）。标题与步骤名宽不过 \(CueName.limit)（汉字算 2，约 12 个汉字），超了整件退回。body、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
-          任务与每个步骤各有正文：标题下面要交代给 Agent 的话，开工时连同标题作为第一句发出，发出后留在任务上；
-          add{title,project?,steps?,body?,session?} 建任务，body 是它的正文（有步骤时开工发的是步骤的正文，步骤的用 edit 写）；带 session 把会话绑到新建的任务上：没绑任务的会话（你要为它的结果负责时），或已完成的事用过的会话（在它上面做别的事，旧任务照旧完成）；不写 body，话用 say 说；project 缺省是会话所在的项目；
+          任务与每个步骤各有正文：标题下面要交代给 Agent 的话，开工时连同标题作为第一句发出（步骤开新会话时先带上顶层任务的标题与正文作背景，接着用上一步会话的只发这一步的），发出后留在任务上；
+          add{title,project?,steps?,body?,session?} 建任务，body 是它的正文（各步骤自己要交代的用 edit 写在步骤上）；带 session 把会话绑到新建的任务上：没绑任务的会话（你要为它的结果负责时），或已完成的事用过的会话（在它上面做别的事，旧任务照旧完成）；不写 body，话用 say 说；project 缺省是会话所在的项目；
           edit{task,title?,body?,steps?,project?,reopen?} 改标题、换掉正文、追加步骤或挪到项目；追加步骤与 reopen:true 都让已完成的任务不再算做完（同用户点掉圆圈），只在确认它其实没做完时用；
           start{task,agent?,model?,effort?,fresh?} 开工：叶子（task 有步骤时是第一个没做完的步骤）还没会话时，同一任务的上一步有会话就接着用它（哪怕已结束，执行时恢复），否则在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；已绑着会话就用 say；上下文太长或要换 Agent 时用 fresh:true 开新的（上一步的会话随之结束）；
           say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它。说话不改任务的状态；
