@@ -13,7 +13,7 @@ public actor CueStore {
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   private var readExpiry: Date?
-  private var syncSubscribers: [UUID: AsyncStream<PendingSync?>.Continuation] = [:]
+  private var syncSubscribers: [UUID: AsyncStream<Void>.Continuation] = [:]
   private let notificationName: String
   private let changeListener: ChangeListener
   private var lastDataVersion: Int64
@@ -71,7 +71,7 @@ public actor CueStore {
     guard let version = try? db.first("PRAGMA data_version", [], { $0.int(0) }), version != lastDataVersion else { return }
     lastDataVersion = version
     for subscriber in subscribers.values { subscriber.signal.yield() }
-    for subscriber in syncSubscribers.values { subscriber.yield(nil) }
+    for subscriber in syncSubscribers.values { subscriber.yield() }
   }
 
   // MARK: 观察
@@ -159,16 +159,19 @@ public actor CueStore {
       subscriber.signal.yield()
     }
     if !syncSubscribers.isEmpty, !tables.isDisjoint(with: Table.synced) {
-      let delta = try? pendingSync(in: changes)  // 算不出增量时让订阅者全量对账
-      for subscriber in syncSubscribers.values { subscriber.yield(delta) }
+      // 只有让记录变成待推送的提交才叫醒（记账、应用远端版本这类不会）；算不出增量时照叫
+      let delta = try? pendingSync(in: changes)
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true {
+        for subscriber in syncSubscribers.values { subscriber.yield() }
+      }
     }
     return result
   }
 
-  /// 同步订阅：本连接每次提交改动了同步表，就给出这次提交中变成待推送的记录；
-  /// nil 表示改动范围未知（别的进程提交过，或增量没算出来），需要全量对账（`pendingSync()`）。订阅在返回前已生效。
-  package func syncChanges() -> AsyncStream<PendingSync?> {
-    let (stream, continuation) = AsyncStream<PendingSync?>.makeStream()
+  /// 同步订阅：本连接的提交让记录变成待推送，或别的进程提交过（范围未知），就给一个信号；待推送是什么读 `pendingSync()`。
+  /// 订阅在返回前已生效。
+  package func syncChanges() -> AsyncStream<Void> {
+    let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
     let token = UUID()
     syncSubscribers[token] = continuation
     continuation.onTermination = { _ in Task { await self.removeSyncSubscriber(token) } }

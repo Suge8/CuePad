@@ -2,9 +2,9 @@ import CueStore
 import CueSync
 import Foundation
 
-/// iCloud 同步的 App 层接入：启动引擎、把状态与冲突交给界面、激活时立即同步。
+/// iCloud 同步的 App 层接入：启动同步、把状态与冲突交给界面、激活时立即同步。
 extension AppServices {
-    /// 引擎与它启动前的状态。没有引擎时状态是写明原因的 `.unavailable`，界面不会显示成已同步。
+    /// 同步与它启动前的状态。没有同步时状态是写明原因的 `.unavailable`，界面不会显示成已同步。
     static func makeSync(
         _ source: SyncSource, store: CueStore, location: LibraryLocation
     ) -> (engine: (any SyncControlling)?, status: SyncStatus) {
@@ -21,12 +21,14 @@ extension AppServices {
         }
     }
 
-    /// 不创建引擎的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据）；
+    /// 不创建同步的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
+    /// 例外只有同步测量：Debug 构建、开发环境签名、给了 `-CuePadCloudKit YES`，见 `DebugHooks.syncsIsolatedLibrary`）；
     /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
     static func makeSync(
-        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit
+        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit,
+        syncsIsolated: Bool = DebugHooks.syncsIsolatedLibrary
     ) -> Result<any SyncControlling, NoSync> {
-        guard !location.isIsolated else { return .failure(.isolated) }
+        guard !location.isIsolated || syncsIsolated else { return .failure(.isolated) }
         guard hasCloudKitEntitlement else { return .failure(.noEntitlement) }
         return .success(CloudSync(store: store))
     }
@@ -42,7 +44,7 @@ extension AppServices {
         }
     }
 
-    /// 启动引擎，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有引擎（隔离模式）什么都不做。
+    /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
     func startSync() {
         guard let sync else { return }
         follow {
@@ -64,14 +66,14 @@ extension AppServices {
         startPolling()
     }
 
-    /// 应用回到前台：立即同步（推送之外的兜底），iOS 恢复主动拉取。
+    /// 应用回到前台：立即同步，iOS 恢复按节奏的拉取。
     func handleActivation() async {
         startPolling()
         await syncNow()
     }
 
-    /// 推送不保证送达，手里有正在等的东西时按节奏主动拉（`SyncPoller`；节奏见 `pollingCadence`，直接拉同步区变化见
-    /// `CloudSync.pullChanges`）。已经在拉就不重开。
+    /// 手里有正在等的东西时按节奏拉（`SyncPoller`；节奏见 `pollingCadence`，每次拉就是 `SyncControlling.syncNow`）。
+    /// Mac 不收推送，别的设备写来的东西只靠它；手机有推送，它是推送之外让在等的东西更快、更稳地到。已经在拉就不重开。
     func startPolling() {
         guard let sync, polling == nil else { return }
         let waiting = pollingCondition()
@@ -79,26 +81,27 @@ extension AppServices {
         polling = Task {
             await poller.run(while: waiting) {
                 do {
-                    try await sync.pullChanges()
+                    try await sync.syncNow()
                 } catch {
-                    log.notice("主动拉取失败：\(String(describing: error), privacy: .public)")
+                    log.notice("按节奏拉取失败：\(String(describing: error), privacy: .public)")
                 }
             }
         }
     }
 
-    /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`；
-    /// 等的对象所在的表见 `ZoneChangePuller.awaitedTables`，加新的等待理由时一并更新：
+    /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的），或 Cue 在这台值班（你在手机上对它说的话、
     ///   "等你"的回答、别的 Mac 接管只经这一拉才到，会话都关着时它也在等）；Mac 不收推送（docs/sync.md「Agent 与 Cue 的通知」）；
-    /// - 手机：有在等回执的话（发往 Mac 还没结果的请求、还没交给 Cue 的你的话，`hasOpenDeliveries`），或正在看 Agent 页、会话近况。
-    ///   进入后台整体停掉（见 `stopPolling`）。
+    /// - 手机：有在等回执的话（发往 Mac 还没结果的请求、还没交给 Cue 的你的话，`hasOpenDeliveries`），或正在看 Agent 页、会话近况、
+    ///   Cue 页（状态与对话是活的）。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
+        DebugHooks.pollsLikePhone
+            ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true)
+            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty)
         #else
-        .phone(hasOpenDeliveries: hasOpenDeliveries, isViewingAgents: piViewers > 0)
+        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0)
         #endif
     }
 
@@ -126,17 +129,19 @@ extension AppServices {
         var since: Date?
     }
 
-    /// iOS 进入后台：停掉主动拉取（回前台由 `handleActivation` 再开）。
+    /// iOS 进入后台：停掉按节奏的拉取（回前台由 `handleActivation` 再开）。
     func stopPolling() {
         polling?.cancel()
         polling = nil
     }
 
-    /// 立即拉取并推送，最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，不跟着同步引擎的队列一直转
-    /// （手动拉取排在引擎正在做的事后面，十几秒到几分钟都可能）。没做完的在后台接着做，拉到的照常经资料库出现在界面上。
-    /// 失败（多半是离线）只记日志：引擎自己会重试，状态变化会经 `syncStatus` 反映。
+    /// 立即同步：立即拉一次（待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
+    /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`。
+    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
     func syncNow() async {
         guard let sync else { return }
+        isSyncingNow = true
+        defer { isSyncingNow = false }
         let (settled, settle) = AsyncStream<Void>.makeStream()
         Task {
             do {
@@ -156,7 +161,32 @@ extension AppServices {
 
     static let syncWaitLimit = Duration.seconds(5)
 
-    /// 处理 `syncStatus == .needsDecision`：用户选择后引擎重新开始。
+    /// 同步那一行转不转圈（Mac 设置与手机设置共用）：正在连接、正在上传或对账，或立即同步还没返回。
+    var isSyncBusy: Bool {
+        if isSyncingNow { return true }
+        switch syncStatus {
+        case .starting, .syncing: return true
+        default: return false
+        }
+    }
+
+    /// "立即同步"按钮（Mac 设置与手机设置共用）能不能按：有同步、不在等你决定、上一次立即同步已经返回。
+    var canSyncNow: Bool {
+        guard sync != nil, !isSyncingNow else { return false }
+        if case .needsDecision = syncStatus { return false }
+        return true
+    }
+
+    /// 收到推送（手机前台的通知、后台的静默推送）：拉一次，不碰立即同步的忙碌状态。
+    func pullForPush() async {
+        do {
+            try await sync?.syncNow()
+        } catch {
+            Self.log.notice("收到推送后拉取失败：\(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
     func resolveSync(_ resolution: SyncResolution) async throws {
         try await sync?.resolve(resolution)
     }

@@ -65,8 +65,8 @@ extension DebugScene {
         // notes 这一轮做完，会话歇下
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
-            sessionID: "notes", state: .settled, title: "notes", folder: "notes", projectID: projects.first { $0.name == "Career" }?.id,
-            times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels)
+            sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
+            times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels, commands: demoCommands)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix("投送队列") }
         if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
         // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务
@@ -349,14 +349,14 @@ extension DebugScene {
         await replay(session, as: .settled, recorder: recorder)
     }
 
-    /// 演示会话换一个状态：名字、所在、模型与上下文照旧（记录器每次整份写入，不带上就被清掉）。
+    /// 演示会话换一个状态：名字、所在、模型、命令与上下文照旧（记录器每次整份写入，不带上就被清掉）。
     private static func replay(
         _ session: PiSessionState, as state: PiWorkState, detail: String? = nil, question: PiQuestion? = nil, recorder: PiStateRecorder
     ) async {
         _ = try? await recorder.update(
-            sessionID: session.sessionID, state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID,
-            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, models: session.models),
-            context: session.context)
+            sessionID: session.sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID,
+            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, models: demoModels.models),
+            context: session.context, commands: demoCommands, agent: session.agent.known)
     }
 
     private static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel]) -> PiModelOption {
@@ -488,18 +488,18 @@ extension DebugScene {
         // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
         for index in 1...3 {
             let id = "flow-\(index)"
-            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", folder: "flow", projectID: nil)
+            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
             try? await recorder.end(sessionID: id)
         }
         for (id, name, recap) in history {
             _ = try? await recorder.update(
-                sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project), agent: demoAgents[id])
+                sessionID: id, state: .settled, detail: nil, title: id, directory: id, projectID: name.flatMap(project), agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
         for (id, state, detail, name, recap) in sessions {
             _ = try? await recorder.update(
-                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
+                sessionID: id, state: state, detail: detail, title: id, directory: id, projectID: name.flatMap(project), question: recap.question,
                 modelState: demoModels(for: demoAgents[id]), context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands,
                 agent: demoAgents[id])
             try? await store.writePiTranscript(PiTranscript(
@@ -530,7 +530,7 @@ extension DebugScene {
         ])
         await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
+        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", directory: "relay")
         await seedChats(store)
         if defaults.bool(forKey: "CuePadLongChat") { await seedLongChat(store, project: project("CuePad")) }
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
@@ -550,7 +550,7 @@ extension DebugScene {
             _ = try? await services.store.requestDelivery("顺便备份一下线上数据库", to: relay.target, on: relay.hostID, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
-            _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
+            _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project("装修"))
             try? await mini.end(sessionID: "quote")
             if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
                 _ = try? await services.store.requestDelivery("把报价单备份到网盘", to: quote.target, on: quote.hostID, mode: .send)

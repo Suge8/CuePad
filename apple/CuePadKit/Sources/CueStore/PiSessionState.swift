@@ -95,7 +95,7 @@ public struct PiSessionPage: Sendable, Equatable {
 /// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
 /// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
 /// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
-/// 每个会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上（`CueStore+SessionTasks`）。
+/// 每个没结束的会话都属于一个任务叶子，不经任务开的由写它的 Mac 建同名任务挂上；历史会话不补建（`CueStore+SessionTasks`）。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -129,15 +129,15 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var hosted: Bool
   /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
   public var subagents: [PiSubagentState]
-  /// 会话当前的模型与思考强度、可以换成的模型（Pi 桥上报；已结束的会话留着最后的模型与强度，可选列表清空）。旧版本写的记录没有。
+  /// 会话当前的模型与思考强度（Pi 桥上报；已结束的会话留着最后的值）。旧版本写的记录没有。
   public var model: PiModelOption?
   public var thinking: Open<PiThinkingLevel>?
-  public var models: [PiModelOption]
-  /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）与此刻能用的斜杠命令（已结束的会话清空）。旧版本写的记录没有。
+  /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）。旧版本写的记录没有。
   public var context: PiContextUsage?
-  public var commands: [PiSlashCommand]
   /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
   public var agent: Open<AgentKind>
+  /// 可以换成的模型与此刻能用的斜杠命令所在的目录记录（`AgentCatalog`，同一目录里的会话共用）；进程不在了的会话没有。
+  public var catalogID: UUID?
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
@@ -145,8 +145,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
-    thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = [], context: PiContextUsage? = nil,
-    commands: [PiSlashCommand] = [], agent: Open<AgentKind> = .known(.pi)
+    thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -170,10 +169,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.pendingPrompt = pendingPrompt
     self.model = model
     self.thinking = thinking
-    self.models = models
     self.context = context
-    self.commands = commands
     self.agent = agent
+    self.catalogID = catalogID
   }
 
   /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
@@ -230,13 +228,12 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "models", "context", "commands", "agent",
+    "model", "thinking", "context", "agent", "catalogID",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
-     model.map(JSONColumn.encode), thinking?.rawValue, JSONColumn.encodeList(models), context.map(JSONColumn.encode),
-     JSONColumn.encodeList(commands), agent.rawValue]
+     model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID]
   }
   init(row: Row) {
     self.init(
@@ -250,9 +247,7 @@ extension PiSessionState: Record {
       // 会话重新连上时又是它——不必等文件再追加
       pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19),
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
-      models: JSONColumn.decodeList(PiModelOption.self, from: row.textOrNil(22)),
-      context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(23)),
-      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)),
-      agent: row.textOrNil(25).map(Open.init(rawValue:)) ?? .known(.pi))
+      context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
+      agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24))
   }
 }

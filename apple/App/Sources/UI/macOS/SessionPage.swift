@@ -13,8 +13,8 @@ extension PiSessionState {
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
-            pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, models: session.availableModels,
-            context: session.context, commands: session.commands, agent: .known(session.agent))
+            pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, context: session.context,
+            agent: .known(session.agent))
     }
 }
 
@@ -29,12 +29,13 @@ extension SessionDigest {
         try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
-    /// 会话在线时，状态、详情、名字与近况取桥上的实时值。
+    /// 会话在线时，状态、详情、名字、可换的模型与命令取桥上的实时值。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
         var digest = self
         digest.session = .live(
             session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
+        digest.catalog = AgentCatalog(host: hostID, models: session.availableModels, commands: session.commands, at: session.stateSince)
         if let project { digest.project = project }
         return digest
     }
@@ -92,7 +93,7 @@ struct SessionPage: View {
                             Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
                         }
                         PiReplyBar(
-                            session: session, config: digest.config(at: services.speech),
+                            session: session, config: digest.config(at: services.speech), catalog: digest.catalog,
                             stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
                             commandProgress: MacDelivery.commandProgress(digest.deliveries, messages: digest.messages, at: services.speech),
                             queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),

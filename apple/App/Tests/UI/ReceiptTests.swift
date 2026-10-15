@@ -100,22 +100,21 @@ struct ReceiptTests {
         #expect(try await cuePresence() != .asleep)
 
         // 断网两分钟多：拉取的窗口走完（手机）；断网时没有在等的时限，说法不变
-        try await eventually("在等回执时主动拉取") { app.sync.pulls > 0 }
+        try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
         await clock.waitForSleeper()
         clock.advance(.seconds(121))
         #if os(iOS)
         try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉
         #else
-        try await eventually("拉取醒来又睡下") { app.sync.pulls > 1 && clock.sleeperCount > 0 }  // Mac 在等就一直拉
+        try await eventually("拉取醒来又睡下") { app.sync.syncNows > 1 && clock.sleeperCount > 0 }  // Mac 在等就一直拉
         #endif
         #expect(try await trips() == [.failed(.offline), .failed(.offline)])
-        let (pulls, syncs) = (app.sync.pulls, app.sync.syncNows)
+        let syncs = app.sync.syncNows
 
         try await store.recordMacPresence(host: "mac-cue") { true }  // Cue 那台醒着（断网时没同步来，本机不说它在睡觉）
         try await setSync(.idle)
         try await eventually("恢复") { services.speech.reachableSince != nil }
-        try await eventually("恢复时立即同步") { app.sync.syncNows > syncs }
-        try await eventually("恢复时拉取重新开始") { app.sync.pulls > pulls }  // 钟没动：是新窗口的第一拉
+        try await eventually("恢复时立即同步，拉取重新开始") { app.sync.syncNows >= syncs + 2 }  // 钟没动：第二次是新窗口的第一拉
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行回到发送中") { row("atlas")?.status == .delivery(.inTransit(.sending)) }
         #expect(services.liveSessions.undelivered["atlas"] == nil)

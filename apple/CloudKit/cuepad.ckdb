@@ -93,10 +93,21 @@ DEFINE SCHEMA
         pendingPrompt ENCRYPTED STRING,
         model         ENCRYPTED STRING,
         thinking      ENCRYPTED STRING,
-        models        ENCRYPTED STRING,
         context       ENCRYPTED STRING,
-        commands      ENCRYPTED STRING,
         agent         STRING,
+        catalogID     STRING,
+        models        ENCRYPTED STRING,
+        commands      ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE agentCatalogs (
+        "___recordID" REFERENCE QUERYABLE,
+        hostID        STRING,
+        models        ENCRYPTED STRING,
+        commands      ENCRYPTED STRING,
+        modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

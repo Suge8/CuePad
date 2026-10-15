@@ -100,7 +100,8 @@ protocol SubscriptionStore: Sendable {
   func delete(_ id: CKSubscription.ID) async throws
 }
 
-/// CloudKit 服务端订阅：Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成可见通知。
+/// CloudKit 服务端订阅（只有手机建）：同步区有变化时的静默推送（收到就拉一次），以及下面的可见通知。
+/// Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成可见通知。
 /// 不依赖静默推送与 App 在后台运行。通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；
 /// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
 /// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
@@ -117,25 +118,39 @@ struct AlertSubscriptions {
   static let waitingID = prefix + "pi.waiting"
   static let settledID = prefix + "pi.settled"
   static let cueID = prefix + "cue"
+  /// 同步区有变化就给这台设备一个静默推送，收到就拉一次（App 的远程通知回调）。数据库订阅生产环境允许客户端直接建。
+  static let changesID = prefix + "changes"
 
   let zoneID: CKRecordZone.ID
 
-  func desired() -> [CKQuerySubscription] {
+  func desired() -> [CKSubscription] {
     [
       make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey),
       make(.piSessionStates, id: Self.settledID, flag: "settled", key: PiAlertRoute.settledLocalizationKey),
       make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: CueAlertRoute.localizationKey),
+      changes(),
     ]
   }
 
-  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。
+  private func changes() -> CKDatabaseSubscription {
+    let subscription = CKDatabaseSubscription(subscriptionID: Self.changesID)
+    let info = CKSubscription.NotificationInfo()
+    info.shouldSendContentAvailable = true
+    subscription.notificationInfo = info
+    return subscription
+  }
+
+  /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除；不是这里建的数据库订阅也删掉（CKSyncEngine 当年建的，
+  /// 它的静默推送和 `changesID` 重复），别的查询订阅不碰。
   /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
   func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
     do {
       let existing = try await store.subscriptions()
       let wanted = desired()
       let wantedIDs = Set(wanted.map(\.subscriptionID))
-      for id in existing.keys where id.hasPrefix(Self.prefix) && !wantedIDs.contains(id) { try await store.delete(id) }
+      for (id, subscription) in existing where !wantedIDs.contains(id) && (id.hasPrefix(Self.prefix) || subscription is CKDatabaseSubscription) {
+        try await store.delete(id)
+      }
       for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
         try await store.save(subscription)
       }
@@ -159,8 +174,11 @@ struct AlertSubscriptions {
     return subscription
   }
 
-  private static func matches(_ existing: CKSubscription?, _ wanted: CKQuerySubscription) -> Bool {
-    guard let existing = existing as? CKQuerySubscription else { return false }
+  private static func matches(_ existing: CKSubscription?, _ wanted: CKSubscription) -> Bool {
+    if wanted is CKDatabaseSubscription {
+      return existing is CKDatabaseSubscription && existing?.notificationInfo?.shouldSendContentAvailable == true
+    }
+    guard let existing = existing as? CKQuerySubscription, let wanted = wanted as? CKQuerySubscription else { return false }
     return existing.recordType == wanted.recordType && existing.predicate.predicateFormat == wanted.predicate.predicateFormat
       && existing.zoneID == wanted.zoneID && existing.querySubscriptionOptions == wanted.querySubscriptionOptions
       && existing.notificationInfo?.alertLocalizationKey == wanted.notificationInfo?.alertLocalizationKey

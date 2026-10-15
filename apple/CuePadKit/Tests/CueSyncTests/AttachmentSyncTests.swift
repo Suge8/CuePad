@@ -87,7 +87,6 @@ import Testing
     let used = try await referencedImage(pngData(width: 4, height: 4, shade: 0.9))
     let freeCard = try #require(try await store.cards(in: nil).first { $0.body.contains(free.hash) })
     try await store.updateCard(freeCard.id) { $0.body = "图片删掉了" }
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 
     await rig.coordinator.handle(.fetched(

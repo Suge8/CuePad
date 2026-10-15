@@ -40,7 +40,7 @@ enum DebugHooks {
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
         var showsDone = false
-        /// 设置页"Pi 通知"一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步引擎，真实状态出不来）。
+        /// 设置页"Pi 通知"一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 一出现就聚焦并预填的搜索框：书架顶上的，或项目页的下拉搜索。
         var focusedSearch: SearchFocus?
@@ -66,12 +66,39 @@ enum DebugHooks {
         #endif
     }()
 
-    /// 同步引擎从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
+    /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
     static var syncSource: AppServices.SyncSource {
         #if DEBUG
         DebugScene.syncSource
         #else
         .iCloud
+        #endif
+    }
+
+    /// 隔离库也连 iCloud：只给同步测量（docs/verify.md「同步测量」），只连 CloudKit 开发环境，见 `DebugScene.syncsIsolatedLibrary`。
+    static var syncsIsolatedLibrary: Bool {
+        #if DEBUG && os(macOS)
+        DebugScene.syncsIsolatedLibrary
+        #else
+        false
+        #endif
+    }
+
+    /// 同步测量里代替手机的实例按手机开着 Agent 页的节奏拉（`-CuePadSyncBench remote`，见 `SyncBench`）。
+    static var pollsLikePhone: Bool {
+        #if DEBUG && os(macOS)
+        DebugScene.defaults.string(forKey: "CuePadSyncBench") == "remote"
+        #else
+        false
+        #endif
+    }
+
+    /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
+    static var hostID: String? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadHost").map { "mac-\($0)" }
+        #else
+        nil
         #endif
     }
 

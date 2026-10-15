@@ -10,15 +10,15 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
+  case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
   case cueMessages, cueLines, cueProfile, cueState, cueSummaries, macPresence
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
-    .accountQuotas,
+    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
+    .previews, .accountQuotas,
     .cueMessages, .cueLines, .cueProfile, .cueState, .macPresence,
   ]
 
@@ -35,6 +35,7 @@ extension Table {
     case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
+    case .agentCatalogs: AgentCatalog.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
     case .directoryBindings: DirectoryBinding.columns
     case .piMessages: PiChatMessage.columns
@@ -369,6 +370,8 @@ public enum CueStoreError: Error, Equatable {
   case notAConflictCopy
   /// 下载的附件内容与其哈希不符。
   case attachmentHashMismatch
+  /// 附件记录声明的哈希格式不对（不是 SHA-256 十六进制）。
+  case invalidAttachmentHash
   case blankDeliveryContent
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
@@ -437,6 +440,7 @@ extension CueStoreError: LocalizedError {
     case .invalidProject: "目标项目已不存在或在回收站"
     case .notAConflictCopy: "这条不是冲突副本"
     case .attachmentHashMismatch: "附件内容与其哈希不符"
+    case .invalidAttachmentHash: "附件的哈希格式不对"
     case .blankDeliveryContent: "发送内容不能为空"
     case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
     case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"

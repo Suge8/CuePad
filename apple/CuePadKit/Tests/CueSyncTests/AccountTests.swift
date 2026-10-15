@@ -12,7 +12,7 @@ import Testing
   private func populateAndPush() async throws -> Card {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "mine")
-    try await rig.coordinator.reconcile()
+    await rig.coordinator.handle(.account("user-a"))
     try await rig.simulatePush()
     return card
   }
@@ -31,51 +31,53 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
-  @Test func signedOutKeepsLocalDataAndSignedInUploadsItAgain() async throws {
+  @Test func signingOutKeepsLocalDataAndTheSameAccountCarriesOn() async throws {
     let card = try await populateAndPush()
 
-    await rig.coordinator.handle(.accountChange(.signedOut))
+    await rig.coordinator.handle(.accountStatus(.noAccount))
     #expect(await rig.coordinator.status == .noAccount)
     #expect(try await store.card(card.id)?.body == "mine")  // 本机数据不动
 
-    await rig.coordinator.handle(.accountChange(.signedIn))
+    await rig.coordinator.handle(.accountStatus(.available))
+    await rig.coordinator.handle(.account("user-a"))
     #expect(await rig.coordinator.status == .idle)
-    #expect(try await rig.reconcileDelta().saves.contains(rig.id(card.id)))  // 新账号：全部重新上传
+    #expect(try await rig.reconcileDelta().saves.isEmpty)  // 同一个账号：已推送的不重传
   }
 
   @Test func switchingAccountsStopsSyncingUntilTheUserDecides() async throws {
     let card = try await populateAndPush()
-    await rig.coordinator.handle(.stateUpdate(Data("old-account-state".utf8)))
 
-    await rig.coordinator.handle(.accountChange(.switched))
+    await rig.coordinator.handle(.account("user-b"))
     #expect(await rig.coordinator.status == .needsDecision(.accountSwitched))
 
-    // 决定之前：不登记推送，也不应用新账号的数据
+    // 决定之前：不上传，也不应用新账号的数据
     try await Task.sleep(for: .milliseconds(3))
     try await store.updateCard(card.id) { $0.body = "edited while waiting" }
-    #expect(try await rig.reconcileDelta().saves.isEmpty)
+    #expect(await rig.coordinator.nextBatch(first: [], limit: 400) == nil)
     await rig.coordinator.handle(.fetched(modifications: [remoteRecord(.cards, cardFields(project: nil, body: "other user", modifiedAt: 9_000_000_000_000))], deletions: []))
     #expect(try await store.card(card.id)?.body == "edited while waiting")
     #expect(try await store.cards(in: nil).isEmpty)  // 新账号的记录没有被应用
   }
 
-  @Test func uploadingLocalDataAfterASwitchMakesEverythingPendingAgain() async throws {
+  @Test func uploadingLocalDataAfterASwitchMakesEverythingPendingForTheNewAccount() async throws {
     let card = try await populateAndPush()
-    await rig.coordinator.handle(.stateUpdate(Data("old-account-state".utf8)))
-    await rig.coordinator.handle(.accountChange(.switched))
+    try await store.setSyncState(ZonePuller.tokenKey, Data("old-token".utf8))
+    await rig.coordinator.handle(.account("user-b"))
 
     try await rig.coordinator.resolve(.uploadLocal)
 
     #expect(await rig.coordinator.status == .idle)
-    #expect(try await rig.coordinator.savedEngineState() == nil)  // 旧账号的引擎状态作废
+    #expect(try await store.syncState(ZonePuller.tokenKey) == nil)  // 旧账号的令牌作废
     #expect(try await rig.reconcileDelta().saves.contains(rig.id(card.id)))
+    await rig.coordinator.handle(.account("user-b"))
+    #expect(await rig.coordinator.status == .idle)  // 新账号记下，不再问
   }
 
   @Test func erasingLocalDataAfterASwitchClearsSyncedTablesOnly() async throws {
     _ = try await populateAndPush()
     let image = try store.files.store(pngData(width: 4, height: 4))
     try await store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: Date()), host: "mac-a")
-    await rig.coordinator.handle(.accountChange(.switched))
+    await rig.coordinator.handle(.account("user-b"))
 
     try await rig.coordinator.resolve(.eraseLocal)
 
@@ -88,22 +90,25 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
-  @Test(arguments: [
-    (CloudDataLoss.deleted, SyncDecision.cloudDataDeleted),
-    (.purged, .cloudDataReset),
-    (.encryptedDataReset, .cloudDataReset),
-  ])
-  func lostCloudDataAsksTheUserInsteadOfDeciding(loss: CloudDataLoss, expected: SyncDecision) async throws {
+  @Test(arguments: [(true, SyncDecision.cloudDataDeleted), (false, .cloudDataReset)])
+  func lostCloudDataAsksTheUserInsteadOfDeciding(deletedByUser: Bool, expected: SyncDecision) async throws {
     _ = try await populateAndPush()
-    await rig.coordinator.handle(.cloudDataLost(loss))
+    await rig.coordinator.handle(.zoneMissing(deletedByUser: deletedByUser))
     #expect(await rig.coordinator.status == .needsDecision(expected))
     try await rig.coordinator.resolve(.uploadLocal)
     #expect(await rig.coordinator.status == .idle)
   }
 
+  /// 第一台设备第一次同步时服务器上还没有同步区：不是云端数据丢了，第一次上传时建区。
+  @Test func aMissingZoneBeforeAnythingWasSyncedIsNotADecision() async throws {
+    _ = try await store.createCard(in: nil, body: "first")
+    await rig.coordinator.handle(.zoneMissing(deletedByUser: false))
+    #expect(await rig.coordinator.status != .needsDecision(.cloudDataReset))
+    #expect(await rig.coordinator.nextBatch(first: [], limit: 400) != nil)
+  }
+
   @Test func quotaExceededIsReportedKeepsChangesPendingAndClearsOnSuccess() async throws {
     let card = try await store.createCard(in: nil, body: "big")
-    try await rig.coordinator.reconcile()
     let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
 
     await rig.coordinator.handle(.sent(saved: [], failedSaves: [(record, CKError(.quotaExceeded))], deleted: [], failedDeletes: []))
@@ -125,13 +130,5 @@ import Testing
     let issue = try #require(await rig.coordinator.issues.last)
     #expect(issue.recordType == "cards" && issue.recordName == rig.id(card.id))
     #expect(issue.message.contains("from type 'tasks' to 'cards'"))
-  }
-
-  @Test func engineStateIsPersistedInTheLocalDatabase() async throws {
-    await rig.coordinator.handle(.stateUpdate(Data("state-1".utf8)))
-    await rig.coordinator.handle(.stateUpdate(Data("state-2".utf8)))
-
-    let reopened = SyncCoordinator(store: try CueStore(url: rig.fixture.url), queue: rig.queue, zoneID: testZone)
-    #expect(try await reopened.savedEngineState() == Data("state-2".utf8))
   }
 }

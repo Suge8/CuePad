@@ -101,7 +101,7 @@ final class CueKeeper {
         /// Cue 自己的目录：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
         var directory: URL
         var timing: CueTiming
-        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，不等引擎自己排，见 `Speech`）
+        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，排在其余待推送前面，见 `Speech`）
         var upload: @Sendable ([UUID]) async -> Void = { _ in }
     }
 

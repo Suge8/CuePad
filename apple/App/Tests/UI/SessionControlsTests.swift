@@ -13,12 +13,15 @@ struct SessionControlsTests {
     private let luna = PiModelOption(key: PiModelKey(provider: "openai", id: "luna"), name: "Luna", thinkingLevels: [.off, .high])
 
     private func session() async throws -> PiSessionState {
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
-        var session = try #require(try await store.piSessionPage(PiSessionQuery()).items.first?.state)
-        session.model = opus
-        session.thinking = .known(.low)
-        session.models = [opus, luna]
-        return session
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(
+            sessionID: "atlas", state: .settled, title: "atlas", directory: "/w/atlas",
+            modelState: PiModelState(model: opus, thinking: .known(.low), models: [opus, luna]))
+        return try #require(try await store.piSessionPage(PiSessionQuery()).items.first?.state)
+    }
+
+    /// 会话页读到的模型与思考强度（与页面同一次读取）。
+    private func shown(_ session: PiSessionState) async throws -> PiConfigShown {
+        try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store).config(at: .always())
     }
 
     private func target(_ session: PiSessionState) -> SendTarget {
@@ -48,21 +51,17 @@ struct SessionControlsTests {
 
     @Test func 换了模型_立即显示新值并标在路上() async throws {
         let atlas = try await session()
-        let request = try await store.requestConfig(PiConfig(model: luna.key, thinking: .high), to: target(atlas), on: atlas.hostID)
+        _ = try await store.requestConfig(PiConfig(model: luna.key, thinking: .high), to: target(atlas), on: atlas.hostID)
 
-        let shown = SessionDigest(session: atlas, project: nil, deliveries: [request]).config(at: .always())
-
-        #expect(shown == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
+        #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
     }
 
     @Test func 没换成_回到会话当前的值并写原因() async throws {
         let atlas = try await session()
         let request = try await store.requestConfig(PiConfig(thinking: .high), to: target(atlas), on: atlas.hostID)
-        let failed = try await execute(request, failing: "Pi 没在运行")
+        _ = try await execute(request, failing: "Pi 没在运行")
 
-        let shown = SessionDigest(session: atlas, project: nil, deliveries: [failed]).config(at: .always())
-
-        #expect(shown == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
+        #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
     }
 
 }

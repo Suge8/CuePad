@@ -42,7 +42,7 @@ import Testing
     let base = Date(timeIntervalSince1970: 1_000_000)
     func write(_ id: String, folder: String?, host: String, at offset: TimeInterval, project: UUID? = nil) async throws {
       try await PiStateRecorder(store: store, hostID: host).update(
-        sessionID: id, state: .settled, title: id, folder: folder, projectID: project,
+        sessionID: id, state: .settled, title: id, directory: folder, projectID: project,
         times: PiTimes(stateSince: base.addingTimeInterval(offset), busySince: nil))
     }
     try await write("old", folder: "app", host: "mac-a", at: 10)

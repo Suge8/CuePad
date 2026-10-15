@@ -2,20 +2,20 @@ import Foundation
 
 /// 表分两类。
 ///
-/// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
+/// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
+/// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
 /// cueMessages、cueLines、cueProfile、cueState、macPresence。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
-/// - 没有 FOREIGN KEY、UNIQUE：CKSyncEngine 乱序送达记录，引用可能先于目标到达，
+/// - 没有 FOREIGN KEY、UNIQUE：同步乱序送达记录，引用可能先于目标到达，
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、cueToldAt（Cue 已知道没送到，见 40）；piSessionStates、cards、deliveryRequests、
 /// piMessages 的 writeSeq（本机写入序号，见 38）。
 ///
-/// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
+/// 本机表（不同步）：piSessions、piProcesses、writeCounter、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）、
 /// cueSummaries（Cue 记忆的摘要缓存，可随时丢弃重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
@@ -56,7 +56,7 @@ enum Schema {
     // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
     // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
     "UPDATE piSessions SET checkpoint = NULL;",
-    // 24：本机交给过服务器、结果还没落账的版本整行（见 `syncSent`）
+    // 24：本机交给过服务器、结果还没落账的版本整行（38 删掉）
     Upgrade(stringLiteral: syncSent),
     // 25：任务最多两级，提示词不算一级。旧规则下第 3 级的任务（含回收站里的，恢复后同样超限）改挂到上级的上级，与 `CardLinks.repairs` 同一规则；
     // 旧规则最深就是第 3 级，一步够。modifiedAt 必须变大，改动才会同步出去
@@ -161,6 +161,25 @@ enum Schema {
     "ALTER TABLE deliveryRequests ADD COLUMN cueToldAt INTEGER;",
     // 41：每台 Mac 的在线记录（它自己写，各端读）：Mac 在不在、Cue 在不在值班的唯一信号
     Upgrade(stringLiteral: macPresence),
+    // 42：同步不再用 CKSyncEngine，只有一条上传通路：引擎状态换成同步区令牌（没有令牌时按版本对一遍账，不全量下载）；
+    // 交出去还没落账的版本只记一个修改时间，从没被服务器收下过的记录也要记，所以系统字段与推送时间可空
+    Upgrade(stringLiteral: """
+      DELETE FROM syncState; DROP TABLE IF EXISTS syncSent;
+      DROP INDEX syncRecords_recordType; ALTER TABLE syncRecords RENAME TO syncRecordsOld;
+      \(syncRecords)
+      INSERT INTO syncRecords (recordName, recordType, systemFields, pushedModifiedAt)
+        SELECT recordName, recordType, systemFields, pushedModifiedAt FROM syncRecordsOld;
+      DROP TABLE syncRecordsOld;
+      """),
+    // 43：可换的模型与斜杠命令从会话记录拆成按内容共用的目录记录（`AgentCatalog`），会话记录只记它的 id；
+    // 在线会话的目录由桥重新连上后的第一次写入补上
+    Upgrade(stringLiteral: """
+      \(agentCatalogs)
+      ALTER TABLE piSessionStates DROP COLUMN models;
+      ALTER TABLE piSessionStates DROP COLUMN commands;
+      ALTER TABLE piSessionStates ADD COLUMN catalogID TEXT;
+      \(catalogIndex)
+      """),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -195,6 +214,23 @@ enum Schema {
   private static func stamp(_ table: String) -> String {
     "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
   }
+
+  /// 同步元数据：每条记录服务器端的系统字段与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
+  /// （`sentModifiedAt`，见 `CueStore.noteSent`）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  private static let syncRecords = """
+    CREATE TABLE syncRecords (
+      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
+      pushedModifiedAt INTEGER, sentModifiedAt INTEGER
+    ) STRICT;
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    """
+
+  private static let agentCatalogs = """
+    CREATE TABLE agentCatalogs (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, models TEXT, commands TEXT, modifiedAt INTEGER NOT NULL) STRICT;
+    """
+
+  /// 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
+  private static let catalogIndex = "CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;"
 
   private static let piProcesses = """
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -301,7 +337,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      model TEXT, thinking TEXT, models TEXT, context TEXT, commands TEXT, agent TEXT,
+      model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
@@ -309,6 +345,10 @@ enum Schema {
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
+    \(catalogIndex)
+
+    -- 会话可换的模型与斜杠命令（AgentCatalog）；id 由主机与内容算出，写下不改。
+    \(agentCatalogs)
 
     \(previews)
 
@@ -351,15 +391,8 @@ enum Schema {
       projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
     ) STRICT;
 
-    -- 同步元数据：每条记录服务器端的系统字段与已推送的修改时间。行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
-    CREATE TABLE syncRecords (
-      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB NOT NULL,
-      pushedModifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
-    -- 本机交给过服务器、结果还没落账的版本（整行，JSON）：这一版经拉取回到本机是自己的回声，不是别的设备的编辑；
-    -- 结果回来时按它记账（上传的记录只带改动的字段，不能读回来）。落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
-    \(syncSent)
+    \(syncRecords)
+    -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
     \(cue)
@@ -374,7 +407,7 @@ enum Schema {
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
     """
 
-  /// 触发器对本地写入与将来同步引擎的写入一视同仁，索引始终跟随数据。
+  /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。
   private static func searchTriggers(table: String, column: String, kind: String) -> String {
     let remove = #"DELETE FROM searchIndex WHERE searchIndex MATCH 'refID: "' || old.id || '"';"#
     let add = """

@@ -76,6 +76,17 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 
 Mac 的 `-CuePadInteractOnly 项,项` 只量列出的几项，前后对比省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）。
 
+## 同步测量
+
+两台设备之间同步的开销与时延只有一个入口：`apple/scripts/sync-bench.py [分钟=10]`（参数见脚本头注释），前后对比跑同一套。它在这台 Mac 上开两个隔离实例连 CloudKit **开发环境**：A 是有在线会话的 Mac（脚本里的假扩展驱动几个会话不停切状态），B 代替手机，每轮给 A 的一个会话"马上说"一句、对 Cue 说一句、立即同步一次（打点见 `DebugScene+SyncBench.swift`）。
+
+- 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。构建由脚本调 `CUEPAD_SIGN=development xc.sh build mac`。
+- 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、签名里写定 Development 三样都在（`DebugScene.syncsIsolatedLibrary`）。两个实例靠 `-CuePadHost` 当两台 Mac。
+- 模拟器没有 Apple 账号、登不了 iCloud，所以 B 是 Mac 进程，当作开着 Agent 页的手机：拉取节奏换成手机那档（`DebugHooks.pollsLikePhone`），界面与通知仍是 Mac 的。
+- Cue 不值班（隔离目录里没有登录的运行时）：只量对 Cue 说的话到 A 的库，不量回复。
+- 口径：预热（默认 90 秒，含冷启动翻整个同步区）之后的固定窗口。CloudKit 操作按进程统计，来源是 debug 日志里每个操作结束时的 `CKOperationMetrics`：次数按类型与操作组分，字节是 CloudKit 自己计的请求与响应体，不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。时延用同一台机器的时钟。
+- 两个实例共用这台 Mac 的 cloudd，CloudKit 操作在里面排同一个队：一个操作慢（服务端或网络，偶尔几十秒），两边排在后面的一起等，结束在同一刻（报告里的"排队"）。真机上手机有自己的 cloudd，所以尾部时延比真实的大；前后对比在同一网络、同一时段交替跑，主要看中位数。开发环境的同步区随每次运行积累会话记录，只影响冷启动。
+
 ## 崩溃诊断
 
 `Diagnostics` 把 MetricKit 交来的诊断存在资料库目录下（隔离库不订阅）。真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来（摘要未符号化，靠 dSYM 还原）。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）。

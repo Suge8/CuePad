@@ -126,8 +126,15 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 40：撤掉 41（每台 Mac 的在线记录）。
-  static let undoSchema41 = "DROP TABLE macPresence;"
+  /// 把新建的库退回结构 42：撤掉 43（模型与命令的目录记录）。更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema43 = """
+    DROP INDEX piSessionStates_catalogID; ALTER TABLE piSessionStates DROP COLUMN catalogID; DROP TABLE agentCatalogs;
+    ALTER TABLE piSessionStates ADD COLUMN models TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;
+    """
+  /// 退回结构 41：42（同步元数据换形）从哪种形状都能重建，不用撤。
+  static let undoSchema42 = undoSchema43
+  /// 退回结构 40：再撤掉 41（每台 Mac 的在线记录）。
+  static let undoSchema41 = undoSchema42 + "DROP TABLE macPresence;"
   /// 退回结构 39：再撤掉 40（请求上记 Cue 已知道没送到，本机列）。
   static let undoSchema40 = undoSchema41 + "ALTER TABLE deliveryRequests DROP COLUMN cueToldAt;"
   /// 退回结构 38：再撤掉 39（卡片上的跟进标记下线；盖序号的触发器去掉它后重建，退回时留着新的也照样能升级）。
@@ -160,6 +167,19 @@ import Testing
   static let undoSchema31 = undoSchema32 + "ALTER TABLE piSessionStates DROP COLUMN agent; ALTER TABLE piSessions DROP COLUMN agent;"
   /// 退回结构 29：再撤掉 30（订阅额度）。
   static let undoSchema30 = undoSchema31 + "DROP TABLE accountQuotas;"
+
+  /// 结构 42 的库升到 43：会话记录原样都在（带着的模型与命令清单丢掉，在线会话由桥重连后写进目录记录），目录记录可写可读。
+  @Test func schema42LibraryMovesModelListsOffSessionRecords() async throws {
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
+    try RawDB(fixture.url).exec(Self.undoSchema43 + "UPDATE piSessionStates SET models = '[]', commands = '[]'; PRAGMA user_version = 42;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
+    let compact = PiSlashCommand(name: "compact", summary: nil, source: .known(.builtin))
+    try await PiStateRecorder(store: upgraded, hostID: "mac").update(sessionID: "s1", state: .settled, directory: "/w", commands: [compact])
+    let catalog = try #require(try await upgraded.allPiSessionStates().first?.catalogID)
+    #expect(try await upgraded.agentCatalog(catalog)?.commands == [compact])
+  }
 
   /// 结构 36 的库升到 37：还开着的旧验收是 Cue 已收尾的事——任务连同步骤完成，那条成了做完的结果；Cue 自拟选项的提问撤回，
   /// 不再等你、也不交给 Cue；答过的照原样留着。
@@ -207,7 +227,7 @@ import Testing
     try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(Self.undoSchema30 + 
       """
-      ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; DROP TABLE syncSent;
+      ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews;
       ALTER TABLE piMessages DROP COLUMN tools; ALTER TABLE piMessages ADD COLUMN toolCount INTEGER NOT NULL DEFAULT 0;
       DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; DROP INDEX cards_todoAt; DROP INDEX cards_piSessionID; PRAGMA user_version = 17;
       """)
@@ -224,7 +244,7 @@ import Testing
   /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
   @Test func schema22LibraryDropsSessionCheckpoints() async throws {
     try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
-    try RawDB(fixture.url).exec(Self.undoSchema30 + "DROP TABLE syncSent; PRAGMA user_version = 22;")
+    try RawDB(fixture.url).exec(Self.undoSchema30 + "PRAGMA user_version = 22;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
@@ -236,7 +256,7 @@ import Testing
     let sub = try await store.createTask("备份", under: top.id)
     let deep = try await store.createTask("导出", in: nil)
     let before = try #require(try await store.card(deep.id)).modifiedAt
-    try RawDB(fixture.url).exec(Self.undoSchema30 + "UPDATE cards SET parentID = '\(sub.id.uuidString.lowercased())' WHERE id = '\(deep.id.uuidString.lowercased())'; DROP TABLE syncSent; PRAGMA user_version = 23;")
+    try RawDB(fixture.url).exec(Self.undoSchema30 + "UPDATE cards SET parentID = '\(sub.id.uuidString.lowercased())' WHERE id = '\(deep.id.uuidString.lowercased())'; PRAGMA user_version = 23;")
 
     let upgraded = try CueStore(url: fixture.url)
     let lifted = try #require(try await upgraded.card(deep.id))

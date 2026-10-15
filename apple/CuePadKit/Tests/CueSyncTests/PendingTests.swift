@@ -25,7 +25,6 @@ import Testing
   @Test func editAfterPushEnqueuesOnlyThatRecord() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "x")
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 
     try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
@@ -39,7 +38,6 @@ import Testing
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "x")
     let send = try await store.recordSend("s", to: SendTarget(kind: .piSession, name: "c"), card: card.id)
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 
     try await Task.sleep(for: .milliseconds(3))
@@ -52,35 +50,34 @@ import Testing
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func localWritesAreRegisteredAutomaticallyOnceStarted() async throws {
-    try await rig.coordinator.start()
+  func localWritesAreUploadedAutomaticallyOnceStarted() async throws {
+    let server = FakeUploader()
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
     let card = try await store.createCard(in: nil, body: "auto")
-    let id = rig.id(card.id)
-    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
+    await server.uploaded(rig.id(card.id))
 
-    try await rig.simulatePush()
     try await store.purgeCard(card.id)
-    await rig.queue.waitUntil { _, deletes in deletes.contains(id) }
-    await rig.coordinator.stop()
+    await server.deleted(rig.id(card.id))
+    await sender.stop()
   }
 
-  /// 引擎发送旧版本期间记录又改了：发送成功后它仍待推送，要重新登记（引擎已移除这条待办）。
+  /// 上一版还在上传时记录又改了：上一版的结果回来后，新的这一版接着传上去，不丢。
   @Test(.timeLimit(.minutes(1)))
-  func editMadeWhileThePreviousVersionWasSendingIsRegisteredAgain() async throws {
-    try await rig.coordinator.start()
+  func anEditMadeWhileThePreviousVersionWasUploadingIsUploadedAfterIt() async throws {
+    let server = FakeUploader(holding: true)
+    let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
+    await sender.start()
     let card = try await store.createCard(in: nil, body: "v1")
     let id = rig.id(card.id)
-    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
-    let sending = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    await server.uploaded(id)
 
     try await Task.sleep(for: .milliseconds(3))
     try await store.updateCard(card.id) { $0.body = "v2" }
-    await rig.queue.waitUntil { saves, _ in saves.count == 2 }
-    await rig.queue.clear()
-    await rig.coordinator.handle(.sent(saved: [sending], failedSaves: [], deleted: [], failedDeletes: []))
+    await server.release()
 
-    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
-    await rig.coordinator.stop()
+    await server.waitUntil { batches in batches.filter { $0.saves.contains(id) }.count == 2 }
+    #expect(try await rig.reconcileDelta().saves.isEmpty)
+    await sender.stop()
   }
-
 }

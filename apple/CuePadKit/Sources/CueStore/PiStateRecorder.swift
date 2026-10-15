@@ -2,7 +2,11 @@ import Foundation
 
 extension CueStore {
   /// `notify` 只置给你的提示（`PiAlert.reaches`）：Cue 值班、问题 CuePad 答得了时进入等回答不置，这类提问 Cue 处理，要你拍板的它会发"等你"。
-  func writePiState(sessionID: String, hostID: String, content: PiStateContent, notify: PiAlert?) throws {
+  /// `catalog`：会话报的模型与命令所在的目录记录；`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，
+  /// 不必每次状态变化都去比一遍几十 KB 的清单。
+  func writePiState(
+    sessionID: String, hostID: String, content: PiStateContent, catalog: AgentCatalog?, writesCatalog: Bool, notify: PiAlert?
+  ) throws {
     try write {
       let now = Date.stamp
       var record = PiSessionState(
@@ -11,7 +15,8 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
-        models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
+        context: content.context, agent: .known(content.agent), catalogID: catalog?.id)
+      if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let alert = notify, !alert.reaches(record, cueOnDuty: try cueOnDuty()) { record.notify = nil }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
@@ -33,6 +38,7 @@ extension CueStore {
           "INSERT OR REPLACE INTO piProcesses (sessionID, pid, startedAt) VALUES (?, ?, ?)", [sessionID, Int64(process.pid), process.startedAt])
       }
       if content.launchToken != nil { try claimLaunchedCards() }
+      try dropUnusedCatalogs(host: hostID)
     }
   }
 
@@ -42,16 +48,19 @@ extension CueStore {
     try write {
       try close(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)], at: now)
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
+      try dropUnusedCatalogs(host: host)
     }
   }
 
   /// 你结束了这个会话：记为已结束、进历史（不算被打断）；已结束、被打断的也改记为已结束。
-  func endPiState(sessionID: String, at now: Date) throws {
+  func endPiState(host: String, sessionID: String, at now: Date) throws {
     try write {
+      try dropCatalogModels(where: "id = ? AND state != ?", [PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue], at: now)
       try db.run(
         "UPDATE piSessionStates SET state = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
         [PiWorkState.ended.rawValue, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), PiWorkState.ended.rawValue])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
+      try dropUnusedCatalogs(host: host)
     }
   }
 
@@ -75,6 +84,7 @@ extension CueStore {
       let among = "(\(gone.map { _ in "?" }.joined(separator: ", ")))"
       try close(where: "hostID = ? AND sessionID IN \(among)", [host] + gone.map { $0 as any SQLBindable }, at: now)
       try db.run("DELETE FROM piProcesses WHERE sessionID IN \(among)", gone.map { $0 as any SQLBindable })
+      try dropUnusedCatalogs(host: host)
       return open
     }
   }
@@ -91,6 +101,7 @@ extension CueStore {
         WHEN hosted = 1 THEN '\(PiWorkState.settled.rawValue)' ELSE '\(PiWorkState.ended.rawValue)' END
       """
     let kept = "((state = '\(PiWorkState.settled.rawValue)' AND NOT \(Self.hadWork)) OR \(failed))"
+    try dropCatalogModels(where: "state NOT IN (\(finals)) AND \(condition)", arguments, at: now)
     try db.run(
       """
       UPDATE piSessionStates SET stateSince = CASE WHEN \(kept) THEN stateSince ELSE ? END,
@@ -99,9 +110,9 @@ extension CueStore {
       """, [now, Date.stamp] + arguments)
   }
 
-  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理、可选模型。
+  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理，还有目录里的可选模型（`dropCatalogModels`）。
   /// 它报过的斜杠命令留着：发话会在后台唤醒它，回复框认命令只看这份清单（`PiSlash.line`），清掉了 "/default" 就会当普通的话发给模型。
-  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, models = NULL"
+  private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
   private static let hadWork: String = {
@@ -119,14 +130,16 @@ extension CueStore {
       try dropSessionRecords(
         where: "hostID = ? AND COALESCE(agent, 'pi') = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
         arguments)
+      try dropUnusedCatalogs(host: host)
     }
   }
 
   /// 删掉一个会话的记录（同步删除）：会话结束时没有留下会话文件的，不进历史。
-  func deletePiState(sessionID: String) throws {
+  func deletePiState(host: String, sessionID: String) throws {
     try write {
       try dropSessionRecords(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
+      try dropUnusedCatalogs(host: host)
     }
   }
 }
@@ -148,7 +161,8 @@ struct PiStateContent: Equatable, Sendable {
   var state: PiWorkState
   var detail: String?
   var title = ""
-  var folder: String?
+  /// 工作目录（完整路径，不同步）：记录上只写文件夹名。
+  var directory: String?
   var projectID: UUID?
   var question: PiQuestion?
   var times: PiTimes
@@ -161,6 +175,19 @@ struct PiStateContent: Equatable, Sendable {
   var agent = AgentKind.pi
   /// 承载它的进程（只写本机表，不进同步记录）；不知道为 nil。
   var process: PiProcess?
+
+  var folder: String? { directory.flatMap(CueStore.folderName(ofWorkingDirectory:)) }
+
+  /// 这个会话的目录记录；什么都没报的没有。
+  func catalog(host: String, at now: Date) -> AgentCatalog? {
+    guard !modelState.models.isEmpty || !commands.isEmpty else { return nil }
+    return AgentCatalog(host: host, models: modelState.models, commands: commands, at: now)
+  }
+
+  /// 模型与命令和上次写的（`written`，没写过为 nil）不同。
+  func catalogDiffers(from written: PiStateContent?) -> Bool {
+    written.map { $0.modelState.models != modelState.models || $0.commands != commands } ?? true
+  }
 
   /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
   var steady: PiStateContent {
@@ -176,7 +203,7 @@ struct PiStateContent: Equatable, Sendable {
 
 /// 把 Pi 会话的状态变化写成同步记录（每个会话一条）。
 /// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
-/// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
+/// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`（默认 `detailInterval`），期间只保留最新的一次；
 /// - 近况（`PiRecap`）变化：立即写；
 /// - 与已写入内容相同的更新不再写；会话的进程退出时按 `exited` 处理记录（历史、歇着、删除）并丢弃挂起的更新；用户结束会话时
 ///   标为已结束（近况留给手机看，记录与会话文件同存亡，见 `CueStore.retainPiSessions`）。
@@ -189,9 +216,16 @@ public actor PiStateRecorder {
     var content: PiStateContent?
     var written: PiStateContent?
     var writtenAt: Date?
+    /// `written` 的目录记录（模型与命令没变时沿用，不重算内容的 id）
+    var catalog: AgentCatalog?
     /// 有挂起的更新（节流期内只保留最新一次，就是 `content`）时在等的定时写入
     var timer: Task<Void, Never>?
   }
+
+  /// 工作中细节的最短写入间隔：每次写入都是一次整条记录的上传与各端的下载。放宽到 15 秒不拖慢该快的：
+  /// 状态转换（开始工作、等你、做完、出错）不受它管；回答（对话与近况）不经这里写，提交后随即上传（`RecordSender`）；
+  /// 正在说的话只在 Mac 的内存里逐字显示（`PiDraft`），不靠同步。
+  public static let detailInterval: Duration = .seconds(15)
 
   private let store: CueStore
   private let hostID: String
@@ -200,7 +234,7 @@ public actor PiStateRecorder {
   private var sessions: [String: Session] = [:]
   private var tail: Task<Void, Never>?
 
-  public init(store: CueStore, hostID: String, minInterval: Duration = .seconds(5), timing: Timing = .system) {
+  public init(store: CueStore, hostID: String, minInterval: Duration = detailInterval, timing: Timing = .system) {
     self.store = store
     self.hostID = hostID
     self.minInterval = minInterval
@@ -208,10 +242,10 @@ public actor PiStateRecorder {
   }
 
   /// 没给的字段（nil）沿用上一次的值；`question` 与 `detail` 每次整体替换。
-  /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不等引擎的自动调度。
+  /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不排在其余待推送后面。
   @discardableResult
   public func update(
-    sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
+    sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, directory: String? = nil,
     projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
     agent: AgentKind? = nil, process: PiProcess? = nil
@@ -228,7 +262,7 @@ public actor PiStateRecorder {
     content.detail = detail
     content.question = question
     if let title { content.title = title }
-    if let folder { content.folder = folder }
+    if let directory { content.directory = directory }
     if let projectID { content.projectID = projectID }
     if let times { content.times = times }
     if let launchToken { content.launchToken = launchToken }
@@ -277,7 +311,7 @@ public actor PiStateRecorder {
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
     let now = timing.now()
-    try await persist { [store] in try await store.endPiState(sessionID: sessionID, at: now) }
+    try await persist { [store, hostID] in try await store.endPiState(host: hostID, sessionID: sessionID, at: now) }
   }
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
@@ -301,7 +335,7 @@ public actor PiStateRecorder {
     if spoke {
       try await persist { [store, hostID] in try await store.losePiState(host: hostID, sessionID: id, at: now) }
     } else {
-      try await persist { [store] in try await store.deletePiState(sessionID: id) }
+      try await persist { [store, hostID] in try await store.deletePiState(host: hostID, sessionID: id) }
     }
   }
 
@@ -338,10 +372,13 @@ public actor PiStateRecorder {
   private func commit(
     _ sessionID: String, _ session: inout Session, _ content: PiStateContent, notify: PiAlert? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {
+    let writesCatalog = content.catalogDiffers(from: session.written)
+    if writesCatalog { session.catalog = content.catalog(host: hostID, at: now) }
     session.written = content
     session.writtenAt = now
-    return { [store, hostID] in
-      try await store.writePiState(sessionID: sessionID, hostID: hostID, content: content, notify: notify)
+    return { [store, hostID, catalog = session.catalog] in
+      try await store.writePiState(
+        sessionID: sessionID, hostID: hostID, content: content, catalog: catalog, writesCatalog: writesCatalog, notify: notify)
     }
   }
 

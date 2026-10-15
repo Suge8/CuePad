@@ -24,19 +24,13 @@ struct SyncRow: View {
         let summary = SyncSummary(services.syncStatus)
         let fix = fix
         SettingRow(
-            title: "iCloud 同步", icon: Image(systemName: summary.symbol), tone: tone(summary), busy: busy, status: status(summary, fix: fix),
+            title: "iCloud 同步", icon: Image(systemName: summary.symbol), tone: tone(summary), busy: services.isSyncBusy, status: status(summary, fix: fix),
             help: fix == nil ? nil : summary.detail
         ) {
             if services.sync != nil, fix != .decide, fix != .openSettings {
-                Button("立即同步") {
-                    working = true
-                    Task {
-                        await services.syncNow()
-                        working = false
-                    }
-                }
-                .settingButton()
-                .disabled(working || services.syncStatus == .syncing)
+                Button("立即同步") { Task { await services.syncNow() } }
+                    .settingButton()
+                    .disabled(!services.canSyncNow)
             }
         } fix: {
             switch fix {
@@ -69,13 +63,6 @@ struct SyncRow: View {
 
     private func tone(_ summary: SyncSummary) -> StatusTone {
         failure != nil || !services.syncIssues.isEmpty ? .failure : summary.tone
-    }
-
-    private var busy: Bool {
-        switch services.syncStatus {
-        case .starting, .syncing: true
-        default: false
-        }
     }
 
     private func status(_ summary: SyncSummary, fix: Fix?) -> Dotted {

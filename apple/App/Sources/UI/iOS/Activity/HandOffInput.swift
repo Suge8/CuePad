@@ -14,6 +14,7 @@ struct HandOffInput: View {
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    /// 在线会话各自的模型显示值与可换的模型、命令（按会话记录 id）。
     @State private var digests: [UUID: SessionDigest]?
     @State private var choice: UUID?
     @State private var planned: Planned?
@@ -51,12 +52,14 @@ struct HandOffInput: View {
     }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
     private var config: PiConfigShown? { chosen.flatMap { digests?[$0.state.id]?.config(at: services.speech) } }
+    private var catalog: AgentCatalog? { chosen.flatMap { digests?[$0.state.id]?.catalog } }
+    private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
     var body: some View {
         Composer(
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card,
-            commands: chosen?.state.usableCommands ?? [],
+            commands: commands,
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if !services.reachesPiHost {
@@ -69,8 +72,8 @@ struct HandOffInput: View {
                 }
             },
             tools: {
-                if let session = chosen?.state, let config, session.capabilities.contains(.model), !session.models.isEmpty {
-                    SessionConfigControls(session: session, shown: config)
+                if let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty {
+                    SessionConfigControls(session: session, models: models, shown: config)
                 }
             },
             send: {
@@ -85,11 +88,13 @@ struct HandOffInput: View {
             guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan) }
             return Planned(plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true))
         }
-        // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
+        // 改模型、思考强度的请求与目录记录不在会话列表那一页里：按在线会话读各自的（会话变了就带着新的会话状态重读）
         .observing(services.store, id: services.liveSessions.live, into: $digests, onError: workspace.fail) { [live = services.liveSessions.live] store in
             var digests: [UUID: SessionDigest] = [:]
             for item in live {
-                digests[item.state.id] = SessionDigest(session: item.state, project: nil, deliveries: try store.deliveryRequests(toSession: item.state.sessionID))
+                digests[item.state.id] = SessionDigest(
+                    session: item.state, project: nil, deliveries: try store.deliveryRequests(toSession: item.state.sessionID),
+                    catalog: try item.state.catalogID.flatMap { try store.agentCatalog($0) })
             }
             return digests
         }
@@ -129,7 +134,7 @@ struct HandOffInput: View {
         }
         let kinds = session.composerKinds, mode = session.deliveryModes[0], files = services.store.files
         let saying: Dotted = "已交给 \(session.title)"
-        let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: session.usableCommands) {
+        let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
             workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {
             workspace.speak(to: .session(session, mode: mode, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }

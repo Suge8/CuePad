@@ -2,7 +2,7 @@ import CueStore
 import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
-/// 一个 Pi 会话页一次读取的数据：会话记录、它所在的项目、对话（从早到晚）、发给它的请求（先发的在前）。
+/// 一个 Pi 会话页一次读取的数据：会话记录、它所在的项目、对话（从早到晚）、发给它的请求（先发的在前）、可换的模型与命令。
 /// 会话记录没了（Mac 上的会话文件被删）时 `session` 为 nil；`sessionID` 由调用方带上，发给它的请求照样读得到。
 nonisolated struct SessionDigest: Sendable, Equatable {
     var session: PiSessionState?
@@ -13,6 +13,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PiPreview] = []
     /// 对话里 Cue 说的那几条的请求 id（按发送记录认，`cueSentDeliveries`）；还在路上的看请求自己的来源。
     var cueSent: Set<UUID> = []
+    /// 可换的模型与能用的斜杠命令（会话记录指向的目录记录）；进程不在了的会话没有。
+    var catalog: AgentCatalog?
 
     /// 正在请 Mac 补写对话（很久以前的会话没有对话时）：请求还在路上（`Speech`，超时就不再说正在补写）。
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
@@ -36,7 +38,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
               let wanted = request.config else { return current }
         switch Speech.trip(request, at: moment) {
         case .sending:
-            let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
+            let model = wanted.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
             return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
         case .delivered: return current
@@ -55,7 +57,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
-            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)))
+            cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
+            catalog: try session?.catalogID.flatMap { try store.agentCatalog($0) })
     }
 }
 

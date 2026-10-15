@@ -24,7 +24,7 @@ import Testing
     let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试")
     let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", question: question, times: times)
+      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", directory: "cuepad", question: question, times: times)
     let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
     try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: recap))
     try await cloud.exchange()
@@ -64,17 +64,22 @@ import Testing
     #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.hash) == nil)
   }
 
-  /// 会话的模型、思考强度与可选模型（Mac 写）经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。
+  /// 会话的模型、思考强度（Mac 写）与它所在目录可换的模型、命令经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。
   @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
     let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
+    let compact = PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin))
     try await recorder.update(
-      sessionID: "s1", state: .settled, title: "t", modelState: PiModelState(model: sonnet, thinking: .known(.low), models: [sonnet, opus]))
+      sessionID: "s1", state: .settled, title: "t", directory: "/Users/me/app",
+      modelState: PiModelState(model: sonnet, thinking: .known(.low), models: [sonnet, opus]), commands: [compact])
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first)
-    #expect(seen.model == sonnet && seen.thinking == .known(.low) && seen.models == [sonnet, opus])
+    #expect(seen.model == sonnet && seen.thinking == .known(.low))
+    let catalogID = try #require(seen.catalogID)
+    let catalog = try #require(try await phone.store.agentCatalog(catalogID))
+    #expect(catalog.models == [sonnet, opus] && catalog.commands == [compact])
 
     let config = PiConfig(model: opus.key, thinking: .high)
     let target = SendTarget(kind: .piSession, name: "t", ref: "s1")
@@ -117,8 +122,8 @@ import Testing
     await executor.stop()
   }
 
-  /// 断网时手机说的话（发给会话、对 Cue 说）：立即上传失败，同步状态是连不上 iCloud、话是同步不通，Mac 那边还没有；
-  /// 记录不丢，恢复后的同步（App 恢复时立即同步：对账、发送、拉取）把它们传到 Mac；Mac 执行、交给 Cue 后的回执经同步回到手机，
+  /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud、话是同步不通，Mac 那边还没有；
+  /// 记录不丢，恢复后的同步（发送者把待推送发出去、拉取）把它们传到 Mac；Mac 执行、交给 Cue 后的回执经同步回到手机，
   /// 两句都是已送达，同步状态回到空闲。
   @Test(.timeLimit(.minutes(1)))
   func wordsSaidOfflineReachTheMacAfterRecoveryAndTheReceiptsComeBack() async throws {
@@ -130,15 +135,16 @@ import Testing
     }
     let request = try await phone.store.requestDelivery("改完再跑一遍", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
     let message = try await phone.store.addCueMessage(.you, text: "在吗")
-    for id in [request.id, message.id] {
-      await #expect(throws: CKError.self) { _ = try await phone.coordinator.sendNow(phone.recordID(id), deleted: false, via: Offline()) }
-    }
+    let sender = RecordSender(uploader: Offline(), coordinator: phone.coordinator)
+    await sender.start()
+    for id in [request.id, message.id] { #expect(await !sender.send([phone.id(id)])) }
+    await sender.stop()
 
     #expect(await phone.coordinator.status == .offline)
     #expect(Speech.trip(request, at: Speech.Moment(now: .now, reachableSince: nil)) == .failed(.offline))
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
 
-    try await cloud.exchange()  // 恢复：手机的对账与发送把断网时写下的传出去
+    try await cloud.exchange()  // 恢复：手机的待推送传出去
     _ = try await eventually(mac.store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.succeeded) }
     try await mac.store.markCueMessagesDelivered([message.id])  // Mac 上值班的管理器交给 Cue
     try await cloud.exchange()  // 回执回到手机
@@ -154,21 +160,38 @@ import Testing
   /// 没有网络：整个上传请求失败。
   private struct Offline: RecordUploader {
     func upload(saving records: [CKRecord], deleting ids: [CKRecord.ID]) async throws -> SentRecords { throw CKError(.networkUnavailable) }
+    func saveZone() async throws { throw CKError(.networkUnavailable) }
   }
 
-  /// 一条状态记录带着大字段（三百个模型的清单）：第二次上传只带改动的字段，服务器并进整条记录，手机上模型清单还在、状态是新的。
-  @Test func aPartialUploadLeavesTheLargeFieldsOnTheOtherDeviceIntact() async throws {
+  /// 三百个模型的清单：报的一样的会话共用一份，状态变化不再带着它上传；同一目录里报的不一样的（如 `--models` 限定了范围）各看各的；
+  /// 会话的进程都没了，这一份也删掉。
+  @Test func sessionsReportingTheSameModelListShareOneThatStateChangesDoNotResend() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
-    try await recorder.update(sessionID: "s1", state: .thinking, title: "t", modelState: PiModelState(model: options[0], models: options))
+    let models = PiModelState(model: options[0], models: options)
+    try await recorder.update(sessionID: "s1", state: .thinking, title: "t", directory: "/Users/me/app", modelState: models)
+    try await recorder.update(sessionID: "s2", state: .thinking, title: "u", directory: "/Users/me/app", modelState: models)
+    let scoped = PiModelState(model: options[0], models: Array(options.prefix(2)))
+    try await recorder.update(sessionID: "s3", state: .thinking, title: "v", directory: "/Users/me/app", modelState: scoped)
     try await cloud.exchange()
-    #expect(try await phone.store.allPiSessionStates().first?.models.count == 300)
+    let states = Dictionary(uniqueKeysWithValues: try await phone.store.allPiSessionStates().map { ($0.sessionID, $0.catalogID) })
+    let shared = try #require(states["s1"] ?? nil)
+    #expect(states["s2"] == shared && states["s3"] != shared)
+    let own = try #require(states["s3"] ?? nil)
+    #expect(try await phone.store.agentCatalog(own)?.models == scoped.models)
+    let sent = try #require(try await mac.store.agentCatalog(shared))
 
     try await recorder.update(sessionID: "s1", state: .settled, detail: "做完了")
     try await cloud.exchange()
 
-    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    let seen = try #require(try await phone.store.allPiSessionStates().first { $0.sessionID == "s1" })
     #expect(seen.state == .known(.settled) && seen.detail == "做完了")
-    #expect(seen.models.count == 300)
+    #expect(try await mac.store.agentCatalog(shared) == sent)  // 没改，不再上传
+    #expect(try await phone.store.agentCatalog(shared)?.models.count == 300)
+
+    try await recorder.end(sessionID: "s1")
+    try await recorder.end(sessionID: "s2")
+    try await cloud.exchange()
+    #expect(try await phone.store.agentCatalog(shared) == nil)
   }
 }

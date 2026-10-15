@@ -9,7 +9,7 @@ struct SyncWiringTests {
     let app = TestApp()
     var services: AppServices { app.services }
 
-    @Test func 启动同步引擎_状态与问题镜像给界面() async throws {
+    @Test func 启动同步_状态与问题镜像给界面() async throws {
         #expect(services.syncStatus == .starting)  // 引擎确认账号前不是"已同步"
         services.startSync()
         defer { services.cancelBackgroundWork() }
@@ -99,7 +99,7 @@ struct SyncWiringTests {
 
     /// 正式组装（`.iCloud`）没有创建引擎时，状态写明原因，不显示成"已同步"。
     /// 真机上的事故：两个入口都绕开了创建引擎的那条路，引擎从未运行，界面却一直是已同步。
-    @Test func 正式组装没有创建同步引擎时状态写明原因() {
+    @Test func 正式组装没有创建同步时状态写明原因() {
         let app = TestApp(sync: .iCloud)  // 测试宿主在隔离目录里
         #expect(app.services.sync == nil)
         guard case .unavailable(let reason) = app.services.syncStatus else {
@@ -109,7 +109,7 @@ struct SyncWiringTests {
         #expect(reason.contains("隔离"))
     }
 
-    @Test func 隔离模式与没有iCloud权限的构建不创建同步引擎() throws {
+    @Test func 隔离模式与没有iCloud权限的构建不创建同步() throws {
         let store = services.store
         let isolated = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: "/tmp/isolated-library"])
         let real = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/tmp/support")))

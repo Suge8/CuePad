@@ -128,7 +128,7 @@ extension DebugScene {
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示
-    /// （演示模式没有同步引擎、真实状态出不来）。
+    /// （演示模式没有同步、真实状态出不来）。
     static var alertStatus: PiAlertStatus? {
         switch defaults.string(forKey: "CuePadAlertStatus") {
         case "on": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .active)

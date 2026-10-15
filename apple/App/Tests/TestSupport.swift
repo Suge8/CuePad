@@ -30,13 +30,12 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
-/// 记录调用的同步引擎替身；`emit` 推一个状态快照给订阅者。
+/// 记录调用的同步替身；`emit` 推一个状态快照给订阅者。
 nonisolated final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
         var stopped = 0
         var syncNows = 0
-        var pulls = 0
         var resolutions: [String] = []
     }
 
@@ -50,7 +49,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     var started: Int { state.withLock { $0.started } }
     var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
-    var pulls: Int { state.withLock { $0.pulls } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 
     var stateUpdates: AsyncStream<SyncState> { updates }
@@ -62,25 +60,27 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         if let error = startError.withLock({ $0 }) { throw error }
     }
 
-    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步引擎）。
+    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步）。
     let stopHangs = Mutex(false)
 
     func stop() async {
         state.withLock { $0.stopped += 1 }
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    /// 为 true 时 `syncNow()` 永不返回（模拟被占满的同步引擎队列）。
+    /// 为 true 时 `syncNow()` 永不返回（像网络一直没有回音）。
     let syncNowHangs = Mutex(false)
 
     func syncNow() async throws {
         state.withLock { $0.syncNows += 1 }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
-    func pullChanges() async throws { state.withLock { $0.pulls += 1 } }
-    func preparePull() async throws {}
-    /// 立即上传过的记录名，按调用顺序。
+    /// 马上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
-    func sendNow(recordName: String, deleted: Bool) async throws { uploads.continuation.yield(recordName) }
+    func send(recordName: String) async -> Bool {
+        uploads.continuation.yield(recordName)
+        return true
+    }
+    func push() async {}
 
     func resolve(_ resolution: SyncResolution) async throws {
         state.withLock { $0.resolutions.append("\(resolution)") }
@@ -111,7 +111,7 @@ final class TestApp {
     #endif
     private(set) var services: AppServices!
 
-    /// 同步引擎的来源；默认用记录型替身 `sync`。
+    /// 同步的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
     /// App 的钟（资料库、在线记录续期、说的话到点翻状态、主动拉取）；要推进时间的测试给 `ManualTiming` 的。
     private let timing: Timing

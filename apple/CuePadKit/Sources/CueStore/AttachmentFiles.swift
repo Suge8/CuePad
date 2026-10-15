@@ -57,8 +57,9 @@ public struct AttachmentFiles: Sendable {
   }
 
   /// 同步下载的附件文件：内容哈希必须与声明一致，才按哈希放进附件目录；已有同哈希文件则不重写。
+  /// 记录本身坏了抛 `invalidAttachmentHash`、`attachmentHashMismatch`；其余（读下载的文件、建目录、拷贝、改名）是本机的失败，原样抛出。
   package func adopt(fileAt source: URL, hash: String) throws {
-    guard Self.isValid(hash) else { throw CueStoreError.notFound }
+    guard Self.isValid(hash) else { throw CueStoreError.invalidAttachmentHash }
     guard try Self.hash(of: source) == hash else { throw CueStoreError.attachmentHashMismatch }
     try place(source, as: hash)
   }

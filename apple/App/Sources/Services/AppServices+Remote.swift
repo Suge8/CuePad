@@ -8,8 +8,8 @@ import SystemConfiguration
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时认下这台 Mac 记录的会话（从此每个都挂在任务上，见 `CueStore.ownSessions`），再对账上次留下的会话记录（别的 Mac 的不动）：
-    /// 进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。先认再对账：上次还在跑的游离会话归位成进行中，不当历史归档。
+    /// 启动时认下这台 Mac 记录的会话（从此没结束的都挂在任务上，见 `CueStore.ownSessions`），再对账上次留下的会话记录（别的 Mac 的不动）：
+    /// 进程确实没了的收尾，还在的留给桥重新连上（见 `PiStateRecorder.reset`）。先认再对账：上次还在跑的游离会话先挂上进行中的任务，收尾成历史后也不丢。
     /// 对账之前还没收尾的会话交给桥：重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
     func resetPiState() async throws {
         try await store.ownSessions(host: hostID)
@@ -57,12 +57,12 @@ extension AppServices {
             ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let alert = try await piStateRecorder.update(
             sessionID: session.sessionID, state: session.state, detail: session.detail, title: title,
-            folder: CueStore.folderName(ofWorkingDirectory: session.cwd.path(percentEncoded: false)),
+            directory: session.cwd.path(percentEncoded: false),
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
             commands: session.commands, agent: session.agent, process: PiProcess.running(pid: session.pid))
-        // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
+        // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
             Task { await upload(record) }

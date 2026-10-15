@@ -66,7 +66,7 @@ struct MacSyncTests {
 
         let late = await services.stop(within: .milliseconds(200))
 
-        #expect(late == "同步引擎")
+        #expect(late == "同步")
         #expect(rig.sync.stopped == 1)
     }
 
@@ -96,7 +96,7 @@ struct MacSyncTests {
         #expect(try await !services.store.macOnline(host))
     }
 
-    @Test func 退出时停止同步引擎与远程投送执行器() async throws {
+    @Test func 退出时停止同步与远程投送执行器() async throws {
         services.startSync()
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
@@ -193,9 +193,11 @@ struct MacSyncTests {
         #expect(stored.sessionID == "s1" && stored.hostID == TestApp.hostID)
         #expect(stored.stateSince == started && stored.busySince == started)
         #expect(stored.subagents == subagents)
-        #expect(stored.model == opus && stored.thinking == .unknown("ultra") && stored.models.map(\.key.id) == ["sonnet", "opus"])
+        #expect(stored.model == opus && stored.thinking == .unknown("ultra"))
         #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
-        #expect(stored.commands == commands)
+        let catalogID = try #require(stored.catalogID)
+        let catalog = try #require(try await services.store.agentCatalog(catalogID))
+        #expect(catalog.models.map(\.key.id) == ["sonnet", "opus"] && catalog.commands == commands)
         #expect(stored.question == question)
         #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-1")).items.map(\.state.sessionID) == ["s1"])
     }
@@ -866,7 +868,10 @@ struct MacSyncTests {
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.state == .known(hosted ? .settled : .ended))
-        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands) == "/default")
+        let catalogID = try #require(stored.catalogID)
+        let catalog = try await services.store.agentCatalog(catalogID)
+        #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
+        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog)) == "/default")
     }
 
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {

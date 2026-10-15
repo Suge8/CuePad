@@ -23,7 +23,6 @@ import Testing
   }
 
   private func pushed() async throws {
-    try await rig.coordinator.reconcile()
     try await rig.simulatePush()
   }
 
@@ -75,7 +74,6 @@ import Testing
         }
         made.append((card.id, isTask, (parent?.depth ?? 0) + 1))
       }
-      try await rig.coordinator.reconcile()
       try await rig.simulatePush()
 
       var changes: [CKRecord] = []

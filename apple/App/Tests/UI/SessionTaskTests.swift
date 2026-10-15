@@ -60,26 +60,36 @@ struct SessionTaskTests {
         #expect(link.path(below: "登录页改版")?.visible == link.primary?.task.title)
     }
 
-    @Test func 启动时只在会话文件里的历史会话_不补任务_留在历史里() async throws {
+    @Test func 只在会话文件里的历史会话_启动时不建任务_从头重读也不改写记录() async throws {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appending(path: "old.jsonl")
         try """
             {"type":"session","version":3,"id":"old","timestamp":"2026-09-01T08:00:00.000Z","cwd":"/work/x"}
-            {"type":"message","id":"u1","parentId":null,"timestamp":"2026-09-01T08:00:01.000Z","message":{"role":"user","content":"整理发布脚本","timestamp":1}}
+            {"type":"message","id":"u1","parentId":null,"timestamp":"2026-09-01T08:00:01.237Z","message":{"role":"user","content":"整理发布脚本","timestamp":1}}
+            {"type":"message","id":"a1","parentId":"u1","timestamp":"2026-09-01T08:00:09.613Z","message":{"role":"assistant","content":[{"type":"text","text":"好了"}],"stopReason":"stop","timestamp":2}}
 
             """.write(to: file, atomically: true, encoding: .utf8)
-        await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [file]))
-            continuation.finish()
-        }, agent: .pi)
-
-        try await services.resetPiState()  // 升级后第一次启动：已有的游离会话归位
+        // 没有检查点、从头读：首次回填，或升级作废检查点之后
+        func backfill() async {
+            await services.consumePiHistory(AsyncStream { continuation in
+                continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
+                continuation.yield(.backfillFinished(sessionFiles: [file]))
+                continuation.finish()
+            }, agent: .pi)
+        }
+        await backfill()
+        try await services.resetPiState()  // Mac 启动
 
         #expect(try await store.piSessions(sessionIDs: ["old"])["old"]?.state.state == .known(.ended))
         #expect(try await store.archived().isEmpty)
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
+        let written = try #require(try await store.piSessions(sessionIDs: ["old"])["old"]?.state)
+        #expect(written.title == "整理发布脚本" && written.lastReply == "好了")
+
+        try await Task.sleep(for: .milliseconds(5))  // 改写了的话修改时间一定不同
+        await backfill()
+        #expect(try await store.piSessions(sessionIDs: ["old"])["old"]?.state == written)
     }
 
     /// 会话里谁说的按来源认（会话页的气泡与 Cue 的 peek 同一条）：Cue 发进去的是"你"，在 CuePad 里发的与终端里打的都是"他"。

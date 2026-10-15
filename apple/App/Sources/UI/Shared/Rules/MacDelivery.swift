@@ -91,7 +91,7 @@ extension MacDelivery {
 
 nonisolated extension PiSessionState {
     /// 从 CuePad 能用的斜杠命令：做得到时是它报的清单，做不到时没有（输入 "/" 不弹面板，按普通文字发）。
-    var usableCommands: [PiSlashCommand] { capabilities.contains(.commands) ? commands : [] }
+    func usableCommands(in catalog: AgentCatalog?) -> [PiSlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
 }
 
 extension PiSessionState {

@@ -72,6 +72,14 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
+    #if os(iOS)
+    /// 手机收到推送（前台的 Agent、Cue 通知，后台的静默推送）：说明服务器上有新东西，这就拉一次，不等切一次后台。
+    func pushed() {
+        guard let services else { return }
+        Task { await services.pullForPush() }
+    }
+    #endif
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
@@ -79,6 +87,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         #if os(macOS)
         return present(route)
         #else
+        pushed()
         // Agent 的由 App 内横幅提示（正看着那个会话时连横幅也不弹）；Cue 的没有 App 内横幅，Cue 页开着就不弹（对话里已经看到了）
         return route == .cue && services?.cueViewers == 0 ? [.banner, .list, .sound] : []
         #endif
@@ -100,13 +109,13 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         enabled = true
         await refresh()
         if authorization == .notDetermined, DebugHooks.asksNotificationPermission { await requestAuthorization() }
-        // 无论是否授权都注册：CloudKit 同步本身也靠推送
+        // 无论是否授权都注册：同步区有变化的静默推送不要通知权限（`AlertSubscriptions.changesID`）
         UIApplication.shared.registerForRemoteNotifications()
     }
 
     func registered() { registration = .registered }
 
-    /// 设置页的"重试"：重新向系统注册推送（订阅由同步引擎重试，见 `AppServices.syncNow`）。
+    /// 设置页的"重试"：重新向系统注册推送（订阅由同步顺带重试，见 `CloudSync.syncNow`）。
     func retryRegistration() {
         guard registration != .registered else { return }
         registration = .pending

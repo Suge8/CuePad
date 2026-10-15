@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+#if os(macOS)
 /// 斜杠命令的进度一行（一处规则 `MacDelivery.commandProgress`）：失败写原因，之后有新的请求或对话就收起。
 struct CommandProgressTests {
     let app = TestApp()
@@ -44,3 +45,4 @@ struct CommandProgressTests {
         #expect(MacDelivery.commandProgress(requests, messages: try await store.piMessages(of: "atlas"), at: app.services.speech) == nil)
     }
 }
+#endif
