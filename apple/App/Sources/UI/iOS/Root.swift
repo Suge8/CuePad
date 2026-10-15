@@ -56,8 +56,7 @@ struct IOSRoot: View {
         }
         // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
         .measuresStatusBar()
-        // Cue 页在屏上时提示排在它的页头下面（`CuePage`），不浮在顶上
-        .overlay(alignment: .top) { if workspace.services.cueViewers == 0 { NoticeBanner() } }
+        .overlay(alignment: .top) { NoticeBanner() }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到

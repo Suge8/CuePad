@@ -82,18 +82,6 @@ struct CuePage: View {
                     .frame(maxWidth: .infinity)
                     .environment(\.composerInk, .solid)
             }
-            // Cue 页在屏上（整页或 iPad 右侧面板）就由它显示提示（操作结果、别的会话做完了）：浮在页头下面（页头当中是名牌，横幅会压住它），
-            // 顶部的提示横幅这时不出现（`AppServices.cueViewers`）
-            .safeAreaBar(edge: .top, spacing: 0) {
-                if let notice = workspace.notice {
-                    NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
-                        .frame(maxWidth: Self.readingWidth)
-                        .transition(.opacity)
-                        .id(notice.id)
-                }
-            }
-            .animation(Motion.quick, value: workspace.notice)
-            .modifier(NoticeFeedback(notice: workspace.notice))
         if inPanel {
             body.safeAreaBar(edge: .top, spacing: 0) {
                 CueTitle().frame(height: FloatingHeaderLayout.height).glass(in: .capsule, ink: .legible)

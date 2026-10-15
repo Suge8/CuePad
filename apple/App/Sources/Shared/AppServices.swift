@@ -80,8 +80,8 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
-    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅），
-    /// iOS 顶上的提示横幅也让给 Cue 页自己的；手机上大于 0 时按节奏拉（`pollingCadence`）。
+    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
+    /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
     /// 立即同步（`syncNow`）还没返回：两个"立即同步"按钮的忙碌与禁用都读 `canSyncNow`。
     var isSyncingNow = false
