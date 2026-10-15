@@ -209,13 +209,17 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .fixedSize()
     }
 
-    /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按是预览与"展开编辑"。
+    /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按（Mac 右键）出"展开编辑""不带了"（`AttachmentButton`）。
     private func chip(_ outbox: Outbox) -> some View {
         let card = CardText(outbox.content)
         let removable = outbox.card != keeps
         let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
+        let menu = removable ? [ChoiceMenu.Section(choices: [
+            ChoiceMenu.Choice(title: "展开编辑", image: .symbol("text.cursor")) { expand(outbox) },
+            ChoiceMenu.Choice(title: "不带了", image: .symbol("xmark"), destructive: true) { drop(outbox) },
+        ])] : []
         return HStack(spacing: 0) {
-            Button { previewing = outbox } label: {
+            AttachmentButton(label: "带上：\(card.title.nonEmpty ?? "图片")", menu: menu, open: { previewing = outbox }) {
                 HStack(spacing: 10) {
                     Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
@@ -231,9 +235,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 .padding(.leading, 12).frame(minHeight: 44)
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
-            .accessibilityHint("看全文")
             if removable {
                 Button("不带了", systemImage: "xmark") { drop(outbox) }
                     .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
@@ -242,12 +243,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             }
         }
         .background(palette.fill, in: shape)
-        .attachmentContextMenu(outbox, shape: shape) {
-            if removable {
-                Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
-                Button("不带了", systemImage: "xmark", role: .destructive) { drop(outbox) }
-            }
-        }
     }
 
     private var imageStrip: some View {

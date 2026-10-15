@@ -69,9 +69,9 @@ struct MenuButton<Label: View>: View {
     var body: some View {
         Group {
             if let primary {
-                Menu(content: items, label: label, primaryAction: primary)
+                Menu { ChoiceMenuItems(sections: sections) } label: { label() } primaryAction: { primary() }
             } else {
-                Menu(content: items, label: label)
+                Menu { ChoiceMenuItems(sections: sections) } label: { label() }
             }
         }
         .menuStyle(.button).buttonStyle(PressStyle(press)).menuIndicator(.hidden).fixedSize()
@@ -79,8 +79,15 @@ struct MenuButton<Label: View>: View {
         .accessibilityValue(value ?? "")
         .accessibilityHint(hint ?? "")
     }
+    #endif
+}
 
-    @ViewBuilder private func items() -> some View {
+#if os(macOS)
+/// Mac 上 SwiftUI 菜单里的项（`MenuButton` 与右键菜单共用）。
+struct ChoiceMenuItems: View {
+    let sections: [ChoiceMenu.Section]
+
+    var body: some View {
         ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
             if sections.count > 1, let title = section.title {
                 Section(title) { choices(section) }
@@ -107,8 +114,8 @@ struct MenuButton<Label: View>: View {
         if let subtitle = choice.subtitle { Text(subtitle) }
         choice.image?.image
     }
-    #endif
 }
+#endif
 
 #if os(iOS)
 /// 透明的 UIKit 按钮：盖在样子上接点按，菜单开、关时告诉 SwiftUI（`presented`），按下的样子交回 SwiftUI 画（`pressed`）。
@@ -125,13 +132,15 @@ private struct MenuTrigger: UIViewRepresentable {
 
     func makeUIView(context: Context) -> TriggerButton {
         let button = TriggerButton()
-        button.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak button] done in done(button?.elements ?? []) }])
+        button.deferred = UIMenu(children: [UIDeferredMenuElement.uncached { [weak button] done in done(button?.elements ?? []) }])
         button.addAction(UIAction { [weak button] _ in button?.primary?() }, for: .primaryActionTriggered)
         return button
     }
 
     func updateUIView(_ button: TriggerButton, context: Context) {
         button.sections = sections
+        // 没有可选的（带上的卡片不能拿掉时）就没有菜单：长按什么都不出
+        button.menu = sections.allSatisfy(\.choices.isEmpty) ? nil : button.deferred
         button.primary = primary
         button.showsMenuAsPrimaryAction = primary == nil
         button.isEnabled = isEnabled
@@ -145,6 +154,7 @@ private struct MenuTrigger: UIViewRepresentable {
 
 private final class TriggerButton: UIButton {
     var sections: [ChoiceMenu.Section] = []
+    var deferred: UIMenu?
     var primary: (() -> Void)?
     var pressed: (Bool) -> Void = { _ in }
     var presented: (Bool) -> Void = { _ in }
