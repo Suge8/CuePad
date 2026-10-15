@@ -60,7 +60,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
 | `draft` | 正在说的话（`PiDraft`）：`text` 是主会话当前这条助手消息到目前为止的正文（文字块按换行连接，同下"对话与摘要"取回答的规则；不含思考、工具参数与子代理），`since` 是它开始出字的时刻（ms）。增量在扩展里合并到约每 100ms 一条，这条说完（`message_end`）时立即补发全文；它转成工具调用（`toolcall_start`）、被停下或出错（`message_end` 的 `stopReason` 为 `aborted`/`error`）、下一条助手消息开始（`message_start`）或新一轮开始（`agent_start`）时发 `text: null` 清掉。正常说完的不清：说完的那条以会话文件为准，CuePad 在对话里出现它之后自己换下 |
 | `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
-| `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（受理了却没来得及交给 Pi 的话的投送请求 id，见下"压缩"） |
+| `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（受理了却没被读到的话的投送请求 id：都报没来得及交给 Pi 的，见下"压缩"；`quit` 另报已交给 Pi、还排在它队列里的——还没在用户消息的 `message_end` 里认领，Pi 的队列随进程丢掉） |
 
 `state.kind`：`idle`、`thinking`（工作中没在调工具，正在出字也是它；"输出中"只是 Mac 读 `draft` 的显示，见 `PiShown.speaking`）、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（自己这轮已歇下，还有子代理在飞）、`compacting`（在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
 
@@ -68,7 +68,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 
 计时：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、工具、等子代理、压缩）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。
 
-压缩：压缩期间 `kind` 是 `compacting`（等你确认的弹窗仍在它之前）。自动压缩发生在一轮里（回答之后、`agent_settled` 之前；溢出时压完重试这一轮），粗状态一直是工作中，计时不断，压完歇下照常是这一轮做完。手动 /compact 先停掉在跑的一轮，压缩本身发生在歇着的时候：结束、失败或被停止后会话回到压缩前的状态，`since`、`busySince` 也回到压缩开始时的值——压缩不是新的一轮，CuePad 据"起点退回"不提示"做完了"、也不算有新回复（`PiAlert.entering`）。手动压缩期间 Pi 拒收新消息（`Cannot submit a prompt while compaction is in progress`），扩展的 `sendUserMessage` 又不回报错误，所以这期间收到的 `send` 先留在扩展里、照常 `ack`（`delivered` 为排队），压缩结束后的下一轮事件循环按到达顺序交给 Pi；压完之前会话就关掉（退出、重新载入、换会话）时，`bye` 的 `undelivered` 报出它们的投送请求 id，CuePad 把这几条记为没送到（"没能送达 + 重发"，`CueStore.failAcceptedDeliveries`）。交给 Pi 派发的 `command` 没有投送请求 id、留着就报不出来，手动压缩期间直接拒绝（`compacting`）。进程被强杀没有告别，留着的话报不出来。自动压缩期间 Pi 自己排队，不经这里。
+压缩：压缩期间 `kind` 是 `compacting`（等你确认的弹窗仍在它之前）。自动压缩发生在一轮里（回答之后、`agent_settled` 之前；溢出时压完重试这一轮），粗状态一直是工作中，计时不断，压完歇下照常是这一轮做完。手动 /compact 先停掉在跑的一轮，压缩本身发生在歇着的时候：结束、失败或被停止后会话回到压缩前的状态，`since`、`busySince` 也回到压缩开始时的值——压缩不是新的一轮，CuePad 据"起点退回"不提示"做完了"、也不算有新回复（`PiAlert.entering`）。手动压缩期间 Pi 拒收新消息（`Cannot submit a prompt while compaction is in progress`），扩展的 `sendUserMessage` 又不回报错误，所以这期间收到的 `send` 先留在扩展里、照常 `ack`（`delivered` 为排队），压缩结束后的下一轮事件循环按到达顺序交给 Pi；压完之前会话就关掉（退出、重新载入、换会话）时，`bye` 的 `undelivered` 报出它们的投送请求 id，CuePad 把这几条记为没送到（"没能送达 + 重发"，`CueStore.failAcceptedDeliveries`）；退出（`quit`）时连同已交给 Pi、还排在它队列里没被读到的一起报。交给 Pi 派发的 `command` 没有投送请求 id、留着就报不出来，手动压缩期间直接拒绝（`compacting`）。进程被强杀没有告别，留着的话报不出来。自动压缩期间 Pi 自己排队，不经这里。
 
 会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`info` 的任一字段变化时 `changes()` 给出 `.infoChanged`。
 

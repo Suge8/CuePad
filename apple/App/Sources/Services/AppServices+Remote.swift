@@ -44,10 +44,10 @@ extension AppServices {
         }
     }
 
-    /// 扩展受理了、还没交给 Pi 会话就关掉了的话（手动压缩期间留着的）：记为没送到，立即上传给手机。
+    /// 扩展受理了、没被读到会话就关掉了的话（手动压缩期间留着的，退出时还排在 Pi 队列里的）：记为没送到，立即上传给手机。
     private func failUndelivered(_ ids: [String]) async throws {
         let failed = try await store.failAcceptedDeliveries(
-            ids.compactMap(UUID.init(uuidString:)), host: hostID, reason: "会话在压缩上下文时关掉了，这句没送进去")
+            ids.compactMap(UUID.init(uuidString:)), host: hostID, reason: "会话在读到这句之前关掉了")
         for id in failed { Task { await upload(id) } }
     }
 

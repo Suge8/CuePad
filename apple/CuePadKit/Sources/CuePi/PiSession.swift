@@ -142,8 +142,8 @@ public enum PiSessionName {
 public enum PiSessionEndReason: Sendable, Equatable {
     /// 连接断开且没有告别：进程被强杀/崩溃
     case disconnected
-    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`。`undelivered` 是扩展受理了、却没来得及交给 Pi 的话
-    /// （手动压缩期间留着的，见 `send`）的投送请求 id：它们没送到
+    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`。`undelivered` 是扩展受理了、却没被读到的话的投送请求 id：
+    /// 没来得及交给 Pi 的（手动压缩期间留着的，见 `send`），退出时还有排在 Pi 队列里、随进程丢掉的。它们没送到
     case closed(reason: String, undelivered: [String] = [])
 }
 
