@@ -98,7 +98,7 @@ public struct CueChange: Equatable, Sendable {
   public var leaf: Card?
   /// 变化所在的会话；任务完成这类不在会话上的变化为 nil。
   public var session: PiSessionState?
-  /// 这一轮是他直接在会话里说的：会话里用户一方最近那句不是 Cue 说的（`PiChatMessage.saidByCue`，由事实推出，不另存）。
+  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的、扩展投进来的机器消息开的都不算。
   public var byUser: Bool
   /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
@@ -324,19 +324,25 @@ extension CueStore {
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: mode, card: card, cue: cue)
   }
 
-  /// 会话正在跑的这一轮是用户发起的：在跑一轮，且这一轮是他说的（`lastSaidByUser`）。
+  /// 会话正在跑的这一轮是他发起的（`turnOpener`）。
   private func inUserTurn(_ sessionID: String?) throws -> Bool {
     guard let sessionID, try sessionState(sessionID)?.state.known?.isTurnRunning == true else { return false }
-    return try lastSaidByUser(sessionID)
+    return try turnOpener(sessionID) == .user
   }
 
-  /// 会话里用户一方最近那句是他说的，不是 Cue 发进去的（`PiChatMessage.saidByCue`）；会话里还没有用户一方的话为假。
-  private func lastSaidByUser(_ sessionID: String) throws -> Bool {
+  /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记与他那一轮里 Cue 不插嘴都只认它）：
+  /// 取会话里最近一条你一方或机器的消息——机器消息（扩展投进来的，如 FireCode 交回结果）既不算他的也不算 Cue 的；
+  /// 你一方的按来源分（`PiChatMessage.saidByCue`）。会话里还没有这两种消息为 nil。
+  private func turnOpener(_ sessionID: String) throws -> TurnOpener? {
     guard let last = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
-    ).first else { return false }
-    return !last.saidByCue(try cueSentDeliveries(among: [last.deliveryID].compactMap(\.self)))
+      PiChatMessage.self, where: "sessionID = ? AND role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.machine.rawValue)')", [sessionID],
+      orderBy: "seq DESC, id DESC", limit: 1
+    ).first else { return nil }
+    guard last.role == .known(.user) else { return .machine }
+    return last.saidByCue(try cueSentDeliveries(among: [last.deliveryID].compactMap(\.self))) ? .cue : .user
   }
+
+  private enum TurnOpener { case user, cue, machine }
 
   /// 这些叶子里正在开新会话的：带着叶子或它的草稿（交出草稿时请求带的是草稿，送达后改记到叶子上）的开新会话请求还在路上，
   /// 或成功了、会话记录还没到（还没认领）。只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；
@@ -676,7 +682,7 @@ extension CueStore {
       }
     guard let kind else { return nil }
     return CueChange(
-      kind: kind, task: task, leaf: leaf, session: session, byUser: try lastSaidByUser(session.sessionID), at: session.stateSince, seq: seq,
+      kind: kind, task: task, leaf: leaf, session: session, byUser: try turnOpener(session.sessionID) == .user, at: session.stateSince, seq: seq,
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
   }
 

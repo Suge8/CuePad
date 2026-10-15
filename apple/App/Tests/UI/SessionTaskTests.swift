@@ -199,6 +199,40 @@ struct SessionTaskTests {
         #expect(!steered.isError && steered.structured["mode"] as? String == DeliveryMode.steer.rawValue)
     }
 
+    /// 这一轮是谁开的只看会话里最近一条你一方或机器的消息：他说的那一轮，变化标"他说的"；FireCode 这类扩展投进来的机器消息开的一轮
+    /// 既不算他的也不算 Cue 的——不标"他说的"，Cue 用 now 说话照常马上插进去。
+    @Test func 机器消息开的一轮_不标他说的_Cue能马上说() async throws {
+        try await enableCue()
+        let task = try await store.createTask("修登录", in: nil)
+        try await store.linkCard(task.id, toSession: "s1")
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录")
+        let byPad = UUID()
+        try await store.recordSend("别动登录页样式", to: SendTarget(kind: .piSession, name: "修登录", ref: "s1"), delivery: byPad)
+        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
+            PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "别动登录页样式", at: .now, deliveryID: byPad),
+            PiChatMessage(sessionID: "s1", entryID: "a1", seq: 2, role: .pi, text: "好", at: .now),
+        ], recap: PiRecap()))
+        func settledLine(after mark: Int) async throws -> String {
+            try await recorder.update(sessionID: "s1", state: .settled)
+            let changes = try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }
+            return CueEnvelope.render(CueEnvelope.Input(
+                now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: changes, dismissed: [], board: try await store.cueBoard(),
+                waiting: [], wake: .sessionActivity, said: nil))
+        }
+        #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的] 修登录"))
+
+        let mark = try await store.lastWrite()
+        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
+            PiChatMessage(sessionID: "s1", entryID: "m3", seq: 3, role: .machine, text: "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>", at: .now),
+        ], recap: PiRecap()))
+        try await recorder.update(sessionID: "s1", state: .thinking)  // 机器消息开的这一轮在跑
+        let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint", "when": "now"]))
+        #expect(!said.isError && said.structured["mode"] as? String == DeliveryMode.steer.rawValue)
+        let line = try await settledLine(after: mark)
+        #expect(line.contains("[歇下] 修登录") && !line.contains("他说的"))
+    }
+
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。
     /// Cue 停用后，答得了的那个也回到"等你确认"。
     /// 它住的那台 Mac 不在线（在线记录过了期限没续：崩溃、断电、断网）也不算值班：答得了的提问回到等你、算进"等你"、置推送标志，
