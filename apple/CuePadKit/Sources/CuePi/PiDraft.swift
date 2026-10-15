@@ -10,13 +10,19 @@ import Observation
 public struct PiDraft: Equatable, Sendable {
     public var text: String
     /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻，界面据此认出它已落库（`landed`）。
-    /// 对话里回答的时刻是写完那一刻的（Pi、Claude Code、Codex 与 Cue 的对话）取开始出字；是消息建立那一刻的（OpenCode）取那一刻
+    /// 取这条开始的时刻，能拿到 Agent 自己的时钟就用它的（Pi 扩展里开始出字、Codex 的 `item/started` 的 `emittedAtMs`、OpenCode 的步骤开始），
+    /// 拿不到的取这条消息开始时收到的时刻（Claude Code 的 `message_start`）。不取第一个增量收到的时刻：会话文件里的时刻截到毫秒，
+    /// 一个增量就说完的短回答，Agent 写下的时刻可能早于增量到这里的时刻，落库了也认不出来，草稿一直挂在对话下面
     public var since: Date
 
     public init(text: String, since: Date) {
         self.text = text
         self.since = since
     }
+
+    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点。
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
+    public func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
 }
 
 /// 一条回答正在说的话怎么拼（各家协议层共用，各自只把事件映射到这几个动作）：依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；

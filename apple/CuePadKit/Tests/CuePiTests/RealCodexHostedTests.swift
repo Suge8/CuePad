@@ -29,6 +29,7 @@ struct RealCodexHostedTests {
                 } == true
             }
 
+            #expect(rig.draftLanded(id))
             let session = try #require(rig.bridge.session(id: id))
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)
@@ -73,6 +74,7 @@ struct RealCodexHostedTests {
                     && rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("WRAPPED") == true } == true
             }
             #expect(rig.bridge.sessions.filter { $0.sessionID == threadID }.map(\.id) == [id])
+            #expect(rig.draftLanded(id))
         }
     }
 
@@ -95,25 +97,30 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// Plan 模式里的提问（`request_user_input`）：在 CuePad 里用 /plan 进 Plan 模式说话，会话停在"等你回答"、带着问题与选项；
-    /// 在 CuePad 里选了，答案交回 Codex，它接着说。
+    /// Plan 模式里不挡着这一轮的提问（`request_user_input_async`，Codex 问完睡着等）：在 CuePad 里用 /plan 进 Plan 模式说话，
+    /// 会话停在"等你回答"、带着问题与选项（也能自己填），睡着等的那段不显示成在调工具；在 CuePad 里选了，答案当你的下一句话交给它，
+    /// 它接着说。说完的回答落了库，正在说的话随之换下。
     @Test func aPlanModeQuestionIsAnsweredFromCuePad() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-ask", name: nil, model: nil, thinking: nil)
             try await eventually("命令清单里有 /plan") { rig.bridge.session(id: id)?.commands.contains { $0.name == "plan" } == true }
+            let log = ChangeLog(rig.bridge)
 
-            try await rig.bridge.command("/plan Use the request_user_input tool to ask me exactly one question: which drink do I want, with the options Tea and Coffee. Then reply with only the option I chose.", in: id)
+            try await rig.bridge.command("/plan Ask me which drink I want, Tea or Coffee, with the request_user_input tool, and sleep while you wait for my answer instead of ending your turn. Then reply with only the option I chose.", in: id)
             try await eventually("等你回答", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
+            #expect(question.kind == .known(.select) && question.allowsOther)
             let coffee = try #require(question.options.first { $0.lowercased().contains("coffee") })
 
             try await rig.bridge.answer(.option(coffee), to: try #require(question.promptID), in: id)
 
-            try await eventually("拿到答案接着说", timeout: .seconds(120)) {
-                rig.bridge.session(id: id).map { rig.replies($0).last?.lowercased().contains("coffee") == true } == true
+            try await eventually("拿到答案接着说，说完落盘", timeout: .seconds(120)) {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.lowercased().contains("coffee") == true } == true
             }
             #expect(rig.bridge.session(id: id)?.question == nil)
+            #expect(rig.draftLanded(id))
+            #expect(!log.details.contains { $0?.contains("clocksleep") == true }, "\(log.details)")
             try await rig.bridge.command("/default", in: id)
         }
     }

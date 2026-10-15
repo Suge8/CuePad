@@ -21,8 +21,12 @@ import OSLog
 /// - 权限确认经 `PermissionRequest` 钩子：Codex 先问钩子、钩子没给决定才在终端里弹框。终端会话按人在不在分（`PresenceGate`）；
 ///   托管的会话没有终端，总是挂住。在终端里按 Esc 停下这一轮会收回挂住的调用。
 /// - Plan 模式：托管会话用 `/plan [话]` 进、`/default` 回默认模式（`thread/settings/update` 的 `collaborationMode`，同终端界面的 /plan），
-///   终端会话在终端里切。Plan 模式的提问（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
-///   托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
+///   终端会话在终端里切。Plan 模式提问有两种：
+///   - 不挡着这一轮的（`request_user_input_async`，0.162 起 Plan 模式的默认）：Codex 登记了问题就接着做事、睡着等或歇下，你的下一句话就是答案。
+///     终端与托管的会话都经 `PostToolUse` 钩子（工具被接受了才有）显示成等你回答，从 CuePad 作答就是对它说这句话（`deliver`），
+///     你说了下一句（`UserPromptSubmit`）就收起。
+///   - 挡着这一轮的（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
+///     托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
@@ -391,6 +395,7 @@ public final class CodexRuntime: AgentRuntime {
             // 子代理自己线程里的事件（session_id 是同一棵树的根，agent_id 是它自己）：只更新它在做什么
             if event == "PreToolUse", let agent { session.facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
         case "UserPromptSubmit":
+            session.facts.standingQuestion = nil
             session.facts.startTurn()
             bridge.update(id) { s in
                 if s.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
@@ -406,6 +411,9 @@ public final class CodexRuntime: AgentRuntime {
             } else {
                 session.facts.work(.tool, detail: ToolDetail.line(tool, input["tool_input"]))
             }
+        case "PostToolUse" where tool == Self.asyncQuestionTool:
+            session.facts.standingQuestion = Self.asyncQuestion(input["tool_input"])
+            session.facts.work(.thinking)
         case "PostToolUse":
             if session.reply == nil { session.facts.questions = [] }
             session.facts.work(.thinking)
@@ -517,12 +525,41 @@ public final class CodexRuntime: AgentRuntime {
             allowsOther: first["isOther"]?.bool == true)
     }
 
-    /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程的提问回给服务端请求。
-    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) throws {
-        guard let session = tracked[id], let reply = session.reply, let question = session.facts.questions.first else {
-            throw PiBridgeError.rejected("no_prompt")
+    static let asyncQuestionTool = "request_user_input_async"
+
+    /// 不挡着这一轮的提问（`request_user_input_async` 的参数，一次可以几个，标题就是完整的问题）：只有一个时照它的选项单选，
+    /// 也能自己填（Codex 的界面总给自由作答）；几个时合成一道文字题，一行一问、选项写在后面。
+    static func asyncQuestion(_ arguments: JSONValue?) -> PiQuestion? {
+        let questions = (arguments?["questions"]?.array ?? []).compactMap { question -> (title: String, options: [String])? in
+            guard let title = question["title"]?.string, !title.isEmpty else { return nil }
+            return (title, (question["options"]?.array ?? []).compactMap(\.string))
         }
+        guard let first = questions.first else { return nil }
+        guard questions.count > 1 else {
+            return PiQuestion(
+                promptID: UUID().uuidString, kind: first.options.isEmpty ? .text : .select, text: String(first.title.prefix(500)),
+                options: first.options, allowsOther: !first.options.isEmpty)
+        }
+        let text = questions.map { $0.options.isEmpty ? $0.title : "\($0.title)（\($0.options.joined(separator: " / "))）" }.joined(separator: "\n")
+        return PiQuestion(promptID: UUID().uuidString, kind: .text, text: String(text.prefix(500)))
+    }
+
+    /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程挡着这一轮的提问回给服务端请求，
+    /// 不挡着的提问把答案当你的下一句话说给它（在跑就插进这一轮）。
+    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
+        guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
         guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
+        guard let reply = session.reply else {
+            let text: String
+            switch answer {
+            case .option(let option) where question.options.contains(option): text = option
+            case .text(let written) where question.acceptsText: text = written
+            default: throw PiBridgeError.rejected("bad_answer")
+            }
+            _ = try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: .steer, to: session)
+            session.facts.standingQuestion = nil
+            return publish(session)
+        }
         switch (reply, answer) {
         case (.hook(let call, let hold), .confirmed(let allowed)):
             let decision: JSONValue = ["behavior": allowed ? "allow" : "deny", "message": .string(allowed ? PermissionWording.allowed : PermissionWording.denied)]
@@ -748,7 +785,7 @@ private final class CodexLink: SessionLink {
     func command(_ line: String, whenBusy: PiQueueMode?) async throws { try await live().command(line, whenBusy: whenBusy, in: id) }
     func end() async throws { try live().end(id) }
     func abort() async throws { try await live().abort(id) }
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try live().answer(answer, to: promptID, in: id) }
+    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await live().answer(answer, to: promptID, in: id) }
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
         try await live().configure(model: model, thinking: thinking, name: name, in: id)
     }

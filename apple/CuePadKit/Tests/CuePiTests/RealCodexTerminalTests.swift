@@ -77,6 +77,35 @@ struct RealCodexTerminalTests {
         }
     }
 
+    /// 终端里 Plan 模式不挡着这一轮的提问（`request_user_input_async`，Codex 问完歇下）：CuePad 里显示成等你回答、带着选项；
+    /// 从 CuePad 选了就是对它说这一句，它接着答，问题收起。
+    @Test func aTerminalPlanModeQuestionIsAnsweredFromCuePad() async throws {
+        try await withCodexRig { rig in
+            let terminal = try CodexTerminal(rig.codex)
+            defer { terminal.stop() }
+            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            // 敲出 /plan（粘贴的不当命令），命令菜单出来了再回车
+            try terminal.press("/plan")
+            try await eventually("命令菜单") { terminal.printed("switch to Plan mode") }
+            let picked = terminal.printedCount
+            try terminal.press("\r")
+            try await eventually("切到 Plan 模式") { terminal.printed("Plan mode", since: picked) }
+
+            try terminal.type("Ask me which drink I want, Tea or Coffee, with the request_user_input tool, then end your turn. When I answer, reply with only the option I chose.")
+            try await eventually("等你回答", timeout: .seconds(120)) { rig.session?.question?.promptID != nil }
+            let session = try #require(rig.session)
+            let question = try #require(session.question)
+            #expect(!session.hosted && session.state == .waitingForUser)
+            let coffee = try #require(question.options.first { $0.lowercased().contains("coffee") })
+
+            try await rig.bridge.answer(.option(coffee), to: try #require(question.promptID), in: session.id)
+            try await eventually("拿到答案接着说", timeout: .seconds(120)) {
+                rig.session.map { $0.state == .settled && rig.replies($0).last?.lowercased().contains("coffee") == true } == true
+            }
+            #expect(rig.session?.question == nil)
+        }
+    }
+
     /// 权限确认按人在不在这台 Mac 前分：人在，终端照常弹框，CuePad 里只显示；人不在，钩子挂住、在 CuePad 里答；
     /// 挂着时人回来了，终端补弹确认框，CuePad 里收起成只显示。
     /// 终端里的这一轮出错（账号用不了的模型，Codex 回 400）：会话停在出错，说明是 Codex 的原话，不是笼统的一句。

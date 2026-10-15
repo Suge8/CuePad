@@ -13,7 +13,7 @@ final class ClaudeStream {
     var onMessage: ((JSONValue) -> Void)?
     /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）：文字块是段，块号是段号，`text_delta` 追加，
     /// 块说完时那一行完整的 `assistant`（一行一块）是定稿。新的一条消息开始（`message_start` 或换了消息 id）、转成工具调用（`tool_use` 块）、
-    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着
+    /// 下一轮开始（`system/init`）、这一轮停下或出错（`result` 的 `is_error`）时清掉，正常说完的留着。起点是收到 `message_start` 的时刻（`PiDraft.since`）
     var onDraft: ((PiDraft?) -> Void)?
     private var speech = DraftParts()
     /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
@@ -109,7 +109,7 @@ final class ClaudeStream {
         let index = event["index"]?.int
         switch event["type"]?.string {
         case "message_start":
-            restart(event["message"]?["id"]?.string)
+            restart(event["message"]?["id"]?.string, since: .now)
         case "content_block_start" where event["content_block"]?["type"]?.string == "tool_use":
             restart(speech.message)
         case "content_block_start" where event["content_block"]?["type"]?.string == "text":
@@ -139,9 +139,9 @@ final class ClaudeStream {
         onDraft?(speech.draft)
     }
 
-    /// 重新开始一条（`message` 为它的 id）：清掉正在说的话。
-    private func restart(_ message: String?) {
-        speech = DraftParts(message: message)
+    /// 重新开始一条（`message` 为它的 id，`since` 是它开始的时刻）：清掉正在说的话。
+    private func restart(_ message: String?, since: Date? = nil) {
+        speech = DraftParts(message: message, since: since)
         openBlock = nil
         onDraft?(nil)
     }

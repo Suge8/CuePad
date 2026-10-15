@@ -177,12 +177,6 @@ struct SessionDraft: View {
         }
     }
 }
-
-extension PiDraft {
-    /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点（`since` 的约定见那里）。
-    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
-    func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
-}
 #endif
 
 

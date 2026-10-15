@@ -12,8 +12,11 @@ struct SessionFacts {
     /// 在跑时在做什么（思考、输出、调工具）与那句说明
     var activity: PiWorkState = .thinking
     var activityDetail: String?
-    /// 要你回答的，按到达先后；显示第一个
+    /// 要你回答的，按到达先后；显示第一个。这一轮结束时作废
     var questions: [PiQuestion] = []
+    /// 不挡着这一轮的提问（Codex 的 `request_user_input_async`）：Agent 问完照常做事或歇下，你说了下一句（答案就是这句话）才收起，
+    /// 这一轮结束不作废；在等它时也算等你回答
+    var standingQuestion: PiQuestion?
     var compacting = false
     /// 上一轮出错的原文；开始新的一轮时清掉
     var failure: String?
@@ -66,13 +69,16 @@ struct SessionFacts {
 
     /// 此刻的状态与那句说明。
     var state: (state: PiWorkState, detail: String?) {
-        if let question = questions.first { return (.waitingForUser, ToolDetail.clip(ToolDetail.singleLine(question.text))) }
+        if let question { return (.waitingForUser, ToolDetail.clip(ToolDetail.singleLine(question.text))) }
         if compacting { return (.compacting, nil) }
         if running { return (activity, activityDetail) }
         if hasRunningSubagent { return (.delegating, nil) }
         if let failure { return (.error, PiErrorSummary(failure).line) }
         return (.settled, nil)
     }
+
+    /// 此刻显示的那一问
+    var question: PiQuestion? { questions.first ?? standingQuestion }
 
     /// 把事实写进桥上的会话。
     mutating func publish(to session: inout PiSession, at now: Date = .now) {
@@ -89,7 +95,7 @@ struct SessionFacts {
             }
         }
         if state == .error { session.errorMessage = failure }
-        session.question = questions.first
+        session.question = question
         let roster = subagents.map(\.state)
         if session.subagents != roster { session.subagents = roster }
     }
@@ -116,13 +122,21 @@ enum ToolDetail {
         return clip(name(tool) + PiSessionState.detailSeparator + target)
     }
 
-    /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"。
+    /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"；
+    /// Codex 钩子里命名空间下的内置工具是命名空间直接拼工具名（`clock` 与 `sleep` 成了 `clocksleep`，同 MCP 的 `mcp__<服务>__` 拼工具名），
+    /// 写回 Codex 自己的写法（`clock.sleep`）。
     static func name(_ tool: String) -> String {
+        if let namespaced = codexNamespaced[tool] { return namespaced }
         let prefix = "mcp__"
         guard tool.hasPrefix(prefix), let split = tool.dropFirst(prefix.count).range(of: "__") else { return tool }
         let rest = tool.dropFirst(prefix.count)
         return "\(rest[..<split.lowerBound]) - \(rest[split.upperBound...]) (MCP)"
     }
+
+    /// Codex 命名空间下的内置工具（它的 `ExtensionItem` 种类）：拼起来的名字 → Codex 的写法
+    private static let codexNamespaced = Dictionary(uniqueKeysWithValues: ["clock.sleep", "image_gen.generation", "web.search"].map {
+        ($0.replacingOccurrences(of: ".", with: ""), $0)
+    })
 
     static func line(_ tool: String, _ arguments: PiToolArguments?) -> String {
         line(tool, arguments.map { arguments -> JSONValue in

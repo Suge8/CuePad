@@ -19,7 +19,7 @@ final class CodexRPC {
     /// 服务端请求（方法、请求 id、参数）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
     /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）：随增量更新，这一项说完（`item/completed`）时换成它带的全文
-    /// （不发增量时也照样有）；过程中的说明（`phase` 为 commentary）说完、
+    /// （不发增量时也照样有）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟）；过程中的说明（`phase` 为 commentary）说完、
     /// 下一项开始（转成工具调用、思考等）、下一轮开始、这一轮停下或失败（`turn/completed` 不是 completed）时清掉，正常说完的留着。
     /// 说明说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
     /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
@@ -139,7 +139,8 @@ final class CodexRPC {
             }
         } else if let method {
             let params = message["params"] ?? .object([:])
-            guard !drafted(method, params) else { return }
+            let emitted = message["emittedAtMs"]?.number.map { Date(timeIntervalSince1970: $0 / 1000) }
+            guard !drafted(method, params, emitted: emitted) else { return }
             onNotification?(method, params)
         } else if let id = message["id"]?.int {
             replies.resolve(id, with: .success(message))
@@ -147,14 +148,19 @@ final class CodexRPC {
     }
 
     /// 改正在说的话；增量本身到此为止（不再交给 `onNotification`），返回 true。
-    private func drafted(_ method: String, _ params: JSONValue) -> Bool {
+    private func drafted(_ method: String, _ params: JSONValue, emitted: Date?) -> Bool {
         guard let thread = params["threadId"]?.string else { return false }
         switch method {
         case "item/agentMessage/delta":
             guard let item = params["itemId"]?.string, let delta = params["delta"]?.string else { return true }
             update(thread, item: item) { $0.append(delta, to: 0) }
             return true
-        case "item/started", "turn/started":
+        case "item/started":
+            clearDraft(thread)
+            if let item = params["item"], item["type"]?.string == "agentMessage", let id = item["id"]?.string {
+                drafts[thread] = DraftParts(message: id, since: emitted)
+            }
+        case "turn/started":
             clearDraft(thread)
         case "item/completed":
             guard let item = params["item"], item["type"]?.string == "agentMessage" else { break }

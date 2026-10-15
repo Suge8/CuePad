@@ -248,6 +248,14 @@ final class CodexRig {
     func replies(_ session: PiSession) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map(\.text)
     }
+
+    /// 正在说的话已换下：没有，或会话页认得出它已在对话里（`PiDraft.landed`，对着会话文件里最近一条回答）。
+    func draftLanded(_ id: PiSession.ID) -> Bool {
+        guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
+        let session = bridge.session(id: id)
+        let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }?.at
+        return draft.landed(newestReply: newest)
+    }
 }
 
 /// 测试里说了算的人在不在：变成在时叫醒等着的。
