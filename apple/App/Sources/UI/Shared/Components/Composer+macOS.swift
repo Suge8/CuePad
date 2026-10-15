@@ -41,9 +41,19 @@ struct ImageSources: ViewModifier {
     }
 }
 
-extension View {
-    func attachmentContextMenu(_ outbox: Outbox, shape: some Shape, @ViewBuilder menu: () -> some View) -> some View {
-        contextMenu { menu() }
+/// 带上的卡片：点一下看全文（`open`），右键出它的菜单。
+struct AttachmentButton<Label: View>: View {
+    let label: String
+    let menu: [ChoiceMenu.Section]
+    let open: () -> Void
+    @ViewBuilder let content: () -> Label
+
+    var body: some View {
+        Button(action: open, label: content)
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+            .accessibilityHint("看全文")
+            .contextMenu { ChoiceMenuItems(sections: menu) }
     }
 }
 

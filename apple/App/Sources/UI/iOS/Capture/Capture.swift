@@ -44,6 +44,7 @@ struct FloatingInput<Content: View>: View {
         }
         // 只淡入淡出：位置跟着键盘走，自己不再加位移
         .animation(Motion.quick, value: isPresented)
+        .modifier(KeyboardHold())
     }
 
     private var swipeDown: some Gesture {

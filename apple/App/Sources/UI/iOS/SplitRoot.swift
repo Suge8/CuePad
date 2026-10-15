@@ -101,6 +101,7 @@ private struct AgentPanel: View {
             .safeAreaPadding(.top, 8)
             .fadesUnderBars()
             .background(palette.desk.ignoresSafeArea())
+            .modifier(KeyboardHold())
     }
 }
 

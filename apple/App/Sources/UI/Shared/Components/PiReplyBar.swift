@@ -217,22 +217,16 @@ struct PiReplyBar: View {
 
     /// Agent 在跑时的发送钮：点按 `tap`（等它做完再说），长按出菜单选 `hold`（马上说）或停止。
     private func holdMenu(tap: DeliveryMode, hold: DeliveryMode) -> some View {
-        Menu {
-            Button { send(hold, held: true) } label: {
-                Label(hold.label, systemImage: Self.symbol(hold))
-                if let explanation = hold.explanation { Text(explanation) }
-            }
-            if canStop, !stopping {
-                Divider()
-                Button(DeliveryMode.stop.label, systemImage: "stop.circle", role: .destructive, action: stop)
-            }
-        } label: {
+        let held = ChoiceMenu.Choice(title: hold.label, subtitle: hold.explanation, image: .symbol(Self.symbol(hold))) { send(hold, held: true) }
+        let stopSection = canStop && !stopping
+            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: DeliveryMode.stop.label, image: .symbol("stop.circle"), destructive: true, choose: stop)])]
+            : []
+        return MenuButton(
+            sections: [ChoiceMenu.Section(choices: [held])] + stopSection, primary: { send(tap) }, press: .button,
+            accessibilityLabel: tap.label, hint: [tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；")
+        ) {
             SubmitGlyph(.send, enabled: canSend)
-        } primaryAction: {
-            send(tap)
         }
-        .menuStyle(.button).menuIndicator(.hidden)
-        .buttonStyle(.plain)
         .fixedSize()
         .disabled(!canSend)
         // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次（菜单或 ⌘⇧↩）就不再出（`holdSendLearned`）。
@@ -251,8 +245,6 @@ struct PiReplyBar: View {
             }
         }
         .animation(Motion.quick, value: canSend)
-        .accessibilityLabel(tap.label)
-        .accessibilityHint([tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；"))
     }
 
     /// 按住发送钮出来的其余说法的图标。

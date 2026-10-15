@@ -9,15 +9,7 @@ extension PiConfigControls {
         guard let anchor = anchors[pick]?.view else { return }
         switch pick {
         case .model:
-            let now = Date.now, quotas = services.accountQuotas.items
-            let sections = groups.map { group in
-                ChoiceMenu.Section(
-                    title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.mark?.nsImage,
-                    choices: group.items.map { item in
-                        ChoiceMenu.Choice(title: item.name, subtitle: item.note, image: item.mark?.nsImage, checked: item.checked, choose: item.choose)
-                    })
-            }
-            ChoiceMenu.popUp(sections, below: anchor)
+            ChoiceMenu.popUp(groups.menu(quotas: services.accountQuotas.items, at: .now), below: anchor)
         case .thinking:
             ChoiceMenu.popUp([ChoiceMenu.Section(title: "思考强度", choices: levels.map { level in
                 ChoiceMenu.Choice(title: level.label, checked: shown.thinking == level) { chooseThinking(level) }

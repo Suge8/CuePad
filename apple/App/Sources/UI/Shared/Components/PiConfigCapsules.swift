@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
+/// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口用了多少（`ModelBadge`），没给组名的分组标题写各窗口的用量
 /// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`QuotaMoments`）。
@@ -29,25 +29,9 @@ struct PiModelCapsule: View {
             .accessibilityLabel("模型")
             .accessibilityValue(spoken(at: now))
         #else
-        Menu {
-            ForEach(groups) { group in
-                Section(group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) } ?? "") {
-                    ForEach(group.items) { item in
-                        Toggle(isOn: Binding(get: { item.checked }, set: { if $0 { item.choose() } })) {
-                            Text(item.name)
-                            if let note = item.note { Text(note) }
-                            item.mark?.image
-                        }
-                    }
-                }
-            }
-        } label: {
+        MenuButton(sections: groups.menu(quotas: quotas, at: now), accessibilityLabel: "模型", value: spoken(at: now)) {
             label(at: now)
         }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .accessibilityLabel("模型")
-        .accessibilityValue(spoken(at: now))
         #endif
     }
 

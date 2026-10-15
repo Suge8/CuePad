@@ -194,6 +194,17 @@ final class DebugWindow: NSWindow {
     }
 }
 
+/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。
+struct DebugNewSessionForm: View {
+    @Environment(Workspace.self) private var workspace
+    @State private var agents: MacAgents?
+
+    var body: some View {
+        NewSessionForm(agents: agents) { _ in }
+            .observing(workspace.services.store, into: $agents) { [host = workspace.services.hostID] in try $0.macAgents(on: host) }
+    }
+}
+
 /// `menubar` 画面：截图只截普通层级的窗口，菜单栏面板拍不到，所以把它放在桌面图上拍（`cuebar` 是"对 Cue 说"的输入条）。
 struct DebugMenuBarStage: View {
     /// `cuebar` 画面：放"对 Cue 说"的输入条。

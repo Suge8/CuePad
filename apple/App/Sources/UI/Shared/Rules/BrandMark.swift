@@ -35,7 +35,10 @@ nonisolated struct BrandMark: Hashable, Sendable {
         mark.map { Text("\($0.image) \(name)") } ?? Text(name)
     }
 
-    #if os(macOS)
+    #if os(iOS)
+    /// UIKit 菜单项用的同一个标志（`MenuButton`）。
+    var uiImage: UIImage? { UIImage(named: "brand-" + asset) }
+    #else
     /// AppKit 菜单项用的同一个标志：符号是模板图。
     var nsImage: NSImage? { NSImage(symbolName: "brand-" + asset, bundle: .main, variableValue: 0) }
     #endif

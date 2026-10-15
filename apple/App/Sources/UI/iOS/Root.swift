@@ -119,6 +119,8 @@ struct RouteView: View {
             // 底部栏在不在只看这一页是不是独占底部的页，不读全局的 `Navigation.ownsBottom`：那个值在推入、返回会话页与纸页时变，
             // 读它的话每个标签里每一页（包括被盖住的）都要跟着重排一遍
             .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
+            // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
+            .modifier(KeyboardHold())
     }
 
     /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
