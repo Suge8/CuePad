@@ -252,15 +252,6 @@ extension View {
         #endif
     }
 
-    /// 性能打点：这一页出现时（见 `DebugHooks.mark`）。
-    func perfMark(_ event: String) -> some View {
-        #if DEBUG
-        onAppear { DebugHooks.mark(event) }
-        #else
-        self
-        #endif
-    }
-
     /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
     func debugSettling(_ busy: Bool) -> some View {
         #if DEBUG

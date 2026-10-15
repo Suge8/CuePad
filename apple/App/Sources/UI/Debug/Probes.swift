@@ -195,7 +195,7 @@ final class TurnLog {
 }
 
 #if os(macOS)
-/// 界面里的测量点：首屏卡片出现（`content`，`perfMark`）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
+/// 界面里的测量点：项目页内容排完（`content`，`ProjectPage` 分帧出完最后一段）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
 enum PerfProbe {
     /// 同一个事件可以有几处同时在等：每一处都要醒。
     private static var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]

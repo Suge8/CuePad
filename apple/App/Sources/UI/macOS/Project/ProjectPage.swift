@@ -69,6 +69,8 @@ struct ProjectPage: View {
                 await NextFrame.wait()
                 stage = next
             }
+            // 首屏有了（`interact` 等它）：按页面排完记，不按墙上的卡片出现——没有"最近"卡片的项目（演示库的圆桌）永远等不到
+            DebugHooks.mark("content")
         }
     }
 
