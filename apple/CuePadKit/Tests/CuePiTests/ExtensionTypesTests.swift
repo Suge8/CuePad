@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 
@@ -32,7 +33,7 @@ private struct PiTypes {
 
 @Suite(.enabled(if: PiTypes() != nil, "需要 ~/.local/bin/pi 指向带 node_modules/.bin/tsc 的 Pi 检出"))
 struct ExtensionTypesTests {
-    @Test func bridgeTypechecksAgainstInstalledPi() throws {
+    @Test func bridgeTypechecksAgainstInstalledPi() async throws {
         let pi = try #require(PiTypes())
         let bridge = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/CuePi/Extension/cuepad-bridge.ts").standardized
         let config: [String: Any] = [
@@ -53,11 +54,10 @@ struct ExtensionTypesTests {
         let output = Pipe()
         process.standardOutput = output
         process.standardError = output
-        try process.run()
+        let exit = try ProcessExit(launching: process)
         let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        process.waitUntilExit()
 
-        #expect(process.terminationStatus == 0, "tsc:\n\(text)")
+        #expect(await exit.value == 0, "tsc:\n\(text)")
     }
 }
 #endif

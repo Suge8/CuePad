@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
@@ -100,11 +101,9 @@ struct CommandLineToolTests {
         process.environment = ["CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]
         let output = Pipe()
         process.standardOutput = output
-        try process.run()
-        process.waitUntilExit()
-
-        #expect(process.terminationStatus == 0)
+        let exit = try ProcessExit(launching: process)
         #expect(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("cuepad"))
+        #expect(await exit.value == 0)
     }
 }
 #endif

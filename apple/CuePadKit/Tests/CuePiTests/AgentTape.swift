@@ -46,9 +46,7 @@ final class AgentTape: @unchecked Sendable {
         let cc = Process()
         cc.executableURL = URL(filePath: "/usr/bin/cc")
         cc.arguments = ["-O2", "-o", building.path, source.path]
-        try cc.run()
-        cc.waitUntilExit()
-        guard cc.terminationStatus == 0 else { throw CocoaError(.executableLoad, userInfo: [NSFilePathErrorKey: source.path]) }
+        guard try ProcessExit(launching: cc).blockingValue == 0 else { throw CocoaError(.executableLoad, userInfo: [NSFilePathErrorKey: source.path]) }
         _ = rename(building.path, binary.path)
         return binary
     }

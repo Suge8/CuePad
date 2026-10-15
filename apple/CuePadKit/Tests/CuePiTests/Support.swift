@@ -43,11 +43,10 @@ func makeSocketDirectory() throws -> URL {
 func fileGone(_ url: URL) -> Bool { !FileManager.default.fileExists(atPath: url.path) }
 
 /// 已经退出的进程 pid（用于"残留 socket 的属主已死"）。
-func deadPid() throws -> Int32 {
+func deadPid() async throws -> Int32 {
     let p = Process()
     p.executableURL = URL(filePath: "/usr/bin/true")
-    try p.run()
-    p.waitUntilExit()
+    _ = try await p.runToExit()
     return p.processIdentifier
 }
 
