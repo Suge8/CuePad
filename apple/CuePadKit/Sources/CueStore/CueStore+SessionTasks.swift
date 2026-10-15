@@ -12,7 +12,8 @@ import Foundation
 /// 自动建的任务（外壳）id 由会话算出（`sessionTaskID`），它只是会话的投影，自己不另存状态：标题跟着会话改名；会话正常结束，
 /// 它跟着完成并归档；被打断、出错的照旧留着（原因看会话状态）；跟着归档后会话又活过来（恢复），它回到进行中。会话没说过话就退出、
 /// 记录删掉时它一起删掉。有人动过它（你或 Cue 改了标题、写了提示词、加了步骤、挪了项目、完成或归档），它就是普通任务，
-/// 不再跟着会话走。动没动过只看它是不是还是自动建出来的样子（`followShells`），不另记标记。
+/// 不再跟着会话走。动没动过只看它是不是还是自动建出来的样子（`followShells`），不另记标记；跟着收尾后你又取回、重新打开的，
+/// 样子虽回到了原样，以你这一下为准，直到会话再有变化。
 /// 只有会话记录的那台 Mac 建，手机与命令行不建：同一个游离会话不会在两台设备上各建一个。
 extension CueStore {
   /// 这个连接是 Mac `host`：它写的没结束的会话记录从此在每个写事务里都挂在任务上；已有的游离会话当场归位。Mac 启动时调用一次。
@@ -62,13 +63,14 @@ extension CueStore {
   /// 外壳跟着会话走，只在这里定（`within` 是对账范围，对会话行 `s`）：没被动过的外壳，会话已结束就完成并归档（完成与归档同一刻），
   /// 没结束（在跑、歇着、被打断、出错）就是进行中——跟着归档过的回到进行中。没被动过 = 还是自动建出来的样子：id 是 `sessionTaskID`、
   /// 标题还是会话名、没有下级、还在会话所在的项目（不在项目里或项目删了是未分类）、不在回收站，开着时没完成也没归档，
-  /// 收着时是跟着收尾的样子（完成与归档同一刻）。
+  /// 收着时是跟着收尾的样子（完成与归档同一刻）。会话最近一次变化要晚于外壳自己的（本机写入序号 `writeSeq`，结构 38）：
+  /// 跟着收尾后你取回并重新打开的外壳又是原样，按样子会被当场收回去，比先后才认得出是你后动的。
   private func followShells(host: String, within scope: (sql: String, rows: [any SQLBindable])) throws {
     let ended = PiWorkState.ended.rawValue
     let stale = try db.query(
       """
       SELECT c.id, c.body, s.sessionID, s.title, s.state = ? FROM piSessionStates s JOIN cards c ON c.piSessionID = s.sessionID
-      WHERE s.hostID = ? \(scope.sql) AND c.todoAt IS NOT NULL AND c.parentID IS NULL AND c.deletedAt IS NULL
+      WHERE s.hostID = ? \(scope.sql) AND c.todoAt IS NOT NULL AND c.parentID IS NULL AND c.deletedAt IS NULL AND s.writeSeq >= c.writeSeq
         AND CASE WHEN s.state = ? THEN c.completedAt IS NULL AND c.archivedAt IS NULL
           ELSE c.completedAt IS NOT NULL AND c.archivedAt = c.completedAt END
         AND c.projectID IS (SELECT id FROM projects WHERE id = s.projectID AND deletedAt IS NULL)
