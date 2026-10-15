@@ -132,8 +132,13 @@ extension CueStore {
 
   /// 归档的灵感与任务（只列归档时的那一条，不列随它一起归档的下级），最近归档的在前；回收站里的不列。
   public func archived() throws -> [Card] {
-    let parents = try untangledParents(where: "archivedAt IS NOT NULL AND deletedAt IS NULL")
-    return try select(Card.self, where: "(\(cardVisible)) AND archivedAt IS NOT NULL", orderBy: "archivedAt DESC, id").filter { parents[$0.id] == nil }
+    try select(
+      Card.self,
+      where: """
+        (\(cardVisible)) AND archivedAt IS NOT NULL
+        AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE archivedAt IS NOT NULL AND deletedAt IS NULL))
+        """,
+      orderBy: "archivedAt DESC, id")
   }
 
   /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
@@ -204,7 +209,9 @@ extension CueStore {
   /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环（远端并发、还没收敛）按收敛的规则断开（`CardHierarchy`），
   /// 排出来的就是收敛后的样子。
   private static func preorder(_ tasks: [Card]) -> [Card] {
-    let parents = CardHierarchy.parents(tasks.map { ($0.id, $0.parentID) })
+    let ids = Set(tasks.map(\.id))
+    let parents = CardHierarchy.breakingCycles(Dictionary(
+      tasks.compactMap { task in task.parentID.flatMap { ids.contains($0) ? (task.id, $0) : nil } }, uniquingKeysWith: { first, _ in first }))
     var children: [UUID: [Card]] = [:]
     for task in tasks { if let parent = parents[task.id] { children[parent, default: []].append(task) } }
     var ordered: [Card] = []
@@ -216,25 +223,16 @@ extension CueStore {
     return ordered
   }
 
-  /// 列得出来的任务（没删除、没归档的要做卡片）：可当上级的就是它们。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
-  static let listedTask = "todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL"
+  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
+  private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// `condition` 选出的这批卡的上下级（`CardHierarchy.parents`）：只读 id 与 parentID 两列。
-  func untangledParents(where condition: String) throws -> [UUID: UUID] {
-    CardHierarchy.parents(try db.query("SELECT id, parentID FROM cards WHERE \(condition)") { (id: $0.uuid(0), parent: $0.uuidOrNil(1)) })
-  }
-
-  /// 任务（`t`）连着它的项目（`p`）与它的上级完没完成（`u`）：`taskCounts` 与 `startedTasks` 共用，顶层按 `isTopLevel` 判。
-  private static let taskWithParent = "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID"
-
-  /// 显示在顶层：没有列得出来的上级（`parents` 是 `listedTask` 那批的上下级，环已断开），或自己没完成而上级已完成（看板上它在顶层）。
-  private static func isTopLevel(_ id: UUID, done: Bool, parentDone: Bool, in parents: [UUID: UUID]) -> Bool {
-    parents[id] == nil || (!done && parentDone)
-  }
+  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `startedTasks` 共用。
+  private static let taskWithParent =
+    "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
+  private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；成环还没收敛的按收敛的规则断开再判
-  /// （`untangledParents`）。步骤的进度见 `subtaskProgress`。
+  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；步骤的进度见 `subtaskProgress`。
   /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] { try taskCounts(scope: "", []) }
 
@@ -244,36 +242,29 @@ extension CueStore {
   }
 
   private func taskCounts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID?: TaskCounts] {
-    let parents = try untangledParents(where: Self.listedTask)
+    // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿 cards_projectID_modifiedAt 逐张翻全部卡片，而不走 cards_todoAt 只翻任务
     let rows = try db.query(
       """
-      SELECT t.id, t.projectID, t.startedAt IS NOT NULL, t.completedAt IS NOT NULL, u.completedAt IS NOT NULL
+      SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
+        SUM(t.completedAt IS NOT NULL)
       \(Self.taskWithParent)
-      WHERE \(visibleTask) \(scope)
+      WHERE \(visibleTask) AND \(Self.topLevel) \(scope)
+      GROUP BY +t.projectID
       """, arguments
-    ) { (id: $0.uuid(0), project: $0.uuidOrNil(1), started: $0.bool(2), done: $0.bool(3), parentDone: $0.bool(4)) }
-    var counts: [UUID?: TaskCounts] = [:]
-    for row in rows where Self.isTopLevel(row.id, done: row.done, parentDone: row.parentDone, in: parents) {
-      var count = counts[row.project] ?? .zero
-      if row.done { count.done += 1 } else if row.started { count.inProgress += 1 } else { count.todo += 1 }
-      counts[row.project] = count
-    }
-    return counts
+    ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
   /// 进行中的任务（已开始、没完成），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
   /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：步骤跟着上级，上级也没完成时不单列）。
   public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
-    let started = try db.query(
+    try db.query(
       """
-      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")), u.completedAt IS NOT NULL \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.startedAt IS NOT NULL AND t.completedAt IS NULL
+      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) \(Self.taskWithParent)
+      WHERE \(visibleTask) AND t.startedAt IS NOT NULL AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "")
       ORDER BY t.startedAt DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
-    ) { (card: Card(row: $0), parentDone: $0.bool(Int32(Card.columns.count))) }
-    guard topLevelOnly else { return started.map(\.card) }
-    let parents = try untangledParents(where: Self.listedTask)
-    return started.filter { Self.isTopLevel($0.card.id, done: false, parentDone: $0.parentDone, in: parents) }.map(\.card)
+    ) { Card(row: $0) }
   }
 
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
@@ -286,18 +277,14 @@ extension CueStore {
   public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
 
   func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
-    // 步骤算在谁下面按断好环的上下级：成环还没收敛时，断开的那条不再算作别人的步骤
-    let parents = try untangledParents(where: Self.listedTask)
-    let steps = try db.query(
-      "SELECT id, completedAt IS NOT NULL FROM cards WHERE parentID IS NOT NULL AND \(Self.listedTask) \(scope)", arguments
-    ) { (id: $0.uuid(0), done: $0.bool(1)) }
-    var progress: [UUID: TaskProgress] = [:]
-    for step in steps {
-      guard let parent = parents[step.id] else { continue }
-      let count = progress[parent] ?? TaskProgress(done: 0, total: 0)
-      progress[parent] = TaskProgress(done: count.done + (step.done ? 1 : 0), total: count.total + 1)
-    }
-    return progress
+    let rows = try db.query(
+      """
+      SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards
+      WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)
+      GROUP BY parentID
+      """, arguments
+    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
   /// 各叶子的草稿（同 `draft(of:)`：它下面第一条不是资料的提示词），按叶子取：任务行据此给"开始"。

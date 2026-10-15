@@ -52,8 +52,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 最近完成的顶层任务：`all`（同一范围里库中的全部任务）里完成了、上级不在其中的（与 `counts.done` 同一批），按完成时间从新到旧取前 `doneLimit` 条。
     /// 看板与项目页任务纸的"已完成"同一规则。
     static func recentlyDone(_ all: [Card]) -> [Card] {
-        let parents = CardHierarchy.parents(all.map { ($0.id, $0.parentID) })
-        return Array(all.filter { $0.status == .done && parents[$0.id] == nil }
+        let listed = Set(all.map(\.id))
+        return Array(all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
             .prefix(doneLimit))
     }

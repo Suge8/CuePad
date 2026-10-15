@@ -790,17 +790,15 @@ extension CueStore {
     return Dictionary(grouping: rows, by: \.task).mapValues { $0.map(\.preview) }
   }
 
-  /// 顶层任务：在没删除的任务（含归档、完成的）里没有上级，按断好环的上下级判（`untangledParents`）。
   private func topTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
-    let parents = try untangledParents(where: "todoAt IS NOT NULL AND deletedAt IS NULL")
-    return try db.query(
+    try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
+      WHERE t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
         AND \(condition)
       ORDER BY \(Self.taskProjectOrder), t.sortKey, t.id
       """, arguments
-    ) { Card(row: $0) }.filter { parents[$0.id] == nil }
+    ) { Card(row: $0) }
   }
 
   private func cards(_ ids: Set<UUID>) throws -> [UUID: Card] {
