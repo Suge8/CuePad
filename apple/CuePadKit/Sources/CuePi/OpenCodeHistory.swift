@@ -154,8 +154,8 @@ enum OpenCodeHistory {
                 }
             }
             // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
-            if message.error?.type == "aborted" { return cp.interrupted(entry, into: &transcript) }
             let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            if message.error?.type == "aborted" { return cp.interrupted(entry, said: text, into: &transcript) }
             if message.finish == "tool-calls" { cp.spoke(text, entry) } else { cp.answered(text, entry, into: &transcript) }
         case "compaction" where message.status == "completed":
             cp.compacted(entry, into: &transcript)

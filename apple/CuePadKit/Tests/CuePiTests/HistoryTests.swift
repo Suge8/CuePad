@@ -223,9 +223,10 @@ struct ConversationRuleTests {
         item(["type": "AgentMessage", "id": id, "content": [["type": "Text", "text": text]], "phase": phase])
     }
 
-    /// 中途被停下的一轮：没说完的那半句不算，问答不变，这一轮的提问也不再算进行中；之后机器消息触发的一轮沿用再往前你说的那句。
-    /// 对话里在停下的地方留一行系统行"已停止"。
-    @Test func aStoppedRoundLeavesTheRecapAsItWasAndAStoppedLine() throws {
+    /// 中途被停下的一轮：已经说出的那段（被停下的那条里说了一半的也算）是这一轮的回答，下面一行系统行"已停止"；什么都没说就被停下的
+    /// 问答不变，这一轮的提问也不再算进行中；之后机器消息触发的一轮沿用再往前你说的那句。存进库再读出来也是这个先后。
+    @Test func aStoppedRoundKeepsWhatWasSaidAndAddsAStoppedLine() async throws {
+        let fixture = try Fixture()
         var stopped = SessionFile(directory: try makeTempDirectory(), name: "stopped.jsonl")
         try stopped.append(
             SessionFile.header(id: "stopped"), SessionFile.user("u1", nil, "第一问", at: 1), SessionFile.assistant("a1", "u1", text: "第一答", at: 2),
@@ -234,11 +235,24 @@ struct ConversationRuleTests {
             SessionFile.user("u4", "a3", "第三问", at: 7), SessionFile.assistant("a4", "u4", text: nil, stop: "aborted", at: 8))
 
         let read = try PiHistory.index(file: stopped.url, from: nil)
+        try await fixture.store.writePiTranscript(read.transcript)
 
-        #expect(read.recap == PiRecap(lastPrompt: "第一问", lastReply: "汇报", pendingPrompt: nil))
-        #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == [
-            "user:第一问", "pi:第一答", "user:第二问", "system:已停止", "pi:汇报", "user:第三问", "system:已停止",
+        #expect(read.recap == PiRecap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil))
+        #expect(try await fixture.store.piMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
+            "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "pi:汇报", "user:第三问", "system:已停止",
         ])
+
+        // OpenCode 被停下的那一步带着说了一半的话
+        let json = """
+            [{"id":"u1","type":"user","text":"写个故事","time":{"created":1000000}},
+             {"id":"a1","type":"assistant","error":{"type":"aborted"},"content":[{"type":"text","text":"从前有座山"}],"time":{"created":1000400,"completed":1006000}}]
+            """
+        var checkpoint = PiHistoryCheckpoint()
+        var transcript = PiHistory.Transcript(fallbackID: "s", files: scratchFiles)
+        for (seq, message) in try JSONDecoder().decode([OpenCodeMessage].self, from: Data(json.utf8)).enumerated() {
+            try OpenCodeHistory.ingest(message, seq: Int64(seq), &checkpoint, &transcript)
+        }
+        #expect(transcript.messages.map { "\($0.role.rawValue):\($0.text)" } == ["user:写个故事", "pi:从前有座山", "system:已停止"])
     }
 
     /// 你拒绝了它要跑的命令、这一轮因此停下：写"已拒绝"，不写"已停止"（Codex 的命令记成 `declined`，Claude Code 的工具结果是它固定的那句拒绝）。
