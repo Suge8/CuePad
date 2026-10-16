@@ -54,7 +54,7 @@ struct NewSessionInput: View {
                     .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
             })
         .disabled(inFlight)
-        // 浮在 `FloatingInput` 里（与随手记同一种）；发出后等它开好时不让收起
+        // 浮在 `FloatingInput` 里（与发给 Agent 同一种）；发出后等它开好时不让收起
         .floatingInputLocked(inFlight)
         .onAppear {
             if launched == nil { launched = start.launched }

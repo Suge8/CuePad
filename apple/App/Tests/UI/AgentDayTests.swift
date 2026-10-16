@@ -190,27 +190,5 @@ struct AgentDayTests {
         #expect(!after.now.map(\.id).contains(session.id) && after.ended.map(\.id).contains(session.id) && after.ends[session.id] == nil)
     }
 
-    /// Agent 页的项目筛选：标签页选的记在本机、重开后还筛着；从项目页进来先筛该项目、在那里换的不记；记住的项目进了回收站回到全部。
-    @Test func Agent页筛选_标签页记住_推入页不记_项目进回收站回到全部() async throws {
-        let table = try await store.createProject(name: "圆桌", color: "#000000")
-        let site = try await store.createProject(name: "个人网站", color: "#000000")
-        let suite = "agent-filter-\(UUID())"
-        func navigation() -> Navigation { Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: suite)!, launchArguments: [:])) }
-        func catalog(_ projects: [Project]) -> ProjectCatalog {
-            ProjectCatalog(projects: projects, cardCounts: [:], taskCounts: [:], directories: [:], bindings: [])
-        }
-        let projects = catalog([table, site])
-        navigation().chooseAgentFilter(table.id)
-        let nav = navigation()
-        #expect(nav.agentFilter(catalog: projects) == table.id)  // 重开后还筛着
-
-        var pushed = AgentFilter(entered: site.id)
-        #expect(pushed.current(in: nav, catalog: projects) == site.id)
-        pushed.choose(nil, in: nav)
-        #expect(pushed.current(in: nav, catalog: projects) == nil)
-        #expect(AgentFilter(entered: nil).current(in: nav, catalog: projects) == table.id)  // 标签页的筛选没被推入页改动
-
-        #expect(nav.agentFilter(catalog: catalog([])) == nil)  // 记住的项目进了回收站：回到全部
-    }
     #endif
 }

@@ -1,11 +1,11 @@
 import SwiftUI
 import WidgetKit
 
-/// 小组件的界面。整块点击打开随手记（`DeepLink.capture`），卡片可用 `DeepLink.card` 链接直达。
+/// 小组件的界面。未分类的整块点开"对 Cue 说"（`DeepLink.speak`，随手记也在那里说），卡片可用 `DeepLink.card` 链接直达。
 enum WidgetViews {
     static func unfiled(_ entry: UnfiledEntry) -> some View {
         UnfiledView(entry: entry)
-            .widgetURL(DeepLink.capture(project: nil).url)
+            .widgetURL(DeepLink.speak.url)
             .containerBackground(.background, for: .widget)
     }
 
@@ -45,7 +45,7 @@ private struct UnfiledView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(Dotted("收件箱", "\(entry.snapshot.total)")).font(.caption).foregroundStyle(.secondary)
+            Text(Dotted("未分类", "\(entry.snapshot.total)")).font(.caption).foregroundStyle(.secondary)
             ForEach(entry.snapshot.cards.prefix(3), id: \.id) { card in
                 Text(card.title.isEmpty ? "图片" : card.title).font(.footnote).lineLimit(1)
             }

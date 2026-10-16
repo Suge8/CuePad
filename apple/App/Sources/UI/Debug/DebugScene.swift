@@ -58,6 +58,10 @@ enum DebugScene {
     static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
     /// 项目页任务纸点"还有 N 条"的那条路（`debugExposesTaskFold`，看得见的那一页上的纸）。
     static var toggleTaskFold: () -> Void = {}
+    #if os(iOS)
+    /// 点 Cue 页头开合面板的那条路（`debugExposesCuePanel`）。
+    static var toggleCuePanel: () -> Void = {}
+    #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {
@@ -168,8 +172,8 @@ enum DebugScene {
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.briefOpen = defaults.bool(forKey: "CuePadBrief")
         preset.alertStatus = alertStatus
-        if scene == "search" { preset.focusedSearch = defaults.string(forKey: "CuePadProject") == nil ? .shelf : .project }
-        if scene == "agent" { preset.agentQuery = searchText }
+        if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
+        preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
         #endif
         return preset
     }

@@ -82,8 +82,8 @@ struct UnfiledWidget: Widget {
         StaticConfiguration(kind: Self.kind, provider: UnfiledProvider()) { entry in
             WidgetViews.unfiled(entry)
         }
-        .configurationDisplayName("收件箱")
-        .description("最近记下的灵感，点一下就能随手记。")
+        .configurationDisplayName("未分类")
+        .description("最近记下的灵感，点一下对 Cue 说。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

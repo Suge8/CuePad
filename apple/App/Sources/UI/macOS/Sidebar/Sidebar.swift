@@ -32,10 +32,7 @@ struct Sidebar: View {
             SidebarSplit {
                 if let data, let catalog, let pages {
                     projects(pages, catalog, data: data)
-                    let sessions = services.liveSessions
-                    PiSection(
-                        recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, renames: sessions.renames,
-                        undelivered: sessions.undelivered, total: sessions.total, select: select)
+                    PiSection(select: select)
                 }
             }
             footer(showsBins: pages?.showsBins ?? false, trashCount: data?.trashCount ?? 0)
@@ -350,35 +347,25 @@ private struct FooterPage: View {
 }
 
 /// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
-/// 同一个顺序（`liveRows`，要你注意的在前），全部列出（两个以上需要 /reload 的合成一行，`PiNowRow`，点开再列）；
+/// 同一列（`LiveSessionList`：与菜单栏面板、手机 Cue 页头的面板同一个顺序与折叠），全部列出；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。
 /// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
 /// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
 private struct PiSection: View {
-    let recorded: [PiSessionState]
-    let deliveries: [String: DeliveryRequest]
-    let renames: [String: DeliveryRequest]
-    let undelivered: [String: Int]
-    let total: Int
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var startingSession = false
     @State private var renaming: PiSessionState?
-    @State private var reloadOpen = false
 
     var body: some View {
         let agents = services.agents
         let detected = AgentKind.allCases.contains { agents.status($0) != nil }
         let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
         let live = services.pi.sessions
-        let rows = PiSessionState.liveRows(
-            live: live.map {
-                PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            },
-            recorded: recorded, deliveries: deliveries, cueOnDuty: services.liveSessions.cueOnDuty, at: services.speech)
+        let rows = workspace.liveSessionRows
+        let total = services.liveSessions.total
         if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") {
@@ -400,18 +387,12 @@ private struct PiSection: View {
                 }
                 if !rows.isEmpty {
                     SidebarScroll {
-                        // 在线的按会话 id 区分：状态变化时那一行不被重建
-                        VStack(spacing: SidebarMetrics.rowGap) {
-                            ForEach(PiNowRow.rows(rows, state: { $0 })) { nowRow in
-                                switch nowRow {
-                                case .session(let session): sessionRow(session, live: live)
-                                case .reload(let sessions):
-                                    PiReloadFold(count: sessions.count, expanded: $reloadOpen, style: SidebarMetrics.session)
-                                        .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
-                                        .frame(height: Spacing.sidebarRow)
-                                    if reloadOpen { ForEach(sessions) { sessionRow($0, live: live) } }
-                                }
-                            }
+                        LiveSessionList(sessions: rows, spacing: SidebarMetrics.rowGap) {
+                            sessionRow($0, live: live)
+                        } fold: { count, expanded in
+                            PiReloadFold(count: count, expanded: expanded, style: SidebarMetrics.session)
+                                .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
+                                .frame(height: Spacing.sidebarRow)
                         }
                         .padding(.horizontal, SidebarMetrics.edge)
                     }
@@ -424,10 +405,10 @@ private struct PiSection: View {
     }
 
     private func sessionRow(_ session: PiSessionState, live: [CuePi.PiSession]) -> some View {
-        let bridge = live.first { $0.sessionID == session.sessionID }
+        let bridge = live.first { $0.sessionID == session.sessionID }, sessions = services.liveSessions
         return PiSessionRow(
-            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
+            session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
+            rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
             .equatable()
             .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
             .frame(height: Spacing.sidebarProjectRow)
@@ -442,19 +423,6 @@ private struct PiSection: View {
                     Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                 }
             }
-    }
-}
-
-extension PiSessionState {
-    /// "现在"的会话行（侧栏 Agent 区、项目页的 Agent 栏）：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）
-    /// 一起按要你注意的先后；同一个会话只出现一次（本机实时优先）。已结束的不列，历史在 Agent 整页里。`recorded` 是会话列表查询的一页。
-    static func liveRows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false,
-        at moment: Speech.Moment
-    ) -> [PiSessionState] {
-        let shown = Set(live.map(\.sessionID))
-        let others = recorded.filter { !shown.contains($0.sessionID) && $0.state != .known(.ended) }
-        return inListOrder(live + others, deliveries: deliveries, cueOnDuty: cueOnDuty, at: moment)
     }
 }
 
