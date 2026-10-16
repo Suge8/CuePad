@@ -69,7 +69,7 @@ struct TaskFlowTests {
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
         try await store.bindSession("s1", to: second.id)
@@ -97,7 +97,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
         try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas")
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
+        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 

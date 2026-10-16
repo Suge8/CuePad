@@ -138,12 +138,19 @@ extension AppServices {
     }
 
     /// 立即同步：立即拉一次（待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
-    /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`。
+    /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`，再要立即同步的
+    /// （启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
     /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
     func syncNow() async {
         guard let sync else { return }
-        syncsInFlight += 1
-        defer { syncsInFlight -= 1 }
+        if let syncing { return await syncing.value }
+        let pulling = Task { await Self.pull(sync) }
+        syncing = pulling
+        await pulling.value
+        syncing = nil
+    }
+
+    private static func pull(_ sync: any SyncControlling) async {
         let (settled, settle) = AsyncStream<Void>.makeStream()
         Task {
             do {

@@ -37,7 +37,6 @@ struct CueStatusRow<Trailing: View>: View {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.lastSaid).lineLimit(1)
             }
-            .opacity(cue.isLoaded ? 1 : 0)
             Spacer(minLength: 6)
             WaitingCount(count: cue.waiting).font(Typography.meta)
             trailing
@@ -45,7 +44,6 @@ struct CueStatusRow<Trailing: View>: View {
         .animation(Motion.quick, value: cue.waiting)
         .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
-        .animation(Motion.quick, value: cue.isLoaded)
     }
 }
 
@@ -102,11 +100,9 @@ struct CueTitle: View {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)
             }
-            .opacity(cue.isLoaded ? 1 : 0)
             .padding(.trailing, 14)
         }
         .animation(Motion.quick, value: cue.presence)
-        .animation(Motion.quick, value: cue.isLoaded)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

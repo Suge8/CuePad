@@ -1,21 +1,17 @@
 import SwiftUI
 
-/// 项目目录读到之前不显示页面（页面里的项目名称、计数从第一帧起就是真实值）；读取失败时说明原因并给"重试"。
-/// 订阅在 `Workspace.follow` 里。
+/// 资料库读不出来时（项目目录读取失败）盖住页面：给原因与"重试"。目录在建工作区时当场读到，没有"还没读到"这一态。
 struct CatalogGate<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        if workspace.catalog != nil {
-            content
-        } else if let failure = workspace.catalogFailure {
+        if let failure = workspace.catalogFailure {
             UnreadableLibraryView(failure: LibraryFailure(reason: failure, location: workspace.services.location)) {
                 workspace.retryCatalog()
             }
         } else {
-            palette.desk.ignoresSafeArea()
+            content
         }
     }
 }

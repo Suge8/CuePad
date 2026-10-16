@@ -112,7 +112,7 @@ struct ProjectNowShelfTests {
         try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
 
         let shelf = try await ShelfData.read(from: store)
-        let sessions = try await LiveSessions.Page.read(from: store, at: .always()).items
+        let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
         let workspace = Workspace(services: app.services)

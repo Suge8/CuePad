@@ -53,7 +53,7 @@ struct Sidebar: View {
     }
 
     private func projects(_ pages: SidebarPages, _ catalog: ProjectCatalog, data: SidebarData) -> some View {
-        // 各项目的"此刻"在数据变化时算一次，行只拿结果；在线会话读到前先留空白（`ProjectNow.byProject`）
+        // 各项目的"此刻"在数据变化时算一次，行只拿结果
         let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: workspace.shown)
         return VStack(alignment: .leading, spacing: 0) {
             SidebarHeader(title: "项目") {

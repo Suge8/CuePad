@@ -166,6 +166,8 @@ struct PaletteProvider: ViewModifier {
     func body(content: Content) -> some View {
         let palette = Palette(scheme, contrast: contrast)
         content.environment(\.palette, palette).tint(palette.accent)
+            // 验收时整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`）：不碰系统设置，Mac 上那是用户这台机器的全局设置
+            .transformEnvironment(\._accessibilityReduceMotion) { if DebugHooks.preset.reducesMotion { $0 = true } }
     }
 }
 

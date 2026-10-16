@@ -75,7 +75,6 @@ struct SessionList<Top: View>: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        .loading(model.list == nil)
         .refreshable { await services.syncNow() }
         .agentList(model, filter: filter)
     }

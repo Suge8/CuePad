@@ -120,7 +120,7 @@ private struct SplitSidebar: View {
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
-                // 各项目的"此刻"在数据变化时算一次，行只拿结果；在线会话读到前先留空白（`ProjectNow.byProject`）
+                // 各项目的"此刻"在数据变化时算一次，行只拿结果
                 let now = ProjectNow.byProject(
                     catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: workspace.shown)
                 let pinned = catalog.projects.filter(\.isPinned)

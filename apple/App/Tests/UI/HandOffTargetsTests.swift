@@ -13,7 +13,7 @@ struct HandOffTargetsTests {
     }
 
     private func live() async throws -> [PiSessionListItem] {
-        try await LiveSessions.Page.read(from: store, at: .always()).items.filter { $0.state.state != .known(.ended) }
+        try await LiveSessions.Page.read(from: store).items.filter { $0.state.state != .known(.ended) }
     }
 
     @Test func 所有Mac上在线的会话都能交给_已结束的不算() async throws {

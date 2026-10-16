@@ -23,7 +23,6 @@ struct TasksScreen: View {
                 if DebugHooks.preset.showsDone, let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
             }
         }
-        .loading(board == nil)
         .floatingHeader("任务", detail: board?.counts.summary ?? "")
         .onAppear { if DebugHooks.preset.showsDone { showsCompleted = true } }
         .animation(.easeOut(duration: 0.2), value: board?.order)

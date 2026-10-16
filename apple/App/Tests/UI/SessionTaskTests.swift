@@ -286,7 +286,7 @@ struct SessionTaskTests {
         }
         let workspace = Workspace(services: services)
         func shown() async throws -> [String: String] {
-            services.liveSessions.apply(try await LiveSessions.Page.read(from: store, at: .always()), at: .always())
+            services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
             return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
         }
         #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])

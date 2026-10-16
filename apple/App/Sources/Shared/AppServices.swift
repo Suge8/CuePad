@@ -63,8 +63,8 @@ final class AppServices {
     let speechClock: SpeechClock
     /// App 的钟：资料库里随时间变的读（`CueStore.timing`）、说的话到点翻状态（`SpeechClock`）与主动拉取的节奏（`SyncPoller`）共用一个。
     @ObservationIgnored let timing: Timing
-    /// 此刻有事的 Pi 会话，整个 App 一份（`start()` 开始跟随）：界面与服务都从这里取，不各自订阅。
-    let liveSessions = LiveSessions()
+    /// 此刻有事的 Pi 会话，整个 App 一份（打开资料库时当场读到第一份，`start()` 接着跟随）：界面与服务都从这里取，不各自订阅。
+    let liveSessions: LiveSessions
     /// 订阅账号的额度，整个 App 一份（`start()` 开始跟随）。
     let accountQuotas = AccountQuotas()
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
@@ -85,10 +85,10 @@ final class AppServices {
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
-    /// 还没返回的立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）有几个：启动时与回到前台的那一次常常叠在一起。
-    var syncsInFlight = 0
+    /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它，不另拉一遍。
+    var syncing: Task<Void, Never>?
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
-    var isSyncingNow: Bool { syncsInFlight > 0 }
+    var isSyncingNow: Bool { syncing != nil }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -316,6 +316,7 @@ final class AppServices {
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
+        liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         timing = mac.timing
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
@@ -349,6 +350,7 @@ final class AppServices {
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         (self.sync, syncStatus) = (engine, status)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         self.timing = timing
         self.pasteboard = pasteboard
     }

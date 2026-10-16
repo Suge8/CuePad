@@ -8,16 +8,13 @@ import Observation
 /// 书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
-/// 读到第一份之前（`isLoaded`）不说任何现状：头像是平时在听的样子、能对它说，名字与那一句等读到再出——
-/// 不先说"还没启用"、不先亮出启用卡，读到后再改口。
+/// 第一份在建工作区时当场读到（`Workspace.init`），之后从它接着订阅：没有"还没读到"时的默认现状。
 @Observable
 final class CueWatch {
-    /// 读到过第一份摘要。页头的名字与那一句等它（还没读到时写的只会是默认值）。
-    private(set) var isLoaded = false
     private(set) var name = CueDigest.empty.name
-    private(set) var presence = CuePresence.idle
+    private(set) var presence = CuePresence.derive(.empty, at: .always())
     /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
-    private(set) var canHear = true
+    private(set) var canHear = false
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
     private(set) var lastSaid: String?
@@ -31,7 +28,9 @@ final class CueWatch {
     /// 之后 `at` 变成新的就是又被叫醒了一次（`CueWakeStage`）。
     private(set) var woke: CueWoke?
     /// 第一份里已有的那次叫醒的时刻（`woke` 不算它）。
-    @ObservationIgnored private var stale: Date?
+    @ObservationIgnored private let stale: Date?
+    /// 当场读到的第一份（读不出来时为 nil，失败页盖住页面）：`follow` 从它接着订阅。
+    @ObservationIgnored private let start: Snapshot<CueDigest>?
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
@@ -41,13 +40,19 @@ final class CueWatch {
     var showsRun = false
     #endif
 
+    init(_ start: Snapshot<CueDigest>?, at moment: Speech.Moment) {
+        self.start = start
+        stale = start?.value.state?.woke?.at
+        if let digest = start?.value { apply(digest, at: moment) }
+    }
+
     func mood(composing: Bool = false) -> CueMood {
         CueMood.of(presence, waiting: waiting, composing: composing, justDone: lastSaidDone)
     }
 
     /// 跟随资料库与此刻直到任务取消。
     func follow(_ services: AppServices) async throws {
-        for try await (digest, moment) in services.observeTimed({ store, _ in try CueDigest.read(from: store) }) {
+        for try await (digest, moment) in services.observeTimed(from: start, { try CueDigest.read(from: $0) }) {
             apply(digest, at: moment)
         }
     }
@@ -64,9 +69,7 @@ final class CueWatch {
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)
         let woke = digest.state?.woke
-        if !isLoaded { stale = woke?.at }
         set(\.woke, woke?.at == stale ? nil : woke)
-        set(\.isLoaded, true)
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<CueWatch, Value>, _ value: Value) {

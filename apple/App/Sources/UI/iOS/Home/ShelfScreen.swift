@@ -20,7 +20,6 @@ struct ShelfScreen: View {
         ScrollView {
             if let data, let catalog = workspace.catalog { content(data, catalog) }
         }
-        .loading(data == nil)
         .refreshable { await services.syncNow() }
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")

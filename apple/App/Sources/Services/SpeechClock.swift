@@ -84,29 +84,41 @@ extension AppServices {
     /// 此刻（`SpeechClock.moment`）：读它的视图到点、同步通断时随之重算。
     var speech: Speech.Moment { speechClock.moment }
 
-    /// 读库并随此刻重算：库变了、此刻变了（到点、同步通断）都重读一次，结果连同读它用的此刻一起给。读的规则里有说的话到哪了
-    /// （时限、Cue 在不在值班）就用它，不各自计时。读失败时流以错误结束。
+    /// 读库并配上此刻：库变了重读，此刻变了（到点、同步通断）把手里那份连同新的此刻再给一次——读的东西不随此刻变，
+    /// 说的话到哪了（时限、Cue 在不在值班）在读到之后按此刻推，不各自计时。给了 `snapshot` 就从它接着订阅，不重读。读失败时流以错误结束。
     func observeTimed<T: Sendable & Equatable>(
-        _ read: @escaping @Sendable (isolated CueStore, Speech.Moment) throws -> T
+        from snapshot: Snapshot<T>? = nil, _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> AsyncThrowingStream<(T, Speech.Moment), any Error> {
-        let store = store, clock = speechClock
+        let values = snapshot.map { store.observe(from: $0, read) } ?? store.observe(read)
+        let clock = speechClock
         return AsyncThrowingStream { continuation in
-            let task = Task {
-                var reading: Task<Void, Never>?
-                for await moment in Observations({ clock.moment }) {
-                    reading?.cancel()
-                    reading = Task {
-                        do {
-                            for try await value in store.observe({ try read($0, moment) }) { continuation.yield((value, moment)) }
-                        } catch {
-                            continuation.finish(throwing: error)
-                        }
+            let latest = Latest(value: snapshot?.value)
+            let reading = Task {
+                do {
+                    for try await value in values {
+                        latest.value = value
+                        continuation.yield((value, clock.moment))
                     }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                reading?.cancel()
-                continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
+            let ticking = Task {
+                for await moment in Observations({ clock.moment }) {
+                    if let value = latest.value { continuation.yield((value, moment)) }
+                }
+            }
+            continuation.onTermination = { _ in
+                reading.cancel()
+                ticking.cancel()
+            }
         }
     }
+}
+
+/// `observeTimed` 手里最近读到的那份：此刻变了时配上它再给一次。
+private final class Latest<T> {
+    var value: T?
+    init(value: T?) { self.value = value }
 }

@@ -34,15 +34,17 @@ final class Workspace {
 
     let services: AppServices
     /// Cue 的现状与 Cue 页的草稿（`CueWatch`，`follow` 跟着）。
-    let cue = CueWatch()
-    /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
+    let cue: CueWatch
+    /// 本窗口的项目目录（建工作区时当场读到，`follow` 接着订阅）；nil 表示读取失败。
     private(set) var catalog: ProjectCatalog?
-    /// 资料库读得出来（项目目录已读到）。没读到或读取失败时，凡是会写资料库的入口都不出现或不可用。
+    /// 资料库读得出来（项目目录读到了）。读取失败时，凡是会写资料库的入口都不出现或不可用。
     var isLibraryReady: Bool { catalog != nil }
-    /// 项目目录读取失败的原因；根视图据此显示错误与"重试"，不停在空白页上。
+    /// 项目目录读取失败的原因；根视图据此显示错误与"重试"。
     private(set) var catalogFailure: String?
-    /// 第几次订阅项目目录：`retryCatalog` 加一，`follow` 就重新订阅。
+    /// 第几次读项目目录：`retryCatalog` 加一并当场重读，`follow` 就从读到的那份重新订阅。
     private(set) var catalogAttempt = 0
+    /// 当场读到的那份目录（`catalogFailure` 时为 nil）：订阅从它接着走。
+    @ObservationIgnored private var catalogStart: Snapshot<ProjectCatalog>?
     #if os(macOS)
     let pages = MacPages()
     let presses = CardPresses()
@@ -97,11 +99,16 @@ final class Workspace {
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
 
+    /// 项目目录与 Cue 的现状当场读（`CueStore.snapshot`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
+        let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
+        // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
+        cue = CueWatch(digest, at: services.speech)
         #if os(macOS)
         sendState = SendState(services: services)
         #endif
+        readCatalog()
     }
 
     #if os(macOS)
@@ -208,13 +215,25 @@ final class Workspace {
 
     private func followFolderGuide() async { await follow(\.folderGuide) { [host = localHost] in try FolderGuide.read(host: host, from: $0) } }
 
-    /// 订阅项目目录，直到所在任务取消；Mac 上项目增删时核对当前项目。
-    /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
-    private func observeCatalog() async {
-        catalogFailure = nil
+    private func readCatalog() {
         do {
             try DebugHooks.willReadCatalog(attempt: catalogAttempt)
-            for try await next in services.store.observe({ try ProjectCatalog.read(from: $0) }) {
+            let start = try services.store.snapshot { try ProjectCatalog.read(from: $0) }
+            (catalogStart, catalog, catalogFailure) = (start, start.value, nil)
+        } catch {
+            (catalogStart, catalog, catalogFailure) = (nil, nil, error.localizedDescription)
+        }
+    }
+
+    /// 从当场读到的那份接着订阅项目目录，直到所在任务取消；Mac 上开始时与项目增删时核对当前项目。
+    /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
+    private func observeCatalog() async {
+        guard let start = catalogStart else { return }
+        #if os(macOS)
+        await reconcileCurrentProject()
+        #endif
+        do {
+            for try await next in services.store.observe(from: start, { try ProjectCatalog.read(from: $0) }) {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged {
@@ -233,6 +252,7 @@ final class Workspace {
 
     func retryCatalog() {
         catalogAttempt += 1
+        readCatalog()
     }
 
     #if os(macOS)
