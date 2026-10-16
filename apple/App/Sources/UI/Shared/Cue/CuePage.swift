@@ -11,7 +11,7 @@ import CuePi
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行灰字（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
-/// 打开时对话读到才排（之前只有页头与输入框，读得慢时中间淡入转圈，`loading`）：一排出来就停在最新处，"等你"同时出现、不滑进来。
+/// 对话第一帧就排好（`observing` 当场读），停在最新处。
 /// Cue 住在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
@@ -104,12 +104,11 @@ struct CuePage: View {
 
     // MARK: 对话
 
-    /// 读到前也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
+    /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread { conversation(thread) } else { Color.clear }
         }
-        .loading(thread == nil)
     }
 
     private func conversation(_ thread: CueThread) -> some View {
@@ -202,8 +201,6 @@ struct CuePage: View {
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.canHear)
-        // 对话读到的那一下"等你"与对话一起出现，不滑进来：底部一动，刚排好的对话又要跟着挪
-        .transaction(value: thread == nil) { $0.disablesAnimations = true }
     }
 }
 

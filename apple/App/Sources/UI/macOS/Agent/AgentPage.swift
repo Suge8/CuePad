@@ -27,7 +27,6 @@ struct AgentPage: View {
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
-        .loading(model.list == nil)
         .background(palette.desk)
         .agentList(model, filter: filter)
         .refreshesQuota()

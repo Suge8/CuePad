@@ -3,6 +3,7 @@ import Synchronization
 import SwiftUI
 
 /// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘；有同步时开启 Pi 通知。
+/// 这里的 body 不随什么重算（前后台在 `ScenePhaseWork` 里看）：窗口的根视图只建一次，建工作区时当场读库（`Workspace.init`）不白读。
 struct SceneRoot: View {
     let services: AppServices
     let alerts: AlertCenter
@@ -12,13 +13,24 @@ struct SceneRoot: View {
         self.alerts = alerts
         alerts.services = services
     }
-    @Environment(\.scenePhase) private var phase
 
     var body: some View {
         IOSRoot(services: services, alerts: alerts)
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }
             .onOpenURL { services.handle(url: $0) }
+            .modifier(ScenePhaseWork(services: services, alerts: alerts))
+    }
+}
+
+/// 回到前台：刷新通知、收分享、立即同步；进入后台：落盘。
+private struct ScenePhaseWork: ViewModifier {
+    let services: AppServices
+    let alerts: AlertCenter
+    @Environment(\.scenePhase) private var phase
+
+    func body(content: Content) -> some View {
+        content
             .onChange(of: phase) { _, phase in
                 switch phase {
                 case .active: Task {

@@ -27,7 +27,7 @@ enum ScrollAnchor {
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
 /// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；`-CuePadWakeLog <路径>` 另量每次叫醒在 App 进程里的开销（同一处）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
-/// - `-CuePadReduceMotion YES`：Cue 被叫醒的那一下按"减弱动态效果"打开来画（`CueWakeStage`；不碰系统设置，Mac 上那是用户这台机器的全局设置，系统的开关只读、覆盖不了整个窗口）；
+/// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦（手机上聚焦才展开出模型与思考强度的胶囊）；
 /// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
@@ -202,8 +202,7 @@ enum DebugScene {
         }
     }
 
-    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、在线会话读到了第一份（`LiveSessions.items`，
-    /// 侧栏与书架的项目要等它才排）、摆画面的事都做完了、
+    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
     static func signalReady(_ services: AppServices) async {
         guard let path = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] else { return }
@@ -212,7 +211,7 @@ enum DebugScene {
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
             _ = try? await services.store.projects()
             await NextFrame.wait()
-            still = pending == 0 && unsettled.isEmpty && services.liveSessions.items != nil && !animating ? still + 1 : 0
+            still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: nil)
     }

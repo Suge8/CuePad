@@ -19,12 +19,15 @@ extension View {
     /// 空闲时先挂上、还没去过的页（`pagePrefetch`）照样先读一份，第一次点开时内容已经建好。
     /// 依赖哪些表由读取本身定（`CueStore.observe(_:)`），这里不另写；读到的和上一次一样就不写——在 Store 一侧比一次，
     /// 重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
+    /// 在前台、手里还没有值时（出现、换了 `id` 或回到前台的那一刻）当场读（`CueStore.snapshot`，`onAppear` 在第一帧之前做完）再从它接着订阅：
+    /// 本机库里的东西第一帧就排好，页面没有"还没读到"这一态。读失败时留给订阅报告，不报两次。
+    /// `immediately: false`：长列表里每行各自的小读（附件到没到本机，要看文件在不在），行在滚动中一个个出现，不在主线程上读，没读到时按到了画。
     func observing<T: Sendable & Equatable>(
-        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>,
+        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>, immediately: Bool = true,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
-        modifier(Observing(store: store, id: id, value: value, onError: onError, read: read))
+        modifier(Observing(store: store, id: id, value: value, immediately: immediately, onError: onError, read: read))
     }
 }
 
@@ -32,10 +35,13 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let store: CueStore
     let id: ID
     @Binding var value: T?
+    let immediately: Bool
     let onError: (any Error) -> Void
     let read: @Sendable (isolated CueStore) throws -> T
     @Environment(\.pageActive) private var active
     @Environment(\.pagePrefetch) private var prefetch
+    /// 当场读到、还没交给订阅的那份。
+    @State private var start: Snapshot<T>?
 
     private struct Run: Equatable {
         let id: ID
@@ -43,17 +49,32 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.task(id: Run(id: id, active: active)) {
-            guard active || prefetch && value == nil else { return }
-            do {
-                for try await next in store.observe(after: value, read) {
-                    value = next
-                    if !active { return }
-                }
-            } catch is CancellationError {
-            } catch {
-                onError(error)
+        content
+            .onAppear(perform: readNow)
+            .onChange(of: Run(id: id, active: active), readNow)
+            .task(id: Run(id: id, active: active)) {
+                guard active || prefetch && value == nil else { return }
+                let updates = start.map { store.observe(from: $0, read) } ?? store.observe(after: value, read)
+                start = nil
+                await follow(updates)
             }
+    }
+
+    private func readNow() {
+        guard immediately, active, value == nil, let snapshot = try? store.snapshot(read) else { return }
+        start = snapshot
+        value = snapshot.value
+    }
+
+    private func follow(_ updates: AsyncThrowingStream<T, any Error>) async {
+        do {
+            for try await next in updates {
+                value = next
+                if !active { return }
+            }
+        } catch is CancellationError {
+        } catch {
+            onError(error)
         }
     }
 }

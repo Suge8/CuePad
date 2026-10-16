@@ -49,9 +49,9 @@ struct ProjectsTests {
         #expect(fresh.page == .project(third))
 
         // 当前项目进了回收站：回落到未分类
-        let only = Workspace(services: services)
         services.settings.currentProject = third
         for project in try await store.projects() { try await store.trashProject(project.id) }
+        let only = Workspace(services: services)
         await only.reconcileCurrentProject()
         #expect(only.page == .unfiled && services.settings.currentProject == nil)
     }

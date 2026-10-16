@@ -44,7 +44,7 @@ struct CueWakeStage: ViewModifier {
             Probe(stage: stage, color: palette.live)
                 .onChange(of: cue.woke?.at) {
                     guard let woke = cue.woke else { return }
-                    stage.play(woke.sessions, reduceMotion: reduceMotion || DebugHooks.preset.reducesMotion)
+                    stage.play(woke.sessions, reduceMotion: reduceMotion)
                 }
         }
     }

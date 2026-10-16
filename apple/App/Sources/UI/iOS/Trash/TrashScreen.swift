@@ -25,7 +25,6 @@ struct TrashScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .loading(data == nil)
         .floatingHeader("回收站", detail: data.map { $0.isEmpty ? "空的" : "\($0.count) 项" } ?? "") {
             // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
             Button("清空", systemImage: "trash", role: .destructive) { confirmEmpty = true }

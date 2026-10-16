@@ -74,7 +74,7 @@ struct PreviewCard: View {
         .buttonStyle(.plain)
         .disabled(file == nil)
         .accessibilityLabel("预览：\(label)")
-        .observing(services.store, id: preview.hash, into: $arrived) { [files = services.store.files, hash = preview.hash] store in
+        .observing(services.store, id: preview.hash, into: $arrived, immediately: false) { [files = services.store.files, hash = preview.hash] store in
             try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
         }
         .task(id: file) { await load(file) }

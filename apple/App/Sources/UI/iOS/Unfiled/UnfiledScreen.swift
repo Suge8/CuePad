@@ -27,7 +27,6 @@ struct UnfiledScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .loading(cards == nil)
         .animation(Motion.quick, value: cards?.map(\.id))
         .floatingHeader(CaptureCopy.unfiled, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
         .observing(services.store, into: $cards, onError: workspace.fail) { store in

@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// 数据还没到、本机不确定是不是最新时的样子，全 App 一份：各页只说"还没读到"（`loading`）、"这一页在等同步"（`SyncingLabel`、
-/// `EmptyState` 的 `waitsForSync`），怎么出现只在这里定。"同步中"只有一个来源（`AppServices.isCatchingUp`）。
-/// 读本机库一般几十毫秒、回到前台的那一拉多在一秒以内：这期间什么都不出，免得一闪；过了 `delay` 还没好才淡入
-/// （`Spinner`，减弱动态效果时是静止的一段弧），好了就撤下。内容到了直接排在终位，不做入场动画。
+/// 本机不确定是不是最新时的样子，全 App 一份：页面只说"这一页在等同步"（`SyncingLabel`、`EmptyState` 的 `waitsForSync`），
+/// 怎么出现只在这里定。"同步中"只有一个来源（`AppServices.isCatchingUp`）。本机库里的东西第一帧就读好（`observing`），没有"还没读到"。
+/// 回到前台的那一拉多在一秒以内：这期间什么都不出，免得一闪；过了 `delay` 还没好才淡入
+/// （`Spinner`，减弱动态效果时是静止的一段弧），好了就撤下。
 enum Pending {
-    /// 比这快的读与拉不出指示：一闪而过的转圈比稍等一下更扰人。
+    /// 比这快的拉取不出指示：一闪而过的转圈比稍等一下更扰人。
     static let delay = Duration.milliseconds(400)
 }
 
@@ -17,22 +17,6 @@ extension View {
             guard !Task.isCancelled, shown.wrappedValue != active else { return }
             withAnimation(Motion.quick) { shown.wrappedValue = active }
         }
-    }
-
-    /// 这一页的数据还没读到：读得慢时在中间淡入一个转圈。
-    func loading(_ loading: Bool) -> some View { modifier(Loading(loading: loading)) }
-}
-
-private struct Loading: ViewModifier {
-    let loading: Bool
-    @State private var shown = false
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if shown { Spinner(.regular).transition(.opacity) }
-            }
-            .pending(loading, shown: $shown)
     }
 }
 

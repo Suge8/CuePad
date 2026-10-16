@@ -38,7 +38,6 @@ struct TaskSheet: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .loading(data == nil)
         .background(palette.desk)
         // 浮窗挂在页面之外：步骤的状态点、叶子去会话的入口读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))

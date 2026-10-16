@@ -13,6 +13,8 @@ struct TabsRoot: View {
     @State private var slide = TabSlide()
     /// 安全区底边离屏幕底边的距离（键盘弹出时是键盘高）：底部栏按屏幕底边摆，内容在安全区之上再让到栏顶。
     @State private var safeBottom: CGFloat = 0
+    /// 窗口第一帧已经出来：之后进出纸页、会话页时底部那一行才随页滑走。第一帧之前就推进去的页（点通知打开 App）一出来就没有那一行。
+    @State private var shown = false
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -31,7 +33,11 @@ struct TabsRoot: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: navigation.ownsBottom)
+        .animation(shown ? Motion.panel : nil, value: navigation.ownsBottom)
+        .task {
+            await NextFrame.wait()
+            shown = true
+        }
         .debugExposesTabSelect(select)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 去搜索（与宽屏的搜索页同一组快捷键），⌘⇧N 对 Cue 说
         .background {
