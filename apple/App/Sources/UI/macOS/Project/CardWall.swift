@@ -57,7 +57,7 @@ struct WallGrid<Tile: View>: View {
         }
         guard next != arrangements else { return }
         if animated, reduceMotion {
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: true)) {
+            withAnimation(Motion.crossfade) {
                 arrangements = next
                 fadeGeneration += 1
             }

@@ -9,7 +9,7 @@ import SwiftUI
 /// 浅色下玻璃的边几乎看不出，两块玻璃各描一圈发丝线、垫一层很轻的投影，从纸上浮起来。都不是色带：栏外一点不画。
 /// 字号固定、不随动态字体放大，辅助字号下长按任一格或搜索弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
-/// （减弱动态效果时淡出淡入、不压）。
+/// （减弱动态效果时直接到位、不压）。
 /// Cue 那一格挂"等你 N"（`CueWaiting`，同侧栏的 Cue 一行）。
 struct BottomBar: View {
     let select: (Navigation.Tab) -> Void
@@ -48,15 +48,12 @@ struct BottomBar: View {
     /// 一块玻璃是轨道，选中滴是轨道里的一层底（玻璃不叠玻璃）；字与图标在最上面。在搜索页时轨道里没有滴。
     private var tabs: some View {
         let index = Self.track.firstIndex(of: navigation.tab)
-        // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
         return Capsule().fill(drop)
             .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
             .scaleEffect(pressed == navigation.tab && !reduceMotion ? 0.94 : 1)
             .animation(Motion.press, value: pressed)
             .padding(Self.inset)
-            .id(reduceMotion ? navigation.tab : nil)
             .opacity(index == nil ? 0 : 1)
-            .transition(.opacity)
             .offset(x: Self.tabWidth * CGFloat(index ?? 0))
             .frame(width: Self.tabWidth * CGFloat(Self.track.count) + Self.inset * 2, alignment: .leading)
             .glass(in: .capsule, interactive: true)

@@ -24,8 +24,8 @@ struct TaskRingView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: size))
                     .foregroundStyle(TaskGlyph.tint(.done, palette))
-                    // 对勾从圈里长出来：缩放加淡入，无回弹（ui.md 动效）；减弱动态效果时只淡入
-                    .transition(reduceMotion ? .opacity : .scale(scale: 0.4).combined(with: .opacity))
+                    // 对勾从圈里长出来：缩放加淡入，无回弹（ui.md 动效）；减弱动态效果时直接换上
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
             } else {
                 open
             }

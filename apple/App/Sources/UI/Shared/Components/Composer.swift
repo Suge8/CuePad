@@ -103,7 +103,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     var body: some View {
         field
-        // 变形（一行 ↔ 两层、短胶囊 ↔ 全宽、工具排的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时退为短淡入淡出
+        // 变形（一行 ↔ 两层、短胶囊 ↔ 全宽、工具排的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时直接到终态
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in

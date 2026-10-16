@@ -87,7 +87,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     }
 }
 
-/// 动效：没有大幅的空间过渡（Mac 打开卡片是编辑页原地淡入）；位置与尺寸只在列表、面板里小幅挪动，其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
+/// 动效：没有大幅的空间过渡（Mac 打开卡片是编辑页原地淡入）；位置与尺寸只在列表、面板里小幅挪动，其余为短淡入淡出。
+/// 减弱动态效果时空间动画直接到终态（`spatial`）；确要交代"变了"的地方由调用处换身份、用 `crossfade` 整块交叉淡入淡出。
 /// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
 /// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作与话在路上（`PiStateDot`）和进行中的流光，都在 `LoopLayer`（Core Animation），离屏即停。
 enum Motion {
@@ -107,9 +108,12 @@ enum Motion {
     /// 列表里一行出现、消失：淡入并从 96% 放大到位，消失反过来；位置由列表自己的动画挪。
     static let item = AnyTransition.opacity.combined(with: .scale(scale: 0.96))
 
-    /// 减弱动态效果时，空间动画换成短淡入淡出。
-    static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation {
-        reduceMotion ? .easeInOut(duration: 0.15) : animation
+    /// 减弱动态效果时的整块交叉淡入淡出：只配换了身份的视图用（新旧两块各自淡入淡出），同一个视图上用它照样会插值位置与尺寸。
+    static let crossfade = Animation.easeInOut(duration: 0.15)
+
+    /// 位置、尺寸、旋转的动画；减弱动态效果时没有动画、直接到终态——一个动画事务里分不出只淡不挪，换曲线照样插值。
+    static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : animation
     }
 }
 
