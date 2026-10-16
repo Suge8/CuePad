@@ -129,15 +129,23 @@ extension DebugScene {
 
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
     /// 带上叫醒它的会话（`CueState.woke`，同值班的 Mac 起一轮时写下的样子），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。录"叫醒"的动效用（`CueWakeStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
+    /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
+    /// 录"叫醒"的动效用（`CueWakeStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
+    /// `-CuePadWakeLog <路径>`：每次叫醒前歇着的 `probe` 秒与叫醒后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
+    /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
+    /// 叫醒那段减去歇着那段是一次叫醒在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（状态照样变、不飞），两者之差是飞的那一下。
+    /// 不抢前台：窗口在后台、留在屏上（display link 照走）；动画本身在渲染服务里插值，渲染服务的开销不在这个进程里，量不到。
     static func wakeIfAsked(_ workspace: Workspace) async {
         let every = defaults.double(forKey: "CuePadWake")
         guard every > 0 else { return }
         let store = workspace.services.store
+        let log = defaults.string(forKey: "CuePadWakeLog").map { URL(fileURLWithPath: $0) }
+        let probe = log == nil ? 0 : wakeProbe
         var round = 0
         while !Task.isCancelled {
             // 叫醒的间隔是演示节奏，不是在等别的事
-            try? await Task.sleep(for: .seconds(every))
+            try? await Task.sleep(for: .seconds(max(every - probe, 0)))
+            if let log { await measureWake("idle", seconds: probe, into: log) }
             // 演示会话的 sessionID 与会话名相同
             let opened = defaults.string(forKey: "CuePadSession")
             let live = Array(workspace.liveSessionRows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
@@ -147,8 +155,37 @@ extension DebugScene {
             round += 1
             guard !woke.isEmpty else { continue }
             try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))
-            try? await Task.sleep(for: .seconds(1.5))
+            if let log { await measureWake("wake", seconds: probe, into: log) }
+            try? await Task.sleep(for: .seconds(max(1.5 - probe, 0)))
             try? await store.setCueState(.settled)
+        }
+    }
+
+    /// 量的一段比叫醒的那一下（约 1.3 秒）长一点。
+    private static let wakeProbe = 1.5
+
+    private static func measureWake(_ kind: String, seconds: Double, into log: URL) async {
+        let turns = TurnLog(), frames = FrameRecorder()
+        let instructions = instructionsMillions(), energy = energyMillijoules()
+        #if os(macOS)
+        guard let view = NSApp.windows.first(where: \.isVisible)?.contentView else { return }
+        frames.start(in: view)
+        #else
+        frames.start()
+        #endif
+        turns.begin(CACurrentMediaTime(), root: nil)
+        try? await Task.sleep(for: .seconds(seconds))
+        var line = TurnLog.metrics(turns.finish(), instructions: instructions, frames: frames.stop())
+        line["kind"] = kind
+        line["energyMJ"] = ((energyMillijoules() - energy) * 10).rounded() / 10
+        for key in ["clickMs", "visibleTurns", "seen", "heavy"] { line[key] = nil }
+        guard let data = try? JSONSerialization.data(withJSONObject: line, options: .sortedKeys) else { return }
+        if let handle = try? FileHandle(forWritingTo: log) {
+            handle.seekToEndOfFile()
+            handle.write(data + Data("\n".utf8))
+            try? handle.close()
+        } else {
+            try? (data + Data("\n".utf8)).write(to: log)
         }
     }
 

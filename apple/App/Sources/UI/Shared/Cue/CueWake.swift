@@ -36,7 +36,6 @@ struct CueWakeStage: ViewModifier {
     func body(content: Content) -> some View {
         let digest = cue.digest
         content
-            .environment(\.cueWokeSessions, digest.state?.woke?.sessions ?? [])
             .background(Probe(stage: stage, color: palette.live))
             .onChange(of: digest) { old, new in
                 guard old != .empty, let woke = new.state?.woke, woke.at != old.state?.woke?.at else { return }
@@ -82,11 +81,6 @@ struct CueWakeStage: ViewModifier {
     }
 }
 
-extension EnvironmentValues {
-    /// 叫醒 Cue 这一轮的会话（`CueState.woke` 的 `sessions`；不在被叫醒的一轮里为空，由 `CueWakeStage` 给）：只有它们的状态标挂锚。
-    @Entry var cueWokeSessions: [String] = []
-}
-
 /// Cue 的头像出现的几处，同时在屏上时光落在等级高的那处。
 enum WakeTarget: Int {
     /// 入口：Mac 侧栏最上面 Cue 那一行（也是菜单栏面板、输入条的那一行）、手机底栏 Cue 那一格。
@@ -105,13 +99,16 @@ extension View {
     }
 }
 
+/// 直接读唤醒事实，不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
+/// 实测每次叫醒主线程多出约 200M 条指令、最重一圈多 20ms；这里只有屏上带状态标的几处各重算这一个小视图。
 private struct WakeSource: ViewModifier {
     let session: String?
-    @Environment(\.cueWokeSessions) private var woke
+    @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
+        let woke = session.flatMap { session in workspace.cue.digest.state?.woke?.sessions.contains(session) == true ? session : nil }
         content.background {
-            if let session, woke.contains(session) { WakeAnchor(role: .source(session)) }
+            if let woke { WakeAnchor(role: .source(woke)) }
         }
     }
 }
