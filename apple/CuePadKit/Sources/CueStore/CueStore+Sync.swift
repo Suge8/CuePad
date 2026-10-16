@@ -376,7 +376,7 @@ extension CueStore {
 
   /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
   private func repairCardTree(touching changed: Set<UUID>) throws {
-    try Self.apply(try CardLinks(db).repairs(touching: changed), in: db, at: Date.stamp)
+    try apply(try CardLinks(db).repairs(touching: changed))
   }
 
   /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。副本是灵感（不带状态、上级与会话），
