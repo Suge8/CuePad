@@ -92,13 +92,7 @@ extension DebugScene {
                 navigation.show(.agent)
                 navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             }
-            if defaults.string(forKey: "CuePadStream") == "live" {
-                Task { await streamLive(session.sessionID, store: workspace.services.store) }
-            } else if defaults.bool(forKey: "CuePadStream") {
-                Task { await stream(session.sessionID, store: workspace.services.store) }
-            }
-            let churn = defaults.integer(forKey: "CuePadChurn")
-            if churn > 0 { Task { await self.churn(session, rounds: churn, navigation: navigation, store: workspace.services.store) } }
+            if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
             if defaults.string(forKey: "CuePadBench") == "chatdepth" { Task { await ChatDepthBench.run() } }
         case "newsession":
             navigation.show(.agent)
@@ -128,27 +122,6 @@ extension DebugScene {
             if let project, split { open(.project(project)) }
         }
         await presetSpeech(workspace)
-    }
-
-    /// `-CuePadChurn <圈数>`（配 session 画面）：反复退回 Agent 整页、再进这个会话，每圈隔几百毫秒；每圈一行写进隔离库目录下的 `churn.log`，跑完写 DONE。
-    static func churn(_ session: PiSessionState, rounds: Int, navigation: Navigation, store: CueStore) async {
-        guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
-        let log = URL(filePath: dir).appending(path: "churn.log")
-        try? Data().write(to: log)
-        func write(_ line: String) {
-            guard let handle = try? FileHandle(forWritingTo: log) else { return }
-            handle.seekToEndOfFile()
-            handle.write(Data((line + "\n").utf8))
-            try? handle.close()
-        }
-        for round in 1...rounds {
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 300...1500)))
-            navigation.show(.agent)
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 150...700)))
-            navigation.openSession(session.id, sessionID: session.sessionID, store: store)
-            write("ROUND \(round)")
-        }
-        write("DONE")
     }
 
     /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示

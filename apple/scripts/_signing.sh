@@ -40,6 +40,13 @@ release_versions() {
   echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"
 }
 
+# 发布的归档按构建号存进 Xcode 的归档目录，不放产物目录：产物目录每次发布先清空、发布用的干净检出用完就删，
+# 真机崩溃（MetricKit、TestFlight）的栈只能靠归档里的 dSYM 还原；Xcode 的 Organizer 列得出它，Spotlight 按 UUID 找得到 dSYM。
+# 用法：release_archive <ios|mac> <release_versions 的输出…>
+release_archive() {
+  echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${3#CURRENT_PROJECT_VERSION=}.xcarchive"
+}
+
 require_asc() {
   [ "${#asc_auth[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 docs/release.md）" >&2; exit 1; }
   [ -f "$ASC_KEY_PATH" ] || { echo "ASC_KEY_PATH 指向的密钥文件不存在" >&2; exit 1; }
