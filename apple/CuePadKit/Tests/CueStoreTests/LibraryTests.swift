@@ -126,8 +126,11 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 把新建的库退回结构 48：撤掉 49（Cue 的允许清单）。更早结构的升级测试从这里逐级往回撤。
-  static let undoSchema49 = "ALTER TABLE cueProfile DROP COLUMN allows;"
+  /// 把新建的库退回结构 50：撤掉 51（叫醒这一轮的会话）；52 只重建会话记录盖序号的触发器，留着新的也照样能升级，不用撤。
+  /// 更早结构的升级测试从这里逐级往回撤。
+  static let undoSchema51 = "ALTER TABLE cueState DROP COLUMN woke;"
+  /// 退回结构 48：50（提示词并进任务）只动数据，不用撤；再撤掉 49（Cue 的允许清单）。
+  static let undoSchema49 = undoSchema51 + "ALTER TABLE cueProfile DROP COLUMN allows;"
   /// 退回结构 47：再撤掉 48（每台 Mac 上能用的 Agent）。
   static let undoSchema48 = undoSchema49 + "DROP TABLE macAgents;"
   /// 退回结构 46：再撤掉 47（Cue 此刻的状态只记在跑的那一行）。
@@ -312,7 +315,8 @@ import Testing
     let parents = zip(ideas, ["b", "c", "a", "d"]).map {
       "UPDATE cards SET parentID = '\(task.id.uuidString.lowercased())', sortKey = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';"
     }.joined()
-    try RawDB(fixture.url).exec(parents + "UPDATE cards SET piSessionID = 's1' WHERE id = '\(second.id.uuidString.lowercased())'; PRAGMA user_version = 49;")
+    try RawDB(fixture.url).exec(
+      Self.undoSchema51 + parents + "UPDATE cards SET piSessionID = 's1' WHERE id = '\(second.id.uuidString.lowercased())'; PRAGMA user_version = 49;")
 
     let upgraded = try CueStore(url: fixture.url)
     let folded = try #require(try await upgraded.card(task.id))
