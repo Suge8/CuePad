@@ -161,6 +161,24 @@ extension DebugScene {
         }
     }
 
+    #if os(macOS)
+    /// `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口（同点关闭钮：内容摘下，`MainShellWindow`），配 `-CuePadWakeLog` 量关着窗时
+    /// 一次叫醒的开销；`-CuePadReopen <秒>`：关上这么久后再打开（真的显示，会到前台），关着的这段中途把 Cue 此刻的状态写成用工具
+    /// "读看板 · 关窗时写下"，看重新打开的第一眼是不是关窗期间变过的样子。
+    static func closeIfAsked(_ workspace: Workspace) async {
+        let after = defaults.double(forKey: "CuePadClosed")
+        guard after > 0, let shell = workspace.services.windowShell else { return }
+        try? await Task.sleep(for: .seconds(after))
+        shell.hide()
+        let reopen = defaults.double(forKey: "CuePadReopen")
+        guard reopen > 0 else { return }
+        try? await Task.sleep(for: .seconds(reopen / 2))
+        try? await workspace.services.store.setCueState(.tool, detail: "读看板 · 关窗时写下")
+        try? await Task.sleep(for: .seconds(reopen / 2))
+        shell.show()
+    }
+    #endif
+
     /// 量的一段比叫醒的那一下（约 1.3 秒）长一点。
     private static let wakeProbe = 1.5
 
@@ -168,8 +186,8 @@ extension DebugScene {
         let turns = TurnLog(), frames = FrameRecorder()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
-        guard let view = NSApp.windows.first(where: \.isVisible)?.contentView else { return }
-        frames.start(in: view)
+        // 主窗口关着（`-CuePadClosed`）时没有可挂 display link 的窗口：只量指令、CPU 与能量
+        if let view = NSApp.windows.first(where: \.isVisible)?.contentView { frames.start(in: view) }
         #else
         frames.start()
         #endif

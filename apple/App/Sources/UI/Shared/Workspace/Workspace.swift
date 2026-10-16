@@ -33,7 +33,7 @@ final class Workspace {
     }
 
     let services: AppServices
-    /// Cue 的现状与 Cue 页的草稿（`CueWatch`，根视图里 `observeCue` 跟随）。
+    /// Cue 的现状与 Cue 页的草稿（`CueWatch`，`follow` 跟着）。
     let cue = CueWatch()
     /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
     private(set) var catalog: ProjectCatalog?
@@ -41,7 +41,7 @@ final class Workspace {
     var isLibraryReady: Bool { catalog != nil }
     /// 项目目录读取失败的原因；根视图据此显示错误与"重试"，不停在空白页上。
     private(set) var catalogFailure: String?
-    /// 第几次订阅项目目录：根视图以它为 `.task` 的 id，`retryCatalog` 加一即重新订阅。
+    /// 第几次订阅项目目录：`retryCatalog` 加一，`follow` 就重新订阅。
     private(set) var catalogAttempt = 0
     #if os(macOS)
     let pages = MacPages()
@@ -74,10 +74,6 @@ final class Workspace {
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [])
     private(set) var folderGuide: FolderGuide?
-
-    func observeAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
-
-    func observeFolderGuide() async { await follow(\.folderGuide) { [host = localHost] in try FolderGuide.read(host: host, from: $0) } }
 
     private func follow<T: Sendable & Equatable>(
         _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
@@ -189,9 +185,32 @@ final class Workspace {
 
     // MARK: 项目目录、当前项目与新建位置
 
-    /// 订阅项目目录，直到所在任务取消（根视图在 `.task(id: catalogAttempt)` 里调用）；Mac 上项目增删时核对当前项目。
+    /// 工作区的全部订阅，直到所在任务取消：项目目录（读不出来时按"重试"重新订阅）、交给了会话的卡、文件夹引导、Cue 的现状，
+    /// Mac 上还有会话归属的项目；会话摘要由 App 级的 `LiveSessions` 跟。页面只读这里存下的那几项，不各自订阅。
+    /// Mac 的工作区随 App 常驻、主窗口与两个面板共用一个，由 App 启动时跟：不挂在哪个视图上，窗口关上、内容摘下（`MainShellWindow`）
+    /// 面板也照常更新；iOS 每个窗口一份，由窗口的根视图跟。
+    func follow() async {
+        async let catalog: Void = followCatalog()
+        async let links: Void = followAgentLinks()
+        async let guide: Void = followFolderGuide()
+        async let cue: Void = followCue()
+        #if os(macOS)
+        await followSessionPlacement()
+        #endif
+        _ = await (catalog, links, guide, cue)
+    }
+
+    private func followCatalog() async {
+        for await _ in Observations({ self.catalogAttempt }) { await observeCatalog() }
+    }
+
+    private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
+
+    private func followFolderGuide() async { await follow(\.folderGuide) { [host = localHost] in try FolderGuide.read(host: host, from: $0) } }
+
+    /// 订阅项目目录，直到所在任务取消；Mac 上项目增删时核对当前项目。
     /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
-    func observeCatalog() async {
+    private func observeCatalog() async {
         catalogFailure = nil
         do {
             try DebugHooks.willReadCatalog(attempt: catalogAttempt)

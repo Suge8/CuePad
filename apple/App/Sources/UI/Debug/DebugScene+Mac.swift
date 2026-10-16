@@ -194,7 +194,7 @@ extension DebugScene {
 }
 
 /// Debug 构建的主窗口：`-CuePadOffscreen` 时不让系统把窗口夹回屏幕内（默认会留一截在屏幕边上）。
-final class DebugWindow: NSWindow {
+final class DebugWindow: MainShellWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         DebugScene.offscreen ? frameRect : super.constrainFrameRect(frameRect, to: screen)
     }

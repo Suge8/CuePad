@@ -6,7 +6,7 @@ import SwiftUI
 /// 页面的底色一直连到窗口上沿（侧栏通顶；设置等窗口不留一条系统色的标题栏和分隔线）。
 enum WindowFactory {
     /// 主窗口：可缩放，标题隐藏（顶上是界面自己的工具栏）。
-    static func main(content: some View) -> NSWindow {
+    static func main(content: some View) -> MainShellWindow {
         let window = dress(DebugHooks.MainWindowClass(
             contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false), content: content)
@@ -25,7 +25,7 @@ enum WindowFactory {
         return window
     }
 
-    private static func dress(_ window: NSWindow, content: some View) -> NSWindow {
+    private static func dress<Window: NSWindow>(_ window: Window, content: some View) -> Window {
         window.titlebarAppearsTransparent = true
         window.contentViewController = NSHostingController(rootView: content)
         window.isReleasedWhenClosed = false

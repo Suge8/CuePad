@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 项目目录读到之前不显示页面（页面里的项目名称、计数从第一帧起就是真实值）；读取失败时说明原因并给"重试"。
-/// 订阅由根视图以 `.task(id: workspace.catalogAttempt)` 启动。
+/// 订阅在 `Workspace.follow` 里。
 struct CatalogGate<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(Workspace.self) private var workspace

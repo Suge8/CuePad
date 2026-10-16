@@ -211,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.terminate(nil)
     }
 
-    private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> NSWindow {
+    private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> MainShellWindow {
         let window = WindowFactory.main(content: RootViews.mainWindow(services, workspace: workspace))
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
         if DebugHooks.placesOffscreen(window) { return window }

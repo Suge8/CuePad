@@ -66,10 +66,7 @@ struct IOSRoot: View {
         .onChange(of: sizeClass, initial: true) { _, size in
             navigation.layout = size == .regular ? .split : .tabs
         }
-        .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
-        .task { await workspace.observeAgentLinks() }
-        .task { await workspace.observeFolderGuide() }
-        .task { await workspace.observeCue() }
+        .task { await workspace.follow() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
