@@ -130,7 +130,7 @@ extension DebugScene {
         await presetSpeech(workspace)
     }
 
-    /// `-CuePadChurn <圈数>`（配 session 画面，iPhone）：反复退出、再进这个会话，每圈隔几百毫秒；每圈一行写进隔离库目录下的 `churn.log`，跑完写 DONE。
+    /// `-CuePadChurn <圈数>`（配 session 画面）：反复退回 Agent 整页、再进这个会话，每圈隔几百毫秒；每圈一行写进隔离库目录下的 `churn.log`，跑完写 DONE。
     static func churn(_ session: PiSessionState, rounds: Int, navigation: Navigation, store: CueStore) async {
         guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
         let log = URL(filePath: dir).appending(path: "churn.log")
@@ -143,7 +143,7 @@ extension DebugScene {
         }
         for round in 1...rounds {
             try? await Task.sleep(for: .milliseconds(Int.random(in: 300...1500)))
-            navigation.agentPath = []
+            navigation.show(.agent)
             try? await Task.sleep(for: .milliseconds(Int.random(in: 150...700)))
             navigation.openSession(session.id, sessionID: session.sessionID, store: store)
             write("ROUND \(round)")
