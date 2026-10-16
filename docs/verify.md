@@ -90,3 +90,5 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 ## 崩溃诊断
 
 `Diagnostics` 把 MetricKit 交来的诊断存在资料库目录下（隔离库不订阅）。真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来（摘要未符号化，靠 dSYM 还原）。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）。
+
+先在模拟器里复现：`xc.sh shot`/`rec` 报"截图前 App 退出了"就是崩了，报告带源码行，在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream live -CuePadChurn <圈数>` 边流式更新边反复进出（见 `DebugScene+LongChat.swift`）；真实数据用只读副本，改会话状态复现当时的样子。

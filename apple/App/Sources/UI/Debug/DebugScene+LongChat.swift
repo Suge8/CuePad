@@ -6,6 +6,7 @@ import Foundation
 /// - `-CuePadLongChat YES`（配 `-CuePadDemo YES`）：演示库多一个 300 轮的会话 marathon（CuePad 项目），回答高矮悬殊——
 ///   一句话、整页长段落、40 行代码块、宽表、长列表轮换，每 25 轮你贴进来一段长文；看打开即最新、往上翻、回到最新。
 /// - `-CuePadStream YES`（配 session 画面）：打开会话后给它一轮一轮追加（你的话、思考中、回答，高矮轮换），看新内容到达时跟随最新。
+///   `-CuePadStream live`（仅 iOS）：像真的 Pi 那样不停地动（`streamLive`）；配 `-CuePadChurn <圈数>` 反复退出、再进这个会话，查流式更新与进出页面叠在一起时的崩溃。
 /// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，每排开一段量一次开销与掉帧（`ChatDepthBench`）。
 /// - `-CuePadBench chatresize`（仅 Mac，配 session 画面打开 marathon）：测量脚本翻到深处后拖窗口边改宽，每次拖动量一次开销与掉帧（`ChatResizeBench`）。
 /// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
@@ -42,6 +43,40 @@ extension DebugScene {
                 roundStartedAt: you.at)
             try? await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: [answer], recap: PiRecap(lastPrompt: you.text, lastReply: answer.text)))
             await set(.settled)
+        }
+    }
+
+    /// 像真的 Pi 那样不停地动：每 200ms 做完一步（经过清单变长、状态在思考、工具、等子代理之间换、子代理名册变），每 15 步落一条回答。
+    static func streamLive(_ sessionID: String, store: CueStore) async {
+        guard let session = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
+        let recorder = PiStateRecorder(store: store, hostID: session.hostID, minInterval: .zero)
+        let started = Date.now
+        var tools = PiChatMessage.Tools()
+        for tick in 0..<100_000 {
+            try? await Task.sleep(for: .milliseconds(200))
+            tools.record(.init(kind: tick % 4 == 0 ? .said : .command, target: tick % 4 == 0 ? "看一下第 \(tick) 步的输出" : "pnpm test -- --run case\(tick)"))
+            var messages: [PiChatMessage] = []
+            var recap = PiRecap(pendingPrompt: "继续", pendingTools: tools)
+            if tick % 15 == 14 {
+                let answer = PiChatMessage(
+                    sessionID: sessionID, entryID: "live-p\(tick)", seq: Int64(2_000_000 + tick), role: tick % 2 == 0 ? .pi : .machine,
+                    text: tick % 2 == 0 ? reply(tick) : "<firecode_master_event>\n子代理 cue-\(tick) 交回：\(reply(tick))\n</firecode_master_event>", at: .now,
+                    tools: tools, roundStartedAt: started)
+                messages = [answer]
+                recap = PiRecap(lastPrompt: "继续", lastReply: answer.text)
+                tools = PiChatMessage.Tools()
+            }
+            try? await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: recap))
+            let agents = [
+                PiSubagentState(name: "mobile-flow", role: "设计师", phase: .known(.running), action: "第 \(tick) 步", startedAt: started, model: "anthropic/claude-opus-5-5"),
+                PiSubagentState(
+                    name: "cue-\(tick / 20)", role: "工程师", phase: tick % 20 < 10 ? .known(.running) : .known(.done), action: "审查",
+                    startedAt: .now, settledAt: tick % 20 < 10 ? nil : .now),
+            ]
+            let state: PiWorkState = [.tool, .thinking, .delegating][tick % 3]
+            _ = try? await recorder.update(
+                sessionID: sessionID, state: state, detail: state == .tool ? "bash · pnpm test \(tick)" : nil, title: session.title,
+                directory: session.folder, projectID: session.projectID, subagents: agents)
         }
     }
 
