@@ -9,12 +9,6 @@ import os
 
 /// 管理器的时间规则；测试缩短它们。
 nonisolated struct CueTiming: Sendable {
-    /// 有会话的事有变化后，安静这么久才醒（又有新变化就重新计时）……
-    var quiet: Duration = .seconds(20)
-    /// ……但从第一处变化算起最多等这么久。
-    var quietLimit: Duration = .seconds(120)
-    /// 你这么久之内对 Cue 说过话，就是还在和它说话：变化先压着。
-    var talking: Duration = .seconds(60)
     /// 你这么久没说话、又没有在做的事，才巡视。
     var patrolAfter: Duration = .seconds(2 * 3600)
     /// 记忆有待合并的块时，空闲这么久才叫它合并。
@@ -60,9 +54,8 @@ nonisolated struct CueTiming: Sendable {
 /// 3. 换新：本班次里出现了交接备忘（`memory renew`）就停掉大脑、起新班次，马上醒来接着做。要换大脑（见上）就醒来请它写交接，请过还没有就直接换。
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
-/// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`，含 Cue 自己发起的请求没能执行）：攒安静窗口再醒；你还在和 Cue 说话时先压着。
-///    其中有会话在等回答（如"允许使用 Bash？"），或 Cue 说的话没送到而它还不知道（`CueChange.Kind.undelivered`），
-///    就是活被卡住了：不攒窗口、不压着，马上醒（正在跑的一轮做完就醒），连同别的变化一起看。
+/// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
+///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。
 /// 6. 空闲巡视：没有在做的事（`CueBoard.isActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -230,8 +223,6 @@ final class CueKeeper {
     private var lastTurnAuthor: CueAuthor = .note
     private var lastFailure: String?
     private var setback: Setback?
-    /// 安静窗口：第一处变化、最近一处新变化被看到的时刻，与看到过的最新写入序号
-    private var window: (first: Date, last: Date, latest: Int)?
     private var timer: Task<Void, Never>?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
     private var history: [CueRound] = []
@@ -605,37 +596,23 @@ final class CueKeeper {
             if let next = try await store.nextCueReminder(after: now) { deadlines.append(next) }
 
             let timing = setup.timing
-            let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
-            let changes = try await changes()
-            let latest = changes.map(\.seq).max()
+            let latest = try await changes().map(\.seq).max()
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
                 if let latest, latest > held.latest ?? Int.min {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
-                    window = nil
                     return _ = try await wakeUp(held.wake, as: held.author, extra: held.extra)
                 } else {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
             }
-            if let latest {
-                var current = window ?? (first: now, last: now, latest: latest)
-                if latest > current.latest { (current.last, current.latest) = (now, latest) }
-                window = current
-                let settled = min(current.last + timing.quiet.seconds, current.first + timing.quietLimit.seconds)
-                let blocked = changes.contains { $0.kind == .waitingForUser || $0.kind == .undelivered }
-                let ready = blocked ? now : max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
-                if now >= ready {
-                    window = nil
-                    return _ = try await wakeUp(.sessionActivity)
-                }
-                deadlines.append(ready)
-            } else {
-                window = nil
+            if latest != nil {
+                return _ = try await wakeUp(.sessionActivity)
             }
 
+            let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
             if try await !store.cueBoard().isActive, let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {

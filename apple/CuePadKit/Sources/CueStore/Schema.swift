@@ -259,19 +259,24 @@ enum Schema {
     },
     // 51：Cue 这一轮是被哪几个会话的动静叫醒的（`CueState.woke`），各端据此画"叫醒"的那一下
     Upgrade(stringLiteral: cueWoke),
+    // 52：会话记录的问答（读会话文件写的，可能晚于桥报的状态）变了也盖写入序号：歇下要等这一轮的回复读到才算变化（`CueStore.cueChanges`）
+    "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
   /// 计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
-  /// 会话状态（进入的状态与时刻）、卡片（`cardChanges`）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
+  /// 会话记录（`sessionChanges`）、卡片（`cardChanges`）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
   private static let writeSeq = """
     CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
     INSERT INTO writeCounter (seq) VALUES (0);
-    \(stamped("piSessionStates", when: ["state", "stateSince"]))
+    \(stamped("piSessionStates", when: sessionChanges))
     \(stamped("cards", when: cardChanges))
     \(stamped("deliveryRequests", when: ["status"]))
     \(stamped("piMessages", when: []))
     """
+
+  /// 会话记录上构成 Cue 的变化的列：进入的状态与时刻，与这一轮的问答（摘要里除经过之外的部分）。
+  private static let sessionChanges = ["state", "stateSince", "lastPrompt", "lastReply", "pendingPrompt"]
 
   /// 卡片上构成 Cue 的变化的列：完成、上级、是不是任务。
   private static let cardChanges = ["completedAt", "parentID", "todoAt"]
