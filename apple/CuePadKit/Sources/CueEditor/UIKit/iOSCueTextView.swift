@@ -3,8 +3,8 @@ import CueText
 import UIKit
 import UniformTypeIdentifiers
 
-/// TextKit 2 编辑器（iOS/iPadOS 薄宿主）。正文的唯一事实源是 `storedText`（存储格式字符串）：
-/// 图片与分割线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
+/// TextKit 2 编辑器（iOS/iPadOS 薄宿主）。正文的唯一事实源是 `storedText`（Markdown 原文）：
+/// 只有图片在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
 /// 全程不得访问 `UITextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
 public final class CueTextView: UITextView, CueEditorHost {
@@ -59,7 +59,7 @@ public final class CueTextView: UITextView, CueEditorHost {
 
     private func configure() {
         allowsEditingTextAttributes = false
-        smartDashesType = .no  // `---split---`、`--flag` 不能被替换成破折号
+        smartDashesType = .no  // 分割线 `---`、`--flag` 不能被替换成破折号
         smartQuotesType = .no
         smartInsertDeleteType = .no
         autocorrectionType = .no
@@ -132,6 +132,42 @@ public final class CueTextView: UITextView, CueEditorHost {
 
     public override var bounds: CGRect {
         didSet { if bounds.width != oldValue.width { core?.settler.restart() } }
+    }
+
+    /// 所有程序性编辑（插图、删图）的唯一入口：替换文本、放置光标、登记撤销（UITextView 不会为直接改 storage 登记撤销），
+    /// 并像用户编辑一样发出 `textDidChange`。
+    func replace(_ range: NSRange, with replacement: NSAttributedString, caret: Int) {
+        let previous = textStorage.attributedSubstring(from: range)
+        let previousCaret = selectedRange.location
+        let inserted = NSRange(location: range.location, length: replacement.length)
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.replace(inserted, with: previous, caret: previousCaret)
+        }
+        textStorage.replaceCharacters(in: range, with: replacement)
+        selectedRange = NSRange(location: caret, length: 0)
+        typingAttributes = core.baseAttributes
+        scrollRangeToVisible(selectedRange)
+        NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: self)
+        delegate?.textViewDidChange?(self)
+    }
+
+    // MARK: 选区
+
+    /// 程序设的选区不经代理的选区回调：在这里也报告。
+    public override var selectedRange: NSRange {
+        get { super.selectedRange }
+        set {
+            super.selectedRange = newValue
+            reportSelection()
+        }
+    }
+
+    /// 有没有选区变了就报告。
+    func reportSelection() {
+        let selecting = selectedRange.length > 0
+        guard selecting != reportedSelection else { return }
+        reportedSelection = selecting
+        onSelectionChange?(selecting)
     }
 
     // MARK: CueEditorHost

@@ -114,7 +114,7 @@ enum SaveState: Equatable {
     }
 }
 
-/// 散放灵感的编辑页底栏：变量（有才出现）。分割线与转为任务在编辑器的右键菜单里。
+/// 散放灵感的编辑页底栏：变量（有才出现）。转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
     let card: Card
     let editing: CardEditing

@@ -16,7 +16,7 @@ let package = Package(
         .library(name: "CueTestSupport", targets: ["CueTestSupport"]),
     ],
     targets: [
-        // 卡片正文的纯文本模型：解析/序列化、标题与按行规则、分割线、变量、光标规范化。仅依赖 Foundation。
+        // 卡片正文（Markdown 原文）的模型：图片的解析/序列化、标题与按行规则、轻装饰、变量。仅依赖 Foundation。
         .target(name: "CueText"),
         // SQLite 唯一事实源、结构与升级、仓储。直接用系统 SQLite3，零第三方依赖。
         .target(name: "CueStore", dependencies: ["CueText"], linkerSettings: [.linkedLibrary("sqlite3")]),

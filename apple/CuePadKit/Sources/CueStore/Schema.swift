@@ -257,6 +257,19 @@ enum Schema {
         _ = try CueStore.purgeCards(where: "id IN (SELECT value FROM json_each(?))", [list], in: db)
       }
     },
+    // 51：正文是标准 Markdown，分割线就是 `---`：独占一行（可带首尾空白）的私有标记 `---split---` 换成它，行里夹着的不是分割线。
+    // 回收站里的也换；modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let marked = try db.query("SELECT id, body FROM cards WHERE body LIKE '%---split---%'") { (id: $0.uuid(0), body: $0.text(1)) }
+      for card in marked {
+        let body = card.body.components(separatedBy: "\n")
+          .map { $0.trimmingCharacters(in: .whitespaces) == "---split---" ? "---" : $0 }
+          .joined(separator: "\n")
+        guard body != card.body else { continue }
+        try db.run("UPDATE cards SET body = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE id = ?3", [body, now, card.id])
+      }
+    },
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，

@@ -2,8 +2,8 @@
 import AppKit
 import CueText
 
-/// TextKit 2 编辑器视图（macOS 薄宿主）。正文的唯一事实源是 `storedText`（存储格式字符串）：
-/// 图片与分割线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化，永不归档 RTFD。
+/// TextKit 2 编辑器视图（macOS 薄宿主）。正文的唯一事实源是 `storedText`（Markdown 原文）：
+/// 只有图片在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化，永不归档 RTFD。
 /// 全程不得访问 `NSTextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
 public final class CueTextView: NSTextView, CueEditorHost {
@@ -56,7 +56,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
         usesFontPanel = false
         usesRuler = false
         isAutomaticQuoteSubstitutionEnabled = false
-        isAutomaticDashSubstitutionEnabled = false  // `---split---`、`--flag` 不能被替换成破折号
+        isAutomaticDashSubstitutionEnabled = false  // 分割线 `---`、`--flag` 不能被替换成破折号
         isAutomaticTextReplacementEnabled = false
         isAutomaticSpellingCorrectionEnabled = false
         isAutomaticLinkDetectionEnabled = false
@@ -139,7 +139,7 @@ extension CueTextView {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// 右键菜单最上面：选中文字时的选区动作（外部提供），再是常驻的"插入分割线"，各自与后面隔一条线。
+    /// 右键菜单最上面：选中文字时的选区动作（外部提供），与后面隔一条线。
     public override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = super.menu(for: event) else { return nil }
         var head: [NSMenuItem] = []
@@ -154,15 +154,18 @@ extension CueTextView {
             }
             head.append(.separator())
         }
-        let divider = NSMenuItem(title: "插入分割线", action: #selector(insertDividerFromMenu), keyEquivalent: "")
-        divider.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: nil)
-        divider.target = self
-        head += [divider, .separator()]
         for (index, item) in head.enumerated() { menu.insertItem(item, at: index) }
         return menu
     }
 
-    @objc private func insertDividerFromMenu() { insertDivider() }
+    /// 所有选区变化（键盘、鼠标、程序）都经这里：有没有选区变了就报告。
+    public override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        let selecting = selectedRange().length > 0
+        guard selecting != reportedSelection else { return }
+        reportedSelection = selecting
+        onSelectionChange?(selecting)
+    }
 
     @objc private func performSelectionAction(_ item: NSMenuItem) {
         guard selectionActions.indices.contains(item.tag), let stored = item.representedObject as? String else { return }

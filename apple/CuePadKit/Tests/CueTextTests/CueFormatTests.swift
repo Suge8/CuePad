@@ -6,39 +6,37 @@ import Testing
 struct CueFormatTests {
     let id = "48a0cc37d2d0f0a6"
 
-    @Test("分隔线与行内图片解析成 token，序列化后与原文一致")
+    @Test("行内图片切成 token，其余（含分割线 ---）原样是文字，序列化后与原文一致")
     func roundTrip() {
-        let stored = "前文 ![](cuepad://img/\(id)) 后文\n---split---\n第二段\n![](cuepad://img/\(id))"
+        let stored = "前文 ![](cuepad://img/\(id)) 后文\n---\n第二段\n![](cuepad://img/\(id))"
         let tokens = CueFormat.parse(stored)
-        #expect(tokens == [
-            .text("前文 "), .image(id), .text(" 后文"), .text("\n"), .split, .text("\n"),
-            .text("第二段"), .text("\n"), .image(id),
-        ])
+        #expect(tokens == [.text("前文 "), .image(id), .text(" 后文\n---\n第二段\n"), .image(id)])
         #expect(CueFormat.serialize(tokens) == stored)
     }
 
-    @Test("非独占行或形近的分隔标记、残缺的图片标记都是普通文字")
+    @Test("残缺的图片标记都是普通文字")
     func lookalikesStayText() {
-        let stored = "前缀 ---split---\n---split--- 后缀\n----split----\n![](cuepad://img/)\n![](cuepad://img/xyz)\n![](cuepad://img/ab"
-        #expect(CueFormat.parse(stored).allSatisfy { if case .text = $0 { true } else { false } })
-        #expect(CueFormat.serialize(CueFormat.parse(stored)) == stored)
+        let stored = "![](cuepad://img/)\n![](cuepad://img/xyz)\n![](cuepad://img/ab"
+        #expect(CueFormat.parse(stored) == [.text(stored)])
     }
-    @Test("CRLF 换行的分隔线行也被识别")
-    func crlf() {
-        #expect(CueFormat.parse("a\r\n---split---\r\nb").contains(.split))
+
+    @Test("分割线是 Markdown 的 thematic break：三个以上同一种 - * _，可夹空白、缩进不超过三格；CRLF 也算", arguments: [
+        ("---", true), ("***", true), ("___", true), ("- - -", true), ("   -----", true), ("---\r", true),
+        ("--", false), ("    ---", false), ("-*-", false), ("--- x", false), ("- 列表", false), ("", false),
+    ])
+    func rule(line: String, expected: Bool) {
+        #expect(CueFormat.isRule(line) == expected)
     }
 
 }
 
 @Suite("标题与摘要")
 struct CueSummaryTests {
-    private let split = CueFormat.splitMarker
-
     @Test("卡片标题只有一条规则：非空、不是分隔线、除图片外还有文字")
     func titleLine() {
         let cases: [(String, Bool)] = [
             ("周报", true), ("  周报  ", true), ("", false), ("   ", false),
-            ("---split---", false),
+            ("---", false),
             ("![](cuepad://img/ab)", false), ("![](cuepad://img/ab) ![](cuepad://img/cd)", false),
             ("![](cuepad://img/ab) 说明", true), ("\u{FFFC}", false), ("\u{FFFC} 说明", true),
         ]
@@ -46,12 +44,12 @@ struct CueSummaryTests {
     }
 
     @Test("卡片标题与摘要：标题是首个标题行并去掉 # 前缀，摘要只取其后的第一段（到空行、分割线或只有图片的行为止）", arguments: [
-        ("![](cuepad://img/ab)\n\n## 周报\n第二行 ![](cuepad://img/cd) 尾\n---split---\n第三行", "周报", "第二行 尾"),
+        ("![](cuepad://img/ab)\n\n## 周报\n第二行 ![](cuepad://img/cd) 尾\n---\n第三行", "周报", "第二行 尾"),
         ("标题\n\n第一段一\n第一段二\n\n第二段", "标题", "第一段一 第一段二"),
         ("标题 ![](cuepad://img/ab) 续\n正文", "标题 续", "正文"),
         ("#无空格也去掉", "无空格也去掉", ""),
         ("C# 入门\n不是标题前缀", "C# 入门", "不是标题前缀"),
-        ("---split---\n![](cuepad://img/ab)", "", ""),
+        ("---\n![](cuepad://img/ab)", "", ""),
         ("", "", ""),
     ])
     func summary(stored: String, title: String, preview: String) {
@@ -80,8 +78,8 @@ struct CueSummaryTests {
 
     @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
     func contentLines() {
-        #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
-        #expect(CueLines.contentLines("\n\(split)\n\n正文") == ["正文"])
+        #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---\n  第三行  \n") == ["a b", "第三行"])
+        #expect(CueLines.contentLines("\n***\n\n正文") == ["正文"])
         #expect(CueLines.contentLines("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == ["周报", "正文"])
         #expect(CueLines.contentLines("![](cuepad://img/ab)").isEmpty)
         #expect(CueLines.contentLines("").isEmpty)

@@ -18,37 +18,12 @@ private final class FakeDragRequest: NSObject, UITextDragRequest {
 @MainActor
 @Suite("iOS 与 Mac 对齐")
 struct IOSAlignmentTests {
-    private let split = CueFormat.splitMarker
-
-    @Test("硬件键盘前向删除：分割线上一行的行尾按下整条删掉分割线并可撤销；其它位置交还系统默认")
-    func forwardDelete() {
-        let h = EditorHarness()
-        let doc = "甲\n\(split)\n乙"
-        h.load(doc)
-        h.setCaret(1)
-        #expect(h.textView.handleForwardDelete())
-        #expect(h.stored == "甲\n乙")
-        h.textView.undoManager?.undo()
-        #expect(h.stored == doc)
-
-        h.load("ab")
-        h.setCaret(0)
-        #expect(!h.textView.handleForwardDelete())
-        #expect(h.stored == "ab")
-
-        h.load(doc)
-        h.setCaret(1)
-        h.textView.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0))
-        #expect(!h.textView.handleForwardDelete())
-    }
-
-    @Test("拖出选区输出存储格式（与 Mac 一致），图片与分割线不会被归档成富文本")
+    @Test("拖出选区输出存储格式（与 Mac 一致），图片不会被归档成富文本")
     func dragOutStoredFormat() async throws {
         let h = EditorHarness()
         h.load("甲乙")
         h.setCaret(1)
         h.textView.insertImage(data: makePNG(width: 40, height: 30))
-        h.textView.insertDivider()
         let original = h.stored
         h.textView.selectedRange = NSRange(location: 0, length: h.textView.textStorage.length)
         let range = try #require(h.textView.selectedTextRange)
