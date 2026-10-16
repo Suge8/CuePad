@@ -116,12 +116,13 @@ struct MacSyncTests {
     @Test func 系统唤醒时立即同步() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
+        // 启动后的第一次拉也走立即同步
+        try await eventually("启动后拉一次") { rig.sync.started == 1 && rig.sync.syncNows == 1 }
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
 
-        try await eventually("rig.sync.syncNows == 1") { rig.sync.syncNows == 1 }
-        #expect(rig.sync.syncNows == 1)
+        try await eventually("rig.sync.syncNows == 2") { rig.sync.syncNows == 2 }
+        #expect(rig.sync.syncNows == 2)
     }
 
     /// 这台 Mac 的在线记录（别的设备判断它在不在、Cue 在不在值班只看它）：启动即在线，醒着每 5 分钟续期，每次都立即上传；

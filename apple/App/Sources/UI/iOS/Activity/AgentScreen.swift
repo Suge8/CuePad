@@ -75,6 +75,7 @@ struct SessionList<Top: View>: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
+        .loading(model.list == nil)
         .refreshable { await services.syncNow() }
         .agentList(model, filter: filter)
     }
@@ -157,7 +158,7 @@ struct SessionList<Top: View>: View {
             }
             .padding(.top, 40)
         case .none(inProject: true):
-            EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话") {
+            EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话", waitsForSync: true) {
                 EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
@@ -165,7 +166,8 @@ struct SessionList<Top: View>: View {
             let hasProjects = workspace.catalog?.projects.isEmpty == false
             EmptyState(
                 mascot: .empty, title: "还没有 Agent 会话",
-                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话"
+                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话",
+                waitsForSync: true
             ) {
                 EmptyStateButton(
                     title: hasProjects ? "新会话" : "新建项目", systemImage: hasProjects ? "plus" : "folder.badge.plus",

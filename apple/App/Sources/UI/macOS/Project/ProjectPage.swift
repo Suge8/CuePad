@@ -59,6 +59,7 @@ struct ProjectPage: View {
             }
             .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
+        .loading(data == nil)
         // 批量选择的"全选"范围：看得见的这一页上散放的灵感（资料、墙、更早），按页上的顺序
         .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in
             if key.active, let ids = key.ids { workspace.presses.selectable = ids }

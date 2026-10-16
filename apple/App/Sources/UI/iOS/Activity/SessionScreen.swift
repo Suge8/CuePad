@@ -53,6 +53,7 @@ struct SessionScreen: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .loading(digest == nil)
         .scrollDismissesKeyboard(.interactively)
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },

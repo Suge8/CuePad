@@ -45,6 +45,7 @@ extension AppServices {
     }
 
     /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。
+    /// 启动后的第一次拉走立即同步（`CloudSync.start` 自己不拉）：算在 `isCatchingUp` 里，打开的页面知道手里的可能不是最新。
     func startSync() {
         guard let sync else { return }
         follow {
@@ -54,8 +55,9 @@ extension AppServices {
             do {
                 try await sync.start()
             } catch {
-                self.syncFailedToStart(error)
+                return self.syncFailedToStart(error)
             }
+            await self.syncNow()
         }
         follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
@@ -140,8 +142,8 @@ extension AppServices {
     /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
     func syncNow() async {
         guard let sync else { return }
-        isSyncingNow = true
-        defer { isSyncingNow = false }
+        syncsInFlight += 1
+        defer { syncsInFlight -= 1 }
         let (settled, settle) = AsyncStream<Void>.makeStream()
         Task {
             do {
@@ -160,6 +162,20 @@ extension AppServices {
     }
 
     static let syncWaitLimit = Duration.seconds(5)
+
+    /// 本机的数据此刻可能不是最新——"同步中"只有这一个来源：正在和 iCloud 对一遍（启动、回到前台、下拉刷新、立即同步的那一拉还没回来，
+    /// 至多 `syncWaitLimit`），或在一页页地拉积压（第一次同步、离线久了，`SyncState.catchingUp`）。上传不算：那是本机的改动在往外走。
+    /// 按节奏的拉取与收到推送的拉取也不算：它们一拉就完，算上的话页头每几秒闪一次。
+    var isCatchingUp: Bool { isSyncingNow || syncCatchingUp }
+
+    /// 事实写在 `host` 上的这一页（Cue 住的 Mac、会话所在的 Mac）此刻可能不是最新：本机就是它时库里就是最新的，不用等（Mac）。
+    func isCatchingUp(on host: String?) -> Bool {
+        #if os(macOS)
+        isCatchingUp && host != hostID
+        #else
+        isCatchingUp
+        #endif
+    }
 
     /// 同步那一行转不转圈（Mac 设置与手机设置共用）：正在连接、正在上传或对账，或立即同步还没返回。
     var isSyncBusy: Bool {

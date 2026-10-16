@@ -97,11 +97,14 @@ public struct SyncState: Equatable, Sendable {
   public var status: SyncStatus
   public var issues: [SyncIssue]
   public var alerts: PiAlertSubscriptionStatus
+  /// 在一页页地拉积压（没有令牌时的对账，或一拉不止一页）：本机的数据还没跟上服务器。上传不算（`status` 的 `.syncing` 两者都算）。
+  public var catchingUp: Bool
 
-  public init(status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off) {
+  public init(status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false) {
     self.status = status
     self.issues = issues
     self.alerts = alerts
+    self.catchingUp = catchingUp
   }
 }
 

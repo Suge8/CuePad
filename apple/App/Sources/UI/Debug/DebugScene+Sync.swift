@@ -41,7 +41,7 @@ extension DebugScene {
         func resolve(_ resolution: SyncResolution) async throws {}
     }
 
-    /// 第一次拉取（启动时的那一拉，或在它之前来的立即同步，两者等同一次）带回 `pages` 页别的设备写下的 Cue 的话，每页 `perPage` 条、
+    /// 第一次拉取（启动后同步一通就拉的那一次，`AppServices.setSyncState`）带回 `pages` 页别的设备写下的 Cue 的话，每页 `perPage` 条、
     /// 隔 `pageGap` 到一页（同 `ZonePuller` 一页页应用），拉完才返回；之后的拉什么都不做。话直接写进本机库：界面看到的与应用远端变更是同一种变化。
     nonisolated final class ArrivingSync: SyncControlling {
         static let pages = 3
@@ -52,7 +52,7 @@ extension DebugScene {
         private let first = Mutex<Task<Void, Never>?>(nil)
 
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [])) } }
-        func start() async throws { Task { await pull() } }
+        func start() async throws {}
         func stop() async {}
         func syncNow() async throws { await pull() }
         func send(recordName: String) async -> Bool { true }

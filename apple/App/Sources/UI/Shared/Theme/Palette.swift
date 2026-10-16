@@ -21,6 +21,7 @@ struct Palette {
     // MARK: 层（由后到前：侧栏 → 桌面 → 纸）
 
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
+    /// iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     /// 纸的上沿：比纸略亮一点，纸面从上往下极轻地过渡到纸色，像有一层向上的光（`paper()`）。

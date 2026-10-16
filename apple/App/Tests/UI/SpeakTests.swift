@@ -84,6 +84,10 @@ struct SpeakTests {
     func 只记下或Cue没启用时发送_记成未分类的灵感_输入框立刻空_不对Cue说(cueEnabled: Bool) async throws {
         if cueEnabled { try await enableCue() }
         let workspace = Workspace(services: app.services)
+        // 发送按读到的 Cue 现状定：读到之前按能对它说算（`CueWatch`）
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        try await eventually("读到 Cue 的现状") { workspace.cue.isLoaded }
         let photo = PickedImage(data: pngData())
         workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", images: [photo])
         let box = Bindable(workspace.cue).draft

@@ -118,6 +118,8 @@ extension EnvironmentValues {
 /// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。`followKey` 变了就算有新内容。
 /// 贴着最新时新内容在下面长出来，整段滑上去，不一下顶上去；发出一句时回复框让出的地方先留着，那句到了一起收（`bottomPadding`），
 /// 收起回复框、新的一条出现、对话上移是同一段滑动。减弱动态效果下滚动不做动画。
+/// 本机正在和 iCloud 对（`holding`，回到前台、刚打开时拉到的积压一页页地到）时，贴着最新也先不跟：新的长在可见区下面、看着的不动，
+/// 对完再一次滑上来——一页一滑的话整段对话一路往下闪。自己发出一句、点"回到最新"照常立刻去。
 ///
 /// 对话不用懒加载栈、只排最近几条（`PiConversation` 的窗口）：懒加载栈的总高与偏移都是按估计高度推出来的，回答高矮悬殊时
 /// 底部锚定会落在内容外、整页空白（WWDC26「Dive into lazy stacks」也说绝对偏移不可靠）；整段排开位置是确定的，
@@ -132,20 +134,29 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let readingWidth: CGFloat
     private let inset: CGFloat
     private let external: Binding<ChatFollow>?
+    private let holding: Bool
     private let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatBottomInset) private var bottomInset
-    @State private var position = ScrollPosition(edge: .bottom)
+    /// 不从"贴着底边"起：那样内容一变高滚动区自己就一下跳到新的底（打开时停在最新处由 `initialOffset` 的底锚管）。
+    @State private var position = ScrollPosition()
     @State private var own = ChatFollow()
     @State private var offset = ScrollOffset()
     /// 发出那一刻浮着的回复框的高（`toNewest`、`bottomPadding`），发出的话到了（内容在下面长高）就放掉。
     @State private var held: CGFloat?
+    /// `holding` 期间内容在下面长了、还没滑上去。
+    @State private var deferred = false
+    /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
+    @State private var unheld = false
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
-    init(followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>? = nil, @ViewBuilder content: () -> Content) {
+    init(
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>? = nil, holding: Bool = false, @ViewBuilder content: () -> Content
+    ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
+        self.holding = holding
         external = follow
         self.content = content()
     }
@@ -210,6 +221,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         byUser: next.scrolling)
                     if next != follow.wrappedValue { follow.wrappedValue = next }
                     guard following else { return }
+                    if holding, !unheld, grown > 0, reading.inset == last.inset {
+                        deferred = true
+                        return
+                    }
                     // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
                     // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                     // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
@@ -221,6 +236,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     }
                 }
                 .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
+                .onChange(of: holding) {
+                    unheld = false
+                    guard !holding, deferred else { return }
+                    deferred = false
+                    slide()
+                }
         }
         .overlay(alignment: .bottomTrailing) {
             if follow.wrappedValue.showsJump {
@@ -305,7 +326,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 回到最新（点圆钮、发出一句）。发出时记下回复框此刻的高（`bottomPadding`）。已经在最新处就不用滚。
     private func toNewest(sent: Bool) {
         held = sent ? bottomInset : nil
-        guard !follow.wrappedValue.atNewest else { return }
+        if holding { unheld = true }
+        // 对的期间报着"在最新处"，下面其实还压着没滑上来的
+        guard !follow.wrappedValue.atNewest || deferred else { return }
+        deferred = false
         withAnimation(reduceMotion ? nil : Motion.quick) { scroll(to: offset.end) }
     }
 

@@ -5,7 +5,7 @@ import os
 /// iCloud 同步入口：私有数据库里一个自定义同步区，自己的同步循环——一个拉取器（`ZonePuller`）、一个发送者（`RecordSender`），
 /// 逻辑在协调器（`SyncCoordinator`）。
 ///
-/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()`；界面订阅 `stateUpdates`，
+/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()` 认账号、开始上传，第一次拉由 App 发起（`syncNow`，它等得到拉完）；界面订阅 `stateUpdates`，
 /// 状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 ///
@@ -78,8 +78,8 @@ public actor CloudSync {
     ready = false
   }
 
-  /// 认账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。认过且能同步就开始拉取与上传；
-  /// 返回此刻是否已开始。认不了（离线）的，下一次立即同步或账号变化时再认。
+  /// 认账号：状态交给协调器，可用时再认是不是上次同步的那个账号（换了就停下来等你决定）。认过且能同步就开始上传；
+  /// 返回此刻是否已开始。认不了（离线）的，下一次立即同步或账号变化时再认。拉取由调用方接着发起（`syncNow`、账号变化）。
   @discardableResult
   private func checkAccount(_ container: CKContainer) async -> Bool {
     if !ready {
@@ -96,7 +96,6 @@ public actor CloudSync {
       guard await coordinator.canSync, let sender else { return false }
       ready = true
       await sender.start()
-      Task { await pull() }
     } else {
       // 已开始后的账号变化：退出、受限、换了账号都由协调器停下（`canSync`）
       do {

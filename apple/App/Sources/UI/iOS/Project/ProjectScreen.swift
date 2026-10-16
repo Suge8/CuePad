@@ -42,6 +42,7 @@ struct ProjectScreen: View {
                 Color.clear.frame(height: 0).debugScrollsToOlder(proxy, ready: board.arrangement != nil)
             }
         }
+        .loading(page == nil || board.arrangement == nil)
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         .floatingHeader(project?.name ?? "", detail: detail.isEmpty ? nil : detail) { actions }

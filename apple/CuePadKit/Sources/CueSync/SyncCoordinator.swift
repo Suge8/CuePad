@@ -15,7 +15,6 @@ actor SyncCoordinator {
   /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
   private var unsendable: [String: Int64] = [:]
   private var sending = false
-  private var catchingUp = false
 
   private(set) var state = SyncState(status: .starting, issues: []) {
     didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
@@ -140,7 +139,7 @@ actor SyncCoordinator {
       sending = busy
       showActivity()
     case .catchingUp(let busy):
-      catchingUp = busy
+      state.catchingUp = busy
       showActivity()
     case .fetched(let modifications, let deletions):
       guard needsDecision == nil else { return }
@@ -186,7 +185,7 @@ actor SyncCoordinator {
   }
 
   private func showActivity() {
-    let busy = sending || catchingUp
+    let busy = sending || state.catchingUp
     if busy, status == .idle { status = .syncing }
     if !busy, status == .syncing { status = .idle }
   }
@@ -360,7 +359,7 @@ actor SyncCoordinator {
       guard Self.isOffline(error), status == .idle || status == .syncing || status == .starting else { return }
       status = .offline
     } else if status == .offline {
-      status = sending || catchingUp ? .syncing : .idle
+      status = sending || state.catchingUp ? .syncing : .idle
     }
   }
 

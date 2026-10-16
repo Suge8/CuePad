@@ -51,6 +51,8 @@ final class AppServices {
     @ObservationIgnored let sync: (any SyncControlling)?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
+    /// 同步在一页页地拉积压（`SyncState.catchingUp`）；界面只经 `isCatchingUp` 读。
+    private(set) var syncCatchingUp = false
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     #if os(iOS)
@@ -83,8 +85,10 @@ final class AppServices {
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
-    /// 立即同步（`syncNow`）还没返回：两个"立即同步"按钮的忙碌与禁用都读 `canSyncNow`。
-    var isSyncingNow = false
+    /// 还没返回的立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）有几个：启动时与回到前台的那一次常常叠在一起。
+    var syncsInFlight = 0
+    /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
+    var isSyncingNow: Bool { syncsInFlight > 0 }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -376,6 +380,7 @@ final class AppServices {
         speechClock.setReachable(state.status.reachesMac)
         if recovered { Task { await syncNow() } }
         syncIssues = state.issues
+        syncCatchingUp = state.catchingUp
         alertSubscription = state.alerts
     }
 
