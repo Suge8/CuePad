@@ -19,12 +19,13 @@ case "$mode" in
     python3 "$provision" all
     # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
     read -ra versions <<<"$(release_versions)"
+    archive="$(release_archive ios "${versions[@]}")"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
-      -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" "${versions[@]}"
+      -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}"
     export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
       com.sugeh.cuepad="CuePad iOS AppStore" com.sugeh.cuepad.share="CuePad Share iOS AppStore" \
       com.sugeh.cuepad.widget="CuePad Widget iOS AppStore" com.sugeh.cuepad.notify="CuePad Notify iOS AppStore"
-    xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
+    xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
