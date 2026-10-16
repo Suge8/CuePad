@@ -10,9 +10,9 @@ struct ProjectsTests {
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    /// 订阅项目目录（根视图的 `.task` 同一条路）。
+    /// 跟着工作区的订阅（App 启动时同一条路），项目目录在其中。
     private func observing(_ workspace: Workspace) -> Task<Void, Never> {
-        Task { await workspace.observeCatalog() }
+        Task { await workspace.follow() }
     }
 
     @Test func 启动落在哪个项目_跟着侧栏顺序_数字键按当下顺序取_失效时回落() async throws {

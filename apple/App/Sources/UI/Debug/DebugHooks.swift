@@ -182,7 +182,7 @@ enum DebugHooks {
     #if DEBUG
     typealias MainWindowClass = DebugWindow
     #else
-    typealias MainWindowClass = NSWindow
+    typealias MainWindowClass = MainShellWindow
     #endif
 
     /// 脚本截图（给了 `CUEPAD_SHOT_READY`）：App 在后台跑，主窗口排在所有窗口最后——不抢前台和键盘，也不盖住正在用的窗口；
@@ -288,9 +288,10 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
-            async let wakes: Void = DebugScene.wakeIfAsked(workspace)
+            // 叫醒与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
+            Task { await DebugScene.wakeIfAsked(workspace) }
+            Task { await DebugScene.closeIfAsked(workspace) }
             await DebugScene.cycleIfAsked(workspace.services)
-            await wakes
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else

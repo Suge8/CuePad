@@ -35,9 +35,6 @@ private struct MainRoot: View {
 
     var body: some View {
         content
-            .task { await workspace.observeAgentLinks() }
-            .task { await workspace.observeFolderGuide() }
-            .task { await workspace.observeCue() }
             // 深链（Mac 上只来自点开的 Cue 通知，主窗口已叫到前面）
             .onChange(of: services.pendingDeepLink, initial: true) {
                 guard let link = services.consumeDeepLink() else { return }

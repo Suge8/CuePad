@@ -196,20 +196,8 @@ extension Workspace {
 }
 
 extension Workspace {
-    /// Mac 的工作区随 App 常驻、主窗口与菜单栏面板共用一个：项目目录（读不出来时按"重试"重新订阅）与会话归属的项目都在这里跟着，
-    /// 不挂在哪个视图上——窗口隐去、面板收起都照常更新，也不会两处各订阅一份（会话摘要由 App 级的 `LiveSessions` 跟）。直到所在任务取消。
-    func follow() async {
-        async let catalog: Void = followCatalog()
-        async let placement: Void = followSessionPlacement()
-        _ = await (catalog, placement)
-    }
-
-    private func followCatalog() async {
-        for await _ in Observations({ self.catalogAttempt }) { await observeCatalog() }
-    }
-
-    /// 在线 Pi 会话或项目目录绑定变了：重算会话归属的项目。
-    private func followSessionPlacement() async {
+    /// 在线 Pi 会话或项目目录绑定变了：重算会话归属的项目（`follow` 跟着）。
+    func followSessionPlacement() async {
         for await _ in Observations({ self.sessionPlacement }) {
             do { try await sendState.refreshSessionProjects() } catch { fail(error) }
         }
