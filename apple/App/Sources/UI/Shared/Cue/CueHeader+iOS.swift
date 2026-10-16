@@ -6,7 +6,7 @@ import SwiftUI
 /// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：等你、在做（`LiveSessionList`）、全部会话、额度（`QuotaStrip`）、记忆。
 /// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveSessionRows`）。
 /// 点页头、点面板外、往上划都收起；点面板里的一项先收起再去那里。
-/// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时是短淡入淡出。
+/// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时收起与展开的两块玻璃整块交叉淡入淡出（换身份，同底部栏的选中滴），尺寸、位置与箭头都不插值。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
 /// 打开时不读库：面板里的数据都是已经在订阅的。
 struct CueHeader: View {
@@ -42,6 +42,8 @@ struct CueHeader: View {
             glass
                 .padding(.leading, expanded || !showsSettings ? 0 : ControlMetrics.height + 8)
                 .padding(.horizontal, Self.edge).padding(.top, Self.top)
+                .id(reduceMotion ? expanded : nil)
+                .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
         .sensoryFeedback(.impact(weight: .light), trigger: expanded)
@@ -57,7 +59,7 @@ struct CueHeader: View {
                 .accessibilityHint(expanded ? "收起" : "看在做的会话、等你的事与记忆")
             if expanded {
                 CueNowPanel(close: toggle)
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: -6)))
+                    .transition(.opacity.combined(with: .offset(y: -6)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
