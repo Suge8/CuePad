@@ -32,7 +32,7 @@ struct CueStatusRow<Trailing: View>: View {
     var body: some View {
         let cue = workspace.cue
         HStack(spacing: 10) {
-            CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row)
+            CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row).wakeTarget(.entry)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
@@ -86,6 +86,7 @@ struct CueTitle: View {
         let cue = workspace.cue
         HStack(spacing: 8) {
             CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .row)
+                .wakeTarget(.header)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)

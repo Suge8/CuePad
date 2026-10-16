@@ -94,6 +94,7 @@ struct BottomBar: View {
             VStack(spacing: 2) {
                 Image(systemName: symbol).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                     .frame(height: Self.icon + 4)
+                    .wakeTarget(tab == .cue ? .entry : nil)
                     .overlay(alignment: .topTrailing) { WaitingBadge(count: waiting).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) }
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium)).lineLimit(1)
             }

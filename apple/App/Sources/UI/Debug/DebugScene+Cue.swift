@@ -127,6 +127,31 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
+    /// 带上叫醒它的会话（`CueState.woke`，同值班的 Mac 起一轮时写下的样子），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
+    /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。录"叫醒"的动效用（`CueWakeStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
+    static func wakeIfAsked(_ workspace: Workspace) async {
+        let every = defaults.double(forKey: "CuePadWake")
+        guard every > 0 else { return }
+        let store = workspace.services.store
+        var round = 0
+        while !Task.isCancelled {
+            // 叫醒的间隔是演示节奏，不是在等别的事
+            try? await Task.sleep(for: .seconds(every))
+            // 演示会话的 sessionID 与会话名相同
+            let opened = defaults.string(forKey: "CuePadSession")
+            let live = Array(workspace.liveSessionRows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
+            let count = round % 2 + 1
+            var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
+            if let opened { woke = [opened] + woke.prefix(count - 1) }
+            round += 1
+            guard !woke.isEmpty else { continue }
+            try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))
+            try? await Task.sleep(for: .seconds(1.5))
+            try? await store.setCueState(.settled)
+        }
+    }
+
     /// `-CuePadLongChat YES`：演示对话前面多 36 轮更早的来回，中间换过两次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
     private static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
         let asks = ["今天先看哪件？", "把计费那个会话的进展说一下", "圆桌的预发什么时候能好？", "帮我记一下：周五不发版", "README 截图换完了吗？", "重连用例加了几个？"]

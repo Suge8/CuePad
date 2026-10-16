@@ -20,8 +20,8 @@ struct TaskNextChip: View {
         Button(action: go) {
             HStack(spacing: 5) {
                 switch next {
-                case .agent(let shown, _):
-                    PiStateDot(shown: shown, size: 6)
+                case .agent(let shown, let session):
+                    PiStateDot(shown: shown, size: 6).wakeSource(session.sessionID)
                     Text(shown.label).foregroundStyle(shown.needsYou ? shown.labelTint(palette) : palette.ink2)
                     #if os(macOS)
                     // 在做时写跑了多久；手机上行窄，省掉，标题不被挤成两行
