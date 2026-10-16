@@ -358,14 +358,17 @@ extension CueStore {
   }
 
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
-  public func setCueState(_ state: PiWorkState, detail: String? = nil, round: UUID? = nil) throws {
+  public func setCueState(_ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil) throws {
     try write {
-      let next = CueState(state: .known(state), detail: detail, round: round, modifiedAt: Date.stamp)
-      if let current = try cueState(), current.state == next.state, current.detail == next.detail, current.round == next.round { return }
+      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, modifiedAt: Date.stamp)
+      if let current = try cueState(), (current.state, current.detail, current.round, current.woke) == (next.state, next.detail, next.round, next.woke) {
+        return
+      }
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
+          woke = excluded.woke
         """, next.bindings)
     }
   }

@@ -317,6 +317,7 @@ struct PiSessionSubtitle: View {
             }
             .font(Self.font)
             .fixedSize()
+            .wakeSource(session.sessionID)
             .accessibilityElement(children: .combine)
         }
     }

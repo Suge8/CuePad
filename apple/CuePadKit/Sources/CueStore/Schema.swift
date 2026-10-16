@@ -54,15 +54,19 @@ enum Schema {
         try db.run("UPDATE cards SET body = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE id = ?3", [body, now, card.id])
       }
     },
+    // 52：Cue 这一轮是被哪几个会话的动静叫醒的（`CueState.woke`），各端据此画"叫醒"的那一下
+    "ALTER TABLE cueState ADD COLUMN woke TEXT;",
+    // 53：会话记录的问答（读会话文件写的，可能晚于桥报的状态）变了也盖写入序号：歇下要等这一轮的回复读到才算变化（`CueStore.cueChanges`）
+    "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
   ]
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
-  /// 会话状态（进入的状态与时刻）、卡片（完成、上级、是不是任务）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
+  /// 会话记录（`sessionChanges`）、卡片（完成、上级、是不是任务）、Cue 发起的请求（状态）在改变时盖，对话里的消息在新增时盖。
   private static let writeSeq = """
     CREATE TABLE writeCounter (seq INTEGER NOT NULL) STRICT;
     INSERT INTO writeCounter (seq) VALUES (0);
-    \(stamped("piSessionStates", when: ["state", "stateSince"]))
+    \(stamped("piSessionStates", when: sessionChanges))
     \(stamped("cards", when: ["completedAt", "parentID", "todoAt"]))
     \(stamped("deliveryRequests", when: ["status"]))
     \(stamped("piMessages", when: []))
@@ -70,11 +74,20 @@ enum Schema {
 
   /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
   private static func stamped(_ table: String, when columns: [String]) -> String {
-    let stamp = "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
-    let insert = "CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp) END;"
-    guard !columns.isEmpty else { return insert }
+    let insert = "CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;"
+    return columns.isEmpty ? insert : insert + "\n" + stampOnChange(table, columns)
+  }
+
+  /// 会话记录上构成 Cue 的变化的列：进入的状态与时刻，与这一轮的问答（摘要里除经过之外的部分）。
+  private static let sessionChanges = ["state", "stateSince", "lastPrompt", "lastReply", "pendingPrompt"]
+
+  private static func stampOnChange(_ table: String, _ columns: [String]) -> String {
     let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
-    return insert + "\n" + "CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp) END;"
+    return "CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;"
+  }
+
+  private static func stamp(_ table: String) -> String {
+    "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
   }
 
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；旧于 `baseVersion` 的拒绝打开；其余旧的按 `upgrades` 就地升级；
@@ -221,7 +234,7 @@ enum Schema {
     CREATE TABLE cueSummaries (
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
-    CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT) STRICT;
+    CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT) STRICT;
 
     \(writeSeq)
 

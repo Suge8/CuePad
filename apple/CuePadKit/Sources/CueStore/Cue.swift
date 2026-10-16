@@ -240,23 +240,42 @@ public struct CueState: Equatable, Sendable {
   public var detail: String?
   /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
   public var round: UUID?
+  /// 在跑的这一轮是会话的动静叫醒的（`CueWake.sessionActivity`）；别的原因醒来、歇着时没有
+  public var woke: CueWoke?
   public var modifiedAt: Date
 
-  public init(state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, modifiedAt: Date = .now) {
+  public init(state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, modifiedAt: Date = .now) {
     self.state = state
     self.detail = detail
     self.round = round
+    self.woke = woke
     self.modifiedAt = modifiedAt
   }
 
   static let recordID = DeterministicID.uuid("cue-state")
 }
 
+/// 叫醒 Cue 这一轮的会话动静：醒来的时刻（一轮一个，接连几次叫醒各是各的）与带来变化的那几个会话（`CueChange.session`；
+/// 只有任务完成、不在会话上的变化时为空）。只在值班的 Mac 起这一轮时定下、随 `CueState` 同步，各端画"叫醒"的那一下只读它。
+public struct CueWoke: StoredJSON, Equatable, Sendable {
+  public var at: Date
+  public var sessions: [String]
+
+  public init(at: Date, sessions: [String]) {
+    self.at = at
+    self.sessions = sessions
+  }
+}
+
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round"]
-  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round] }
-  init(row: Row) { self.init(state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), modifiedAt: row.date(3)) }
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke"]
+  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored] }
+  init(row: Row) {
+    self.init(
+      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), woke: row.textOrNil(5).flatMap(CueWoke.init(stored:)),
+      modifiedAt: row.date(3))
+  }
 }
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"

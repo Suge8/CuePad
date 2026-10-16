@@ -19,6 +19,15 @@ func instructionsMillions() -> Double {
     return Double(usage.ri_instructions) / 1_000_000
 }
 
+/// 进程累计消耗的能量（毫焦，内核按 CPU 与 GPU 等的活动估算）。
+func energyMillijoules() -> Double {
+    var usage = rusage_info_v6()
+    _ = withUnsafeMutablePointer(to: &usage) {
+        $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { pidRusage(getpid(), RUSAGE_INFO_V6, $0) }
+    }
+    return Double(usage.ri_energy_nj) / 1_000_000
+}
+
 #if os(macOS)
 private func pidRusage(_ pid: Int32, _ flavor: Int32, _ buffer: UnsafeMutablePointer<rusage_info_t?>) -> Int32 {
     proc_pid_rusage(pid, flavor, buffer)

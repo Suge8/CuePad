@@ -25,6 +25,8 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
+/// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；`-CuePadWakeLog <路径>` 另量每次叫醒在 App 进程里的开销（同一处）；
+/// - `-CuePadReduceMotion YES`：Cue 被叫醒的那一下按"减弱动态效果"打开来画（`CueWakeStage`；不碰系统设置，Mac 上那是用户这台机器的全局设置，系统的开关只读、覆盖不了整个窗口）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦（手机上聚焦才展开出模型与思考强度的胶囊）；
 /// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
@@ -164,6 +166,7 @@ enum DebugScene {
         preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
+        preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")

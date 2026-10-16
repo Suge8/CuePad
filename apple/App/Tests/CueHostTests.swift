@@ -27,16 +27,15 @@ struct CueHostTests {
         var services: AppServices { app.services }
         var store: CueStore { services.store }
 
-        /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。`quiet`、`talking` 是安静窗口与"你在和 Cue 说话"的压制。
+        /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮先用 tell 问你一句，再写最后的回复。
         init(
-            usage: Int = 100, failingOnce: [String] = [], quiet: Duration = .milliseconds(500), talking: Duration = .zero,
-            seesImages: Bool = true, asksOnEnable: Bool = false
+            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
             let port = try await model.start()
             let timing = CueTiming(
-                quiet: quiet, quietLimit: max(quiet, .seconds(2)), talking: talking, patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
+                patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
@@ -76,6 +75,14 @@ struct CueHostTests {
             try await store.updateCard(task.id) { $0.body = title }
             session.setState(["kind": "thinking"])
             session.setState(["kind": "idle"])
+            try await answered(session.sessionID)
+        }
+
+        /// 会话这一轮的回复读到了：像 Mac 读会话文件那样写下问答。放在歇下写进库之后，是回复晚于状态到的那一路
+        /// （Claude Code 的轮末标记写在报歇下的钩子之后）：Cue 要等读到回复才醒，信封里带着它。
+        func answered(_ sessionID: String) async throws {
+            try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
+            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: [], recap: PiRecap(lastPrompt: "接着做", lastReply: "好了")))
         }
 
         /// 你对 Cue 说一句。
@@ -206,7 +213,7 @@ struct CueHostTests {
     }
 
     /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
-    /// 会话歇下后，攒过安静窗口 Cue 自己醒来，这一轮的动态写成灰色一行（note）。
+    /// 会话歇下后 Cue 马上自己醒来，这一轮的动态写成灰色一行（note）。
     @Test func 建任务开工_会话歇下后Cue醒来写动态() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
@@ -225,6 +232,7 @@ struct CueHostTests {
         try await rig.store.linkCard(task.id, toSession: session.sessionID)
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
+        try await rig.answered(session.sessionID)
         try await rig.message(.note, containing: "登录页那边歇下了")
         await rig.stop()
     }
@@ -250,10 +258,10 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 在做的会话在等回答（如"允许使用 Bash？"）是活被卡住了：不攒安静窗口，你刚和 Cue 说过话也不压着，马上叫醒 Cue。
+    /// 在做的会话在等回答（如"允许使用 Bash？"）：马上叫醒 Cue 去作答。
     @Test func 会话等回答时Cue马上醒来() async throws {
-        let rig = try await Rig(quiet: .seconds(30), talking: .seconds(30))
-        try await rig.settleTask(titled: "修好登录页 要作答")  // 你刚说过"请建个任务并开工"；会话歇下这一处变化要攒 30 秒
+        let rig = try await Rig()
+        try await rig.settleTask(titled: "修好登录页 要作答")
         let session = try #require(rig.app.host.extensions.values.first)
         session.setState(["kind": "waiting_user", "title": "允许使用 Bash？"])
         try await rig.message(.note, containing: "去作答了", timeout: .seconds(5))
@@ -272,10 +280,10 @@ struct CueHostTests {
     }
 
     /// Cue 对开着的会话说话，过了说话工具等结果的时限（`Speech.cueWait`）Mac 才回报没送达（会话已关闭）：工具如实说还没送达；
-    /// 失败一到就叫醒 Cue（不攒安静窗口：这里的窗口长到测试等不到），信封里是"[发送失败] 任务 · 原因"；会话页那句话的气泡写着同一个原因。
+    /// 失败一到就叫醒 Cue，信封里是"[发送失败] 任务 · 原因"；会话页那句话的气泡写着同一个原因。
     /// 会话开在另一台 Mac 上：说话请求由那台执行，本机的执行器不碰它；时限过后由替身当那台 Mac 写回失败。
     @Test func 说话过了时限才没送达_Cue马上醒来看到原因() async throws {
-        let rig = try await Rig(quiet: .seconds(600))
+        let rig = try await Rig()
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
@@ -325,6 +333,7 @@ struct CueHostTests {
         let task = try await rig.store.createTask("修好登录页 半路断开", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-2")
         try await PiStateRecorder(store: rig.store, hostID: "mac-b").update(sessionID: "remote-2", state: .settled, title: "修好登录页")
+        try await rig.answered("remote-2")
         try await eventually("Cue 说了话、工具在等结果") {
             try await rig.store.deliveryRequests(toSession: "remote-2").contains { $0.isOpen && $0.isFromCue }
         }
@@ -373,6 +382,7 @@ struct CueHostTests {
         try await rig.message(.cue, containing: "收到：你好")
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
         try await remote.update(sessionID: "remote-1", state: .settled, times: PiTimes(stateSince: settledAt, busySince: nil))
+        try await rig.answered("remote-1")
         try await rig.message(.note, containing: "登录页那边歇下了")
         await rig.stop()
     }
@@ -386,6 +396,7 @@ struct CueHostTests {
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
         try await remote.update(sessionID: "remote-1", state: .settled)
+        try await rig.answered("remote-1")
         try await rig.message(.note, containing: "登录页那边歇下了")
 
         /// 你请 Cue 对会话说一句，这一轮做完后由替身当那台 Mac 按 `clock` 的时刻回报没送达，Cue 醒来看到 `reason`。

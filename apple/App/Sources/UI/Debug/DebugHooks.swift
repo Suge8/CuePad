@@ -34,6 +34,8 @@ enum DebugHooks {
         var cueFocus = false
         /// 项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开（`-CuePadTasksOpen`）。
         var taskFold = TaskFold()
+        /// Cue 被叫醒的那一下按"减弱动态效果"打开来画（`-CuePadReduceMotion`，`CueWakeStage`）：验收时不碰系统设置。
+        var reducesMotion = false
         #if os(macOS)
         /// 正文以它开头的那张灵感卡或那条任务一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
@@ -286,7 +288,9 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
+            async let wakes: Void = DebugScene.wakeIfAsked(workspace)
             await DebugScene.cycleIfAsked(workspace.services)
+            await wakes
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -303,7 +307,9 @@ extension View {
             .task {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)
+                async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 await DebugScene.cycleIfAsked(workspace.services)
+                await wakes
             }
         #else
         self
