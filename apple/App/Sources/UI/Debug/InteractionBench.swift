@@ -33,6 +33,8 @@ enum InteractionBench {
         "侧栏展开": (28, 2),
         "展开任务": (28, 2),
         "收起任务": (14, 2),
+        "发送·会话页": (14, 1),
+        "发送·Cue 页": (14, 1),
     ]
 
     private static let turns = TurnLog()
@@ -75,6 +77,21 @@ enum InteractionBench {
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
         await step("页面回访") { workspace.show(.agent) }
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
+        // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下
+        if let id = sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
+            workspace.show(.session(id))
+            for _ in 0..<2 {
+                workspace.services.settings.setReplyDraft(ComposerDraft(text: sample), for: PiSessionState.recordID(sessionID: id))
+                await step("发送·会话页") { sendShortcut(in: window, field: "回复") }
+            }
+        }
+        if only.map({ $0.contains("发送·Cue 页") }) ?? true {
+            workspace.show(.cue)
+            for _ in 0..<2 {
+                workspace.cue.draft = ComposerDraft(text: sample)
+                await step("发送·Cue 页") { sendShortcut(in: window, field: "对 ") }
+            }
+        }
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
         if let card = try? await store.cards(in: workspace.currentProject).first?.id {
             for _ in 0..<2 {
@@ -107,6 +124,23 @@ enum InteractionBench {
             }
         }
         NSApp.terminate(nil)
+    }
+
+    /// 发送时回复框里的话：三行，发出后输入框收回一行。
+    private static let sample = "把重连的用例补上，跑一遍全量测试\n失败的贴给我看，别自己改断言\n做完把覆盖率报一下"
+
+    /// ⌘↩：回复框聚焦时主菜单"回复"的发送项交到文字区（`GrowingTextView.performReplyShortcut`）。按读屏标签的开头挑文字区（离开的页面还挂着）。
+    private static func sendShortcut(in window: NSWindow, field label: String) {
+        guard let field = textViews(in: window.contentView).first(where: { $0.accessibilityLabel()?.hasPrefix(label) == true }) else { return }
+        let item = NSMenuItem()
+        item.tag = ReplyShortcut.send.rawValue
+        field.performReplyShortcut(item)
+    }
+
+    private static func textViews(in view: NSView?) -> [GrowingTextView] {
+        guard let view else { return [] }
+        if let field = view as? GrowingTextView { return [field] }
+        return view.subviews.flatMap(textViews)
     }
 
     private static func measure(_ name: String, in view: NSView, _ action: () -> Void) async -> [String: Any] {

@@ -76,41 +76,41 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)
         VStack(spacing: 0) {
             if let session = digest.session {
-                // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
-                if stored != nil {
-                    SessionChat(
-                        session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
-                        .replyNotes(session: session.id, messages: digest.messages)
-                        .frame(maxHeight: .infinity)
-                } else {
-                    Color.clear.frame(maxHeight: .infinity)
-                }
-                VStack(spacing: 8) {
-                    if secondary {
-                        PiQuestionDock(session: session, deliveries: digest.deliveries)
-                        if let failure = shownEnd?.failure, session.state != .known(.ended) {
-                            Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
-                        }
-                        PiReplyBar(
-                            session: session, config: digest.config(at: services.speech), catalog: digest.catalog,
-                            stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
-                            commandProgress: MacDelivery.commandProgress(digest.deliveries, messages: digest.messages, at: services.speech),
-                            queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),
-                            recall: PiChat.lastSaid(digest.messages),
-                            revealNote: { follow.seek($0.entry) }
-                        ) {
-                            follow.jumpToNewest()
-                        }
-                    } else {
-                        // 留出回复框平时的高度，它到了时对话不被顶上去
-                        Color.clear.frame(height: ComposerMetrics.openOneLine)
+                FloatingReply {
+                    // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
+                    if stored != nil {
+                        SessionChat(
+                            session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, slot: slot)
+                            .replyNotes(session: session.id, messages: digest.messages)
                     }
+                } reply: {
+                    VStack(spacing: 8) {
+                        if secondary {
+                            PiQuestionDock(session: session, deliveries: digest.deliveries)
+                            if let failure = shownEnd?.failure, session.state != .known(.ended) {
+                                Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
+                            }
+                            PiReplyBar(
+                                session: session, config: digest.config(at: services.speech), catalog: digest.catalog,
+                                stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
+                                commandProgress: MacDelivery.commandProgress(digest.deliveries, messages: digest.messages, at: services.speech),
+                                queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),
+                                recall: PiChat.lastSaid(digest.messages),
+                                revealNote: { follow.seek($0.entry) }
+                            ) {
+                                follow.sent()
+                            }
+                        } else {
+                            // 留出回复框平时的高度，它到了时对话不被顶上去
+                            Color.clear.frame(height: ComposerMetrics.openOneLine)
+                        }
+                    }
+                    .padding(.horizontal, 24).padding(.bottom, 16)
+                    .frame(maxWidth: Self.readingWidth)
+                    .animation(Motion.quick, value: session.question)
+                    .renameSession($renaming)
+                    .endSession($confirmingEnd)
                 }
-                .padding(.horizontal, 24).padding(.bottom, 16)
-                .frame(maxWidth: Self.readingWidth)
-                .animation(Motion.quick, value: session.question)
-                .renameSession($renaming)
-                .endSession($confirmingEnd)
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .frame(maxHeight: .infinity)

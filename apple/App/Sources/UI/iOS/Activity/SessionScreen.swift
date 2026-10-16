@@ -101,7 +101,7 @@ struct SessionScreen: View {
                             commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
                             queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
                             recall: PiChat.lastSaid(digest?.messages ?? [])
-                        ) { follow.jumpToNewest() }
+                        ) { follow.sent() }
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, Self.barGap)
