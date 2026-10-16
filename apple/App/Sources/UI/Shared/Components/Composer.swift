@@ -292,7 +292,8 @@ enum ComposerMetrics {
 /// 文字区要多高（两端的 `ComposerField` 各持一份）：最高只露出 `limit`，所以只排开头够撑满上限的那一段，不排整篇——
 /// 粘贴几百行进来后每敲一个字都整篇重排，一个字要两三百毫秒。开头一段排出的高度不会超过整篇的（后面的字只会多出行），
 /// 够上限就是上限；不够再排长一倍，排到整篇为止。先排的字数按全角字估（全角字最宽，撑满同样的行数要的字最少）：
-/// SwiftUI 每次排版还会拿宽度 0 来探，那时几个字就竖着撑满了，不能一上来就排上千个字。
+/// SwiftUI 每次排版还会拿宽度 0 来探，那时几个字就竖着撑满了，不能一上来就排上千个字；横排里有别的圆钮（Agent 跑一轮时的停止钮）时
+/// 还会拿无穷宽来量它最宽能多宽，那时估不出字数，从最短的一段排起（无穷宽、极宽转整数会让 App 崩溃）。
 /// 量过的按宽度各记一份（一次排版里会按几种宽度轮流问）；文字变了时，撑满过上限的那段开头没动（接着往后写）就还是上限，不再排。
 struct ComposerHeight {
     private var fits: [Key: Fit] = [:]
@@ -331,7 +332,8 @@ struct ComposerHeight {
     private static func fit(
         _ text: NSString, width: CGFloat, em: CGFloat, limit: CGFloat, measure: (String) -> CGFloat
     ) -> (height: CGFloat, filled: NSString?) {
-        var length = max(minSpan, Int(limit / em * width / em))
+        let estimate = limit / em * width / em
+        var length = estimate.isFinite ? max(minSpan, Int(min(estimate, CGFloat(text.length)))) : minSpan
         while length < text.length {
             let prefix = text.substring(to: text.rangeOfComposedCharacterSequence(at: length).location)
             if measure(prefix) >= limit { return (limit, prefix as NSString) }
