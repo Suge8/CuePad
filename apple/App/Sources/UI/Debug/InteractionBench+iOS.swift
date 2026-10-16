@@ -57,6 +57,11 @@ enum IOSInteractionBench {
         func row(_ row: [String: Any]) { write("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self)) }
         let cold = await cold()
         if wants("冷启动·Cue 页") { row(cold) }
+        // 只量冷启动时不要求库里有别的项（真实库的副本不一定有演示库那几样）
+        if only == ["冷启动·Cue 页"] {
+            write("DONE")
+            exit(0)
+        }
         try? await Task.sleep(for: .seconds(3))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
