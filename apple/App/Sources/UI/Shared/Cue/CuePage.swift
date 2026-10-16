@@ -57,13 +57,13 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                chat.frame(maxHeight: .infinity)
+            FloatingReply {
+                chat
+            } reply: {
                 bottom
                     .padding(.horizontal, Self.inset).padding(.bottom, 16)
                     .frame(maxWidth: Self.readingWidth)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             if cue.showsRun, let keeper = services.cue.keeper {
                 CueRunPanel(keeper: keeper, handoff: thread?.lastHandoff)
                     .padding([.trailing, .bottom], 12)
@@ -180,9 +180,9 @@ struct CuePage: View {
                 CueEnableCard().transition(.opacity)
             }
             #if os(iOS)
-            CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests) { follow.jumpToNewest() }
+            CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests) { follow.sent() }
             #else
-            CueComposer(style: .page) { follow.jumpToNewest() }
+            CueComposer(style: .page) { follow.sent() }
             #endif
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))

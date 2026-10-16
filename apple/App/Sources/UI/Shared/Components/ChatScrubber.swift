@@ -14,6 +14,8 @@ struct ChatScrubber: View {
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 刻度区的下沿还要让开浮在对话底上的回复框（Mac）。在这里读而不在 `ChatColumn` 读：它一读，回复框一变高矮整段对话都要重排。
+    @Environment(\.chatBottomInset) private var bottomInset
     /// 手指按着时在刻度区里的高度。
     @State private var finger: CGFloat?
     /// 停手后还留一会儿再淡回去。
@@ -107,6 +109,7 @@ struct ChatScrubber: View {
             .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
         }
         .frame(width: Self.width)
+        .padding(.bottom, bottomInset)
         .onHover { hovering = $0 }
         .task(id: scrolling || finger != nil) {
             // 停手后留一会儿再淡回去
