@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 extension EnvironmentValues {
-    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（随手记、新会话、发给 Agent）
+    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（新会话、发给 Agent）
     /// 压在整页列表上、整块都是要读的字，由 `FloatingInput` 给 `solid`，工具那一排背后也不透出列表的字块。
     @Entry var composerInk: GlassInk = .legible
 }
@@ -358,7 +358,7 @@ extension String {
 
 /// 输入框的形态，几时一行、几时两层只在这里定（一个输入框一个值，调用方按场景给）。
 enum ComposerForm: Equatable {
-    /// 一直是两层、工具排一直在：浮起的输入框（随手记、新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
+    /// 一直是两层、工具排一直在：浮起的输入框（新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
     case open
     /// 空着又没聚焦时收成一行；有内容时两层，`opensOnFocus` 时聚焦也展开（Mac 底部输入栏；手机会话回复框：
     /// 有工具排时聚焦就展开，已结束的会话没有工具，聚焦了也保持一行，打了字再长）。

@@ -15,7 +15,9 @@ struct UnfiledScreen: View {
         List {
             if let cards {
                 if cards.isEmpty {
-                    EmptyIdeas { navigation.startCapture(project: .some(nil)) }
+                    EmptyIdeas {
+                        workspace.attempt { navigation.push(.card(try await workspace.createCard(in: nil).id)) }
+                    }
                         .listRowBackground(Color.clear)
                 } else {
                     Section {

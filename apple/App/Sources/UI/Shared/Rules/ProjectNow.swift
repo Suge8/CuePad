@@ -48,7 +48,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return intro.map { ProjectNow(source: .intro, text: $0) }
     }
 
-    /// iPhone 书架的"此刻"：书架不带会话（会话在 Agent 标签），只有最近开始的进行中任务与介绍；
+    /// iPhone 书架的"此刻"：书架不带会话（会话在 Cue 页），只有最近开始的进行中任务与介绍；
     /// `listed` 是同一屏"正在推进"已列出的任务，任务那一档跳过它们、取下一条。
     static func shelf(_ projects: [Project], tasks: [UUID: [InProgress]], listed: Set<UUID>) -> [UUID: ProjectNow] {
         var result: [UUID: ProjectNow] = [:]

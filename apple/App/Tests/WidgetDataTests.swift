@@ -62,8 +62,7 @@ struct WidgetDataTests {
     }
 
     @Test(arguments: [
-        ("cuepad://capture", DeepLink.capture(project: nil)),
-        ("cuepad://capture?project=6f0c1a7e-0000-4000-8000-000000000001", DeepLink.capture(project: UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000001"))),
+        ("cuepad://speak", DeepLink.speak),
         ("cuepad://project/6f0c1a7e-0000-4000-8000-000000000002", DeepLink.project(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000002")!)),
         ("cuepad://card/6f0c1a7e-0000-4000-8000-000000000003", DeepLink.card(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000003")!)),
         ("cuepad://cue", DeepLink.cue),
@@ -73,7 +72,7 @@ struct WidgetDataTests {
         #expect(link.url == URL(string: text))
     }
 
-    @Test(arguments: ["https://example.com", "cuepad://unknown", "cuepad://project/not-a-uuid", "cuepad://project", "cuepad://capture?project=x"])
+    @Test(arguments: ["https://example.com", "cuepad://unknown", "cuepad://project/not-a-uuid", "cuepad://project", "cuepad://capture"])
     func 不认识的链接被忽略(text: String) {
         #expect(DeepLink(url: URL(string: text)!) == nil)
         services.handle(url: URL(string: text)!)

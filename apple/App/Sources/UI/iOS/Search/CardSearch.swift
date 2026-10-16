@@ -3,12 +3,6 @@ import CueStore
 import SwiftUI
 import UIKit
 
-/// 搜索的范围：全部卡片（书架、iPad 搜索页），或一个项目里的卡片（项目页，nil 是未分类）。
-enum CardSearchScope: Equatable {
-    case all
-    case project(UUID?)
-}
-
 nonisolated private struct SearchData: Sendable, Equatable {
     var groups: [Group]
     var total: Int
@@ -35,11 +29,9 @@ nonisolated private struct SearchData: Sendable, Equatable {
     }
 }
 
-/// 卡片搜索的结果：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。书架、项目页与 iPad 搜索页共用；
-/// 项目范围内不分组、不出现项目筛选。
+/// 卡片搜索的结果（搜索页"灵感与任务"一栏）：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。
 struct CardSearchResults: View {
     @Binding var query: PaletteQuery
-    let scope: CardSearchScope
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -55,17 +47,11 @@ struct CardSearchResults: View {
 
     private var shown: PaletteQuery { settled ?? query }
 
-    private var effective: PaletteQuery {
-        var effective = shown
-        if case .project(let id) = scope { effective.project = .some(id) }
-        return effective
-    }
-
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    FilterChips(query: $query, projects: scope == .all ? workspace.catalog?.projects ?? [] : nil, targets: data?.targets ?? [])
+                    FilterChips(query: $query, projects: workspace.catalog?.projects ?? [], targets: data?.targets ?? [])
                     if let data, !shown.text.isEmpty || shown.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                             .contentTransition(.numericText()).animation(Motion.quick, value: data.total)
@@ -78,13 +64,11 @@ struct CardSearchResults: View {
                         EmptyState.noMatch(shown.text).padding(.top, 24)
                     }
                     ForEach(data.groups) { group in
-                        if scope == .all {
-                            HStack(spacing: 6) {
-                                ProjectGlyph(project: group.project, size: 12)
-                                SectionHeader(title: group.project?.name ?? CaptureCopy.unfiled, count: nil).padding(.horizontal, -4)
-                            }
-                            .padding(.top, 8)
+                        HStack(spacing: 6) {
+                            ProjectGlyph(project: group.project, size: 12)
+                            SectionHeader(title: group.project?.name ?? CaptureCopy.unfiled, count: nil).padding(.horizontal, -4)
                         }
+                        .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                             ForEach(group.cards) { CardRow(entry: $0, highlight: shown.text) }
                         }
@@ -101,69 +85,12 @@ struct CardSearchResults: View {
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
-        .observing(services.store, id: effective, into: $data, onError: workspace.fail) { [effective] store in
-            let found = try store.search(effective.store(), limit: PaletteQuery.pageSize * effective.pages)
+        .observing(services.store, id: shown, into: $data, onError: workspace.fail) { [shown] store in
+            let found = try store.search(shown.store(), limit: PaletteQuery.pageSize * shown.pages)
             return SearchData(
                 groups: SearchData.grouped(found.cards, projects: try store.projects()), total: found.totalCards, shown: found.cards.count,
                 targets: try store.sendTargets())
         }
-    }
-}
-
-extension View {
-    /// iPhone 项目页的下拉搜索（系统搜索框在顶栏下，页面在顶上时露出，下滑收起）：只搜本项目，搜索时页面换成同一套搜索结果，
-    /// 取消搜索回到项目页；⌘K 指名这一页时聚焦它。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
-    /// `available`：这个项目有卡片（按同步可得的项目目录判断）；`ready`：页面内容已读到、可以挂搜索框。
-    func cardSearch(project: UUID, available: Bool, ready: Bool) -> some View {
-        modifier(CardSearch(project: project, available: available, ready: ready))
-    }
-}
-
-private struct CardSearch: ViewModifier {
-    let project: UUID
-    let available: Bool
-    let ready: Bool
-    @Environment(Navigation.self) private var navigation
-    @State private var query = PaletteQuery()
-    @FocusState private var focused: Bool
-
-    private var scope: CardSearchScope { .project(project) }
-
-    private func focusIfRequested() {
-        guard navigation.pendingPageSearch == .project(project) else { return }
-        navigation.pendingPageSearch = nil
-        focused = true
-    }
-
-    func body(content: Content) -> some View {
-        Group {
-            if available && ready {
-                SearchSwap(query: $query, scope: scope) { content }
-                    .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索本项目")
-                    .searchFocused($focused)
-                    .onAppear(perform: focusIfRequested)
-                    .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-                    .onAppear {
-                        guard DebugHooks.preset.focusedSearch == (scope == .all ? .shelf : .project) else { return }
-                        query.text = DebugHooks.preset.searchText
-                        focused = true
-                    }
-            } else {
-                content
-            }
-        }
-    }
-}
-
-/// 搜索框激活时换成结果；`isSearching` 只在 `.searchable` 之内可读，所以单独成一个视图。
-private struct SearchSwap<Content: View>: View {
-    @Binding var query: PaletteQuery
-    let scope: CardSearchScope
-    @ViewBuilder let content: Content
-    @Environment(\.isSearching) private var isSearching
-
-    var body: some View {
-        if isSearching { CardSearchResults(query: $query, scope: scope) } else { content }
     }
 }
 
@@ -187,23 +114,20 @@ extension UIResponder {
     }
 }
 
-/// 筛选胶囊：项目（只在全部范围里有）、含图片、发送、时间；生效的填成实心。
+/// 筛选胶囊：项目、含图片、发送、时间；生效的填成实心。
 private struct FilterChips: View {
     @Binding var query: PaletteQuery
-    /// nil：已限定在一个项目里，不出现项目筛选。
-    let projects: [Project]?
+    let projects: [Project]
     let targets: [SendTarget]
 
     var body: some View {
         ChipRow {
-            if let projects {
-                Menu {
-                    Button("全部") { query.project = nil }
-                    Button(CaptureCopy.unfiled) { query.project = .some(nil) }
-                    Divider()
-                    ForEach(projects) { project in Button(project.name) { query.project = project.id } }
-                } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
-            }
+            Menu {
+                Button("全部") { query.project = nil }
+                Button(CaptureCopy.unfiled) { query.project = .some(nil) }
+                Divider()
+                ForEach(projects) { project in Button(project.name) { query.project = project.id } }
+            } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
             Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
                 .accessibilityAddTraits(query.withImages ? .isSelected : [])
             Menu {
@@ -227,7 +151,7 @@ private struct FilterChips: View {
         switch query.project {
         case .none: "全部"
         case .some(.none): CaptureCopy.unfiled
-        case .some(.some(let id)): projects?.first { $0.id == id }?.name ?? "全部"
+        case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
         }
     }
 

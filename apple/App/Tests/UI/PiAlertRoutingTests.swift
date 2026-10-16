@@ -35,8 +35,8 @@ struct PiAlertRoutingTests {
 
         switch layout {
         case .tabs:
-            #expect(navigation.tab == .agent)
-            #expect(navigation.agentPath == [.session(session)])
+            #expect(navigation.tab == .cue)
+            #expect(navigation.cuePath == [.session(session)])
         case .split:
             #expect(navigation.splitPath.last == .session(session))
         }
@@ -68,7 +68,7 @@ struct PiAlertRoutingTests {
         navigation.open(alert: alerts.consumeTap())
 
         #expect(navigation.tab == .cue)
-        #expect(navigation.agentPath.isEmpty)
+        #expect(navigation.cuePath.isEmpty)
         #expect(navigation.splitPath.isEmpty)
     }
 

@@ -30,16 +30,6 @@ enum SearchScope: Hashable {
     case cards, sessions
 }
 
-
-nonisolated extension PiSessionListItem {
-    /// 列表里的会话；所属项目已删的不再带项目（按文件夹归组、写文件夹名）。
-    var listed: PiSessionState {
-        var session = state
-        if project == nil { session.projectID = nil }
-        return session
-    }
-}
-
 /// 会话范围读到的：全部在线的（不多，不分页）与已结束的前若干页（从新到旧），同一个搜索词。
 nonisolated struct SessionSearchData: Sendable, Equatable {
     var live: [PiSessionState]

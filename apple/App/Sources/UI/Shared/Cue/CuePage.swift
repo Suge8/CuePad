@@ -5,14 +5,14 @@ import CuePi
 #endif
 
 /// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
-/// 页头一直在（`CueTitle`：头像、名字、此刻在做什么；Mac 在窗口工具栏，手机在顶栏，iPad 面板在顶上）；
+/// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
 /// 中间是对话：你的话是右侧气泡，Cue 的话左侧全宽，它第一次提到一件活时下面一行这件活（`CueTaskLine`），
 /// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行），这一轮说的话与结果按先后在它之后；
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行灰字（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"⋯"里是"Cue 记得什么"（`CueMemoryPage`）；
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）在 Mac 的"⋯"里、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 struct CuePage: View {
     /// iPad 右侧面板里：没有自己的顶栏（页头浮在面板顶上）。
@@ -23,6 +23,7 @@ struct CuePage: View {
     @Environment(\.pageActive) private var active
     #if os(iOS)
     @Environment(\.tabPageReady) private var tabPageReady
+    @Environment(Navigation.self) private var navigation
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -73,10 +74,14 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    @ViewBuilder private var page: some View {
-        let body = chat
+    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。标签栏布局下页头左边是设置（标签根页的规则）；
+    /// iPad 分栏与右侧面板里设置在侧栏。
+    private var page: some View {
+        chat
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
+            .safeAreaPadding(.top, CueHeader.reserve)
+            .overlay(alignment: .top) { CueHeader(showsSettings: !inPanel && navigation.layout == .tabs) }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 bottom
                     .padding(.horizontal, 12).padding(.bottom, 8)
@@ -84,23 +89,9 @@ struct CuePage: View {
                     .frame(maxWidth: .infinity)
                     .environment(\.composerInk, .solid)
             }
-        if inPanel {
-            body.safeAreaBar(edge: .top, spacing: 0) {
-                CueTitle().frame(height: FloatingHeaderLayout.height).glass(in: .capsule, ink: .legible)
-            }
-        } else {
-            body.floatingHeader(cue.name) { CueTitle() } trailing: { trailing }
-        }
-    }
-
-    /// 右上角"⋯"：Cue 记得什么。会话在 Agent 标签里，这里不另放入口。
-    private var trailing: some View {
-        Menu {
-            Button("\(cue.name) 记得什么", systemImage: "brain") { cue.showsMemory = true }
-        } label: {
-            Image(systemName: "ellipsis")
-        }
-        .accessibilityLabel("更多")
+            .navigationTitle(cue.name)
+            .toolbar(removing: .title)
+            .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
     }
     #endif
 
@@ -192,7 +183,11 @@ struct CuePage: View {
             if cue.presence == .disabled {
                 CueEnableCard().transition(.opacity)
             }
+            #if os(iOS)
+            CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests) { follow.jumpToNewest() }
+            #else
             CueComposer(style: .page) { follow.jumpToNewest() }
+            #endif
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.presence == .disabled)

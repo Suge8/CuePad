@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue），再是订阅额度的总览（`QuotaStrip`，没有额度记录时没有；面板弹出时数据陈旧就查一次，见 `AppDelegate`）+ Pi 状态（点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口，与手机一致）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
+/// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue），再是订阅额度的总览（`QuotaStrip`，没有额度记录时没有；面板弹出时数据陈旧就查一次，见 `AppDelegate`）+ 在做的会话（`LiveSessionList`，与侧栏 Agent 区、手机 Cue 页头的面板同一列，最多 4 个；点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
 /// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。资料库读到之前没有输入框；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
     /// 在主窗口里打开一页（会话、Cue 页）。
@@ -22,21 +22,19 @@ struct MenuBarPad: View {
             if !services.accountQuotas.items.isEmpty {
                 QuotaStrip().modifier(Block())
             }
-            let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
-                PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
-            }, cueOnDuty: services.liveSessions.cueOnDuty, at: services.speech).prefix(Self.sessionLimit)
+            let sessions = workspace.liveSessionRows
             if !sessions.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
-                    ForEach(sessions, id: \.sessionID) { session in
-                        PiSessionRow(
-                            session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
-                            .contentShape(.rect)
-                            .onTapGesture { open(.session(session.sessionID)) }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction { open(.session(session.sessionID)) }
-                    }
+                LiveSessionList(sessions: sessions, limit: Self.sessionLimit, spacing: 9) { session in
+                    PiSessionRow(
+                        session: session, project: workspace.catalog?.project(session.projectID),
+                        delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
+                        undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
+                        .contentShape(.rect)
+                        .onTapGesture { open(.session(session.sessionID)) }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { open(.session(session.sessionID)) }
+                } fold: { count, expanded in
+                    PiReloadFold(count: count, expanded: expanded)
                 }
                 .modifier(Block())
             }

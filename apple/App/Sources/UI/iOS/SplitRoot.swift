@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// iPad（宽）：左栏项目（含任务、Agent 等入口），右侧项目页；打开的卡片纸页推在项目页上，Agent 可在右侧面板并排看。
-/// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 随手记、⌘⇧T 任务、⌘, 设置。
+/// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -55,15 +55,12 @@ struct SplitRoot: View {
         }
     }
 
-    /// 右侧页："写"（浮起随手记）与 Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
+    /// 右侧页：Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
     @ViewBuilder private func page(_ route: Route) -> some View {
-        if route.isCard {
+        if route.isCard || route == .cue {
             RouteView(route: route)
         } else {
             RouteView(route: route).toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(WriteEntry.title, systemImage: WriteEntry.symbol) { navigation.startCapture() }
-                }
                 ToolbarItem(placement: .primaryAction) { AgentPanelButton() }
             }
         }
@@ -257,7 +254,7 @@ private struct SplitShortcuts: View {
                 Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
             }
             Button("记一条灵感", action: newCard).keyboardShortcut("n")
-            Button("随手记") { navigation.startCapture() }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }

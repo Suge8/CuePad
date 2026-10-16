@@ -78,6 +78,26 @@ struct SpeakTests {
         #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }
 
+    /// 对 Cue 说的输入框也是随手记：长按发送"只记下"，或 Cue 没启用时按发送，这句不交给 Cue，记成未分类的一条灵感
+    /// （不选项目；文字在前、图片在后），输入框立刻空，提示落点；Cue 那边不多一句你的话。
+    @Test(arguments: [true, false])
+    func 只记下或Cue没启用时发送_记成未分类的灵感_输入框立刻空_不对Cue说(cueEnabled: Bool) async throws {
+        if cueEnabled { try await enableCue() }
+        let workspace = Workspace(services: app.services)
+        let photo = PickedImage(data: pngData())
+        workspace.cue.draft = ComposerDraft(text: "  周末读完第三章  ", images: [photo])
+        let box = Bindable(workspace.cue).draft
+
+        let writing = cueEnabled ? workspace.note(from: box) : workspace.sayToCue(from: box)
+        #expect(workspace.cue.draft.isEmpty(accepting: .images))
+        await writing?.value
+
+        let hash = try files.store(photo.data)
+        #expect(try await store.cards(in: nil).map(\.body) == ["周末读完第三章\n\n![](cuepad://img/\(hash))"])
+        #expect(workspace.notice?.text == "已记到 未分类")
+        #expect(try await youSaid().isEmpty)
+    }
+
     /// 回执晚到但在时限内：一直是发送中，Cue 是话在路上；过了时限这句没能送达（同步通着是 Mac 迟迟没收下，不通写同步的原因），
     /// 但那台 Mac 在线 Cue 就不算睡觉、仍在值班；那台 Mac 将睡眠标了离线 Cue 才在睡觉、不值班，本机同步不通时不说它在睡觉（照它写下的状态）；
     /// 超时后回执来了照样是已送达，Cue 照它写下的在做事。

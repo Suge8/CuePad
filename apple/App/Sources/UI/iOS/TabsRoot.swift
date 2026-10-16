@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// iPhone（及窄窗口 iPad）：三个标签的内容 + 底部自绘的一行（`BottomBar`）。Cue 是主入口（打开就在它上面），
-/// Agent 是全部会话，灵感是项目、灵感与任务。系统标签栏隐藏，TabView 只管切内容
+/// iPhone（及窄窗口 iPad）：Cue、灵感两个标签与搜索的内容 + 底部自绘的一行（`BottomBar`）。Cue 是主入口（打开就在它上面，
+/// Agent 整页从它的页头面板推入），灵感是项目、灵感与任务，搜索同时搜卡片与会话（同 Mac 的 ⌘K）。系统标签栏隐藏，TabView 只管切内容
 /// （保留各标签的导航栈、滚动位置与页面的出现/消失）；点底部换标签时页面按标签顺序推移（`TabSlide`）。
 /// 底部那一行不随滚动收小，进纸页、会话页时随页收起（`Navigation.ownsBottom`）。
 struct TabsRoot: View {
@@ -18,8 +18,8 @@ struct TabsRoot: View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.tab) {
             Tab(value: Navigation.Tab.cue) { stack(.cue, $navigation.cuePath) { RouteView(route: .cue) } }
-            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .agent) } }
             Tab(value: Navigation.Tab.projects) { stack(.projects, $navigation.projectsPath) { RouteView(route: .shelf) } }
+            Tab(value: Navigation.Tab.search) { stack(.search, $navigation.searchPath) { RouteView(route: .search) } }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
         .environment(\.bottomBarReserve, BottomBar.reserve(above: safeBottom))
@@ -33,12 +33,12 @@ struct TabsRoot: View {
         }
         .animation(Motion.panel, value: navigation.ownsBottom)
         .debugExposesTabSelect(select)
-        // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的搜索（与宽屏的搜索页同一组快捷键）
+        // 窄窗口 iPad 接键盘：⌘K / ⌘F 去搜索（与宽屏的搜索页同一组快捷键），⌘⇧N 对 Cue 说
         .background {
             ZStack {
-                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("k")
-                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("f")
-                Button("随手记") { navigation.startCapture() }.keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("搜索") { navigation.openSearch() }.keyboardShortcut("k")
+                Button("搜索") { navigation.openSearch() }.keyboardShortcut("f")
+                Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -46,8 +46,9 @@ struct TabsRoot: View {
         }
     }
 
-    /// 点底部换标签：选中滴滑过去，页面同向推移。
+    /// 点底部换标签：选中滴滑过去，页面同向推移。点搜索圆钮总是聚焦搜索框（同系统的搜索标签）。
     private func select(_ tab: Navigation.Tab) {
+        if tab == .search { navigation.focusSearch() }
         guard tab != navigation.tab else { return }
         slide.leave(navigation.tab, to: tab, reduceMotion: reduceMotion)
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }

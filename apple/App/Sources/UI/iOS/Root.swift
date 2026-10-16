@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是三个标签（Cue / Agent / 灵感）加底部一行（标签与"写"），宽 iPad 用分栏。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是两个标签（Cue / 灵感）加底部一行（标签与搜索圆钮），宽 iPad 用分栏。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -24,7 +24,7 @@ struct IOSRoot: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
-            // 浮起的输入框（随手记、新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
+            // 浮起的输入框（新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
             // 否则键盘一出来、一收起，底下整页（连同另一个标签里的页）都要按新的安全区重排一遍
             .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
             .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
@@ -35,11 +35,7 @@ struct IOSRoot: View {
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                 if !navigation.floating { pageIgnoresKeyboard = false }
             }
-            // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
-            // 随手记与新会话都是浮在键盘上方的输入框
-            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) {
-                CaptureComposer(state: $navigation.capture, defaultProject: navigation.currentProject, pinnedOpen: true, saved: navigation.finishCapture)
-            } }
+            // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
@@ -107,10 +103,10 @@ struct RouteView: View {
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
         // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏时间那一段的内容淡出（`fadesUnderBars`）。
-        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（`SearchRow`）
+        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（`RootBar`、Cue 页头）
         // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
-        page.contentMargins(.top, route.hasSearchRow ? nil : 0, for: .scrollContent)
-            .safeAreaPadding(.top, route.hasSearchRow ? 0 : Bars.contentGap)
+        page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
+            .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
             .fadesUnderBars()
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
