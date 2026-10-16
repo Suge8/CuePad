@@ -203,44 +203,55 @@ extension ChoiceMenu.Glyph {
     }
 }
 
-/// 系统菜单开着的这段（`Navigation.menuOpen`）锁住键盘上方的位置：用菜单开之前外面给的底部安全区（含键盘）垫着，这段里不跟键盘走；
-/// 关了之后等键盘回到原高再放开，键盘因菜单里的动作往下收（比开着时还矮）就立刻放开、跟着它走。
+/// 系统菜单开着的这段（`Navigation.menuOpen`）锁住键盘上方的位置：内容的框与底部安全区（含键盘）都定在菜单开之前那一刻，
+/// 这段里不跟键盘走（候选栏收起、键盘变矮）；关了之后等键盘回到原高再放开，键盘因菜单里的动作往下收（比开着时还矮）就立刻放开、跟着它走。
+/// 锁成一个写死高度（原高加原底部安全区）、顶边对齐的框，放在不随孩子撑大的框（minHeight 0）里：忽略安全区不放大外面给的尺寸，
+/// 只垫底部安全区的话内容（有最小高度，如 Cue 页的页头、等你卡片与输入框）加垫的那截超出外面给的高度，撑大的这一层被外面居中，顶边被挤出屏幕；
+/// 只锁高度不垫底部安全区又会改了滚动区的框，对话的锚点跟着跳。
 /// 挂在跟着键盘走的那一层：导航栈里的每一页（`RouteView`，页在 UIKit 的宿主里自己让键盘，外层管不到）、iPad 的 Cue 面板与浮起的输入框（`FloatingInput`）。
-/// 键盘变矮的通知可能比"菜单开了"的状态先到这里，所以垫的是菜单开之前最后一次的读数，不是开的那一刻的。
-/// 位置读数记在引用里（不进状态），只在开、关与放开时取用，不形成布局反馈环。
+/// 键盘变矮的通知可能比"菜单开了"的状态先到这里，所以锁的是菜单开之前最后一次的读数，不是开的那一刻的。
+/// 读数记在引用里（不进状态），只在开、关与放开时取用，不形成布局反馈环。
 struct KeyboardHold: ViewModifier {
     @Environment(Navigation.self) private var navigation
-    @State private var held: CGFloat?
-    @State private var bottom = Bottom()
+    @State private var held: Reading?
+    @State private var readings = Readings()
 
-    private final class Bottom {
-        var now: CGFloat = 0
+    /// 外面给的这一层：高度与底部安全区（含键盘）。
+    nonisolated private struct Reading: Equatable {
+        var height: CGFloat = 0
+        var bottom: CGFloat = 0
+    }
+
+    private final class Readings {
+        var now = Reading()
         /// 没有菜单开着时的最后一次。
-        var steady: CGFloat = 0
-        /// 菜单开着以来最矮的时候（候选栏收起的那一截）。
+        var steady = Reading()
+        /// 菜单开着以来最矮的底部安全区（候选栏收起的那一截）。
         var lowest: CGFloat = 0
     }
 
     func body(content: Content) -> some View {
         content
-            .safeAreaPadding(.bottom, held ?? 0)
+            .safeAreaPadding(.bottom, held?.bottom ?? 0)
+            .frame(height: held.map { $0.height + $0.bottom })
+            .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
             .ignoresSafeArea(held == nil ? [] : .all, edges: .bottom)
-            // 读的是外面给的底部安全区：挂在背景上，不受上面这层忽略的影响
-            .background { Color.clear.onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { now in
-                bottom.now = now
+            // 读的是外面给的：挂在背景上，不受上面这层忽略的影响
+            .background { Color.clear.onGeometryChange(for: Reading.self) { Reading(height: $0.size.height, bottom: $0.safeAreaInsets.bottom) } action: { now in
+                readings.now = now
                 guard held != nil || navigation.menuOpen else {
-                    bottom.steady = now
+                    readings.steady = now
                     return
                 }
-                let lower = now < bottom.lowest - 0.5
-                bottom.lowest = min(bottom.lowest, now)
-                if let held, !navigation.menuOpen, now >= held - 0.5 || lower { release() }
+                let lower = now.bottom < readings.lowest - 0.5
+                readings.lowest = min(readings.lowest, now.bottom)
+                if let held, !navigation.menuOpen, now.bottom >= held.bottom - 0.5 || lower { release() }
             } }
             .onChange(of: navigation.menuOpen) { _, open in
                 if open {
-                    held = bottom.steady
-                    bottom.lowest = min(bottom.steady, bottom.now)
-                } else if let held, bottom.now >= held - 0.5 {
+                    held = readings.steady
+                    readings.lowest = min(readings.steady.bottom, readings.now.bottom)
+                } else if let held, readings.now.bottom >= held.bottom - 0.5 {
                     release()
                 }
             }
@@ -248,7 +259,7 @@ struct KeyboardHold: ViewModifier {
 
     private func release() {
         held = nil
-        bottom.steady = bottom.now
+        readings.steady = readings.now
     }
 }
 #endif

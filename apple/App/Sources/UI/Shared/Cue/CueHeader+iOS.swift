@@ -8,8 +8,6 @@ import SwiftUI
 /// 点页头、点面板外、往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时是短淡入淡出。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
-/// 系统菜单开着时（`Navigation.menuOpen`，如长按发送）页面那一层被键盘锁（`KeyboardHold`）垫住底部、顶上被挤出屏幕，
-/// 页头按菜单开之前的位置钉住（`Pin`），不跟着出去再回来；挂到键盘锁外面不行：整个导航页的宿主一起被挤上去。
 /// 打开时不读库：面板里的数据都是已经在订阅的。
 struct CueHeader: View {
     /// 左边留着设置钮（iPhone 标签栏布局；iPad 的设置在侧栏）。
@@ -17,13 +15,7 @@ struct CueHeader: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(Navigation.self) private var navigation
     @State private var expanded = DebugHooks.preset.cuePanelOpen
-    @State private var pin = Pin()
-    @State private var drift: CGFloat = 0
-
-    /// 平时的位置记在引用里（不进状态），只有被挤开时才写 `drift`。
-    private final class Pin { var settled: CGFloat = 0 }
 
     static let height: CGFloat = 56
     private static let radius: CGFloat = 28
@@ -52,16 +44,6 @@ struct CueHeader: View {
                 .padding(.horizontal, Self.edge).padding(.top, Self.top)
         }
         .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
-        .offset(y: drift)
-        // 量的是没挪过的位置：挂在挪动外面，读数不受 drift 影响
-        .background { Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { y in
-            if navigation.menuOpen || y < 0 {
-                drift = pin.settled - y
-            } else {
-                pin.settled = y
-                drift = 0
-            }
-        } }
         .sensoryFeedback(.impact(weight: .light), trigger: expanded)
         .onDisappear { expanded = false }
         .debugExposesCuePanel(toggle)
