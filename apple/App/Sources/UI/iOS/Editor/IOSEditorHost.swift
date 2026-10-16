@@ -22,8 +22,6 @@ struct IOSEditorHost: UIViewRepresentable {
     let onChange: (String) -> Void
     let onInsertImage: () -> Void
     let onVariables: () -> Void
-    /// 键盘上方的"发给 Agent"；nil 时没有这一颗（灵感不直接发给 Agent，见 `CardMenu.handsToAgent`）。
-    let onSend: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     @Environment(AppServices.self) private var services
@@ -51,29 +49,18 @@ struct IOSEditorHost: UIViewRepresentable {
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
-        context.coordinator.send = onSend ?? {}
-        (view.inputAccessoryView as? KeyboardBar)?.showsSend = onSend != nil
         context.coordinator.insertImage = onInsertImage
         context.coordinator.variables = onVariables
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset { view.theme = theme }
     }
 }
 
-/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘，提示词另有发给 Agent（选中文字时只发选中的部分）。
+/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘。
 final class KeyboardBar: UIToolbar {
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
     final class Actions {
-        var send: () -> Void = {}
         var insertImage: () -> Void = {}
         var variables: () -> Void = {}
-    }
-
-    private var base: [UIBarButtonItem] = []
-    private var send: UIBarButtonItem?
-
-    /// 有没有发给 Agent：卡在打开期间可能挂到任务成了提示词，随宿主更新切换。
-    var showsSend = false {
-        didSet { if showsSend != oldValue { setItems(base + (showsSend ? [send].compactMap { $0 } : []), animated: false) } }
     }
 
     init(textView: CueTextView, actions: Actions) {
@@ -86,17 +73,13 @@ final class KeyboardBar: UIToolbar {
             item.accessibilityLabel = label
             return item
         }
-        let send = item("发给 Agent", "paperplane.fill") { _ in actions.send() }
-        send.style = .prominent
-        self.send = send
-        base = [
+        items = [
             item("插入分割线", "rectangle.split.1x2") { $0.insertDivider() },
             item("插入图片", "photo") { _ in actions.insertImage() },
             item("变量取值", "curlybraces") { _ in actions.variables() },
             .flexibleSpace(),
             item("收起键盘", "keyboard.chevron.compact.down") { $0.resignFirstResponder() },
         ]
-        items = base
         sizeToFit()
     }
 

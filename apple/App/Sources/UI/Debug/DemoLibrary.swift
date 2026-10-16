@@ -154,22 +154,21 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 两级任务：圆桌的"乱序"四个步骤，每个步骤是叶子、一条提示词（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
-    /// CuePad 的"投送超时"是叶子、一条提示词（演示里发给 notes，送达后用掉）。
+    /// 两级任务：圆桌的"乱序"四个步骤，每个步骤是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
+    /// CuePad 的"投送超时"是叶子、带着正文（演示里发给 notes）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {
-            _ = try await store.createCard(body: "投送超时时先重试一次，还失败再报错，并在提示里写明原因", under: timeout.id)
+            try await store.updateCard(timeout.id) { $0.rest = "投送超时时先重试一次，还失败再报错，并在提示里写明原因" }
         }
         guard let order = tasks.first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
-        for (step, prompt) in [
+        for (step, rest) in [
             ("复现乱序", "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法"),
             ("改成按首次加入时间排序", "按首次加入时间排序，把断言也改了，再跑一遍"),
             ("补 3 个重连用例", "改完补 3 个重连用例，覆盖断线、超时、换设备"),
             ("部署到预发环境", "测试都过了就部署到预发环境"),
         ] {
-            let leaf = try await store.createTask(step, under: order.id)
-            _ = try await store.createCard(body: prompt, under: leaf.id)
+            _ = try await store.createTask(step + "\n" + rest, under: order.id)
         }
     }
 

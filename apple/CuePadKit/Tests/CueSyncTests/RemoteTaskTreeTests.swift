@@ -69,7 +69,9 @@ import Testing
         switch (isTask, parent) {
         case (true, let parent?): card = try await store.createTask("t\(index)", under: parent.id)
         case (true, nil): card = try await store.createTask("t\(index)", in: project)
-        case (false, let parent?): card = try await store.createCard(body: "i\(index)", under: parent.id)
+        case (false, let parent?):
+          card = try await store.createCard(in: nil, body: "i\(index)")
+          try await store.moveCard(card.id, to: .under(parent.id), after: nil)
         case (false, nil): card = try await store.createCard(in: project, body: "i\(index)")
         }
         made.append((card.id, isTask, (parent?.depth ?? 0) + 1))
@@ -113,49 +115,41 @@ import Testing
     }
   }
 
-  @Test func 并发挪出第三级任务_提到第二级_叶子的提示词跟着() async throws {
+  @Test func 并发挪出第三级任务_提到第二级_挂在下面的灵感跟着() async throws {
     let a = try await store.createTask("a", in: nil)
     let a1 = try await store.createTask("a1", under: a.id)
     let b = try await store.createTask("b", in: nil)
     let b1 = try await store.createTask("b1", under: b.id)
-    let note = try await store.createCard(body: "备注", under: b1.id)
+    let note = try await store.createCard(in: nil, body: "备注")
+    try await store.moveCard(note.id, to: .under(b1.id), after: nil)
     try await pushed()
 
     await rig.coordinator.handle(.fetched(modifications: [remote(b, parent: a1.id)], deletions: []))
 
     #expect(try await store.card(b.id)?.parentID == a.id)
     #expect(try await store.card(b1.id)?.parentID == a.id)
-    #expect(try await store.card(note.id)?.parentID == b1.id)  // b1 是步骤也是叶子：草稿留在它下面
+    #expect(try await store.card(note.id)?.parentID == b1.id)
   }
 
-  @Test func 提示词与会话只在叶子上_远端让叶子有了步骤_草稿与会话落到第一个没完成的步骤_草稿并成一条() async throws {
+  @Test func 会话只在叶子上_远端让叶子有了步骤_会话落到第一个没完成的步骤() async throws {
     let top = try await store.createTask("上线", in: nil)
     let first = try await store.createTask("备份", in: nil)
     let second = try await store.createTask("发布", in: nil)
-    let later = try await store.createCard(in: nil, body: "第二条")
-    let earlier = try await store.createCard(in: nil, body: "第一条")  // 新灵感排在最前：排序键更小
     try await store.linkCard(top.id, toSession: "s1")
     try await pushed()
 
-    func record(_ card: Card, parent: UUID, sortKey: String, task: Bool = true, done: Bool = false, session: String? = nil) -> CKRecord {
+    func record(_ card: Card, parent: UUID, sortKey: String, done: Bool = false, session: String? = nil) -> CKRecord {
       var fields = cardFields(project: nil, body: card.body, modifiedAt: millis(card.modifiedAt) + 1_000, sortKey: sortKey)
       fields["parentID"] = .text(parent.uuidString.lowercased())
-      fields["todoAt"] = task ? .int(1_000) : .null
+      fields["todoAt"] = .int(1_000)
       fields["completedAt"] = done ? .int(3_000) : .null
       fields["piSessionID"] = session.map { .text($0) } ?? .null
       return remoteRecord(.cards, id: card.id, fields)
     }
-    // 另一台设备给"上线"加了两个步骤（备份已完成），又把两条灵感挂在"上线"下
-    let changes = [
-      record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b"),
-      record(later, parent: top.id, sortKey: "c", task: false), record(earlier, parent: top.id, sortKey: "b", task: false),
-    ]
+    // 另一台设备给"上线"加了两个步骤（备份已完成）
+    let changes = [record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b")]
     await rig.coordinator.handle(.fetched(modifications: changes, deletions: []))
 
-    let drafts = try await store.children(of: second.id).filter { !$0.isTask }
-    #expect(drafts.map(\.id) == [earlier.id] && drafts[0].body == "第一条\n\n第二条")
-    #expect(try await store.card(later.id) == nil)
-    #expect(try await store.children(of: top.id).filter { !$0.isTask }.isEmpty)
     #expect(try await store.card(top.id)?.piSessionID == nil)
     #expect(try await store.card(first.id)?.piSessionID == nil)
     #expect(try await store.card(second.id)?.piSessionID == "s1")

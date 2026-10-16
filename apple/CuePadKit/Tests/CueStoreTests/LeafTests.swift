@@ -4,25 +4,24 @@ import CueText
 import Foundation
 import Testing
 
-/// 任务 → 步骤 → 会话：叶子（没有步骤的任务）才有草稿与会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
+/// 任务 → 步骤 → 会话：叶子（没有步骤的任务）才有会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
 @Suite struct LeafTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  @Test func 加第一个步骤时_叶子的草稿与会话移到这个步骤上() async throws {
+  @Test func 加第一个步骤时_叶子的会话移到这个步骤上() async throws {
     let task = try await store.createTask("修乱序", in: nil)
-    let draft = try await store.createCard(body: "跑一下测试", under: task.id)
     try await store.linkCard(task.id, toSession: "s1")
 
     let step = try await store.createTask("复现", under: task.id)
-    #expect(try await store.children(of: step.id).map(\.id) == [draft.id])
     #expect(step.piSessionID == "s1" && step.startedAt != nil)
     let upper = try #require(try await store.card(task.id))
     #expect(upper.piSessionID == nil)
 
-    // 再加一个步骤不动：草稿与会话已经在第一个步骤上
-    _ = try await store.createTask("改排序", under: task.id)
-    #expect(try await store.children(of: step.id).map(\.id) == [draft.id])
+    // 再加一个步骤不动：会话已经在第一个步骤上
+    let next = try await store.createTask("改排序", under: task.id)
+    #expect(try await store.card(step.id)?.piSessionID == "s1")
+    #expect(next.piSessionID == nil)
   }
 
   /// 终端里开的 Claude Code、Codex 会话不是什么都做得到（`AgentCapabilities`）：Cue 对它们的开工、停止、收尾与界面同一组规则——
@@ -30,11 +29,12 @@ import Testing
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
     let recorder = PiStateRecorder(store: store, hostID: "mac")
     let claude = try await store.createTask("修乱序", in: nil)
-    try await store.linkCard(claude.id, toSession: "claude-1")
+    let first = try await store.createTask("复现", under: claude.id)
+    try await store.linkCard(first.id, toSession: "claude-1")
     try await recorder.update(sessionID: "claude-1", state: .settled, agent: .claudeCode)
     let image = try store.files.store(pngData(width: 8, height: 8, shade: 0.5))
-    _ = try await store.createCard(body: "看截图\n\(CueFormat.imageMarkup(id: image))", under: claude.id)
-    #expect(try await store.startLeaf(claude.id, host: "mac").content == "看截图")
+    let next = try await store.createTask("改排序\n看截图\n\(CueFormat.imageMarkup(id: image))", under: claude.id)
+    #expect(try await store.startLeaf(next.id, host: "mac").content == "改排序\n看截图")
     try await recorder.update(sessionID: "claude-1", state: .thinking, title: "修乱序", agent: .claudeCode)
     await #expect(throws: CueStoreError.cannotStop("修乱序")) { try await store.stopSession("claude-1", host: "mac") }
 
@@ -45,7 +45,7 @@ import Testing
     #expect(try await store.card(codex.id)?.status == .done)
   }
 
-  /// 一个会话绑好几个叶子、草稿接进回复框、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
+  /// 一个会话绑好几个叶子、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
   @Test func 绑定_只绑叶子_改绑后原来的会话留作用过的_解绑不改任务状态() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)

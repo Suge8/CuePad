@@ -102,7 +102,6 @@ struct OlderRow: View {
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card, selectable: true) }
-        .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
     }
 }

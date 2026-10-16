@@ -4,7 +4,7 @@ import Foundation
 /// 项目页的内容（灵感、发送、任务）一次读取；项目的名称、图标、目录、计数在 `ProjectCatalog`。
 nonisolated struct ProjectPageData: Sendable, Equatable {
     var project: Project?
-    /// 散放的灵感（不含任务与提示词）：卡片墙与"更早"。
+    /// 散放的灵感（不含任务与挂在任务下的）：卡片墙与"更早"。
     var cards: [Card]
     /// 卡片最近一次发送（时间与目标）；从未发送的卡不在里面。
     var lastSends: [UUID: LastSend]
@@ -16,8 +16,6 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var taskCounts: TaskCounts
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
-    /// 叶子的草稿：行尾的"开始"交出的就是它。
-    var drafts: [UUID: Card]
 
     /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
     var lastTarget: [UUID: String] {
@@ -41,8 +39,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
             done: TaskBoard.recentlyDone(all),
             taskCounts: try store.taskCounts(in: project),
-            subtasks: try store.subtaskProgress(in: project),
-            drafts: try store.drafts(in: project))
+            subtasks: try store.subtaskProgress(in: project))
     }
 }
 

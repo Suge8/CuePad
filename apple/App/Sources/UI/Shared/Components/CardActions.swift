@@ -2,8 +2,6 @@ import CueStore
 import SwiftUI
 
 /// 灵感与任务的菜单（长按 / Mac 右键，或任务页与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
-/// 挂到任务两端一样（弹出选任务的面板，`Workspace.attaching`）；发给 Agent（只在提示词上）是平台各自的：
-/// Mac 发给当前目标（发给 Pi 会话时把提示词关联到它），iOS 浮起发给 Agent 的输入框。
 struct CardActions: View {
     let card: Card
     /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。
@@ -13,9 +11,6 @@ struct CardActions: View {
     /// 这是 Mac 上的叶子任务（没有步骤）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
     var leaf = false
     @Environment(Workspace.self) private var workspace
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    #endif
 
     var body: some View {
         let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf)
@@ -28,8 +23,6 @@ struct CardActions: View {
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
         let id = card.id
         switch item {
-        case .attachToTask: Button(item.title + "…", systemImage: item.symbol) { workspace.attaching = card }
-        case .handToAgent: handToAgent
         case .makeTask, .makeIdea: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.setTodo(id, item == .makeTask) } }
         case .complete, .reopen:
             Button(item.title, systemImage: item.symbol) {
@@ -68,24 +61,12 @@ struct CardActions: View {
                 .disabled(card.parentID == nil && here == nil)
         }
     }
-
-    private var handToAgent: some View {
-        Button(CardMenu.Item.handToAgent.title, systemImage: CardMenu.Item.handToAgent.symbol) {
-            #if os(macOS)
-            workspace.handOff(card)
-            #else
-            navigation.handToAgent(card)
-            #endif
-        }
-    }
 }
 
 /// 每一项的字、图标与颜色语义：长按菜单、"⋯"与轻扫共用一份。
 extension CardMenu.Item {
     var title: String {
         switch self {
-        case .attachToTask: "挂到任务"
-        case .handToAgent: "发给 Agent"
         case .makeTask: "设为任务"
         case .makeIdea: "改回灵感"
         case .complete: "完成"
@@ -105,9 +86,6 @@ extension CardMenu.Item {
 
     var symbol: String {
         switch self {
-        // 挂进任务成为它下面的一条，不用对勾：对勾读作"完成、存好"，只给"记下"这类提交（`SubmitGlyph`）
-        case .attachToTask: "arrow.turn.down.right"
-        case .handToAgent: "paperplane"
         case .makeTask: "checklist"
         case .makeIdea: "lightbulb"
         case .complete: "checkmark.circle"
@@ -128,7 +106,6 @@ extension CardMenu.Item {
     var tone: ActionTone {
         switch self {
         case .trash: .destructive
-        case .attachToTask, .handToAgent: .primary
         default: .neutral
         }
     }
@@ -140,7 +117,6 @@ extension RowSwipes {
         let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil, outdent: structure?.outdent != nil)
         func action(_ item: CardMenu.Item) -> RowAction? {
             let run: (() -> Void)? = switch item {
-            case .attachToTask: { workspace.attaching = card }
             case .makeTask: { workspace.attempt { try await workspace.setTodo(card.id, true) } }
             case .trash: { workspace.attempt { try await workspace.trash(card.id) } }
             case .indent: structure?.indent

@@ -29,7 +29,7 @@ extension Command {
         Opt("parent", "作为该任务的步骤（项目随它；任务 → 步骤，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
       notes: Schema.defaultProject(otherwise: "是全局任务") + "；给了 --parent 时不能再给 --project / --global。\n"
-        + "正文取所有位置参数，以空格连接：第一行是任务，其余几行成为它的提示词（要发给 Agent 的话）。已有的灵感用 cuepad card todo 变成任务。\n"
+        + "正文取所有位置参数，以空格连接：第一行是标题，其余几行是它的正文（开始时连同标题发给 Agent）。已有的灵感用 cuepad card todo 变成任务。\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
       let args = call.args

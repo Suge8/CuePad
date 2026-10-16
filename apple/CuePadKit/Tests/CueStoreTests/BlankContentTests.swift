@@ -16,13 +16,11 @@ import Testing
     let spaces = try await store.createCard(in: p.id, body: " \n\n ")
     let kept = try await store.createCard(in: p.id, body: "换首图")
     let task = try await store.createTask("修乱序", in: p.id)
-    let prompt = try await store.createCard(body: "", under: task.id)
 
-    for id in [blank.id, spaces.id, kept.id, task.id, prompt.id] { try await store.dropIfBlank(id) }
+    for id in [blank.id, spaces.id, kept.id, task.id] { try await store.dropIfBlank(id) }
 
     #expect(try await store.card(blank.id) == nil)
     #expect(try await store.card(spaces.id) == nil)
-    #expect(try await store.card(prompt.id) == nil)
     #expect(try await store.card(kept.id) != nil)
     #expect(try await store.card(task.id) != nil)
   }

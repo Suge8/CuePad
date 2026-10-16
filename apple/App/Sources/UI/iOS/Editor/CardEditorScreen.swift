@@ -8,19 +8,17 @@ import SwiftUI
 nonisolated private struct EditorData: Sendable, Equatable {
     var card: Card
     var project: Project?
-    /// 提示词所在的任务（挂在任务下的灵感）。
-    var task: Card?
 }
 
-/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值，提示词另有发给 Agent；选中文字时只发选中的部分）与自动保存在这里，
-/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
-/// 与"时间 · 资料"，右下一颗主按钮（⌘↩）：灵感是"挂到任务"，提示词是"发给 Agent"（`CardMenu.handsToAgent`）；右边"⋯"里是分享与 `CardMenu.more`；
-/// 任务是 `TaskPage`（标题、提示词、步骤）。
-/// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
+/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值）与自动保存在这里，
+/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目
+/// 与"时间 · 资料"，右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题、正文、步骤）。
+/// `part` 是 `.rest` 时是任务页弹出的正文编辑（同一种纸页，只写标题下面的话，顶栏写任务的标题）。
+/// 灵感离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
+    var part = CardTextPart.whole
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
@@ -33,34 +31,23 @@ struct CardEditorScreen: View {
     @State private var pickedImage: PhotosPickerItem?
     @State private var editingVariables = false
     @State private var flushToken: UUID?
-    @State private var typing = false
 
     private static let pageWidth: CGFloat = 760
 
     var body: some View {
         frame
-            // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
-            .background {
-                Button("主动作", action: primary).keyboardShortcut(.return, modifiers: .command)
-                    .disabled(data == nil).opacity(0).accessibilityHidden(true)
-            }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }
             .sheet(isPresented: $editingVariables) {
                 if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: currentText)) }
             }
-            // 提示词送达就用掉（资料库里删了）：卡没了就收起，不当错误
-            .observing(services.store, id: cardID, into: $data, onError: { error in
-                if case .notFound = error as? CueStoreError { dismiss() } else { workspace.fail(error) }
-            }) { [cardID] store in
+            .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-                return EditorData(
-                    card: card, project: try card.projectID.flatMap { try store.project($0) },
-                    task: try card.isTask ? nil : card.parentID.flatMap { try store.card($0) })
+                return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
             }
             .onChange(of: data?.card.id, initial: true) {
                 guard initialText == nil, let card = data?.card else { return }
-                initialText = card.body
+                initialText = part.text(of: card)
             }
             .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
             .onAppear(perform: makeAutosave)
@@ -72,15 +59,10 @@ struct CardEditorScreen: View {
 
     private var wide: Bool { sizeClass == .regular }
     @ViewBuilder private var frame: some View {
-        if let data, data.card.isTask {
+        if let data, data.card.isTask, part == .whole {
             TaskPage(card: data.card)
         } else {
             editor
-                // 贴着正文右下一颗主按钮（灵感挂到任务、提示词发给 Agent），写字时让给键盘上方的工具栏
-                .overlay(alignment: .bottomTrailing) { if !typing, let card = data?.card { mainButton(card).transition(.opacity) } }
-                .animation(Motion.quick, value: typing)
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
                 .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
                 .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
                 .overlay {
@@ -88,7 +70,7 @@ struct CardEditorScreen: View {
                 }
                 .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .floatingHeader(data.map(Self.place) ?? "", detail: data.map(Self.detail) ?? "") { actions }
+                .floatingHeader(data.map(place) ?? "", detail: data.map(detail) ?? "") { actions }
         }
     }
 
@@ -102,7 +84,6 @@ struct CardEditorScreen: View {
                     onChange: { autosave?.changed($0) },
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
-                    onSend: hand(data.card),
                     selectionActions: selectionActions(data.card),
                     onError: workspace.fail)
             }
@@ -111,14 +92,14 @@ struct CardEditorScreen: View {
 
     private var inset: CGFloat { wide ? 44 : 20 }
 
-    /// 顶栏中间：提示词写它的任务，其余写所属项目。
-    private static func place(_ data: EditorData) -> String {
-        data.task?.title ?? data.project?.name ?? CaptureCopy.unfiled
+    /// 顶栏中间：任务的正文写任务的标题，其余写所属项目。
+    private func place(_ data: EditorData) -> String {
+        part == .rest ? data.card.title : data.project?.name ?? CaptureCopy.unfiled
     }
 
-    /// 顶栏的一行："改于 03:36 · 资料"；提示词是"提示词 · 改于 03:36"。
-    private static func detail(_ data: EditorData) -> Dotted {
-        Dotted(data.task != nil ? "提示词" : nil, "改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "资料" : nil)
+    /// 顶栏的一行："改于 03:36 · 资料"；任务的正文是"正文 · 改于 03:36"。
+    private func detail(_ data: EditorData) -> Dotted {
+        Dotted(part == .rest ? "正文" : nil, "改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "资料" : nil)
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
@@ -133,44 +114,9 @@ struct CardEditorScreen: View {
         .disabled(data == nil)
     }
 
-    @ViewBuilder private func mainButton(_ card: Card) -> some View {
-        Group {
-            if CardMenu.handsToAgent(card) {
-                MainButton(title: "发给 Agent", symbol: "paperplane.fill", action: sendToMac)
-            } else {
-                MainButton(title: CardMenu.Item.attachToTask.title, symbol: CardMenu.Item.attachToTask.symbol, action: { workspace.attaching = card })
-            }
-        }
-        .padding(.trailing, 16).padding(.bottom, 16)
-    }
-
-    /// 键盘上方的发给 Agent：只有提示词有。
-    private func hand(_ card: Card) -> (() -> Void)? {
-        CardMenu.handsToAgent(card) ? { sendToMac() } : nil
-    }
-
-    /// ⌘↩：右下那颗主按钮做的事。
-    private func primary() {
-        guard let card = data?.card else { return }
-        if CardMenu.handsToAgent(card) { sendToMac() } else { workspace.attaching = card }
-    }
-
-    /// 发给 Agent（浮起发给 Agent 的输入框）：选中了文字就只发选中的部分。
-    private func sendToMac() {
-        guard let card = data?.card else { return }
-        let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
-        navigation.handToAgent(card, text: body)
-    }
-
-    /// 编辑菜单里的选区动作：转为任务；提示词另有发给 Agent（只发选中的部分）。
+    /// 编辑菜单里的选区动作：转为任务。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        let hand = CueSelectionAction(title: "发给 Agent", systemImage: "paperplane") { stored in
-            navigation.handToAgent(card, text: Outgoing.text(body: stored, values: card.variableValues))
-        }
-        let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
-            workspace.convertToTasks(stored, in: card.projectID)
-        }
-        return CardMenu.handsToAgent(card) ? [hand, tasks] : [tasks]
+        [CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in workspace.convertToTasks(stored, in: card.projectID) }]
     }
 
     /// 当前编辑中的整张正文（未保存的也算）：编辑器是正文的唯一写者，从它读；编辑器还没建好时是打开时的正文。
@@ -197,34 +143,13 @@ struct CardEditorScreen: View {
 
     private func makeAutosave() {
         guard autosave == nil else { return }
-        let store = services.store, id = cardID
+        let store = services.store, id = cardID, part = part
         let autosave = Autosave(
-            save: { body in try await store.updateCard(id) { $0.body = body } },
+            save: { text in try await store.updateCard(id) { part.write(text, into: &$0) } },
             onError: workspace.fail)
         self.autosave = autosave
         // 进入后台时由壳层等它落盘：之后 App 可能被系统结束，离开页面的 onDisappear 不会再来
         flushToken = services.addBackgroundFlush { await autosave.flush() }
-    }
-}
-
-/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是"挂到任务"，提示词是"发给 Agent"。
-private struct MainButton: View {
-    let title: String
-    let symbol: String
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(palette.onSignature)
-                .padding(.horizontal, 18).frame(height: 48)
-                .background(palette.signatureFill, in: .capsule)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle())
-        .sensoryFeedback(.impact(weight: .light), trigger: 0)
     }
 }
 

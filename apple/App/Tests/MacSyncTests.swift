@@ -662,10 +662,9 @@ struct MacSyncTests {
         try await services.store.setDirectory(directory.path, for: project.id)
         defer { services.cancelBackgroundWork() }
         let task = try await services.store.createTask("上线", in: project.id)
-        let step = try await services.store.createTask("备份数据库", under: task.id)
-        let prompt = try await services.store.createCard(body: "先把库备份一份", under: step.id)
+        let step = try await services.store.createTask("备份数据库\n先把库备份一份", under: task.id)
 
-        let done = try await launched(PiLaunch(project: project.id, prompt: prompt.body, token: "tok-6"), card: prompt.id)
+        let done = try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id)
 
         #expect(done.status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-6"])

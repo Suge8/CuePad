@@ -78,9 +78,11 @@ import Testing
       #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
 
       let added = try await server.call(
-        "task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"], "prompt": "先读 release.sh"])
+        "task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"]])
       let taskID = try #require(added["task"] as? String)
       let task = try #require(UUID(uuidString: taskID))
+      let research = try #require(try await store.children(of: task).first)
+      _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
       let board = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
       #expect(board.compactMap { $0["title"] as? String } == ["重写发布脚本"])
       // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
@@ -91,22 +93,11 @@ import Testing
       }
       #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { $0.parentID == nil }.count == 1)
 
-      // 没有草稿不开工（开新会话也一样，fresh 也一样）：先 edit 写草稿，什么请求都不写
-      let blankID = try await server.call("task", ["action": "add", "title": "空着", "project": "演示"])["task"] as? String
-      let blank = try #require(blankID.flatMap(UUID.init(uuidString:)))
-      for arguments: [String: Any] in [["action": "start", "task": blank.uuidString], ["action": "start", "task": blank.uuidString, "fresh": true]] {
-        let refused = try await server.request("tools/call", ["name": "task", "arguments": arguments])
-        #expect(refused["isError"] as? Bool == true)
-        #expect(((refused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("edit") == true)
-      }
-      #expect(try await store.deliveryRequests().isEmpty)
-      _ = try await store.trashCard(blank)
-
       _ = try await server.call("task", ["action": "start", "task": String(task.uuidString.prefix(6)), "model": "anthropic/claude-x", "effort": "high"])
       let launch = try #require(try await store.deliveryRequests().first)
       let step = try #require(try await store.children(of: task).first)
       #expect(launch.hostID == "mac-a" && launch.isFromCue && launch.target.name == "调研")
-      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "先读 release.sh")
+      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "重写发布脚本\n\n调研\n先读 release.sh")  // 开新会话：顶层任务作背景在前
       #expect(launch.launch?.model == PiModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
       #expect(try await store.workingLeaf(of: task).id == step.id)
       let starting = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
@@ -156,23 +147,24 @@ import Testing
     }
     try await Server.run(library: sandbox.directory) { server in
 
-      let added = try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "prompt": "先看现有问候"])
+      let added = try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "body": "先看现有问候"])
       let taskID = try #require(added["task"] as? String)
       let task = try #require(UUID(uuidString: taskID))
       let step = try #require(try await store.children(of: task).first)
-      let draft = try #require(try await store.children(of: step.id).first)
       #expect(try await store.card(task)?.projectID == nil)
+      #expect(try await store.card(task)?.body == "加问候语\n先看现有问候")
 
       _ = try await server.call("task", ["action": "edit", "task": taskID, "project": "greet"])
-      for id in [task, step.id, draft.id] { #expect(try await store.card(id)?.projectID == project.id) }
+      for id in [task, step.id] { #expect(try await store.card(id)?.projectID == project.id) }
       _ = try await server.call("task", ["action": "start", "task": taskID])
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
-      // 你亲手给步骤绑上会话：绑了会话的叶子不留草稿，Cue 再写草稿被拒（叫它用 say），什么都不留下
+      // 你亲手给步骤绑上会话：再开工被拒（叫它用 say），什么请求都不多写
       try await store.bindSession("s9", to: step.id)
-      let rejected = try await server.request("tools/call", ["name": "task", "arguments": ["action": "edit", "task": taskID, "prompt": "再看看"]])
+      let rejected = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": taskID]])
       #expect(rejected["isError"] as? Bool == true)
-      #expect(try await store.children(of: step.id).isEmpty)
+      #expect(((rejected["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("say") == true)
+      #expect(try await store.deliveryRequests().count == 1)
     }
   }
 
@@ -331,8 +323,7 @@ import Testing
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
-    let task = try await store.createTask("修好登录页", in: project.id)
-    _ = try await store.createCard(body: "登录页白屏，查一下", under: task.id)
+    let task = try await store.createTask("修好登录页\n登录页白屏，查一下", in: project.id)
     try await Server.run(library: sandbox.directory) { server in
 
       for bad in [["agent": "pi", "model": "gpt-5.1"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
@@ -386,18 +377,13 @@ import Testing
       #expect(try await store.card(first.id)?.status == .done)
       #expect(try await store.deliveryRequests().isEmpty)
 
-      // 下一步还没有草稿：报错，什么都不写、不绑
-      #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("edit") == true)
-      #expect(try await store.card(second.id)?.piSessionID == nil)
-      #expect(try await store.deliveryRequests().isEmpty)
-
-      _ = try await store.createCard(body: "照调研结论改 release.sh", under: second.id)
+      try await store.updateCard(second.id) { $0.body += "\n照调研结论改 release.sh" }
       let continued = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": second.id.uuidString]])
       #expect(continued["isError"] as? Bool == false)
       #expect(((continued["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("已发出，还没送达") == true)
       let sent = try await store.deliveryRequests()
       #expect(sent.map(\.mode) == [.known(.followUp)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
-      #expect(sent.first?.content == "照调研结论改 release.sh")
+      #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
       // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
       let board = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
@@ -451,7 +437,6 @@ import Testing
       _ = try await server.call("task", ["action": "done", "task": sound.id.uuidString, "evidence": ["提示音与提示窗都出来了"]])
       #expect(try await ends().isEmpty)  // 下一步还没开工，默认接着用它
 
-      _ = try await store.createCard(body: "在设置里加通知开关", under: settings.id)
       _ = try await server.call("task", ["action": "start", "task": settings.id.uuidString, "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(try await ends() == ["s1"])
@@ -582,8 +567,7 @@ import Testing
       #expect(answered.map(\.mode) == [.known(.config), .known(.answer)] && answered.allSatisfy(\.isFromCue))
       #expect(answered.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-sol"), thinking: .low))
 
-      // 照提示 fresh 开新会话：绑着会话的叶子也开新的（同样要先写草稿）
-      _ = try await store.createCard(body: "换 opus 接着改", under: claude.id)
+      // 照提示 fresh 开新会话：绑着会话的叶子也开新的
       _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(launch.launch?.agent == .claudeCode && launch.launch?.model == PiModelKey(provider: "claude", id: "opus"))

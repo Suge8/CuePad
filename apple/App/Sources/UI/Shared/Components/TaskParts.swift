@@ -3,9 +3,23 @@ import CueText
 import SwiftUI
 
 
-// 任务页（手机推入的纸页、Mac 盖在当前页上的浮窗）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
-// 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；步骤是次要的一组（`SubtaskList`）。
+// 任务页（手机推入的纸页、Mac 盖在当前页上的浮窗）的几块：任务是一件要做成的事——标题（`TaskHeading`）与下面要交代给 Agent 的话
+// （正文，`Card.rest`）；步骤是次要的一组（`SubtaskList`）。
 
+
+/// 编辑器写的是正文的哪一段：整条（灵感），或任务标题下面的话（`Card.rest`；标题由 `TaskHeading` 另写，写入时各读库里此刻的另一段）。
+nonisolated enum CardTextPart: Sendable {
+    case whole, rest
+
+    func text(of card: Card) -> String { self == .whole ? card.body : card.rest ?? "" }
+
+    func write(_ text: String, into card: inout Card) {
+        switch self {
+        case .whole: card.body = text
+        case .rest: card.rest = text
+        }
+    }
+}
 
 /// 任务的标题（单行），就地改、自动保存。回车结束编辑。
 struct TaskHeading: View {
@@ -32,21 +46,22 @@ struct TaskHeading: View {
             .onAppear {
                 title = task.heading
                 let store = services.store, id = task.id
-                autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
+                autosave = Autosave(
+                    save: { title in try await store.updateCard(id) { $0.body = CueLines.joined(title: title, rest: $0.rest) } }, onError: workspace.fail)
             }
             .onDisappear { if let autosave { Task { await autosave.flush() } } }
     }
 
-    /// 只换标题那一行：正文里若还有别的话（旧版本同步来的），一并写回，由 Store 拆成提示词，不在改标题时丢掉。
+    /// 只换标题那一行：下面的正文在写入的那一刻从库里读（`Card.rest`），与正文编辑各写各的。
     private func save() {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title != task.heading else { return }
-        autosave?.changed(CueLines.split(task.body).prompt.map { title + "\n" + $0 } ?? title)
+        autosave?.changed(title)
     }
 }
 
 
-/// 步骤：在提示词之后的次要一组，可勾的圈与标题（点标题打开）；没有步骤时整组不出现。
+/// 步骤：在正文之后的次要一组，可勾的圈与标题（点标题打开）；没有步骤时整组不出现。
 /// 步骤不在这里加：Mac 浮窗在它下面接一行"添加步骤"，手机在任务大纲里把任务拖到它上面。
 struct SubtaskList: View {
     let detail: TaskDetail?

@@ -10,7 +10,7 @@ struct CaptureState {
 }
 
 /// 随手记（Mac 底部输入栏与菜单栏面板共用；手机上随手记在"对 Cue 说"里，见 `CueComposer`）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
-/// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感：它要发给 Agent 先挂到任务，所以这里没有发送；记下后提示落点、点提示去那里。
+/// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感，所以这里没有发送；记下后提示落点、点提示去那里。
 /// 文案与存法见 `CaptureCopy`、`CaptureDraft`。两处只差：Mac 底部输入栏平时收成一行、占位带上落点（`pinnedOpen` 为 false），
 /// 菜单栏面板的提示写在头部右边。
 struct CaptureComposer: View {

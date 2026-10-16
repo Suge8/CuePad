@@ -117,8 +117,8 @@ extension CueStore {
     return String(cString: resolved)
   }
 
-  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的提示词），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
-  /// 任务见 `tasks(_:)`，提示词见 `children(of:)`。
+  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
+  /// 任务见 `tasks(_:)`，挂在任务下的见 `children(of:)`。
   public func cards(in project: UUID?) throws -> [Card] {
     try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
@@ -142,7 +142,7 @@ extension CueStore {
   }
 
   /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
-  /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
+  /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上；没开成的不算交给过，任务行重新给"开始"）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
   /// 在路上的（还没执行完的）最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），
   /// 不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上（`claimLaunchedCards`）。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
@@ -156,6 +156,7 @@ extension CueStore {
       UNION ALL
       SELECT r.cardID, r.targetRef, r.mode = 'start', 2 FROM deliveryRequests r
       WHERE \(handOff) AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
+        AND (r.mode != 'start' OR r.status != '\(DeliveryStatus.failed.rawValue)')
       ORDER BY rank
       """
     ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
@@ -166,7 +167,7 @@ extension CueStore {
   /// 还没执行完的请求（`r`）。
   private static let openRequest = "r.status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.executing.rawValue)')"
 
-  /// 一张任务的下级（步骤与提示词），按手动顺序；在回收站的不列。
+  /// 一张任务的下级（步骤与挂在下面的灵感），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
@@ -230,7 +231,7 @@ extension CueStore {
 
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
   /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；步骤的进度见 `subtaskProgress`。
-  /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
+  /// 灵感不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] { try taskCounts(scope: "", []) }
 
   /// 一个项目（nil = 未分类）的顶层任务数，口径同 `taskCounts()`；没有任务为 `.zero`。
@@ -266,7 +267,6 @@ extension CueStore {
 
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
   /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
-  /// 提示词不在其中：提示词只表示发没发出去（见 `drafts()` 与 `handedSessions()`），不算任务的进度。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
   public func subtaskProgress(of parent: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND parentID = ?", [parent]) }
@@ -282,19 +282,6 @@ extension CueStore {
       """, arguments
     ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
-  }
-
-  /// 各叶子的草稿（同 `draft(of:)`：它下面第一条不是资料的提示词），按叶子取：任务行据此给"开始"。
-  /// 不带参数读全库；`in` 只读一个项目（nil = 未分类）里的。归档、回收站里的不列。
-  public func drafts() throws -> [UUID: Card] { try drafts(scope: "", []) }
-
-  public func drafts(in project: UUID?) throws -> [UUID: Card] { try drafts(scope: "AND projectID IS ?", [project]) }
-
-  private func drafts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: Card] {
-    let cards = try select(
-      Card.self, where: "parentID IS NOT NULL AND todoAt IS NULL AND isPinned = 0 AND deletedAt IS NULL AND archivedAt IS NULL \(scope)", arguments,
-      orderBy: "parentID, sortKey, id")
-    return Dictionary(cards.map { ($0.parentID!, $0) }, uniquingKeysWith: { first, _ in first })
   }
 
   /// 发送记录，最近的在前（同一毫秒按写入先后）。
