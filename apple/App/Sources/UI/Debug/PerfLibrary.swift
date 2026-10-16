@@ -21,6 +21,8 @@ enum PerfLibrary {
     private static let boundProjects = 10
     /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
+    /// 最长的那段对话。
+    static var longestChat: String { "perf-\(chatRounds.count - 1)" }
 
     static func seed(_ store: CueStore) async throws {
         var random = SeededRandom(seed: 20261002)
