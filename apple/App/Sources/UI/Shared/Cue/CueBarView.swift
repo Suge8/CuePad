@@ -35,13 +35,15 @@ struct CueStatusRow<Trailing: View>: View {
             CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row).wakeTarget(.entry)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.digest.lastSaid).lineLimit(1)
+                CueStatusLine(fallback: cue.lastSaid).lineLimit(1)
             }
             Spacer(minLength: 6)
-            WaitingCount(count: cue.digest.waiting).font(Typography.meta)
+            WaitingCount(count: cue.waiting).font(Typography.meta)
             trailing
         }
-        .animation(Motion.quick, value: cue.digest)
+        .animation(Motion.quick, value: cue.waiting)
+        .animation(Motion.quick, value: cue.lastSaid)
+        .animation(Motion.quick, value: cue.presence)
     }
 }
 

@@ -107,9 +107,9 @@ struct CuePage: View {
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
-                let ending = ending
+                let live = live
                 let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou, ending: ending) }
+                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou, live: live) }
                 CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
@@ -118,22 +118,18 @@ struct CuePage: View {
         }
     }
 
-    /// 一轮的经过那一行的结尾：在跑的那一行（Cue 此刻的状态记着是哪一行）是此刻在做的，其余的不记用时。
-    private var ending: (CueMessage) -> RoundProcess.Ending {
-        let presence = cue.presence, live = cue.digest.state?.round
-        return { message in
-            guard message.id == live, let shown = presence.shown, let progress = presence.progress else { return .took(nil) }
-            return .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.symbol(.other) : nil)
-        }
+    /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。
+    private var live: CueLiveRound? {
+        let presence = cue.presence
+        guard let round = cue.round, let shown = presence.shown, let progress = presence.progress else { return nil }
+        return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.symbol(.other) : nil))
     }
 
-    /// `lastYou`：你最后一句，只在它下面写"已送达"。
-    @ViewBuilder private func row(
-        _ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?, ending: @escaping (CueMessage) -> RoundProcess.Ending
-    ) -> some View {
+    /// `lastYou`：你最后一句，只在它下面写"已送达"。`live` 只交给它所在的那一格，别的格子输入不变、不随 Cue 的状态重算。
+    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?, live: CueLiveRound?) -> some View {
         switch row {
         case .you(let message):
-            SpeechBubble(said: .cue(message, host: cue.digest.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
+            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou)
                 .padding(.top, 14)
         case .cue(let message, let task):
             VStack(alignment: .leading, spacing: 6) {
@@ -141,9 +137,9 @@ struct CuePage: View {
                 if let task, let ref = tasks[task] { CueTaskLine(ref: ref) }
             }
         case .notes(let notes):
-            CueNotes(notes: notes, ending: ending)
+            CueNotes(notes: notes, live: live.flatMap { live in notes.contains { $0.id == live.round } ? live : nil })
         case .process(let message):
-            RoundProcess(tools: message.tools, ending: ending(message))
+            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live))
         case .renewed(let handoff):
             CueRenewal(handoff: handoff, name: cue.name)
         }
@@ -180,7 +176,7 @@ struct CuePage: View {
             if let thread {
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = PreviewOpening(preview: $0) }
             }
-            if cue.presence == .disabled {
+            if !cue.canHear {
                 CueEnableCard().transition(.opacity)
             }
             #if os(iOS)
@@ -190,7 +186,19 @@ struct CuePage: View {
             #endif
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
-        .animation(Motion.quick, value: cue.presence == .disabled)
+        .animation(Motion.quick, value: cue.canHear)
+    }
+}
+
+/// Cue 在跑的那一轮：经过那一行（`round`）此刻的结尾，其余经过不记用时。
+/// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
+struct CueLiveRound: Equatable {
+    let round: UUID
+    let ending: RoundProcess.Ending
+
+    static func ending(of message: CueMessage, in live: CueLiveRound?) -> RoundProcess.Ending {
+        guard let live, live.round == message.id else { return .took(nil) }
+        return live.ending
     }
 }
 
@@ -232,7 +240,7 @@ private struct CueEnding: View {
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
-        if workspace.cue.digest.state?.round == nil, let shown = presence.shown, let progress = presence.progress {
+        if workspace.cue.round == nil, let shown = presence.shown, let progress = presence.progress {
             RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }

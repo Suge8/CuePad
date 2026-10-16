@@ -53,7 +53,7 @@ struct CueEnableCard: View {
             }
             #else
             Label {
-                Text(cue.digest.hostName.map { "到「\($0)」上打开 CuePad，在设置里启用 \(cue.name)" } ?? "到你的 Mac 上打开 CuePad，在设置里启用 \(cue.name)")
+                Text(cue.hostName.map { "到「\($0)」上打开 CuePad，在设置里启用 \(cue.name)" } ?? "到你的 Mac 上打开 CuePad，在设置里启用 \(cue.name)")
             } icon: {
                 Image(systemName: "desktopcomputer")
             }
@@ -139,8 +139,8 @@ struct CuePreviewThumb: View {
 /// 点开看全——经过与回答注脚同一个样子（`RoundProcess`），说的话是灰字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
 struct CueNotes: View {
     let notes: [CueMessage]
-    /// 经过那一行的结尾（在跑的那一行是此刻在做的，见 `CuePage`）
-    let ending: (CueMessage) -> RoundProcess.Ending
+    /// 在跑的那一轮在这几条里时有（`CueLiveRound`）
+    let live: CueLiveRound?
     @State private var expanded = false
     @Environment(\.palette) private var palette
 
@@ -163,7 +163,7 @@ struct CueNotes: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(notes) { note in
                         if note.tools != nil {
-                            RoundProcess(tools: note.tools, ending: ending(note))
+                            RoundProcess(tools: note.tools, ending: CueLiveRound.ending(of: note, in: live))
                         } else {
                             Text(CueFormat.plainText(note.text)).font(Typography.meta).foregroundStyle(palette.ink3)
                                 .fixedSize(horizontal: false, vertical: true)

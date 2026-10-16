@@ -61,7 +61,7 @@ struct BottomBar: View {
             .overlay {
                 let cue = workspace.cue
                 HStack(spacing: 0) {
-                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.digest.waiting)
+                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.waiting)
                     tab(.projects, title: "灵感", symbol: "lightbulb")
                 }
                 .accessibilityElement(children: .contain)
