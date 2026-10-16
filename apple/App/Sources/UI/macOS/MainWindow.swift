@@ -111,6 +111,7 @@ private struct CardPressMonitor: NSViewRepresentable {
     final class MonitorView: NSView {
         private let workspace: Workspace
         private var monitor: Any?
+        private static let deleteKey: UInt16 = 51
 
         init(workspace: Workspace) {
             self.workspace = workspace
@@ -119,17 +120,29 @@ private struct CardPressMonitor: NSViewRepresentable {
 
         required init?(coder: NSCoder) { nil }
 
+        /// ⌘⌫（同访达）删鼠标停着的那张卡：在文字里时照常是删到行首，批量选择时归底部的操作栏（`SelectionBar`）。
+        /// 不挂成窗口级快捷键：那样会先于编辑页、输入栏接走 ⌘⌫。
+        private func deleteHovered(_ event: NSEvent) -> Bool {
+            guard event.keyCode == Self.deleteKey, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  !((window?.firstResponder as? NSTextView)?.isEditable ?? false),
+                  let card = workspace.presses.deletable else { return false }
+            workspace.attempt { try await self.workspace.trash(card) }
+            return true
+        }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor { NSEvent.removeMonitor(monitor) }
             monitor = nil
             guard window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
-                MainActor.assumeIsolated {
-                    guard let self, event.window === self.window, !event.modifierFlags.contains(.control) else { return }
-                    self.workspace.presses.mouse(down: event.type == .leftMouseDown)
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .keyDown]) { [weak self] event in
+                let handled = MainActor.assumeIsolated {
+                    guard let self, event.window === self.window else { return false }
+                    if event.type == .keyDown { return self.deleteHovered(event) }
+                    if !event.modifierFlags.contains(.control) { self.workspace.presses.mouse(down: event.type == .leftMouseDown) }
+                    return false
                 }
-                return event
+                return handled ? nil : event
             }
         }
     }

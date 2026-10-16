@@ -4,7 +4,8 @@ import CueStore
 /// 动线是任务优先：记下灵感 → 设为任务（标题下面写要交代的话）→ 开始（正文作为第一句交给 Agent，见 `TaskNext`）→ 完成并归档。
 /// 所以灵感的主动作是设为任务。长按（Mac 右键）最多四项加删除，主动作排第一，删除单独在最后；
 /// 打开是点按、完成是点圆圈、缩进是轻扫和拖放，这些不进菜单；低频的（换项目、复制、改回灵感、资料）在任务页与纸页的"⋯"里（`more`）。
-/// 一行轻扫露出的动作也在这里（`swipes`）。
+/// 一行轻扫露出的动作也在这里（`swipes`）。删除只有一处（`Workspace.trash`，进回收站、提示里可撤销）：菜单、轻扫之外，
+/// Mac 上悬停墙上的卡与"更早"的行时露出删除钮，⌘⌫ 删鼠标停着的那张（`DeleteCardButton`、`CardPresses.deletable`）。
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
         case makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash

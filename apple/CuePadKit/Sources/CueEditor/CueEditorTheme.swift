@@ -27,8 +27,8 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var backgroundColor: CueColor
     public var variableColor: CueColor
     public var variableBackground: CueColor
-    public var dividerColor: CueColor
-    public var dividerLabelColor: CueColor
+    /// 链接 `[文字](地址)` 里文字的颜色（其余标记用 `markerColor`）。
+    public var linkColor: CueColor
     /// 图片加载中或缺失时的底色。
     public var placeholderColor: CueColor
     /// 文字离编辑区左右边的最小距离。
@@ -40,14 +40,13 @@ public struct CueEditorTheme: @unchecked Sendable {
     /// `# ` 标题行上方的额外间距。
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
-    public var dividerHeight: CGFloat
 
     public init(
         font: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
         codeBackground: CueColor, textColor: CueColor, backgroundColor: CueColor, variableColor: CueColor,
-        variableBackground: CueColor, dividerColor: CueColor, dividerLabelColor: CueColor,
+        variableBackground: CueColor, linkColor: CueColor,
         placeholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
-        headingSpacing: CGFloat, imageCornerRadius: CGFloat, dividerHeight: CGFloat
+        headingSpacing: CGFloat, imageCornerRadius: CGFloat
     ) {
         self.font = font
         self.headingFont = headingFont
@@ -58,8 +57,7 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.backgroundColor = backgroundColor
         self.variableColor = variableColor
         self.variableBackground = variableBackground
-        self.dividerColor = dividerColor
-        self.dividerLabelColor = dividerLabelColor
+        self.linkColor = linkColor
         self.placeholderColor = placeholderColor
         self.horizontalInset = horizontalInset
         self.maxTextWidth = maxTextWidth
@@ -67,6 +65,5 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.lineSpacing = lineSpacing
         self.headingSpacing = headingSpacing
         self.imageCornerRadius = imageCornerRadius
-        self.dividerHeight = dividerHeight
     }
 }

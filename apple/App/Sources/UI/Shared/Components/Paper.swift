@@ -3,7 +3,10 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 瀑布墙：列数随宽度变化，每张卡按实测高度放进当前最短的列，墙底边尽量齐。
+/// 卡片墙（手机项目页与 Mac 项目页同一个）：列数随宽度（列不窄于 `minColumnWidth`，最多 `maxColumns` 列），
+/// 卡按顺序依次放进当前最短的一列（并列取左边），高度是实测的：多少张、多宽，都是从左往右填、墙底边尽量齐，不留空列。
+/// 不记"哪张在哪列"：位置只由顺序与宽度推出。墙上的顺序本身是稳定的（`WallArrangement`：同一次打开里编辑过的卡原地不动），
+/// 记分列的话删卡、改成任务留下的空列会一直空着。
 struct MasonryLayout: Layout {
     var minColumnWidth: CGFloat = 220
     var maxColumns = 4
@@ -11,13 +14,22 @@ struct MasonryLayout: Layout {
 
     private static let idealWidth: CGFloat = 900
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let (width, frames) = place(subviews, width: proposal.width)
-        return CGSize(width: width, height: frames.map(\.maxY).max() ?? 0)
+    /// 排版结果按宽度记一份：同一轮排版里 SwiftUI 先量（`sizeThatFits`）再摆（`placeSubviews`），每张卡只量一遍；
+    /// 子视图变了 SwiftUI 换一份新的缓存。
+    final class Memo {
+        var width: CGFloat?
+        var frames: [CGRect] = []
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, frame) in zip(subviews, place(subviews, width: bounds.width).frames) {
+    func makeCache(subviews: Subviews) -> Memo { Memo() }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGSize {
+        let width = fit(proposal.width).width
+        return CGSize(width: width, height: frames(subviews, width: width, memo: cache).map(\.maxY).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) {
+        for (subview, frame) in zip(subviews, frames(subviews, width: bounds.width, memo: cache)) {
             subview.place(
                 at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
                 proposal: ProposedViewSize(width: frame.width, height: frame.height))
@@ -25,20 +37,30 @@ struct MasonryLayout: Layout {
     }
 
     /// 墙没有文字基线可对齐；默认实现会逐个询问子视图，侧栏开合时每帧都付这笔账（时间分析里约 4%）。
-    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
-    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
 
-    private func place(_ subviews: Subviews, width proposed: CGFloat?) -> (width: CGFloat, frames: [CGRect]) {
-        let (width, columns) = WallColumns.fit(proposed, ideal: Self.idealWidth, columnWidth: minColumnWidth, spacing: spacing, limit: maxColumns)
-        let columnWidth = (width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
-        var heights = Array(repeating: CGFloat(0), count: columns)
-        return (width, subviews.map { subview in
+    /// 墙没有固有宽度：问理想尺寸（nil）或最大尺寸（无穷）时按 `idealWidth` 排——无穷宽换算列数会让整数转换崩溃。
+    private func fit(_ proposed: CGFloat?) -> (width: CGFloat, count: Int) {
+        let width = proposed.flatMap { $0.isFinite ? $0 : nil } ?? Self.idealWidth
+        return (width, max(1, min(maxColumns, Int(((width + spacing) / (minColumnWidth + spacing)).rounded(.down)))))
+    }
+
+    private func frames(_ subviews: Subviews, width: CGFloat, memo: Memo) -> [CGRect] {
+        if memo.width == width { return memo.frames }
+        let count = fit(width).count
+        let columnWidth = max((width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)
+        var heights = Array(repeating: CGFloat(0), count: count)
+        let frames = subviews.map { subview in
             let column = heights.indices.min { heights[$0] < heights[$1] } ?? 0
             let height = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
             let frame = CGRect(x: CGFloat(column) * (columnWidth + spacing), y: heights[column], width: columnWidth, height: height)
             heights[column] += height + spacing
             return frame
-        })
+        }
+        memo.width = width
+        memo.frames = frames
+        return frames
     }
 }
 

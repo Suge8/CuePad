@@ -22,6 +22,17 @@ extension DebugScene {
         case "connected":
             await connectAgents(workspace.services)
             workspace.show(.agent)
+        case "wallgap":
+            // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
+            try? await Task.sleep(for: .seconds(1))
+            let project = workspace.currentProject
+            for body in ["报销\nbs 84.36 刀 claude github", "产品决策\nanti-slop 整理前端"] {
+                _ = try? await workspace.createCard(body: body, in: project)
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            try? await Task.sleep(for: .seconds(1))
+            let cards = (try? await workspace.services.store.cards(in: project)) ?? []
+            if let oldest = cards.filter({ !$0.isTask }).min(by: { $0.modifiedAt < $1.modifiedAt }) { try? await workspace.trash(oldest.id) }
         case "select":
             // 批量选择：选上本页前三条灵感
             try? await Task.sleep(for: .seconds(1))

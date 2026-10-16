@@ -77,7 +77,7 @@ struct ComposerDraft {
         draft.images = []
         draft.attachments = attachments.map { outbox in
             var outbox = outbox
-            outbox.content = CueFormat.withoutImages(outbox.content)
+            outbox.content = CueFormat.plainText(outbox.content)
             return outbox
         }
         return draft

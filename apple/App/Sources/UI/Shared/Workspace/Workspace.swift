@@ -301,6 +301,8 @@ final class Workspace {
         let undo = try await services.store.trashing(ids)
         #if os(macOS)
         ids.forEach(closeIfOpen)
+        // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
+        ids.forEach { presses.hover($0, inside: false) }
         #endif
         say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
