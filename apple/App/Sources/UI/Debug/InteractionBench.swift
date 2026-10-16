@@ -11,6 +11,7 @@ import QuartzCore
 ///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
+/// - **到对话出现**（`contentMs`，只有"Cue 页首访"）：动作发出到 Cue 页的对话排出来的墙钟毫秒（`PerfProbe` 的 `cue`）；第一次变的画面可能还是空的页。
 /// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
 enum InteractionBench {
     /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
@@ -23,6 +24,7 @@ enum InteractionBench {
         "页面首访": (28, 2),
         "Agent 页首访": (28, 2),
         "会话页": (90, 2),
+        "Cue 页首访": (90, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
         "任务面板开": (28, 2),
@@ -87,8 +89,9 @@ enum InteractionBench {
                 await step("发送·会话页") { sendShortcut(in: window, field: "回复") }
             }
         }
-        if only.map({ $0.contains("发送·Cue 页") }) ?? true {
+        if only.map({ $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") }) ?? true {
             await DebugScene.seedCue(workspace.services)
+            await step("Cue 页首访") { workspace.show(.cue) }
             workspace.show(.cue)
             for _ in 0..<2 {
                 workspace.cue.draft = ComposerDraft(text: sample)
@@ -154,7 +157,9 @@ enum InteractionBench {
         turns.begin(CACurrentMediaTime(), root: view.window?.contentView?.superview?.layer ?? view.layer)
         action()
         try? await Task.sleep(for: .milliseconds(800))
+        let began = turns.began
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
+        if let shown = PerfProbe.lastSeen["cue"], shown >= began { row["contentMs"] = ((shown - began) * 10_000).rounded() / 10 }
         row["name"] = name
         row["budgetClickMs"] = budgets[name]?.clickMs ?? 0
         row["budgetHitches"] = budgets[name]?.hitches ?? 0

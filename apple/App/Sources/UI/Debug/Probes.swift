@@ -140,6 +140,9 @@ final class TurnLog {
         recording = true
     }
 
+    /// 这一次从哪一刻起量（`begin` 给的时刻）。
+    var began: CFTimeInterval { since }
+
     func finish() -> (log: [Turn], changedAt: Int?, start: CFTimeInterval) {
         recording = false
         return (log, changedAt, since)
@@ -203,15 +206,18 @@ final class TurnLog {
     }
 }
 
-#if os(macOS)
-/// 界面里的测量点：项目页内容排完（`content`，`ProjectPage` 分帧出完最后一段）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
+/// 界面里的测量点：项目页内容排完（`content`，`ProjectPage` 分帧出完最后一段，Mac）、Cue 页的对话出现（`cue`）。只在 Debug 构建里由视图调用，
+/// `interact` 等它出现再开始量，或拿它的时刻算到内容出现用了多久。
 enum PerfProbe {
     /// 同一个事件可以有几处同时在等：每一处都要醒。
     private static var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
     private(set) static var firstSeen: [String: Date] = [:]
+    /// 每个事件最近一次出现的时刻（`CACurrentMediaTime`）。
+    private(set) static var lastSeen: [String: CFTimeInterval] = [:]
 
     static func mark(_ event: String) {
         if firstSeen[event] == nil { firstSeen[event] = .now }
+        lastSeen[event] = CACurrentMediaTime()
         for continuation in waiting.removeValue(forKey: event) ?? [] { continuation.resume() }
     }
 
@@ -219,6 +225,15 @@ enum PerfProbe {
     static func wait(for event: String) async {
         await withCheckedContinuation { waiting[event, default: []].append($0) }
     }
+
+    /// 本进程启动的时刻（内核记的）：冷启动从这里起算。
+    static var processStart: Date {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        sysctl(&mib, 4, &info, &size, nil, 0)
+        let start = info.kp_proc.p_starttime
+        return Date(timeIntervalSince1970: Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000)
+    }
 }
-#endif
 #endif

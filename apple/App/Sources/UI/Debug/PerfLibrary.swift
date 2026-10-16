@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 /// 性能测量用的大资料库（`-CuePadSeed perf`，只在 Debug 构建、隔离资料库、库为空时写入）：
 /// 50 个项目、5000 张卡（一个大项目 1200 张、未分类 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
 /// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话，其中前 \(chatRounds.count) 个带对话（轮数见 `chatRounds`，
-/// 回答混着长段落、列表、表格、代码块与工具活动，给会话页滚动与切换用）。内容由固定种子生成，每次一样。
+/// 回答混着长段落、列表、表格、代码块与工具活动，给会话页滚动与切换用）；Cue 住在另一台 Mac 上，对话 \(cueRounds) 轮
+/// （你的话、这一轮的经过、它的回答，中间夹着动态，每 \(cueRenewEvery) 轮换一次新上下文），给 Cue 页首访用。内容由固定种子生成，每次一样。
 enum PerfLibrary {
     static let projectCount = 50
     static let cardCount = 5000
@@ -72,6 +73,30 @@ enum PerfLibrary {
                 lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")
         }
         for (index, rounds) in chatRounds.enumerated() { try await seedChat("perf-\(index)", rounds: rounds, random: &random, store: store) }
+        try await seedCue(random: &random, store: store)
+    }
+
+    private static let cueRounds = 60
+    private static let cueRenewEvery = 25
+
+    private static func seedCue(random: inout SeededRandom, store: CueStore) async throws {
+        _ = try await store.updateCueProfile { profile in
+            profile.hostID = "perf-mac"
+            profile.enabledAt = .now
+        }
+        for round in 0..<cueRounds {
+            if round > 0, round % cueRenewEvery == 0 {
+                _ = try await store.addCueMessage(.handoff, text: "**在做**\n- " + sentence(&random, chinese: true, words: 8...20))
+            }
+            let you = try await store.addCueMessage(.you, text: sentence(&random, chinese: round % 3 != 0, words: 6...30))
+            try await store.markCueMessagesDelivered([you.id])
+            _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: tools(&random))
+            _ = try await store.addCueMessage(.cue, text: answer(&random, round: round))
+            if round % 4 == 1 {
+                _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools(&random))
+                _ = try await store.addCueMessage(.note, text: sentence(&random, chinese: true, words: 6...18))
+            }
+        }
     }
 
     private static func seedChat(_ sessionID: String, rounds: Int, random: inout SeededRandom, store: CueStore) async throws {

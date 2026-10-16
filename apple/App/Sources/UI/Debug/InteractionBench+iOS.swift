@@ -11,6 +11,8 @@ import UIKit.UIGestureRecognizerSubclass
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、底部栏换标签的 `select`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
+/// - 冷启动·Cue 页：App 一打开就在 Cue 标签上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
+///   主线程与帧从画面摆起来（`beginCold`）量到对话出来后一秒，指令数从进程启动算起。量真实大小的对话配 `CUEPAD_PERF_SEED`（`perf-ios.sh`）。
 /// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
 ///   走键盘输入同一条路（`paste`、`UITextInput.insertText`），每个字一项；编辑页是正文已有那一大段时打字。`-CuePadPasteFile <路径>` 换成那个文件的内容。
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
@@ -18,6 +20,22 @@ import UIKit.UIGestureRecognizerSubclass
 /// - 掉帧：display link 相邻间隔超过 1.5 帧的次数。模拟器的合成与 GPU 和真机不同，只作参考。
 enum IOSInteractionBench {
     private static let turns = TurnLog()
+    private static let coldFrames = FrameRecorder()
+
+    /// 画面一摆起来就开始量冷启动（`DebugScene.prepare` 的第一步），读库与摆画面都在它之后。
+    static func beginCold() {
+        coldFrames.start()
+        turns.begin(CACurrentMediaTime(), root: nil)
+    }
+
+    private static func cold() async -> [String: Any] {
+        if PerfProbe.firstSeen["cue"] == nil { await PerfProbe.wait(for: "cue") }
+        try? await Task.sleep(for: .seconds(1))
+        var row = TurnLog.metrics(turns.finish(), instructions: 0, frames: coldFrames.stop())
+        row["launchMs"] = ((PerfProbe.firstSeen["cue"] ?? .now).timeIntervalSince(PerfProbe.processStart) * 1000).rounded()
+        row["name"] = "冷启动·Cue 页"
+        return row
+    }
 
     static func run(_ workspace: Workspace, _ navigation: Navigation) async {
         guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
@@ -34,7 +52,12 @@ enum IOSInteractionBench {
             write("FAIL " + reason)
             exit(1)
         }
-        try? await Task.sleep(for: .seconds(4))
+        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
+        func row(_ row: [String: Any]) { write("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self)) }
+        let cold = await cold()
+        if wants("冷启动·Cue 页") { row(cold) }
+        try? await Task.sleep(for: .seconds(3))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 4)))?.items ?? []).map(\.state.id)
@@ -43,15 +66,13 @@ enum IOSInteractionBench {
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
         guard let idea = try? await store.cards(in: nil).first else { fail("演示库里没有未分类的灵感") }
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
-        func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         /// `press`：请测量脚本在这一点真按（长按或轻点由脚本按名字定），从手指按下起量；不给时从 `action` 发出起量。
         func step(_ name: String, window: Duration = .milliseconds(800), press: CGPoint? = nil, _ action: () -> Void = {}) async {
             guard wants(name) else { return }
             let pressed: (() async -> Void)? = press.map { point in { await Self.touch(write, name, at: point) } }
-            var row = await measure(window: window, pressed: pressed, action)
-            row["name"] = name
-            write("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            var measured = await measure(window: window, pressed: pressed, action)
+            measured["name"] = name
+            row(measured)
         }
         DebugScene.selectTab(.projects)
         try? await Task.sleep(for: .seconds(1))

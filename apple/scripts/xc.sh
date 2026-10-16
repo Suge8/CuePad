@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 用法：xc.sh check                 快速静态门：lint.sh、CuePadKit 的 swift build、iOS 编译；不跑测试
 #       xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
-#       xc.sh rec <ios|ipad> [录屏输出路径.mov] [-- 启动参数…]   同 shot 摆好画面后录屏 CUEPAD_REC_SECONDS 秒（默认 12），看动效与状态切换
+#       xc.sh rec <ios|ipad> [录屏输出路径.mov] [-- 启动参数…]   同 shot 摆好画面后录屏 CUEPAD_REC_SECONDS 秒（默认 12），看动效与状态切换；
+#         CUEPAD_REC_LAUNCH=1 从启动前开录（冷启动的首屏），录满秒数不等就绪
 #       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着（给 bcu 操作），就绪后打印 PID；RUN_MAC_TTL 秒后自己退出，下次 run/shot 先结束它
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh test kit [swift test 参数…]   CuePadKit 的 swift test（macOS），如 --filter SuiteName
@@ -205,20 +206,21 @@ capture_sim() {
   mkdir -p "$(dirname "$out")"
   sim_boot "$device"
   xcrun simctl install "$device" "$app"
-  local ready="$DERIVED/shot-ready-$platform"
+  local ready="$DERIVED/shot-ready-$platform" recorder=""
   rm -f "$ready"
+  # recordVideo 收到 SIGINT 才把文件写完整；只结束这里启动的那个 PID。录多久是要录的内容，固定等
+  record() { xcrun simctl io "$device" recordVideo --codec h264 --force "$out" 2>/dev/null & recorder=$!; }
+  stop_recording() { sleep "${CUEPAD_REC_SECONDS:-12}"; kill -INT "$recorder"; wait "$recorder" || true; }
+  # 冷启动录屏：录像先起来（约半秒后才出帧）再启动 App，录满秒数、不等就绪
+  local cold=""
+  if [ "$cmd" = rec ] && [ -n "${CUEPAD_REC_LAUNCH:-}" ]; then cold=1; record; sleep 1; fi
   SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library-$platform}")" SIMCTL_CHILD_CUEPAD_SHOT_READY="$ready" \
     xcrun simctl launch "$device" "$BUNDLE_ID" ${launch_args[@]+"${launch_args[@]}"} >/dev/null
-  wait_ready "$ready" "sim_alive" || { xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null; exit 1; }
-  if [ "$cmd" = rec ]; then
-    # recordVideo 收到 SIGINT 才把文件写完整；只结束这里启动的那个 PID。录多久是要录的内容，固定等
-    xcrun simctl io "$device" recordVideo --codec h264 --force "$out" 2>/dev/null &
-    local recorder=$!
-    sleep "${CUEPAD_REC_SECONDS:-12}"
-    kill -INT "$recorder"
-    wait "$recorder" || true
+  if [ -n "$cold" ]; then
+    stop_recording
   else
-    xcrun simctl io "$device" screenshot "$out" >/dev/null
+    wait_ready "$ready" "sim_alive" || { xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null; exit 1; }
+    if [ "$cmd" = rec ]; then record; stop_recording; else xcrun simctl io "$device" screenshot "$out" >/dev/null; fi
   fi
   xcrun simctl terminate "$device" "$BUNDLE_ID"
   echo "$out"

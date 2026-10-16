@@ -47,9 +47,13 @@ struct CuePage: View {
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(active: active))
-            #if os(iOS)
-            .onChange(of: thread != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
-            #endif
+            .onChange(of: thread != nil, initial: true) { _, loaded in
+                guard loaded else { return }
+                DebugHooks.mark("cue")
+                #if os(iOS)
+                tabPageReady?()
+                #endif
+            }
     }
 
     // MARK: 平台

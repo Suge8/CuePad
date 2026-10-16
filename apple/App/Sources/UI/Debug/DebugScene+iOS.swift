@@ -16,6 +16,7 @@ import UIKit
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
+        if defaults.string(forKey: "CuePadBench") == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }

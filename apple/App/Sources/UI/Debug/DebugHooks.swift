@@ -142,9 +142,9 @@ enum DebugHooks {
         #endif
     }
 
-    /// 性能打点：某件事第一次出现（`interact` 等它，见 `PerfProbe`）。
+    /// 性能打点：某件事出现了（`interact` 等它、量到它用了多久，见 `PerfProbe`）。
     static func mark(_ event: String) {
-        #if DEBUG && os(macOS)
+        #if DEBUG
         PerfProbe.mark(event)
         #endif
     }

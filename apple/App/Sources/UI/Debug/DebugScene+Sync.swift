@@ -3,15 +3,18 @@ import CueStore
 import CueSync
 import Foundation
 import SQLite3
+import Synchronization
 
 extension DebugScene {
     /// `-CuePadSync stalled`：装上拉取永不返回的同步替身（隔离库本来没有同步），核对下拉刷新的圈有时限、界面不跟着卡。
+    /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
     static var syncSource: AppServices.SyncSource {
         switch defaults.string(forKey: "CuePadSync") {
         case "stalled": .custom(StalledSync())
         case "offline": .custom(OfflineSync(seconds: defaults.object(forKey: "CuePadOfflineSeconds") as? Double ?? 6))
+        case "arrive": .custom(ArrivingSync())
         default: .iCloud
         }
     }
@@ -38,6 +41,55 @@ extension DebugScene {
         func resolve(_ resolution: SyncResolution) async throws {}
     }
 
+    /// 第一次拉取（启动时的那一拉，或在它之前来的立即同步，两者等同一次）带回 `pages` 页别的设备写下的 Cue 的话，每页 `perPage` 条、
+    /// 隔 `pageGap` 到一页（同 `ZonePuller` 一页页应用），拉完才返回；之后的拉什么都不做。话直接写进本机库：界面看到的与应用远端变更是同一种变化。
+    nonisolated final class ArrivingSync: SyncControlling {
+        static let pages = 3
+        static let perPage = 6
+        static let pageGap = Duration.milliseconds(450)
+        /// 资料库在服务建好后才有（替身先建）：摆画面时交过来（`presetSync`）。
+        static let library = AsyncStream<CueStore>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        private let first = Mutex<Task<Void, Never>?>(nil)
+
+        var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [])) } }
+        func start() async throws { Task { await pull() } }
+        func stop() async {}
+        func syncNow() async throws { await pull() }
+        func send(recordName: String) async -> Bool { true }
+        func push() async {}
+        func resolve(_ resolution: SyncResolution) async throws {}
+
+        private func pull() async {
+            let task = first.withLock { task in
+                if let task { return task }
+                let made = Task { await Self.arrive() }
+                task = made
+                return made
+            }
+            await task.value
+        }
+
+        private static func arrive() async {
+            var stores = library.stream.makeAsyncIterator()
+            guard let store = await stores.next() else { return }
+            let lines = [
+                (CueAuthor.note, "看了圆桌：重连的人拿到了新的加入时间，乱序就是从这来的"),
+                (.note, "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试"),
+                (.cue, "排序改好了，scheduler 的 42 个测试都过了。接下来补 3 个重连用例。"),
+                (.note, "补了「6 人同时重连顺序不变」，在跑"),
+                (.note, "CuePad 导入旧数据的会话又出错了：prompt 太长，等你回来再拆"),
+                (.cue, "重连用例都过了，预发也部署好了，截图放在任务上。要推送到 origin/main 吗？"),
+            ]
+            for page in 0..<pages {
+                try? await Task.sleep(for: pageGap)
+                for index in 0..<perPage {
+                    let (author, text) = lines[(page * perPage + index) % lines.count]
+                    _ = try? await store.addCueMessage(author, text: text)
+                }
+            }
+        }
+    }
+
     /// 立即同步不返回（像网络一直没有回音），其余什么都不做。
     nonisolated final class StalledSync: SyncControlling {
         var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [])) } }
@@ -57,6 +109,7 @@ extension DebugScene {
             SyncIssue(recordType: "Attachment", recordName: "9F3E", message: "CKError 27: asset file not found"),
         ]
         switch defaults.string(forKey: "CuePadSync") {
+        case "arrive": ArrivingSync.library.continuation.yield(services.store)
         case "noAccount": services.setSyncState(SyncState(status: .noAccount, issues: []))
         case "decide": services.setSyncState(SyncState(status: .needsDecision(.accountSwitched), issues: []))
         case "failed": services.setSyncState(SyncState(status: .failed("同步出错"), issues: issues))
