@@ -48,18 +48,20 @@ if [ ! -f "$LIBRARY/cuepad.db" ]; then
   wait "$pid" || true
 fi
 
-# 每次都是全新进程（首访就是首访）；演示库每次重建，大库用同一份
+# 每次都是全新进程（首访就是首访）与一份没量过的库：量的动作会写库（发送），同一份库连跑，后几次量的是越来越长的对话。
+# 演示库每次重建；大库每次从写好的那份 APFS 克隆（不占时间也不占空间）
 collect() {
-  local label="$1"; shift
+  local label="$1" source="$2" library="$DERIVED/library-run"; shift 2
   for _ in $(seq "$runs"); do
-    launch "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} 2>/dev/null | sed -n 's/^INTERACT //p' | sed "s/^{/{\"库\":\"$label\",/"
+    rm -rf "$library"
+    if [ -n "$source" ]; then cp -cR "$source" "$library"; fi
+    launch "$library" "$@" -CuePadBench interact -CuePadWindowSize 1440x900 ${extra[@]+"${extra[@]}"} 2>/dev/null | sed -n 's/^INTERACT //p' | sed "s/^{/{\"库\":\"$label\",/"
   done
+  rm -rf "$library"
 }
 rows="$DERIVED/interact.jsonl"
 : >"$rows"
-demo="$DERIVED/library-demo"
-rm -rf "$demo"
-collect 演示库 "$demo" -CuePadDemo YES -CuePadProject 圆桌 >>"$rows"
+collect 演示库 "" -CuePadDemo YES -CuePadProject 圆桌 >>"$rows"
 collect 大库 "$LIBRARY" -CuePadProject 大项目 >>"$rows"
 python3 - "$rows" <<'PY'
 import json, statistics as st, sys

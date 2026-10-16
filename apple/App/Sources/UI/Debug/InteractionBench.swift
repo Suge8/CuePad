@@ -77,8 +77,10 @@ enum InteractionBench {
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
         await step("页面回访") { workspace.show(.agent) }
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
-        // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下
-        if let id = sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
+        // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
+        // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
+        let longest = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
+        if let id = longest?.state.sessionID ?? sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
             workspace.show(.session(id))
             for _ in 0..<2 {
                 workspace.services.settings.setReplyDraft(ComposerDraft(text: sample), for: PiSessionState.recordID(sessionID: id))
@@ -86,6 +88,7 @@ enum InteractionBench {
             }
         }
         if only.map({ $0.contains("发送·Cue 页") }) ?? true {
+            await DebugScene.seedCue(workspace.services)
             workspace.show(.cue)
             for _ in 0..<2 {
                 workspace.cue.draft = ComposerDraft(text: sample)
