@@ -33,13 +33,11 @@ private func attachments(in string: NSAttributedString?) -> [NSTextAttachment] {
 @MainActor
 @Suite("iOS 存储与图片")
 struct IOSEditingTests {
-    private let split = CueFormat.splitMarker
-
-    @Test("存储格式往返：文字、图片、分隔线；缺失图片保留引用")
+    @Test("存储格式往返：文字（含分割线 ---）、图片；缺失图片保留引用")
     func roundTrip() throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 40, height: 30))
-        let stored = "前\n![](cuepad://img/\(id))\n\(split)\n后 ![](cuepad://img/00000000deadbeef)"
+        let stored = "前\n![](cuepad://img/\(id))\n---\n后 ![](cuepad://img/00000000deadbeef)"
         h.load(stored)
         #expect(h.stored == stored)
     }
@@ -70,12 +68,13 @@ struct IOSEditingTests {
         #expect(h.store.storedData.count == 1)
     }
 
-    @Test("粘贴文本按存储格式解析：分隔线行与图片标记还原成控件")
-    func pasteText() async {
+    @Test("粘贴文本按存储格式解析：图片标记还原成图片，其余（含分割线）原样")
+    func pasteText() async throws {
         let h = EditorHarness()
-        let item = await transform(NSItemProvider(object: "a\n\(split)\nb" as NSString), in: h)
-        #expect(attachments(in: item.result).first is CueDividerAttachment)
-        #expect(item.result?.string == "a\n\u{FFFC}\nb")
+        let id = try h.store.store(makePNG(width: 40, height: 30))
+        let item = await transform(NSItemProvider(object: "a\n---\n![](cuepad://img/\(id))" as NSString), in: h)
+        #expect(attachments(in: item.result).first is CueImageAttachment)
+        #expect(item.result?.string == "a\n---\n\u{FFFC}")
     }
 
     @Test("图片入库失败：报告错误、不插入")

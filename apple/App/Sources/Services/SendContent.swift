@@ -11,22 +11,12 @@ nonisolated struct SendContent: Equatable, Sendable {
     let segments: [Segment]
 
     init(stored: String) {
-        var segments: [Segment] = []
-        func appendText(_ text: String) {
-            if case .text(let previous)? = segments.last {
-                segments[segments.count - 1] = .text(previous + text)
-            } else {
-                segments.append(.text(text))
-            }
-        }
-        for token in CueFormat.parse(stored) {
+        segments = CueFormat.parse(stored).map { token in
             switch token {
-            case .text(let text): appendText(text)
-            case .split: appendText(CueFormat.splitMarker)
-            case .image(let hash): segments.append(.image(hash: hash))
+            case .text(let text): .text(text)
+            case .image(let hash): .image(hash: hash)
             }
         }
-        self.segments = segments
     }
 
     /// 去掉图片后的文字。

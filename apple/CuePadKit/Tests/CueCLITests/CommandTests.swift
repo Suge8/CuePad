@@ -28,7 +28,7 @@ import Testing
   @Test func cardBodyRoundTripsVerbatimThroughStdinAndArgument() async throws {
     let sb = try Sandbox()
     _ = try await sb.project("Alpha")
-    let body = "第一段  \n---split---\n![](cuepad://img/\(String(repeating: "a", count: 64)))\n\n结尾\n"
+    let body = "第一段  \n---\n![](cuepad://img/\(String(repeating: "a", count: 64)))\n\n结尾\n"
 
     let added = try await sb.object("card", "add", "--project", "alpha", stdin: body)
     let id = try #require(added.string("id"))

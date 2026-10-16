@@ -83,6 +83,9 @@ final class CardPresses {
         presence(of: card).opening = false
     }
 
+    /// ⌘⌫ 删的那张：鼠标停着的卡；批量选择中、编辑页开着时没有。
+    var deletable: UUID? { isSelecting || presented != nil ? nil : hovered }
+
     /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
     func hover(_ card: UUID, inside: Bool) {
         if inside {

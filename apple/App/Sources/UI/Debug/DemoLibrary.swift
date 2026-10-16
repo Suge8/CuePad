@@ -74,10 +74,10 @@ enum DemoLibrary {
         return [
             DemoProject(name: "CuePad", icon: "sparkles", color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: "投送队列本月可上线", cards: [
                 (0.2, "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", false),
-                (0.6, "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---split---\n约束：离线并发编辑保留两个版本，不静默覆盖。", false),
+                (0.6, "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---\n约束：离线并发编辑保留两个版本，不静默覆盖。", false),
                 (1.2, "变量模板文档\n\n\(pic)\n更新变量模板的开发文档，删掉过时的说明。", false),
                 (1.5, "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。", false),
-                (2.0, "重构菜单栏面板\n\n把 {{模块路径}} 里的菜单栏面板拆成独立模块，保持公开接口不变。\n---split---\n验收：菜单栏唤起到可输入 < 100ms。\n---split---\n完成后把改动摘要写进发布说明。", false),
+                (2.0, "重构菜单栏面板\n\n把 {{模块路径}} 里的菜单栏面板拆成独立模块，保持公开接口不变。\n\n- 唤起到可输入 < 100ms\n- 参考 [NSPanel 文档](https://developer.apple.com/documentation/appkit/nspanel)\n---\n完成后把改动摘要写进发布说明。", false),
                 (3.0, "评审：导入旧数据\n\n审查 {{分支}} 中导入旧数据相关改动，只报告会导致错误行为的问题。", false),
                 (4.0, "优化回收站性能\n\n回收站在 {{数据量}} 条时明显卡顿，先测量再优化。", false),
                 (5.5, "迁移投送队列\n\n把投送队列迁到新的存储层，旧数据一次性导入。", false),

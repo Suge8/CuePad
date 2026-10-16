@@ -85,7 +85,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// nil 表示未分类。
   public internal(set) var projectID: UUID?
-  /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
+  /// 正文：一段 Markdown（`CueFormat`），图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
   /// 资料：项目里长期参考的灵感（项目页任务区下面一组）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool

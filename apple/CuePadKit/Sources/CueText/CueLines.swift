@@ -2,7 +2,7 @@ import Foundation
 
 /// 正文按行的规则：哪些行有文字（卡片名字与摘要用），选中的文字怎么转成任务。
 public enum CueLines {
-    // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线，且除图片引用
+    // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线（`---`），且除图片引用
     // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
 
     /// 这一行是不是卡片名字所在的那种行（有文字的行）。
@@ -19,7 +19,7 @@ public enum CueLines {
     }
 
     static func text(of line: String) -> String {
-        guard !CueFormat.isMarkerLine(line) else { return "" }
+        guard !CueFormat.isRule(line) else { return "" }
         // 绝大多数行没有图片引用：不必拆成记号再拼回去
         var text = line
         if line.contains(CueFormat.imagePrefix) {

@@ -34,7 +34,7 @@ enum CueTextStack {
     }
 }
 
-/// 编辑器的平台无关核心：存储格式与运行时富文本的互转、变量高亮、轻装饰、
+/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有图片换成附件）、变量高亮、轻装饰、
 /// 图片懒加载与分片预布局。平台宿主只负责视图、输入与系统交互。
 @MainActor
 final class EditorCore {
@@ -49,8 +49,8 @@ final class EditorCore {
     /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
     private var pendingEdits: [NSRange] = []
     /// 现有段落是按哪份装饰上下文排版的。
-    var flushedDecorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
-    var decorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
+    var flushedDecorations = CueDecorations("")
+    var decorations = CueDecorations("")
     private var decorationDelegate: DecorationDelegate?
     private(set) lazy var settler = LayoutSettler(core: self)
     private(set) lazy var thumbnails = ThumbnailLoader(core: self)
@@ -80,7 +80,6 @@ final class EditorCore {
         storage.enumerateAttribute(.attachment, in: range) { value, run, _ in
             switch value {
             case let image as CueImageAttachment: tokens.append(.image(image.imageID))
-            case is CueDividerAttachment: tokens.append(.split)
             default: tokens.append(.text(storage.attributedSubstring(from: run).string))
             }
         }
@@ -99,7 +98,6 @@ final class EditorCore {
             switch token {
             case .text(let text): result.append(NSAttributedString(string: text, attributes: baseAttributes))
             case .image(let id): result.append(imageString(id: id))
-            case .split: result.append(dividerString())
             }
         }
         return result
@@ -108,36 +106,9 @@ final class EditorCore {
     func imageString(id: String) -> NSAttributedString {
         let attachment = CueImageAttachment(id: id, fileURL: imageStore.fileURL(for: id))
         attachment.core = self
-        return attachmentString(attachment)
-    }
-
-    func dividerString() -> NSAttributedString {
-        let attachment = CueDividerAttachment()
-        attachment.core = self
-        return attachmentString(attachment)
-    }
-
-    private func attachmentString(_ attachment: NSTextAttachment) -> NSAttributedString {
         let string = NSMutableAttributedString(attachment: attachment)
         string.addAttributes(baseAttributes, range: NSRange(location: 0, length: string.length))
         return string
-    }
-
-    /// 分割线编辑（`CueEdit.insert` 里的 U+FFFC 是一条分割线）对应的富文本。
-    func insertion(for edit: CueEdit) -> NSAttributedString {
-        let insertion = NSMutableAttributedString()
-        for (index, part) in edit.insert.components(separatedBy: String(UnicodeScalar(CueFormat.objectCharacter)!)).enumerated() {
-            if index > 0 { insertion.append(dividerString()) }
-            insertion.append(NSAttributedString(string: part, attributes: baseAttributes))
-        }
-        return insertion
-    }
-
-    func buffer() -> CueBuffer {
-        let storage = storage
-        return CueBuffer(text: storage.mutableString) { index in
-            index < storage.length && storage.attribute(.attachment, at: index, effectiveRange: nil) is CueDividerAttachment
-        }
     }
 
     /// 整体替换正文；撤销栈、选区、`onChange` 由宿主处理。
@@ -165,7 +136,7 @@ final class EditorCore {
     func storageDidProcessEditing() {
         guard storage.editedMask.contains(.editedCharacters) else { return }
         pendingEdits.append(storage.editedRange)
-        decorations = CueDecorations(buffer())
+        decorations = CueDecorations(storage.mutableString)
         DispatchQueue.main.async { [weak self] in self?.flushHighlight() }
     }
 

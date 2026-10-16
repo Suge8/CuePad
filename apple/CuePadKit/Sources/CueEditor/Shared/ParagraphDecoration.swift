@@ -74,7 +74,7 @@ extension EditorCore {
         let hasNewline = range.length > 0 && text.character(at: NSMaxRange(range) - 1) == 0x0A
         let lineRange = NSRange(location: range.location, length: range.length - (hasNewline ? 1 : 0))
         let line = decorations.style(ofLine: text.substring(with: lineRange), at: range.location)
-        guard line.kind != .body || !line.inlineCode.isEmpty else { return nil }
+        guard line.kind != .body || !line.inlineCode.isEmpty || !line.links.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         decorate(paragraph, line: line)
         return NSTextParagraph(attributedString: paragraph)
@@ -94,6 +94,10 @@ extension EditorCore {
         }
         if line.markerLength > 0 {
             paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: NSRange(location: 0, length: line.markerLength))
+        }
+        for link in line.links {
+            paragraph.addAttribute(.foregroundColor, value: style.linkColor, range: link.label)
+            for syntax in link.syntax { paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: syntax) }
         }
         for code in line.inlineCode {
             paragraph.addAttributes([.font: style.codeFont, .backgroundColor: style.codeBackground], range: code)

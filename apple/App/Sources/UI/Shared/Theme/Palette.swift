@@ -196,15 +196,13 @@ extension CueEditorTheme {
             backgroundColor: .clear,
             variableColor: CueColor(palette.variable),
             variableBackground: CueColor(palette.variableBackground),
-            dividerColor: CueColor(palette.ink3),
-            dividerLabelColor: CueColor(palette.ink2),
+            linkColor: CueColor(palette.signature),
             placeholderColor: CueColor(palette.fill),
             horizontalInset: horizontalInset,
             maxTextWidth: maxTextWidth,
             verticalInset: 8,
             lineSpacing: 7,
             headingSpacing: 10,
-            imageCornerRadius: 10,
-            dividerHeight: 32)
+            imageCornerRadius: 10)
     }
 }

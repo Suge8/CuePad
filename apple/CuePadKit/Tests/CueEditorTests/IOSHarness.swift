@@ -14,14 +14,14 @@ func makePNG(width: Int = 1600, height: Int = 1000, color: UIColor = .systemTeal
 }
 
 extension CueEditorTheme {
-    /// 测试用的最小主题：系统字体、固定色（分割线是纯红，便于从像素里认出来）。App 的纸页主题在 App 里，不在这个包。
+    /// 测试用的最小主题：系统字体、固定色。App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 17),
         headingFont: .systemFont(ofSize: 20, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 15, weight: .regular),
         markerColor: .gray, codeBackground: UIColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
         variableColor: .purple, variableBackground: UIColor.purple.withAlphaComponent(0.12),
-        dividerColor: UIColor(red: 1, green: 0, blue: 0, alpha: 1), dividerLabelColor: .darkGray, placeholderColor: .lightGray,
-        horizontalInset: 16, verticalInset: 12, lineSpacing: 3, headingSpacing: 8, imageCornerRadius: 6, dividerHeight: 32)
+        linkColor: .blue, placeholderColor: .lightGray,
+        horizontalInset: 16, verticalInset: 12, lineSpacing: 3, headingSpacing: 8, imageCornerRadius: 6)
 }
 
 @MainActor

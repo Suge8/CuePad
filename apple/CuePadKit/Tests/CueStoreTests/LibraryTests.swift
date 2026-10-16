@@ -325,6 +325,24 @@ import Testing
     #expect(try await upgraded.sendRecords().map(\.cardID) == [task.id])
   }
 
+  /// 结构 50 的库里分割线是私有标记 `---split---`（独占一行）：升到 51 时换成 Markdown 的 `---`，行里夹着的不是分割线、不动；
+  /// 改过的卡带新的修改时间（同步出去），回收站里的也换。
+  @Test func schema50LibraryWritesDividersAsMarkdown() async throws {
+    let card = try await store.createCard(in: nil, body: "上\n---split---\n中 ---split--- 夹着\n  ---split---  \n下")
+    let plain = try await store.createCard(in: nil, body: "没有分割线")
+    let trashed = try await store.createCard(in: nil, body: "甲\n---split---\n乙")
+    _ = try await store.trashCard(trashed.id)
+    let before = try #require(try await store.card(card.id)).modifiedAt
+    let untouched = try #require(try await store.card(plain.id)).modifiedAt
+    try RawDB(fixture.url).exec("PRAGMA user_version = 50;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    let converted = try #require(try await upgraded.card(card.id))
+    #expect(converted.body == "上\n---\n中 ---split--- 夹着\n---\n下" && converted.modifiedAt > before)
+    #expect(try await upgraded.card(plain.id)?.modifiedAt == untouched)
+    #expect(try await upgraded.trashedCards().map(\.body) == ["甲\n---\n乙"])
+  }
+
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
   @Test(arguments: [
     (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),

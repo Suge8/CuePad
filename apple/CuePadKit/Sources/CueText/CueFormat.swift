@@ -1,58 +1,36 @@
 import Foundation
 
-/// 正文的结构化视图：卡片正文的存储格式与运行时 token 之间的桥。
+/// 正文里的文字与图片（发送、预览时按原顺序切开用）。
 public enum CueToken: Equatable, Sendable {
     case text(String)
     /// 内联图片，值为内容哈希（小写十六进制）。
     case image(String)
-    /// 分割线（独占一行）。
-    case split
 }
 
-/// 存储格式（纯字符串，唯一事实源）：
-/// 分割线是独占一行的 `---split---`；
-/// 图片是行内 `![](cuepad://img/<hash>)`。
+/// 存储格式：正文就是一段标准 Markdown（唯一事实源）。图片是行内 `![](cuepad://img/<hash>)`，分割线就是 `---`。
+/// 编辑器里图片显示成附件（U+FFFC），其余照原文编辑。
 public enum CueFormat {
-    public static let splitMarker = "---split---"
-    /// 运行时正文里分割线与图片各占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
+    /// 编辑器运行时正文里图片占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
     public static let objectCharacter: UniChar = 0xFFFC
 
     /// 图片引用的开头；其后是内容哈希（小写十六进制）与 `)`。
     public static let imagePrefix = "![](cuepad://img/"
 
-    /// 独占一行且 trim 后是分割标记时为分割线行。
-    public static func isMarkerLine(_ line: String) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed == splitMarker
-    }
-
     public static func imageMarkup(id: String) -> String { imagePrefix + id + ")" }
 
-    /// 发出去（发送、复制、分享）的正文：分割线只是一条线，写成 `---`；去掉首尾空白。
-    public static func readable(_ stored: String) -> String {
-        stored.components(separatedBy: "\n").map { isMarkerLine($0) ? "---" : $0 }.joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Markdown 的分割线（thematic break）：一行里只有三个以上同一种 `-` `*` `_`，中间可夹空白，行首缩进不超过三格。
+    public static func isRule(_ line: String) -> Bool {
+        guard line.prefix { $0 == " " }.count <= 3 else { return false }
+        let marks = line.filter { !$0.isWhitespace }
+        guard marks.count >= 3, let mark = marks.first, "-*_".contains(mark) else { return false }
+        return marks.allSatisfy { $0 == mark }
     }
 
-    /// 存储格式正文去掉图片、只留文字（收不了图片的会话，`AgentCapabilities.images`：界面与 Cue 交给会话的话都经它）。
-    public static func withoutImages(_ stored: String) -> String {
+    /// 去掉图片、只留文字（输入框、分享、一行摘要，收不了图片的会话 `AgentCapabilities.images`）：图片留下的空行折叠，去掉首尾空白。
+    public static func plainText(_ stored: String) -> String {
         imageHashes(in: stored)
             .reduce(stored) { $0.replacingOccurrences(of: imageMarkup(id: $1), with: "") }
             .replacing(/\n{3,}/, with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// 去掉图片后的文字（给输入框、分享、一行摘要）：分割线写成 `---`，图片留下的空行折叠，去掉首尾空白。
-    public static func plainText(_ stored: String) -> String {
-        parse(stored).map { token in
-            switch token {
-            case .text(let text): text
-            case .split: "---"
-            case .image: ""
-            }
-        }
-        .joined()
-        .replacing(/\n{3,}/, with: "\n\n")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 正文里引用的图片哈希，按出现顺序（可重复）。
@@ -61,31 +39,10 @@ public enum CueFormat {
         return parse(stored).compactMap { if case .image(let hash) = $0 { hash } else { nil } }
     }
 
+    /// 按原顺序切成文字与图片。
     public static func parse(_ stored: String) -> [CueToken] {
         var tokens: [CueToken] = []
-        for (index, line) in stored.components(separatedBy: "\n").enumerated() {
-            if index > 0 { tokens.append(.text("\n")) }
-            if isMarkerLine(line) {
-                tokens.append(.split)
-            } else {
-                appendInline(line, to: &tokens)
-            }
-        }
-        return tokens
-    }
-
-    public static func serialize(_ tokens: [CueToken]) -> String {
-        tokens.map {
-            switch $0 {
-            case .text(let text): text
-            case .image(let id): imageMarkup(id: id)
-            case .split: splitMarker
-            }
-        }.joined()
-    }
-
-    private static func appendInline(_ line: String, to tokens: inout [CueToken]) {
-        var rest = Substring(line)
+        var rest = Substring(stored)
         var pending = Substring()
         while let start = rest.range(of: imagePrefix) {
             let afterPrefix = rest[start.upperBound...]
@@ -104,5 +61,15 @@ public enum CueFormat {
         }
         pending += rest
         if !pending.isEmpty { tokens.append(.text(String(pending))) }
+        return tokens
+    }
+
+    public static func serialize(_ tokens: [CueToken]) -> String {
+        tokens.map {
+            switch $0 {
+            case .text(let text): text
+            case .image(let id): imageMarkup(id: id)
+            }
+        }.joined()
     }
 }

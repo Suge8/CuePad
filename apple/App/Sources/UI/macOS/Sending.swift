@@ -101,7 +101,7 @@ final class SendState {
     /// 不在线的（已结束，或托管着、进程歇着）写给它所在的 Mac，由那台的执行器在后台唤醒后送达。
     func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener)? {
         // 收不了图片的会话只发文字（`AgentCapabilities.images`）
-        let stored = capabilities(of: target.session).contains(.images) ? stored : CueFormat.withoutImages(stored)
+        let stored = capabilities(of: target.session).contains(.images) ? stored : CueFormat.plainText(stored)
         let route = route(of: target.session, host: target.host)
         let busy = switch route {
         case .local(let live): live.state.isTurnRunning

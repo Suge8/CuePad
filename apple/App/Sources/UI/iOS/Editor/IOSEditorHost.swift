@@ -55,7 +55,7 @@ struct IOSEditorHost: UIViewRepresentable {
     }
 }
 
-/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘。
+/// 键盘上方的工具栏：插图、变量取值、收起键盘。格式就是正文里的 Markdown 原文，没有格式按钮。
 final class KeyboardBar: UIToolbar {
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
     final class Actions {
@@ -74,7 +74,6 @@ final class KeyboardBar: UIToolbar {
             return item
         }
         items = [
-            item("插入分割线", "rectangle.split.1x2") { $0.insertDivider() },
             item("插入图片", "photo") { _ in actions.insertImage() },
             item("变量取值", "curlybraces") { _ in actions.variables() },
             .flexibleSpace(),

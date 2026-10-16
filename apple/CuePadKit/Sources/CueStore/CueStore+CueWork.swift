@@ -261,7 +261,7 @@ extension CueStore {
     var parts = [card]
     if newSession, let top = try find(Card.self, try topTask(of: leaf)), top.id != leaf { parts.insert(top, at: 0) }
     return parts
-      .map { CueFormat.readable(CueVariables.fill($0.body, values: $0.variableValues)) }
+      .map { CueVariables.fill($0.body, values: $0.variableValues).trimmingCharacters(in: .whitespacesAndNewlines) }
       .joined(separator: "\n\n")
   }
 
@@ -333,7 +333,7 @@ extension CueStore {
     // 记录还没到时 Cue 不知道做不做得到马上说，按做不到写；界面只在做得到时给出马上说，照你选的写
     let canSteer = session.state.map { $0.capabilities.contains(.steer) } ?? !cue
     let mode = try mode == .steer && !(canSteer && !(cue && inUserTurn(session.target.ref))) ? .followUp : mode
-    let content = session.state?.capabilities.contains(.images) == false ? CueFormat.withoutImages(content) : content
+    let content = session.state?.capabilities.contains(.images) == false ? CueFormat.plainText(content) : content
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: mode, card: card, cue: cue)
   }
 
