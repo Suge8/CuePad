@@ -28,6 +28,10 @@ struct ProjectPage: View {
     }
 
     private static let collapseOffset: CGFloat = 140
+    /// 卡片墙：列不窄于 260；2560 宽的全屏收起侧栏是 9 列，留出余量。
+    private static let minColumnWidth: CGFloat = 260
+    private static let maxColumns = 12
+    private static let wallSpacing: CGFloat = 16
     /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的绑定引导与空态是纸，与页面同宽）。
     private static let emptyLineWidth: CGFloat = 460
 
@@ -146,9 +150,11 @@ struct ProjectPage: View {
                 Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
                 Text("\(count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
             }
-            WallGrid(ids: ids, cards: byID, arrangedAt: board.arrangement?.arrangedAt) { card in
-                CardTile(
-                    card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
+            MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
+                ForEach(ids.compactMap { byID[$0] }) { card in
+                    CardTile(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
+                        .transition(Motion.item)
+                }
             }
         }
     }
@@ -161,8 +167,12 @@ struct ProjectPage: View {
     private func rearrange() {
         guard let data else { return }
         var next = board
-        next.refresh(with: data, project: projectID)
-        if next != board { board = next }
+        // 第一次排墙直接到位；之后墙上的卡增减、挪位有动画（同手机项目页）
+        if next.refresh(with: data, project: projectID) {
+            board = next
+        } else if next != board {
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { board = next }
+        }
         if let arrangement = next.arrangement {
             let shape = PageShape(data, arrangement)
             if shape != self.shape { self.shape = shape }

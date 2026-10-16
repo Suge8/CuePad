@@ -89,6 +89,7 @@ struct OlderRow: View {
             Spacer(minLength: 12)
             AgentDot(card: card.id)
             if let lastTarget { SentMark(target: lastTarget) }
+            if hovering, !workspace.presses.isSelecting { DeleteCardButton(card: card.id).transition(.opacity) }
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
