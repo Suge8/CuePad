@@ -257,6 +257,8 @@ enum Schema {
         _ = try CueStore.purgeCards(where: "id IN (SELECT value FROM json_each(?))", [list], in: db)
       }
     },
+    // 51：Cue 这一轮是被哪几个会话的动静叫醒的（`CueState.woke`），各端据此画"叫醒"的那一下
+    Upgrade(stringLiteral: cueWoke),
   ]
 
   /// 38 加的计数器、本机列与触发器：建新库时放在最后（各表的列都已建好）。构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，
@@ -333,6 +335,9 @@ enum Schema {
 
   /// 49 加的列：Cue 的允许清单（`CueProfile.allows`）。
   private static let cueAllows = "ALTER TABLE cueProfile ADD COLUMN allows TEXT;"
+
+  /// 51 加的列：叫醒这一轮的会话（`CueState.woke`）。
+  private static let cueWoke = "ALTER TABLE cueState ADD COLUMN woke TEXT;"
 
   /// 33 加的列（37 删掉）：只用于升级 32 的库。
   private static let cueAcceptance = "ALTER TABLE cueMessages ADD COLUMN acceptance INTEGER NOT NULL DEFAULT 0;"
@@ -489,6 +494,7 @@ enum Schema {
     \(cueTools)
     \(cueRound)
     \(cueAllows)
+    \(cueWoke)
     \(writeSeq)
     \(macPresence)
     \(macAgents)

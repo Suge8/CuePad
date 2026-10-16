@@ -240,6 +240,7 @@ DEFINE SCHEMA
         detail        ENCRYPTED STRING,
         modifiedAt    INT64,
         round         STRING,
+        woke          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

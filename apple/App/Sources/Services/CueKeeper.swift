@@ -179,6 +179,8 @@ final class CueKeeper {
         var speaking: PiDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
+        /// 会话的动静叫醒的这一轮：叫醒它的那几个会话（随此刻的状态写进库，各端画"叫醒"的那一下）
+        var woke: CueWoke?
 
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或接着你发起的那一轮（换新后写成 cue 的）。不是的（Cue 自己醒来、
         /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
@@ -252,14 +254,14 @@ final class CueKeeper {
     let speech = PiDraftFeed()
 
     /// Cue 此刻在做什么：一轮里在想或在用工具（连同这一轮的经过在对话里的那一行），起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
-    private var work: (state: PiWorkState, detail: String?, row: UUID?) {
+    private var work: (state: PiWorkState, detail: String?, row: UUID?, woke: CueWoke?) {
         switch phase {
-        case .starting, .restarting: return (.settled, nil, nil)
-        case .stuck(let reason): return (.error, reason, nil)
+        case .starting, .restarting: return (.settled, nil, nil, nil)
+        case .stuck(let reason): return (.error, reason, nil, nil)
         case .running(let shift):
-            guard let round = shift.turn?.round else { return (.settled, nil, nil) }
-            let detail = round.running.map { CueActivity.detail(tool: $0.name, arguments: $0.arguments) }
-            return (detail == nil ? .thinking : .tool, detail, round.row)
+            guard let turn = shift.turn else { return (.settled, nil, nil, nil) }
+            let detail = turn.round.running.map { CueActivity.detail(tool: $0.name, arguments: $0.arguments) }
+            return (detail == nil ? .thinking : .tool, detail, turn.round.row, turn.woke)
         }
     }
 
@@ -279,7 +281,7 @@ final class CueKeeper {
     private func publish() async {
         do {
             let work = work
-            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row)
+            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -720,10 +722,16 @@ final class CueKeeper {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
             resume?.messages.removeAll { delivering.contains($0.id) }
         }
+        let changes = try await changes()
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, renewAt: Self.renewAt, projects: try await store.cueProjects(),
-            changes: try await changes(), board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
+            changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
             resume: resume, said: nil))
+        var woke: CueWoke?
+        if wake == .sessionActivity {
+            var seen = Set<String>()
+            woke = CueWoke(at: now, sessions: changes.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
+        }
         var parts = [envelope]
         if let used = shift.context?.used, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
@@ -740,7 +748,7 @@ final class CueKeeper {
         updateShift {
             $0.resumed = true
             $0.turn = Turn(
-                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark)
+                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark, woke: woke)
         }
         save()
         try await markDelivered(delivering)
