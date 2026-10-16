@@ -4,6 +4,10 @@ import SwiftUI
 
 /// 菜单栏图标下方的弹出面板宿主：承载界面提供的 SwiftUI 视图，自身无边框透明，
 /// 材质与形状由内容决定。不激活应用，失去键盘焦点或按 Esc 即收起。
+///
+/// 收起时内容从面板上摘下：不在窗口里的托管视图不再跟着它读的状态（Cue 的现状、在做的会话、额度…）更新，看不见的东西不占主线程；
+/// 托管视图本身留着，内容的状态（草稿、展开、焦点）不丢。打开时先挂回去、量尺寸时按此刻的状态排好再上屏，第一帧就是现在的样子
+/// （实测收起期间 Cue 变了状态，打开的头几帧与半秒后一致，不从旧样子过渡）。否决了只隐藏托管视图：隐藏的视图照样更新。
 final class MenuBarPanel: NSObject, NSWindowDelegate {
     private static let edgeMargin: CGFloat = 8
     private static let anchorGap: CGFloat = 4
@@ -28,7 +32,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         panel.hasShadow = true
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentView = host
         panel.delegate = self
         host.onIntrinsicSizeChange = { [weak self] in self?.fitToContent() }
     }
@@ -52,6 +55,7 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     func show(below anchor: CGRect) {
         let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
         placement = (anchor, screen?.visibleFrame ?? anchor)
+        panel.contentView = host
         fitToContent()
         panel.makeKeyAndOrderFront(nil)
     }
@@ -66,6 +70,7 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
 
     func hide() {
         panel.orderOut(nil)
+        panel.contentView = nil
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -95,7 +100,7 @@ private final class Panel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     override func cancelOperation(_ sender: Any?) {
-        orderOut(sender)
+        (delegate as? MenuBarPanel)?.hide()
     }
 }
 #endif

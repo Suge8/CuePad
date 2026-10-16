@@ -77,11 +77,11 @@ struct CueHeader: View {
                 .padding(.leading, 6)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.digest.lastSaid, font: .footnote).lineLimit(1)
+                CueStatusLine(fallback: cue.lastSaid, font: .footnote).lineLimit(1)
             }
             Spacer(minLength: 6)
             // 展开时等你那一行在面板里，页头不再重复
-            WaitingCount(count: expanded ? 0 : cue.digest.waiting).font(.subheadline)
+            WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
             Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
@@ -89,7 +89,8 @@ struct CueHeader: View {
         }
         .frame(height: Self.height)
         .contentShape(.rect)
-        .animation(Motion.quick, value: cue.digest)
+        .animation(Motion.quick, value: cue.waiting)
+        .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
         .accessibilityElement(children: .combine)
     }
@@ -114,11 +115,11 @@ private struct CueNowPanel: View {
         let cue = workspace.cue, sessions = services.liveSessions
         let rows = workspace.liveSessionRows
         VStack(alignment: .leading, spacing: 16) {
-            if cue.digest.waiting > 0 {
+            if cue.waiting > 0 {
                 Button(action: close) {
                     HStack(spacing: 8) {
                         Image(systemName: Waiting.symbol).foregroundStyle(Waiting.tint(dark: palette.dark)).accessibilityHidden(true)
-                        WaitingCount(count: cue.digest.waiting)
+                        WaitingCount(count: cue.waiting)
                         Spacer(minLength: 8)
                         Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
                     }

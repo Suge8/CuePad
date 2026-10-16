@@ -19,8 +19,8 @@ import SwiftUI
 ///   两头都不在就什么都不画：没有一个看得见的东西能把这件事讲清楚，Cue 的头像回到屏幕上时自己就在转环。
 /// - 减弱动态效果：不飞、不扩，头像的环与起点的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度。
 ///
-/// 动画状态只来自唤醒事实（`CueState.woke`）：`woke.at` 变成新的非空值就播一次，不另存；窗口读到的第一份不播（App 刚打开、
-/// 窗口刚开时已有的叫醒不是此刻发生的），之后页面换来换去也不播（挂在窗口根上，不随页面出现）。
+/// 动画状态只来自唤醒事实（`CueState.woke`，经 `CueWatch.woke`：同一份摘要的投影，只在叫醒变了时才写，窗口读到的第一份不算）：
+/// `woke.at` 变成新的非空值就播一次，不另存动画状态；页面换来换去也不播（挂在窗口根上，不随页面出现）。
 ///
 /// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与），只在播时把一层画布挂到窗口的根层最上面，播完拿掉。
 /// 不在每一行挂几何读数：只有被叫醒的那几个会话的状态标此刻挂一个空的锚视图（`wakeSource`），Cue 的几处头像各挂一个（`wakeTarget`）；
@@ -29,18 +29,24 @@ import SwiftUI
 /// 否决了 SwiftUI 的覆盖层加锚点偏好：偏好过不了 Mac 工具栏与 iOS 导航容器的托管边界，覆盖层也盖不住 Mac 的工具栏。
 struct CueWakeStage: ViewModifier {
     let cue: CueWatch
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var stage = Stage()
 
-    func body(content: Content) -> some View {
-        let digest = cue.digest
-        content
-            .background(Probe(stage: stage, color: palette.live))
-            .onChange(of: digest) { old, new in
-                guard old != .empty, let woke = new.state?.woke, woke.at != old.state?.woke?.at else { return }
-                stage.play(woke.sessions, reduceMotion: reduceMotion || DebugHooks.preset.reducesMotion)
-            }
+    // 窗口根上什么都不读：叫醒只在背景里那个小视图里看（`Watcher`），Cue 的现状怎么变根都不重算
+    func body(content: Content) -> some View { content.background(Watcher(cue: cue)) }
+
+    /// 只读 `CueWatch.woke`（只在叫醒变了时才写）：又被叫醒了一次就播。
+    private struct Watcher: View {
+        let cue: CueWatch
+        @Environment(\.palette) private var palette
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var stage = Stage()
+
+        var body: some View {
+            Probe(stage: stage, color: palette.live)
+                .onChange(of: cue.woke?.at) {
+                    guard let woke = cue.woke else { return }
+                    stage.play(woke.sessions, reduceMotion: reduceMotion || DebugHooks.preset.reducesMotion)
+                }
+        }
     }
 
     /// 本窗口的舞台：认得窗口（`Probe`），播时找锚、交给 `WakeFlight`。
@@ -99,14 +105,14 @@ extension View {
     }
 }
 
-/// 直接读唤醒事实，不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
+/// 读 `CueWatch.woke`（只在叫醒变了时才写），不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
 /// 实测每次叫醒主线程多出约 200M 条指令、最重一圈多 20ms；这里只有屏上带状态标的几处各重算这一个小视图。
 private struct WakeSource: ViewModifier {
     let session: String?
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let woke = session.flatMap { session in workspace.cue.digest.state?.woke?.sessions.contains(session) == true ? session : nil }
+        let woke = session.flatMap { session in workspace.cue.woke?.sessions.contains(session) == true ? session : nil }
         content.background {
             if let woke { WakeAnchor(role: .source(woke)) }
         }
