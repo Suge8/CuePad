@@ -2,17 +2,24 @@ import SwiftUI
 
 /// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作。全 App 共用这一套布局。
 /// 整页尺寸的那张纸与所在页面的内容同宽（左右边线与标题、其他纸对齐，中轴就是页面的中轴），纸里的字居中、最宽 420。
-/// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
+/// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时只淡入、不挪。
+/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`AppServices.isCatchingUp`）不先说空：对得快就等对完再出，
+/// 久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: String
     var message: String?
     var compact = false
+    var waitsForSync = false
     @ViewBuilder var action: Action
+    @Environment(AppServices.self) private var services: AppServices?
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var shown = false
+    @State private var syncing = false
+
+    private var catchingUp: Bool { waitsForSync && services?.isCatchingUp == true }
 
     var body: some View {
         Group {
@@ -25,7 +32,7 @@ struct EmptyState<Action: View>: View {
                     illustration
                     copy
                     if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
-                    action
+                    if !syncing { action }
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -33,7 +40,7 @@ struct EmptyState<Action: View>: View {
                 VStack(spacing: 16) {
                     illustration
                     copy
-                    action
+                    if !syncing { action }
                 }
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
@@ -43,22 +50,34 @@ struct EmptyState<Action: View>: View {
         }
         .paper(radius: compact ? 18 : 24)
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)
-        .opacity(shown || reduceMotion ? 1 : 0)
+        .opacity(shown ? 1 : 0)
         .buttonStyle(ControlButtonStyle(kind: .primary))
-        .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
+        .onAppear { if !catchingUp { appear() } }
+        .onChange(of: catchingUp) { if !catchingUp { appear() } }
+        .pending(catchingUp, shown: $syncing)
+        .onChange(of: syncing) { if syncing { appear() } }
+    }
+
+    private func appear() {
+        guard !shown else { return }
+        withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true }
     }
 
     private var illustration: some View {
-        Image(mascot.rawValue).resizable().scaledToFit()
+        Image(syncing ? Mascot.search.rawValue : mascot.rawValue).resizable().scaledToFit()
             .frame(width: compact ? 48 : 104, height: compact ? 48 : 104)
             .accessibilityHidden(true)
     }
 
     private var copy: some View {
         VStack(alignment: compact ? .leading : .center, spacing: compact ? 4 : 6) {
-            Text(title).font(compact ? Typography.secondary.weight(.medium) : Typography.emptyTitle)
-                .foregroundStyle(palette.ink)
-            if let message {
+            HStack(spacing: 6) {
+                if syncing { Spinner(.small) }
+                Text(syncing ? "正在从 iCloud 同步" : title)
+            }
+            .font(compact ? Typography.secondary.weight(.medium) : Typography.emptyTitle)
+            .foregroundStyle(palette.ink)
+            if let message = syncing ? "别的设备上的内容到了就会出现在这里" : message {
                 Text(message).font(compact ? Typography.meta : Typography.secondary)
                     .foregroundStyle(palette.ink2)
             }
@@ -68,8 +87,8 @@ struct EmptyState<Action: View>: View {
 }
 
 extension EmptyState where Action == EmptyView {
-    init(mascot: Mascot, title: String, message: String? = nil) {
-        self.init(mascot: mascot, title: title, message: message) { EmptyView() }
+    init(mascot: Mascot, title: String, message: String? = nil, waitsForSync: Bool = false) {
+        self.init(mascot: mascot, title: title, message: message, waitsForSync: waitsForSync) { EmptyView() }
     }
 
     /// 没搜到；没有搜索词（只按条件筛）时不复述空词。
@@ -119,7 +138,7 @@ struct EmptyIdeas: View {
     let write: () -> Void
 
     var body: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感", message: "随时记下新的想法", compact: compact) {
+        EmptyState(mascot: .empty, title: "还没有灵感", message: "随时记下新的想法", compact: compact, waitsForSync: true) {
             EmptyStateButton(title: "记一条", systemImage: "square.and.pencil", kind: compact ? .small : .primary, action: write)
                 .accessibilityLabel("记一条灵感")
         }
@@ -137,6 +156,6 @@ struct EmptyLibrary<Action: View>: View {
     #endif
 
     var body: some View {
-        EmptyState(mascot: .welcome, title: "还没有项目", message: Self.message) { action }
+        EmptyState(mascot: .welcome, title: "还没有项目", message: Self.message, waitsForSync: true) { action }
     }
 }

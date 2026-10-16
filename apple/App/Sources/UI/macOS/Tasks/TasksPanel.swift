@@ -38,6 +38,7 @@ struct TasksPanel: View {
             ScrollView {
                 if let board { list(board, lazy: lazy) }
             }
+            .loading(board == nil)
         }
         .frame(width: 400)
         .frame(height: lazy ? 640 : nil)

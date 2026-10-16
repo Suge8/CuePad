@@ -292,40 +292,45 @@ struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    /// 会话在别的 Mac 上、本机正在和 iCloud 对（久过 `Pending.delay`）：写下的状态可能已经过时，先写"正在同步"（同 Cue 页头）。
+    @State private var syncing = false
 
     var body: some View {
         let shown = workspace.shownInHeader(session)
-        let speaks = shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
+        let speaks = syncing || shown.isLive || shown.needsYou || [.restart, .ended, .cueAsking].contains(shown.status)
         let mark = session.agentMark
-        if speaks || undelivered != nil || mark != nil {
-            HStack(spacing: 4) {
-                if mark != nil {
-                    AgentMark(session: session, font: Self.font)
-                    if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+        // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
+        ZStack(alignment: .leading) {
+            if speaks || undelivered != nil || mark != nil {
+                HStack(spacing: 4) {
+                    if mark != nil {
+                        AgentMark(session: session, font: Self.font)
+                        if speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+                    }
+                    if syncing { SyncingLabel() } else if speaks { PiShownLabel(shown: shown) }
+                    if let undelivered {
+                        if speaks { Dot().foregroundStyle(palette.failure) }
+                        Text(undelivered).foregroundStyle(palette.failure)
+                    }
+                    if !syncing, shown.isLive, shown.clock != nil {
+                        Dot().foregroundStyle(palette.ink3)
+                        // 整个 App 只有这一个计时到秒：正看着的这个会话
+                        PiElapsed(shown: shown, font: Self.font, style: .header)
+                    }
                 }
-                if speaks { PiShownLabel(shown: shown) }
-                if let undelivered {
-                    if speaks { Dot().foregroundStyle(palette.failure) }
-                    Text(undelivered).foregroundStyle(palette.failure)
-                }
-                if shown.isLive, shown.clock != nil {
-                    Dot().foregroundStyle(palette.ink3)
-                    // 整个 App 只有这一个计时到秒：正看着的这个会话
-                    PiElapsed(shown: shown, font: Self.font, style: .header)
-                }
+                .font(Self.font)
+                .fixedSize()
+                .wakeSource(session.sessionID)
+                .accessibilityElement(children: .combine)
             }
-            .font(Self.font)
-            .fixedSize()
-            .wakeSource(session.sessionID)
-            .accessibilityElement(children: .combine)
         }
+        .pending(services.isCatchingUp(on: session.hostID), shown: $syncing)
     }
 
     private static let font = Typography.caption
-
 }
-
 
 /// 顶栏里的状态（会话页与 Cue 页同一个样子）：着色的状态词，手机上前面加状态标（Mac 的标题玻璃里不画圆）。
 struct PiShownLabel: View {

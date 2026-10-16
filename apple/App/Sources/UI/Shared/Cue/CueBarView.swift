@@ -37,6 +37,7 @@ struct CueStatusRow<Trailing: View>: View {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.lastSaid).lineLimit(1)
             }
+            .opacity(cue.isLoaded ? 1 : 0)
             Spacer(minLength: 6)
             WaitingCount(count: cue.waiting).font(Typography.meta)
             trailing
@@ -44,21 +45,28 @@ struct CueStatusRow<Trailing: View>: View {
         .animation(Motion.quick, value: cue.waiting)
         .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
+        .animation(Motion.quick, value: cue.isLoaded)
     }
 }
 
 /// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
 /// 都没有时是 `fallback`。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
+/// 它住在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态可能已经过时。
 struct CueStatusLine: View {
     var fallback: String?
     var font = Typography.meta
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @State private var syncing = false
 
     var body: some View {
         let cue = workspace.cue
-        Group {
-            if let shown {
+        // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
+        ZStack(alignment: .leading) {
+            if syncing {
+                SyncingLabel().transition(.opacity)
+            } else if let shown {
                 PiShownLabel(shown: shown)
             } else if let line = cue.presence.line(name: cue.name) ?? fallback {
                 Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
@@ -66,6 +74,7 @@ struct CueStatusLine: View {
         }
         .font(font)
         .transition(.opacity)
+        .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
     private var shown: PiShown? {
@@ -93,9 +102,11 @@ struct CueTitle: View {
                 Text(cue.name).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(font: Typography.toolbarSubtitle).lineLimit(1)
             }
+            .opacity(cue.isLoaded ? 1 : 0)
             .padding(.trailing, 14)
         }
         .animation(Motion.quick, value: cue.presence)
+        .animation(Motion.quick, value: cue.isLoaded)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

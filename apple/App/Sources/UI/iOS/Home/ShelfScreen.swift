@@ -18,10 +18,9 @@ struct ShelfScreen: View {
 
     var body: some View {
         ScrollView {
-            // 读到数据时整页淡入，不是一帧里突然铺满
-            if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
+            if let data, let catalog = workspace.catalog { content(data, catalog) }
         }
-        .animation(Motion.quick, value: data == nil)
+        .loading(data == nil)
         .refreshable { await services.syncNow() }
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")

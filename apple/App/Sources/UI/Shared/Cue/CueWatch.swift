@@ -8,12 +8,16 @@ import Observation
 /// 书架与侧栏都要跟着重算。
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
+/// 读到第一份之前（`isLoaded`）不说任何现状：头像是平时在听的样子、能对它说，名字与那一句等读到再出——
+/// 不先说"还没启用"、不先亮出启用卡，读到后再改口。
 @Observable
 final class CueWatch {
+    /// 读到过第一份摘要。页头的名字与那一句等它（还没读到时写的只会是默认值）。
+    private(set) var isLoaded = false
     private(set) var name = CueDigest.empty.name
-    private(set) var presence = CuePresence.derive(.empty, at: .always())
+    private(set) var presence = CuePresence.idle
     /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
-    private(set) var canHear = false
+    private(set) var canHear = true
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
     private(set) var lastSaid: String?
@@ -26,8 +30,7 @@ final class CueWatch {
     /// 此刻叫醒它的这一轮（`CueState.woke`）。这个窗口读到的第一份不算（App 刚打开、窗口刚开时已有的叫醒不是此刻发生的），
     /// 之后 `at` 变成新的就是又被叫醒了一次（`CueWakeStage`）。
     private(set) var woke: CueWoke?
-    /// 读到过第一份；第一份里已有的那次叫醒的时刻（`woke` 不算它）。
-    @ObservationIgnored private var loaded = false
+    /// 第一份里已有的那次叫醒的时刻（`woke` 不算它）。
     @ObservationIgnored private var stale: Date?
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
@@ -61,11 +64,9 @@ final class CueWatch {
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)
         let woke = digest.state?.woke
-        if !loaded {
-            loaded = true
-            stale = woke?.at
-        }
+        if !isLoaded { stale = woke?.at }
         set(\.woke, woke?.at == stale ? nil : woke)
+        set(\.isLoaded, true)
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<CueWatch, Value>, _ value: Value) {

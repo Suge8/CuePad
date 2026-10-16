@@ -79,6 +79,7 @@ struct CueHeader: View {
                 Text(cue.name).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.lastSaid, font: .footnote).lineLimit(1)
             }
+            .opacity(cue.isLoaded ? 1 : 0)
             Spacer(minLength: 6)
             // 展开时等你那一行在面板里，页头不再重复
             WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
@@ -92,6 +93,7 @@ struct CueHeader: View {
         .animation(Motion.quick, value: cue.waiting)
         .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
+        .animation(Motion.quick, value: cue.isLoaded)
         .accessibilityElement(children: .combine)
     }
 

@@ -11,6 +11,9 @@ import CuePi
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行灰字（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
+/// 打开时对话读到才排（之前只有页头与输入框，读得慢时中间淡入转圈，`loading`）：一排出来就停在最新处，"等你"同时出现、不滑进来。
+/// Cue 住在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
+/// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 住在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）在 Mac 的"⋯"里、手机页头的面板里；
 /// Cue 在这台 Mac 值班时 Mac 的"⋯"里还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
@@ -47,9 +50,13 @@ struct CuePage: View {
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(active: active))
-            #if os(iOS)
-            .onChange(of: thread != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
-            #endif
+            .onChange(of: thread != nil, initial: true) { _, loaded in
+                guard loaded else { return }
+                DebugHooks.mark("cue")
+                #if os(iOS)
+                tabPageReady?()
+                #endif
+            }
     }
 
     // MARK: 平台
@@ -97,20 +104,28 @@ struct CuePage: View {
 
     // MARK: 对话
 
-    private var chat: some View {
-        let thread = thread
-        let rows = thread?.rows ?? []
+    /// 读到前也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
+    @ViewBuilder private var chat: some View {
+        Group {
+            if let thread { conversation(thread) } else { Color.clear }
+        }
+        .loading(thread == nil)
+    }
+
+    private func conversation(_ thread: CueThread) -> some View {
+        let rows = thread.rows
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
-            marks: thread?.marks ?? [], count: rows.count, position: { id in rows.firstIndex { $0.id == id } }, paging: Self.paging
+            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
+            holding: services.isCatchingUp(on: cue.hostID)
         ) { window, showEarlier in
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: PiConversation.spacing) {
                 if first > 0 { EarlierRow(hidden: first, action: showEarlier) }
                 let live = live
-                let lastYou = thread?.messages.last { $0.author == .known(.you) }?.id
-                ForEach(rows[first...]) { item in row(item, tasks: thread?.tasks ?? [:], lastYou: lastYou, live: live) }
-                CueEnding(newestSaid: thread?.messages.last { $0.author == .known(.cue) }?.createdAt)
+                let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
+                ForEach(rows[first...]) { item in row(item, tasks: thread.tasks, lastYou: lastYou, live: live) }
+                CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt)
             }
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
             .scrollTargetLayout()
@@ -161,10 +176,10 @@ struct CuePage: View {
         var waiting: Int
         var live: Bool
 
-        init(_ thread: CueThread?, live: Bool) {
-            count = thread?.messages.count ?? 0
-            last = thread?.messages.last?.modifiedAt
-            waiting = thread?.waiting.count ?? 0
+        init(_ thread: CueThread, live: Bool) {
+            count = thread.messages.count
+            last = thread.messages.last?.modifiedAt
+            waiting = thread.waiting.count
             self.live = live
         }
     }
@@ -187,6 +202,8 @@ struct CuePage: View {
         }
         .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.canHear)
+        // 对话读到的那一下"等你"与对话一起出现，不滑进来：底部一动，刚排好的对话又要跟着挪
+        .transaction(value: thread == nil) { $0.disablesAnimations = true }
     }
 }
 

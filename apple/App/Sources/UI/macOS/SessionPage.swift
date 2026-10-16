@@ -117,6 +117,7 @@ struct SessionPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .loading(stored == nil)
         .background(palette.desk)
         .onChange(of: headerState(digest, live: live, shownEnd: shownEnd, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
         .onAppear {

@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近 `window` 条，离最早那头不到一屏时
-/// （往上翻、或排开的几条铺不满一屏）再排开 `paging.step` 条；右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
+/// （往上翻、或排开的几条铺不满一屏）再排开 `paging.step` 条。排开到哪按那一条记（`oldest`），不按条数：新的在下面长出来、
+/// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜；右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
 /// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
-/// 内容只管按 `window` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。
+/// 内容只管按 `window` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。`holding`：本机正在和 iCloud 对，见 `ChatScroll`。
 struct ChatColumn<Content: View, Key: Equatable>: View {
     let followKey: Key
     let readingWidth: CGFloat
@@ -11,19 +12,19 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     @Binding var follow: ChatFollow
     /// 刻度：你说的话与换上下文的地方（先后）。
     let marks: [ChatMark]
-    /// 对话里一共几条，与 `position` 给的序号同一种数法。
-    let count: Int
-    /// 某一条在对话里的序号（从最早那条数起）；跳到它要排开到那里。
-    let position: (UUID) -> Int?
+    /// 对话里的各条，从最早那条起；`content` 排的是它的最后 `window` 条。
+    let ids: [UUID]
     let paging: ChatPaging
+    let holding: Bool
     @ViewBuilder let content: (_ window: Int, _ showEarlier: @escaping () -> Void) -> Content
-    @State private var window: Int
+    /// 排开到的最早那一条；还没排（没有内容）为 nil。
+    @State private var oldest: UUID?
     @State private var highlight = ChatHighlight()
     @State private var pendingJump: UUID?
 
     init(
-        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], count: Int,
-        position: @escaping (UUID) -> Int?, paging: ChatPaging,
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], ids: [UUID],
+        paging: ChatPaging, holding: Bool,
         @ViewBuilder content: @escaping (_ window: Int, _ showEarlier: @escaping () -> Void) -> Content
     ) {
         self.followKey = followKey
@@ -31,15 +32,20 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.inset = inset
         _follow = follow
         self.marks = marks
-        self.count = count
-        self.position = position
+        self.ids = ids
         self.paging = paging
+        self.holding = holding
         self.content = content
-        _window = State(initialValue: paging.first)
+    }
+
+    /// 排着几条：从记下的那一条到最新；还没记下，或它已不在读的范围里时，最近 `paging.first` 条。
+    private var window: Int {
+        guard let oldest, let index = ids.firstIndex(of: oldest) else { return min(ids.count, paging.first) }
+        return ids.count - index
     }
 
     var body: some View {
-        ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow) {
+        ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
             content(window, showEarlier)
         }
         .environment(\.chatHighlight, highlight.id)
@@ -50,6 +56,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                     .padding(.trailing, Self.scrollerWidth)
             }
         }
+        .onChange(of: ids, initial: true) { if oldest.flatMap(ids.firstIndex(of:)) == nil { show(from: ids.count - window) } }
         .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier() } }
         .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id) } }
         .onChange(of: pendingJump) {
@@ -69,16 +76,22 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     /// 先描圈、排开到那一条（离屏远的地方排的是空白，描圈的那条所在的段排成真的），排好了再跳。
     private func seek(_ id: UUID) {
         highlight.flash(id)
-        if let index = position(id) { window = max(window, count - index) }
+        if let index = ids.firstIndex(of: id) { show(from: min(index, ids.count - window)) }
         pendingJump = id
     }
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
     private func showEarlier() {
-        guard window < count else { return }
-        DebugHooks.chatShowsEarlier(from: max(0, count - window - paging.step), of: count)
+        guard window < ids.count else { return }
+        let from = max(0, ids.count - window - paging.step)
+        DebugHooks.chatShowsEarlier(from: from, of: ids.count)
         follow.willPrepend()
-        window += paging.step
+        show(from: from)
+    }
+
+    /// 从第 `index` 条排起（记下那一条）。
+    private func show(from index: Int) {
+        oldest = ids.indices.contains(index) ? ids[index] : nil
     }
 }
 

@@ -5,7 +5,7 @@ import CuePi
 #endif
 
 /// 会话页的对话区（iOS 会话页、Mac 会话页共用）：对话区的排开、跳转与刻度见 `ChatColumn`（与 Cue 页同一个），这里只接会话的数据——
-/// 对话（`PiConversation`，按段排），正在请 Mac 补写对话时最上面一行说明。
+/// 对话（`PiConversation`，按段排），正在请 Mac 补写对话时最上面一行说明。会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
 struct SessionChat: View {
     let session: PiSessionState
     let digest: SessionDigest
@@ -26,8 +26,9 @@ struct SessionChat: View {
         ChatColumn(
             followKey: PiConversation.followKey(
                 session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech),
-            readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, count: items.count,
-            position: { id in items.firstIndex { $0.id == id } }, paging: PiConversation.paging
+            readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, ids: items.map(\.id),
+            paging: PiConversation.paging,
+            holding: services.isCatchingUp(on: session.hostID)
         ) { window, showEarlier in
             VStack(spacing: 14) {
                 if digest.fetchingTranscript(at: services.speech) {

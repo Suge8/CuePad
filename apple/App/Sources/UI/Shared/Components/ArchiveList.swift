@@ -29,6 +29,7 @@ struct ArchiveList: View {
                 .scrollContentBackground(.hidden)
             }
         }
+        .loading(cards == nil)
         .animation(Motion.quick, value: cards?.map(\.id))
         .observing(services.store, into: $cards, onError: workspace.fail) { try $0.archived() }
     }

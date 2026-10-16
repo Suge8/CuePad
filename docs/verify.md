@@ -12,7 +12,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 - 截图与 App 测试以后台 App 运行，不抢前台（`DebugHooks.staysInBackground`）。要前台的只有量交互与动画（见"性能测量"），它会抢焦点、动指针，跑之前先确认用户此刻不在用这台 Mac。
 - 后台窗口里的网页截图不可信：同一次运行里先有内容、过几秒就成了空白，WebKit 自己的快照却一直有内容。看网页预览用快照：`-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview` 打开那一页，载入完存成 PNG）。
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸。
-- 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
+- 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。冷启动的首屏给 `CUEPAD_REC_LAUNCH=1`，从启动前开录；配 `-CuePadSync arrive` 看启动后拉到一批别的设备写下的话时页面怎么变。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …` 按真实时刻取。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
 - 裁图、缩放用系统自带的 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 模拟器（选哪台、启停、隔离库）只经 `xc.sh`，规则见它与 `_sim.sh` 的头注释。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。
@@ -73,6 +73,8 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 ### 交互预算
 
 预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数至少跑两遍取中位数。
+
+冷启动进 Cue 页（iOS 第一项，`launchMs` 是进程启动到对话排出来）要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。Mac 的"Cue 页首访"带 `contentMs`（点下到对话排出来），大库里有一段 Cue 对话。项名带空格，整个参数要加引号。
 
 `-CuePadInteractOnly 项,项`（两端，跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）。iOS 的长文打字（输入框里已有一大段时再敲一个字）配 `-CuePadPasteFile <路径>` 换成真的粘贴内容。
 

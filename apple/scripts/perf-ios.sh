@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 用法：xc.sh perf ios [次数=3] [启动参数…]   启动参数原样传给 App，如任务多时：xc.sh perf ios 3 -CuePadManyTasks 150 -CuePadProject CuePad
-#   iPhone 模拟器上的单次交互（-CuePadBench interact，`IOSInteractionBench`）：演示库，每次全新进程，逐项量点击回合、合计、最重一圈
+#   iPhone 模拟器上的单次交互（-CuePadBench interact，`IOSInteractionBench`）：演示库（给了 CUEPAD_PERF_SEED=<库目录> 时每次从那份库的克隆起，
+#   如真实库的只读副本：冷启动进 Cue 页要量真实大小的对话），每次全新进程，逐项量点击回合、合计、最重一圈
 #   （主线程 CPU 毫秒）、进程指令数（百万条）与掉帧，按"第几次"分开取各次的中位数列成表。
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单在进程内没有入口：App 写 `AWAIT 名 x y`，这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）。
@@ -38,8 +39,10 @@ rows="$DERIVED/interact.jsonl"
 for run in $(seq "$runs"); do
   library="$DERIVED/library-$run"
   rm -rf "$library"
+  library_args=(-CuePadDemo YES)
+  if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); fi
   out="$library/interact.jsonl"
-  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" -CuePadDemo YES -CuePadBench interact "${@:2}" >/dev/null
+  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:2}" >/dev/null
   sleep 2
   # 量完自己退出；最多等 5 分钟。其间按 App 要的点真按
   pressed=0 finished=0 deadline=$(( $(date +%s) + 300 )) tick=0
