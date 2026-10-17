@@ -33,7 +33,7 @@ import Testing
     try await store.moveCard(a.id, to: .under(b.id), after: nil)
     let movedB = try #require(try await store.card(b.id))
 
-    await rig.coordinator.handle(.fetched(modifications: [remote(movedB, parent: a.id)], deletions: []))
+    try await rig.coordinator.pulled([remote(movedB, parent: a.id)], [])
 
     let first = [a.id, b.id].min { $0.uuidString.lowercased() < $1.uuidString.lowercased() }!
     let other = first == a.id ? b.id : a.id
@@ -98,7 +98,7 @@ import Testing
         changes.append(remoteRecord(.cards, id: current.id, fields))
       }
 
-      await rig.coordinator.handle(.fetched(modifications: changes, deletions: deletions))
+      try await rig.coordinator.pulled(changes, deletions)
 
       for item in made {
         guard let card = try await store.card(item.id), card.deletedAt == nil else { continue }
@@ -124,7 +124,7 @@ import Testing
     try await store.moveCard(note.id, to: .under(b1.id), after: nil)
     try await pushed()
 
-    await rig.coordinator.handle(.fetched(modifications: [remote(b, parent: a1.id)], deletions: []))
+    try await rig.coordinator.pulled([remote(b, parent: a1.id)], [])
 
     #expect(try await store.card(b.id)?.parentID == a.id)
     #expect(try await store.card(b1.id)?.parentID == a.id)
@@ -148,7 +148,7 @@ import Testing
     }
     // 另一台设备给"上线"加了两个步骤（备份已完成）
     let changes = [record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b")]
-    await rig.coordinator.handle(.fetched(modifications: changes, deletions: []))
+    try await rig.coordinator.pulled(changes, [])
 
     #expect(try await store.card(top.id)?.piSessionID == nil)
     #expect(try await store.card(first.id)?.piSessionID == nil)
@@ -166,7 +166,7 @@ import Testing
     fields["parentID"] = .text(UUID().uuidString.lowercased())
     fields["todoAt"] = .int(1_000)
     let orphan = remoteRecord(.cards, fields)
-    await rig.coordinator.handle(.fetched(modifications: [remote(parent, parent: nil, project: table.id), orphan], deletions: []))
+    try await rig.coordinator.pulled([remote(parent, parent: nil, project: table.id), orphan], [])
 
     #expect(try await store.card(child.id)?.projectID == table.id)
     let waiting = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "父任务还在路上" })

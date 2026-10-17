@@ -162,7 +162,7 @@ struct AlertSubscriptions {
 
   private func make(_ table: Table, id: String, flag: String, key: String) -> CKQuerySubscription {
     let subscription = CKQuerySubscription(
-      recordType: RecordMapper.recordType(for: table), predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
+      recordType: table.rawValue, predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
       subscriptionID: id, options: [.firesOnRecordCreation, .firesOnRecordUpdate])
     subscription.zoneID = zoneID
     let info = CKSubscription.NotificationInfo()
