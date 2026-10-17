@@ -17,6 +17,9 @@ nonisolated struct CueThread: Equatable, Sendable {
     let stamps: [UUID: Date]
     /// 刻度滑条：你的话与换新的地方（`ChatMark`），按 `rows` 的先后。
     let marks: [ChatMark]
+    /// 每一格估计至少多高（与 `rows` 同序）：Cue 页按它一段一段排开对话（`ChatPaging.height`），不按条数——
+    /// 一格可能是一行旁注，也可能是带四十行代码的回答，按条数排开最近 40 格时长对话打开一次要排十来屏。
+    let extents: [CGFloat]
 
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
@@ -28,6 +31,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         rows = Self.rows(messages, tasks: tasks, waiting: waiting)
         let stamps = Self.stamps(rows)
         self.stamps = stamps
+        extents = rows.map(\.extent)
         joined = Set(zip(rows, rows.dropFirst()).compactMap { above, row in
             row.speaker != nil && row.speaker == above.speaker && stamps[row.id] == nil ? row.id : nil
         })
@@ -83,6 +87,24 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .you(let message), .cue(let message, _), .result(let message, _, _), .renewed(let message), .process(let message): message.createdAt
             case .notes(let group): group[0].createdAt
             }
+        }
+
+        /// 估计至少多高：气泡按字数与换行数估行数（一行按最宽的阅读栏能排下的字数算，宁可估矮），其余是一行。
+        var extent: CGFloat {
+            switch self {
+            case .you(let message), .cue(let message, _): Self.bubbleInset + Self.lineHeight * Self.lines(message.text)
+            case .result: Self.bubbleInset + 3 * Self.lineHeight
+            case .notes, .process, .renewed: Self.lineHeight
+            }
+        }
+
+        private static let lineHeight: CGFloat = 18
+        private static let bubbleInset: CGFloat = 20
+        /// 一行最多排下的 UTF-16 码元：Mac 最宽的气泡里排得下的西文字数（汉字只有一半）。
+        private static let lineUnits = 80
+
+        private static func lines(_ text: String) -> CGFloat {
+            CGFloat(text.split(separator: "\n", omittingEmptySubsequences: false).reduce(0) { $0 + max(1, ($1.utf16.count + lineUnits - 1) / lineUnits) })
         }
 
         /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（结果卡、经过、动态、分隔）不是气泡，不与上下的气泡连成一串。
