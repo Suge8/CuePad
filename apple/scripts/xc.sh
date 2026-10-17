@@ -205,13 +205,14 @@ shot_mac() {
   echo "$out"
 }
 
-# 截到的图与就绪文件里窗口的像素尺寸（DebugScene.shotSize）对不上：窗口在屏上被系统缩放显示（调度中心、台前调度开着），
+# 截到的图比就绪文件里窗口的像素尺寸（DebugScene.shotSize）小一截：窗口在屏上被系统缩放显示（调度中心、台前调度开着），
 # screencapture 拍下的是缩小的画面。删掉、报错，不留一张看着像成果的小图。
+# 差 2% 以内不算：就绪之后窗口还可能按内容长几个点（设置窗口），缩放显示差的是一半上下。
 check_shot_size() {
   local shot=$1 expected got
   expected="$(cat "$2")"
   got="$(sips -g pixelWidth -g pixelHeight "$shot" | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w" "h}')"
-  [ "$got" = "$expected" ] && return 0
+  awk -v g="$got" -v e="$expected" 'BEGIN { split(g, a, " "); split(e, b, " "); exit !(a[1] >= b[1] * 0.98 && a[2] >= b[2] * 0.98) }' && return 0
   rm -f "$shot"
   echo "截到 ${got/ /×}，窗口是 ${expected/ /×}：窗口在屏上被缩放显示（调度中心或台前调度开着？），关掉再拍" >&2
   exit 1

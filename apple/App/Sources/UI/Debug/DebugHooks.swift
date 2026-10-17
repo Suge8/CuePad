@@ -287,6 +287,7 @@ extension View {
             Task { await DebugScene.wakeIfAsked(workspace) }
             Task { await DebugScene.relayIfAsked(workspace) }
             Task { await DebugScene.closeIfAsked(workspace) }
+            Task { await DebugScene.openMenuIfAsked() }
             await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }

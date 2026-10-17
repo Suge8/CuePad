@@ -58,7 +58,8 @@ Task {
         guard let window = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { fail("没有找到 \(pid) 的窗口") }
         let scale = NSScreen.screens.first { $0.frame.intersects(window.frame) }?.backingScaleFactor ?? 1
         let shown = (Int(window.frame.width * scale), Int(window.frame.height * scale))
-        guard abs(shown.0 - width) <= 2, abs(shown.1 - height) <= 2 else {
+        // 同 xc.sh 的 check_shot_size：差 2% 以内是就绪后窗口按内容长了几个点，缩放显示差的是一半上下
+        guard Double(shown.0) >= Double(width) * 0.98, Double(shown.1) >= Double(height) * 0.98 else {
             fail("窗口在屏上被缩放显示（\(shown.0)×\(shown.1)，应为 \(width)×\(height)）：调度中心或台前调度开着？关掉再录")
         }
         let config = SCStreamConfiguration()
