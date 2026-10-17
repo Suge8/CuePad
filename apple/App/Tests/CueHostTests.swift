@@ -484,7 +484,7 @@ struct CueHostTests {
     /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
     @Test func 记忆待合并时空闲后醒来合并() async throws {
         let rig = try await Rig()
-        for index in 0..<(CueMemoryView.defaultBudget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
+        for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
         try await rig.message(.note, containing: "记忆合并好了")
         await rig.stop()
     }

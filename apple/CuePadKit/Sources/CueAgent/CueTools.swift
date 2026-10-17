@@ -578,7 +578,7 @@ public struct CueTools: Sendable {
     throw Failure("没有记忆 \(raw)：用 recall 找它的序号")
   }
 
-  static func date(_ raw: String) -> Date? {
+  private static func date(_ raw: String) -> Date? {
     if let date = try? Date(raw, strategy: .iso8601) { return date }
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -642,10 +642,7 @@ public struct CueTools: Sendable {
 struct Args {
   let raw: [String: Any]
 
-  func string(_ key: String) -> String? {
-    guard let value = raw[key] as? String else { return nil }
-    return value
-  }
+  func string(_ key: String) -> String? { raw[key] as? String }
 
   func required(_ key: String) throws -> String {
     guard let value = string(key), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
