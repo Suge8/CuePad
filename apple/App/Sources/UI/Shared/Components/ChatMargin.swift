@@ -97,14 +97,9 @@ nonisolated enum ChatTime {
     /// 隔了这么久另起一段写时间（同 iMessage 的一小时）。
     static let gap: TimeInterval = 3600
 
+    /// 哪天：今天不写（nil），其余同 `DateLabel.day`。
     static func day(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String? {
-        if calendar.isDate(date, inSameDayAs: now) { return nil }
-        let chinese = Locale(identifier: "zh_CN")
-        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "昨天" }
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
-        if days < 7 { return date.formatted(.dateTime.weekday(.abbreviated).locale(chinese)) }
-        if calendar.isDate(date, equalTo: now, toGranularity: .year) { return date.formatted(.dateTime.month(.defaultDigits).day().locale(chinese)) }
-        return date.formatted(.dateTime.year().month(.defaultDigits).day().locale(chinese))
+        calendar.isDate(date, inSameDayAs: now) ? nil : DateLabel.day(date, now: now, calendar: calendar)
     }
 
     static func time(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }

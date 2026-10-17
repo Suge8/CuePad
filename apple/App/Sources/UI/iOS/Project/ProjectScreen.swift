@@ -10,7 +10,7 @@ nonisolated private struct ProjectPage: Sendable, Equatable {
 
     init(_ data: ProjectPageData) {
         self.data = data
-        stamps = data.stamps()
+        stamps = data.stamps
         entries = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, CardEntry($0)) })
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话页里换模型与思考强度的显示：只由会话记录与发给它的投送请求推出（不另存界面状态）。
+/// 会话页里换模型与思考强度：经模型胶囊同一个入口（`AppServices.configure`）写请求，显示只由会话记录与发给它的投送请求推出（不另存界面状态）。
 /// 换了之后胶囊立即显示新值并标着在路上；没换成回到会话当前的值并写原因。
 struct SessionControlsTests {
     let app = TestApp()
@@ -22,10 +22,6 @@ struct SessionControlsTests {
     /// 会话页读到的模型与思考强度（与页面同一次读取）。
     private func shown(_ session: PiSessionState) async throws -> PiConfigShown {
         try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store).config(at: .always())
-    }
-
-    private func target(_ session: PiSessionState) -> SendTarget {
-        SendTarget(kind: .piSession, name: session.title, ref: session.sessionID)
     }
 
     /// Mac 执行器按给定结果写回，等到这条有结果。
@@ -51,7 +47,7 @@ struct SessionControlsTests {
 
     @Test func 换了模型_立即显示新值并标在路上() async throws {
         let atlas = try await session()
-        _ = try await store.requestConfig(PiConfig(model: luna.key, thinking: .high), to: target(atlas), on: atlas.hostID)
+        _ = try await app.services.configure(PiConfig(model: luna.key, thinking: .high), for: atlas)
 
         #expect(try await shown(atlas) == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
     }
@@ -63,20 +59,16 @@ struct SessionControlsTests {
         #expect(ended.state == .known(.ended))
         #expect(try await SessionDigest.read(ended.id, sessionID: ended.sessionID, from: store).catalog?.models == [opus, luna])
 
-        _ = try await store.requestConfig(PiConfig(model: luna.key), to: target(atlas), on: atlas.hostID)
+        _ = try await app.services.configure(PiConfig(model: luna.key), for: ended)
 
         #expect(try await shown(ended).model == luna)
     }
 
     @Test func 没换成_回到会话当前的值并写原因() async throws {
         let atlas = try await session()
-        let request = try await store.requestConfig(PiConfig(thinking: .high), to: target(atlas), on: atlas.hostID)
+        let request = try await app.services.configure(PiConfig(thinking: .high), for: atlas)
         _ = try await execute(request, failing: "Pi 没在运行")
 
         #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
     }
-
 }
-
-#if os(iOS)
-#endif

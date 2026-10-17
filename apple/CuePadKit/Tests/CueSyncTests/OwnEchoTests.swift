@@ -37,7 +37,7 @@ import Testing
     _ = try await edit(card, "第二版")
     let restarted = SyncCoordinator(store: store, zoneID: testZone)
 
-    await restarted.handle(.fetched(modifications: [uploaded], deletions: []))
+    try await restarted.pulled([uploaded], [])
 
     try await expectNoCopyAndLocalKept(card, body: "第二版")
   }
@@ -56,9 +56,9 @@ import Testing
     if comesBackAsRejection {
       let retry = try #require(await restarted.nextBatch(first: [], limit: 400)?.saves.first)
       let rejection = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: lost])
-      await restarted.handle(.sent(saved: [], failedSaves: [(retry, rejection)], deleted: [], failedDeletes: []))
+      _ = await restarted.sent(SentRecords(saved: [], failedSaves: [(retry, rejection)], deleted: [], failedDeletes: []))
     } else {
-      await restarted.handle(.fetched(modifications: [lost], deletions: []))
+      try await restarted.pulled([lost], [])
     }
 
     try await expectNoCopyAndLocalKept(card, body: "第二版")
@@ -70,7 +70,7 @@ import Testing
     let local = try await edit(card, "本机第二版")
     let other = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "另一台的版本", modifiedAt: (local["modifiedAt"] as! NSNumber).int64Value + 1_000))
 
-    await rig.coordinator.handle(.fetched(modifications: [other], deletions: []))
+    try await rig.coordinator.pulled([other], [])
 
     let conflict = try #require(try await store.conflicts().first)
     #expect(conflict.original.body == "另一台的版本" && conflict.copy.body == "本机第二版")

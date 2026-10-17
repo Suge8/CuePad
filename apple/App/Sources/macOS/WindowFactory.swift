@@ -11,6 +11,7 @@ enum WindowFactory {
             contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false), content: content)
         window.title = "CuePad"
+        window.delegate = window
         window.titleVisibility = .hidden
         window.contentMinSize = NSSize(width: 720, height: 520)
         window.setContentSize(NSSize(width: 1200, height: 760)) // 须在设置 contentViewController 之后，否则被内容尺寸覆盖
