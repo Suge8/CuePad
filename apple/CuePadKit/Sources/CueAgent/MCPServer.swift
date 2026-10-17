@@ -56,7 +56,7 @@ public struct CueMCPServer: Sendable {
       }
       return Self.result(
         id: id,
-        ["content": [["type": "text", "text": result.text]], "structuredContent": result.structured, "isError": result.isError])
+        ["content": [["type": "text", "text": result.text]], "isError": result.isError])
     default:
       return Self.error(id: id, code: -32601, "不支持 \(method)")
     }

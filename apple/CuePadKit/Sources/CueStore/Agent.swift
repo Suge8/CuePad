@@ -49,6 +49,12 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     guard parts.count == 1, let modelProvider else { return nil }
     return PiModelKey(provider: modelProvider, id: parts[0])
   }
+
+  /// `modelKey`，读不出抛 `invalidModel`（Cue 写的 model）。
+  public func requiredModelKey(_ ref: String) throws -> PiModelKey {
+    guard let key = modelKey(ref) else { throw CueStoreError.invalidModel(name) }
+    return key
+  }
 }
 
 /// 从 CuePad 能对一个会话做什么（发文字总能做，不在其中）。只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，

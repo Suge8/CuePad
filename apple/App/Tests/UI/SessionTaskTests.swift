@@ -75,7 +75,7 @@ struct SessionTaskTests {
 
         let cue = CueTools(store: store, wait: 0)
         let answered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "覆盖"]))
-        #expect(!answered.isError && answered.structured["mode"] as? String == DeliveryMode.answer.rawValue)
+        #expect(!answered.isError && answered.text.contains("回答"))
         let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(answer.answer == PiAnswer(promptID: "p1", value: .option("覆盖")))
         #expect(try await store.outcome(of: answer.id).status == .known(.succeeded))
@@ -221,13 +221,13 @@ struct SessionTaskTests {
         #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
 
         let waited = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动", "when": "now"]))
-        #expect(!waited.isError && waited.structured["mode"] as? String == DeliveryMode.followUp.rawValue)
+        #expect(!waited.isError && waited.text.contains("等它做完再说"))
 
         // Cue 自己说的那句开的一轮：照常马上说
         try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
         let steered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的", "when": "now"]))
-        #expect(!steered.isError && steered.structured["mode"] as? String == DeliveryMode.steer.rawValue)
+        #expect(!steered.isError && steered.text.contains("马上说"))
     }
 
     /// 这一轮是谁开的只看会话里最近一条你一方或机器的消息：他说的那一轮，变化标"他说的"；FireCode 这类扩展投进来的机器消息开的一轮
@@ -259,7 +259,7 @@ struct SessionTaskTests {
         ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "测试全过")))
         try await recorder.update(sessionID: "s1", state: .thinking)  // 机器消息开的这一轮在跑
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint", "when": "now"]))
-        #expect(!said.isError && said.structured["mode"] as? String == DeliveryMode.steer.rawValue)
+        #expect(!said.isError && said.text.contains("马上说"))
         let line = try await settledLine(after: mark)
         #expect(line.contains("[歇下] 修登录") && !line.contains("他说的"))
     }

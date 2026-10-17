@@ -416,6 +416,12 @@ public enum CueStoreError: Error, Equatable {
   case launching(String)
   /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
   case noFolder(String)
+  /// 开会话的那台 Mac 记着这家不能用（参数是"Agent 名 原因"）。
+  case agentUnavailable(String)
+  /// 开会话的那台 Mac 一家能用的都没有（参数是 `MacAgents.whyNone`）。
+  case noAgent(String)
+  /// model 不是这家的写法（参数是 Agent 名）。
+  case invalidModel(String)
   /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
   /// 会话换不了模型（参数是会话名）。
@@ -468,6 +474,9 @@ extension CueStoreError: LocalizedError {
       project.isEmpty
         ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
         : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
+    case .agentUnavailable(let reason): "开不了会话：\(reason)。start 的 agent 换成系统提示里列着的那几家"
+    case .noAgent(let why): "开会话的那台 Mac 上没有能用的 Agent（\(why)）：用 tell 告诉用户"
+    case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
