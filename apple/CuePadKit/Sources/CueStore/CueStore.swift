@@ -98,11 +98,6 @@ public actor CueStore {
     return (try? connection.first("PRAGMA user_version") { Int($0.int(0)) }) ?? nil
   }
 
-  /// 按资料库位置打开。
-  public init(location: LibraryLocation) throws {
-    try self.init(url: location.databaseURL)
-  }
-
   /// 收到别的进程的通知：确有别的连接提交过才算外部变更，所有订阅者整体重读（不猜是哪张表）。
   private func externalChangeNotified() {
     guard let version = try? db.first("PRAGMA data_version", [], { $0.int(0) }), version != lastDataVersion else { return }

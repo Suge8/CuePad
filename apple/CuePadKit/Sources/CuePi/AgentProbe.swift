@@ -59,7 +59,7 @@ struct AgentProbe {
             return agent.map(Outcome.usable) ?? .unusable("没登录")
         } catch {
             let message = error.localizedDescription
-            return .unusable("问不出模型（\(message.count > Self.messageLimit ? message.prefix(Self.messageLimit - 1) + "…" : message)）")
+            return .unusable("问不出模型（\(message.clipped(Self.messageLimit))）")
         }
     }
 

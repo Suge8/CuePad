@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import CueText
+import CueText
 
 /// 选区操作用到的纯文本规则：转为任务按行切。
 @Suite("选区与发出的正文")

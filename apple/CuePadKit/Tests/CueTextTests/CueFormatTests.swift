@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import CueText
+import CueText
 
 @Suite("存储格式")
 struct CueFormatTests {
@@ -27,22 +27,10 @@ struct CueFormatTests {
     func rule(line: String, expected: Bool) {
         #expect(CueFormat.isRule(line) == expected)
     }
-
 }
 
 @Suite("标题与摘要")
 struct CueSummaryTests {
-    @Test("卡片标题只有一条规则：非空、不是分隔线、除图片外还有文字")
-    func titleLine() {
-        let cases: [(String, Bool)] = [
-            ("周报", true), ("  周报  ", true), ("", false), ("   ", false),
-            ("---", false),
-            ("![](cuepad://img/ab)", false), ("![](cuepad://img/ab) ![](cuepad://img/cd)", false),
-            ("![](cuepad://img/ab) 说明", true), ("\u{FFFC}", false), ("\u{FFFC} 说明", true),
-        ]
-        for (line, expected) in cases { #expect(CueLines.isTitleLine(line) == expected, "\(line.debugDescription)") }
-    }
-
     @Test("卡片标题与摘要：标题是首个标题行并去掉 # 前缀，摘要只取其后的第一段（到空行、分割线或只有图片的行为止）", arguments: [
         ("![](cuepad://img/ab)\n\n## 周报\n第二行 ![](cuepad://img/cd) 尾\n---\n第三行", "周报", "第二行 尾"),
         ("标题\n\n第一段一\n第一段二\n\n第二段", "标题", "第一段一 第一段二"),
@@ -51,6 +39,10 @@ struct CueSummaryTests {
         ("C# 入门\n不是标题前缀", "C# 入门", "不是标题前缀"),
         ("---\n![](cuepad://img/ab)", "", ""),
         ("", "", ""),
+        // 有文字的行只有一条规则：空白行、分割线、只有图片（存储格式或编辑器里的 U+FFFC）的行都不算
+        ("   \n  周报  ", "周报", ""),
+        ("![](cuepad://img/ab) ![](cuepad://img/cd)\n![](cuepad://img/ab) 说明", "说明", ""),
+        ("\u{FFFC}\n\u{FFFC} 说明\n正文", "说明", "正文"),
     ])
     func summary(stored: String, title: String, preview: String) {
         let summary = CueSummary(stored)
@@ -76,15 +68,6 @@ struct CueSummaryTests {
         #expect(CueSummary.snippet(body, matching: ["CHONG"]) == CueSummary(body).preview)
     }
 
-    @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
-    func contentLines() {
-        #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---\n  第三行  \n") == ["a b", "第三行"])
-        #expect(CueLines.contentLines("\n***\n\n正文") == ["正文"])
-        #expect(CueLines.contentLines("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == ["周报", "正文"])
-        #expect(CueLines.contentLines("![](cuepad://img/ab)").isEmpty)
-        #expect(CueLines.contentLines("").isEmpty)
-    }
-
     @Test("提取变量名：去重、保留首次出现顺序；名称不含花括号与换行")
     func names() {
         #expect(CueVariables.names(in: "纯文本").isEmpty)
@@ -98,5 +81,4 @@ struct CueSummaryTests {
         #expect(CueVariables.fill("{{甲}}/{{乙}}", values: ["甲": "x", "乙": ""]) == "x/{{乙}}")
         #expect(CueVariables.fill("😀{{名}}😀", values: ["名": "值"]) == "😀值😀")
     }
-
 }

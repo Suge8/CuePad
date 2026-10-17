@@ -90,5 +90,4 @@ import Testing
     _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }
-
 }

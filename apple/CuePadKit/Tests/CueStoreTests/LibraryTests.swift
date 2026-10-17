@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-@testable import CueStore
-
 @Suite struct LibraryTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -98,11 +96,7 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 卡片
-
-  // MARK: 任务
-
-  // MARK: 发送记录与 Pi 会话索引
+  // MARK: 发送记录
 
   @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
     let card = try await store.createCard(in: nil, body: "prompt v1")
@@ -118,7 +112,7 @@ import Testing
     #expect(records.first?.targetName == "fix bug")
   }
 
-  // MARK: 项目目录（本机）
+  // MARK: 结构版本
 
   @Test func reopeningTheFileKeepsData() async throws {
     let card = try await store.createCard(in: nil, body: "persisted")

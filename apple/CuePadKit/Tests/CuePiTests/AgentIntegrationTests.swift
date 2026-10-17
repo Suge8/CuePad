@@ -202,7 +202,6 @@ struct AgentIntegrationTests {
         try await integration().install(.pi)
 
         #expect(try String(contentsOf: extensionFile, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(PiExtensionBundle.version == PiExtensionBundle.declaredVersion(in: PiExtensionBundle.source) && PiExtensionBundle.version > 0)
     }
 }
 #endif

@@ -128,8 +128,8 @@ extension CueStore {
 
   /// Cue 写的、方式在 `modes` 里的请求（还在库里的，请求完成一会儿就清理）。
   public func cueRequests(_ modes: Set<DeliveryMode>) throws -> [DeliveryRequest] {
-    let list = modes.map { "'\($0.rawValue)'" }.sorted().joined(separator: ", ")
-    return try select(DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND mode IN (\(list))", [], orderBy: "createdAt, rowid")
+    try select(
+      DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND mode IN (\(sqlList(modes)))", orderBy: "createdAt, rowid")
   }
 
   /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
@@ -226,7 +226,7 @@ extension CueStore {
       try db.run(
         """
         UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
-        WHERE id = ? AND status IN ('pending', 'executing')
+        WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))
         """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
     }
   }
@@ -252,7 +252,7 @@ extension CueStore {
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
     let undelivered = """
-      status = 'failed' AND (mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
+      status = 'failed' AND (mode IN (\(sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
       """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?2
@@ -260,9 +260,9 @@ extension CueStore {
         AND \(Self.launchUnclaimed)
       """
     let queued = """
-      status = 'succeeded' AND mode IN (\(DeliveryMode.sqlList([DeliveryMode.steer, .followUp]))) AND completedAt >= ?3
+      status = 'succeeded' AND mode IN (\(sqlList([DeliveryMode.steer, .followUp]))) AND completedAt >= ?3
         AND NOT EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = deliveryRequests.targetRef AND m.deliveryID = deliveryRequests.id)
-        AND EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = deliveryRequests.targetRef AND s.state IN (\(Self.busyStates)))
+        AND EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = deliveryRequests.targetRef AND s.state IN (\(PiWorkState.pendingWorkSQL)))
       """
     let arguments: [any SQLBindable] = [cutoff, claimCutoff, undeliveredCutoff]
     return try write {
@@ -273,8 +273,6 @@ extension CueStore {
     }
   }
 
-  /// 会话还忙着（`PiWorkState.hasPendingWork`）的状态值，SQL `IN (…)` 里的列表。
-  private static let busyStates = PiWorkState.allCases.filter(\.hasPendingWork).map { "'\($0.rawValue)'" }.joined(separator: ", ")
 }
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，

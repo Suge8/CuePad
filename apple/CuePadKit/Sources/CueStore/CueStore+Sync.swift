@@ -371,7 +371,7 @@ extension CueStore {
   /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
   private func isAwaitingResult(_ id: String) throws -> Bool {
     try db.first(
-      "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN ('pending', 'executing')", [id]) { _ in true } != nil
+      "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))", [id]) { _ in true } != nil
   }
 
   /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
