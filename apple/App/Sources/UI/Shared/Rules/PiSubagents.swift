@@ -16,15 +16,16 @@ nonisolated extension [PiSubagentState] {
 }
 
 nonisolated extension PiSubagentState {
-    /// 在跑：自己在工作，或在被审查（审查期间它自己是闲的，但这件事还没完）。
-    var isRunning: Bool { phase == .known(.running) || phase == .known(.review) }
+    /// 在跑（全 App 只此一个定义：会话卡片的"2/8"、"在做"区头的子代理数、名册的排序与颜色都读它）：状态是在跑。
+    /// 在被审查的不算：审查期间它自己是闲的，等的是审查它的那位。
+    var isRunning: Bool { phase == .known(.running) }
 
-    /// 状态标与状态词借会话的说法：干活的是工作中，失败是出错，其余（交回、被中断、空闲）是停着。
+    /// 状态标借会话的说法：在跑的是工作中，失败是出错，其余（审查中、交回、被中断、空闲）是停着；状态词另写（`label`）。
     var shown: PiShown {
         switch phase.known {
-        case .running, .review: PiShown(state: .known(.thinking))
+        case .running: PiShown(state: .known(.thinking))
         case .failed: PiShown(state: .known(.error))
-        case .done, .interrupted, .idle: PiShown(state: .known(.settled))
+        case .review, .done, .interrupted, .idle: PiShown(state: .known(.settled))
         case nil: PiShown(state: .unknown(phase.rawValue))
         }
     }
@@ -101,7 +102,7 @@ nonisolated enum PiSubagentClock: Equatable {
 }
 
 /// 会话在等子代理时（`PiProgress` 的那一句）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；
-/// 都停了（结果还没发给 Agent）说已交回。
+/// 都不在跑了（交回了、在被审查，结果还没发给 Agent）说已交回。
 nonisolated enum PiSubagentLine {
     static func of(_ agents: [PiSubagentState]) -> String? {
         guard !agents.isEmpty else { return nil }

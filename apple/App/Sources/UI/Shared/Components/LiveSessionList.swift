@@ -4,7 +4,7 @@ import SwiftUI
 /// "在做"的那一列会话：Mac 侧栏的 Agent 区、Mac 菜单栏面板与手机、iPad Cue 页头的面板同一个。行是同一种（`PiSessionRow`，样式与点它做什么由调用处给），
 /// 顺序同一个（`LiveWork.rows`，要你注意的在前）；两个以上需要 /reload 的会话合成一行（`PiReloadFold`），点开再列。
 /// `limit` 给了就先列前几个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
-/// 看全在原地，不用跳到全部会话页；总数在区头（`LiveWorkCount`）。
+/// 看全在原地，不用跳到全部会话页；区头写有几个在跑（`LiveWorkCount`）。
 struct LiveSessionList<Row: View, Fold: View>: View {
     let sessions: [PiSessionState]
     var limit: Int?
@@ -61,34 +61,46 @@ private struct LiveMoreFold: View {
     }
 }
 
-/// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：在线会话按要你注意的先后，与这些会话里在跑的子代理数。
-/// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算），
-/// 只数状态是在跑的（`PiSubagentPhase.running`）：在被审查的那个子代理自己是闲的，"同时在跑几个 Agent"不算它。
+/// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：列出来的在线会话（按要你注意的先后），与同时在跑的 Agent——
+/// 显示的状态是工作中的会话（思考、用工具、压缩、子代理工作中，`PiShown.Status.working`，与行上那颗晴蓝状态标同一个判断；
+/// 等你、出错、没能送达、歇着、新会话都不算），加上各会话里在跑的子代理（`PiSubagentState.isRunning`）。
+/// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算）。
 nonisolated struct LiveWork: Equatable {
     let rows: [PiSessionState]
+    /// 此刻在工作的会话数。
+    let working: Int
+    /// 在跑的子代理数。
     let subagents: Int
 
-    init(rows: [PiSessionState]) {
+    init(rows: [PiSessionState], working: (PiSessionState) -> Bool) {
         self.rows = rows
-        subagents = rows.reduce(0) { $0 + $1.subagents.count { $0.phase == .known(.running) } }
+        self.working = rows.count(where: working)
+        subagents = rows.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
     }
-
-    var sessions: Int { rows.count }
 }
 
-/// 区头右边的计数："7 个会话 · 3 个子代理"（没有在跑的子代理只写会话数）：数字本身就是全部，报不出子代理的那几家不在里面，不另作说明。
+/// 区头右边的计数，只写在跑的："2 个在跑 · 2 个子代理"；只有子代理在跑时写"2 个子代理在跑"，都停着写"都停着"。
+/// 数字本身就是全部：报不出子代理的那几家不在里面，不另作说明；列了几行不在这里重复（多出的那一行写"还有 N 个"）。
 struct LiveWorkCount: View {
     let work: LiveWork
     var font = Typography.meta
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(Dotted("\(work.sessions) 个会话", work.subagents > 0 ? "\(work.subagents) 个子代理" : nil))
+        Text(text)
             .font(font.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .contentTransition(.numericText())
-            .animation(Motion.quick, value: work.sessions)
+            .animation(Motion.quick, value: work.working)
             .animation(Motion.quick, value: work.subagents)
-            .accessibilityLabel(work.subagents > 0 ? "\(work.sessions) 个会话，\(work.subagents) 个子代理在跑" : "\(work.sessions) 个会话")
+    }
+
+    private var text: Dotted {
+        switch (work.working, work.subagents) {
+        case (0, 0): "都停着"
+        case (0, let agents): Dotted("\(agents) 个子代理在跑")
+        case (let sessions, 0): Dotted("\(sessions) 个在跑")
+        case (let sessions, let agents): Dotted("\(sessions) 个在跑", "\(agents) 个子代理")
+        }
     }
 }
 
@@ -104,8 +116,11 @@ extension Workspace {
         #else
         let live: [PiSessionState] = []
         #endif
-        return LiveWork(rows: PiSessionState.liveRows(
-            live: live, recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, cueOnDuty: sessions.cueOnDuty, at: services.speech))
+        let rows = PiSessionState.liveRows(
+            live: live, recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, cueOnDuty: sessions.cueOnDuty, at: services.speech)
+        return LiveWork(rows: rows) { session in
+            if case .working = shown(session, delivery: sessions.deliveries[session.sessionID]).status { true } else { false }
+        }
     }
 }
 

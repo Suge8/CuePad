@@ -184,36 +184,47 @@ private struct CueNowPanel: View {
 
     private var sessions: some View {
         let live = services.liveSessions, work = workspace.liveWork
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
-            }
-            .accessibilityElement(children: .combine)
-            if work.rows.isEmpty {
-                Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
-            } else {
-                LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
-                    Button {
-                        close()
-                        navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-                    } label: {
-                        PiSessionRow(
-                            session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
-                            rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
-                        ).equatable()
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(RowPressStyle())
-                } fold: { count, expanded in
-                    PiReloadFold(count: count, expanded: expanded)
+        // 区头钉在面板顶上：展开后一屏放不下，往下翻会话时还看得到有几个在跑
+        return LazyVStack(alignment: .leading, spacing: 10, pinnedViews: .sectionHeaders) {
+            Section {
+                sessionRows(work, live: live)
+            } header: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
                 }
+                .padding(.vertical, 6)
+                // 面板的底色（`GlassInk.solid` 垫的页面底色），实的：钉住时下面滚过的行不透上来
+                .background(palette.desk)
+                .accessibilityElement(children: .combine)
             }
-            link("全部会话", count: live.total) {
-                close()
-                navigation.push(.agent)
+        }
+    }
+
+    @ViewBuilder private func sessionRows(_ work: LiveWork, live: LiveSessions) -> some View {
+        if work.rows.isEmpty {
+            Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
+        } else {
+            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
+                Button {
+                    close()
+                    navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+                } label: {
+                    PiSessionRow(
+                        session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
+                        rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
+                    ).equatable()
+                        .contentShape(.rect)
+                }
+                .buttonStyle(RowPressStyle())
+            } fold: { count, expanded in
+                PiReloadFold(count: count, expanded: expanded)
             }
+        }
+        link("全部会话", count: live.total) {
+            close()
+            navigation.push(.agent)
         }
     }
 
