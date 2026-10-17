@@ -1,7 +1,6 @@
 #if os(macOS)
 import AppKit
 import CueEditor
-import CueText
 import SwiftUI
 
 /// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。

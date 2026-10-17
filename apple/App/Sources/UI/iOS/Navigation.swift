@@ -1,8 +1,6 @@
 #if os(iOS)
 import CueStore
 import CueSync
-import Foundation
-import Observation
 import SwiftUI
 
 /// iOS 的导航状态，三种宽度同一个状态机：侧栏选中的页（`root`）与其上推入的页（`path`），iPhone 上分栏折叠后此刻在列表还是在页里（`column`），
@@ -83,8 +81,7 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 宽屏：右侧的 Cue 面板是否展开。
     var agentPanel = false
-    /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
-    /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
+    /// 各会话回复框的草稿在这里（`AppSettings.replyDraft`）："发到 Mac"带来的卡片或任务写进那个会话的草稿（`openSession`）。
     @ObservationIgnored private let settings: AppSettings
 
     init(settings: AppSettings) {

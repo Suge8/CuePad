@@ -2,7 +2,6 @@
 import CuePi
 import CueStore
 import CueText
-import Foundation
 import SwiftUI
 
 /// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上交给 Agent 的是任务的正文（"开始"，`Workspace.handOff`）。

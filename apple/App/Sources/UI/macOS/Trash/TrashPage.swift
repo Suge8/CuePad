@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueStore
 import SwiftUI
 
 /// 回收站：删除的项目（连同其卡片）与单独删除的卡片；可恢复、永久删除、清空。
