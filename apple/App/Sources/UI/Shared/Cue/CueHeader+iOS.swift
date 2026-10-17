@@ -114,6 +114,8 @@ private struct CueNowPanel: View {
 
     /// 面板只是一瞥：在做的会话最多列这么多，全部在 Agent 整页里。
     private static let limit = 5
+    /// "在做"区头的高度（钉住时滚过的行在它下沿淡去，`FadesUnderHeader`）。
+    @ScaledMetric(relativeTo: .footnote) private var headerHeight: CGFloat = 30
 
     var body: some View {
         HugHeight {
@@ -193,9 +195,7 @@ private struct CueNowPanel: View {
                     Spacer(minLength: 8)
                     if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
                 }
-                .padding(.vertical, 6)
-                // 面板的底色（`GlassInk.solid` 垫的页面底色），实的：钉住时下面滚过的行不透上来
-                .background(palette.desk, in: .rect)
+                .frame(height: headerHeight)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -217,14 +217,16 @@ private struct CueNowPanel: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.row)
+                .modifier(FadesUnderHeader(header: headerHeight))
             } fold: { count, expanded in
-                PiReloadFold(count: count, expanded: expanded)
+                PiReloadFold(count: count, expanded: expanded).modifier(FadesUnderHeader(header: headerHeight))
             }
         }
         link("全部会话", count: live.total) {
             close()
             navigation.push(.agent)
         }
+        .modifier(FadesUnderHeader(header: headerHeight))
     }
 
     private func link(_ title: String, symbol: String? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
@@ -241,6 +243,21 @@ private struct CueNowPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(.row)
+    }
+}
+
+/// 钉住的"在做"区头不铺底，滚到它下面的行就地淡去：铺什么颜色都与面板的玻璃对不上（玻璃的光随背后变，深色下曾是一条直角色带），
+/// 不铺底它就是玻璃本身。行顶离区头下沿还有 `fade` 的一半时开始淡，碰到区头的字之前淡完，字不会叠在一起。
+/// 读的是渲染时的几何（`visualEffect`），不进状态、不挂几何回调：滚动时每帧只改透明度。
+private struct FadesUnderHeader: ViewModifier {
+    let header: CGFloat
+    private static let fade: CGFloat = 12
+
+    func body(content: Content) -> some View {
+        content.visualEffect { [header] content, proxy in
+            let top = proxy.frame(in: .scrollView).minY - (header - Self.fade / 2)
+            return content.opacity(min(max(top / Self.fade, 0), 1))
+        }
     }
 }
 #endif
