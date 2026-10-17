@@ -246,8 +246,9 @@ struct TaskFlowTests {
 
         #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
         // 任务页的"进行中"与它同一批、同一个顺序
-        #expect(try await TaskBoard.read(from: store).inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
-        #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
+        let board = try await TaskBoard.read(from: store)
+        #expect(board.inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
+        #expect(board.counts.inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级

@@ -89,31 +89,37 @@ struct ReplyTests {
             """)
     }
 
-    /// 撤回与改为马上说只对还没被 Mac 领取的（Pi 扩展收不回已交给 Pi 的话）。
+    /// 排队的话（回复框上方一叠）撤回放回输入框、改为马上说，走那一叠的按钮同一个入口（`Workspace.takeBack`、`AppServices.promote`）；
+    /// 只对还没被 Mac 领取的（Pi 扩展收不回已交给 Pi 的话），领取后撤回给提示、话原样留着。
     @Test func 还没被Mac领取的可撤回或改为马上说_领取后不行() async throws {
         let app = TestApp()
         let store = app.services.store
         try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
         let live = try #require(try await store.piSessionPage(.live).items.first?.state)
-        let first = try await app.services.store.requestDelivery("改完再看看超时", to: live.target, on: live.hostID, mode: .followUp)
-        let second = try await app.services.store.requestDelivery("顺便跑一遍", to: live.target, on: live.hostID, mode: .followUp)
+        let workspace = Workspace(services: app.services)
+        let box = app.services.settings.replyDraftBinding(for: live.id)
+        let first = try await store.requestDelivery("改完再看看超时", to: live.target, on: live.hostID, mode: .followUp)
+        let second = try await store.requestDelivery("顺便跑一遍", to: live.target, on: live.hostID, mode: .followUp)
         #expect(first.isWithdrawable && second.isWithdrawable)
 
-        #expect(try await store.promoteDelivery(first.id))
+        try await app.services.promote(first)
         #expect(try await store.deliveryRequest(first.id)?.mode == .known(.steer))
-        #expect(try await store.withdrawDelivery(second.id))
+        workspace.takeBack(second, into: box)
+        try await eventually("撤回的话放回输入框") { box.wrappedValue.text == "顺便跑一遍" }
         #expect(try await store.deliveryRequest(second.id) == nil)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { _ in }) { _ in .succeeded }
-        let third = try await app.services.store.requestDelivery("再加一句", to: live.target, on: live.hostID, mode: .followUp)
+        let third = try await store.requestDelivery("再加一句", to: live.target, on: live.hostID, mode: .followUp)
         try await executor.start()
         for try await current in store.observe({ try $0.deliveryRequest(third.id) }) where current?.isOpen == false { break }
         await executor.stop()
         let handed = try #require(try await store.deliveryRequest(third.id))
         #expect(!handed.isWithdrawable)
-        #expect(try await !store.withdrawDelivery(third.id))
-        #expect(try await !store.promoteDelivery(third.id))
+        await #expect(throws: SendError.alreadyHanded) { try await app.services.promote(handed) }
+        workspace.takeBack(handed, into: box)
+        try await eventually("提示撤不回") { workspace.notice?.isError == true }
         #expect(try await store.deliveryRequest(third.id)?.mode == .known(.followUp))
+        #expect(box.wrappedValue.text == "顺便跑一遍")
     }
 
     /// 收不了图片的会话（终端里的 Claude Code）回复框里不露出图片，发出去的也只有文字：带上的卡片里的图片不跟着发；Pi 的照常带图。

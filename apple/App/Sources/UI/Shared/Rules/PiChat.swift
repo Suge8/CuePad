@@ -19,8 +19,6 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PiPreview] = []
     /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
-
-    var isUser: Bool { role == .user }
 }
 
 private nonisolated extension PiChatEntry.Role {
