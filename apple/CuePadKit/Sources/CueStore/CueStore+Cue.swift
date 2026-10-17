@@ -320,6 +320,25 @@ extension CueStore {
     try write { try editProfile(edit) }
   }
 
+  /// 让 Cue 住在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
+  /// 选的 Agent 那台用不了才换成 `CueProfile.runtimes` 里第一家能用的，模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
+  /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。
+  public func enableCue(on host: String) throws {
+    try write {
+      let usable = try macAgents(on: host)
+      let available = CueProfile.runtimes.filter(usable.kinds.contains)
+      guard let first = available.first else { throw CueEnableError.noRuntime(usable.whyNone) }
+      _ = try editProfile { profile in
+        profile.hostID = host
+        profile.enabledAt = .now
+        if profile.runtime.known.map(available.contains) != true {
+          profile.runtime = .known(first)
+          profile.model = nil
+        }
+      }
+    }
+  }
+
   /// `updateCueProfile` 的事务内部分：必须在写事务内调用。
   private func editProfile(_ edit: (inout CueProfile) -> Void) throws -> CueProfile {
     let stored = try cueProfile()
@@ -360,15 +379,32 @@ extension CueStore {
   /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
   public func setCueState(_ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil) throws {
     try write {
-      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, modifiedAt: Date.stamp)
-      if let current = try cueState(), (current.state, current.detail, current.round, current.woke) == (next.state, next.detail, next.round, next.woke) {
+      let current = try cueState()
+      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, context: current?.context, modifiedAt: Date.stamp)
+      if let current, (current.state, current.detail, current.round, current.woke) == (next.state, next.detail, next.round, next.woke) {
         return
       }
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
           woke = excluded.woke
+        """, next.bindings)
+    }
+  }
+
+  /// 值班的 Mac 写下 Cue 此刻的上下文（一轮做完时）；和库里一样就不写。还没有状态那一行时先按歇着建。
+  public func setCueContext(_ context: CueContext?) throws {
+    try write {
+      let current = try cueState()
+      guard current?.context != context else { return }
+      var next = current ?? CueState(state: .known(.settled))
+      next.context = context
+      next.modifiedAt = Date.stamp
+      try db.run(
+        """
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET context = excluded.context, modifiedAt = excluded.modifiedAt
         """, next.bindings)
     }
   }

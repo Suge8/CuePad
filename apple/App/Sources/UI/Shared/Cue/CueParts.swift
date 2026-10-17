@@ -69,11 +69,11 @@ struct CueEnableCard: View {
     private func enable() {
         enabling = true
         failure = nil
-        let cue = services.cue
+        let services = services
         Task {
             defer { enabling = false }
             do {
-                try await cue.enable()
+                try await services.enableCue(on: services.hostID)
             } catch {
                 failure = error.localizedDescription
             }

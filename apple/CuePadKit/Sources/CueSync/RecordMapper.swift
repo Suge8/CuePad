@@ -19,7 +19,7 @@ enum RecordMapper {
     .cueLines: ["text"],
     .cueProfile: ["name", "model", "effort", "allows"],
     .cueState: ["detail"],
-    .macAgents: ["agents", "problems"],
+    .macAgents: ["agents", "problems", "name"],
   ]
 
   /// 服务端要查询的字段（订阅谓词等），schema 里建可查询索引。加密字段服务端看不见，不能出现在这里。

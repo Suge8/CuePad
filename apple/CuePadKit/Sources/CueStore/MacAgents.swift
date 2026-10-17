@@ -6,14 +6,17 @@ import Foundation
 /// 内容没变不写（不触发同步）。没有记录（还没探测完，或更旧版本的 Mac）是一家都不能用。
 public struct MacAgents: Equatable, Sendable {
   public var hostID: String
+  /// 这台 Mac 的名字（系统设置里的电脑名）；更旧版本写的没有。别处要写出某台 Mac 的名字都读这里。
+  public var name: String?
   /// 能用的，按 `AgentKind` 的顺序；更新的版本写的、不认识的那家读出时丢掉（下同）。
   public var agents: [MacAgent]
   /// 不能用的与原因（没装、没接入、没登录、问不出），按 `AgentKind` 的顺序。
   public var problems: [MacAgentProblem]
   public var modifiedAt: Date
 
-  public init(hostID: String, agents: [MacAgent], problems: [MacAgentProblem] = [], modifiedAt: Date) {
+  public init(hostID: String, name: String? = nil, agents: [MacAgent], problems: [MacAgentProblem] = [], modifiedAt: Date) {
     self.hostID = hostID
+    self.name = name
     self.agents = agents
     self.problems = problems
     self.modifiedAt = modifiedAt
@@ -74,13 +77,13 @@ private struct Lenient<T: Decodable>: Decodable {
 
 extension MacAgents: Record {
   static let table = Table.macAgents
-  static let columns = ["id", "hostID", "agents", "problems", "modifiedAt"]
+  static let columns = ["id", "hostID", "agents", "problems", "modifiedAt", "name"]
   var bindings: [any SQLBindable] {
-    [Self.recordID(host: hostID), hostID, JSONColumn.encodeList(agents), JSONColumn.encodeList(problems), modifiedAt]
+    [Self.recordID(host: hostID), hostID, JSONColumn.encodeList(agents), JSONColumn.encodeList(problems), modifiedAt, name]
   }
   init(row: Row) {
     self.init(
-      hostID: row.text(1), agents: JSONColumn.decodeList(Lenient<MacAgent>.self, from: row.textOrNil(2)).compactMap(\.value),
+      hostID: row.text(1), name: row.textOrNil(5), agents: JSONColumn.decodeList(Lenient<MacAgent>.self, from: row.textOrNil(2)).compactMap(\.value),
       problems: JSONColumn.decodeList(Lenient<MacAgentProblem>.self, from: row.textOrNil(3)).compactMap(\.value),
       modifiedAt: row.date(4))
   }
@@ -89,17 +92,24 @@ extension MacAgents: Record {
 extension CueStore {
   /// 这台 Mac 写下自己的 Agent 能不能用；和库里的一样就不写。返回写了的记录 id（立即上传用），没写为 nil。
   @discardableResult
-  public func recordMacAgents(host: String, _ agents: [MacAgent], problems: [MacAgentProblem] = []) throws -> UUID? {
+  public func recordMacAgents(host: String, name: String?, _ agents: [MacAgent], problems: [MacAgentProblem] = []) throws -> UUID? {
     try write {
-      if let stored = try find(MacAgents.self, MacAgents.recordID(host: host)), stored.agents == agents, stored.problems == problems { return nil }
-      let record = MacAgents(hostID: host, agents: agents, problems: problems, modifiedAt: Date.stamp)
+      if let stored = try find(MacAgents.self, MacAgents.recordID(host: host)), stored.name == name, stored.agents == agents, stored.problems == problems {
+        return nil
+      }
+      let record = MacAgents(hostID: host, name: name, agents: agents, problems: problems, modifiedAt: Date.stamp)
       try db.run(
         """
-        INSERT INTO macAgents (\(MacAgents.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET agents = excluded.agents, problems = excluded.problems, modifiedAt = excluded.modifiedAt
+        INSERT INTO macAgents (\(MacAgents.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET name = excluded.name, agents = excluded.agents, problems = excluded.problems, modifiedAt = excluded.modifiedAt
         """, record.bindings)
       return MacAgents.recordID(host: host)
     }
+  }
+
+  /// 各台 Mac 写下的（Cue 能住的就是这几台），按名字排。
+  public func allMacAgents() throws -> [MacAgents] {
+    try select(MacAgents.self, orderBy: "name, hostID")
   }
 
   /// 那台 Mac 上的 Agent；没有记录是一家都没有（`whyNone` 说还没查过）。

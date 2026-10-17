@@ -127,10 +127,10 @@ struct CueSettingsSection: View {
 
     private func enable(_ on: Bool) {
         failure = nil
-        let cue = services.cue
+        let services = services
         Task {
             do {
-                if on { try await cue.enable() } else { try await cue.disable() }
+                if on { try await services.enableCue(on: services.hostID) } else { try await services.disableCue() }
             } catch {
                 failure = error.localizedDescription
             }

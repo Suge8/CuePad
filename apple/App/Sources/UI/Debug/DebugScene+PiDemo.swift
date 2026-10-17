@@ -453,12 +453,13 @@ extension DebugScene {
             MacAgentProblem(kind: .pi, reason: "没登录"), MacAgentProblem(kind: .claudeCode, reason: "没装"), MacAgentProblem(kind: .codex, reason: "没装"),
         ]
         let store = services.store
-        _ = try? await store.recordMacAgents(host: "demo-mac", full)
-        _ = try? await store.recordMacAgents(host: "demo-mini", [agent(.claudeCode), agent(.codex)])
-        _ = try? await store.recordMacAgents(host: "demo-air", [], problems: bare)
+        _ = try? await store.recordMacAgents(host: "demo-mac", name: "Mac Studio", full)
+        _ = try? await store.recordMacAgents(host: "demo-mini", name: "Mac mini", [agent(.claudeCode), agent(.codex)])
+        _ = try? await store.recordMacAgents(host: "demo-air", name: "MacBook Air", [], problems: bare)
         #if os(macOS)
         let local = services.hostID
-        _ = try? await store.recordMacAgents(host: local, local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
+        _ = try? await store.recordMacAgents(
+            host: local, name: "这台 Mac", local == "mac-bare" ? [] : full, problems: local == "mac-bare" ? bare : [])
         #endif
     }
 

@@ -168,7 +168,7 @@ final class TestApp {
 
     /// 这台 Mac 写下自己能用 Pi（开新会话只从 macAgents 选 Agent）：探测本身起真 Agent，只在 Kit 的 Real* 测试里验，这里直接写下它的结果。
     func offersPi() async throws {
-        try await services.store.recordMacAgents(host: Self.hostID, [MacAgent(kind: .pi, model: nil, models: [])])
+        try await services.store.recordMacAgents(host: Self.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: [])])
     }
 
     /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
