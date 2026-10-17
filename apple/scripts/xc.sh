@@ -19,7 +19,7 @@
 # 提交钩子在 apple/scripts/hooks（主检出只收合并，其余检出跑 lint.sh），每个仓库启用一次、所有检出共享：git config core.hooksPath apple/scripts/hooks
 # ios 是 iPhone 模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # 模拟器开着复用（_sim.sh）；每次装新包，资料库与偏好用隔离目录。
-# test 里每个测试最多 TEST_TIME_LIMIT 秒（xcodebuild 的测试时限，Xcode 27 实测对 Swift Testing 也生效，主线程死锁也会被结束）：
+# test 里每个测试最多 TEST_TIME_LIMIT 秒（CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用；xcodebuild 的测试时限，Xcode 27 实测对 Swift Testing 也生效，主线程死锁也会被结束）：
 # 超时的测试记一条 "Time limit was exceeded"，测试宿主重启后接着跑，最后非零退出。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析）。
@@ -39,7 +39,7 @@ BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
-TEST_TIME_LIMIT=120
+TEST_TIME_LIMIT=${CUEPAD_TEST_TIME_LIMIT:-120}
 # run mac 的实例活多久：够一轮 bcu 交互验收；忘了收的实例曾活过 14 小时
 RUN_MAC_TTL=3600
 # 本机同一时间只留一个 Mac 调试实例（不分检出）：各检出各记一份时，并行的截图、测量在 Dock 里堆出一排 CuePad
