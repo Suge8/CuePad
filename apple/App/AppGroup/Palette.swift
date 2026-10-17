@@ -131,8 +131,8 @@ struct Palette {
 
     /// 等你确认：暖黄（浅色像蜂蜜纸，深色是暗琥珀）。赭黄字 5.1，深色 6.8；淡墨 3.7，深色 4.1。
     var waitingWash: Color { dark ? Color(hex: 0x433618) : Color(hex: 0xF9EBC0) }
-    /// 出错与没能送达：淡胭脂。胭脂字 5.3，深色 4.9。
-    var failureWash: Color { dark ? Color(hex: 0x412A31) : Color(hex: 0xFAE4EA) }
+    /// 出错与没能送达：淡胭脂，比等你的暖黄再淡一档——出错常一屏好几张，不能压过要你拍板的等你。胭脂字 5.6，深色 5.1。
+    var failureWash: Color { dark ? Color(hex: 0x382A2E) : Color(hex: 0xFBEDF0) }
     /// 有新回复：淡石绿。石绿字 5.2，深色 5.1。
     var repliedWash: Color { dark ? Color(hex: 0x26382D) : Color(hex: 0xE2F1E7) }
 
