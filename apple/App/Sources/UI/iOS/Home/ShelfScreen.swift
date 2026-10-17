@@ -369,11 +369,14 @@ private struct ActiveTasks: View {
                 }
             }
             .padding(.horizontal, 4)
+            // 行铺满纸（`rowPaper`）：纸上下多留的白放进首尾两行里，行底才贴得到纸边、与纸的圆角同心
             VStack(spacing: 0) {
-                ForEach(tasks) { ActiveTaskRow(item: $0).transition(Motion.item) }
+                ForEach(tasks) { task in
+                    let ends: Edge.Set = [task.id == tasks.first?.id ? .top : [], task.id == tasks.last?.id && more == 0 ? .bottom : []]
+                    ActiveTaskRow(item: task, ends: ends).transition(Motion.item)
+                }
                 if more > 0 { moreRow }
             }
-            .padding(.vertical, 6)
             .rowPaper(radius: Self.radius)
         }
     }
@@ -389,10 +392,14 @@ private struct ActiveTasks: View {
             .font(.subheadline).foregroundStyle(palette.ink3)
             .padding(.leading, ActiveTaskRow.textInset).padding(.trailing, 16)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.bottom, Self.endPadding)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
     }
+
+    /// 纸的首尾比行间多留的白。
+    static let endPadding: CGFloat = 6
 
     private var title: some View {
         Text("正在推进").font(.title3.weight(.bold)).foregroundStyle(palette.ink)
@@ -417,6 +424,8 @@ private struct ActiveTasks: View {
 /// 有正在做的步骤时再一行写它——圈小一号、字小一号，与任务页里步骤的样子相同：一眼看到这件事走到了哪一步。
 private struct ActiveTaskRow: View {
     let item: TaskBoard.ActiveTask
+    /// 是纸的首行、末行：多留的白在行里（`ActiveTasks.endPadding`）。
+    let ends: Edge.Set
     @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -443,6 +452,7 @@ private struct ActiveTaskRow: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
+            .padding(ends, ActiveTasks.endPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
