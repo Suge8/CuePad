@@ -9,6 +9,7 @@ import Observation
 /// 在不在、话在不在路上随库与此刻重算：它那台 Mac 的在线期限由订阅到点重读（`CueStore.macOnline`），你最近一句的时限与同步通断由
 /// 此刻给，这里不另计时。
 /// 第一份在建工作区时当场读到（`Workspace.init`），之后从它接着订阅：没有"还没读到"时的默认现状。
+/// 读的是摘要加 Cue 交给会话的那几条（`Reading`）：交给只有窗口要，不放进摘要——小组件也读摘要，投送请求一变它不必跟着重读。
 @Observable
 final class CueWatch {
     private(set) var name = CueDigest.empty.name
@@ -25,12 +26,16 @@ final class CueWatch {
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
     /// 此刻叫醒它的这一轮（`CueState.woke`）。这个窗口读到的第一份不算（App 刚打开、窗口刚开时已有的叫醒不是此刻发生的），
-    /// 之后 `at` 变成新的就是又被叫醒了一次（`CueWakeStage`）。
+    /// 之后 `at` 变成新的就是又被叫醒了一次（`CueRelayStage`）。
     private(set) var woke: CueWoke?
     /// 第一份里已有的那次叫醒的时刻（`woke` 不算它）。
     @ObservationIgnored private let stale: Date?
+    /// 此刻 Cue 交给会话的这一批（`Reading.relays` 里比上一批新的）。窗口读到的第一份里已有的不算，同 `woke`。
+    private(set) var relay: CueRelay?
+    /// 已经算过的最新一条交给的时刻：第一份里最新的那条，之后是上一批里最新的。
+    @ObservationIgnored private var relayedThrough: Date?
     /// 当场读到的第一份（读不出来时为 nil，失败页盖住页面）：`follow` 从它接着订阅。
-    @ObservationIgnored private let start: Snapshot<CueDigest>?
+    @ObservationIgnored private let start: Snapshot<Reading>?
     /// Cue 页的输入（离开再回来还在）。
     var draft = ComposerDraft()
     /// "Cue 记得什么"开着。
@@ -40,24 +45,44 @@ final class CueWatch {
     var showsRun = false
     #endif
 
-    init(_ start: Snapshot<CueDigest>?, at moment: Speech.Moment) {
+    /// 一次读到的：Cue 的摘要与它交给会话的那几条。
+    nonisolated struct Reading: Equatable, Sendable {
+        var digest: CueDigest
+        var relays: [CueRelay.Handed]
+
+        static func read(from store: isolated CueStore) throws -> Reading {
+            Reading(digest: try CueDigest.read(from: store), relays: try CueRelay.Handed.read(from: store))
+        }
+    }
+
+    init(_ start: Snapshot<Reading>?, at moment: Speech.Moment) {
         self.start = start
-        stale = start?.value.state?.woke?.at
-        if let digest = start?.value { apply(digest, at: moment) }
+        stale = start?.value.digest.state?.woke?.at
+        relayedThrough = start?.value.relays.map(\.at).max()
+        if let reading = start?.value { apply(reading, at: moment) }
     }
 
     func mood(composing: Bool = false) -> CueMood {
         CueMood.of(presence, waiting: waiting, composing: composing, justDone: lastSaidDone)
     }
 
+    /// `session` 此刻在接力（叫醒 Cue 的、Cue 交给的）：它的状态标挂锚（`relaySpot`）。
+    func relays(session: String) -> Bool {
+        woke?.sessions.contains(session) == true || relay?.ends.contains { $0.session == session } == true
+    }
+
+    /// Cue 此刻交给的是这件任务（开新会话、带着它说话）。
+    func relays(task: UUID) -> Bool { relay?.ends.contains { $0.task == task } == true }
+
     /// 跟随资料库与此刻直到任务取消。
     func follow(_ services: AppServices) async throws {
-        for try await (digest, moment) in services.observeTimed(from: start, { try CueDigest.read(from: $0) }) {
-            apply(digest, at: moment)
+        for try await (reading, moment) in services.observeTimed(from: start, { try Reading.read(from: $0) }) {
+            apply(reading, at: moment)
         }
     }
 
-    private func apply(_ digest: CueDigest, at moment: Speech.Moment) {
+    private func apply(_ reading: Reading, at moment: Speech.Moment) {
+        let digest = reading.digest
         set(\.name, digest.name)
         let presence = CuePresence.derive(digest, at: moment)
         set(\.presence, presence)
@@ -70,6 +95,12 @@ final class CueWatch {
         set(\.round, digest.state?.round)
         let woke = digest.state?.woke
         set(\.woke, woke?.at == stale ? nil : woke)
+        let since = relayedThrough ?? .distantPast
+        let fresh = reading.relays.filter { $0.at > since }
+        if let latest = fresh.map(\.at).max() {
+            relayedThrough = latest
+            relay = CueRelay(at: latest, ends: fresh.sorted { $0.at > $1.at }.map(\.end))
+        }
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<CueWatch, Value>, _ value: Value) {

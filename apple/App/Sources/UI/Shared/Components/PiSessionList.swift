@@ -106,7 +106,7 @@ struct PiSessionRow: View {
 
     private func card(shown: PiShown, facts: PiRowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            if !ended { PiStateDot(shown: shown, size: style.dot).wakeSource(session.sessionID) }
+            if !ended { PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -135,7 +135,7 @@ struct PiSessionRow: View {
 
     private func compact(shown: PiShown, facts: PiRowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
-            PiStateDot(shown: shown, size: style.dot).wakeSource(session.sessionID)
+            PiStateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 HStack(spacing: 6) {

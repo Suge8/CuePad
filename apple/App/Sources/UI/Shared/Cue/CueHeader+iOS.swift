@@ -73,7 +73,7 @@ struct CueHeader: View {
         let cue = workspace.cue
         return HStack(spacing: 10) {
             CueAvatar(mood: cue.mood(composing: !cue.draft.isEmpty(accepting: .images)), presence: cue.presence, size: .header)
-                .wakeTarget(.header)
+                .relaySpot(cue: .header)
                 .padding(.leading, 6)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(.headline).foregroundStyle(palette.ink).lineLimit(1)

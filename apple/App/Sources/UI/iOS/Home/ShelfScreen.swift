@@ -468,7 +468,7 @@ private struct ActiveTaskRow: View {
     var body: some View {
         Button { navigation.push(.card(task.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                TaskRingView(status: .inProgress, ring: .plain, done: false, size: ring)
+                TaskRingView(status: .inProgress, ring: .plain, done: false, size: ring).relaySpot(task: task.id)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
                         .lineLimit(typeSize.isAccessibilitySize ? 4 : 2).multilineTextAlignment(.leading)

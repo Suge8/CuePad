@@ -322,7 +322,7 @@ struct PiSessionSubtitle: View {
                 }
                 .font(Self.font)
                 .fixedSize()
-                .wakeSource(session.sessionID)
+                .relaySpot(session: session.sessionID)
                 .accessibilityElement(children: .combine)
             }
         }
