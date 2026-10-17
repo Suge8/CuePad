@@ -10,7 +10,7 @@ struct PiSubagentList: View {
     let agents: [PiSubagentState]
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var expanded = false
+    @State private var expanded = DebugHooks.preset.toolsOpen
 
     var body: some View {
         if let summary = PiSubagentSummary(agents) {
