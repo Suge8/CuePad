@@ -59,13 +59,8 @@ enum JellyMove {
     /// 做完的勾：按下去，勾顶出来时拉长弹起，落回抖一下。
     case pop
 
-    /// 第几秒换：压得最扁的那一刻。
-    var swapAt: Double {
-        switch self {
-        case .wake, .pop: 0.1
-        case .happy: 0.08
-        }
-    }
+    /// 第几秒换：压得最扁的那一刻，即第一步走完。
+    var swapAt: Double { steps[0].time }
 
     /// 每一步用多久走到这个姿势，最后一步回到静止。
     var steps: [(time: Double, pose: JellyPose)] {

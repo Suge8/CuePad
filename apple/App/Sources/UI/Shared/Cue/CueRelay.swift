@@ -109,6 +109,9 @@ final class RelayLaunch {
     fileprivate weak var pad: RelayAnchorView?
     fileprivate var color: CGColor?
 
+    /// 箭镞的中心在钮心上方多远（钮高的比例）：对着录屏逐帧对准，光的第一帧正落在正淡出的箭镞上。
+    private static let arrowheadRise: CGFloat = 0.15
+
     func fly(reduceMotion: Bool) {
         guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
               let from = pad.frame(in: root) else { return }
@@ -116,9 +119,8 @@ final class RelayLaunch {
             guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
             return (spot, frame)
         }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
-        // 箭镞在钮心往上约一成半
         let up: CGFloat = RelayFlight.up(in: root)
-        let head = CGPoint(x: from.midX, y: from.midY + up * from.height * 0.15)
+        let head = CGPoint(x: from.midX, y: from.midY + up * from.height * Self.arrowheadRise)
         RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root)
     }
 }

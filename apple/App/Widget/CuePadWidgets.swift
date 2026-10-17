@@ -66,7 +66,7 @@ struct CueWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: Self.kind, provider: CueProvider()) { entry in
-            WidgetViews.cue(entry)
+            WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")
         .description("等你的几件事和它最近说的一句，点一下和它说话。")
@@ -80,7 +80,7 @@ struct UnfiledWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: Self.kind, provider: UnfiledProvider()) { entry in
-            WidgetViews.unfiled(entry)
+            WidgetViews.unfiled(entry.snapshot)
         }
         .configurationDisplayName("未分类")
         .description("最近记下的灵感，点一下对 Cue 说。")

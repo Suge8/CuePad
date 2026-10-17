@@ -123,8 +123,18 @@ struct Palette {
         case (true, true): Color(hex: 0x8FDCB2)
         }
     }
-    /// 要你看的会话卡片铺的一层很淡的状态色（`PiShown.wash`）。
-    func wash(_ status: Color) -> Color { status.opacity(dark ? 0.08 : 0.07) }
+
+    // MARK: 要你看的会话卡片的底（`PiShown.wash`，代替纸色）
+
+    // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
+    // 卡上的字（状态词、次要墨色）照纸上的对比度核过，下面写的是状态词的对比度；与纸、桌面靠色相分开。
+
+    /// 等你确认：暖黄（浅色像蜂蜜纸，深色是暗琥珀）。赭黄字 5.1，深色 6.8；淡墨 3.7，深色 4.1。
+    var waitingWash: Color { dark ? Color(hex: 0x433618) : Color(hex: 0xF9EBC0) }
+    /// 出错与没能送达：淡胭脂。胭脂字 5.3，深色 4.9。
+    var failureWash: Color { dark ? Color(hex: 0x412A31) : Color(hex: 0xFAE4EA) }
+    /// 有新回复：淡石绿。石绿字 5.2，深色 5.1。
+    var repliedWash: Color { dark ? Color(hex: 0x26382D) : Color(hex: 0xE2F1E7) }
 
     // MARK: 轻扫露出的其余动作（删除是 `failureFill`、主动作是 `signatureFill`）
 
@@ -154,9 +164,12 @@ struct Palette {
         ProjectColor(stored: "#8A8A84", name: "灰色", light: 0x7D7A73, dark: 0xA39F96),
     ]
 
+    /// 不在表里的旧值退回的那一档。
+    private static let fallbackProjectColor = projectColors.first { $0.name == "灰色" }!
+
     /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。不在表里的旧值退回灰色。
     func project(_ stored: String) -> Color {
-        let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.projectColors[7]
+        let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.fallbackProjectColor
         return Color(hex: dark ? entry.dark : entry.light)
     }
 

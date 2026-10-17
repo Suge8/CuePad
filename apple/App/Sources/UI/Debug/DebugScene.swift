@@ -216,7 +216,20 @@ enum DebugScene {
             await NextFrame.wait()
             still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
-        FileManager.default.createFile(atPath: path, contents: nil)
+        FileManager.default.createFile(atPath: path, contents: shotSize.map { Data($0.utf8) })
+    }
+
+    /// Mac：要拍的那扇窗（屏上最大的普通窗口，同 `xc.sh` 取的那扇）按像素算多大，写进就绪文件："宽 高"。
+    /// `xc.sh` 拿截到的图、录到的帧和它比：窗口在屏上被系统缩放显示时（调度中心、台前调度开着）截到的是缩小的画面，不能当成果。
+    private static var shotSize: String? {
+        #if os(macOS)
+        let window = NSApp.windows.filter { $0.isVisible && $0.level == .normal }.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        guard let window else { return nil }
+        let scale = window.backingScaleFactor
+        return "\(Int(window.frame.width * scale)) \(Int(window.frame.height * scale))"
+        #else
+        return nil
+        #endif
     }
 
     private static let longestOneShot: CFTimeInterval = 5

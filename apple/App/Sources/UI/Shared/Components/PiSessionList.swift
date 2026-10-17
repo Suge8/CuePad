@@ -51,7 +51,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 /// 不写会话在说什么（那在会话页里），只写它是谁、在哪、什么状态、跑得怎样。
 /// - 整页（`page`）是一张圆角卡片，"现在"的卡片：状态标、名字（Mac 在后台开的带"后台"小签）与右上的时长；
 ///   所在（项目图标与名字，没有项目时是文件夹；按项目筛着时不写）接状态词，上下文靠右；有模型或子代理时再一层读数——模型、
-///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
+///   子代理（角色图标，颜色是它的状态，后接在跑 / 共几个）。卡片高随内容，没有读数不留空行。要你看的三种状态卡片换成这种状态的淡底（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
 /// 名字后是哪家 Agent 只放标志（`AgentMark`）：名字优先，窄处先截名字，标志与时长一直留着。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`），上下文靠右。
@@ -206,7 +206,7 @@ extension PiSessionRow: Equatable {
     }
 }
 
-/// Agent 页的一张会话卡片（会话、合成的"需要 /reload"）：留白、纸色圆角面，要你看的状态再铺一层很淡的状态色（`PiShown.wash`），
+/// Agent 页的一张会话卡片（会话、合成的"需要 /reload"）：留白、纸色圆角面，要你看的状态换成这种状态的淡底（`PiShown.wash`），
 /// 换状态时淡入淡出。静态内容卡：不加阴影与描边，靠纸比桌面亮一档分层。
 struct SessionCard: ViewModifier {
     var wash: Color?
@@ -220,9 +220,7 @@ struct SessionCard: ViewModifier {
             .padding(.horizontal, 16).padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                // 深色的纸更暗，状态色要浓一点才看得出
-                shape.fill(palette.paper)
-                    .overlay { shape.fill(wash.map(palette.wash) ?? .clear) }
+                shape.fill(wash ?? palette.paper)
                     .animation(Motion.quick, value: wash)
             }
     }

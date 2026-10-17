@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # 用法：xc.sh check                 快速静态门：lint.sh、CuePadKit 的 swift build、iOS 编译；不跑测试
 #       xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
-#       xc.sh rec <ios|ipad> [录屏输出路径.mov] [-- 启动参数…]   同 shot 摆好画面后录屏 CUEPAD_REC_SECONDS 秒（默认 12），看动效与状态切换；
-#         CUEPAD_REC_LAUNCH=1 从启动前开录（冷启动的首屏），录满秒数不等就绪
-#       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着（给 bcu 操作），就绪后打印 PID；RUN_MAC_TTL 秒后自己退出，下次 run/shot 先结束它
+#       xc.sh rec <ios|ipad|mac> [录屏输出路径.mov] [-- 启动参数…]   同 shot 摆好画面后录屏 CUEPAD_REC_SECONDS 秒（默认 12），看动效与状态切换；
+#         CUEPAD_REC_LAUNCH=1 从启动前开录（冷启动的首屏），录满秒数不等就绪（只有 ios、ipad）。Mac 按窗口录（winrec.swift，ScreenCaptureKit），
+#         不录屏幕区域：别的窗口、系统的录屏标记都不进画面
+#       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着（给 bcu 操作），就绪后打印 PID；RUN_MAC_TTL 秒后自己退出，本机任一检出的下次 run/shot 先结束它（同一时间只有一个 Mac 调试实例）
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh test kit [swift test 参数…]   CuePadKit 的 swift test（macOS），如 --filter SuiteName
 #       xc.sh perf <mac|ios> [参数…]   单次交互的性能测量（perf-mac.sh、perf-ios.sh，参数见各自头注释），独占机器
@@ -41,6 +42,8 @@ IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 TEST_TIME_LIMIT=120
 # run mac 的实例活多久：够一轮 bcu 交互验收；忘了收的实例曾活过 14 小时
 RUN_MAC_TTL=3600
+# 本机同一时间只留一个 Mac 调试实例（不分检出）：各检出各记一份时，并行的截图、测量在 Dock 里堆出一排 CuePad
+MAC_PIDFILE="/tmp/cuepad-shot-$(id -u)/mac.pid"
 USAGE="用法：$0 <check|build|test|shot|rec|run|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
@@ -147,10 +150,11 @@ wait_ready() {
 start_mac() {
   local exe="$app/Contents/MacOS/CuePad"
   rm -f "$ready"
-  # 上次被中断的截图或 run 留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
+  # 上一个调试实例（任一检出的截图或 run）：只结束记录下的那个 PID，并确认它仍是某个检出产物目录里的 CuePad，不碰正式版
+  mkdir -p "$(dirname "$pidfile")"
   if [ -f "$pidfile" ]; then
     pid="$(cat "$pidfile")"
-    if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "$exe" ]; then
+    if [[ "$(ps -o comm= -p "$pid" 2>/dev/null)" == */.derived/Build/Products/Debug/CuePad.app/Contents/MacOS/CuePad ]]; then
       kill -TERM "$pid"
       for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
       # 5 秒没退出（卡在收尾里）：PID 已核对是自己的实例，强制结束，不无限等
@@ -170,7 +174,7 @@ start_mac() {
 }
 
 run_mac() {
-  local ready="$DERIVED/shot-ready" pidfile="$DERIVED/shot-mac.pid" pid=""
+  local ready="$DERIVED/shot-ready" pidfile="$MAC_PIDFILE" pid=""
   start_mac
   wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
   # 到点自己退出：守护进程脱离本脚本（不占检出锁、不随脚本结束），到时只结束仍是这个可执行文件的那个 PID
@@ -181,7 +185,7 @@ run_mac() {
 
 shot_mac() {
   mkdir -p "$(dirname "$out")"
-  local ready="$DERIVED/shot-ready" pidfile="$DERIVED/shot-mac.pid" pid="" wid=""
+  local ready="$DERIVED/shot-ready" pidfile="$MAC_PIDFILE" pid="" wid=""
   start_mac
   for _ in $(seq 100); do
     wid="$(window_id "$pid")"
@@ -197,7 +201,39 @@ shot_mac() {
   kill -TERM "$pid"
   wait "$pid" || true
   rm -f "$pidfile"
+  check_shot_size "$out" "$ready"
   echo "$out"
+}
+
+# 截到的图与就绪文件里窗口的像素尺寸（DebugScene.shotSize）对不上：窗口在屏上被系统缩放显示（调度中心、台前调度开着），
+# screencapture 拍下的是缩小的画面。删掉、报错，不留一张看着像成果的小图。
+check_shot_size() {
+  local shot=$1 expected got
+  expected="$(cat "$2")"
+  got="$(sips -g pixelWidth -g pixelHeight "$shot" | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w" "h}')"
+  [ "$got" = "$expected" ] && return 0
+  rm -f "$shot"
+  echo "截到 ${got/ /×}，窗口是 ${expected/ /×}：窗口在屏上被缩放显示（调度中心或台前调度开着？），关掉再拍" >&2
+  exit 1
+}
+
+# Mac 录屏：同 shot 摆好画面，按窗口录 CUEPAD_REC_SECONDS 秒（winrec.swift，录前按源码编译一次放在产物目录），录完结束实例。
+rec_mac() {
+  mkdir -p "$(dirname "$out")"
+  local ready="$DERIVED/shot-ready" pidfile="$MAC_PIDFILE" pid="" recorder="$DERIVED/winrec" width height
+  if [ ! -x "$recorder" ] || [ "$APPLE_DIR/scripts/winrec.swift" -nt "$recorder" ]; then
+    swiftc -O "$APPLE_DIR/scripts/winrec.swift" -o "$recorder"
+  fi
+  start_mac
+  wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
+  # 就绪文件没有换行，read 读到文件尾返回非零
+  read -r width height <"$ready" || true
+  local status=0
+  "$recorder" "$pid" "${CUEPAD_REC_SECONDS:-12}" "$width" "$height" "$out" || status=$?
+  kill -TERM "$pid"
+  wait "$pid" || true
+  rm -f "$pidfile"
+  exit $status
 }
 
 # iOS/iPadOS：库与偏好放进隔离目录（每个设备各一个，默认 .derived/library-<ios|ipad>），启动参数原样传给 App。
@@ -250,7 +286,7 @@ case "$cmd" in
     fi
     exit $status ;;
   shot) xcb -quiet build; "shot_$platform" ;;
-  rec) [ "$platform" != mac ] || { echo "rec 只有 ios、ipad：Mac 的动效与 iOS 同一份代码，在模拟器里录" >&2; exit 2; }; xcb -quiet build; capture_sim ;;
+  rec) xcb -quiet build; if [ "$platform" = mac ]; then rec_mac; else capture_sim; fi ;;
   run) [ "$platform" = mac ] || { echo "run 只有 mac：iOS 模拟器没有可操作的窗口，用 shot" >&2; exit 2; }; xcb -quiet build; run_mac ;;
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
