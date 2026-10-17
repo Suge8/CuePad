@@ -6,8 +6,6 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  // MARK: 最近发送时间
-
   @Test func lastSendsBatchesLatestSendWithItsTargetPerVisibleCardOfTheProject() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let a = try await store.createCard(in: p.id, body: "a")
@@ -36,7 +34,4 @@ import Testing
     #expect(try await store.lastSends(in: nil).keys.contains(unfiled.id))
     _ = neverSent
   }
-
-  // MARK: 发送目标列表
-
 }

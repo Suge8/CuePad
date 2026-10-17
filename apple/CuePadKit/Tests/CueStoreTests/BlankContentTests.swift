@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-@testable import CueStore
-
 /// 空白内容的规则（真实库里留着正文为空的灵感与名字为空的项目）：空白灵感离开编辑就不留下、不计数；
 /// 项目名不能写成空的，旧数据里空名的项目读出来叫"未命名项目"。
 @Suite struct BlankContentTests {
@@ -31,5 +29,4 @@ import Testing
     await #expect(throws: CueStoreError.blankProjectName) { try await store.updateProject(p.id) { $0.name = "" } }
     #expect(try await store.project(p.id)?.name == "P")
   }
-
 }
