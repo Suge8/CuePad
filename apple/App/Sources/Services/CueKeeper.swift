@@ -698,7 +698,7 @@ final class CueKeeper {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
             changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
-            resume: resume, said: nil))
+            resume: resume))
         var woke: CueWoke?
         if wake == .sessionActivity {
             var seen = Set<String>()
