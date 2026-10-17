@@ -410,7 +410,7 @@ struct NoticeActionButton: View {
 
     var body: some View {
         Button(action.title) { workspace.run(action) }
-        .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.accent)
+        .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
         .buttonStyle(PressStyle())
         .padding(.horizontal, 10).frame(height: 28)
         .keyboardShortcut(action.isUndo ? KeyboardShortcut("z", modifiers: .command) : nil)

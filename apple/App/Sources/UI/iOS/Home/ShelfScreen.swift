@@ -230,7 +230,7 @@ private struct PinnedShelfCard: View {
     private static let radius: CGFloat = 20
 
     var body: some View {
-        let tint = Palette.projectTint(entry.project.color)
+        let wash = palette.projectWash(entry.project.color)
         NavigationLink(value: Route.project(entry.project.id)) {
             Group {
                 if wide {
@@ -258,7 +258,7 @@ private struct PinnedShelfCard: View {
             // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
             .background(
                 LinearGradient(
-                    colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)],
+                    colors: [wash, wash.opacity(0)],
                     startPoint: wide ? .leading : .top, endPoint: .center),
                 in: .rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
@@ -343,7 +343,7 @@ private struct ShelfRow: View {
                 if !stacked {
                     ProjectGlyph(project: entry.project, size: 17)
                         .frame(width: Self.tile, height: Self.tile)
-                        .background(Palette.projectTint(entry.project.color).opacity(0.12), in: .rect(cornerRadius: 10))
+                        .background(palette.projectWash(entry.project.color), in: .rect(cornerRadius: 10))
                 }
                 // 行高一直是两行（名称与"此刻"）的高度，状态出现、消失时列表不跳；没有可说的时名称在行里居中，
                 // 不在上半截空出一行（同 Mac 侧栏）
@@ -367,7 +367,7 @@ private struct ShelfRow: View {
                 .animation(Motion.quick, value: now == nil)
                 Spacer(minLength: 8)
                 if !stacked { counts }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3.opacity(0.7))
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, Self.horizontalPadding).padding(.vertical, 11)

@@ -95,16 +95,15 @@ struct SearchPalette: View {
         }
         // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
-        // 面大、字多：玻璃之上再垫一层接近实色的纸，背后的内容不透出来干扰阅读
-        .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
+        // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
+        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous), ink: .solid)
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            Image(systemName: "magnifyingglass").foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
                 .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
@@ -167,7 +166,7 @@ struct SearchPalette: View {
                     if let data {
                         if data.cards.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
-                                .font(Typography.secondary).foregroundStyle(.secondary)
+                                .font(Typography.secondary).foregroundStyle(palette.ink2)
                                 .padding(16)
                         }
                         ForEach(groups(data), id: \.owner) { group in
@@ -175,15 +174,15 @@ struct SearchPalette: View {
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
                                 Text(project?.name ?? CaptureCopy.unfiled)
-                                Text("\(group.cards.count)").foregroundStyle(.tertiary)
+                                Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
-                            .font(Typography.label).foregroundStyle(.secondary)
+                            .font(Typography.label).foregroundStyle(palette.ink2)
                             .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
                             ForEach(group.cards) { card in row(card).id(card.id) }
                         }
                         if data.total > data.cards.count {
                             Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
-                                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(.secondary)
+                                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2)
                                 .padding(10)
                         }
                     }
@@ -203,7 +202,7 @@ struct SearchPalette: View {
                 if card.isTask {
                     TaskRingView(status: card.status, done: false, size: 14)
                 } else {
-                    Image(systemName: text.images.isEmpty ? "doc.text" : "photo").foregroundStyle(.secondary)
+                    Image(systemName: text.images.isEmpty ? "doc.text" : "photo").foregroundStyle(palette.ink2)
                 }
             }
             .frame(width: 16)
@@ -211,10 +210,10 @@ struct SearchPalette: View {
             .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
             Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
-            Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(.secondary)
+            Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(palette.ink2)
         }
         .padding(.horizontal, 10).frame(height: 34)
-        .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
+        .background(isSelected ? palette.selection : .clear, in: .rect(cornerRadius: 9))
         .contentShape(.rect)
         // 单击即选中、双击打开（同访达）：双击与单击并列识别——单击排在双击后面时要等过双击间隔才选中，点下去顿半拍
         .onTapGesture { selection = card.id }
@@ -361,6 +360,7 @@ private struct FilterBar: View {
     let projects: [Project]
     let targets: [SendTarget]
     let total: Int?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         // 筛选在左、可横向滚动（窄面板里不被挤成省略号），结果数常驻右侧
@@ -368,7 +368,7 @@ private struct FilterBar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) { chips }
             }
-            if let total { Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
+            if let total { Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2).fixedSize().layoutPriority(1) }
         }
     }
 
@@ -439,16 +439,16 @@ private struct FilterCapsule: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(name).foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.secondary))
+            Text(name).foregroundStyle(on ? palette.paper : palette.ink2)
             if let value {
                 Text(value).fontWeight(.medium)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
         .font(Typography.meta)
-        .foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.primary))
+        .foregroundStyle(on ? palette.paper : palette.ink)
         .padding(.horizontal, 10).frame(height: 28)
-        .background(on ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
+        .background(on ? palette.ink : palette.fill, in: .capsule)
         .contentShape(.capsule)
     }
 }

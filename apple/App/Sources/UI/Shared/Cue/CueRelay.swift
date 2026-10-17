@@ -2,7 +2,7 @@ import CueStore
 import QuartzCore
 import SwiftUI
 
-/// Cue 与会话之间的"接力"：一点晴蓝的光在 Cue 的头像与会话的状态标之间沿一道弧飞过。晴蓝是在跑的颜色（`Palette.live`）：
+/// Cue 与会话之间的"接力"：一点靛青的光在 Cue 的头像与会话的状态标之间沿一道弧飞过。靛青是正在发生的颜色（`Palette.signature`，在跑也是它）：
 /// 两个方向都是把"在跑"交棒给对方。iOS 与 Mac 同一套样子、同一份时长；只在那一刻出现，一次最多三道、错开 90ms（再多就成了一片光，看不出谁是谁）。
 /// - 叫醒（会话 → Cue）：飞的是一颗实心的点（会话的状态标）。起飞处一圈细环外扩（0.45s，缓出）；光飞 0.42～0.72s
 ///   （随距离：侧栏里一跳短，手机上从列表飞到底栏长），先加速、后长长地减速，落进头像时已经很慢——"被接住"，不是"撞上"；还差最后一成路时
@@ -47,7 +47,7 @@ struct CueRelayStage: ViewModifier {
         @State private var stage = Stage()
 
         var body: some View {
-            Probe(stage: stage, color: palette.live)
+            Probe(stage: stage, color: palette.signature)
                 .onChange(of: workspace.cue.flight?.at) {
                     guard let flight = workspace.cue.flight, !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
                     stage.play(flight, reduceMotion: reduceMotion)
@@ -89,7 +89,7 @@ struct CueRelayStage: ViewModifier {
         }
     }
 
-    /// 窗口根上一个空视图：让舞台认得自己在哪个窗口，并取当下配色里的晴蓝。
+    /// 窗口根上一个空视图：让舞台认得自己在哪个窗口，并取当下配色里的靛青。
     fileprivate struct Probe {
         let stage: Stage
         let color: Color

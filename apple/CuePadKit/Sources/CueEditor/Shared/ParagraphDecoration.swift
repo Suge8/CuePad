@@ -96,7 +96,8 @@ extension EditorCore {
             paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: NSRange(location: 0, length: line.markerLength))
         }
         for link in line.links {
-            paragraph.addAttribute(.foregroundColor, value: style.linkColor, range: link.label)
+            // 链接是正文的墨色加下划线，不另上色：签名色只给焦点
+            paragraph.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: link.label)
             for syntax in link.syntax { paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: syntax) }
         }
         for code in line.inlineCode {

@@ -61,7 +61,7 @@ struct ComposerField: NSViewRepresentable {
             scroll.needsLayout = true
         }
         view.placeholder = prompt
-        view.placeholderColor = NSColor(palette.placeholder)
+        view.placeholderColor = NSColor(palette.ink3)
         // 只在颜色真的变了时设（同 iOS 那份：设一次就给整篇文字重铺颜色）
         if ink != context.coordinator.ink {
             context.coordinator.ink = ink
@@ -129,7 +129,7 @@ final class ComposerScrollView: NSScrollView {
 final class GrowingTextView: NSTextView {
     static let bodyFont = NSFont.systemFont(ofSize: Typography.bodySize)
     var placeholder = ""
-    var placeholderColor = NSColor.placeholderTextColor
+    var placeholderColor = NSColor.clear
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }

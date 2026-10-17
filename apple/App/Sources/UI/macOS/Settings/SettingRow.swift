@@ -77,7 +77,7 @@ private struct SettingFixStyle: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.buttonStyle(.plain).font(Typography.meta.weight(.medium)).foregroundStyle(palette.signature).pointerStyle(.link)
+        content.buttonStyle(.plain).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink).underline().pointerStyle(.link)
     }
 }
 
@@ -90,7 +90,7 @@ private struct SettingPopoverBackground: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.presentationBackground(palette.desk.opacity(0.9))
+        content.presentationBackground(palette.solidGlass)
     }
 }
 

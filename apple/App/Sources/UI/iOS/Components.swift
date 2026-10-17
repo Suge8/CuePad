@@ -16,7 +16,7 @@ struct RowPressStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .background { palette.fill.opacity(configuration.isPressed ? 1 : 0) }
+                .background { configuration.isPressed ? palette.fill : .clear }
                 .animation(configuration.isPressed ? nil : Motion.quick, value: configuration.isPressed)
         }
     }
@@ -63,7 +63,7 @@ private struct LiftedContextMenu<Menu: View, Preview: View>: ViewModifier {
                 .environment(navigation)
                 .environment(services)
                 .environment(\.palette, palette)
-                .tint(palette.accent)
+                .tint(palette.ink)
                 .environment(\.cardAgents, agents)
         }
     }

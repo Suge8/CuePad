@@ -21,7 +21,7 @@ struct MarkdownText: View, Equatable {
 
     /// 每段可选文字（相邻的非表格块排成的那一个 `Text`）渲染出来的字，按先后：批注按它认出选区在哪条回答的第几段（`ReplyNote.run`）。
     static func proseTexts(_ source: String) -> [String] {
-        Run.of(source, Palette(.light), notes: []).compactMap { run in
+        Run.of(source, Palette(dark: false), notes: []).compactMap { run in
             if case .prose(let text) = run { String(text.characters) } else { nil }
         }
     }
@@ -273,7 +273,7 @@ private struct MoreToTheRight: ViewModifier {
             .mask {
                 HStack(spacing: 0) {
                     Color.black
-                    LinearGradient(colors: [.black, .black.opacity(more ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                    LinearGradient(colors: [.black, more ? .clear : .black], startPoint: .leading, endPoint: .trailing)
                         .frame(width: Self.width)
                 }
             }

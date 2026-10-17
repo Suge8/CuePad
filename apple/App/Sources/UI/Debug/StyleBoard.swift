@@ -28,8 +28,9 @@ struct StyleBoard: View {
         let tokens: [(String, Color)] = [
             ("sidebar", palette.sidebar), ("desk", palette.desk), ("paper", palette.paper),
             ("ink", palette.ink), ("ink2", palette.ink2), ("ink3", palette.ink3),
-            ("signature", palette.signature), ("selection", palette.selection), ("waiting", Waiting.tint(dark: palette.dark)),
-            ("failure", palette.failure), ("variable", palette.variable), ("bubble", palette.bubble),
+            ("signature", palette.signature), ("selection", palette.selection), ("waiting", palette.waiting),
+            ("failure", palette.failure), ("replied", palette.replied), ("bubble", palette.bubble),
+            ("hair", palette.hair), ("fill", palette.fill), ("track", palette.track), ("signatureFill", palette.signatureFill),
         ]
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
             ForEach(tokens, id: \.0) { name, color in

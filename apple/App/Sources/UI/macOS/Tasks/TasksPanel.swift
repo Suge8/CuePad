@@ -10,6 +10,7 @@ struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
+    @Environment(\.palette) private var palette
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 
@@ -28,10 +29,10 @@ struct TasksPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("任务").font(Typography.sectionTitle)
-                if let board, board.counts.open > 0 { Text("\(board.counts.open)").font(Typography.sectionCount).foregroundStyle(.secondary) }
+                if let board, board.counts.open > 0 { Text("\(board.counts.open)").font(Typography.sectionCount).foregroundStyle(palette.ink2) }
                 Spacer()
                 Button("关闭", systemImage: "xmark") { close() }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
+                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
             }
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 6)
             NewTaskField(project: workspace.currentProject, choosesProject: true, autofocus: true)
@@ -99,7 +100,7 @@ struct TasksPanel: View {
                 Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
                     .buttonStyle(.plain).help("把最近完成的任务全部归档：不占列表，照样搜得到")
             }
-            .font(Typography.label).foregroundStyle(.secondary)
+            .font(Typography.label).foregroundStyle(palette.ink2)
             .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
             if showsCompleted { rows(board.done) }
         }

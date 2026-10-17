@@ -9,12 +9,6 @@ struct ProjectStylePicker: View {
     var cell: CGFloat
     @Environment(\.palette) private var palette
 
-    /// 可选颜色：存储值 → 读屏与提示用的颜色名。没有靛蓝一路：与签名色靛青色相太近，项目会被读成焦点。
-    static let colors: [(hex: String, name: String)] = [
-        ("#D9774B", "橙色"), ("#C9A227", "黄色"), ("#5E9E5A", "绿色"), ("#3F8FB8", "蓝色"),
-        ("#3AA088", "青绿"), ("#A260C4", "紫色"), ("#D0607D", "粉色"), ("#8A8A84", "灰色"),
-    ]
-
     private static let spacing: CGFloat = 6
 
     private var columns: [GridItem] {
@@ -35,17 +29,17 @@ struct ProjectStylePicker: View {
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Palette.projectTint(color))
+                    .foregroundStyle(palette.project(color))
                     .accessibilityLabel("图标：\(choice.name)")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                     .help(choice.name)
                 }
             }
             LazyVGrid(columns: columns, spacing: Self.spacing) {
-                ForEach(Self.colors, id: \.hex) { choice in
-                    let hex = choice.hex, selected = color == hex
-                    Button { color = hex } label: {
-                        Circle().fill(Palette.projectTint(hex)).frame(width: cell * 0.66, height: cell * 0.66)
+                ForEach(Palette.projectColors, id: \.stored) { choice in
+                    let stored = choice.stored, selected = color == stored
+                    Button { color = stored } label: {
+                        Circle().fill(palette.project(stored)).frame(width: cell * 0.66, height: cell * 0.66)
                             .overlay { if selected { Circle().strokeBorder(palette.ink, lineWidth: 2).padding(-4) } }
                             .frame(width: cell, height: cell)
                             .contentShape(.rect)

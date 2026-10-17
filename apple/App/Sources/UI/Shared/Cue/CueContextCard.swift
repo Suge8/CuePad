@@ -63,8 +63,8 @@ private struct RenewRuler: View {
     private var fill: Color {
         switch PiContextMeter.level(of: Double(used) / Double(renewAt)) {
         case .critical: palette.failure
-        case .tight: palette.ink.opacity(0.7)
-        case .roomy: palette.ink.opacity(0.4)
+        case .tight: palette.ink2
+        case .roomy: palette.ink3
         }
     }
 

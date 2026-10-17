@@ -222,7 +222,7 @@ struct SessionCard: ViewModifier {
             .background {
                 // 深色的纸更暗，状态色要浓一点才看得出
                 shape.fill(palette.paper)
-                    .overlay { shape.fill(wash?.opacity(palette.dark ? 0.08 : 0.07) ?? .clear) }
+                    .overlay { shape.fill(wash.map(palette.wash) ?? .clear) }
                     .animation(Motion.quick, value: wash)
             }
     }
@@ -250,14 +250,14 @@ private struct NoteWord: View {
     var body: some View { Text(note.text).foregroundStyle(note.isFailure ? palette.failure : palette.ink2) }
 }
 
-/// 子代理在跑 / 共几个（在跑的数是晴蓝）；窄处前面带一个分叉图标（`branch`），整页卡片后面接角色图标。
+/// 子代理在跑 / 共几个（在跑的数是靛青）；窄处前面带一个分叉图标（`branch`），整页卡片后面接角色图标。
 private struct SubagentCount: View {
     let summary: PiSubagentSummary
     var branch = false
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.live : palette.ink2).fontWeight(.semibold)
+        let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.signature : palette.ink2).fontWeight(.semibold)
         let icon = branch ? Text("\(Image(systemName: "arrow.triangle.branch"))\u{2009}") : Text(verbatim: "")
         Text("\(icon)\(running)/\(summary.total)")
             .monospacedDigit().foregroundStyle(palette.ink2)
@@ -319,7 +319,7 @@ private struct FactColumns: View {
     }
 }
 
-/// 子代理：在跑 / 共几个，后接角色图标（最多 `shown` 个，在跑、失败的排前面），颜色是它的状态——晴蓝在跑、胭脂失败、灰做完或空闲。
+/// 子代理：在跑 / 共几个，后接角色图标（最多 `shown` 个，在跑、失败的排前面），颜色是它的状态——靛青在跑、胭脂失败、灰做完或空闲。
 /// 窄卡片放不下时裁掉靠后的图标，数字总在。
 private struct SubagentRoster: View {
     let summary: PiSubagentSummary
@@ -338,7 +338,7 @@ private struct SubagentRoster: View {
     }
 
     private func color(_ agent: PiSubagentState) -> Color {
-        agent.isRunning ? palette.live : agent.phase == .known(.failed) ? palette.failure : palette.ink3
+        agent.isRunning ? palette.signature : agent.phase == .known(.failed) ? palette.failure : palette.ink3
     }
 }
 

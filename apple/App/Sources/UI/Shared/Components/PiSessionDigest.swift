@@ -280,11 +280,11 @@ private struct AnswerButton: View {
         let lit = hovering && enabled && !prominent
         configuration.label
             .font(Typography.body.weight(.medium))
-            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
+            .foregroundStyle(prominent ? palette.paper : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(prominent ? palette.accent : lit ? palette.paperLit : palette.fill, in: shape)
-            .overlay { if !prominent { shape.strokeBorder(lit ? palette.ink2 : palette.ink3.opacity(0.5), lineWidth: 1) } }
+            .background(prominent ? palette.ink : lit ? palette.paperLit : palette.fill, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(lit ? palette.ink2 : palette.hair, lineWidth: 1) } }
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: lit)
             .contentShape(shape)

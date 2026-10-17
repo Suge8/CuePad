@@ -22,9 +22,9 @@ struct PiContextGauge: View {
     /// 胶囊里铺到已用比例的那层淡色：比胶囊底深一档，紧了再深一点，快满了换成胭脂。
     private var used: Color {
         switch meter.level {
-        case .critical: palette.failure.opacity(0.2)
-        case .tight: palette.ink.opacity(0.13)
-        case .roomy: palette.ink.opacity(0.08)
+        case .critical: palette.failureTrack
+        case .tight: palette.track
+        case .roomy: palette.hair
         }
     }
 

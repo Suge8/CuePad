@@ -218,7 +218,7 @@ struct FilterChip<Label: View>: View {
             .padding(.horizontal, 12).frame(minHeight: 36)
             // 选中：靛青浅底 + 靛青描边（选中一律用签名色），字仍是墨
             .background(on ? palette.selection : palette.paper, in: .capsule)
-            .overlay { Capsule().strokeBorder(on ? palette.signature.opacity(0.55) : palette.hair) }
+            .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
             .padding(.vertical, 4)
             .contentShape(.rect)
             .animation(Motion.quick, value: on)

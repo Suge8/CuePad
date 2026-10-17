@@ -123,7 +123,7 @@ private struct RowGlyph: View {
     var body: some View {
         Group {
             if selected {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onSignature, palette.signature)
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onFill, palette.signature)
             } else {
                 Image(systemName: images ? "photo" : "doc.text").foregroundStyle(palette.ink3)
             }

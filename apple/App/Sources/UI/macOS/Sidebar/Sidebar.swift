@@ -268,8 +268,6 @@ private struct PageRow<Icon: View, Title: View>: View {
     @ViewBuilder let title: Title
     @Environment(\.palette) private var palette
 
-    private static var restingOpacity: Double { 0.85 }
-
     var body: some View {
         Button { select(page) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -281,7 +279,7 @@ private struct PageRow<Icon: View, Title: View>: View {
                     Text("\(count)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                 }
             }
-            .foregroundStyle(selected ? palette.ink : palette.ink.opacity(Self.restingOpacity))
+            .foregroundStyle(palette.ink)
             .padding(.horizontal, SidebarMetrics.inset)
             .frame(height: height)
             .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
@@ -462,7 +460,7 @@ private struct AgentConnectCard: View {
             }
             Spacer(minLength: 4)
             Button { workspace.showsAgentSetup = true } label: {
-                Text("接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
+                Text("接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 12).frame(height: 24)
                     .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
             }

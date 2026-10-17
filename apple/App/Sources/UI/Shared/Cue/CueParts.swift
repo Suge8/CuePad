@@ -383,7 +383,7 @@ struct CueWaitingDock: View {
             }
         }
         .padding(.horizontal, 10).frame(minHeight: 32)
-        .background(palette.ink.opacity(0.05), in: .rect(cornerRadius: 8, style: .continuous))
+        .background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
         .disabled(ending == message.id)
     }
 

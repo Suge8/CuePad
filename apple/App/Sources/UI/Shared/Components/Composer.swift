@@ -256,7 +256,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair))
                         Button { draft.images.removeAll { $0.id == image.id } } label: {
                             Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .black.opacity(0.55)).font(.body)
+                                .foregroundStyle(palette.onMedia, palette.mediaScrim).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
                         .buttonStyle(.plain)

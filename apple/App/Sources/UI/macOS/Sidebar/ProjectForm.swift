@@ -36,7 +36,7 @@ struct ProjectForm: View {
     @State private var name = ""
     @State private var intro = ""
     @State private var icon = "folder"
-    @State private var color = ProjectStylePicker.colors[0].hex
+    @State private var color = Palette.projectColors[0].stored
     /// 新建时选的文件夹（完整路径）；编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: String?
 
@@ -71,12 +71,12 @@ struct ProjectForm: View {
     /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
     private var folderRow: some View {
         HStack(spacing: 8) {
-            Label("文件夹", systemImage: "folder").foregroundStyle(.secondary)
+            Label("文件夹", systemImage: "folder").foregroundStyle(palette.ink2)
             Spacer()
             if let folder {
                 Text(URL(filePath: folder).lastPathComponent).lineLimit(1).help(folder)
                 Button("不绑了", systemImage: "xmark.circle.fill") { self.folder = nil }
-                    .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary)
+                    .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink2)
             } else {
                 Button("选择…") { Task { folder = await ProjectDirectory.pick() } }
             }

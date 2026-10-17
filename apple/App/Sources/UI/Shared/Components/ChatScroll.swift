@@ -359,7 +359,7 @@ struct JumpToNewest: View {
                 .glass(in: .circle, interactive: true)
                 .overlay(alignment: .topTrailing) {
                     if unseen {
-                        Circle().fill(palette.accent).frame(width: 10, height: 10)
+                        Circle().fill(palette.ink).frame(width: 10, height: 10)
                             .overlay(Circle().strokeBorder(palette.desk, lineWidth: 2))
                             .offset(x: -3, y: 3)
                             .transition(.scale.combined(with: .opacity))
