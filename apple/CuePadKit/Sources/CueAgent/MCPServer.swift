@@ -23,7 +23,7 @@ public struct CueMCPServer: Sendable {
   }
 
   /// 处理一行；通知（没有 id）与不需要回应的返回 nil。
-  public func handle(_ line: String) async -> String? {
+  private func handle(_ line: String) async -> String? {
     guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) else {
       return Self.encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32700, "message": "不是 JSON"]])
     }
