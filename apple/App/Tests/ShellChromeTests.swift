@@ -44,8 +44,7 @@ struct ShellChromeTests {
             if sheet.attachedSheet != nil { stillAttached.append("nested") }
         }
 
-        try await eventually("proceeded") { proceeded }
-        #expect(proceeded, "弹窗没有全部结束，退出一直没有继续")
+        try await eventually("弹窗全部结束后继续退出") { proceeded }
         #expect(stillAttached.isEmpty, "继续退出时这些弹窗还挂着：\(stillAttached)")
         #expect(ended == ["sheet", "nested"])
     }

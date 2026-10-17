@@ -7,7 +7,6 @@ import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var services: AppServices?
-    private var windowDelegate: MainWindowDelegate?
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
     private var cueBar: CueBar?
@@ -16,9 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var sigterm: DispatchSourceSignal?
     /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
-    /// 主窗口与它的工作区（主菜单"显示"里的开关作用在它上面）。
+    /// 主窗口的工作区（主菜单"显示"里的开关作用在它上面；主窗口本身是 `services.windowShell`）。
     private var workspace: Workspace?
-    private weak var mainWindow: NSWindow?
     /// 系统通知：在启动完成前设为代理，冷启动时点开的通知才不会丢。
     private let alerts = AlertCenter()
 
@@ -54,24 +52,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let workspace = Workspace(services: services)
         Task { await workspace.follow() }
         let window = makeMainWindow(services, workspace: workspace)
-        let shell = WindowShell(window: window)
-        let windowDelegate = MainWindowDelegate(shell: shell)
-        window.delegate = windowDelegate
-        services.windowShell = shell
+        services.windowShell = window
         services.alerts = alerts
         alerts.services = services
         alerts.workspace = workspace
         followAlertTaps(workspace)
         self.services = services
-        self.windowDelegate = windowDelegate
         self.workspace = workspace
-        mainWindow = window
 
         let panel = MenuBarPanel()
         // 菜单栏面板点会话或 Cue：收起面板、把主窗口叫到前面，在它的内容区打开那一页（与侧栏同一处）
         panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] route in
             panel?.hide()
-            shell.show()
+            window.show()
             workspace.show(route)
         })
         menuBarPanel = panel
@@ -81,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧
                 if panel.isVisible { Task { await services.refreshQuotaIfStale() } }
             },
-            toggleWindow: { shell.toggleFromMenu() })
+            toggleWindow: { window.toggleFromMenu() })
 
         services.start()
         let cueBar = CueBar(services: services, workspace: workspace)
@@ -127,8 +120,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
-        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === mainWindow
+        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
+        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }
     }
@@ -215,9 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let window = WindowFactory.main(content: RootViews.mainWindow(services, workspace: workspace))
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
         if DebugHooks.placesOffscreen(window) { return window }
-        let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
-        if !keeper.restore() { window.center() }
-        mainFrameKeeper = keeper
+        mainFrameKeeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
         return window
     }
 }

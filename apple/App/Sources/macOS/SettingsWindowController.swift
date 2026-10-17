@@ -20,9 +20,7 @@ final class SettingsWindowController {
 
     private func firstWindow() -> NSWindow {
         let window = makeWindow()
-        let keeper = WindowFrameKeeper(window: window, name: "settings", settings: settings)
-        if !keeper.restore() { window.center() }
-        frameKeeper = keeper
+        frameKeeper = WindowFrameKeeper(window: window, name: "settings", settings: settings)
         self.window = window
         return window
     }

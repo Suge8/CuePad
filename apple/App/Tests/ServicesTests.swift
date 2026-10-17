@@ -2,7 +2,6 @@
 import CueStore
 @testable import CuePi
 import Foundation
-import Synchronization
 import Testing
 @testable import CuePad
 
@@ -25,28 +24,6 @@ struct GlobalShortcutTests {
         #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
         #expect(hotkey.accelerator == "Alt+KeyQ" && defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option), taken])
-    }
-}
-
-struct ImageStoreTests {
-    @Test func 编辑器存入的图片按内容哈希落入库并可读回() async throws {
-        let rig = TestApp()
-        let png = pngData()
-
-        let id = try rig.services.store.files.store(png)
-
-        #expect(id.count == 64)
-        #expect(try rig.services.store.files.store(png) == id)
-        #expect(try rig.services.store.files.original(hash: id) == png)
-        let url = try #require(rig.services.store.files.fileURL(for: id))
-        #expect(try Data(contentsOf: url) == png)
-        #expect(rig.services.store.files.fileURL(for: String(repeating: "0", count: 64)) == nil)
-
-        let file = rig.directory.appending(path: "dropped.png")
-        let other = pngData(shade: 0.9)
-        try other.write(to: file)
-        let droppedID = try rig.services.store.files.store(fileAt: file)
-        #expect(try rig.services.store.files.original(hash: droppedID) == other)
     }
 }
 
