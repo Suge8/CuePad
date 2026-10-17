@@ -184,7 +184,7 @@ final class AppServices {
     /// 写库后马上传这一条，别的设备马上看到；Cue 住的那台 Mac 的管理器读到就按新设置值班。
     func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
         try await store.updateCueProfile(edit)
-        await sync?.upload(CueProfile.recordID)
+        await upload(CueProfile.recordID)
     }
 
     /// 让 Cue 住在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
@@ -194,7 +194,7 @@ final class AppServices {
         if host == hostID { try await macAgents.record() }
         #endif
         try await store.enableCue(on: host)
-        await sync?.upload(CueProfile.recordID)
+        await upload(CueProfile.recordID)
     }
 
     /// 停用 Cue（住在哪台留着）。
