@@ -68,7 +68,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 - `xctrace record --template 'Time Profiler' --attach <pid>`；`--launch` 按 bundle id 找进程，机器上有别的 CuePad 时报 ambiguous。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
 - `Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。
-- 会话页滚动（Mac，可不碰指针、不抢焦点）：`-CuePadBench chatscroll`，跑法、指标与屏幕外量不到的部分见 `DebugScene+LongChat.swift` 里 `ChatScrollBench` 的注释。
+- 会话页与 Cue 页滚动（Mac，可不碰指针、不抢焦点）：`-CuePadBench chatscroll`，跑法、指标与屏幕外量不到的部分见 `DebugScene+LongChat.swift` 里 `ChatScrollBench` 的注释。
 
 ### 交互预算
 

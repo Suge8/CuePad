@@ -9,7 +9,7 @@ import Foundation
 ///   也查会话在跑时才有的界面（经过、子代理、回复框的停止钮）。
 /// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，每排开一段量一次开销与掉帧（`ChatDepthBench`）。
 /// - `-CuePadBench chatresize`（仅 Mac，配 session 画面打开 marathon）：测量脚本翻到深处后拖窗口边改宽，每次拖动量一次开销与掉帧（`ChatResizeBench`）。
-/// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
+/// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon，或 cue 画面量 Cue 页的长对话）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
 extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
@@ -20,7 +20,7 @@ extension DebugScene {
         let start = Date.now.addingTimeInterval(-Double(longChatRounds) * 240)
         let turns = (0..<longChatRounds).map { round in
             let asked = start.addingTimeInterval(Double(round) * 240)
-            return ChatTurn(you: prompt(round), pi: reply(round), tools: nil, asked: asked, answered: asked.addingTimeInterval(60))
+            return ChatTurn(you: longChatPrompt(round), pi: longChatReply(round), tools: nil, asked: asked, answered: asked.addingTimeInterval(60))
         }
         try? await writeChat(longChat, turns, store: store)
     }
@@ -39,7 +39,7 @@ extension DebugScene {
         }
         for round in 0..<rounds {
             let seq = Int64(1_000_000 + round * 3)
-            let you = PiChatMessage(sessionID: sessionID, entryID: "stream-u\(round)", seq: seq, role: .user, text: prompt(round + 1), at: .now)
+            let you = PiChatMessage(sessionID: sessionID, entryID: "stream-u\(round)", seq: seq, role: .user, text: longChatPrompt(round + 1), at: .now)
             await write([you], PiRecap(pendingPrompt: you.text))
             var tools = PiChatMessage.Tools()
             for step in 0..<15 {
@@ -50,28 +50,28 @@ extension DebugScene {
                 await set(step % 2 == 0 ? .tool : .thinking, detail: step % 2 == 0 ? "bash · pnpm test case\(step)" : nil, agents: [helper])
             }
             let answer = PiChatMessage(
-                sessionID: sessionID, entryID: "stream-p\(round)", seq: seq + 1, role: .pi, text: reply(round + 1), at: .now, tools: tools, roundStartedAt: you.at)
+                sessionID: sessionID, entryID: "stream-p\(round)", seq: seq + 1, role: .pi, text: longChatReply(round + 1), at: .now, tools: tools, roundStartedAt: you.at)
             await write([answer], PiRecap(lastPrompt: you.text, lastReply: answer.text))
             let helper = PiSubagentState(name: "helper-\(round)", role: "工程师", phase: .known(.running), action: "收尾", startedAt: you.at)
             await set(.delegating, agents: [helper])
             try? await Task.sleep(for: .seconds(1))
             let returned = PiChatMessage(
                 sessionID: sessionID, entryID: "stream-m\(round)", seq: seq + 2, role: .machine,
-                text: "<firecode_master_event>\nhelper-\(round) 交回：\(reply(round))\n</firecode_master_event>", at: .now)
+                text: "<firecode_master_event>\nhelper-\(round) 交回：\(longChatReply(round))\n</firecode_master_event>", at: .now)
             await write([returned], PiRecap(lastPrompt: you.text, lastReply: answer.text))
             await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: "工程师", phase: .known(.done), startedAt: you.at, settledAt: .now)])
             try? await Task.sleep(for: .seconds(1))
         }
     }
 
-    private static func prompt(_ round: Int) -> String {
+    static func longChatPrompt(_ round: Int) -> String {
         guard round % 25 != 0 else {
             return "第 \(round) 轮，我把日志贴过来：\n" + (1...30).map { "[\($0)] worker-\($0 % 7) retry=\($0 % 3) 连接被对端重置，正在重连第 \($0) 次" }.joined(separator: "\n")
         }
         return ["继续", "第 \(round) 轮：把上一步的结果整理成表格", "这里为什么会慢？给我看一下热点代码", "好，下一个", "列一下还剩哪些没做"][round % 5]
     }
 
-    private static func reply(_ round: Int) -> String {
+    static func longChatReply(_ round: Int) -> String {
         let paragraph = "第 \(round) 轮的回答。调度器在重连时会拿到新的时间戳，所以按加入时间排序会把重连的人排到最前；改成按首次加入时间排序之后，"
             + "重连不再改变顺序，压测里 p95 从 12ms 降到 9ms，内存基本不变。另外两条超时路径还没有用例覆盖，补上之后覆盖率能到 85% 左右。"
         switch round % 6 {
@@ -205,12 +205,12 @@ enum ChatResizeBench {
 import AppKit
 import QuartzCore
 
-/// 长对话里滚轮与触控板滚动的开销（`-CuePadBench chatscroll`，配 session 画面打开 marathon）：先往上翻几趟把对话排开、量过高度，
+/// 长对话里滚轮与触控板滚动的开销（`-CuePadBench chatscroll`，配 session 画面打开 marathon，或 `-CuePadScene cue` 量 Cue 页）：先往上翻几趟把对话排开、量过高度，
 /// 再各量三组手势（慢速触控板 600px/s、快速触控板 2400px/s、鼠标滚轮），每组下上下上共四趟，一组一行 `CHATSCROLL {json}`，量完退出。
 /// 指标：主线程每圈 CPU（≥0.2ms 的圈）的 p50/p90/p99（毫秒；144Hz 一帧 6.9ms）、超 6.9ms 与 16ms 的圈数、总 CPU、进程指令数（百万，前后对比以它为准）、
 /// `movedPx`（为 0 说明没滚动起来，数字作废）、`events` 与 `delivered`（应投与实际投出的事件数，不等时这一组的工作量和别组不同，数字作废）；前台时还有 display link 掉帧。
 /// 别人在编译时 CPU 时间会被拖歪，指令数基本不动；热身时排开多少条随时机略变，要排除它就把初始排开的条数固定成同一个值再比（同值下三遍指令数相差不到 1%）。
-/// 跑法：`-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`，
+/// 跑法：`-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`（Cue 页把后两项场景换成 `-CuePadScene cue`），
 /// 用 `open -g -n -a <app> --stdout <文件> --env … --args …` 后台启动（直接执行二进制会把应用调到前台抢焦点）；Time Profiler 按这次启动的 PID `--attach`。
 /// 默认不碰真实指针、不把窗口调到前台、不向系统发事件，配 `-CuePadOffscreen YES` 在屏幕外跑：直接挪滚动视图的裁剪区原点（不经 AppKit 的滚轮事件与动画，
 /// 那条路靠 display link，屏幕外不走），补发 `willStartLiveScroll` 与 `didEndLiveScroll` 两个通知（滚动区据此知道"用户在滚"）。屏幕外量不到：滚轮事件与动画那一段、

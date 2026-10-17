@@ -258,17 +258,21 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadLongChat YES`：演示对话前面多 36 轮更早的来回，中间换过两次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
+    /// `-CuePadLongChat YES`：演示对话前面多 90 轮更早的来回（Cue 页读得到的差不多就是这么多），中间换过三次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
+    /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
+    /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     private static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
         let asks = ["今天先看哪件？", "把计费那个会话的进展说一下", "圆桌的预发什么时候能好？", "帮我记一下：周五不发版", "README 截图换完了吗？", "重连用例加了几个？"]
         let replies = ["先看圆桌：乱序会影响所有 5 人以上的房间。", "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", "测试在跑，大概二十分钟后能部署到预发。",
                        "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
-        for round in 0..<36 {
-            if round == 12 || round == 26 {
+        let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
+        for round in 0..<90 {
+            if round % 30 == 12 {
                 _ = try await store.addCueMessage(.handoff, text: "**在做**\n- 圆桌乱序：在改排序，测试在跑。\n\n**下一步**\n- 测试过了派重连用例，再部署预发。")
             }
-            try await you("第 \(round + 1) 句：" + asks[round % asks.count])
-            _ = try await store.addCueMessage(.cue, text: replies[round % replies.count])
+            let ask = round % 25 == 0 ? longChatPrompt(round) : "第 \(round + 1) 句：" + asks[round % asks.count]
+            try await you(round % 15 == 7 ? ask + "\n" + shot : ask)
+            _ = try await store.addCueMessage(.cue, text: round % 3 == 0 ? replies[round % replies.count] : longChatReply(round))
         }
     }
 
