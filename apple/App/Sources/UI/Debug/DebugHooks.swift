@@ -25,8 +25,6 @@ enum DebugHooks {
         var demoMac = false
         /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、又没装同步替身时（替身自己报通断，`-CuePadSync`）。
         var alwaysReachable = false
-        /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
-        var quotaDetail: String?
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
         /// Cue 页的输入框一出现就聚焦（`-CuePadCueFocus`）。
@@ -49,8 +47,9 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看额度与记忆）。
         var cuePanelOpen = false
+        var cuePanelEnd = false
         #endif
     }
 

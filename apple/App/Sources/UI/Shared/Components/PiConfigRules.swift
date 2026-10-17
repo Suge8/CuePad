@@ -3,9 +3,9 @@ import SwiftUI
 
 
 
-/// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带用量；胶囊上的短名见 `PiModelName`。
+/// 会话页的模型菜单怎么写：按提供方（`PiProvider`）分组，组名有额度时带还剩多少；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
-    /// 分组标题：这家有订阅额度时写"Claude · 5 小时 14% · 本周 8%"（`QuotaMeter.menuTitle`），否则是提供方名。
+    /// 分组标题：这家有订阅额度时写"Claude · 5 小时剩 86% · 本周剩 92%"（`QuotaMeter.menuTitle`），否则是提供方名。
     static func title(_ provider: PiProvider, quotas: [AccountQuota], at now: Date) -> String {
         quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
     }

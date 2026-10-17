@@ -166,7 +166,6 @@ enum DebugScene {
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
         preset.alwaysReachable = preset.demoMac && defaults.string(forKey: "CuePadSync") == nil
-        preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
@@ -179,7 +178,9 @@ enum DebugScene {
         preset.briefOpen = defaults.bool(forKey: "CuePadBrief")
         preset.alertStatus = alertStatus
         if defaults.string(forKey: "CuePadSearchScope") == "sessions" { preset.searchScope = .sessions }
-        preset.cuePanelOpen = defaults.bool(forKey: "CuePadCuePanel")
+        let panel = defaults.string(forKey: "CuePadCuePanel")
+        preset.cuePanelEnd = panel == "end"
+        preset.cuePanelOpen = preset.cuePanelEnd || defaults.bool(forKey: "CuePadCuePanel")
         #endif
         return preset
     }
