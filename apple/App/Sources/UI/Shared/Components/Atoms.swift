@@ -31,6 +31,16 @@ extension View {
     }
 }
 
+extension View {
+    /// 附件文件到没到本机（图片、交付物随同步晚于对话到）：库里有这条附件、文件也在。附件表变化时重读；
+    /// 行在滚动中一个个出现，不在主线程上当场读，没读到时按到了画。
+    func observingArrival(of hash: String, in store: CueStore, into arrived: Binding<Bool?>) -> some View {
+        observing(store, id: hash, into: arrived, immediately: false) { [files = store.files] store in
+            try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
+        }
+    }
+}
+
 private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let store: CueStore
     let id: ID
