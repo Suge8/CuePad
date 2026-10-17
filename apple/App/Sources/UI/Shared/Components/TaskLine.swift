@@ -164,7 +164,7 @@ struct TaskLine: View {
             .background(hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
             .contentShape(.rect)
             .onHover { hovering = $0 }
-            .onAppear { if DebugHooks.hovers(task) { hovering = true } }
+            .onAppear { if DebugHooks.hovers(task.body) { hovering = true } }
             .onTapGesture(perform: open)
             .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
             // 只给带项目图标的行挂悬停提示：每行一块提示的跟踪区，滚动时跟着重算
