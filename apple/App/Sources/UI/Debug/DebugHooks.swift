@@ -288,8 +288,9 @@ extension View {
         task {
             await DebugScene.prepare(workspace)
             await DebugScene.signalReady(workspace.services)
-            // 叫醒与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
+            // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             Task { await DebugScene.wakeIfAsked(workspace) }
+            Task { await DebugScene.relayIfAsked(workspace) }
             Task { await DebugScene.closeIfAsked(workspace) }
             await DebugScene.cycleIfAsked(workspace.services)
         }
@@ -309,8 +310,9 @@ extension View {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
+                async let relays: Void = DebugScene.relayIfAsked(workspace)
                 await DebugScene.cycleIfAsked(workspace.services)
-                await wakes
+                _ = await (wakes, relays)
             }
         #else
         self

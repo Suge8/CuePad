@@ -1,0 +1,556 @@
+import CueStore
+import QuartzCore
+import SwiftUI
+
+/// Cue 与会话之间的"接力"：一点晴蓝的光在 Cue 的头像与会话的状态标之间沿一道弧飞过。晴蓝是在跑的颜色（`Palette.live`）：
+/// 两个方向都是把"在跑"交棒给对方。iOS 与 Mac 同一套样子、同一份时长；只在那一刻出现，一次最多三道、错开 90ms（再多就成了一片光，看不出谁是谁）。
+/// - 叫醒（会话 → Cue，`CueWatch.woke`）：飞的是一颗实心的点（会话的状态标）。起飞处一圈细环外扩（0.45s，缓出）；光飞 0.42～0.72s
+///   （随距离：侧栏里一跳短，手机上从列表飞到底栏长），先加速、后长长地减速，落进头像时已经很慢——"被接住"，不是"撞上"；还差最后一成路时
+///   头像的环亮起（带一圈同色光晕）、停一下再外扩到 1.6 倍淡去（0.7s），晚 0.12s 一圈细涟漪扩到 2.1 倍（0.75s）；不盖住它的脸。
+/// - 交给（Cue → 会话，`CueWatch.relay`：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
+///   头像的环先亮一下、外扩到 1.25 倍淡去（0.6s），0.12s 后环离开头像，同一条弧、同一条曲线飞到会话的状态标，落下时那里一圈细环外扩、垫一层淡光。
+///   方向一眼分得出：起点先亮的是谁、飞的是点还是环。
+/// 光后面拖一截由亮到暗的尾巴（同一条弧上的描边，起点追着终点走、落下时被收进去），比单独一个点更看得出从哪来、到哪去。
+/// 弧向窗口竖中线那边鼓（从侧栏、屏边起飞时弧在屏内）；来回两个方向走同一条弧。整个过程约 1.3～1.4s：
+/// 这是全 App 唯一超过 300ms 的动效（docs/ui.md），它讲的是一件低频的事从哪到哪，短了看不清起点。
+///
+/// 会话在屏上的位置（`RelayEnd`）：它的状态标；没有在屏上的状态标时是它的任务行（任务圈，`relaySpot(task:)`）——
+/// 开新会话还没有会话 id，只认任务。同一个会话出现几处时取离头像最近的那处。Cue 的头像同时在屏上几处时取等级高的（`CueSpot`）。
+///
+/// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
+/// - 会话那头不在屏上（不在这一页、滚出去了）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
+/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，手机在会话页、纸页这类收起了底栏的页）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
+///   交给是只在会话那头外扩一圈、垫一层淡光。
+/// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己就在转环，会话的状态标自己会变。
+/// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
+/// - 减弱动态效果：不飞、不扩，头像的环与会话那头的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度。
+///
+/// 动画状态只来自库里的事实，经 `CueWatch` 投影成只在变了时才写的值（窗口读到的第一份不算），不另存动画状态；页面换来换去也不播
+/// （挂在窗口根上，不随页面出现）。
+///
+/// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与），只在播时把一层画布挂到窗口的根层最上面，播完拿掉。
+/// 不在每一行挂几何读数：只有此刻在接力的那几个会话的状态标与任务行挂一个空的锚视图，Cue 的几处头像各挂一个；
+/// 播的那一刻沿层树把锚换算到窗口根层的坐标，一并算进父层的裁切、隐藏与透明（滚出屏的、被盖住的页、开合到 0 的都算不在），
+/// 工具栏、导航容器、分栏这些各自托管的视图都在同一棵层树里，不需要逐层换算。
+/// 否决了 SwiftUI 的覆盖层加锚点偏好：偏好过不了 Mac 工具栏与 iOS 导航容器的托管边界，覆盖层也盖不住 Mac 的工具栏。
+struct CueRelayStage: ViewModifier {
+    let workspace: Workspace
+
+    // 窗口根上什么都不读：接力只在背景里那个小视图里看（`Watcher`），Cue 的现状怎么变根都不重算
+    func body(content: Content) -> some View { content.background(Watcher(workspace: workspace)) }
+
+    /// 只读 `CueWatch.woke` 与 `relay`（都只在变了时才写）：又有一次就播。
+    private struct Watcher: View {
+        let workspace: Workspace
+        @Environment(\.palette) private var palette
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @State private var stage = Stage()
+
+        var body: some View {
+            let cue = workspace.cue
+            Probe(stage: stage, color: palette.live)
+                .onChange(of: cue.woke?.at) {
+                    if let woke = cue.woke { play(.wake, woke.sessions.map { RelayEnd(session: $0) }) }
+                }
+                .onChange(of: cue.relay?.at) {
+                    if let relay = cue.relay { play(.relay, relay.ends) }
+                }
+        }
+
+        private func play(_ direction: RelayFlight.Direction, _ ends: [RelayEnd]) {
+            guard !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
+            stage.play(direction, ends, reduceMotion: reduceMotion)
+        }
+    }
+
+    /// 本窗口的舞台：认得窗口（`Probe`），播时找锚、交给 `RelayFlight`。
+    final class Stage {
+        fileprivate weak var host: RelayAnchorView?
+        fileprivate var color: CGColor?
+
+        func play(_ direction: RelayFlight.Direction, _ ends: [RelayEnd], reduceMotion: Bool) {
+            Task {
+                // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
+                await NextFrame.wait()
+                guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else { return }
+                let anchors = RelayAnchorView.all(in: window)
+                let cue = anchors.compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
+                    guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
+                    return (spot, frame)
+                }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
+                let places = ends.compactMap { Self.place(of: $0, among: anchors, in: root, near: cue?.center) }
+                RelayFlight(color: color, reduceMotion: reduceMotion).play(direction, cue: cue, ends: Array(places.prefix(RelayFlight.most)), in: root)
+            }
+        }
+
+        /// 会话那头在屏上的位置：状态标，没有就是它的任务行；几处都在时取离头像最近的。
+        private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> CGPoint? {
+            func nearest(_ matches: (RelayAnchorView.Role) -> Bool) -> CGPoint? {
+                anchors.filter { matches($0.role) }.compactMap { $0.frame(in: root)?.center }
+                    .min { RelayFlight.distance($0, cue) < RelayFlight.distance($1, cue) }
+            }
+            return end.session.flatMap { session in nearest { $0 == .session(session) } }
+                ?? nearest { role in
+                    guard case .task(let task, let session) = role else { return false }
+                    return task == end.task || (end.session != nil && session == end.session)
+                }
+        }
+    }
+
+    /// 窗口根上一个空视图：让舞台认得自己在哪个窗口，并取当下配色里的晴蓝。
+    fileprivate struct Probe {
+        let stage: Stage
+        let color: Color
+
+        func make() -> RelayAnchorView {
+            let view = RelayAnchorView(role: .stage)
+            stage.host = view
+            return view
+        }
+    }
+}
+
+/// 接力的一头的那个会话：会话 id（开新会话时还没有）与它的任务（请求带着的那张卡）。
+nonisolated struct RelayEnd: Equatable, Sendable {
+    var session: String?
+    var task: UUID?
+}
+
+/// Cue 的头像出现的几处，同时在屏上时取等级高的那处。
+enum CueSpot: Int {
+    /// 入口：Mac 侧栏最上面 Cue 那一行（也是菜单栏面板、输入条的那一行）、iPad 侧栏的 Cue 那一行、手机底栏 Cue 那一格。
+    case entry
+    /// 页头：Mac 与手机 Cue 页的页头——正看着 Cue 时落在它脸上。
+    case header
+}
+
+extension View {
+    /// 会话的状态标：接力的会话那一头。只有此刻在接力的会话挂锚，平时什么都不加。
+    func relaySpot(session: String?) -> some View { modifier(SessionSpot(session: session)) }
+
+    /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话没有状态标在屏上、或正为它开新会话时，接力落在这里。
+    func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
+
+    /// Cue 的头像（或底栏那一格的图标）：接力的 Cue 那一头，环在这里亮起。
+    func relaySpot(cue spot: CueSpot?) -> some View {
+        background { if let spot { RelayAnchor(role: .cue(spot)) } }
+    }
+}
+
+/// 读 `CueWatch` 里在接力的会话（只在变了时才写），不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
+/// 实测每次叫醒主线程多出约 200M 条指令、最重一圈多 20ms；这里只有屏上带状态标的几处各重算这一个小视图。
+private struct SessionSpot: ViewModifier {
+    let session: String?
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        let flying = session.flatMap { workspace.cue.relays(session: $0) ? $0 : nil }
+        content.background {
+            if let flying { RelayAnchor(role: .session(flying)) }
+        }
+    }
+}
+
+/// 任务交给的会话从窗口那一份里取（`cardAgents`，行本来就读它）：会话在接力、或这张卡就是接力的那件任务时挂锚。
+private struct TaskSpot: ViewModifier {
+    let task: UUID
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.cardAgents) private var agents
+
+    func body(content: Content) -> some View {
+        let cue = workspace.cue
+        let session = agents.items[task]?.state.sessionID
+        let flying = cue.relays(task: task) || session.map(cue.relays(session:)) == true
+        content.background {
+            if flying { RelayAnchor(role: .task(task, session: session)) }
+        }
+    }
+}
+
+private struct RelayAnchor {
+    let role: RelayAnchorView.Role
+}
+
+/// 锚：一个不接事件、不画东西的空视图，只为播的那一刻能沿层树量出它在窗口里的位置。
+final class RelayAnchorView: RelayAnchorBase {
+    enum Role: Equatable {
+        case stage
+        case cue(CueSpot)
+        case session(String)
+        case task(UUID, session: String?)
+    }
+
+    var role: Role
+    private static let anchors = NSHashTable<RelayAnchorView>.weakObjects()
+
+    init(role: Role) {
+        self.role = role
+        super.init(frame: .zero)
+        #if os(iOS)
+        isUserInteractionEnabled = false
+        #else
+        wantsLayer = true
+        #endif
+        Self.anchors.add(self)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    #if os(macOS)
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    #endif
+
+    static func all(in window: AnyObject) -> [RelayAnchorView] { anchors.allObjects.filter { $0.window === window } }
+
+    /// 窗口最底下那一层：Mac 是窗口外框的层（工具栏与内容都在它下面），iOS 是窗口的层。
+    #if os(iOS)
+    static func rootLayer(of window: UIWindow) -> CALayer? { window.layer }
+    #else
+    static func rootLayer(of window: NSWindow) -> CALayer? { window.contentView?.superview?.layer }
+    #endif
+
+    /// 在 `root` 里看得见的那块：沿层树往上换算，被裁掉、藏起或透明的祖先让它不算在屏上。
+    func frame(in root: CALayer) -> CGRect? {
+        #if os(iOS)
+        var current = layer
+        #else
+        guard var current = layer else { return nil }
+        #endif
+        var rect = current.bounds
+        while let parent = current.superlayer {
+            guard !current.isHidden, current.opacity > 0.01 else { return nil }
+            rect = current.convert(rect, to: parent)
+            if parent.masksToBounds || parent === root { rect = rect.intersection(parent.bounds) }
+            guard !rect.isEmpty else { return nil }
+            if parent === root { return rect }
+            current = parent
+        }
+        return nil
+    }
+}
+
+#if os(iOS)
+typealias RelayAnchorBase = UIView
+
+extension RelayAnchor: UIViewRepresentable {
+    func makeUIView(context: Context) -> RelayAnchorView { RelayAnchorView(role: role) }
+    func updateUIView(_ view: RelayAnchorView, context: Context) { view.role = role }
+}
+
+extension CueRelayStage.Probe: UIViewRepresentable {
+    func makeUIView(context: Context) -> RelayAnchorView { make() }
+    func updateUIView(_ view: RelayAnchorView, context: Context) { stage.color = color.resolve(in: context.environment).cgColor }
+}
+#else
+typealias RelayAnchorBase = NSView
+
+extension RelayAnchor: NSViewRepresentable {
+    func makeNSView(context: Context) -> RelayAnchorView { RelayAnchorView(role: role) }
+    func updateNSView(_ view: RelayAnchorView, context: Context) { view.role = role }
+}
+
+extension CueRelayStage.Probe: NSViewRepresentable {
+    func makeNSView(context: Context) -> RelayAnchorView { make() }
+    func updateNSView(_ view: RelayAnchorView, context: Context) { stage.color = color.resolve(in: context.environment).cgColor }
+}
+#endif
+
+/// 一次接力的画（样子与时长见 `CueRelayStage`）：在窗口根层最上面铺一层画布，所有动画一次交给 Core Animation，全部播完画布拿掉。
+/// 画布上每一层的模型值都是透明的：动画之前、之后都看不见，只在动画里出现。
+struct RelayFlight {
+    /// 叫醒：会话 → Cue；交给：Cue → 会话。
+    enum Direction { case wake, relay }
+
+    let color: CGColor
+    let reduceMotion: Bool
+
+    /// 一次最多飞几道。
+    static let most = 3
+    /// 相邻两道起飞的间隔。
+    private static let stagger = 0.09
+    /// 起飞那圈环外扩之后多久光离开状态标（叫醒）。
+    private static let liftoff = 0.05
+    /// 头像的环亮起之后多久小环离开头像（交给）：先看清是 Cue 发出的。
+    private static let release = 0.12
+    /// 飞着的那颗点（叫醒）与那个小环（交给）的直径。
+    private static let head: CGFloat = 7
+    private static let ring: CGFloat = 10
+    /// 另一头不在屏上时光飘多远。
+    private static let drift: CGFloat = 24
+    /// 先加速、后长长地减速：落下时已经很慢。
+    private static let glide = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.2, 1)
+    private static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+
+    static func distance(_ a: CGPoint, _ b: CGPoint?) -> CGFloat {
+        guard let b else { return 0 }
+        return hypot(a.x - b.x, a.y - b.y)
+    }
+
+    /// `cue` 是头像在屏上的那块，`ends` 是会话那头在屏上的几处（都可能不在）。
+    func play(_ direction: Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer) {
+        guard !ends.isEmpty || cue != nil else { return }
+        let canvas = CALayer()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock { canvas.removeFromSuperlayer() }
+        canvas.frame = root.bounds
+        canvas.zPosition = 10_000
+        root.addSublayer(canvas)
+        let scene = Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root))
+        if reduceMotion {
+            if let cue { scene.glow(ring: cue) }
+            for end in ends { scene.glow(dot: end) }
+        } else {
+            switch direction {
+            case .wake: wake(scene, from: ends, to: cue)
+            case .relay: relay(scene, from: cue, to: ends)
+            }
+        }
+        CATransaction.commit()
+    }
+
+    private func wake(_ scene: Scene, from sources: [CGPoint], to target: CGRect?) {
+        for (index, source) in sources.enumerated() {
+            let start = Double(index) * Self.stagger
+            scene.depart(at: source, delay: start)
+            if let target {
+                let duration = scene.fly(from: source, to: target.center, head: .dot, delay: start + Self.liftoff)
+                // 光还差最后一点到时环就亮：落点与亮起连成一下
+                scene.land(on: target, delay: start + Self.liftoff + duration * 0.9)
+            } else {
+                scene.drift(from: source, rise: scene.up * Self.drift, head: .dot, delay: start + Self.liftoff)
+            }
+        }
+        if sources.isEmpty, let target { scene.land(on: target, delay: 0) }
+    }
+
+    private func relay(_ scene: Scene, from source: CGRect?, to targets: [CGPoint]) {
+        guard let source else {
+            for (index, target) in targets.enumerated() { scene.depart(at: target, delay: Double(index) * Self.stagger, fills: true) }
+            return
+        }
+        scene.send(from: source)
+        for (index, target) in targets.enumerated() {
+            let start = Self.release + Double(index) * Self.stagger
+            let duration = scene.fly(from: source.center, to: target, head: .ring, delay: start)
+            scene.depart(at: target, delay: start + duration * 0.9, fills: true)
+        }
+        // 会话不在屏上：从头像朝窗口中间那侧的边上飘出一段（从页头往下、从底栏往上）——从脸的中心起飘，还没出头像就淡了
+        if targets.isEmpty {
+            let inward: CGFloat = scene.canvas.bounds.midY > source.midY ? 1 : -1
+            let edge = CGPoint(x: source.midX, y: source.midY + inward * source.height / 2)
+            scene.drift(from: edge, rise: inward * Self.drift * 1.5, head: .ring, delay: Self.release)
+        }
+    }
+
+    /// 屏幕上的"上"在这层坐标里是 y 的哪个方向（iOS 的层 y 朝下；Mac 的层默认 y 朝上）。
+    private static func up(in root: CALayer) -> CGFloat {
+        #if os(iOS)
+        -1
+        #else
+        root.contentsAreFlipped() ? -1 : 1
+        #endif
+    }
+
+    /// 飞的是什么：会话的状态标（实心点）或 Cue 的环（空心小环）。
+    private enum Head { case dot, ring }
+
+    private struct Scene {
+        let canvas: CALayer
+        let color: CGColor
+        let now: CFTimeInterval
+        let up: CGFloat
+
+        /// 会话那头：状态标外一圈细环外扩淡去（叫醒的起飞、交给的落下）；落下时另垫一层淡光（`fills`）。
+        func depart(at point: CGPoint, delay: Double, fills: Bool = false) {
+            let ring = circle(at: point, radius: 6, line: 2)
+            animate(ring, delay: delay, duration: 0.45, timing: RelayFlight.easeOut, [
+                Self.keyframes("transform.scale", [0.8, 2.4]), Self.keyframes("opacity", [1, 0]),
+            ])
+            if fills {
+                animate(circle(at: point, radius: 9, fill: 0.3), delay: delay, duration: 0.6, [
+                    Self.keyframes("opacity", [0, 1, 0], times: [0, 0.25, 1], timing: RelayFlight.easeOut),
+                ])
+            }
+        }
+
+        /// 沿弧飞到 `end`，返回飞了多久。弧向窗口的竖中线那边鼓：从侧栏、屏边起飞时弧在屏内；几乎横着飞时往上鼓。
+        func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double) -> Double {
+            let length = RelayFlight.distance(start, end)
+            let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+            var normal = CGPoint(x: -(end.y - start.y) / max(length, 1), y: (end.x - start.x) / max(length, 1))
+            let outward = abs(normal.x) < 0.2 ? normal.y * up < 0 : normal.x * (canvas.bounds.midX - mid.x) < 0
+            if outward { normal = CGPoint(x: -normal.x, y: -normal.y) }
+            let bend = length * 0.28
+            let path = CGMutablePath()
+            path.move(to: start)
+            path.addQuadCurve(to: end, control: CGPoint(x: mid.x + normal.x * bend, y: mid.y + normal.y * bend))
+            let duration = min(max(0.42 + Double(length) / 1800, 0.42), 0.72)
+            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide)
+            return duration
+        }
+
+        /// 另一头不在屏上：从 `start` 沿 `rise`（层坐标里的竖直位移）飘一小段淡去。
+        func drift(from start: CGPoint, rise: CGFloat, head: Head, delay: Double) {
+            let path = CGMutablePath()
+            path.move(to: start)
+            path.addQuadCurve(to: CGPoint(x: start.x + 6, y: start.y + rise), control: CGPoint(x: start.x, y: start.y + rise * 0.6))
+            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true)
+        }
+
+        /// 一道光加它的尾巴：尾巴是同一条弧上的描边，终点跟着光走、起点晚一点出发、到终点时追上——尾巴越飞越短，落下时被收进去。
+        /// 三层叠出由亮到暗的尾巴：短而亮的芯、长而淡的身子、宽而很淡的光晕（描边上不能铺沿着弧走的渐变）。
+        private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false) {
+            for (width, alpha, lag) in [(CGFloat(8), 0.12, 0.14), (2.5, 0.3, 0.3), (2, 0.9, 0.12)] {
+                let trail = CAShapeLayer()
+                trail.frame = canvas.bounds
+                trail.path = path
+                trail.fillColor = nil
+                trail.strokeColor = color
+                trail.lineWidth = width
+                trail.lineCap = .round
+                trail.opacity = 0
+                canvas.addSublayer(trail)
+                animate(trail, delay: delay, duration: duration, timing: timing, [
+                    Self.keyframes("strokeEnd", [0, 1]),
+                    Self.keyframes("strokeStart", [0, 0, 1], times: [0, NSNumber(value: lag), 1]),
+                    Self.keyframes("opacity", [alpha, alpha, 0], times: [0, fades ? 0.4 : 0.75, 1]),
+                ])
+            }
+            let dot = self.head(head)
+            let move = CAKeyframeAnimation(keyPath: "position")
+            move.path = path
+            move.calculationMode = .paced
+            animate(dot, delay: delay, duration: duration, timing: timing, [
+                move,
+                Self.keyframes("transform.scale", [0.5, 1.15, 1, fades ? 0.6 : 0.4], times: [0, 0.2, 0.85, 1]),
+                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, fades ? 0.5 : 0.88, 1]),
+            ])
+        }
+
+        /// 飞着的那颗：实心点或空心小环，外带一圈同色光晕（形状给定，不让渲染服务每帧从内容里另算）。
+        private func head(_ head: Head) -> CALayer {
+            let layer: CALayer
+            switch head {
+            case .dot:
+                let side = RelayFlight.head
+                layer = CALayer()
+                layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+                layer.cornerRadius = side / 2
+                layer.backgroundColor = color
+                layer.shadowPath = CGPath(ellipseIn: layer.bounds, transform: nil)
+                layer.shadowRadius = side * 0.8
+            case .ring:
+                let side = RelayFlight.ring, line: CGFloat = 2
+                let shape = CAShapeLayer()
+                shape.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+                let path = CGPath(ellipseIn: shape.bounds.insetBy(dx: line / 2, dy: line / 2), transform: nil)
+                shape.path = path
+                shape.fillColor = nil
+                shape.strokeColor = color
+                shape.lineWidth = line
+                shape.shadowPath = path.copy(strokingWithWidth: line, lineCap: .round, lineJoin: .round, miterLimit: 0)
+                shape.shadowRadius = side * 0.5
+                layer = shape
+            }
+            layer.shadowColor = color
+            layer.shadowOpacity = 1
+            layer.shadowOffset = .zero
+            layer.opacity = 0
+            canvas.addSublayer(layer)
+            return layer
+        }
+
+        /// 叫醒落下：头像的环亮起（带一圈光晕），停一下再外扩到 1.6 倍淡去；稍后一圈细的涟漪扩得更远。不盖住它的脸。
+        func land(on target: CGRect, delay: Double) {
+            let (radius, line) = Self.ring(of: target)
+            animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: delay, duration: 0.7, [
+                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, 0.3, 1], timing: RelayFlight.easeOut),
+                Self.keyframes("transform.scale", [1, 1, 1, 1.6], times: [0, 0.12, 0.3, 1], timing: RelayFlight.easeOut),
+            ])
+            animate(circle(at: target.center, radius: radius, line: max(1, line / 2)), delay: delay + 0.12, duration: 0.75, timing: RelayFlight.easeOut, [
+                Self.keyframes("opacity", [0.7, 0]), Self.keyframes("transform.scale", [1, 2.1]),
+            ])
+        }
+
+        /// 交给发出：头像的环亮一下（带光晕），外扩到 1.25 倍淡去；比叫醒落下的那一下短、扩得近——发出是一拍，接住才漾开。
+        func send(from source: CGRect) {
+            let (radius, line) = Self.ring(of: source)
+            animate(circle(at: source.center, radius: radius, line: line, glows: true), delay: 0, duration: 0.6, [
+                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.15, 0.35, 1], timing: RelayFlight.easeOut),
+                Self.keyframes("transform.scale", [1, 1, 1, 1.25], times: [0, 0.15, 0.35, 1], timing: RelayFlight.easeOut),
+            ])
+        }
+
+        /// 减弱动态效果：头像的环原地淡入高亮再淡出。
+        func glow(ring target: CGRect) {
+            let (radius, line) = Self.ring(of: target)
+            animate(circle(at: target.center, radius: radius, line: line, glows: true), delay: 0, duration: 1, [Self.hold()])
+        }
+
+        /// 减弱动态效果：会话那头的状态标垫一层淡光，与头像同时亮、同时暗。
+        func glow(dot point: CGPoint) {
+            animate(circle(at: point, radius: 9, fill: 0.3), delay: 0, duration: 1, [Self.hold()])
+        }
+
+        private static func hold() -> CAAnimation {
+            keyframes("opacity", [0, 1, 1, 0], times: [0, 0.2, 0.55, 1], timing: CAMediaTimingFunction(name: .easeInEaseOut))
+        }
+
+        /// 头像外那圈环的半径与线宽（`CueAvatar`：环宽约是外框的 7%）。
+        private static func ring(of target: CGRect) -> (radius: CGFloat, line: CGFloat) {
+            let side = min(target.width, target.height)
+            let line = max(1.5, side * 0.07)
+            return (side / 2 - line / 2, line)
+        }
+
+        /// 以 `point` 为心的一个圆：给了线宽是描边（`glows` 时描边外带一圈同色的光晕），否则按 `fill` 的透明度填色。
+        private func circle(at point: CGPoint, radius: CGFloat, line: CGFloat? = nil, fill: CGFloat = 0, glows: Bool = false) -> CAShapeLayer {
+            let shape = CAShapeLayer()
+            shape.bounds = CGRect(x: 0, y: 0, width: radius * 2, height: radius * 2)
+            shape.position = point
+            shape.path = CGPath(ellipseIn: shape.bounds, transform: nil)
+            if let line {
+                shape.fillColor = nil
+                shape.strokeColor = color
+                shape.lineWidth = line
+                if glows, let path = shape.path {
+                    // 给出光晕的形状：不让渲染服务每帧从内容里另算一遍
+                    shape.shadowPath = path.copy(strokingWithWidth: line, lineCap: .round, lineJoin: .round, miterLimit: 0)
+                    shape.shadowColor = color
+                    shape.shadowOpacity = 0.9
+                    shape.shadowRadius = line * 1.6
+                    shape.shadowOffset = .zero
+                }
+            } else {
+                shape.fillColor = color.copy(alpha: color.alpha * fill)
+            }
+            shape.opacity = 0
+            canvas.addSublayer(shape)
+            return shape
+        }
+
+        /// 一组动画在 `delay` 之后开始；之前之后都是层的模型值（透明）。不往前填（`fillMode` 留默认）：往前填时晚开始的那几层
+        /// 在开始前就停在第一帧上——落下时才该外扩的环、晚 0.12s 的涟漪会在光还没到时就亮着。
+        private func animate(_ layer: CALayer, delay: Double, duration: Double, timing: CAMediaTimingFunction? = nil, _ animations: [CAAnimation]) {
+            let group = CAAnimationGroup()
+            group.animations = animations
+            group.duration = duration
+            group.beginTime = now + delay
+            group.timingFunction = timing
+            layer.add(group, forKey: nil)
+        }
+
+        private static func keyframes(_ key: String, _ values: [Double], times: [NSNumber]? = nil, timing: CAMediaTimingFunction? = nil) -> CAKeyframeAnimation {
+            let animation = CAKeyframeAnimation(keyPath: key)
+            animation.values = values
+            animation.keyTimes = times
+            if let timing { animation.timingFunctions = Array(repeating: timing, count: values.count - 1) }
+            return animation
+        }
+    }
+}
+
+private extension CGRect {
+    var center: CGPoint { CGPoint(x: midX, y: midY) }
+}

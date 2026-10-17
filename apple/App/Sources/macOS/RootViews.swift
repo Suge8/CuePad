@@ -44,8 +44,8 @@ private struct MainRoot: View {
                 case .card, .speak: break  // 小组件与分享扩展只在 iOS
                 }
             }
-            // Cue 被会话叫醒的那一下画在整个窗口上（含工具栏）
-            .modifier(CueWakeStage(cue: workspace.cue))
+            // Cue 与会话之间接力的那一下画在整个窗口上（含工具栏）
+            .modifier(CueRelayStage(workspace: workspace))
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in
                 NSApp.appearance = switch theme {

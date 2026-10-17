@@ -140,6 +140,36 @@ nonisolated struct CueDigest: Equatable, Sendable {
     private static let recentWindow = 40
 }
 
+/// Cue 交给会话的一批（`CueWatch.relay`，画"交给"的那一下，`CueRelayStage`）：事实就是 Cue 写的投送请求（`DeliveryRequest.origin`），不另存。
+/// 飞的只有把话或活交到会话手里的几种（`flies`）：说话（直接说、马上说、等它做完再说）、答它在等的问题、开新会话。
+/// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
+/// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
+nonisolated struct CueRelay: Equatable, Sendable {
+    /// 这一批里最新一条的时刻：变成新的就又交了一次。
+    let at: Date
+    /// 交给的那几个会话，最新的在前。
+    let ends: [RelayEnd]
+
+    static let flies: Set<DeliveryMode> = [.send, .steer, .followUp, .answer, .start]
+
+    /// 一条交给：写下的时刻（Cue 那台 Mac 的时钟，同一台写的彼此可比）与交给了谁。
+    struct Handed: Equatable, Sendable {
+        let at: Date
+        let end: RelayEnd
+
+        init?(_ request: DeliveryRequest) {
+            guard request.isFromCue, let mode = request.mode.known, CueRelay.flies.contains(mode) else { return nil }
+            let session = request.target.kind == .known(.piSession) ? request.target.ref : nil
+            guard session != nil || request.cardID != nil else { return nil }
+            at = request.createdAt
+            end = RelayEnd(session: session, task: request.cardID)
+        }
+
+        /// 库里还在的几条（请求完成一会儿就清理）。
+        static func read(from store: isolated CueStore) throws -> [Handed] { try store.deliveryRequests().compactMap(Handed.init) }
+    }
+}
+
 nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按写快照这一刻（`moment`）推出的状态定（快照随库与此刻重写）。
     init(digest: CueDigest, at moment: Speech.Moment) {

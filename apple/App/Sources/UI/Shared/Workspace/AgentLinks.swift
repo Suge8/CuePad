@@ -47,6 +47,7 @@ struct AgentDot: View {
     var body: some View {
         if agents.launching.contains(card) {
             Circle().strokeBorder(palette.live, lineWidth: 1.5).frame(width: 8, height: 8)
+                .relaySpot(task: card)
                 .frame(width: 28, height: 28)
                 .accessibilityLabel("正在开会话")
                 .help("正在开会话")
@@ -54,14 +55,14 @@ struct AgentDot: View {
             let shown = workspace.shown(item)
             #if os(iOS)
             Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
-                PiStateDot(shown: shown, size: 8).wakeSource(item.state.sessionID).frame(width: 28, height: 28).contentShape(.rect)
+                PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID).frame(width: 28, height: 28).contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(item.state.title) \(shown.presence)")
             .accessibilityHint("看 Agent 的会话")
             #else
             PiStateDot(shown: shown, size: 7)
-                .wakeSource(item.state.sessionID)
+                .relaySpot(session: item.state.sessionID)
                 .sessionLink(item.state.sessionID)
                 .help("交给了 Agent 会话「\(item.state.title)」：\(shown.presence)，点开看近况")
             #endif

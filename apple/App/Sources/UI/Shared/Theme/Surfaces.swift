@@ -91,7 +91,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 /// 减弱动态效果时空间动画直接到终态（`spatial`）；确要交代"变了"的地方由调用处换身份、用 `crossfade` 整块交叉淡入淡出。
 /// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
 /// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作与话在路上（`PiStateDot`）和进行中的流光，都在 `LoopLayer`（Core Animation），离屏即停。
-/// 超过 300ms 的只有 Cue 被会话叫醒的那一下（`CueWakeStage`），时长与理由在它那里。
+/// 超过 300ms 的只有 Cue 与会话之间接力的那一下（`CueRelayStage`），时长与理由在它那里。
 enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)

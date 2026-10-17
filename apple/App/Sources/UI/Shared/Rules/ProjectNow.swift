@@ -6,7 +6,7 @@ import Foundation
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
     enum Source: Hashable, Sendable {
-        case agent(PiShown)
+        case agent(PiShown, session: String)
         case task
         case intro
     }
@@ -22,7 +22,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     /// Agent 的事才有状态（书架、侧栏的状态标与项目长按菜单的标题读它）。
     var shown: PiShown? {
-        if case .agent(let shown) = source { shown } else { nil }
+        if case .agent(let shown, _) = source { shown } else { nil }
     }
 
     /// 要你动手（等你确认、出错）：只有这时状态标带色。
@@ -37,7 +37,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
             .compactMap { pair in tier(pair.shown).map { (tier: $0, item: pair.item, shown: pair.shown) } }
             .min { $0.tier < $1.tier }
         if let agent {
-            return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown))
+            return ProjectNow(source: .agent(agent.shown, session: agent.item.state.sessionID), text: sentence(agent.item, agent.shown))
         }
         return pick(task: task, intro: intro)
     }

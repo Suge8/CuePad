@@ -75,6 +75,7 @@ struct TaskCheckButton: View {
 
     private var ring: some View {
         TaskRingView(status: task.status, ring: TaskRing(subtasks), done: check.done(task), size: size)
+            .relaySpot(task: task.id)
             .frame(width: target.width, height: target.height)
             .contentShape(.rect)
     }
