@@ -77,9 +77,8 @@ struct ProjectNowSeenTests {
         await executor.stop()
         func now(_ tasks: [ProjectNow.InProgress] = []) async throws -> String? {
             let current = try await store.piSessionPage(.current).items
-            return ProjectNow.byProject(
-                [project.id], sessions: current, tasks: [project.id: tasks], intros: [project.id: "三家报价"],
-                shown: Workspace(services: app.services).shown)[project.id]?.text
+            let projects = try await store.projects()
+            return ProjectNow.byProject(projects, sessions: current, tasks: [project.id: tasks], shown: Workspace(services: app.services).shown)[project.id]?.text
         }
         func state(_ id: String) async throws -> PiSessionState {
             try #require(try await store.piSessionPage(PiSessionQuery(limit: 10)).items.first { $0.state.sessionID == id }?.state)

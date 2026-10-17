@@ -3,13 +3,9 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// 图片字节的格式处理：读取原图文件，按目标需要转 PNG 或给出 MIME 类型。
+/// 图片字节的格式处理：按目标需要转 PNG 或给出 MIME 类型。
 nonisolated enum ImageFiles {
     private static let pngSignature = Data([0x89, 0x50, 0x4E, 0x47])
-
-    static func original(at url: URL) throws -> Data {
-        try Data(contentsOf: url, options: .mappedIfSafe)
-    }
 
     static func mimeType(of data: Data) -> String? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -32,10 +28,9 @@ nonisolated enum ImageFiles {
 }
 
 extension AttachmentFiles {
-    /// 本机上的原图字节；文件不在本机时抛 `SendError.imageUnavailable`。
+    /// 本机上的原图字节（`original(hash:)`）；不在本机时抛给人看的 `SendError.imageUnavailable`。
     func original(_ hash: String) throws -> Data {
-        guard let url = fileURL(for: hash), let data = try? ImageFiles.original(at: url) else { throw SendError.imageUnavailable(hash) }
-        return data
+        do { return try original(hash: hash) } catch { throw SendError.imageUnavailable(hash) }
     }
 
     func png(_ hash: String) throws -> Data {

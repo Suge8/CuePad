@@ -2,7 +2,7 @@ import Foundation
 
 /// Pi 历史（已结束的会话）按结束时间分段：今天 / 昨天 / 本周 / 本月 / 更早。手机 Agent 页与 Mac ⌘K 的会话范围共用。
 /// 查询按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
-nonisolated enum PiHistorySection: Int, CaseIterable, Sendable {
+nonisolated enum PiHistorySection: Sendable {
     case today, yesterday, thisWeek, thisMonth, earlier
 
     var title: String {

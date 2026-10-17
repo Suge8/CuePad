@@ -70,8 +70,8 @@ final class AppServices {
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
-    /// 小组件、分享扩展打开 App 的链接，界面处理后调用 `consumeDeepLink()`。
-    private(set) var pendingDeepLink: DeepLink?
+    /// 小组件、分享扩展的链接与点开的 Cue 通知要打开的页，界面处理后调用 `consumeDeepLink()`。
+    var pendingDeepLink: DeepLink?
 
     /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
     @ObservationIgnored let tasks = Followers()
@@ -105,8 +105,8 @@ final class AppServices {
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
-    /// 主窗口显隐；全局快捷键经它。
-    @ObservationIgnored var windowShell: WindowShell?
+    /// 主窗口（显隐规则在它身上）；全局快捷键经它。测试没有窗口。
+    @ObservationIgnored var windowShell: MainShellWindow?
     /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
     @ObservationIgnored weak var alerts: AlertCenter?
 
@@ -184,7 +184,7 @@ final class AppServices {
     /// 写库后马上传这一条，别的设备马上看到；Cue 住的那台 Mac 的管理器读到就按新设置值班。
     func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
         try await store.updateCueProfile(edit)
-        await sync?.upload(CueProfile.recordID)
+        await upload(CueProfile.recordID)
     }
 
     /// 让 Cue 住在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
@@ -194,7 +194,7 @@ final class AppServices {
         if host == hostID { try await macAgents.record() }
         #endif
         try await store.enableCue(on: host)
-        await sync?.upload(CueProfile.recordID)
+        await upload(CueProfile.recordID)
     }
 
     /// 停用 Cue（住在哪台留着）。
@@ -316,9 +316,11 @@ final class AppServices {
         }
     }
 
+    // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
+    // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let store = try Self.openLibrary(at: location, timing: mac.timing)
+        let store = try CueStore(url: location.databaseURL, timing: mac.timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -352,7 +354,7 @@ final class AppServices {
     init(
         location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general, timing: Timing = .system
     ) throws {
-        let store = try Self.openLibrary(at: location, timing: timing)
+        let store = try CueStore(url: location.databaseURL, timing: timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -365,12 +367,6 @@ final class AppServices {
         self.pasteboard = pasteboard
     }
     #endif
-
-    /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
-    /// （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
-    static func openLibrary(at location: LibraryLocation, timing: Timing = .system) throws -> CueStore {
-        try CueStore(url: location.databaseURL, timing: timing)
-    }
 
     /// 同步没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
     func syncFailedToStart(_ error: any Error) {
@@ -398,10 +394,6 @@ final class AppServices {
 
     func setConflicts(_ conflicts: [CardConflict]) {
         self.conflicts = conflicts
-    }
-
-    func setDeepLink(_ link: DeepLink?) {
-        pendingDeepLink = link
     }
 
     func reportIssue(_ issue: StartupIssue) {
