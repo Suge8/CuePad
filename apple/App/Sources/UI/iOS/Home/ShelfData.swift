@@ -21,9 +21,10 @@ nonisolated struct ShelfData: Sendable, Equatable {
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
-        let active = try TaskBoard.active(limit: activeLimit, from: store)
+        let started = try store.startedTasks()
+        let active = try TaskBoard.active(limit: activeLimit, started: started, from: store)
         return ShelfData(
-            leading: try TaskBoard.leading(from: store),
+            leading: TaskBoard.leading(started),
             active: active.tasks, activeMore: active.more, trashCount: try store.trashCount())
     }
 }

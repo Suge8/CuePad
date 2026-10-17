@@ -67,6 +67,13 @@ import Testing
     #expect(try await card(plan.id).status == .inProgress)
     #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 2, todo: 0, done: 0))
     #expect(try await store.startedTasks(topLevelOnly: true).map(\.id) == [plan.id, top.id])
+
+    // 开始只记在叶子上：开始了的叶子加了第一个步骤，开始移到这一步，上级照样进行中（从步骤推出）
+    let solo = try await store.createTask("写发布说明", in: project.id)
+    try await store.setStatus(solo.id, .inProgress)
+    let first = try await store.createTask("列改动", under: solo.id)
+    #expect(try await card(first.id).status == .inProgress)
+    #expect(try await card(solo.id).status == .inProgress)
   }
 
   @Test func 移动_不能成环或任务超两级_换项目带着子树_取消要做与进回收站时下级上提() async throws {

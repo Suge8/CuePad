@@ -88,14 +88,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     }
 
     /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress`、任务看板的进行中同一批，步骤跟着上级），最近开始的在前，
-    /// 同刻按原来的先后；取前 `limit` 条，其余数个数。书架不看会话，不读会话。
-    static func active(limit: Int, from store: isolated CueStore) throws -> Active {
-        let started = try store.startedTasks()
+    /// 同刻按原来的先后；取前 `limit` 条，其余数个数。`started` 是 `CueStore.startedTasks()`（书架同一份也给 `leading`）。书架不看会话，不读会话。
+    static func active(limit: Int, started: [Card], from store: isolated CueStore) throws -> Active {
         let top = try store.startedTasks(topLevelOnly: true)
         let shown = top.prefix(limit)
-        let progress = shown.isEmpty ? [:] : try store.subtaskProgress()
-        // 最近开始的在前：每个上级取第一条
         let ids = Set(shown.map(\.id))
+        let progress = try store.subtaskProgress(of: ids)
+        // 最近开始的在前：每个上级取第一条
         var steps: [UUID: Card] = [:]
         for step in started { if let parent = step.parentID, ids.contains(parent), steps[parent] == nil { steps[parent] = step } }
         return Active(
@@ -103,10 +102,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             more: max(0, top.count - limit))
     }
 
-    /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。
-    static func leading(from store: isolated CueStore) throws -> [UUID: [ProjectNow.InProgress]] {
+    /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：`started` 是 `CueStore.startedTasks()`，按项目归拢。
+    static func leading(_ started: [Card]) -> [UUID: [ProjectNow.InProgress]] {
         var result: [UUID: [ProjectNow.InProgress]] = [:]
-        for task in try store.startedTasks() {
+        for task in started {
             guard let project = task.projectID else { continue }
             result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }

@@ -149,7 +149,7 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { try TaskBoard.leading(from: $0) }
+        .observing(services.store, into: $leading, onError: workspace.fail) { TaskBoard.leading(try $0.startedTasks()) }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {

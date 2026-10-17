@@ -63,11 +63,11 @@ struct SearchPalette: View {
                 for owner in Set(found.cards.map(\.projectID)) {
                     lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
                 }
-                var parents: [UUID: String] = [:], subtasks: [UUID: TaskProgress] = [:]
+                var parents: [UUID: String] = [:]
                 for task in found.cards where task.isTask {
-                    subtasks[task.id] = try store.subtaskProgress(of: task.id)[task.id]
                     if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
                 }
+                let subtasks = try store.subtaskProgress(of: found.cards.filter(\.isTask).map(\.id))
                 return PaletteData(
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
                     lastSends: lastSends, targets: try store.sendTargets(), parents: parents, subtasks: subtasks)

@@ -5,17 +5,13 @@ import SwiftUI
 nonisolated struct TaskDetail: Sendable, Equatable {
     /// 步骤与挂在下面的灵感（资料），同级手动顺序。
     var children: [Card]
+    /// 步骤完成了几个（`CueStore.subtaskProgress`）；没有步骤为 nil。完成圈与"步骤 n/m"按它画。
+    var progress: TaskProgress?
 
     static func read(_ id: UUID, from store: isolated CueStore) throws -> TaskDetail {
-        TaskDetail(children: try store.children(of: id))
+        TaskDetail(children: try store.children(of: id), progress: try store.subtaskProgress(of: [id])[id])
     }
 
     var subtasks: [Card] { children.filter(\.isTask) }
     var references: [Card] { children.filter { !$0.isTask } }
-
-    /// 步骤完成了几个；没有步骤为 nil。完成圈与"步骤 n/m"按它画。
-    var progress: TaskProgress? {
-        let subtasks = subtasks
-        return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter { $0.status == .done }.count, total: subtasks.count)
-    }
 }
