@@ -184,7 +184,7 @@ private final class MenuDelegate: NSObject, UITextViewDelegate {
     func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
         guard let view = textView as? CueTextView, let stored = view.selectedStoredText, !view.selectionActions.isEmpty else { return nil }
         let custom = view.selectionActions.map { action in
-            UIAction(title: action.title, image: UIImage(systemName: action.systemImage)) { _ in action.perform(stored) }
+            UIAction(title: action.title, image: action.image) { _ in action.perform(stored) }
         }
         return UIMenu(children: custom + suggestedActions)
     }

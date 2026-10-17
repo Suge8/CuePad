@@ -69,7 +69,7 @@ private struct NoteRow: View {
             .accessibilityLabel("批注：\(note.note)，原文：\(ReplyNote.excerpt(note.quote))")
             .accessibilityHint("回到原文")
             Button(action: remove) {
-                Image(systemName: "xmark").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                     .frame(width: Self.height, height: Self.height).contentShape(.rect)
             }
             .buttonStyle(PressStyle())

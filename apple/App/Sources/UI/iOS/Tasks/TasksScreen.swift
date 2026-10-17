@@ -103,7 +103,7 @@ struct TasksScreen: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text("最近完成 \(count)")
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        Image(.forward).font(.caption.weight(.semibold))
                             .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
                         Spacer()
                     }
@@ -144,7 +144,7 @@ struct NewTaskLine: View {
     var body: some View {
         HStack(spacing: 2) {
             // 入口不用系统占位灰：那样看起来像不能点
-            Image(systemName: "plus").foregroundStyle(palette.ink2).frame(width: 44).accessibilityHidden(true)
+            Image(.add).foregroundStyle(palette.ink2).frame(width: 44).accessibilityHidden(true)
             TextField(text: $text, prompt: Text("添加任务").foregroundStyle(palette.ink2)) { Text("添加任务") }
                 .accessibilityLabel("添加任务")
                 .frame(minHeight: 44)

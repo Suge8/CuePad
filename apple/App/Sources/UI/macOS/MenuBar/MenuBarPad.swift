@@ -73,7 +73,7 @@ struct MenuBarPad: View {
     private var cueRow: some View {
         let empty = capture.draft.isEmpty(accepting: .images) || !workspace.cue.canHear
         return CueStatusRow {
-            Button("交给 \(workspace.cue.name)", systemImage: "paperplane", action: handToCue)
+            Button("交给 \(workspace.cue.name)", icon: .handOff, action: handToCue)
                 .font(Typography.meta.weight(.semibold))
                 .buttonStyle(ControlButtonStyle(kind: empty ? .secondary : .primary, compact: true))
                 .disabled(empty)

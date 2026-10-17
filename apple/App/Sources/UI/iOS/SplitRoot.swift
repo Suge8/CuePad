@@ -80,7 +80,7 @@ private struct AgentPanelButton: View {
     var body: some View {
         let waiting = workspace.cue.waiting
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
-            Label(workspace.cue.name, systemImage: "bubble.left.and.text.bubble.right")
+            Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
                 .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
         }
         .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
@@ -114,10 +114,10 @@ private struct SplitSidebar: View {
         List {
             Section { CueSidebarItem() }
             Section {
-                SidebarRow(route: .shelf, title: "灵感", symbol: "lightbulb")
-                SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
-                SidebarRow(route: .agent, title: "会话", symbol: "waveform.path.ecg")
-                SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
+                SidebarRow(route: .shelf, title: "灵感", icon: .idea)
+                SidebarRow(route: .tasks, title: "任务", icon: .task)
+                SidebarRow(route: .agent, title: "会话", icon: .session)
+                SidebarRow(route: .search, title: "搜索", icon: .search)
             }
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
@@ -132,14 +132,14 @@ private struct SplitSidebar: View {
                 if !recent.isEmpty || unfiled > 0 {
                     Section("最近") {
                         ForEach(recent) { row($0, catalog, now: now[$0.id]) }
-                        if unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, symbol: "tray", badge: unfiled) }
+                        if unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, icon: .unfiled, badge: unfiled) }
                     }
                 }
             }
             Section {
-                SidebarRow(route: .archive, title: "归档", symbol: "archivebox")
-                SidebarRow(route: .trash, title: "回收站", symbol: "trash")
-                SidebarRow(route: .settings, title: "设置", symbol: "gearshape")
+                SidebarRow(route: .archive, title: "归档", icon: .archive)
+                SidebarRow(route: .trash, title: "回收站", icon: .trash)
+                SidebarRow(route: .settings, title: "设置", icon: .settings)
             }
         }
         // 侧栏用共用的侧栏层色（深色是更深一档的暖黑），不用系统偏冷的灰
@@ -147,7 +147,7 @@ private struct SplitSidebar: View {
         .background(palette.sidebar)
         .navigationTitle("CuePad")
         .toolbar {
-            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+            Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
         }
         .observing(services.store, into: $leading, onError: workspace.fail) { TaskBoard.leading(try $0.startedTasks()) }
     }
@@ -181,7 +181,7 @@ private struct CueSidebarItem: View {
 private struct SidebarRow: View {
     let route: Route
     let title: String
-    var symbol: String?
+    var icon: Icon?
     var project: Project?
     var badge = 0
     /// 项目行的"此刻"（项目行总留着这一行的高度）。
@@ -190,7 +190,7 @@ private struct SidebarRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 图标随字号放大（侧栏列表里的符号默认不跟随辅助字号）。
-    @ScaledMetric(relativeTo: .body) private var icon: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 16
 
     var body: some View {
         let selected = navigation.splitRoot == route
@@ -210,7 +210,7 @@ private struct SidebarRow: View {
                     if project != nil { ProjectNowLine(now: now, font: .footnote) }
                 }
             } icon: {
-                if let symbol { Image(systemName: symbol).font(.system(size: icon)) } else { ProjectGlyph(project: project, size: icon) }
+                if let icon { IconImage(icon, accent: selected ? .lit : .none).font(.system(size: glyph)) } else { ProjectGlyph(project: project, size: glyph) }
             }
             .foregroundStyle(palette.ink)
             .frame(minHeight: 44)

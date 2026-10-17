@@ -43,7 +43,7 @@ struct CueMemoryPage: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.add).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 TextField("记一条", text: $text).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)
@@ -75,12 +75,12 @@ struct CueMemoryPage: View {
                     .font(Typography.meta).foregroundStyle(palette.ink3)
             }
             Spacer(minLength: 8)
-            Button(line.pinned ? "不再一直记着" : "一直记着", systemImage: line.pinned ? "pin.fill" : "pin") {
+            Button(line.pinned ? "不再一直记着" : "一直记着", icon: line.pinned ? .pinned : .pin) {
                 workspace.pinCueLine(line.id, !line.pinned)
             }
             .foregroundStyle(line.pinned ? palette.ink : palette.ink3)
             .modifier(RowIcon())
-            Button("忘掉", systemImage: "xmark") { workspace.forgetCueLine(line.id) }
+            Button("忘掉", icon: .remove) { workspace.forgetCueLine(line.id) }
                 .foregroundStyle(palette.ink3)
                 .modifier(RowIcon())
         }
@@ -127,7 +127,7 @@ struct CueMemoryPage: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                 }
         }
         .presentationDetents([.large])

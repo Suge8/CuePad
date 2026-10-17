@@ -31,7 +31,7 @@ struct TasksPanel: View {
                 Text("任务").font(Typography.sectionTitle)
                 if let board, board.counts.open > 0 { Text("\(board.counts.open)").font(Typography.sectionCount).foregroundStyle(palette.ink2) }
                 Spacer()
-                Button("关闭", systemImage: "xmark") { close() }
+                Button("关闭", icon: .close) { close() }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
             }
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 6)
@@ -92,7 +92,7 @@ struct TasksPanel: View {
                 Button {
                     withAnimation(Motion.quick) { showsCompleted.toggle() }
                 } label: {
-                    Label("最近完成 \(board.counts.done)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
+                    Label("最近完成 \(board.counts.done)", icon: showsCompleted ? .expand : .forward)
                 }
                 .buttonStyle(.plain)
                 .accessibilityValue(showsCompleted ? "已展开" : "已折叠")

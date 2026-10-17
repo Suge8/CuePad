@@ -1,7 +1,7 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三层上箭头（`climb`）、等你确认的外扩波纹（`ripple`）、
+/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三块实心 V（`climb`）、等你确认的外扩波纹（`ripple`）、
 /// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
 /// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动、Cue 在做事时头像里的它上下跳（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，

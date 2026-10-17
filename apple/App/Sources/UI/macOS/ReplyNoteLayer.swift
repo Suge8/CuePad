@@ -49,7 +49,7 @@ private struct ReplyNoteLayer: ViewModifier {
         switch float {
         case .offer(let note, let at):
             Button { begin(note, at: at) } label: {
-                Label("批注", systemImage: "text.bubble")
+                Label("批注", icon: .said)
                     .font(Typography.caption.weight(.semibold))
                     .padding(.horizontal, 12).frame(height: 28)
                     .contentShape(.capsule)
@@ -153,7 +153,7 @@ private struct NoteEditor: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "text.bubble").font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            Image(.said).font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField("写批注，↩ 挂到下一句", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typography.secondary).foregroundStyle(palette.ink)

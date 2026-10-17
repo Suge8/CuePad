@@ -90,7 +90,7 @@ struct TaskLine: View {
     private func titled(done: Bool) -> Text {
         let title = Text(task.title.textGlyphs).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
         guard let project else { return title }
-        let glyph = Text(Image(systemName: ProjectGlyph.symbol(project.icon))).font(Self.projectGlyph)
+        let glyph = Text(Image(ProjectGlyph.icon(project.icon))).font(Self.projectGlyph)
             .foregroundStyle(done ? palette.ink3 : palette.project(project.color))
         return Text("\(title)  \(glyph)")
     }
@@ -205,7 +205,7 @@ struct TaskNextMark: View {
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID)
                 if shown.needsYou || bright { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
-                Image(systemName: "play.fill").font(Self.glyph)
+                Image(.start).font(Self.glyph)
                 #if os(macOS)
                 Text("开始").fontWeight(.semibold)
                 #endif

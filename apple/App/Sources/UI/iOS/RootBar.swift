@@ -38,7 +38,7 @@ struct SettingsButton: View {
     var body: some View {
         let status = services.syncStatus
         Button { navigation.push(.settings) } label: {
-            Label("设置", systemImage: "gearshape")
+            Label("设置", icon: .settings)
                 .overlay(alignment: .topTrailing) {
                     if !status.reachesMac {
                         Circle().fill(palette.color(SyncSummary(status).tone)).frame(width: 7, height: 7).offset(x: 3, y: -1)
@@ -60,10 +60,10 @@ struct SearchCapsule: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
+            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField(prompt, text: $query).submitLabel(.search).focused(focus).accessibilityLabel("搜索")
             if !query.isEmpty || focus.wrappedValue {
-                Button("清除", systemImage: "xmark.circle.fill") {
+                Button("清除", icon: .clear) {
                     query = ""
                     focus.wrappedValue = false
                 }

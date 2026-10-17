@@ -262,7 +262,7 @@ struct PanelHeader<Trailing: View>: View {
             .overlay(alignment: .trailing) {
                 HStack(spacing: 10) {
                     trailing
-                    Button("关闭", systemImage: "xmark") { close() }
+                    Button("关闭", icon: .close) { close() }
                         .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
                         .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
                         .buttonStyle(PressStyle())
@@ -286,7 +286,7 @@ struct PanelSearchField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
+            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField(prompt, text: $text).textFieldStyle(.plain).focused($focused)
         }
         .font(Typography.body)

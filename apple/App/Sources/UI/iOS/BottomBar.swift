@@ -60,8 +60,8 @@ struct BottomBar: View {
             .overlay {
                 let cue = workspace.cue
                 HStack(spacing: 0) {
-                    tab(.cue, title: cue.name, symbol: "bubble.left.and.text.bubble.right", waiting: cue.waiting)
-                    tab(.projects, title: "灵感", symbol: "lightbulb")
+                    tab(.cue, title: cue.name, icon: .cue, waiting: cue.waiting) { CueMark(selected: $0) }
+                    tab(.projects, title: "灵感", icon: .idea) { IconImage(.idea, accent: $0 ? .lit : .none) }
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isTabBar)
@@ -72,7 +72,7 @@ struct BottomBar: View {
     private var search: some View {
         let selected = navigation.tab == .search
         return Button { select(.search) } label: {
-            Image(systemName: "magnifyingglass").font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
+            IconImage(.search, accent: selected ? .lit : .none).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                 .foregroundStyle(selected ? palette.signature : palette.ink)
                 .frame(width: Self.height, height: Self.height)
                 .background { if selected { Circle().fill(palette.selection).padding(Self.inset).transition(.opacity) } }
@@ -84,14 +84,17 @@ struct BottomBar: View {
         .animation(Motion.quick, value: selected)
         .accessibilityLabel("搜索")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityShowsLargeContentViewer { Label("搜索", systemImage: "magnifyingglass") }
+        .accessibilityShowsLargeContentViewer { Label("搜索", icon: .search) }
     }
 
-    private func tab(_ tab: Navigation.Tab, title: String, symbol: String, waiting: Int = 0) -> some View {
+    /// `glyph` 画这一格的图标（参数是选中没有）；`icon` 是放大查看时的那个。
+    private func tab(
+        _ tab: Navigation.Tab, title: String, icon: Icon, waiting: Int = 0, @ViewBuilder glyph: (Bool) -> some View
+    ) -> some View {
         let selected = navigation.tab == tab
         return Button { select(tab) } label: {
             VStack(spacing: 2) {
-                Image(systemName: symbol).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
+                glyph(selected).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                     .frame(height: Self.icon + 4)
                     .relaySpot(cue: tab == .cue ? .entry : nil)
                     .overlay(alignment: .topTrailing) { WaitingBadge(count: waiting).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) }
@@ -111,7 +114,7 @@ struct BottomBar: View {
         }
         .buttonStyle(TabPress(tab: tab, pressed: $pressed))
         .accessibilityElement(children: .ignore)
-        .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
+        .accessibilityShowsLargeContentViewer { Label(title, icon: icon) }
         .accessibilityLabel(title)
         .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)

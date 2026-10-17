@@ -21,15 +21,15 @@ enum ActionTone: Sendable {
 /// 一行轻扫露出的一个动作（也画成长按菜单里的同一项与读屏动作）：标题、图标、颜色语义与要做的事。
 struct RowAction {
     let title: String
-    let symbol: String
+    let icon: Icon
     let tone: ActionTone
     /// 此刻做不了（如 Mac 够不着时改名）：照样列出，置灰；不直接消失，用户才知道有这件事。
     let enabled: Bool
     let run: () -> Void
 
-    init(_ title: String, symbol: String, tone: ActionTone = .neutral, enabled: Bool = true, run: @escaping () -> Void) {
+    init(_ title: String, icon: Icon, tone: ActionTone = .neutral, enabled: Bool = true, run: @escaping () -> Void) {
         self.title = title
-        self.symbol = symbol
+        self.icon = icon
         self.tone = tone
         self.enabled = enabled
         self.run = run
@@ -52,7 +52,7 @@ struct RowActionButtons: View {
     var body: some View {
         ForEach(actions.keyed, id: \.key) { item in
             let action = item.action
-            Button(action.title, systemImage: action.symbol, role: action.tone == .destructive ? .destructive : nil, action: action.run)
+            Button(action.title, icon: action.icon, role: action.tone == .destructive ? .destructive : nil, action: action.run)
                 .tint(tinted ? action.tone.fill(palette) : nil)
                 .disabled(!action.enabled)
         }
@@ -159,7 +159,7 @@ private struct SwipeRow: ViewModifier {
         let progress = min(width / Self.slot, 1)
         return Button { run(action) } label: {
             VStack(spacing: 5) {
-                Image(systemName: action.symbol)
+                Image(action.icon)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(palette.onFill)
                     .frame(width: stretched ? max(width - 16, Self.pill.width) : Self.pill.width, height: Self.pill.height)

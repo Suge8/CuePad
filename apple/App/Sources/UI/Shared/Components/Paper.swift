@@ -78,13 +78,13 @@ struct CardMeta: View {
             Text(DateLabel.short(card.modifiedAt))
             // 第一个链接的域名：长段文字里一眼认出是哪张
             if let host = text.linkHost {
-                Label(host, systemImage: "link").labelStyle(.titleAndIcon).lineLimit(1).truncationMode(.middle).layoutPriority(-1)
+                Label(host, icon: .link).labelStyle(.titleAndIcon).lineLimit(1).truncationMode(.middle).layoutPriority(-1)
             }
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
-            if card.isTask { Image(systemName: "checklist").help("任务").accessibilityLabel("任务") }
-            if floated { Image(systemName: "arrow.up").help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
-            if card.isPinned { Image(systemName: "books.vertical.fill").help("资料").accessibilityLabel("资料") }
+            if card.isTask { Image(.task).help("任务").accessibilityLabel("任务") }
+            if floated { Image(.floated).help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
+            if card.isPinned { Image(.isResource).help("资料").accessibilityLabel("资料") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)
@@ -96,7 +96,7 @@ struct SentMark: View {
     let target: String
 
     var body: some View {
-        Label(target, systemImage: "paperplane").labelStyle(.titleAndIcon).lineLimit(1)
+        Label(target, icon: .handOff).labelStyle(.titleAndIcon).lineLimit(1)
             // 纸飞机是装饰：整体读作一句"已发给 …"；同项目时的"已发过"已经是完整文案。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(target == SendCopy.sameProject ? target : "已发给 \(target)")

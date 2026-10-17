@@ -78,8 +78,8 @@ struct HandOffInput: View {
                 }
             },
             send: {
-                Button(action: send) { SubmitGlyph(.send, enabled: canSend) }
-                    .buttonStyle(.plain).disabled(!canSend)
+                Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
+                    .buttonStyle(PressStyle(.button)).disabled(!canSend)
                     .accessibilityLabel(chosen.map { "交给 \($0.state.title)" } ?? "开新会话交给它")
             })
         .onAppear { focused = true }
@@ -107,7 +107,7 @@ struct HandOffInput: View {
         HStack(spacing: 8) {
             // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
-                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .symbol("plus"), choose: newSession)]),
+                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
                 ChoiceMenu.Section(choices: sessions.map { item in
                     ChoiceMenu.Choice(title: title(item).visible, checked: item.state.id == chosen?.state.id) { choice = item.state.id }
                 }),

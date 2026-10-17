@@ -29,9 +29,9 @@ struct PiQueueStack: View {
             if folded, !unfolded {
                 Button { unfolded = true } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "clock").accessibilityHidden(true)
+                        Image(.queued).accessibilityHidden(true)
                         Text("\(requests.count) 句排队中")
-                        Image(systemName: "chevron.right").font(Typography.caption2.weight(.semibold)).accessibilityHidden(true)
+                        Image(.forward).font(Typography.caption2.weight(.semibold)).accessibilityHidden(true)
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 6)
@@ -62,7 +62,7 @@ struct PiQueueStack: View {
         let note = PiChat.queueNote(of: request, at: services.speech)
         return HStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "clock").font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.queued).font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(PiChat.shownText(of: request))
                         .font(Typography.secondary).foregroundStyle(palette.ink2)
@@ -79,7 +79,7 @@ struct PiQueueStack: View {
             if request.isWithdrawable {
                 if steers {
                     Button { promote(request) } label: {
-                        Label(DeliveryMode.steer.label, systemImage: "bolt")
+                        Label(DeliveryMode.steer.label, icon: .steer)
                             .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink)
                             .padding(.horizontal, 10).frame(height: 26)
                             .background(palette.fill, in: .capsule)
@@ -90,7 +90,7 @@ struct PiQueueStack: View {
                     .help(DeliveryMode.steer.explanation ?? "")
                 }
                 Button { workspace.takeBack(request, into: box) } label: {
-                    Image(systemName: "arrow.uturn.backward").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                    Image(.restore).font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                         .frame(width: Self.target, height: Self.target).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())

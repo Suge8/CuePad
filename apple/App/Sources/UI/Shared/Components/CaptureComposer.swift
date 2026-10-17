@@ -69,8 +69,8 @@ struct CaptureComposer: View {
     }
 
     private var saveButton: some View {
-        Button(action: save) { SubmitGlyph(.save, enabled: !saving) }
-            .buttonStyle(.plain)
+        Button(action: save) { SendGlyph(.save(enabled: !saving)) }
+            .buttonStyle(PressStyle(.button))
             .disabled(saving)
             .accessibilityLabel("记下")
             .help("记下（⌘↩）")
@@ -104,7 +104,7 @@ struct DestinationChip<Icon: View>: View {
             if let lead { Text(lead).foregroundStyle(palette.ink3) }
             icon
             title.foregroundStyle(palette.ink).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(ChipMetrics.chevron).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            Image(.choose).font(ChipMetrics.chevron).foregroundStyle(palette.ink3).accessibilityHidden(true)
         }
         .font(ChipMetrics.font)
         .padding(.horizontal, ChipMetrics.inset).frame(height: ChipMetrics.height)

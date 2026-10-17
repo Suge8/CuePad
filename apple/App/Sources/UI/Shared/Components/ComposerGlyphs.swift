@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 输入框里的圆钮（看得见的 36，点得到的 44）：＋、提交钮、停止钮同一个。
+/// 输入框里的圆钮（看得见的 36，点得到的 44）：＋ 与主按钮（`SendGlyph`）同一个。
 struct CircleGlyph<Content: View>: View {
     let fill: Color
     @ViewBuilder let content: () -> Content
@@ -14,44 +14,74 @@ struct CircleGlyph<Content: View>: View {
     }
 }
 
-/// 输入框右下角的提交钮：存下（记成灵感）是打勾，发出（发给 Agent、回复、开新会话）是向上箭头——
-/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡。
-struct SubmitGlyph: View {
-    enum Action {
-        case save, send
-        var symbol: String { self == .save ? "checkmark" : "arrow.up" }
+/// 输入框右下角的主按钮，全 App 的输入框只此一颗（"对 Cue 说"、会话回复框、随手记、新会话、发给 Agent）。墨块的样子：钮是一块实心圆，
+/// 字形是刻出来的反色——发送是燕尾箭镞（点睛层）加一截箭杆，记下是勾，停止是一块圆角方墨。
+/// - 不可发送：淡底、淡墨；可发送（主动作）：靛青实心，变成可发送的那一下箭杆、箭镞依次往上一跳。
+/// - 发送中（话在路上，与会话状态标同一个）：淡底上三块靛青的 V 从下往上依次亮（`LoopLayer.climb`）；发出那一刻钮当帧换成发送中，
+///   同一刻箭镞处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
+/// - 停止（Agent 跑一轮时代替发送）：墨色实心方块；停止请求发出、这一轮还没歇下时换成转圈，不能再点。
+/// 按下照 `PressFeedback`（由外面的按钮给）。减弱动态效果：换状态只淡入淡出，不跳、不走，发送中是静止的"话在路上"。
+struct SendGlyph: View {
+    enum Phase: Equatable {
+        case idle, ready, sending, stop, stopping
+        /// 记下（随手记、Cue 没启用时）：勾，能按时靛青。
+        case save(enabled: Bool)
     }
 
-    let action: Action
-    let enabled: Bool
+    let phase: Phase
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 变成可发送的次数：每变一次跳一下（只在进入时，离开不跳）。
+    @State private var hops = 0
 
-    init(_ action: Action, enabled: Bool) {
-        self.action = action
-        self.enabled = enabled
-    }
+    init(_ phase: Phase) { self.phase = phase }
 
     var body: some View {
-        CircleGlyph(fill: enabled ? palette.signatureFill : palette.fill) {
-            Image(systemName: action.symbol).font(.body.weight(.semibold)).foregroundStyle(enabled ? palette.onFill : palette.ink3)
-        }
-        .animation(Motion.quick, value: enabled)
-    }
-}
-
-/// 输入框右下角的停止钮（Agent 跑一轮时代替提交钮）：墨色实心方块；停止请求已发出、这一轮还没歇下时换成转圈，不能再点。
-struct StopGlyph: View {
-    let stopping: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        CircleGlyph(fill: stopping ? palette.fill : palette.ink) {
-            if stopping {
-                Spinner(.small)
-            } else {
-                Image(systemName: "stop.fill").font(.caption.weight(.bold)).foregroundStyle(palette.paper)
+        CircleGlyph(fill: disc) {
+            ZStack {
+                switch phase {
+                case .sending: onTheWay.transition(.opacity)
+                case .stopping: Spinner(.small).transition(.opacity)
+                default: glyph.transition(.opacity)
+                }
             }
         }
-        .animation(Motion.quick, value: stopping)
+        // 发出那一刻钮底与字形当帧换掉（箭镞就是飞走的那点光，箭不留残影；发出后主线程还要忙一阵收输入框，渐变会卡在半路），其余换状态时渐变
+        .animation(phase == .sending ? nil : Motion.quick, value: phase)
+        .onChange(of: phase) { _, new in if new == .ready, !reduceMotion { hops += 1 } }
+    }
+
+    private var disc: Color {
+        switch phase {
+        case .idle, .sending, .stopping, .save(enabled: false): palette.fill
+        case .ready, .save(enabled: true): palette.signatureFill
+        case .stop: palette.ink
+        }
+    }
+
+    /// 发送、记下、停止共用一个 Image：颜色跟着钮插值，符号原地替换。箭镞（点睛）与箭杆同色：钮本身就是主动作的颜色。
+    private var glyph: some View {
+        let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
+        case .stop: (.stop, palette.paper, 14)
+        case .save(let enabled): (.save, enabled ? palette.onFill : palette.ink3, 17)
+        case .ready: (.send, palette.onFill, 20)
+        default: (.send, palette.ink3, 20)
+        }
+        return IconImage(icon, accent: .state(ink))
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(ink)
+            // 减弱动态效果时系统把符号的替换换成淡入淡出
+            .contentTransition(.symbolEffect(.replace.offUp))
+            // 刚能发的那一下：箭杆、箭镞依次往上一跳
+            .symbolEffect(.bounce.up.byLayer, options: .nonRepeating, value: hops)
+    }
+
+    /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.climb`；减弱动态效果时是状态标同一个静止符号。
+    @ViewBuilder private var onTheWay: some View {
+        if reduceMotion {
+            Image(.onTheWay).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.signature)
+        } else {
+            LoopLayer(kind: .climb, color: palette.signature).frame(width: 20, height: 20)
+        }
     }
 }

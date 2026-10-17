@@ -23,7 +23,7 @@ struct SettingsScreen: View {
                         Text("浅色").tag(AppSettings.Theme.light)
                         Text("深色").tag(AppSettings.Theme.dark)
                     } label: {
-                        Label("外观", systemImage: "sun.max")
+                        Label("外观", icon: .appearance)
                     }
                 }
                 SyncSection()
@@ -31,7 +31,7 @@ struct SettingsScreen: View {
                 if !services.conflicts.isEmpty {
                     Section {
                         NavigationLink(value: Route.conflicts) {
-                            Label("\(services.conflicts.count) 条灵感或任务有两个版本", systemImage: "square.on.square")
+                            Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
                                 .foregroundStyle(palette.ink)
                         }
                     }
@@ -79,7 +79,7 @@ private struct AlertSection: View {
                     if let detail = status.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
                 }
             } icon: {
-                Image(systemName: status.state == .on ? "bell.badge" : status.state == .pending ? "bell" : "bell.slash")
+                Image(status.state == .on ? .alertsOn : status.state == .pending ? .alertsPending : .alertsOff)
                     .foregroundStyle(status.state == .problem ? palette.failure : palette.ink2)
             }
             if let diagnostics = status.diagnostics {
@@ -89,16 +89,16 @@ private struct AlertSection: View {
             }
             switch status.action {
             case .retry:
-                Button("重试", systemImage: "arrow.clockwise") {
+                Button("重试", icon: .retry) {
                     alerts.retryRegistration()
                     Task { await services.syncNow() }
                 }
             case .openSettings:
-                Button("打开系统通知设置", systemImage: "gearshape") {
+                Button("打开系统通知设置", icon: .settings) {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                 }
             case .allow:
-                Button("开启通知", systemImage: "bell") { Task { await alerts.requestAuthorization() } }
+                Button("开启通知", icon: .alertsPending) { Task { await alerts.requestAuthorization() } }
             case nil:
                 EmptyView()
             }
@@ -129,15 +129,15 @@ private struct SyncSection: View {
                 if services.isSyncBusy {
                     Spinner(.small)
                 } else {
-                    Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
+                    Image(summary.icon).foregroundStyle(palette.color(summary.tone))
                 }
             }
             if services.sync != nil {
                 if case .needsDecision = services.syncStatus {
-                    Button("上传本机数据", systemImage: "icloud.and.arrow.up") { resolve(.uploadLocal) }
-                    Button("用云端数据替换本机…", systemImage: "icloud.and.arrow.down", role: .destructive) { confirmErase = true }
+                    Button("上传本机数据", icon: .uploadLocal) { resolve(.uploadLocal) }
+                    Button("用云端数据替换本机…", icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
                 } else {
-                    Button("立即同步", systemImage: "arrow.triangle.2.circlepath") { Task { await services.syncNow() } }
+                    Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
                         .disabled(!services.canSyncNow)
                     MacConnectionTest()
                 }

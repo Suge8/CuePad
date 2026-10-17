@@ -135,8 +135,8 @@ struct SessionList<Top: View>: View {
         let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
-        let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { model.confirmingEnd = item.state }] : [])
-            + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
+        let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])
+            + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
         return SessionRow(item: item, filtered: filtered, end: end)
             .cardRow()
             .listSwipes(RowSwipes(trailing: trailing))
@@ -158,7 +158,7 @@ struct SessionList<Top: View>: View {
             .padding(.top, 40)
         case .none(inProject: true):
             EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话", waitsForSync: true) {
-                EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init(project: filter) })
+                EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
         case .none(inProject: false):
@@ -169,7 +169,7 @@ struct SessionList<Top: View>: View {
                 waitsForSync: true
             ) {
                 EmptyStateButton(
-                    title: hasProjects ? "新会话" : "新建项目", systemImage: hasProjects ? "plus" : "folder.badge.plus",
+                    title: hasProjects ? "新会话" : "新建项目", icon: hasProjects ? .add : .newProject,
                     action: { navigation.startNewSession(hasProjects: hasProjects) })
             }
             .padding(.top, 40)
@@ -188,7 +188,7 @@ private struct NewSessionButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新会话", systemImage: "plus") {
+        Button("新会话", icon: .add) {
             navigation.startNewSession(.init(project: project), hasProjects: workspace.catalog?.projects.isEmpty == false)
         }
             .accessibilityHint("让 Mac 开一个 Agent 会话")

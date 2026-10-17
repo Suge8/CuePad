@@ -45,7 +45,7 @@ private struct LiveMoreFold: View {
         Button { expanded.toggle() } label: {
             HStack(spacing: style.dot + 2) {
                 Text(expanded ? "收起" : "还有 \(hidden) 个").monospacedDigit()
-                Image(systemName: "chevron.down").font(style.line.weight(.semibold))
+                Image(.expand).font(style.line.weight(.semibold))
                     .rotationEffect(.degrees(expanded ? 180 : 0))
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)

@@ -71,11 +71,11 @@ struct ProjectForm: View {
     /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
     private var folderRow: some View {
         HStack(spacing: 8) {
-            Label("文件夹", systemImage: "folder").foregroundStyle(palette.ink2)
+            Label("文件夹", icon: .folder).foregroundStyle(palette.ink2)
             Spacer()
             if let folder {
                 Text(URL(filePath: folder).lastPathComponent).lineLimit(1).help(folder)
-                Button("不绑了", systemImage: "xmark.circle.fill") { self.folder = nil }
+                Button("不绑了", icon: .clear) { self.folder = nil }
                     .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink2)
             } else {
                 Button("选择…") { Task { folder = await ProjectDirectory.pick() } }

@@ -6,12 +6,12 @@ import SwiftUI
 extension PickedImage {
     init(data: Data) {
         let jpeg = Self.keeps(data) ? nil : NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: Self.quality])
-        self.init(data: jpeg ?? data, preview: NSImage(data: data).map(Image.init(nsImage:)) ?? Image(systemName: "photo"))
+        self.init(data: jpeg ?? data, preview: NSImage(data: data).map(Image.init(nsImage:)) ?? Image(.photo))
     }
 }
 
 extension ComposerSource {
-    static var imageChoices: [(title: String, symbol: String, source: ComposerSource)] { [("图片文件…", "photo", .files)] }
+    static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] { [("图片文件…", .photo, .files)] }
 }
 
 extension ComposerMetrics {

@@ -21,7 +21,7 @@ struct NewTaskField: View {
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {
             // 入口不用系统占位灰：那样看起来像不能点
-            Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            Image(.add).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 .frame(width: TaskMetrics.ringColumn)
             TextField(text: $text, prompt: Text(prompt).foregroundStyle(palette.ink2)) { Text(prompt) }.textFieldStyle(.plain).font(Typography.body)
                 .accessibilityLabel(prompt)

@@ -88,7 +88,7 @@ private struct PreviewPager: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                 if let file = file(of: preview) { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) } }
                 // 快速查看自己吃掉左右滑（它里面也是一个翻页的滚动区），翻到它那页时只能靠这两个箭头
                 if let position {
@@ -103,7 +103,7 @@ private struct PreviewPager: View {
             PanelHeader(title: title) {
                 if let position { stepper(position) }
                 if let file = file(of: preview) {
-                    ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") }
+                    ShareLink(item: file) { Image(.share).accessibilityLabel("分享") }
                 }
             }
             .buttonStyle(.borderless).foregroundStyle(palette.ink2)
@@ -116,9 +116,9 @@ private struct PreviewPager: View {
 
     /// 前后箭头夹着"第几个 / 共几个"。
     @ViewBuilder private func stepper(_ position: String) -> some View {
-        Button("上一个", systemImage: "chevron.left") { step(-1) }.labelStyle(.iconOnly).disabled(index == 0)
+        Button("上一个", icon: .back) { step(-1) }.labelStyle(.iconOnly).disabled(index == 0)
         Text(position).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
-        Button("下一个", systemImage: "chevron.right") { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1)
+        Button("下一个", icon: .forward) { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1)
     }
 
     private func step(_ offset: Int) {

@@ -50,8 +50,8 @@ struct NewSessionInput: View {
             },
             tools: { EmptyView() },
             send: {
-                Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
-                    .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
+                Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
+                    .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
         .disabled(inFlight)
         // 浮在 `FloatingInput` 里（与发给 Agent 同一种）；发出后等它开好时不让收起

@@ -5,6 +5,7 @@ import SwiftUI
 /// 话在路上时靛青实环；等你时赭黄实环；空闲时一圈淡墨静止；睡着或起不来时整个头像变暗。
 /// 三档尺寸：行内（任务行、会话标题旁，只露上半身：纸面、折角和眼睛，不跳）、侧栏与 Mac 页头的一行、手机 Cue 页头（`header`）。
 /// `size` 是里面那张脸的直径，环画在它外面（外框大一圈）。减弱动态效果时在做事是一段静止的弧，它不跳。
+/// 被叫醒、做完时脸软糖地弹一下，在压得最扁时换表情（`Jelly`，同 Cue 的标签图标）。
 struct CueAvatar: View {
     enum Size {
         case inline, row, header
@@ -42,7 +43,7 @@ struct CueAvatar: View {
     var body: some View {
         ZStack {
             ring
-            face.frame(width: size.face, height: size.face)
+            Jelly(value: mood, move: JellyMove.cue) { mood, _ in face(mood) }.frame(width: size.face, height: size.face)
         }
         .frame(width: size.box, height: size.box)
         .opacity(dimmed ? 0.5 : 1)
@@ -51,7 +52,7 @@ struct CueAvatar: View {
         .accessibilityHidden(true)
     }
 
-    @ViewBuilder private var face: some View {
+    @ViewBuilder private func face(_ mood: CueMood) -> some View {
         let image = Image(mood.asset).resizable().scaledToFit()
         if size == .inline {
             // 只露上半身：脸放大到比圆大，顶边对齐，圆裁掉下半截

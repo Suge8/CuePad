@@ -27,16 +27,16 @@ struct ProjectSwitcher: View {
             }
             Divider()
             if (workspace.catalog?.cardCounts[nil] ?? 0) > 0 {
-                Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, systemImage: "tray").labelStyle(.titleAndIcon) }
+                Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, icon: .unfiled).labelStyle(.titleAndIcon) }
             }
-            Button { workspace.show(.agent) } label: { Label("Agent", systemImage: "sparkles").labelStyle(.titleAndIcon) }
-            Button { workspace.show(.archive) } label: { Label("归档", systemImage: "archivebox").labelStyle(.titleAndIcon) }
-            Button { workspace.show(.trash) } label: { Label("回收站", systemImage: "trash").labelStyle(.titleAndIcon) }
+            Button { workspace.show(.agent) } label: { Label("Agent", icon: .agent).labelStyle(.titleAndIcon) }
+            Button { workspace.show(.archive) } label: { Label("归档", icon: .archive).labelStyle(.titleAndIcon) }
+            Button { workspace.show(.trash) } label: { Label("回收站", icon: .trash).labelStyle(.titleAndIcon) }
         } label: {
             HStack(spacing: 6) {
                 if collapsed {
                     CurrentPage(projects: projects)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                    Image(.expand).font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 }
             }
             .font(Typography.toolbarLabel.weight(.semibold))
@@ -52,7 +52,7 @@ struct ProjectSwitcher: View {
     private static var menuIcons: [String: NSImage] = [:]
 
     private static func menuIcon(_ project: Project) -> NSImage {
-        let key = "\(ProjectGlyph.symbol(project.icon))|\(project.color)"
+        let key = "\(project.icon ?? "")|\(project.color)"
         if let cached = menuIcons[key] { return cached }
         let image = makeMenuIcon(project)
         menuIcons[key] = image
@@ -66,7 +66,7 @@ struct ProjectSwitcher: View {
         }
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
-        let image = NSImage(systemSymbolName: ProjectGlyph.symbol(project.icon), accessibilityDescription: nil)?
+        let image = ProjectGlyph.icon(project.icon).platformImage?
             .withSymbolConfiguration(configuration) ?? NSImage()
         image.isTemplate = false
         return image
@@ -85,16 +85,16 @@ private struct CurrentPage: View {
             ProjectGlyph(project: project, size: 12)
             Text(project?.name ?? "")
         case .unfiled:
-            Image(systemName: "tray").accessibilityHidden(true)
+            Image(.unfiled).accessibilityHidden(true)
             Text(CaptureCopy.unfiled)
         case .archive:
-            Image(systemName: "archivebox").accessibilityHidden(true)
+            Image(.archive).accessibilityHidden(true)
             Text("归档")
         case .trash:
-            Image(systemName: "trash").accessibilityHidden(true)
+            Image(.trash).accessibilityHidden(true)
             Text("回收站")
         case .agent, .session:
-            Image(systemName: "sparkles").accessibilityHidden(true)
+            Image(.agent).accessibilityHidden(true)
             Text("Agent")
         default:
             EmptyView()

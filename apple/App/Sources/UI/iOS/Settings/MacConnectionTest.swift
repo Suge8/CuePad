@@ -15,7 +15,7 @@ struct MacConnectionTest: View {
     private static let count = 10
 
     var body: some View {
-        Button(running ? "正在测试…（\(rounds.count)/\(Self.count)）" : "测试到 Mac 的连接", systemImage: "antenna.radiowaves.left.and.right") {
+        Button(running ? "正在测试…（\(rounds.count)/\(Self.count)）" : "测试到 Mac 的连接", icon: .testConnection) {
             Task { await run() }
         }
         .disabled(running)

@@ -17,7 +17,7 @@ struct SettingsView: View {
         @Bindable var settings = services.settings
         Form {
             Section {
-                SettingRow(title: "外观", icon: Image(systemName: "sun.max")) {
+                SettingRow(title: "外观", icon: Image(.appearance)) {
                     Picker("外观", selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
@@ -27,9 +27,9 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                 }
-                ShortcutRow(title: "显示/隐藏", symbol: "keyboard", accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
+                ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
                 if let cueBar {
-                    ShortcutRow(title: "对 Cue 说", symbol: "bubble.left", accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
+                    ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
                 }
             }
             CueSettingsSection()
@@ -61,7 +61,7 @@ struct SettingsView: View {
 /// 悬停时键帽左边露出"更改"。
 private struct ShortcutRow: View {
     let title: String
-    let symbol: String
+    let icon: Icon
     let accelerator: String
     /// 注册新的组合键；失败时抛出，原来的照用。
     let apply: (String) throws -> Void
@@ -72,7 +72,7 @@ private struct ShortcutRow: View {
     @State private var error: String?
 
     var body: some View {
-        SettingRow(title: title, icon: Image(systemName: symbol), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
+        SettingRow(title: title, icon: Image(icon), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -145,14 +145,14 @@ private struct NotificationSection: View {
     }
 
     @ViewBuilder private var permission: some View {
-        let icon = Image(systemName: "bell")
+        let icon = Image(.alertsPending)
         switch alerts.authorization {
         case .notDetermined:
             SettingRow(title: "系统通知", icon: icon, tone: .notice, status: "还没开启") { EmptyView() } fix: {
                 Button("开启") { Task { await alerts.requestAuthorization() } }.settingFix()
             }
         case .denied:
-            SettingRow(title: "系统通知", icon: Image(systemName: "bell.slash"), tone: .notice, status: "已关闭，收不到提示") { EmptyView() } fix: {
+            SettingRow(title: "系统通知", icon: Image(.alertsOff), tone: .notice, status: "已关闭，收不到提示") { EmptyView() } fix: {
                 Button("打开系统设置", action: openSystemSettings).settingFix()
             }
         default:
@@ -163,7 +163,7 @@ private struct NotificationSection: View {
     private func row(_ title: String, kind: PiAlert, help: String) -> some View {
         @Bindable var settings = services.settings
         // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
-        return SettingRow(title: title, icon: Image(systemName: PiShown(status: SessionAlert.status(kind)).symbol), help: help) {
+        return SettingRow(title: title, icon: Image(PiShown(status: SessionAlert.status(kind)).icon), help: help) {
             HStack(spacing: 12) {
                 Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
                     settings.alerts[kind].sound = sound
@@ -206,7 +206,7 @@ private struct CrashRow: View {
 
     var body: some View {
         SettingRow(
-            title: report.kind.label, icon: Image(systemName: Failure.symbol), tone: .failure,
+            title: report.kind.label, icon: Image(.failure), tone: .failure,
             status: Dotted(report.date.formatted(date: .abbreviated, time: .shortened))
         ) {
             EmptyView()
@@ -227,7 +227,7 @@ private struct ConflictsRow: View {
 
     var body: some View {
         SettingRow(
-            title: "同步冲突", icon: Image(systemName: "square.on.square"), tone: .notice,
+            title: "同步冲突", icon: Image(.conflict), tone: .notice,
             status: "\(services.conflicts.count) 条灵感或任务有两个版本"
         ) {
             EmptyView()

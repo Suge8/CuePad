@@ -106,7 +106,7 @@ struct TaskSheet: View {
     }
 
     private var closeButton: some View {
-        Button("关闭", systemImage: "xmark") { close() }
+        Button("关闭", icon: .close) { close() }
             .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
             .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
             .buttonStyle(PressStyle())

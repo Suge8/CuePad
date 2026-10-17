@@ -138,7 +138,7 @@ struct ChatScrubber: View {
     private func preview(_ mark: ChatMark) -> some View {
         HStack(spacing: 5) {
             if mark.kind == .boundary {
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.ink2)
+                Image(.renew).font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.ink2)
             }
             Text(mark.preview).lineLimit(1)
         }

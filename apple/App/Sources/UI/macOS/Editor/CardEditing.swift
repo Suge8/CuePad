@@ -73,7 +73,7 @@ final class CardEditing {
 
     /// 右键菜单里的选区动作：转为任务。
     private static func selectionActions(_ card: Card, workspace: Workspace) -> [CueSelectionAction] {
-        [CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in workspace.convertToTasks(stored, in: card.projectID) }]
+        [CueSelectionAction(title: "转为任务", icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }]
     }
 }
 
@@ -145,7 +145,7 @@ private struct VariablesChip: View {
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)
                     .lineLimit(1)
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(palette.ink2) }
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.expand).font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
             }
             .font(Typography.secondary.weight(.medium))
             .padding(.horizontal, 14).frame(height: 44)

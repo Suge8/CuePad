@@ -57,7 +57,7 @@ struct Sidebar: View {
         let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: workspace.shown)
         return VStack(alignment: .leading, spacing: 0) {
             SidebarHeader(title: "项目") {
-                Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
+                Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
             }
             SidebarScroll(revealsPage: true) {
                 ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.edge)
@@ -86,11 +86,11 @@ struct Sidebar: View {
             StartupIssues()
             HStack(spacing: 2) {
                 if showsBins {
-                    FooterPage(page: .archive, title: "归档", systemImage: "archivebox", select: select)
-                    FooterPage(page: .trash, title: trashCount > 0 ? "回收站，\(trashCount) 项" : "回收站", systemImage: "trash", select: select)
+                    FooterPage(page: .archive, title: "归档", icon: .archive, select: select)
+                    FooterPage(page: .trash, title: trashCount > 0 ? "回收站，\(trashCount) 项" : "回收站", icon: .trash, select: select)
                 }
                 Spacer()
-                Button("设置", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                Button("设置", icon: .settings) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .font(.system(size: 15))
@@ -323,7 +323,7 @@ private struct ProjectRow: View, Equatable {
 private struct FooterPage: View {
     let page: Route
     let title: String
-    let systemImage: String
+    let icon: Icon
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -331,7 +331,7 @@ private struct FooterPage: View {
     var body: some View {
         let selected = workspace.page == page
         Button { select(page) } label: {
-            Image(systemName: systemImage).font(.system(size: 15))
+            IconImage(icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
                 .frame(width: 32, height: 32)
                 .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
@@ -416,10 +416,10 @@ private struct PiSection: View {
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                    Button("重命名…", icon: .rename) { renaming = session }
                 }
                 if let bridge, bridge.canJump {
-                    Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
+                    Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
                 }
             }
     }
@@ -434,7 +434,7 @@ private struct AllSessionsRow: View {
 
     var body: some View {
         PageRow(page: .agent, count: total, selected: workspace.page == .agent, select: select) {
-            Image(systemName: "rectangle.stack").font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
+            Image(.allSessions).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
         } title: {
             Text("全部")
         }
@@ -450,7 +450,7 @@ private struct AgentConnectCard: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "puzzlepiece.extension").font(.system(size: 14)).foregroundStyle(palette.ink2)
+            Image(.extensionNote).font(.system(size: 14)).foregroundStyle(palette.ink2)
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {

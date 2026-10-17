@@ -354,7 +354,7 @@ struct JumpToNewest: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "arrow.down").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+            Image(.toLatest).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                 .frame(width: 40, height: 40)
                 .glass(in: .circle, interactive: true)
                 .overlay(alignment: .topTrailing) {

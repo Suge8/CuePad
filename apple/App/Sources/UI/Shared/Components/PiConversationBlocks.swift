@@ -80,7 +80,7 @@ private struct MachineCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { open.toggle() } label: {
-                NoteLine(symbol: note.fromFireCode ? "flame" : "puzzlepiece.extension", open: note.detail.isEmpty ? nil : open) {
+                NoteLine(icon: note.fromFireCode ? .fireCode : .extensionNote, open: note.detail.isEmpty ? nil : open) {
                     Text(note.who).foregroundStyle(palette.ink3).fixedSize()
                     Text(note.line).foregroundStyle(note.failed ? palette.failure : palette.ink2)
                         .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
@@ -140,7 +140,7 @@ struct LiveStatus: View {
         guard session.state.isWorking, !delegating || session.pendingTools != nil else { return nil }
         guard !delegating else { return .live(shown, doing: shown.label, step: nil) }
         let tool = session.state == .known(.tool) ? session.detail?.components(separatedBy: PiProgress.detailSeparator).first : nil
-        return .live(shown, doing: session.detail.flatMap(PiProgress.action) ?? shown.label, step: RoundProcess.symbol(tool: tool))
+        return .live(shown, doing: session.detail.flatMap(PiProgress.action) ?? shown.label, step: RoundProcess.icon(tool: tool))
     }
 }
 

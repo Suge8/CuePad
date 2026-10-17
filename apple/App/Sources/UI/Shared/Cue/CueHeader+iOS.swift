@@ -84,7 +84,7 @@ struct CueHeader: View {
             Spacer(minLength: 6)
             // 展开时等你那一行在面板里，页头不再重复
             WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
-            Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+            Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
                 .accessibilityHidden(true)
@@ -137,7 +137,7 @@ private struct CueNowPanel: View {
             if cue.waiting > 0 { waiting(cue.waiting) }
             sessions
             QuotaStrip()
-            link("记忆", symbol: "brain") {
+            link("记忆", icon: .memory) {
                 close()
                 cue.showsMemory = true
             }
@@ -155,9 +155,9 @@ private struct CueNowPanel: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) {
                     if let home { Text(home).lineLimit(1) }
-                    Image(systemName: "gearshape")
+                    Image(.settings)
                 }
-                Image(systemName: "gearshape")
+                Image(.settings)
             }
             .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
             // 贴右对齐：与下面各行右端的字落在同一条竖线上
@@ -171,10 +171,10 @@ private struct CueNowPanel: View {
     private func waiting(_ count: Int) -> some View {
         Button(action: close) {
             HStack(spacing: 8) {
-                Image(systemName: Waiting.symbol).foregroundStyle(palette.waiting).accessibilityHidden(true)
+                Image(.waiting).foregroundStyle(palette.waiting).accessibilityHidden(true)
                 WaitingCount(count: count)
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             .font(.subheadline)
             .contentShape(.rect)
@@ -229,14 +229,14 @@ private struct CueNowPanel: View {
         }
     }
 
-    private func link(_ title: String, symbol: String? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
+    private func link(_ title: String, icon: Icon? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let symbol { Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 20).accessibilityHidden(true) }
+                if let icon { Image(icon).foregroundStyle(palette.ink2).frame(width: 20).accessibilityHidden(true) }
                 Text(title).foregroundStyle(palette.ink)
                 if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             .font(.subheadline.weight(.medium))
             .frame(minHeight: 32)

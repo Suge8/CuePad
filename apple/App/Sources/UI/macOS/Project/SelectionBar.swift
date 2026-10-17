@@ -19,7 +19,7 @@ struct SelectionBar: View {
             Button("完成") { presses.clearSelection() }
                 .keyboardShortcut(.cancelAction)
             Button(role: .destructive) { delete() } label: {
-                Label("删除", systemImage: "trash")
+                Label("删除", icon: .trash)
                     .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 14).frame(height: 32)
                     .background(palette.failureFill, in: .capsule)

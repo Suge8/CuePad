@@ -65,7 +65,7 @@ struct PreviewCard: View {
                         .font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,10 +88,10 @@ struct PreviewCard: View {
                 Image(decorative: thumbnail, scale: scale).resizable().scaledToFill()
                     .overlay { palette.mediaDim }
             } else {
-                Image(systemName: Self.symbol(preview.kind)).font(.title2).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(Self.icon(preview.kind)).font(.title2).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             if preview.kind == .video, thumbnail != nil {
-                Image(systemName: "play.fill").font(.footnote).foregroundStyle(palette.onMedia).shadow(radius: 2).accessibilityHidden(true)
+                Image(.start).font(.footnote).foregroundStyle(palette.onMedia).shadow(radius: 2).accessibilityHidden(true)
             }
         }
         .frame(width: Self.side, height: Self.side)
@@ -125,19 +125,19 @@ struct PreviewCard: View {
         thumbnail = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
     }
 
-    static func symbol(_ kind: PiPreviewKind?) -> String {
+    static func icon(_ kind: PiPreviewKind?) -> Icon {
         switch kind {
-        case .web: "safari"
-        case .markdown: "text.document"
-        case .image: "photo"
-        case .video: "film"
-        case .audio: "waveform"
-        case .pdf: "doc.richtext"
-        case .document: "doc.text"
-        case .spreadsheet: "tablecells"
-        case .presentation: "rectangle.on.rectangle"
-        case .model: "cube"
-        case .text, nil: "doc.plaintext"
+        case .web: .web
+        case .markdown: .markdown
+        case .image: .photo
+        case .video: .video
+        case .audio: .audio
+        case .pdf: .pdf
+        case .document: .document
+        case .spreadsheet: .spreadsheet
+        case .presentation: .presentation
+        case .model: .model
+        case .text, nil: .plainText
         }
     }
 

@@ -65,8 +65,8 @@ final class KeyboardBar: UIToolbar {
 
     init(textView: CueTextView, actions: Actions) {
         super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
-        func item(_ label: String, _ symbol: String, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
-            let item = UIBarButtonItem(image: UIImage(systemName: symbol), primaryAction: UIAction { [weak textView] _ in
+        func item(_ label: String, _ icon: Icon, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
+            let item = UIBarButtonItem(image: icon.platformImage, primaryAction: UIAction { [weak textView] _ in
                 guard let textView else { return }
                 action(textView)
             })
@@ -74,10 +74,10 @@ final class KeyboardBar: UIToolbar {
             return item
         }
         items = [
-            item("插入图片", "photo") { _ in actions.insertImage() },
-            item("变量取值", "curlybraces") { _ in actions.variables() },
+            item("插入图片", .photo) { _ in actions.insertImage() },
+            item("变量取值", .variables) { _ in actions.variables() },
             .flexibleSpace(),
-            item("收起键盘", "keyboard.chevron.compact.down") { $0.resignFirstResponder() },
+            item("收起键盘", .dismissKeyboard) { $0.resignFirstResponder() },
         ]
         sizeToFit()
     }

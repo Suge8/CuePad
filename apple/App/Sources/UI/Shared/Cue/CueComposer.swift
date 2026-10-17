@@ -18,7 +18,14 @@ struct CueComposer: View {
     var focusRequests = 0
     var sent: () -> Void = {}
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
+    /// 刚发出、还没读到"话在路上"：库里那条记录要下一次读库才变成 `CuePresence.sending`，这一小段钮先当帧换成发送中，
+    /// 不先缩没再长出来。Cue 的现状一变（读到了在路上，或已经不在路上）就交还给它。
+    @State private var launched = false
+    /// 光从发送钮的箭镞起飞、落进 Cue 的头像。
+    @State private var launch = RelayLaunch()
     #if os(macOS)
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单。
     @State private var opening: PiConfigPick?
@@ -30,12 +37,14 @@ struct CueComposer: View {
             draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记一条灵感",
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .images,
-            form: form, shortcuts: shortcuts,
+            form: form, showsSendEmpty: sending, shortcuts: shortcuts,
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: focusRequests) { focused = true }
+            .onChange(of: workspace.cue.presence) { launched = false }
+            .task { if style == .page { await DebugHooks.pressCueSendIfAsked(send) } }
     }
 
     /// 发送钮：点是发送，长按是"只记下"（`MenuButton`：菜单开着时输入框锁在原位）。Cue 没启用时只有记下。
@@ -43,18 +52,20 @@ struct CueComposer: View {
         let cue = workspace.cue
         if cue.canHear {
             MenuButton(
-                sections: [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "只记下（记成灵感）", image: .symbol("square.and.pencil"), choose: note)])],
+                sections: [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "只记下（记成灵感）", image: .icon(.write), choose: note)])],
                 primary: send, press: .button, accessibilityLabel: "发送", hint: "长按只记下"
             ) {
-                SubmitGlyph(.send, enabled: true)
+                SendGlyph(hasDraft ? .ready : .sending)
             }
+            .disabled(!hasDraft)
+            .relayLaunch(launch, color: palette.signature)
             .fixedSize()
             #if os(macOS)
             .help("发送（\(ReplyShortcut.send.symbols)）；按住只记下")
             #endif
         } else {
-            Button(action: send) { SubmitGlyph(.save, enabled: true) }
-                .buttonStyle(.plain)
+            Button(action: send) { SendGlyph(.save(enabled: true)) }
+                .buttonStyle(PressStyle(.button))
                 .accessibilityLabel("记下")
         }
     }
@@ -64,6 +75,10 @@ struct CueComposer: View {
         if style == .page { CueConfigControls(opening: $opening) }
         #endif
     }
+
+    private var hasDraft: Bool { !workspace.cue.draft.isEmpty(accepting: .images) }
+    /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CuePresence.sending`）。
+    private var sending: Bool { workspace.cue.canHear && (launched || workspace.cue.presence == .sending) }
 
     private var form: ComposerForm {
         #if os(iOS)
@@ -86,7 +101,9 @@ struct CueComposer: View {
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 
     private func send() {
-        guard workspace.sayToCue(from: Bindable(workspace.cue).draft) != nil else { return }
+        guard hasDraft, workspace.sayToCue(from: Bindable(workspace.cue).draft) != nil else { return }
+        launched = true
+        launch.fly(reduceMotion: reduceMotion)
         finish()
     }
 

@@ -245,7 +245,7 @@ private struct RoundEndNote: View {
     let notice: PiNotice
 
     var body: some View {
-        NoteLine(symbol: notice == .declined ? "hand.raised" : "stop.circle") { Text(notice.rawValue) }
+        NoteLine(icon: notice == .declined ? .declined : .endSession) { Text(notice.rawValue) }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .transition(.entry)
@@ -259,7 +259,7 @@ struct EarlierRow: View {
     let action: () -> Void
 
     var body: some View {
-        ChatMarker(action: action) { Label("更早的 \(count) 条", systemImage: "arrow.up").labelStyle(.titleAndIcon) }
+        ChatMarker(action: action) { Label("更早的 \(count) 条", icon: .earlier).labelStyle(.titleAndIcon) }
     }
 }
 

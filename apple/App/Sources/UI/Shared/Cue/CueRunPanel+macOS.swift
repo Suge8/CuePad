@@ -22,7 +22,7 @@ struct CueRunPanel: View {
             HStack {
                 Text("运行情况").font(Typography.sectionTitle).foregroundStyle(palette.ink)
                 Spacer()
-                Button("收起", systemImage: "xmark") { workspace.cue.showsRun = false }
+                Button("收起", icon: .close) { workspace.cue.showsRun = false }
                     .labelStyle(.iconOnly).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink3)
                     .frame(width: 28, height: 28).contentShape(.rect)
                     .buttonStyle(PressStyle(.button))
@@ -77,7 +77,7 @@ private struct CueRoundRow: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
-                Image(systemName: CueRunFormat.symbol(round.wake)).font(Typography.caption).foregroundStyle(palette.ink2)
+                Image(CueRunFormat.icon(round.wake)).font(Typography.caption).foregroundStyle(palette.ink2)
                     .frame(width: 16).accessibilityHidden(true)
                 Text(CueRunFormat.reason(round.wake)).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                 if round.sent.count > 1 {
@@ -110,7 +110,7 @@ private struct CueRoundRow: View {
             if !round.sent.isEmpty {
                 Button { withAnimation(Motion.quick) { showsSent.toggle() } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "envelope").frame(width: 13).accessibilityHidden(true)
+                        Image(.mail).frame(width: 13).accessibilityHidden(true)
                         Text("交给 Cue 的话")
                         Text(CueRunFormat.preview(round.sent[0])).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 4)
@@ -140,7 +140,7 @@ private struct CueCallRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { withAnimation(Motion.quick) { expanded.toggle() } } label: {
-                ToolRow(symbol: CueRunFormat.symbol(tool: call.name), target: target, truncation: .tail) { status }
+                ToolRow(icon: CueRunFormat.icon(tool: call.name), target: target, truncation: .tail) { status }
                     .frame(minHeight: 22).contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -232,25 +232,25 @@ private enum CueRunFormat {
         }
     }
 
-    static func symbol(_ wake: CueWake) -> String {
+    static func icon(_ wake: CueWake) -> Icon {
         switch wake {
-        case .enabled: "power"
-        case .message: "bubble.left"
-        case .sessionActivity: "bolt"
-        case .idle: "eye"
-        case .reminder: "alarm"
-        case .renewed: "arrow.triangle.2.circlepath"
-        case .settingsChanged: "arrow.left.arrow.right"
+        case .enabled: .wakeEnabled
+        case .message: .wakeMessage
+        case .sessionActivity: .wakeActivity
+        case .idle: .wakeIdle
+        case .reminder: .wakeReminder
+        case .renewed: .renew
+        case .settingsChanged: .wakeSettings
         }
     }
 
-    /// Cue 自己的三个工具各一个图标，读文件类与会话里的工具清单同一套（`RoundProcess.symbol`）。
-    static func symbol(tool: String) -> String {
+    /// Cue 自己的三个工具各一个图标，读文件类与会话里的工具清单同一套（`RoundProcess.icon`）。
+    static func icon(tool: String) -> Icon {
         switch tool {
-        case "task": "checklist"
-        case "tell": "text.bubble"
-        case "memory": "brain"
-        default: RoundProcess.symbol(tool: tool)
+        case "task": .task
+        case "tell": .said
+        case "memory": .memory
+        default: RoundProcess.icon(tool: tool)
         }
     }
 

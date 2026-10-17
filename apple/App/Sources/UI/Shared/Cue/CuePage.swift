@@ -147,7 +147,7 @@ struct CuePage: View {
     private var live: CueLiveRound? {
         let presence = cue.presence
         guard let round = cue.round, let shown = presence.shown, let progress = presence.progress else { return nil }
-        return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.symbol(.other) : nil))
+        return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。

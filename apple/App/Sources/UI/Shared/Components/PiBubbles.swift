@@ -195,20 +195,20 @@ struct MessageActions: View {
 
     @ViewBuilder private func item(_ item: MessageMenu.Item) -> some View {
         switch item {
-        case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(text) }
-        case .selectText: if let selectText { Button(item.title, systemImage: item.symbol, action: selectText) }
-        case .share: ShareLink(item: kind == .reply ? text : CueFormat.plainText(text)) { Label(item.title, systemImage: item.symbol) }
+        case .copy: Button(item.title, icon: item.icon) { workspace.copy(text) }
+        case .selectText: if let selectText { Button(item.title, icon: item.icon, action: selectText) }
+        case .share: ShareLink(item: kind == .reply ? text : CueFormat.plainText(text)) { Label(item.title, icon: item.icon) }
         case .saveAsIdea:
             if let session {
-                Button(item.title, systemImage: item.symbol) {
+                Button(item.title, icon: item.icon) {
                     let text = text
                     workspace.attempt { try await workspace.saveReply(text, of: session) }
                 }
             }
-        case .editAgain: if let session { Button(item.title, systemImage: item.symbol) { editAgain(session) } }
+        case .editAgain: if let session { Button(item.title, icon: item.icon) { editAgain(session) } }
         case .resend:
-            if let resend { Button(item.title, systemImage: item.symbol, action: resend).disabled(!workspace.services.reachesPiHost) }
-        case .remove: if let remove { Button(item.title, systemImage: item.symbol, role: .destructive, action: remove) }
+            if let resend { Button(item.title, icon: item.icon, action: resend).disabled(!workspace.services.reachesPiHost) }
+        case .remove: if let remove { Button(item.title, icon: item.icon, role: .destructive, action: remove) }
         }
     }
 
@@ -262,7 +262,7 @@ struct SpeechBubble<Menu: View>: View {
                 .accessibilityElement(children: .combine)
         case .delivered:
             if showsDelivered {
-                NoteLine(symbol: "paperplane.fill") { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
+                NoteLine(icon: .delivered) { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
                     .accessibilityElement(children: .combine)
             }
         case .failed(let failure):
@@ -272,7 +272,7 @@ struct SpeechBubble<Menu: View>: View {
                     .foregroundStyle(palette.ink2).buttonStyle(.plain)
                     .frame(minHeight: 44).contentShape(.rect)
                 // 送不到 Mac 时也露出来（停用），看得出能重发
-                Button("重发", systemImage: "arrow.clockwise", action: resend)
+                Button("重发", icon: .retry, action: resend)
                     .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
                     .padding(.horizontal, 10).frame(minHeight: 28)
                     .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))

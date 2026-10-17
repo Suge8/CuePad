@@ -13,7 +13,7 @@ struct CommandLineToolRow: View {
     var body: some View {
         let (tone, status) = describe
         SettingRow(
-            title: "cuepad 命令", icon: Image(systemName: "terminal"), tone: tone, status: status,
+            title: "cuepad 命令", icon: Image(.terminal), tone: tone, status: status,
             help: "在 \(tool.linkDirectoryDisplay) 建一个指向 App 内命令行工具的 cuepad 链接，不需要管理员权限"
         ) {
             Toggle("cuepad 命令", isOn: Binding(get: { tool.state == .installed }, set: { apply($0) }))

@@ -271,7 +271,7 @@ nonisolated extension PiShown {
     /// 此刻显示为没能送达时的原因（会话行、项目"此刻"、Mac 任务面板写它）。
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
-    /// 在动：工作中（心电线）、话在路上（三层上箭头）。
+    /// 在动：工作中（心电线）、话在路上（三块实心 V）。
     var isLive: Bool {
         switch status {
         case .working, .delivery(.inTransit), .delivery(.delivered): true

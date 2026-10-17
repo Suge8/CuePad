@@ -104,9 +104,9 @@ struct CardEditorScreen: View {
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
     private var actions: some View {
-        Menu("更多", systemImage: "ellipsis") {
+        Menu("更多", icon: .more) {
             if let card = data?.card {
-                ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
+                ShareLink(item: outgoing(card)) { Label("分享", icon: .share) }
                 Divider()
                 CardActions(card: card, more: true)
             }
@@ -116,7 +116,7 @@ struct CardEditorScreen: View {
 
     /// 编辑菜单里的选区动作：转为任务。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        [CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in workspace.convertToTasks(stored, in: card.projectID) }]
+        [CueSelectionAction(title: "转为任务", icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }]
     }
 
     /// 当前编辑中的整张正文（未保存的也算）：编辑器是正文的唯一写者，从它读；编辑器还没建好时是打开时的正文。

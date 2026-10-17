@@ -68,14 +68,14 @@ struct SessionScreen: View {
                     // 所在与"后台"不挤在顶栏里：点"⋯"时写在最上面
                     if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
                     if MacDelivery.canRename(session) {
-                        Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
+                        Button("重命名", icon: .rename) { renaming = session }.disabled(!services.reachesPiHost)
                     }
                     if session.canEnd {
-                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
+                        Button("结束会话", icon: .endSession, role: .destructive) { confirmingEnd = session }
                             .disabled(shownEnd == .sending)
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    Image(.more)
                 }
                 .accessibilityLabel("更多")
                 // 确认框挂在"⋯"上，系统从这颗钮弹出；挂在整页上会指向页面中间随便一处

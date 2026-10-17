@@ -87,10 +87,10 @@ struct PiReplyBar: View {
 
     var body: some View {
         switch reply {
-        case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
-        case .unanswerable: notice(Self.unanswerable, systemImage: "desktopcomputer")
+        case .answerAbove: notice("先在上面作答", icon: .above)
+        case .unanswerable: notice(Self.unanswerable, icon: .mac)
         // 怎么接上在顶上的玻璃标题里（点它看说明，`PiShown.explanation`），这里不重复
-        case .restartPi: notice("这个会话现在发不了", systemImage: "nosign")
+        case .restartPi: notice("这个会话现在发不了", icon: .cannotSend)
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
                 if let commandProgress { progressLine(commandProgress) }
@@ -184,8 +184,8 @@ struct PiReplyBar: View {
     }
 
     /// 等你确认、不能发自由文本时收成的一行。
-    private func notice(_ text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
+    private func notice(_ text: String, icon: Icon) -> some View {
+        Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
             .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
             .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
@@ -194,20 +194,20 @@ struct PiReplyBar: View {
     @ViewBuilder private var sendControl: some View {
         switch button {
         case .stop:
-            Button(action: stop) { StopGlyph(stopping: stopping) }
-                .buttonStyle(.plain)
+            Button(action: stop) { SendGlyph(stopping ? .stopping : .stop) }
+                .buttonStyle(PressStyle(.button))
                 .disabled(stopping || !reachable)
                 .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
         case .answer:
-            Button(action: answer) { SubmitGlyph(.send, enabled: canSend) }
-                .buttonStyle(.plain)
+            Button(action: answer) { SendGlyph(canSend ? .ready : .idle) }
+                .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
         case .send(let tap, let hold) where hold != tap:
             holdMenu(tap: tap, hold: hold)
         case .send(let tap, _):
-            Button { send(tap) } label: { SubmitGlyph(.send, enabled: canSend) }
-                .buttonStyle(.plain)
+            Button { send(tap) } label: { SendGlyph(canSend ? .ready : .idle) }
+                .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
         case nil:
@@ -217,15 +217,15 @@ struct PiReplyBar: View {
 
     /// Agent 在跑时的发送钮：点按 `tap`（等它做完再说），长按出菜单选 `hold`（马上说）或停止。
     private func holdMenu(tap: DeliveryMode, hold: DeliveryMode) -> some View {
-        let held = ChoiceMenu.Choice(title: hold.label, subtitle: hold.explanation, image: .symbol(Self.symbol(hold))) { send(hold, held: true) }
+        let held = ChoiceMenu.Choice(title: hold.label, subtitle: hold.explanation, image: .icon(Self.icon(hold))) { send(hold, held: true) }
         let stopSection = canStop && !stopping
-            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: DeliveryMode.stop.label, image: .symbol("stop.circle"), destructive: true, choose: stop)])]
+            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: DeliveryMode.stop.label, image: .icon(.endSession), destructive: true, choose: stop)])]
             : []
         return MenuButton(
             sections: [ChoiceMenu.Section(choices: [held])] + stopSection, primary: { send(tap) }, press: .button,
             accessibilityLabel: tap.label, hint: [tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；")
         ) {
-            SubmitGlyph(.send, enabled: canSend)
+            SendGlyph(canSend ? .ready : .idle)
         }
         .fixedSize()
         .disabled(!canSend)
@@ -248,10 +248,10 @@ struct PiReplyBar: View {
     }
 
     /// 按住发送钮出来的其余说法的图标。
-    private static func symbol(_ mode: DeliveryMode) -> String {
+    private static func icon(_ mode: DeliveryMode) -> Icon {
         switch mode {
-        case .steer: "bolt"
-        default: "paperplane"
+        case .steer: .steer
+        default: .handOff
         }
     }
 
@@ -319,7 +319,7 @@ struct SyncHint: View {
 
     var body: some View {
         let summary = SyncSummary(status)
-        Label { Text(Dotted(summary.title, consequence)) } icon: { Image(systemName: summary.symbol) }
+        Label { Text(Dotted(summary.title, consequence)) } icon: { Image(summary.icon) }
             .font(Typography.meta).foregroundStyle(palette.ink3)
             .lineLimit(2)
     }

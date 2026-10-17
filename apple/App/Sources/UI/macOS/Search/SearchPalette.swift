@@ -103,7 +103,7 @@ struct SearchPalette: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(palette.ink2).accessibilityHidden(true)
+            Image(.search).foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
                 .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
@@ -202,7 +202,7 @@ struct SearchPalette: View {
                 if card.isTask {
                     TaskRingView(status: card.status, done: false, size: 14)
                 } else {
-                    Image(systemName: text.images.isEmpty ? "doc.text" : "photo").foregroundStyle(palette.ink2)
+                    Image(text.images.isEmpty ? .document : .photo).foregroundStyle(palette.ink2)
                 }
             }
             .frame(width: 16)
@@ -442,7 +442,7 @@ private struct FilterCapsule: View {
             Text(name).foregroundStyle(on ? palette.paper : palette.ink2)
             if let value {
                 Text(value).fontWeight(.medium)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
+                Image(.expand).font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
         .font(Typography.meta)
