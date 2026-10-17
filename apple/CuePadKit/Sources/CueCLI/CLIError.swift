@@ -15,7 +15,9 @@ struct CLIError: Error {
   static func usage(_ message: String) -> CLIError { CLIError(kind: .usage, message: message) }
   static func notFound(_ message: String) -> CLIError { CLIError(kind: .notFound, message: message) }
   static func invalid(_ message: String) -> CLIError { CLIError(kind: .invalid, message: message) }
+}
 
+extension CLIError {
   /// Store 抛出的错误翻成可操作的说明。
   init(_ error: any Error) {
     switch error {
@@ -36,10 +38,5 @@ struct CLIError: Error {
     default:
       self = CLIError(kind: .store, message: "\(error)")
     }
-  }
-
-  init(kind: Kind, message: String) {
-    self.kind = kind
-    self.message = message
   }
 }
