@@ -300,9 +300,9 @@ enum AgentSkill {
     static func text(for kind: AgentKind, cuepad: URL) -> String {
         let command = shellQuoted(cuepad.path)
         let lines = [
-            "description: 要在手机上看或验收你做的东西（网页、截图、PDF、音视频、文稿），或用户提到 CuePad、灵感、任务时用：把文件发到用户手机上的 CuePad，读写其中的灵感与任务。CuePad 是用户记灵感、管任务、指挥 Agent 的 App。",
+            "description: 交付能看的成果（截图、录屏、网页、PDF、文稿）给用户验收，或用户提到 CuePad、灵感、任务时用：把文件发到用户手机上的 CuePad，读写其中的灵感与任务。CuePad 是用户记灵感、管任务、指挥 Agent 的 App。",
             "---",
-            "CuePad 的手机端看得到这个会话，你发的文件在对话里是一张卡片。",
+            "用户多在手机上看你的成果，本机路径（如 /tmp/x.png）他打不开。做完时把能看的成果发到手机，回答里说一句发了什么；指挥你的 Cue 也在那里核对。",
             "",
             "发到手机：`\(command) show <文件…> [--title 标题]`。一次给几个文件是同一张卡，点开后左右切换。",
             "",

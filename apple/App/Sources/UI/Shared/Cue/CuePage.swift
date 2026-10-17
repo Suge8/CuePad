@@ -167,6 +167,8 @@ struct CuePage: View {
             }
         case .cue(let message, let task):
             CueSays(message: message, task: task.flatMap { tasks[$0] }, joined: joined, arrives: !swapsInPlace)
+        case .result(let message, let task, let deliverables):
+            if let ref = tasks[task] { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
         case .notes(let notes):
             CueNotes(notes: notes, live: live.flatMap { live in notes.contains { $0.id == live.round } ? live : nil })
                 .padding(.leading, Bubble.noteInset)
@@ -207,7 +209,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 8) {
             if let thread {
-                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = PreviewOpening(preview: $0) }
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 }
             }
             if !cue.canHear {
                 CueEnableCard().transition(.opacity)

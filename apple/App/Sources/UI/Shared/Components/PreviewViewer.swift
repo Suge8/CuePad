@@ -1,132 +1,186 @@
 import CueStore
 #if os(macOS)
 import Quartz
-#else
-import QuickLook
 #endif
 import SwiftUI
 
-/// 附件目录里的文件在本机的可读位置：文件以哈希为名，没有扩展名，系统的快速查看与"存到文件"认不出类型，
-/// 所以按文件名放一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）。预览文件与对话里的图片共用。
-nonisolated enum PreviewFile {
-    static func url(hash: String, name: String, original: URL) -> URL? {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
-        // 文件名来自同步的记录：不能带路径
-        let target = directory.appending(path: name.replacing("/", with: "_").replacing("..", with: "_"))
-        guard !FileManager.default.fileExists(atPath: target.path) else { return target }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: original, to: target)
-            return target
-        } catch {
-            return nil
-        }
-    }
-}
-
-/// 点开的那一个文件，和与它同一批（同一张卡）的几个：在全屏页里左右切换。
+/// 点开的那一份，和与它同一组的几份（全屏页里左右翻）；`group` 认它从哪张缩略图放大（`PreviewZoomKey`），`reply` 是底栏对谁说。
 struct PreviewOpening: Identifiable, Equatable {
     let preview: PiPreview
     let batch: [PiPreview]
-
-    init(preview: PiPreview, batch: [PiPreview]? = nil) {
-        self.preview = preview
-        self.batch = batch ?? [preview]
-    }
+    let group: String
+    let reply: PreviewReply
 
     var id: UUID { preview.id }
 }
 
+/// 全屏页底栏：从结果卡打开是对 Cue 说，从会话页打开是对这个会话说，从"等你"打开是那几个选项。
+enum PreviewReply: Equatable {
+    case cue
+    case session(PiSessionState)
+    /// `question` 是"等你"卡上那句要你定什么（`CueAsk.question`）
+    case answer(CueMessage, question: String)
+}
+
 extension View {
-    /// 点预览卡后的全屏页：一批里的几个在同一页里左右切换（前后箭头：Mac 在右上角，手机在底栏；手机上网页与 Markdown 那几页也能左右滑）。网页与 Markdown 由 CuePad 自己显示
-    /// （网页只读、不联网），其余嵌系统的快速查看（缩放、播放、翻页都有）。一个对话只在这里挂一次，不在每张卡上各挂一个。
+    /// 点交付物后的全屏页：同一组的几份左右翻；手机上每类都由 CuePad 自己显示（`PreviewPages+iOS`；网页与文稿只读、不联网），
+/// Mac 上网页与 Markdown 自己显示，其余嵌系统的快速查看（缩放、播放、翻页都有）。
+    /// 手机上从点的那张缩略图放大出来（系统 zoom 转场），下滑缩回翻到的那一份原处；减弱动态效果时整块交叉淡入淡出。Mac 是窗口内浮层。
+    /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>) -> some View { modifier(PreviewPresenter(opened: opened)) }
 }
 
 private struct PreviewPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
+    /// 呈现着的那一份：跟着 `opened` 走，只多管一件事——减弱动态效果时不带呈现动画地换上（不滑上来，全屏页自己淡入，`PreviewPager.shown`）。
+    /// 调用处直接写 `opened`，写的那一下的动画由它们定，这里另起一个事务才拦得住。
+    @State private var presented: PreviewOpening?
+    @Namespace private var zoom
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
-            .panel(item: $opened, style: .fullScreen) {
-                PreviewPager(batch: $0.batch, current: $0.preview.id)
+            #if os(iOS)
+            .environment(\.previewZoom, reduceMotion ? nil : zoom)
+            #endif
+            .onChange(of: opened, initial: true) { _, next in
+                var transaction = Transaction()
+                transaction.disablesAnimations = reduceMotion
+                withTransaction(transaction) { presented = next }
+            }
+            .panel(item: Binding { presented } set: { presented = $0; opened = $0 }, style: .fullScreen) {
+                PreviewPager(opening: $0, current: $0.preview.id, zoom: reduceMotion ? nil : zoom)
                     #if os(macOS)
-                    .frame(maxWidth: 960, maxHeight: 720)
+                    .frame(maxWidth: 960, maxHeight: 760)
                     .background(palette.desk)
                     #endif
             }
     }
 }
 
-/// 全屏页：顶上是各端浮层统一的那一行（Mac 是 `PanelHeader`：标题居中，前后箭头、分享与关闭在右上；iOS 是系统顶栏：左关闭、右分享），
-/// 标题是当前这个文件（一批共用一个标题时写文件名，同卡片上的写法），不另画分隔线，内容紧接着铺满。
+/// 全屏页：顶上是各端浮层统一的那一行（Mac 是 `PanelHeader`：标题居中，前后箭头、分享与关闭在右上；iOS 是系统顶栏：左关闭、中间标题与
+/// "第几份 · 类型"、右分享），标题是当前这一份（写法同缩略图下那行），内容紧接着铺满，底部一条玻璃栏（`PreviewReplyBar`）。
 private struct PreviewPager: View {
-    let batch: [PiPreview]
+    let opening: PreviewOpening
     @State var current: UUID
+    let zoom: Namespace.ID?
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    #if os(iOS)
     @Environment(\.closePanel) private var close
+    #if os(iOS)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 减弱动态效果时整页的淡入淡出
+    @State private var shown = false
+    /// 往下拉了多少（`PageSwipe`）
+    @State private var pull: CGFloat = 0
+    /// 图片页放大着：拖动是看图，不是收起
+    @State private var zoomedIn = false
     #endif
 
+    private var batch: [PiPreview] { opening.batch }
     private var index: Int { batch.firstIndex { $0.id == current } ?? 0 }
     private var preview: PiPreview { batch[index] }
-    private var title: String { PreviewGroup.label(of: preview, in: batch) }
-    /// 一批里第几个，只有一个时不写
-    private var position: String? { batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil }
+    private var title: String { DeliverableStrip.label(of: preview, in: batch) }
+    /// "2 / 3 · 图片"，只有一份时只写类型
+    private var position: Dotted { Dotted(batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil, preview.kind?.label) }
 
     var body: some View {
         #if os(iOS)
         NavigationStack {
             TabView(selection: $current) {
-                ForEach(batch) { PreviewContent(preview: $0, file: file(of: $0), active: $0.id == current).tag($0.id) }
+                ForEach(batch) { PreviewContent(preview: $0, file: file(of: $0), active: $0.id == current, zoomedIn: $zoomedIn).tag($0.id) }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .scaleEffect(1 - min(pull, 400) / 1600)
+            .offset(y: pull)
+            .gesture(PageSwipe(enabled: !zoomedIn) { pull = $0 } released: { pulled in
+                if pulled > Self.pullToClose { dismiss() } else { withAnimation(Motion.snappy) { pull = 0 } }
+            })
+            .onChange(of: current) { zoomedIn = false }
             .background(palette.desk)
             .navigationTitle(title)
+            .navigationSubtitle(position.visible)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
                 if let file = file(of: preview) { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) } }
-                // 快速查看自己吃掉左右滑（它里面也是一个翻页的滚动区），翻到它那页时只能靠这两个箭头
-                if let position {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        stepper(position)
-                    }
-                }
+            }
+            .safeAreaBar(edge: .bottom) {
+                PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
+                    .padding(.horizontal, 12).padding(.bottom, 8)
+                    .frame(maxWidth: 640)
+                    .frame(maxWidth: .infinity)
             }
         }
+        .zoomed(from: PreviewZoomKey(group: opening.group, preview: current), in: zoom)
+        .opacity(reduceMotion && !shown ? 0 : 1)
+        .presentationBackground(reduceMotion ? .clear : palette.desk)
+        .onAppear { if reduceMotion { withAnimation(Motion.crossfade) { shown = true } } }
         #else
         VStack(spacing: 10) {
             PanelHeader(title: title) {
-                if let position { stepper(position) }
+                stepper
                 if let file = file(of: preview) {
                     ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") }
                 }
             }
             .buttonStyle(.borderless).foregroundStyle(palette.ink2)
             PreviewContent(preview: preview, file: file(of: preview)).id(preview.id)
+            PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
+                .frame(maxWidth: 640).padding([.horizontal, .bottom], 16)
         }
         .padding(.top, 14)
         .background(palette.desk)
         #endif
     }
 
-    /// 前后箭头夹着"第几个 / 共几个"。
-    @ViewBuilder private func stepper(_ position: String) -> some View {
-        Button("上一个", systemImage: "chevron.left") { step(-1) }.labelStyle(.iconOnly).disabled(index == 0)
+    #if os(iOS)
+    /// 拉过这么多松手就收起
+    private static let pullToClose: CGFloat = 110
+
+    #endif
+
+    #if os(macOS)
+    /// 前后箭头夹着"第几份 · 类型"。
+    @ViewBuilder private var stepper: some View {
+        if batch.count > 1 { Button("上一个", systemImage: "chevron.left") { step(-1) }.labelStyle(.iconOnly).disabled(index == 0) }
         Text(position).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
-        Button("下一个", systemImage: "chevron.right") { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1)
+        if batch.count > 1 { Button("下一个", systemImage: "chevron.right") { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1) }
     }
 
     private func step(_ offset: Int) {
         withAnimation(Motion.quick) { current = batch[index + offset].id }
     }
+    #endif
+
+    /// 关掉：减弱动态效果时先淡出再无动画地收起，其余照系统的（手机上缩回那张缩略图）。
+    private func dismiss() {
+        #if os(iOS)
+        if reduceMotion {
+            withAnimation(Motion.crossfade) { shown = false } completion: {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { close() }
+            }
+            return
+        }
+        #endif
+        close()
+    }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(hash: preview.hash, name: preview.systemFileName, original: $0) }
+        services.store.files.url(of: preview)
+    }
+}
+
+private extension View {
+    @ViewBuilder func zoomed(from key: PreviewZoomKey, in namespace: Namespace.ID?) -> some View {
+        #if os(iOS)
+        if let namespace { navigationTransition(.zoom(sourceID: key, in: namespace)) } else { self }
+        #else
+        self
+        #endif
     }
 }
 
@@ -136,6 +190,8 @@ private struct PreviewContent: View {
     let file: URL?
     /// 是不是翻到的这一页（翻页留着的邻页不是）
     var active = true
+    /// 图片页放大着（手机：这时拖动是看图，不收起）
+    var zoomedIn: Binding<Bool> = .constant(false)
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -144,10 +200,15 @@ private struct PreviewContent: View {
                 switch preview.kind {
                 case .web: PreviewWeb(file: file)
                 case .markdown: PreviewMarkdown(file: file)
-                #if os(macOS)
-                default: QuickLookPage(file: file)
+                #if os(iOS)
+                case .image: PreviewImage(file: file, zoomedIn: active ? zoomedIn : .constant(false))
+                case .pdf: PreviewPDF(file: file)
+                case .video, .audio: PreviewPlayer(file: file, active: active)
+                case .text: PreviewText(file: file)
+                case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
+                case .model, nil: PreviewStill(preview: preview, file: file)
                 #else
-                default: QuickLookPage(file: file, active: active)
+                default: QuickLookPage(file: file)
                 #endif
                 }
             } else {
@@ -176,35 +237,6 @@ private struct QuickLookPage: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: QLPreviewView, coordinator: ()) { view.close() }
-}
-#else
-/// 嵌在页里的快速查看（只放这一个文件，切换由外面的分页做）。快速查看在另一个进程里播音视频，控制器拆掉或翻走了它还接着播：
-/// 不在当前页时换成空列表让它停下，翻回来再放回这个文件。
-private struct QuickLookPage: UIViewControllerRepresentable {
-    let file: URL
-    var active = true
-
-    func makeCoordinator() -> Source { Source() }
-
-    func makeUIViewController(context: Context) -> QLPreviewController {
-        let controller = QLPreviewController()
-        context.coordinator.file = active ? file : nil
-        controller.dataSource = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
-        let shown = active ? file : nil
-        guard context.coordinator.file != shown else { return }
-        context.coordinator.file = shown
-        controller.reloadData()
-    }
-
-    final class Source: NSObject, QLPreviewControllerDataSource {
-        var file: URL?
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { file == nil ? 0 : 1 }
-        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> any QLPreviewItem { file! as NSURL }
-    }
 }
 #endif
 

@@ -800,15 +800,22 @@ extension CueStore {
   }
 
 
-  /// 一批任务各自的预览（任务自己与它的步骤的会话发到手机上的，从早到晚）：一次查完，界面不必逐件取细节。没有预览的不在结果里。
-  public func previews(ofTasks tasks: [UUID]) throws -> [UUID: [PiPreview]] {
+  /// 一批顶层任务各自的交付物（唯一的规则）：任务与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
+  /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
+  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 页里一句话下面挂哪几份按话的先后再切（`CueThread`）。没有的任务不在结果里。
+  public func deliverables(of tasks: [UUID]) throws -> [UUID: [PiPreview]] {
     guard !tasks.isEmpty else { return [:] }
     let rows = try db.query(
       """
-      WITH tasks(id) AS (SELECT value FROM json_each(?))
-      SELECT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", ")), CASE WHEN c.id IN tasks THEN c.id ELSE c.parentID END
-      FROM previews p JOIN cards c ON c.piSessionID = p.sessionID
-      WHERE c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND (c.id IN tasks OR c.parentID IN tasks)
+      WITH tops(id) AS (SELECT value FROM json_each(?1)),
+      used(task, session) AS (
+        SELECT COALESCE(c.parentID, c.id), c.piSessionID FROM cards c
+        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.piSessionID IS NOT NULL
+        UNION SELECT COALESCE(c.parentID, c.id), f.value FROM cards c, json_each(c.formerSessionIDs) f
+        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
+      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", ")), u.task
+      FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = u.task
+      WHERE p.createdAt >= COALESCE(\(Card.startedSQL("t")), t.todoAt)
       ORDER BY p.createdAt, p.id
       """, [Self.idList(tasks)]
     ) { (task: $0.uuid(Int32(PiPreview.columns.count)), preview: PiPreview(row: $0)) }

@@ -56,10 +56,13 @@ public struct ExecutableLocator: Sendable, Equatable {
     /// 这组目录再保底 /usr/bin 与 /bin，写成 PATH。
     public var path: String { Self.join(searchDirectories) }
 
-    /// 起 `executable` 用的完整环境：CuePad 自己的环境，盖上 `overrides`；PATH 是可执行文件所在目录（`pi` 是 node 脚本，
-    /// node 多半与它装在一起）、搜索目录、原有的 PATH（`overrides` 里给了就用它的），再保底 /usr/bin 与 /bin。
+    /// 起 `executable` 用的完整环境：CuePad 自己的环境，盖上 `overrides`，去掉各家的会话 id（`AgentKind.sessionVariable`）；
+    /// PATH 是可执行文件所在目录（`pi` 是 node 脚本，node 多半与它装在一起）、搜索目录、原有的 PATH（`overrides` 里给了就用它的），
+    /// 再保底 /usr/bin 与 /bin。CuePad 在某个 Agent 的命令里被启动时，那个会话的 id 会一路传给开出的会话，`cuepad show` 就发错了地方
+    /// （`overrides` 常是一份完整的进程环境，`AgentPaths.environment`，所以在合并之后去掉）。
     public func environment(launching executable: URL, overrides: [String: String] = [:]) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment.merging(overrides) { $1 }
+        let sessions = Set(AgentKind.allCases.map(\.sessionVariable))
+        var environment = ProcessInfo.processInfo.environment.merging(overrides) { $1 }.filter { !sessions.contains($0.key) }
         let inherited = (environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
         environment["PATH"] = Self.join([executable.deletingLastPathComponent()] + searchDirectories + inherited)
         return environment

@@ -19,6 +19,16 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     }
   }
 
+  /// 这家给它执行的每条命令带上当前会话 id 的环境变量（`cuepad show` 据此认出会话）。
+  public var sessionVariable: String {
+    switch self {
+    case .pi: "PI_SESSION_ID"
+    case .claudeCode: "CLAUDE_CODE_SESSION_ID"
+    case .codex: "CODEX_THREAD_ID"
+    case .opencode: "OPENCODE_SESSION_ID"
+    }
+  }
+
   /// 这家模型的提供方（`PiModelKey.provider`），唯一的一处：Claude Code、Codex 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`），
   /// 提供方就写成这家；Pi、OpenCode 的模型本身带提供方（`provider/id`），为 nil。会话上报的模型、Cue 的可选清单、开工时只给了 id 的补全都按它。
   public var modelProvider: String? {

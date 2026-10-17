@@ -24,6 +24,7 @@ extension DebugScene {
         case "agentsetup": workspace.showsAgentSetup = true
         case "connected":
             await connectAgents(workspace.services)
+            await bindFolderIfAsked(workspace.services.store)
             workspace.show(.agent)
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
@@ -143,6 +144,17 @@ extension DebugScene {
             let install: () -> Void = { print("update-installed"); DebugHooks.mark("update-installed") }
             if postponeRelaunch?(install) != true { install() }
         }
+    }
+
+    /// `-CuePadFolder <路径>`：建一个以文件夹命名、绑着它的项目（已有同名的不再建）。隔离实例里真跑 Cue 派活要有绑了文件夹的项目，
+    /// 而系统的选文件夹面板读写正式版的偏好域（同一个 bundle id），在后台也点不动。
+    private static func bindFolderIfAsked(_ store: CueStore) async {
+        guard let path = defaults.string(forKey: "CuePadFolder") else { return }
+        let name = URL(filePath: path).lastPathComponent
+        guard (try? await store.projects())?.contains(where: { $0.name == name }) != true,
+            let project = try? await store.createProject(name: name, color: "#2F4A9E", icon: "globe")
+        else { return }
+        try? await store.setDirectory(path, for: project.id)
     }
 
     private static func connectAgents(_ services: AppServices) async {

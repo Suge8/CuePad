@@ -1,6 +1,5 @@
 import CueStore
 import SwiftUI
-import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -163,10 +162,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
-    static func previewWebLoaded(_ page: WebPage) {
+    /// 预览网页要打开了（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里拍一张同样规则下载入完的快照。
+    static func previewWebLoaded(_ file: URL) {
         #if DEBUG
-        DebugScene.snapshotWeb(page)
+        DebugScene.snapshotWeb(file)
         #endif
     }
 
