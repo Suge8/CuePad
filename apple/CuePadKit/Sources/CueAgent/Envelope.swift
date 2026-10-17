@@ -20,9 +20,10 @@ public enum CueWake: Equatable, Sendable {
   case settingsChanged
 }
 
-/// 交给 Cue 的大脑的一轮输入：一个 `<cue>` 块，你的话（若有）接在块后面。
-/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
-/// 接上的（新上下文第一次醒来才有）、醒来的原因。
+/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（你的话若有，由值班的管理器接在块后面）。
+/// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
+/// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或他改了名字、Agent）末尾一行要它先写交接。
+/// 信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
   /// 合起来约是换新线（`CueContext.renewAt`，6 万 token）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
@@ -33,8 +34,6 @@ public enum CueEnvelope {
     public var now: Date
     /// 上下文已用多少 token；不知道为 nil。
     public var contextUsed: Int?
-    /// 用到这么多 token 就该换新上下文。
-    public var renewAt: Int
     /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
     public var projects: [CueProject]
     public var changes: [CueChange]
@@ -44,30 +43,25 @@ public enum CueEnvelope {
     public var wake: CueWake
     /// 新上下文第一次醒来：接上的交接与对话（不含这次交出去的话）；其余为 nil
     public var resume: CueResume?
-    /// 你这次说的话（`CueFormat` 正文）；没有为 nil。
-    public var said: String?
 
     public init(
-      now: Date, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
+      now: Date, contextUsed: Int?, projects: [CueProject], changes: [CueChange],
+      board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil
     ) {
       self.resume = resume
       self.now = now
       self.contextUsed = contextUsed
-      self.renewAt = renewAt
       self.projects = projects
       self.changes = changes
       self.board = board
       self.waiting = waiting
       self.wake = wake
-      self.said = said
     }
   }
 
   public static func render(_ input: Input) -> String {
     let calendar = Calendar(identifier: .gregorian)
-    let used = input.contextUsed.map(CueContext.tokens) ?? "未知"
-    var lines = ["<cue>", "\(stamp(input.now, calendar)) · 上下文 \(used) / 换新线 \(CueContext.tokens(input.renewAt))"]
+    var lines = ["<cue>", stamp(input.now, calendar)]
 
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
@@ -87,22 +81,25 @@ public enum CueEnvelope {
     if let resume = input.resume { lines += self.resume(resume, calendar) }
     lines.append("醒来：" + wake(input.wake))
     if case .reminder(let due) = input.wake { lines += due.map { "- #\($0.index) \($0.line.text)" } }
+    if input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
     lines.append("</cue>")
-    if let said = input.said, !said.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { lines.append(said) }
     return lines.joined(separator: "\n")
   }
 
   private static func wake(_ wake: CueWake) -> String {
     switch wake {
     case .enabled: "刚启用"
-    case .message: "你发来新消息"
+    case .message: "他发来新消息"
     case .sessionActivity: "会话有动静"
     case .idle: "空闲，例行看一眼"
     case .reminder: "提醒到点"
     case .renewed: "换了新上下文，从接上的地方接着做"
-    case .settingsChanged: "他改了你的名字或 Agent，要换新上下文：先 memory renew 写交接备忘，再结束这一轮"
+    case .settingsChanged: "他改了你的名字或 Agent"
     }
   }
+
+  /// 要换新上下文时的那一行。
+  static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
 
   /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
   private static func resume(_ resume: CueResume, _ calendar: Calendar) -> [String] {
