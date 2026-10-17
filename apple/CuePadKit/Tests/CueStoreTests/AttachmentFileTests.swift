@@ -64,5 +64,4 @@ import Testing
     #expect(throws: CueStoreError.notFound) { try store.files.original(hash: hash) }
     #expect(store.files.fileURL(for: hash) == nil)
   }
-
 }

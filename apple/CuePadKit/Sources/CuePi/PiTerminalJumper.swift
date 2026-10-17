@@ -12,20 +12,8 @@ public struct PiJumpResult: Sendable, Equatable {
     }
 
     public var precision: Precision
-    /// 会话在 tmux 里时，是否已把 tmux 切到该 pane
-    public var tmuxPaneSelected: Bool
     /// 精度降级/失败的原因，给界面提示用
     public var note: String?
-}
-
-/// 跳转要用到的系统能力。生产实现是 `LivePiTerminalSystem`；测试用假实现记录调用。
-public protocol PiTerminalSystem: Sendable {
-    /// 运行外部命令（如 `tmux`），返回退出码与标准输出
-    func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String)
-    /// 执行 AppleScript，返回结果文字；未授权自动化等失败时抛错
-    func appleScript(_ source: String) async throws -> String
-    /// 激活应用；应用没在运行返回 false
-    func activate(bundleID: String) async -> Bool
 }
 
 /// "跳到该会话所在终端"。用 hello 里的终端信息，按能做到的最高精度定位：
@@ -33,25 +21,22 @@ public protocol PiTerminalSystem: Sendable {
 /// - Terminal.app：按 tty 选中标签页并前置窗口；
 /// - Ghostty：按工作目录找终端，唯一匹配才聚焦（Ghostty 不暴露 tty，也没有传给子进程的终端 ID）；
 /// - 其他终端：只能激活应用。iTerm2/kitty/WezTerm 各有自己的脚本接口，尚未接入。
+///
+/// `tmux` 按 `ExecutableLocator.standard` 的 PATH 找（GUI 应用的 PATH 很短）、AppleScript 在主线程执行、应用激活走 `NSRunningApplication`。
+/// 首次控制某个应用时系统会弹"自动化"授权，App 需要在 Info.plist 里写 `NSAppleEventsUsageDescription`。
 public struct PiTerminalJumper: Sendable {
-    private let system: any PiTerminalSystem
-
     private static let appleTerminal = "com.apple.Terminal"
     private static let ghostty = "com.mitchellh.ghostty"
 
-    public init(system: any PiTerminalSystem = LivePiTerminalSystem()) {
-        self.system = system
-    }
+    public init() {}
 
     public func jump(to session: PiSession) async -> PiJumpResult {
         let terminal = session.terminal
         var tty = terminal.tty
-        var tmuxSelected = false
         var notes: [String] = []
 
         if let pane = terminal.tmuxPane, let socket = terminal.tmuxSocketPath {
-            tmuxSelected = await system.run("tmux", ["-S", socket, "switch-client", "-t", pane]).status == 0
-            if tmuxSelected {
+            if await run("tmux", ["-S", socket, "switch-client", "-t", pane]).status == 0 {
                 tty = await hostingClientTTY(socket: socket, pane: pane) ?? tty
             } else {
                 notes.append("tmux 没能切到 \(pane)（会话可能没有附着的客户端）")
@@ -59,7 +44,7 @@ public struct PiTerminalJumper: Sendable {
         }
 
         guard let bundleID = terminal.bundleID else {
-            return PiJumpResult(precision: .failed, tmuxPaneSelected: tmuxSelected, note: "不知道会话运行在哪个终端应用里")
+            return PiJumpResult(precision: .failed, note: "不知道会话运行在哪个终端应用里")
         }
 
         let script: String? = switch bundleID {
@@ -69,8 +54,8 @@ public struct PiTerminalJumper: Sendable {
         }
         if let script {
             do {
-                let result = try await system.appleScript(script)
-                if result == "ok" { return PiJumpResult(precision: .tab, tmuxPaneSelected: tmuxSelected, note: notes.first) }
+                let result = try await appleScript(script)
+                if result == "ok" { return PiJumpResult(precision: .tab, note: notes.first) }
                 notes.append(Self.explain(scriptResult: result))
             } catch {
                 notes.append("无法控制该终端应用（可能没有授予自动化权限）：\(error.localizedDescription)")
@@ -79,15 +64,15 @@ public struct PiTerminalJumper: Sendable {
             notes.append("没有 tty 信息，无法定位标签页")
         }
 
-        guard await system.activate(bundleID: bundleID) else {
-            return PiJumpResult(precision: .failed, tmuxPaneSelected: tmuxSelected, note: "终端应用 \(bundleID) 没有在运行")
+        guard await activate(bundleID: bundleID) else {
+            return PiJumpResult(precision: .failed, note: "终端应用 \(bundleID) 没有在运行")
         }
-        return PiJumpResult(precision: .application, tmuxPaneSelected: tmuxSelected, note: notes.first)
+        return PiJumpResult(precision: .application, note: notes.first)
     }
 
     /// 最近活动的 tmux 客户端 = tmux 切换时选中的那个
     private func hostingClientTTY(socket: String, pane: String) async -> String? {
-        let listed = await system.run("tmux", ["-S", socket, "list-clients", "-t", pane, "-F", "#{client_activity} #{client_tty}"])
+        let listed = await run("tmux", ["-S", socket, "list-clients", "-t", pane, "-F", "#{client_activity} #{client_tty}"])
         guard listed.status == 0 else { return nil }
         return listed.output.split(separator: "\n")
             .compactMap { line -> (Int, String)? in
@@ -109,7 +94,7 @@ public struct PiTerminalJumper: Sendable {
         "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
-    static func appleTerminalScript(tty: String) -> String {
+    private static func appleTerminalScript(tty: String) -> String {
         let device = tty.hasPrefix("/dev/") ? tty : "/dev/" + tty
         return """
         tell application "Terminal"
@@ -128,7 +113,7 @@ public struct PiTerminalJumper: Sendable {
         """
     }
 
-    static func ghosttyScript(cwd: String) -> String {
+    private static func ghosttyScript(cwd: String) -> String {
         """
         tell application "Ghostty"
             set matches to every terminal whose working directory is \(quoted(cwd))
@@ -141,20 +126,17 @@ public struct PiTerminalJumper: Sendable {
         end tell
         """
     }
-}
 
-/// 生产实现：`tmux` 按 `ExecutableLocator.standard` 的 PATH 找（GUI 应用的 PATH 很短）、AppleScript 在主线程执行、
-/// 应用激活走 `NSRunningApplication`。首次控制某个应用时系统会弹"自动化"授权，App 需要在
-/// Info.plist 里写 `NSAppleEventsUsageDescription`。
-public struct LivePiTerminalSystem: PiTerminalSystem {
-    public init() {}
+    // MARK: 系统
 
-    public func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
+    /// 运行外部命令（如 `tmux`），返回退出码与标准输出
+    private func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
         let env = URL(filePath: "/usr/bin/env")
         return await ChildProcess.run(env, [executable] + arguments, environment: ExecutableLocator.standard.environment(launching: env)) ?? (-1, "")
     }
 
-    public func appleScript(_ source: String) async throws -> String {
+    /// 执行 AppleScript，返回结果文字；未授权自动化等失败时抛错
+    private func appleScript(_ source: String) async throws -> String {
         try await MainActor.run {
             var error: NSDictionary?
             guard let script = NSAppleScript(source: source) else { throw ScriptError(message: "invalid script") }
@@ -164,7 +146,8 @@ public struct LivePiTerminalSystem: PiTerminalSystem {
         }
     }
 
-    public func activate(bundleID: String) async -> Bool {
+    /// 激活应用；应用没在运行返回 false
+    private func activate(bundleID: String) async -> Bool {
         await MainActor.run {
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.activate() ?? false
         }

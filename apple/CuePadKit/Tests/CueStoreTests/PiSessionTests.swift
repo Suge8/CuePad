@@ -38,5 +38,4 @@ import Testing
     #expect(try await store.piCheckpoint(of: "s1") == second)
     #expect(try await store.piSessions().count == 1)
   }
-
 }
