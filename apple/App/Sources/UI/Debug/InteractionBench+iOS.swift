@@ -106,6 +106,19 @@ enum IOSInteractionBench {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
+        // Cue 页的对话滚动（配 `-CuePadLongChat YES` 量长对话）与任务页（侧栏的"任务"，配 `-CuePadManyTasks` 量任务多时）：进页、滚动、回到列表
+        if wants("Cue 页滚动") {
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("Cue 页上找不到可滚的对话") }
+            for _ in 0..<2 { await stepScroll("Cue 页滚动", scroll, step: { name, action in await step(name, action) }) }
+        }
+        for _ in 0..<2 where wants("任务页") || wants("任务页滚动") {
+            navigation.showList()
+            try? await Task.sleep(for: .seconds(1))
+            await step("任务页") { navigation.select(.tasks) }
+            guard wants("任务页滚动") else { continue }
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("任务页上找不到可滚的列表") }
+            await stepScroll("任务页滚动", scroll, step: { name, action in await step(name, action) })
+        }
         // Agent 整页（侧栏的"会话"）点会话（先读出这一页再推入）→ 返回
         navigation.select(.agent)
         try? await Task.sleep(for: .seconds(1))
