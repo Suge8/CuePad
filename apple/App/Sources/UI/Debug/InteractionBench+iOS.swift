@@ -6,7 +6,7 @@ import QuartzCore
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：以列表为根的导航栈）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
+/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：分栏折叠成一层层的页）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
 /// 动作是点击最终调用的同一条路（导航路径、`openSession`、点列表行的 `select`、系统返回改的 `column`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。

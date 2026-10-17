@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：宽屏是分栏，iPhone 是以列表为根的导航栈（`SplitRoot`），导航状态同一个。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：各种宽度都是同一个分栏（`SplitRoot`），iPhone 上由系统折叠成一层层的页。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -61,7 +61,7 @@ struct IOSRoot: View {
         .environment(navigation)
         .environment(workspace.services)
         .preferredColorScheme(scheme)
-        // 变宽后两栏都在：此后再变窄，栈里是右边那一页（不停在列表上）
+        // 变宽后两栏都在：此后再变窄，折叠出来的是右边那一页（不停在列表上）
         .onChange(of: sizeClass) { _, size in if size == .regular { navigation.column = .detail } }
         .task { await workspace.follow() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
