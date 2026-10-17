@@ -115,6 +115,7 @@ private struct CueNowPanel: View {
     var body: some View {
         HugHeight {
             ScrollView { content }.scrollBounceBehavior(.basedOnSize)
+                .defaultScrollAnchor(DebugHooks.preset.cuePanelEnd ? .bottom : nil)
         }
         .refreshesQuota()
     }

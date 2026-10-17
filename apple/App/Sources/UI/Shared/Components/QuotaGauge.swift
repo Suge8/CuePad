@@ -1,20 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 订阅额度的仪表（读数规则在 `QuotaMeter`）。
+/// 订阅额度的总览（读数规则在 `QuotaMeter`）：手机 Cue 页头的面板、Mac Agent 页顶部与菜单栏面板，还没有额度记录时整条不出现。
 ///
-/// - `QuotaStrip`：Agent 页顶部（Mac 与 iOS）与 Mac 菜单栏面板的总览，一排放得下就并排、放不下一个一行（`QuotaFlow`，每个账号只量一次），
-///   每个账号一枚 `QuotaChip`：仪表加两行字——账号名（数据陈旧时接一句"x 分钟前"），下面一句：超了匀速刻度写"照这速度约 X 后用完"，
-///   否则写卡着的窗口多久后重置（计时文字，系统只在整分钟换字），过了重置时间还没有新观测的写"已重置"。
-///   点开是明细（`QuotaDetail`）：各窗口的用量条、按模型的周额度、"更新于 x 分钟前"；弹出框只在点开时挂上，平时不建。还没有额度记录时整条不出现。
-/// - `QuotaRings`：一块画布画全部的圈与刻度（与中间的提供方图标）：外圈是短窗口（5 小时），内圈是长窗口（本周）；只有一个窗口（Codex 常见）就一圈。
-///   弧从 12 点顺时针铺到已用的比例，弧上一道刻度是匀速刻度（窗口已过的时间该用到多少），刻度在弧外面压出一道缝，任何底色上都读得出。
-///   回复框的模型胶囊（`ModelBadge`）用同一块画布画一圈、不画刻度。
+/// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
+/// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，系统只在整分钟换字；过了重置时间还没有新观测写"已重置"），
+/// 右边是还剩多少的大号等宽数字，下面一条剩余条（`QuotaBar`）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
+/// 主视图把要看的都写出来了，所以不再有点开的明细：总览不是按钮、没有按压。
+/// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
 ///
-/// 配色只用墨：余量足是次要墨色，七成起是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）。
+/// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色。
 /// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`QuotaMoments`：等到重置是业务语义，不是周期刷新）：
-/// 弧与刻度用无回弹弹簧过去，减弱动态效果时换成短淡入淡出；没有常驻动画与周期定时器。
-/// 这一条在 Agent 页第一次出现时整条现建：圈不拆成一段一个视图、排法不量两遍、弹出框不预先挂，第一次建的成本才不盖过整页。
+/// 条与匀速线用无回弹弹簧过去、数字滚动换字，减弱动态效果时直接到终态；没有常驻动画与周期定时器。
 struct QuotaStrip: View {
     @Environment(AppServices.self) private var services
 
@@ -22,44 +19,45 @@ struct QuotaStrip: View {
         let quotas = services.accountQuotas.items
         if !quotas.isEmpty {
             QuotaMoments(quotas) { now in
-                QuotaFlow {
-                    ForEach(quotas.map { QuotaMeter($0, at: now) }.filter { !$0.rings.isEmpty }, id: \.provider) { QuotaChip(meter: $0) }
+                QuotaColumns {
+                    ForEach(quotas.map { QuotaMeter($0, at: now) }.filter { !$0.windows.isEmpty }, id: \.provider) { QuotaAccount(meter: $0) }
                 }
             }
         }
     }
 }
 
-/// 一排放得下就并排（间距 22），放不下就一个一行（行距 12）：每枚只按理想尺寸量一次。
-private struct QuotaFlow: Layout {
-    private static let spacing: CGFloat = 22
-    private static let lineSpacing: CGFloat = 12
+/// 放得下每栏 `column` 宽就并排成等宽的几栏（顶对齐），否则一个一块往下排。
+private struct QuotaColumns: Layout {
+    private static let column: CGFloat = 280
+    private static let gap: CGFloat = 32
+    private static let lineSpacing: CGFloat = 16
 
-    func makeCache(subviews: Subviews) -> [CGSize] { subviews.map { $0.sizeThatFits(.unspecified) } }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGSize]) -> CGSize {
-        if fitsRow(proposal.width, cache) {
-            return CGSize(width: rowWidth(cache), height: cache.map(\.height).max() ?? 0)
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? Self.column
+        if let column = columnWidth(width, subviews.count) {
+            let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+            return CGSize(width: width, height: heights.max() ?? 0)
         }
-        let gaps = Self.lineSpacing * CGFloat(max(cache.count - 1, 0))
-        return CGSize(width: cache.map(\.width).max() ?? 0, height: cache.map(\.height).reduce(0, +) + gaps)
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + Self.lineSpacing * CGFloat(max(heights.count - 1, 0)))
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout [CGSize]) {
-        let row = fitsRow(bounds.width, cache)
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let column = columnWidth(bounds.width, subviews.count)
         var origin = bounds.origin
-        for (subview, size) in zip(subviews, cache) {
-            let y = row ? bounds.midY - size.height / 2 : origin.y
-            subview.place(at: CGPoint(x: origin.x, y: y), proposal: ProposedViewSize(size))
-            if row { origin.x += size.width + Self.spacing } else { origin.y += size.height + Self.lineSpacing }
+        for subview in subviews {
+            let size = ProposedViewSize(width: column ?? bounds.width, height: nil)
+            subview.place(at: origin, proposal: size)
+            if let column { origin.x += column + Self.gap } else { origin.y += subview.sizeThatFits(size).height + Self.lineSpacing }
         }
     }
 
-    private func rowWidth(_ sizes: [CGSize]) -> CGFloat {
-        sizes.map(\.width).reduce(0, +) + Self.spacing * CGFloat(max(sizes.count - 1, 0))
+    private func columnWidth(_ width: CGFloat, _ count: Int) -> CGFloat? {
+        guard count > 1 else { return nil }
+        let column = (width - Self.gap * CGFloat(count - 1)) / CGFloat(count)
+        return column >= Self.column ? column : nil
     }
-
-    private func fitsRow(_ width: CGFloat?, _ sizes: [CGSize]) -> Bool { width.map { rowWidth(sizes) <= $0 } ?? true }
 }
 
 /// 按额度读数画的内容：此刻画一次，之后只在下一个重置时刻再画一次（等到那一刻是业务语义：`task(id:)` 睡到那一刻，不周期刷新），
@@ -113,49 +111,33 @@ private struct QuotaRefreshOnAppear: ViewModifier {
     }
 }
 
-/// 一个账号：仪表加两行字，点开看明细。
-struct QuotaChip: View {
+/// 一个账号：标志与账号名一行，下面每个窗口一行。
+private struct QuotaAccount: View {
     let meter: QuotaMeter
     @Environment(\.palette) private var palette
-    @State private var showsDetail = false
+
+    /// 图标列宽与它到字的距离，同面板里的列表行。
+    private static let iconColumn: CGFloat = 20
+    private static let iconGap: CGFloat = 8
 
     var body: some View {
-        Button { showsDetail = true } label: { label }
-            .buttonStyle(PressStyle(.control))
-            // 弹出框只在点开时挂上：挂在与这枚同大的空底上，关掉随即卸下
-            .background {
-                if showsDetail {
-                    Color.clear.popover(isPresented: $showsDetail, arrowEdge: Self.arrowEdge) {
-                        QuotaDetail(meter: meter).presentationCompactAdaptation(.popover)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: Self.iconGap) {
+                PiProvider(id: meter.provider).mark?.image
+                    .foregroundStyle(palette.ink2)
+                    .frame(width: Self.iconColumn)
+                Text("\(Text(meter.account).foregroundStyle(palette.ink))\(stale)")
+                    .lineLimit(1)
             }
-            .accessibilityLabel(meter.spoken)
-            .onAppear { if DebugHooks.preset.quotaDetail == meter.provider { DebugHooks.later(.milliseconds(400)) { showsDetail = true } } }
-    }
-
-    /// 朝哪边弹：总览在页顶，手机上固定朝上会被截（不翻面），交给系统按空间定；Mac 给的是首选边（弹在锚点的哪一边），
-    /// 放不下系统自己翻，首选下边：朝上会盖住窗口顶上的工具栏，菜单栏面板上方是菜单栏。
-    #if os(macOS)
-    private static let arrowEdge: Edge? = .bottom
-    #else
-    private static let arrowEdge: Edge? = nil
-    #endif
-
-    private var label: some View {
-        HStack(spacing: 10) {
-            QuotaDial(meter: meter)
-            VStack(alignment: .leading, spacing: 1) {
-                title
-                summary.font(Typography.meta).lineLimit(1)
+            .font(Typography.secondary.weight(.medium))
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(meter.windows) { QuotaWindowRow(window: $0) }
             }
-            .fixedSize()
+            .padding(.leading, Self.iconColumn + Self.iconGap)
         }
-        .contentShape(.rect)
-    }
-
-    private var title: some View {
-        Text("\(Text(meter.account).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink))\(stale)")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(meter.spoken)
     }
 
     /// 数据陈旧时接在账号名后面的"· x 分钟前"。
@@ -165,16 +147,43 @@ struct QuotaChip: View {
                 .font(Typography.meta).foregroundStyle(palette.ink3)
             : Text(verbatim: "")
     }
+}
 
-    /// 卡着的那个窗口一句话：用完了写多久后重置（胭脂），超了刻度写照这速度多久用完，否则写多久后重置。
-    private var summary: Text {
-        guard let window = meter.binding else { return Text(verbatim: "") }
-        if window.hasReset { return Text("\(window.name)\(Dotted.inline)已重置").foregroundStyle(palette.ink3) }
-        if window.isSpent { return Text("已用完\(Dotted.inline)\(window.countdown)后重置").foregroundStyle(palette.failure) }
-        if let runway = window.runway(from: .now) {
-            return Text("照这速度\(runway)后用完").foregroundStyle(window.level == .critical ? palette.failure : palette.ink2)
+/// 一个窗口：窗口名与多久后重置、右边还剩多少，下面一条剩余条；超了匀速线再写照这速度多久用完。
+private struct QuotaWindowRow: View {
+    let window: QuotaMeter.Window
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 还剩多少的数字（Mac 没有动态字体，给固定字号）。
+    #if os(macOS)
+    private static let number = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
+    #else
+    private static let number = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
+    #endif
+
+    var body: some View {
+        let critical = window.level == .critical
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(window.name).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
+                Text("\(Dotted.inline)\(reset)").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                Spacer(minLength: 8)
+                Text("剩 ").font(Typography.meta).foregroundStyle(palette.ink3)
+                Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink)
+                    .contentTransition(.numericText(value: window.left))
+            }
+            QuotaBar(window)
+            if let runway = window.runway(from: .now) {
+                Text("照这速度\(runway)后用完").font(Typography.caption).foregroundStyle(critical ? palette.failure : palette.ink2)
+                    .transition(.opacity)
+            }
         }
-        return Text("\(window.name)\(Dotted.inline)\(window.countdown)后重置").foregroundStyle(palette.ink3)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: window)
+    }
+
+    private var reset: Text {
+        window.hasReset ? Text("已重置") : Text("\(window.countdown)后重置")
     }
 }
 
@@ -183,164 +192,89 @@ extension QuotaMeter.Window {
     var countdown: Text { Text(.currentDate, format: QuotaMeter.Countdown(end: resetsAt)).monospacedDigit() }
 }
 
-/// 总览里的仪表：两圈加中间的提供方图标，一块画布。
-private struct QuotaDial: View {
-    let meter: QuotaMeter
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private static let size: CGFloat = 34
-
-    var body: some View {
-        let line = max(1.5, Self.size * 0.064)
-        QuotaRings(Array(meter.rings.prefix(2)), line: line, gap: line * 0.95, showsPace: true, mark: PiProvider(id: meter.provider).mark?.image)
-            .frame(width: Self.size, height: Self.size)
-            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: meter.rings)
-    }
-}
-
-/// 一到两圈额度弧（外到内），一块画布画完：底圈、铺到已用比例的弧、匀速刻度（两侧压出缝），可选中间的图标。
-/// 已用与刻度随动画插值（`animatableData`），档位的颜色直接换。
-struct QuotaRings: View, Animatable {
-    private var values: AnimatablePair<AnimatablePair<Double, Double>, AnimatablePair<Double, Double>>
-    private let levels: [PiContextMeter.Level]
-    private let line: CGFloat
-    private let gap: CGFloat
-    private let showsPace: Bool
-    private let mark: Image?
+/// 剩余条：铺到还剩的比例，匀速线是一道竖线（两侧在条上压出缝，任何底色上都读得出）；剩的少于匀速线就是用快了。一块画布。
+/// 剩余与匀速线随动画插值（`animatableData`），档位的颜色直接换。
+private struct QuotaBar: View, Animatable {
+    private var values: AnimatablePair<Double, Double>
+    private let level: PiContextMeter.Level
     @Environment(\.palette) private var palette
 
-    init(_ windows: [QuotaMeter.Window], line: CGFloat, gap: CGFloat = 0, showsPace: Bool, mark: Image? = nil) {
-        func pair(_ index: Int) -> AnimatablePair<Double, Double> {
-            windows.indices.contains(index) ? AnimatablePair(windows[index].used, windows[index].pace) : AnimatablePair(0, 0)
-        }
-        values = AnimatablePair(pair(0), pair(1))
-        levels = windows.prefix(2).map(\.level)
-        self.line = line
-        self.gap = gap
-        self.showsPace = showsPace
-        self.mark = mark
+    private static let thickness: CGFloat = 5
+    private static let height: CGFloat = 11
+
+    init(_ window: QuotaMeter.Window) {
+        values = AnimatablePair(window.left, window.even ?? -1)
+        level = window.level
     }
 
-    var animatableData: AnimatablePair<AnimatablePair<Double, Double>, AnimatablePair<Double, Double>> {
+    var animatableData: AnimatablePair<Double, Double> {
         get { values }
         set { values = newValue }
     }
 
     var body: some View {
-        let rings = [values.first, values.second].prefix(levels.count)
-        let (track, tick, markInk) = (palette.track, palette.ink, palette.ink2)
-        let fills = levels.map { QuotaInk.fill($0, palette) }
+        let (left, even) = (values.first, values.second)
+        let (track, fill, tick) = (palette.track, QuotaInk.fill(level, palette), palette.ink)
+        Canvas { context, size in
+            let bar = CGRect(x: 0, y: (size.height - Self.thickness) / 2, width: size.width, height: Self.thickness)
+            context.fill(Path(roundedRect: bar, cornerRadius: Self.thickness / 2), with: .color(track))
+            if left > 0 {
+                let width = max(size.width * min(left, 1), Self.thickness)
+                context.fill(Path(roundedRect: CGRect(x: 0, y: bar.minY, width: width, height: Self.thickness), cornerRadius: Self.thickness / 2), with: .color(fill))
+            }
+            guard even > 0 else { return }
+            let x = size.width * min(even, 1)
+            context.blendMode = .destinationOut
+            context.fill(Path(roundedRect: CGRect(x: x - 2, y: 0, width: 4, height: size.height), cornerRadius: 2), with: .color(.black))
+            context.blendMode = .normal
+            context.fill(Path(roundedRect: CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height), cornerRadius: 0.75), with: .color(tick))
+        }
+        .frame(height: Self.height)
+    }
+}
+
+/// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。
+/// 还剩随动画插值，档位的颜色直接换。
+struct QuotaRing: View, Animatable {
+    private var left: Double
+    private let level: PiContextMeter.Level
+    @Environment(\.palette) private var palette
+
+    private static let line: CGFloat = 1.5
+
+    init(_ window: QuotaMeter.Window) {
+        left = window.left
+        level = window.level
+    }
+
+    var animatableData: Double {
+        get { left }
+        set { left = newValue }
+    }
+
+    var body: some View {
+        let (track, fill, left) = (palette.track, QuotaInk.fill(level, palette), left)
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            for (index, ring) in rings.enumerated() {
-                let radius = min(size.width, size.height) / 2 - CGFloat(index) * (line + gap) - line / 2
-                // 每圈一层：刻度压出的缝只挖自己这一圈
-                context.drawLayer { layer in
-                    layer.stroke(Self.arc(center, radius, to: 1), with: .color(track), lineWidth: line)
-                    if ring.first > 0 {
-                        layer.stroke(Self.arc(center, radius, to: ring.first), with: .color(fills[index]), style: StrokeStyle(lineWidth: line, lineCap: .round))
-                    }
-                    guard showsPace, ring.second > 0 else { return }
-                    let mark = Self.tick(center, radius, at: ring.second, length: line + 3)
-                    layer.blendMode = .destinationOut
-                    layer.stroke(mark, with: .color(.black), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
-                    layer.blendMode = .normal
-                    layer.stroke(mark, with: .color(tick), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                }
+            let radius = min(size.width, size.height) / 2 - Self.line / 2
+            let ring = Path { $0.addArc(center: center, radius: radius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false) }
+            context.stroke(ring, with: .color(track), lineWidth: Self.line)
+            guard left > 0 else { return }
+            let arc = Path {
+                $0.addArc(center: center, radius: radius, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(left, 1)), clockwise: false)
             }
-            if let mark {
-                context.draw(context.resolve(Text(mark).font(.system(size: 13)).foregroundStyle(markInk)), at: center)
-            }
-        }
-    }
-
-    /// 从 12 点顺时针铺到 `fraction` 的弧。
-    private static func arc(_ center: CGPoint, _ radius: CGFloat, to fraction: Double) -> Path {
-        Path { $0.addArc(center: center, radius: radius, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(fraction, 1)), clockwise: false) }
-    }
-
-    /// 圈上 `fraction` 处一道沿半径的短线。
-    private static func tick(_ center: CGPoint, _ radius: CGFloat, at fraction: Double, length: CGFloat) -> Path {
-        let angle = fraction * 2 * .pi - .pi / 2
-        let (dx, dy) = (cos(angle), sin(angle))
-        return Path {
-            $0.move(to: CGPoint(x: center.x + dx * (radius - length / 2), y: center.y + dy * (radius - length / 2)))
-            $0.addLine(to: CGPoint(x: center.x + dx * (radius + length / 2), y: center.y + dy * (radius + length / 2)))
+            context.stroke(arc, with: .color(fill), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
         }
     }
 }
 
-/// 额度的墨：余量足次要墨色，七成起墨色，九成起胭脂。
-enum QuotaInk {
+/// 额度的墨（按已用的档位）：余量足次要墨色，七成起墨色，九成起胭脂。
+private enum QuotaInk {
     static func fill(_ level: PiContextMeter.Level, _ palette: Palette) -> Color {
         switch level {
         case .roomy: palette.ink2
         case .tight: palette.ink
         case .critical: palette.failure
         }
-    }
-}
-
-/// 明细：各窗口的用量条（带匀速刻度）、多久后重置或照这速度多久用完，按模型的周额度在后，右上角写更新于几分钟前。点开时才建。
-struct QuotaDetail: View {
-    let meter: QuotaMeter
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(meter.account).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
-                Spacer(minLength: 12)
-                Text("更新于 \(Text(.currentDate, format: PiClock.ago(meter.updatedAt).live(.list)))").font(Typography.caption).foregroundStyle(palette.ink3)
-            }
-            ForEach(meter.rings + meter.scoped) { QuotaBarRow(window: $0) }
-        }
-        .padding(16)
-        .frame(width: 280, alignment: .leading)
-    }
-}
-
-private struct QuotaBarRow: View {
-    let window: QuotaMeter.Window
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(window.name).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
-                Text(window.hasReset ? "\(Dotted.inline)已重置" : "\(Dotted.inline)\(window.countdown)后重置")
-                    .font(Typography.caption).foregroundStyle(palette.ink3)
-                Spacer(minLength: 8)
-                Text(window.percent).font(Typography.meta.monospacedDigit()).fontWeight(window.level == .roomy ? .medium : .bold)
-                    .foregroundStyle(window.level == .critical ? palette.failure : palette.ink)
-            }
-            bar
-            if window.isSpent {
-                Text("已用完").font(Typography.caption).foregroundStyle(palette.failure)
-            } else if let runway = window.runway(from: .now) {
-                Text("照这速度\(runway)后用完").font(Typography.caption)
-                    .foregroundStyle(window.level == .critical ? palette.failure : palette.ink2)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// 细条：铺到已用，匀速刻度一道竖线（两侧压出缝），一块画布。
-    private var bar: some View {
-        let (used, pace) = (window.used, window.pace)
-        let (track, fill, tick) = (palette.track, QuotaInk.fill(window.level, palette), palette.ink)
-        return Canvas { context, size in
-            let y = size.height / 2
-            context.fill(Path(roundedRect: CGRect(x: 0, y: y - 2, width: size.width, height: 4), cornerRadius: 2), with: .color(track))
-            if used > 0 {
-                context.fill(Path(roundedRect: CGRect(x: 0, y: y - 2, width: max(size.width * min(used, 1), 4), height: 4), cornerRadius: 2), with: .color(fill))
-            }
-            guard pace > 0 else { return }
-            let x = size.width * pace
-            context.blendMode = .destinationOut
-            context.fill(Path(roundedRect: CGRect(x: x - 1.6, y: 0, width: 3.2, height: size.height), cornerRadius: 1.6), with: .color(.black))
-            context.blendMode = .normal
-            context.fill(Path(roundedRect: CGRect(x: x - 0.6, y: 0, width: 1.2, height: size.height), cornerRadius: 0.6), with: .color(tick))
-        }
-        .frame(height: 10)
     }
 }

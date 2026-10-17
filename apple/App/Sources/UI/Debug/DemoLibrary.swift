@@ -49,8 +49,8 @@ enum DemoLibrary {
         }
     }
 
-    /// 订阅额度：Claude 的 5 小时略超匀速刻度（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用；Codex 本周已过九成（胭脂）。
-    /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对仪表在那一刻变成已重置）。
+    /// 订阅额度：Claude 的 5 小时用得比匀速快（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用（总览里不列）；Codex 本周已过九成（胭脂）。
+    /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对总览在那一刻变成已重置）。
     private static func seedQuotas(_ store: CueStore) async throws {
         let now = Date.now
         let resetIn = DebugScene.defaults.double(forKey: "CuePadQuotaResetIn")
