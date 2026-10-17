@@ -99,7 +99,7 @@ extension CueStore {
   private func pendingSaves(_ table: Table, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [SyncKey] {
     try db.query(
       """
-      SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
+      SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s INDEXED BY syncRecords_pushed ON s.recordName = t.id
       WHERE (\(condition)) AND (s.pushedModifiedAt IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
       """, arguments
     ) { SyncKey(table: table, id: $0.text(0)) }

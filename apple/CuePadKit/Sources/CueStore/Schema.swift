@@ -60,6 +60,12 @@ enum Schema {
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
+    // 55：推导待推送的覆盖索引（见 `create` 里的 syncRecords）
+    """
+    DROP INDEX syncRecords_recordType;
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
+    """,
   ]
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
@@ -211,7 +217,9 @@ enum Schema {
       recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
       pushedModifiedAt INTEGER, sentModifiedAt INTEGER
     ) STRICT;
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    -- 推导待推送只读记录名、类型与收下的修改时间：两个覆盖索引让它不碰带系统字段（每行约 4KB）的表本身（CueStore.pendingSync）
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 

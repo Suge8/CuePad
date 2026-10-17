@@ -135,9 +135,12 @@ import Testing
     _ = try await store.trashCard(trashed.id)
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
-    // 退回 50：撤掉 52、54 加的列（53 重建触发器，留着新的照样能升）
+    // 退回 50：撤掉 52、54 加的列与 55 的索引（53 重建触发器，留着新的照样能升）
     try RawDB(fixture.url).exec(
-      "ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name; PRAGMA user_version = 50;")
+      """
+      ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
+      DROP INDEX syncRecords_pushed; PRAGMA user_version = 50;
+      """)
 
     let upgraded = try CueStore(url: fixture.url)
     let converted = try #require(try await upgraded.card(card.id))
