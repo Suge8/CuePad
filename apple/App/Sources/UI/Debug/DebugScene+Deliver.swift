@@ -123,6 +123,7 @@ extension DebugScene {
         .card{flex:1;background:#fff;border-radius:18px;padding:28px;box-shadow:0 8px 30px -12px rgba(0,0,0,.2)}
         .card.pro{outline:3px solid #4f46e5}.price{font-size:44px;font-weight:800;margin:12px 0}
         button{width:100%;border:0;border-radius:12px;padding:12px;font-size:16px;background:#4f46e5;color:#fff}
+        @media(max-width:600px){body{padding:24px}h1{font-size:30px}.row{flex-direction:column;gap:14px}.card{padding:20px}}
         </style></head><body><h1>选一个适合你的方案</h1><p>年付立省 20%，随时可以取消。</p><div class="row">
         <div class="card"><b>基础</b><div class="price">¥0</div><button>开始使用</button></div>
         <div class="card pro"><b>专业</b><div class="price">¥68</div><button>升级</button></div>
