@@ -71,15 +71,13 @@ nonisolated struct CueTiming: Sendable {
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。
-/// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
+/// 上下文用到换新线（`CueContext.renewAt`）后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
-/// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它的全部与此刻的上下文 `context`。
+/// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：第一次调工具时写下，每做完一步改一次，
 /// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。
 @Observable
 final class CueKeeper {
-    /// 上下文用到这么多 token 就请 Cue 换新。
-    nonisolated static let renewAt = 60_000
     nonisolated static let patrolsPerDay = 3
     /// 运行情况里留最近这么多轮
     nonisolated static let roundsKept = 50
@@ -138,8 +136,8 @@ final class CueKeeper {
         var resumed = false
         let startedAt = Date.now
         var turn: Turn?
-        /// 最近一次模型请求的上下文用量与窗口（token）
-        var context: (used: Int, window: Int?)?
+        /// 最近一次模型请求的上下文用量与窗口（token）：随状态写进库（`CueState.context`），各端读那一份
+        var context: CueContext?
         /// 这个班次里请过合并的块（同一块只请一次）
         var mergesTried: Set<[Int]> = []
         /// 起好之前连续失败的次数：一轮做完清零
@@ -236,10 +234,6 @@ final class CueKeeper {
 
     /// 最近的几轮，旧的在前，在跑的一轮在最后。
     var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
-    /// 此刻班次的上下文用量与窗口；没在值班或这个班次还没请求过模型为 nil。
-    var context: (used: Int, window: Int?)? { shift?.context }
-    /// 此刻班次从什么时候起。
-    var shiftStartedAt: Date? { shift?.startedAt }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
     let speech = PiDraftFeed()
@@ -273,6 +267,7 @@ final class CueKeeper {
         do {
             let work = work
             try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke)
+            if let context = shift?.context { try await setup.store.setCueContext(context) }
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -423,7 +418,7 @@ final class CueKeeper {
             updateShift { $0.turn?.speaking = draft }
             speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used, let window):
-            updateShift { $0.context = (used, window ?? $0.context?.window) }
+            updateShift { $0.context = CueContext(used: used, window: window ?? $0.context?.window, since: $0.startedAt) }
         case .tool(let id, let name, let arguments):
             updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, startedAt: .now)) }
             await recordRound()
@@ -701,7 +696,7 @@ final class CueKeeper {
         }
         let changes = try await changes()
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.context?.used, renewAt: Self.renewAt, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.context?.used, renewAt: CueContext.renewAt, projects: try await store.cueProjects(),
             changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
             resume: resume, said: nil))
         var woke: CueWoke?
@@ -710,7 +705,7 @@ final class CueKeeper {
             woke = CueWoke(at: now, sessions: changes.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
-        if let used = shift.context?.used, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
+        if let used = shift.context?.used, used >= CueContext.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
