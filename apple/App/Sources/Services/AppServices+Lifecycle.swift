@@ -5,11 +5,11 @@ extension AppServices {
     /// 小组件、分享扩展的链接；不认识的链接忽略。
     func handle(url: URL) {
         guard let link = DeepLink(url: url) else { return }
-        setDeepLink(link)
+        pendingDeepLink = link
     }
 
     func consumeDeepLink() -> DeepLink? {
-        defer { setDeepLink(nil) }
+        defer { pendingDeepLink = nil }
         return pendingDeepLink
     }
 

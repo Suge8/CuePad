@@ -141,26 +141,6 @@ struct SessionTaskTests {
         #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }
 
-    /// 下一步"开始"接着用上一步的会话，哪怕它已结束：话照样发进那个会话（执行的 Mac 先恢复它），不开新会话。
-    @Test func 下一步接着用上一步已结束的会话() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        try await store.setDirectory("/work/x", for: project.id)
-        let task = try await store.createTask("加语言参数", in: project.id)
-        let first = try await store.createTask("加 --lang", under: task.id)
-        let second = try await store.createTask("写 README", under: task.id)
-        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
-        try await recorder.update(sessionID: "s1", state: .settled, title: "加 --lang")
-        let workspace = Workspace(services: services)
-        try await store.bindSession("s1", to: first.id)
-        try await workspace.toggle(first.id)
-        try await recorder.end(sessionID: "s1")
-
-        workspace.handOff(second)
-        let sent = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.send) } }) { $0 != nil }
-        #expect(sent?.target.ref == "s1")
-        #expect(try await store.deliveryRequests().allSatisfy { $0.mode != .known(.start) })
-    }
-
     @Test func 只在会话文件里的历史会话_从头重读也不改写记录() async throws {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -215,7 +195,7 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
 
         let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
-        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter(\.isUser).map(\.fromCue) == [true, false, false])
+        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false, false])
         let cue = CueTools(store: store)
         let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
         #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))

@@ -139,7 +139,7 @@ struct LiveStatus: View {
         let delegating = session.state == .known(.delegating) && !session.subagents.isEmpty
         guard session.state.isWorking, !delegating || session.pendingTools != nil else { return nil }
         guard !delegating else { return .live(shown, doing: shown.label, step: nil) }
-        let tool = session.state == .known(.tool) ? session.detail?.components(separatedBy: PiProgress.detailSeparator).first : nil
+        let tool = session.state == .known(.tool) ? session.detail?.components(separatedBy: PiSessionState.detailSeparator).first : nil
         return .live(shown, doing: session.detail.flatMap(PiProgress.action) ?? shown.label, step: RoundProcess.icon(tool: tool))
     }
 }

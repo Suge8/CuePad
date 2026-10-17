@@ -2,8 +2,6 @@ import CueStore
 import CueSync
 import Foundation
 
-/// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
-nonisolated enum MacDelivery {}
 
 /// 回复框此刻该做什么：发消息（可用的方式，第一个是默认）、就是作答框（文字型问题）、
 /// 先在上面作答（选择、确认型问题：自由文本发出去会一直挂着，Pi 不答完题不会去看）、这里答不了（只能在 Mac 上答）。
@@ -24,9 +22,9 @@ nonisolated enum PiReplyButton: Equatable {
     case send(tap: DeliveryMode, hold: DeliveryMode)
 }
 
-extension MacDelivery {
-    /// 会话能做什么只看 `AgentCapabilities`：发送方式、能否停止、结束与作答都经 `PiSessionState` 上同一组规则（Cue 也经它们）。
-
+/// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
+/// 会话能做什么只看 `AgentCapabilities`：发送方式、能否停止、结束与作答都经 `PiSessionState` 上同一组规则（Cue 也经它们）。
+nonisolated enum MacDelivery {
     /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
     /// 进度只读投送请求，界面不另存。
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {

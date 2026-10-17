@@ -61,7 +61,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let open = tree.rows(of: started.map(\.id) + todo.flatMap(\.roots))
         return TaskBoard(
             tree: tree, inProgress: started, todo: todo, done: finished, subtasks: try store.subtaskProgress(),
-            counts: try counts(from: store), order: open.map(\.id) + finished.map(\.id))
+            counts: try store.taskCounts().values.reduce(.zero, +), order: open.map(\.id) + finished.map(\.id))
     }
 
     /// 最近完成的顶层任务：`all`（同一范围里库中的全部任务）里完成了、上级不在其中的（与 `counts.done` 同一批），按完成时间从新到旧取前 `doneLimit` 条。
@@ -110,11 +110,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }
         return result
-    }
-
-    /// 全部项目的顶层任务计数（回收站里的项目不算）。
-    static func counts(from store: isolated CueStore) throws -> TaskCounts {
-        try store.taskCounts().values.reduce(.zero, +)
     }
 }
 
