@@ -27,21 +27,17 @@ struct LibraryFailureTests {
 
     private enum Unexpected: Error { case opened }
 
-    @Test func 更早版本建的库_打不开但不终止_失败带原文与库版本() throws {
-        let failure = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
-
-        #expect(failure.version == 13 && failure.olderLibrary && !failure.newerLibrary)
-        #expect(failure.diagnostics.contains(failure.reason) && failure.diagnostics.contains("13"))
-        // 给人看的说明不夹原文（原文折叠在详情里）
-        #expect(!failure.summary.contains(failure.reason))
-    }
-
-    @Test func 更新版本建的库_说明要更新_而不是不再升级() throws {
-        let newer = try failure(of: library(version: 99, setup: "CREATE TABLE cards (id TEXT)"))
+    @Test func 更早或更新版本建的库_打不开但不终止_失败带原文与库版本_说明各自怎么办() throws {
         let older = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
+        let newer = try failure(of: library(version: 99, setup: "CREATE TABLE cards (id TEXT)"))
 
+        #expect(older.version == 13 && older.olderLibrary && !older.newerLibrary)
         #expect(newer.version == 99 && newer.newerLibrary && !newer.olderLibrary)
+        // 更新版本的库要说更新 App，而不是"不再升级"
         #expect(newer.summary != older.summary)
+        #expect(older.diagnostics.contains(older.reason) && older.diagnostics.contains("13"))
+        // 给人看的说明不夹原文（原文折叠在详情里）
+        #expect(!older.summary.contains(older.reason))
     }
 
     #if os(iOS)
@@ -53,6 +49,5 @@ struct LibraryFailureTests {
         }
         #expect(failure.version == 13)
     }
-
     #endif
 }

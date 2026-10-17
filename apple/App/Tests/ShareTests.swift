@@ -27,11 +27,6 @@ struct ShareTests {
         #expect(content.images == [.init(data: png, fileExtension: "png")])
     }
 
-    @Test func 没有可保存的内容时报错() async {
-        await #expect(throws: ShareError.self) { try await ShareItemLoader.load(from: [provider(text: "   ")]) }
-        await #expect(throws: ShareError.self) { try await ShareItemLoader.load(from: []) }
-    }
-
     @Test func 选项目保存后进待入库目录并可被主App读到() async throws {
         let app = TestApp()
         let location = app.services.location
@@ -53,9 +48,9 @@ struct ShareTests {
         #expect(entry.capture.project == target.id)
     }
 
-    @Test func 内容读不出来时进入失败状态_不写任何东西() async throws {
+    @Test func 没有可保存的内容时进入失败状态_不写任何东西() async throws {
         let app = TestApp()
-        let model = ShareModel(providers: [], location: app.services.location)
+        let model = ShareModel(providers: [provider(text: "   ")], location: app.services.location)
 
         await model.load()
         let saved = await model.save()
