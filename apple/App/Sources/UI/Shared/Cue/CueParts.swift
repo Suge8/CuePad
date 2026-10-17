@@ -154,46 +154,40 @@ struct CuePreviewThumb: View {
     private static let side: CGFloat = 44
 }
 
-/// 连着的几条动态（Cue 自己醒来的那几轮：每轮先是它的经过，再是它说的那句）：折成一行灰字（最新一条的首行，没有正文的写它的经过，与条数），
-/// 点开看全——经过与回答注脚同一个样子（`RoundProcess`），说的话是灰字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
+/// 连着的几条动态（Cue 自己醒来的那几轮：每轮先是它的经过，再是它说的那句；没推给你）：一行旁注（`NoteLine`），
+/// 图标是一颗收着的话（与气泡里对你说的话分开：没有纸、不靠气泡、字小一档），写最新一条的首行（没有正文的写它的经过）与条数；
+/// 点开在细线下按先后列全（`NoteThread`）——经过与回答注脚同一个样子（`RoundProcess`），说的话是小字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
 struct CueNotes: View {
     let notes: [CueMessage]
     /// 在跑的那一轮在这几条里时有（`CueLiveRound`）
     let live: CueLiveRound?
-    @State private var expanded = false
+    @State private var expanded = DebugHooks.preset.toolsOpen
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation(Motion.quick) { expanded.toggle() } } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
+        VStack(alignment: .leading, spacing: 0) {
+            Button { expanded.toggle() } label: {
+                NoteLine(symbol: "ellipsis.bubble", open: expanded) {
                     Text(expanded ? "\(notes.count) 条动态" : Dotted(notes.last.flatMap(Self.line), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
-                    Spacer(minLength: 0)
                 }
-                .font(Typography.meta).foregroundStyle(palette.ink3)
-                .frame(minHeight: 24).contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityHint(expanded ? "收起" : "展开")
             if expanded {
-                VStack(alignment: .leading, spacing: 8) {
+                NoteThread {
                     ForEach(notes) { note in
                         if note.tools != nil {
                             RoundProcess(tools: note.tools, ending: CueLiveRound.ending(of: note, in: live))
                         } else {
-                            Text(CueFormat.plainText(note.text)).font(Typography.meta).foregroundStyle(palette.ink3)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .selectable()
+                            SaidRow(text: CueFormat.plainText(note.text))
                         }
                     }
                 }
-                .padding(.leading, 15)
-                .transition(.opacity)
             }
         }
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .transition(.entry)
     }
 
@@ -203,23 +197,62 @@ struct CueNotes: View {
     }
 }
 
-/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、你回答了的下面一行写你的回答
-/// （还在等的不在对话里，见 `CueThread.rows`；撤回的只剩这句话）。
+/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
+/// 问过你、你回答了的，下面靠右一颗你的小气泡写你的回答（`AnswerChip`；还在等的不在对话里，见 `CueThread.rows`；撤回的只剩这句话）。
+/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
-    /// 新到的淡入；原位换下正在说的话时（见 `DraftReply`）直接出现
-    var fadesIn = true
+    var task: CueTaskRef?
+    /// 上面紧挨着 Cue 的另一句（`Bubble.shape`）。
+    var joined = false
+    /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
+    var arrives = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selecting = false
+
+    var body: some View {
+        let shape = Bubble.shape(.leading, joined: joined)
+        VStack(alignment: .leading, spacing: 4) {
+            BubbleWidth(fraction: Bubble.cueWidth, edge: .leading) {
+                VStack(alignment: .leading, spacing: 8) {
+                    MarkdownText(source: message.text).equatable()
+                    if let task { CueTaskLine(ref: task) }
+                }
+                .cueBubble(joined: joined)
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, shape)
+                #endif
+                .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
+            }
+            if let answer = message.answer { AnswerChip(answer: answer) }
+        }
+        #if os(iOS)
+        .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
+        #endif
+        .transition(arrives ? Bubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
+    }
+}
+
+extension View {
+    /// Cue 的话的气泡：纸做的（卡片同一种纸，`paper`），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
+    func cueBubble(joined: Bool) -> some View {
+        padding(Bubble.padding).paper(in: Bubble.shape(.leading, joined: joined), sheenInset: Bubble.radius)
+    }
+}
+
+/// 你对 Cue 问的那一句的回答（选的那一项或另外说的话）：靠右一颗你的颜色的小气泡，前面一个回复的箭头。
+private struct AnswerChip: View {
+    let answer: String
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MarkdownText(source: message.text).equatable()
-            if let answer = message.answer {
-                Label(answer, systemImage: "arrowshape.turn.up.left").font(Typography.meta).foregroundStyle(palette.ink3)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(fadesIn ? .entry : .identity)
+        Label { Text(answer).lineLimit(2) } icon: { Image(systemName: "arrowshape.turn.up.left.fill").imageScale(.small) }
+            .font(Typography.secondary).foregroundStyle(palette.ink)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(palette.bubble, in: .capsule)
+            .overlay(Capsule().strokeBorder(palette.bubbleEdge))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel("你回答：\(answer)")
     }
 }
 

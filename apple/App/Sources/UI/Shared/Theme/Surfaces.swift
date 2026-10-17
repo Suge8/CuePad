@@ -3,7 +3,12 @@ import SwiftUI
 extension View {
     /// 纸面：从上沿极轻地亮到纸色的实底 + 上沿一线高光 + 1px 半透明描边；抬起的纸浅色下多一层柔影（深色只留描边）。
     func paper(radius: CGFloat = 14, lifted: Bool = false) -> some View {
-        modifier(PaperSurface(radius: radius, lifted: lifted))
+        paper(in: RoundedRectangle(cornerRadius: radius, style: .continuous), sheenInset: radius, lifted: lifted)
+    }
+
+    /// 别的形状的纸面（Cue 说的话是纸做的气泡，`CueBubble`）；`sheenInset` 是上沿高光两头让开的圆角。
+    func paper<S: InsettableShape>(in shape: S, sheenInset: CGFloat, lifted: Bool = false) -> some View {
+        modifier(PaperSurface(shape: shape, sheenInset: sheenInset, lifted: lifted))
     }
 
     /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
@@ -30,19 +35,19 @@ enum GlassInk {
     case solid
 }
 
-private struct PaperSurface: ViewModifier {
-    let radius: CGFloat
+private struct PaperSurface<S: InsettableShape>: ViewModifier {
+    let shape: S
+    let sheenInset: CGFloat
     let lifted: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(palette.paperFill, in: shape)
             .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
             // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，
             // 卡片一变宽（侧栏开合、拉窗口）整面墙每张都要重画，大库里开合侧栏的第一帧因此卡上百毫秒
-            .overlay(alignment: .top) { palette.sheen.frame(height: 1).padding(.horizontal, radius).padding(.top, 1) }
+            .overlay(alignment: .top) { palette.sheen.frame(height: 1).padding(.horizontal, sheenInset).padding(.top, 1) }
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .shadow(color: .black.opacity(palette.dark || !lifted ? 0 : 0.08), radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
     }
