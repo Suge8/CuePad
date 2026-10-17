@@ -1,13 +1,13 @@
 # shellcheck shell=bash
-# xc.sh 与 perf 脚本的入口锁，三条规则：
+# xc.sh 的入口锁，三条规则：
 # 1. 同一检出一次一个任务（<检出>/apple/.derived/xc.lock）：同一产物目录上的两个 xcodebuild 会抢构建数据库、互相覆盖产物。
 #    不同检出之间不设上限：实测同时 9 个增量编译测试，不排队比限 3 个快（链接、签名、起测试宿主时 CPU 空着，并发正好填上）。
-# 2. 性能测量独占机器：普通任务持 /tmp/cuepad-xc-<uid>/machine 的共享锁，测量要独占锁；测量先占闸门（gate），
+# 2. 交互性能测量的那一段独占机器（xc.sh perf 先照普通任务构建，再进这把锁）：普通任务持 /tmp/cuepad-xc-<uid>/machine 的共享锁，测量要独占锁；测量先占闸门（gate），
 #    后来的普通任务停在闸门外，测量不会被源源不断的新任务饿死。
 # 3. iOS 的测试、截图、录屏从固定的 SIM_POOL 台模拟器里领一台（每台一把锁，见 _sim.sh），全占着就等空出一台。
 # 锁都是 flock，持有进程退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<模拟器号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着。
-# 用法：脚本开头 xc_enter <plain|sim|exclusive> "$0" "$@"；exclusive 是性能测量（用 0 号模拟器）。
+# 用法：xc_enter <plain|sim|exclusive> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）；exclusive 是交互的性能测量（用 0 号模拟器）。
 
 SIM_POOL=3
 HOLD_LIMIT=1800
