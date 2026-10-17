@@ -10,7 +10,6 @@ import Testing
 #if os(macOS)
 import AppKit
 @testable import CuePi
-import Testing
 #else
 import UIKit
 #endif
@@ -36,7 +35,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         var started = 0
         var stopped = 0
         var syncNows = 0
-        var resolutions: [String] = []
     }
 
     private let state = Mutex(State())
@@ -49,7 +47,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     var started: Int { state.withLock { $0.started } }
     var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
-    var resolutions: [String] { state.withLock { $0.resolutions } }
 
     var stateUpdates: AsyncStream<SyncState> { updates }
 
@@ -82,9 +79,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     }
     func push() async {}
 
-    func resolve(_ resolution: SyncResolution) async throws {
-        state.withLock { $0.resolutions.append("\(resolution)") }
-    }
+    func resolve(_ resolution: SyncResolution) async throws {}
 }
 
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，

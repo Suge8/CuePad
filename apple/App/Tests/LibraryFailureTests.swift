@@ -18,7 +18,7 @@ struct LibraryFailureTests {
 
     private func failure(of location: LibraryLocation) throws -> LibraryFailure {
         do {
-            _ = try AppServices.openLibrary(at: location)
+            _ = try CueStore(url: location.databaseURL)
         } catch {
             return LibraryFailure(error, location: location)
         }

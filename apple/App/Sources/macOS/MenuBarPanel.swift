@@ -37,7 +37,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     }
 
     var isVisible: Bool { panel.isVisible }
-    var frame: CGRect { panel.frame }
 
     func setContent<Content: View>(_ content: Content) {
         host.rootView = AnyView(content)
