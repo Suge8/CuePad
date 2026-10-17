@@ -1099,6 +1099,339 @@ def puzzle(m):
     return [Layer("piece", [body, disc((-1.6, -8.4), 3.4 + g), disc((8.4, 1.6), 3.4 + g)])]
 
 
+# ---------- 输入、发送与会话：纸飞机、箭头、圆环记号、气泡、窗口、相片、角色几族 ----------
+
+PLANE = sc(K, [(11.0, -10.4), (-11.0, -0.6), (-2.6, 2.8), (0.6, 11.0)])  # 机头、左翼尖、折痕底、下翼尖（格）；三角的墨比方块少，同气泡一样放大 K
+
+
+def plane(m):
+    """交给（转交给 Cue、会话里转给别人的那一步）：一架纸飞机，机头朝右上；一道折痕从机头斜下来，把机身切成上翼与下翼两块。"""
+    g, c = GROW[m] * 0.6, CARVE[m]
+    nose, wing, fold, tail = PLANE
+    k = c + 2 * g  # 两翼各外扩 g 之后正好一条刻缝
+    n = left(norm(sub(fold, nose)))
+    n = n if (tail[0] - nose[0]) * n[0] + (tail[1] - nose[1]) * n[1] > 0 else mul(n, -1)
+    a, b = add(nose, mul(n, k)), add(fold, mul(n, k))
+    upper = grown([fold, wing, nose], [0.9, 1.0, 0.9], g)
+    lower = grown([tail, meet(a, b, fold, tail), meet(a, b, nose, tail)], [1.0, 0.9, 0.9], g)
+    return [Layer("upper", [upper]), Layer("lower", [lower])]
+
+
+def meet(p1, p2, q1, q2):
+    """两条直线（各过两点）的交点。"""
+    d1, d2 = sub(p2, p1), sub(q2, q1)
+    t = cross(sub(q1, p1), d2) / cross(d1, d2)
+    return add(p1, mul(d1, t))
+
+
+def plane_done(m):
+    """已送达：纸飞机（同交给），右下的空角里嵌一个小勾（点睛），离飞机一条刻缝。"""
+    g = GROW[m]
+    tick = bar([(7.0, 9.6), (9.2, 11.8), (13.6, 7.2)], 2.4 + 1.0 * g)
+    return plane(m) + [Layer("tick", [tick], "secondary")]
+
+
+def seg_scaled(s, k, d):
+    """一段轮廓（模板单位）以原点缩放 k 再平移 d。"""
+    def t(p): return add(mul(p, k), d)
+    if isinstance(s, Line): return Line(t(s.a), t(s.b))
+    if isinstance(s, Cubic): return Cubic(t(s.p0), t(s.p1), t(s.p2), t(s.p3))
+    return Arc(t(s.c), s.r * k, s.a0, s.sweep, s.pieces)
+
+
+def tick(m):
+    """保存、选中：一个粗勾（同已同步、选上里刻的那笔），不带圆。"""
+    s = 1.75
+    return [Layer("tick", mark_tick((0, 0.6), s, (3.2 + 1.3 * GROW[m]) / s))]
+
+
+def straight_arrow(down):
+    """回到最新（朝下）/ 在上面、拿回来的、更早的（朝上）：一支粗直箭头（同云里刻的那支）。"""
+    def build(m):
+        s = 1.7
+        return [Layer("arrow", mark_arrow((0, 0.6 if down else -0.6), s, (3.6 + 1.4 * GROW[m]) / s, down=down))]
+    return build
+
+
+def compact(m):
+    """压缩上下文：两支斜箭头从左上、右下往中间收，箭尖之间隔一条刻缝。"""
+    g = GROW[m]
+    w = 3.4 + 1.3 * g
+    head = (4.8 * G, 5.0 * G + g * G)
+    def one(k):
+        return arrow([Line(mul((11.4 * k, 11.4 * k), G), mul((4.6 * k, 4.6 * k), G))], w * G, head)
+    return [Layer("a", [one(-1)]), Layer("b", [one(1)])]
+
+
+def bolt(m):
+    """插话：一道闪电（同"断了"的那道，不截断）。"""
+    return [Layer("bolt", [grown(sc(K, BOLT), [1.0, 1.0, 0, 0.9, 0.8, 0, 0.9], GROW[m])])]
+
+
+def mark_square(c, s, w):
+    h = 4.4 * s
+    return [rpoly([(c[0] - h, c[1] - h), (c[0] + h, c[1] - h), (c[0] + h, c[1] + h), (c[0] - h, c[1] + h)], [1.2 * s] * 4)]
+
+
+def mark_play(c, s, w):
+    return [rpoly([at(c, s, p) for p in ((-3.4, -5.6), (5.8, 0), (-3.4, 5.6))], [1.2 * s, 1.0 * s, 1.2 * s])]
+
+
+def mark_hands(c, s, w):
+    return [bar([at(c, s, (0, -6.0)), at(c, s, (0, 0)), at(c, s, (4.4, 2.8))], w * s)]
+
+
+def bubble_outline(g, T):
+    """对话气泡（尾巴在左下）的一圈墨（同等 Cue 回答），返回轮廓与气泡里的中心。"""
+    top, bottom = -10.8, 5.8
+    box, radii = [(-11, top), (11, top), (11, bottom), (-11, bottom)], [4.2] * 4
+    outer = grown(sc(K, [(-11, top), (11, top), (11, bottom), (-0.8, bottom), (-6.4, 11.0), (-5.8, bottom), (-11, bottom)]), [4.2, 4.2, 4.2, 0.6, 0.6, 0.4, 4.2], g)
+    return [outer, rev(grown(sc(K, box), radii, g - T))], (0, K * (top + bottom) / 2)
+
+
+def bubble(kind):
+    """说了一句（气泡里两行字）/ 在想（气泡里三个点）：气泡是一圈墨，里面的记号自己一块。"""
+    def build(m):
+        g = GROW[m]
+        ring, (cx, cy) = bubble_outline(g, 2.2 + 1.1 * g)
+        w = 2.4 + 0.9 * g
+        if kind == "text":
+            mark = [bar([(cx - 6.4, cy - 2.6), (cx + 6.4, cy - 2.6)], w), bar([(cx - 6.4, cy + 2.6), (cx + 2.0, cy + 2.6)], w)]
+        else:
+            mark = [disc((cx + dx, cy + 0.2), 1.6 + 0.5 * g) for dx in (-5.2, 0, 5.2)]
+        return [Layer("bubble", ring), Layer("mark", mark)]
+    return build
+
+
+def mac(m):
+    """Mac：一块屏（圆角实心）下面一只 T 形的座，屏与座之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    screen = grown([(-11.0, -10.0), (11.0, -10.0), (11.0, 4.4), (-11.0, 4.4)], [2.4] * 4, g)
+    top = 4.4 + c + 2 * g
+    stand = grown([(-2.6, top), (2.6, top), (3.0, 8.0), (6.8, 8.0), (6.8, 10.4), (-6.8, 10.4), (-6.8, 8.0), (-3.0, 8.0)],
+                  [0, 0, 0.6, 1.0, 1.0, 1.0, 1.0, 0.6], g)
+    return [Layer("screen", [screen]), Layer("stand", [stand])]
+
+
+def window(m):
+    """终端窗口：一扇窗，上面一条窄的标题栏与窗身之间一道横刀口。"""
+    g, c = GROW[m], CARVE[m]
+    y0, split, y1 = -9.6, -5.2, 9.6
+    bar_ = grown([(-11.0, y0), (11.0, y0), (11.0, split), (-11.0, split)], [2.6, 2.6, 0, 0], g)
+    body = grown([(-11.0, split + c + 2 * g), (11.0, split + c + 2 * g), (11.0, y1), (-11.0, y1)], [0, 0, 2.6, 2.6], g)
+    return [Layer("window", [body]), Layer("title", [bar_])]
+
+
+def terminal(m):
+    """终端、命令：一块圆角实心的屏，刻出提示符 > 与一道下划线。"""
+    g = GROW[m]
+    w = MARK_W(m, 3.0)
+    screen = grown([(-11.0, -9.6), (11.0, -9.6), (11.0, 9.6), (-11.0, 9.6)], [2.8] * 4, g)
+    prompt = bar([(-6.4, -4.2), (-2.0, 0), (-6.4, 4.2)], w)
+    line = bar([(0.8, 4.4), (6.6, 4.4)], w)
+    return [Layer("screen", [screen] + holed([prompt, line]))]
+
+
+def doc(m):
+    """读文件：一张纸，右上折角（点睛，同拷贝），纸上刻三行字。"""
+    g, c = GROW[m], CARVE[m]
+    x0, y0, x1, y1 = -8.6, -11.0, 8.6, 11.0
+    e = 5.6 + g * 0.5
+    page = grown([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)], [2.2, 0.4, 0, 0.4, 2.2, 2.2], g)
+    ear = rpoly([(x1 - e + g, y0 - g), (x1 + g, y0 + e - g), (x1 - e + g, y0 + e - g)], [0.6, 0.6, 0])
+    w = MARK_W(m, 2.4)
+    lines = [bar([(-4.4, y), (r, y)], w) for y, r in ((0.6, 4.4), (5.2, 4.4))] + [bar([(-4.4, -4.0), (-1.0, -4.0)], w)]
+    return [Layer("page", [page] + holed(lines)), Layer("ear", [ear], "secondary")]
+
+
+def wrench(m):
+    """工具：一把扳手，斜着放，钳口朝右上张开；钳口与把手之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    o, r, T = (4.0, -4.0), 4.6, 3.4 + 1.3 * g
+    jaw = bow(o, r, 10, 250, T)
+    hw = 4.0 + 1.4 * g
+    d = (r + T / 2 + c + hw / 2) * 0.7071
+    handle = bar([(o[0] - d, o[1] + d), (-9.2, 9.2)], hw)
+    return [Layer("wrench", [jaw, handle])]
+
+
+def branch(m):
+    """分出去（子代理）：一根从下往上的主干；右边一枝从主干半腰斜出、拐上去并排往上走，枝头一颗点（点睛），枝与干之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    w = 2.8 + 1.2 * g
+    x = -5.6
+    trunk = bar([(x, 10.8), (x, -10.8)], w)
+    arm = bar([(-1.6, 6.0), (5.4, -1.0), (5.4, -5.0)], w, [0, 3.0, 0])
+    r = 2.4 + 0.5 * g
+    knot = disc((5.4, -5.0 - w / 2 - c - r), r)
+    return [Layer("branch", [trunk, arm]), Layer("knot", [knot], "secondary")]
+
+
+def dot(m):
+    """标为未读：一颗实心圆点。"""
+    return [Layer("dot", [disc((0, 0), 6.6 + GROW[m])])]
+
+
+def flame(m):
+    """FireCode：一簇火苗（主焰尖偏右，左边再窜起一小舌），里面挖出一颗小火苗的槽，嵌着内焰（点睛）。"""
+    g, c = GROW[m], CARVE[m]
+    outer = [(1.4, -12.2), (5.2, -6.8), (8.8, -1.8), (9.4, 3.6), (6.6, 8.8), (0, 11.2), (-6.6, 8.8), (-9.4, 3.6), (-8.8, -1.6), (-6.8, -6.8), (-4.0, -3.4), (-1.8, -7.8)]
+    core = [(0.4, -2.0), (2.4, 1.6), (3.1, 4.6), (2.0, 7.0), (0, 7.7), (-2.0, 7.0), (-3.1, 4.6), (-2.2, 2.0)]
+    def curve(pts, d): return [seg_scaled(sg, G, (0, 0)) for sg in catmull(spread(pts, d), closed=True)]
+    return [Layer("flame", [curve(outer, g), rev(curve(core, 0.42 * g + c * 1.5))]), Layer("core", [curve(core, 0.42 * g)], "secondary")]
+
+
+def spread(pts, d):
+    """闭合折线（顺时针）的每个点沿外法线推出 d 格：平滑曲线的近似等距。"""
+    n, out = len(pts), []
+    for i in range(n):
+        t = norm(sub(pts[(i + 1) % n], pts[i - 1]))
+        out.append(add(pts[i], mul(left(t), d)))
+    return out
+
+
+def hand(m):
+    """拒绝：举起的手——掌一块，四指一根根竖着、各隔一条刻缝，拇指斜在左边。"""
+    g, c = GROW[m], CARVE[m]
+    palm = grown([(-7.6, 0.4), (7.6, 0.4), (7.6, 6.0), (4.0, 11.2), (-4.0, 11.2), (-7.6, 6.0)], [0.6, 0.6, 3.4, 2.4, 2.4, 3.4], g)
+    fw = 2.6 + 0.5 * g
+    top = 0.4 - g - c - fw / 2
+    fingers = [bar([(x, top), (x, y)], fw) for x, y in ((-5.85, -6.6), (-1.95, -10.0), (1.95, -10.6), (5.85, -8.4))]
+    thumb = bar([(-7.6 - g - c - fw / 2, 6.2), (-11.2, 1.4)], fw)
+    return [Layer("hand", [palm] + fingers + [thumb])]
+
+
+def camera(m):
+    """拍照：机身一块，顶上一块小机顶隔一条刻缝；机身挖一圈镜头槽，嵌着镜头（点睛）。"""
+    g, c = GROW[m], CARVE[m]
+    body = grown([(-11.0, -5.0), (11.0, -5.0), (11.0, 9.4), (-11.0, 9.4)], [2.6] * 4, g)
+    hump = grown([(-5.2, -9.4), (5.2, -9.4), (6.8, -5.0 - c - 2 * g), (-6.8, -5.0 - c - 2 * g)], [1.2, 1.2, 0, 0], g)
+    o, r = (0, 2.4), 3.0 + 0.6 * g
+    slot = disc(o, r + c + 1.4, hole=True)
+    return [Layer("camera", [body, slot, hump]), Layer("lens", [disc(o, r)], "secondary")]
+
+
+def photo_parts(x0, y0, x1, y1, g, c, T):
+    """相片：一圈相框（圆角）里一座山（两个峰，一块实心），右上一颗太阳（点睛）。"""
+    frame = [grown([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], [2.6] * 4, g),
+             rev(grown([(x0 + T, y0 + T), (x1 - T, y0 + T), (x1 - T, y1 - T), (x0 + T, y1 - T)], [1.0] * 4, -g))]
+    ix0, iy1, ix1 = x0 + T + g + c, y1 - T - g - c, x1 - T - g - c
+    w, h = ix1 - ix0, iy1 - (y0 + T + g + c)
+    peaks = [(ix0, iy1), (ix0, iy1 - h * 0.3), (ix0 + w * 0.32, iy1 - h * 0.72), (ix0 + w * 0.56, iy1 - h * 0.36), (ix0 + w * 0.68, iy1 - h * 0.46), (ix1, iy1 - h * 0.12), (ix1, iy1)]
+    mountain = rpoly(peaks, [0.4, 0.4, 0.9, 0.5, 0.8, 0.4, 0.4])
+    r = w * 0.1
+    sun = disc((ix1 - r - 1.8, y0 + T + g + c + r + 1.4), r + 0.3 * g)
+    return frame, mountain, sun
+
+
+def photo(m):
+    """图片：一张相片。"""
+    g, c = GROW[m], CARVE[m]
+    frame, mountain, sun = photo_parts(-11.0, -9.0, 11.0, 9.0, g, c, 2.4)
+    return [Layer("photo", frame + [mountain]), Layer("sun", [sun], "secondary")]
+
+
+def photos(m):
+    """相册：一张相片往左下让，后面一张往右上错开，只露出上边与右边的 L 形（同全部的错开一叠）。"""
+    g, c = GROW[m], CARVE[m]
+    d = 3.6
+    x0, y0, x1, y1 = -11.0, -9.0 + d, 11.0 - d, 11.0
+    frame, mountain, sun = photo_parts(x0, y0, x1, y1, g, c, 2.2)
+    bx0, by0, bx1, by1 = x0 + d, y0 - d, x1 + d, y1 - d
+    ix, iy = bx1 - d + c + 2 * g, by0 + d - c - 2 * g
+    back = grown([(bx0, by0), (bx1, by0), (bx1, by1), (ix, by1), (ix, iy), (bx0, iy)], [1.4, 2.4, 1.4, 0.4, 0, 0.4], g)
+    return [Layer("photo", frame + [mountain, back]), Layer("sun", [sun], "secondary")]
+
+
+def keyboard_down(m):
+    """收起键盘：一块键盘（刻出两排键与空格）下面一个朝下的 V（点睛），隔一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    board = grown([(-11.0, -10.4), (11.0, -10.4), (11.0, 3.4), (-11.0, 3.4)], [2.4] * 4, g)
+    k = 1.25 - 0.2 * g
+    keys = [disc((x, y), k) for y in (-6.8, -3.0) for x in (-6.6, -2.2, 2.2, 6.6)]
+    space = bar([(-4.4, 0.6), (4.4, 0.6)], 2 * k)
+    v = bar([(-4.6, 7.2), (0, 10.6), (4.6, 7.2)], 2.6 + 1.0 * g)
+    return [Layer("board", [board] + holed(keys + [space])), Layer("hide", [v], "secondary")]
+
+
+def braces(m):
+    """变量取值：一对花括号。"""
+    g = GROW[m]
+    w = 2.6 + 1.2 * g
+    left_ = [(-2.4, -10.8), (-6.0, -10.8), (-6.0, -3.0), (-9.8, 0), (-6.0, 3.0), (-6.0, 10.8), (-2.4, 10.8)]
+    radii = [0, 2.6, 2.2, 2.2, 2.2, 2.6, 0]
+    return [Layer("braces", [bar(left_, w, radii), bar([(-x, y) for x, y in left_], w, radii)])]
+
+
+def select_text(m):
+    """选择文本：一截选中的字（实心块），两头各立一根选择柄，柄头一颗圆点（一个在上、一个在下），柄与块之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    w = 2.2 + 0.9 * g
+    hx = 9.4
+    block = grown([(-hx + w / 2 + c + g, -4.0), (hx - w / 2 - c - g, -4.0), (hx - w / 2 - c - g, 4.0), (-hx + w / 2 + c + g, 4.0)], [1.0] * 4, g)
+    r = 2.4 + 0.5 * g
+    left_ = [bar([(-hx, -5.4), (-hx, 6.8)], w), disc((-hx, -6.4 - r * 0.6), r)]
+    right_ = [bar([(hx, -6.8), (hx, 5.4)], w), disc((hx, 6.4 + r * 0.6), r)]
+    return [Layer("text", [block]), Layer("handles", left_ + right_)]
+
+
+def hammer(m):
+    """工程师：一把锤子斜着放（锤头在右上），锤头一块、锤柄一根，之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    # 斜放后外接框会缩到七成，竖着画时比别的图形长一截
+    head = grown([(-8.6, -14.2), (5.0, -14.2), (9.8, -11.8), (9.8, -10.0), (5.0, -7.8), (-8.6, -7.8)], [1.4, 0.4, 1.0, 1.0, 0.4, 1.4], g)
+    w = 3.6 + 1.4 * g
+    handle = bar([(-1.0, -7.8 + g + c + w / 2), (-1.0, 14.6)], w)
+    return [Layer("hammer", turned([head, handle], 45))]
+
+
+def layers3(m):
+    """批量工：三层叠起来的板——上面一块完整的菱形，下面两条同斜率的 V 形板边，各隔一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    hw, drop, t = 11.0, 6.0, 2.8
+    cut = (c + 2 * g) / math.cos(math.atan(drop / hw))
+    top = -10.4
+    out = [grown([(0, top), (hw, top + drop), (0, top + 2 * drop), (-hw, top + drop)], [1.2, 1.0, 1.2, 1.0], g)]
+    y = top + drop + cut
+    for _ in range(2):
+        out.append(grown([(-hw, y), (0, y + drop), (hw, y), (hw, y + t), (0, y + drop + t), (-hw, y + t)], [0.8, 0, 0.8, 0.8, 1.0, 0.8], g))
+        y += t + cut
+    return [Layer("layers", out)]
+
+
+def brush(m):
+    """设计师：一支画笔斜着放（笔头朝左下），笔杆、笔箍、笔头三块，各隔一条刻缝。笔头占了三成墨，不当点睛。"""
+    g, c = GROW[m], CARVE[m]
+    w = 3.4 + 1.3 * g
+    handle = bar([(0, -14.6), (0, -4.2)], w)
+    f0 = -4.2 + w / 2 + c
+    ferrule = grown([(-3.2, f0 + g), (3.2, f0 + g), (3.2, 1.0), (-3.2, 1.0)], [0.4, 0.4, 0, 0], g)
+    b0 = 1.0 + g + c + g
+    tip = grown([(-3.2, b0), (3.2, b0), (2.8, 6.8), (0, 14.6), (-2.8, 6.8)], [0.4, 0.4, 2.8, 0.9, 2.8], g)
+    return [Layer("brush", turned([handle, ferrule], 45)), Layer("tip", turned([tip], 45))]
+
+
+def eye(m):
+    """哨兵：一只盯着的眼——杏仁形的一块，挖一圈虹膜的槽，嵌着瞳孔（点睛）。"""
+    g, c = GROW[m], CARVE[m]
+    hw, rise = 11.6, 7.6
+    r = (hw * hw + rise * rise) / (2 * rise)  # 上下两段弧过眼角与眼睑最高点
+    a = math.degrees(math.acos((r - rise) / (r + g)))  # 外扩后两段弧仍在眼角（y=0）相接
+    almond = [*arcs((0, r - rise), r + g, -90 - a, 2 * a), *arcs((0, -(r - rise)), r + g, 90 - a, 2 * a)]
+    o, p = (0, 0), 2.6 + 0.5 * g
+    return [Layer("eye", [almond, disc(o, p + c + 1.6, hole=True)]), Layer("pupil", [disc(o, p)], "secondary")]
+
+
+def person(m):
+    """子代理：一个人——圆头，下面是圆肩的半身，之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    o, r = (0, -5.4), 5.0
+    head = disc(o, r + g)
+    top = o[1] + r + g + c + g
+    body = grown([(-10.0, 11.0), (-10.0, top + 5.6), (-5.0, top), (5.0, top), (10.0, top + 5.6), (10.0, 11.0)], [1.4, 4.6, 3.0, 3.0, 4.6, 1.4], g)
+    return [Layer("person", [head, body])]
+
+
 # "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同发送的箭镞），竖厚 THICK，两端竖切；从下往上排。
 # 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
 CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
@@ -1193,6 +1526,41 @@ SYMBOLS = {
     "choose": choose,
     "filter": filter_lines,
     "puzzle": puzzle,
+    "tick": tick,
+    "plane": plane,
+    "plane.done": plane_done,
+    "bolt": bolt,
+    "clock": ring_mark(mark_hands),
+    "arrow.up": straight_arrow(False),
+    "arrow.down": straight_arrow(True),
+    "ring.down": ring_mark(lambda c, s, w: mark_arrow(c, s, w, down=True)),
+    "ring.stop": ring_mark(mark_square),
+    "ring.play": ring_mark(mark_play),
+    "ring.plus": ring_mark(mark_plus),
+    "badge.up": badge(mark_arrow),
+    "compact": compact,
+    "hand": hand,
+    "mac": mac,
+    "photo": photo,
+    "photos": photos,
+    "camera": camera,
+    "select": select_text,
+    "keyboard.down": keyboard_down,
+    "braces": braces,
+    "terminal": terminal,
+    "window": window,
+    "doc": doc,
+    "wrench": wrench,
+    "bubble.text": bubble("text"),
+    "bubble.dots": bubble("dots"),
+    "branch": branch,
+    "dot": dot,
+    "flame": flame,
+    "hammer": hammer,
+    "layers": layers3,
+    "brush": brush,
+    "eye": eye,
+    "person": person,
 }
 
 
