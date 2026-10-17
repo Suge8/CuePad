@@ -88,8 +88,8 @@ struct Sidebar: View {
             StartupIssues()
             HStack(spacing: 2) {
                 if showsBins {
-                    FooterPage(entry: .archive, page: .archive, select: select)
-                    FooterPage(entry: .trash, page: .trash, count: trashCount, select: select)
+                    FooterPage(entry: .archive, select: select)
+                    FooterPage(entry: .trash, count: trashCount, select: select)
                 }
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
@@ -231,7 +231,6 @@ private struct SidebarPages {
 private struct PlaceRows: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -239,19 +238,19 @@ private struct PlaceRows: View {
             ForEach(SidebarOutline.places, id: \.self) { entry in
                 switch entry {
                 case .tasks:
-                    row(entry, count: workspace.catalog?.allTasks.open ?? 0, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
+                    row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:
-                    row(entry, count: services.liveSessions.total, selected: workspace.page == .agent) { select(.agent) }
+                    row(entry, selected: workspace.page == entry.route) { select(entry.route) }
                         .help("按项目查看、搜索全部会话")
                 }
             }
         }
     }
 
-    private func row(_ entry: SidebarOutline.Entry, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
-        PageRow(count: count, selected: selected, action: action) {
+    private func row(_ entry: SidebarOutline.Entry, selected: Bool, action: @escaping () -> Void) -> some View {
+        PageRow(count: entry.count(in: workspace), selected: selected, action: action) {
             Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
         } title: {
             Text(entry.title)
@@ -352,7 +351,6 @@ private struct ProjectRow: View, Equatable {
 /// 底栏里通向一页的图标钮（归档、回收站，有东西时读屏念出条数）：当前页垫选中底色。
 private struct FooterPage: View {
     let entry: SidebarOutline.Entry
-    let page: Route
     var count = 0
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -361,8 +359,8 @@ private struct FooterPage: View {
     private var title: String { count > 0 ? "\(entry.title)，\(count) 项" : entry.title }
 
     var body: some View {
-        let selected = workspace.page == page
-        Button { select(page) } label: {
+        let selected = workspace.page == entry.route
+        Button { select(entry.route) } label: {
             IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
                 .frame(width: 32, height: 32)
