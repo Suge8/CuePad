@@ -4,7 +4,7 @@ import SwiftUI
 /// 只在事件发生的那一拍放一次（关键帧，放完就停，不常驻）；减弱动态效果时不形变，换的那一下只淡入淡出。
 /// 用法：`Jelly(value:move:) { shown, leaving in … }`，`value` 每变一次按 `move(旧, 新)` 挑动作（nil 是不形变、直接换）；
 /// `shown` 是此刻该画的值，`leaving` 是换之前那一小段（画的是旧值，可换成过渡的样子，如做完的勾先是一颗点）。
-struct Jelly<Value: Equatable, Content: View>: View {
+struct Jelly<Value: Equatable & Sendable, Content: View>: View {
     let value: Value
     let move: (Value, Value) -> JellyMove?
     @ViewBuilder let content: (Value, Bool) -> Content
@@ -19,13 +19,16 @@ struct Jelly<Value: Equatable, Content: View>: View {
         var count = 0
     }
 
+    /// 画法交给关键帧的内容闭包：那个闭包的签名是 `@Sendable`，捕获不了本视图的 `content`；SwiftUI 只在主线程排视图时调它，
+    /// 画法在那里调用与在 `body` 里调用是同一处境。
+    private nonisolated struct Draw: @unchecked Sendable {
+        let content: (Value, Bool) -> Content
+    }
+
     var body: some View {
         content(value, false)
-            .keyframeAnimator(initialValue: JellyPose(), trigger: play.count) { [before = play.before, value] _, pose in
-                content(pose.swap < 0.5 ? before ?? value : value, pose.swap < 0.5)
-                    .scaleEffect(x: pose.sx, y: pose.sy, anchor: .bottom)
-                    .rotationEffect(.degrees(pose.rot), anchor: .bottom)
-                    .visualEffect { content, proxy in content.offset(y: pose.y * proxy.size.height) }
+            .keyframeAnimator(initialValue: JellyPose(), trigger: play.count) { [draw = Draw(content: content), before = play.before, value] _, pose in
+                draw.content(pose.swap < 0.5 ? before ?? value : value, pose.swap < 0.5).modifier(JellyShape(pose: pose))
             } keyframes: { _ in
                 let steps = play.move?.steps ?? []
                 KeyframeTrack(\.sx) { for step in steps { CubicKeyframe(step.pose.sx, duration: step.time) } }
@@ -44,6 +47,18 @@ struct Jelly<Value: Equatable, Content: View>: View {
                 guard !reduceMotion, let next = move(old, new) else { return }
                 play = Play(move: next, before: old, count: play.count + 1)
             }
+    }
+}
+
+/// 把一帧的形变加到内容上（不放在泛型的 `Jelly` 里：那里的 `@Sendable` 闭包会捕获内容的类型）。
+private struct JellyShape: ViewModifier {
+    let pose: JellyPose
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(x: pose.sx, y: pose.sy, anchor: .bottom)
+            .rotationEffect(.degrees(pose.rot), anchor: .bottom)
+            .visualEffect { [y = pose.y] content, proxy in content.offset(y: y * proxy.size.height) }
     }
 }
 
