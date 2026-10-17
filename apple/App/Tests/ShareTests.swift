@@ -38,7 +38,7 @@ struct ShareTests {
         try Snapshots.write(
             ProjectsSnapshot(projects: [.init(id: UUID(), name: "A", color: "#111111", icon: nil)]),
             to: location.snapshotsDirectory)
-        let target = try #require(Snapshots.readProjects(from: location.snapshotsDirectory)?.projects.first)
+        let target = try #require(Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects.first)
         let model = ShareModel(providers: [provider(text: "记一下")], location: location)
         #expect(model.projects.map(\.name) == ["A"])
         await model.load()

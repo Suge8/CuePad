@@ -38,43 +38,29 @@ nonisolated struct CueSnapshot: Codable, Equatable, Sendable {
     var mood: String
 }
 
-/// 快照文件的读写：每种快照一个 JSON，原子替换，读的一方随时都能读到完整内容。
+/// 主 App 写、小组件与分享扩展读的一种快照：每种一个 JSON 文件。
+nonisolated protocol SnapshotFile: Codable, Sendable {
+    static var fileName: String { get }
+}
+
+nonisolated extension ProjectsSnapshot: SnapshotFile { static let fileName = "projects.json" }
+nonisolated extension UnfiledSnapshot: SnapshotFile { static let fileName = "unfiled.json" }
+nonisolated extension CueSnapshot: SnapshotFile { static let fileName = "cue.json" }
+
+/// 快照文件的读写：原子替换，读的一方随时都能读到完整内容。
 nonisolated enum Snapshots {
-    static func write(_ snapshot: ProjectsSnapshot, to directory: URL) throws {
-        try write(snapshot, named: "projects.json", to: directory)
-    }
-
-    static func write(_ snapshot: UnfiledSnapshot, to directory: URL) throws {
-        try write(snapshot, named: "unfiled.json", to: directory)
-    }
-
-    static func write(_ snapshot: CueSnapshot, to directory: URL) throws {
-        try write(snapshot, named: "cue.json", to: directory)
-    }
-
-    static func readCue(from directory: URL) -> CueSnapshot? {
-        read(named: "cue.json", from: directory)
-    }
-
-    static func readProjects(from directory: URL) -> ProjectsSnapshot? {
-        read(named: "projects.json", from: directory)
-    }
-
-    static func readUnfiled(from directory: URL) -> UnfiledSnapshot? {
-        read(named: "unfiled.json", from: directory)
-    }
-
-    private static func write<T: Encodable>(_ value: T, named name: String, to directory: URL) throws {
+    static func write<S: SnapshotFile>(_ snapshot: S, to directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
-        try encoder.encode(value).write(to: directory.appending(path: name), options: .atomic)
+        try encoder.encode(snapshot).write(to: directory.appending(path: S.fileName), options: .atomic)
     }
 
-    private static func read<T: Decodable>(named name: String, from directory: URL) -> T? {
-        guard let data = try? Data(contentsOf: directory.appending(path: name)) else { return nil }
+    /// 没写过或读不出来为 nil。
+    static func read<S: SnapshotFile>(_: S.Type, from directory: URL) -> S? {
+        guard let data = try? Data(contentsOf: directory.appending(path: S.fileName)) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try? decoder.decode(T.self, from: data)
+        return try? decoder.decode(S.self, from: data)
     }
 }
