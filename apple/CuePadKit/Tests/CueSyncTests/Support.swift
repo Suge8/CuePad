@@ -1,15 +1,9 @@
 import CloudKit
-import CoreGraphics
 @_exported import CueTestSupport
 import CueStore
 import Foundation
-import ImageIO
-import SQLite3
-import UniformTypeIdentifiers
 
 @testable import CueSync
-
-
 
 
 /// 按顺序回放的同步区替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
@@ -137,10 +131,6 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
     "targetRef": .null, "cardID": .null, "taskID": .null, "sentAt": .int(2_000), "modifiedAt": .int(modifiedAt),
   ]
 }
-
-
-
-
 
 /// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`pulled`），并回报发送成功。
 struct Loopback {
