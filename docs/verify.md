@@ -96,11 +96,11 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 改 Cue 的提示词（系统提示、工具说明、信封）前后各跑一遍，比同一套场景里真模型的做法：
 
 ```bash
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/after CUEPAD_TEST_TIME_LIMIT=900 \
+TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_TOKEN=<令牌> TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/after CUEPAD_TEST_TIME_LIMIT=900 \
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑是真的 Claude Code，用本机 Pi 登录的 Claude 订阅（`~/.pi/agent/auth.json`），默认 opus · medium；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
+- 大脑是真的 Claude Code，用 Claude 订阅：令牌由跑的人用 `claude setup-token` 生成后经 `TEST_RUNNER_CUEPAD_CUE_EVAL_TOKEN` 给，评测不读 `~/.pi`、`~/.claude`；默认 opus · medium；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
 - 输出目录里每个场景一个 .md（信封、工具调用与结果、Cue 写的消息、判定），`summary.md` 汇总，`system-prompt.md` 是这次的系统提示。有场景没过时命令非零退出，输出照样写完。
 - 场景与判定在 `CueEvalTests` 里；模型每次答得不完全一样，结论看两遍以上。
 
