@@ -98,8 +98,6 @@ final class TestApp {
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
-    /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
-    nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif

@@ -83,12 +83,9 @@ final class RecordingHost: AgentRuntime {
         try bridge.start()
         try ext.start()
         extensions[sessionID] = ext
-        try await eventually("bridge.session(id: ext.id) != nil") { bridge.session(id: ext.id) != nil }
-        guard bridge.session(id: ext.id) != nil else { throw ConnectTimeout(sessionID: sessionID) }
+        try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
         return ext
     }
-
-    struct ConnectTimeout: Error { var sessionID: String }
 }
 
 extension FakeExtension {
