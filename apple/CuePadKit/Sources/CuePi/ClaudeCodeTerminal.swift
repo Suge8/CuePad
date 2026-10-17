@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Darwin
 import Foundation
 

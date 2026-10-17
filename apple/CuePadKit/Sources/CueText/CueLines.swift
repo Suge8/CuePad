@@ -141,3 +141,10 @@ public struct CueSummary: Equatable, Sendable {
         return rest.count < line.count ? rest.trimmingCharacters(in: .whitespaces) : line
     }
 }
+
+extension String {
+    /// 至多 `limit` 个字符，超出的以省略号结尾（省略号算在内）。
+    public func clipped(_ limit: Int) -> String {
+        count <= limit ? self : String(prefix(limit - 1)) + "…"
+    }
+}

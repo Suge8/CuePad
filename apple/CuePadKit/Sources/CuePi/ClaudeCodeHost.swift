@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
