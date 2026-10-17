@@ -23,12 +23,13 @@ public struct CueMemoryView: Equatable, Sendable {
   /// 一直记着的已超出预算：视图里提示合并或取消一些。
   public var pinnedOverBudget: Bool
 
-  /// 默认预算：视图最多这么多行（约 8k token）。
-  public static let defaultBudget = 96
+  /// 预算：视图最多这么多行（约 8k token）。
+  public static let budget = 96
   /// 不超过这么多行的块直接从原行合并；更大的从两半的摘要合并。
-  static let rawMax = 16
+  private static let rawMax = 16
 
-  public init(_ memory: CueMemory, budget: Int = defaultBudget) {
+  public init(_ memory: CueMemory) {
+    let budget = Self.budget
     let lines = memory.lines
     let summaries = Dictionary(memory.summaries.map { ([$0.lo, $0.hi], $0.text) }, uniquingKeysWith: { _, last in last })
     pinned = lines.enumerated().filter { $1.pinned && $1.deletedAt == nil }.map { CueIndexedLine(index: $0, line: $1) }
@@ -101,7 +102,7 @@ public struct CueMemoryView: Equatable, Sendable {
   }
 
   /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。
-  static func cover(_ total: Int, alpha: Double) -> [(Int, Int)] {
+  private static func cover(_ total: Int, alpha: Double) -> [(Int, Int)] {
     var root = 1
     while root < total { root *= 2 }
     var out: [(Int, Int)] = [], stack = [(0, root)]
@@ -120,7 +121,7 @@ public struct CueMemoryView: Equatable, Sendable {
   }
 
   /// 至多 `budget` 块、越新越细：全放得下就一条一块；否则二分 alpha 取最细的、行数不超预算的铺法，余下的预算花在最新的块上。
-  static func cover(_ total: Int, budget: Int) -> [(Int, Int)] {
+  private static func cover(_ total: Int, budget: Int) -> [(Int, Int)] {
     guard total > 0 else { return [] }
     if total <= budget { return (0..<total).map { ($0, $0 + 1) } }
     var low = 0.0, high = 1.0
