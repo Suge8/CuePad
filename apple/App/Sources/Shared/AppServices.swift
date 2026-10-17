@@ -85,6 +85,8 @@ final class AppServices {
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
+    /// 在拉的那一拉（`pull`）：立即同步与按节奏的拉取共用。
+    @ObservationIgnored var pulling: Task<Void, Never>?
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它，不另拉一遍。
     var syncing: Task<Void, Never>?
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。

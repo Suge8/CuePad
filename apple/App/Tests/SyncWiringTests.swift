@@ -76,8 +76,14 @@ struct SyncWiringTests {
         #expect(worstDelay < AppServices.syncWaitLimit / 5)
     }
 
-    @Test func 应用激活时立即同步() async {
-        await services.handleActivation()
+    /// 回到前台时正有在等的东西（手机停在 Agent 页、Cue 页，或有话在等回执）：按节奏的拉取随之开始，与立即同步是同一拉，不连拉两次。
+    @Test func 应用激活时立即同步_正在等也只拉一次() async {
+        let time = ManualTiming()
+        let app = TestApp(timing: time.timing)
+        app.services.hasOpenDeliveries = true
+        await app.services.handleActivation()
+        defer { app.services.stopPolling() }
+        await time.waitForSleeper()  // 按节奏的拉取已开始、睡在第一个间隔里
         #expect(app.sync.syncNows == 1)
     }
 

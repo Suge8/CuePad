@@ -74,21 +74,33 @@ extension AppServices {
         await syncNow()
     }
 
-    /// 手里有正在等的东西时按节奏拉（`SyncPoller`；节奏见 `pollingCadence`，每次拉就是 `SyncControlling.syncNow`）。
+    /// 手里有正在等的东西时按节奏拉（`SyncPoller`；节奏见 `pollingCadence`，每次拉经 `pull`）。
     /// Mac 不收推送，别的设备写来的东西只靠它；手机有推送，它是推送之外让在等的东西更快、更稳地到。已经在拉就不重开。
     func startPolling() {
-        guard let sync, polling == nil else { return }
+        guard sync != nil, polling == nil else { return }
         let waiting = pollingCondition()
-        let log = Self.log, poller = SyncPoller(timing: timing)
+        let poller = SyncPoller(timing: timing)
         polling = Task {
-            await poller.run(while: waiting) {
-                do {
-                    try await sync.syncNow()
-                } catch {
-                    log.notice("按节奏拉取失败：\(String(describing: error), privacy: .public)")
-                }
+            await poller.run(while: waiting) { [weak self] in await self?.pull() }
+        }
+    }
+
+    /// 拉一次：立即同步与按节奏的拉取只经这里。同一时刻只有一拉，期间要拉的就是这一拉：回到前台、同步恢复时
+    /// 立即同步与重开的按节奏拉取同时要拉，只拉一次。收到推送不经这里（`pullForPush`：推送说的是之后才到的变化，要排在在拉的那一拉后面）。
+    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
+    func pull() async {
+        guard let sync else { return }
+        if let pulling { return await pulling.value }
+        let task = Task {
+            do {
+                try await sync.syncNow()
+            } catch {
+                Self.log.notice("拉取失败：\(String(describing: error), privacy: .public)")
             }
         }
+        pulling = task
+        await task.value
+        pulling = nil
     }
 
     /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`：
@@ -137,27 +149,22 @@ extension AppServices {
         polling = nil
     }
 
-    /// 立即同步：立即拉一次（待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
+    /// 立即同步：立即拉一次（`pull`，与按节奏的拉取同一拉；待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
     /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`，再要立即同步的
     /// （启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
-    /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
     func syncNow() async {
-        guard let sync else { return }
+        guard sync != nil else { return }
         if let syncing { return await syncing.value }
-        let pulling = Task { await Self.pull(sync) }
-        syncing = pulling
-        await pulling.value
+        let waiting = Task { await self.pullAtMost() }
+        syncing = waiting
+        await waiting.value
         syncing = nil
     }
 
-    private static func pull(_ sync: any SyncControlling) async {
+    private func pullAtMost() async {
         let (settled, settle) = AsyncStream<Void>.makeStream()
         Task {
-            do {
-                try await sync.syncNow()
-            } catch {
-                Self.log.notice("立即同步失败：\(String(describing: error), privacy: .public)")
-            }
+            await pull()
             settle.finish()
         }
         let deadline = Task {
