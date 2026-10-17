@@ -52,6 +52,13 @@ extension CueStore {
       total: total)
   }
 
+  /// 在问你的会话数："等你"里会话那一半（规则在 `PiSessionState.asksYou`）。只读在等回答的那几条：
+  /// Dock 角标与"等你 N"随每次会话状态变化重读，读整页在线会话（连项目与投送请求）曾占会话忙时常驻开销的一成多。
+  public func sessionsAskingYou() throws -> Int {
+    let onDuty = try cueOnDuty()
+    return try select(PiSessionState.self, where: "state = ?", [PiWorkState.waitingForUser.rawValue]).count { $0.asksYou(cueOnDuty: onDuty) }
+  }
+
   /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。
   func latestRenames(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
