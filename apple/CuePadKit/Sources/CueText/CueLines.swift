@@ -6,7 +6,7 @@ public enum CueLines {
     // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
 
     /// 这一行是不是卡片名字所在的那种行（有文字的行）。
-    public static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
+    static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
     /// 正文里全部有文字的行（去掉图片引用，空白折成单个空格），按出现顺序。
     static func contentLines(_ stored: String) -> [String] {
@@ -139,5 +139,12 @@ public struct CueSummary: Equatable, Sendable {
     private static func stripHeading(_ line: String) -> String {
         let rest = line.drop { $0 == "#" }
         return rest.count < line.count ? rest.trimmingCharacters(in: .whitespaces) : line
+    }
+}
+
+extension String {
+    /// 至多 `limit` 个字符，超出的以省略号结尾（省略号算在内）。
+    public func clipped(_ limit: Int) -> String {
+        count <= limit ? self : String(prefix(limit - 1)) + "…"
     }
 }

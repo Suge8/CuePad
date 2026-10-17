@@ -128,9 +128,9 @@ actor RecordSender {
     blockedUntil = nil
     notBefore = nil
 
-    await coordinator.handle(.sending(true))
+    await coordinator.setSending(true)
     let end = await batches()
-    await coordinator.handle(.sending(false))
+    await coordinator.setSending(false)
     finish(end)
   }
 
@@ -171,7 +171,7 @@ actor RecordSender {
         resolve(names, received: [])
         Self.log.notice("上传整批失败：\(error.brief, privacy: .public)")
         if let error = error as? CKError, error.code == .userDeletedZone {
-          await coordinator.handle(.zoneMissing(deletedByUser: true))
+          await coordinator.zoneMissing(deletedByUser: true)
           return .halted
         }
         await coordinator.reached(error)  // 网络类失败：连不上 iCloud

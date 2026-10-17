@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// 一个会话此刻的事实：各家把自己的事件（钩子、stream-json、app-server 通知、服务事件）翻译成对它的修改，桥上的状态、那句说明、
@@ -62,14 +63,14 @@ struct SessionFacts {
     mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
         updateSubagent(id) { agent in
             agent.phase = .known(phase)
-            agent.action = summary.flatMap(ToolDetail.firstLine).map { ToolDetail.clip($0) } ?? ""
+            agent.action = summary.flatMap(ToolDetail.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
             agent.settledAt = now
         }
     }
 
     /// 此刻的状态与那句说明。
     var state: (state: PiWorkState, detail: String?) {
-        if let question { return (.waitingForUser, ToolDetail.clip(ToolDetail.singleLine(question.text))) }
+        if let question { return (.waitingForUser, ToolDetail.singleLine(question.text).clipped(ToolDetail.limit)) }
         if compacting { return (.compacting, nil) }
         if running { return (activity, activityDetail) }
         if hasRunningSubagent { return (.delegating, nil) }
@@ -118,8 +119,8 @@ enum ToolDetail {
     static let limit = 120
 
     static func line(_ tool: String, _ input: JSONValue?) -> String {
-        guard let target = target(input) else { return clip(name(tool)) }
-        return clip(name(tool) + PiSessionState.detailSeparator + target)
+        guard let target = target(input) else { return name(tool).clipped(limit) }
+        return (name(tool) + PiSessionState.detailSeparator + target).clipped(limit)
     }
 
     /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"；
@@ -165,9 +166,6 @@ enum ToolDetail {
             .joined(separator: PiSessionState.detailSeparator)
     }
 
-    static func clip(_ text: String, _ limit: Int = limit) -> String {
-        text.count <= limit ? text : String(text.prefix(limit - 1)) + "…"
-    }
 }
 
 /// 挂在钩子上、要你回答的（Codex 的权限确认、Claude Code 的 `AskUserQuestion` 与 MCP 请求输入）在哪里答：按人在不在这台 Mac 前（`UserPresence`）。
@@ -219,7 +217,7 @@ enum PermissionWording {
         let lines = (["允许 \(agent.name) \(action)？"] + details.compactMap { $0 }).reduce(into: [String]()) { lines, line in
             if !line.isEmpty, !lines.contains(line) { lines.append(line) }
         }
-        return ToolDetail.clip(lines.joined(separator: "\n"), 500)
+        return lines.joined(separator: "\n").clipped(500)
     }
 }
 #endif

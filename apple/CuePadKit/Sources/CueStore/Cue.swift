@@ -403,12 +403,11 @@ public enum CueAlert {
   public static let bodyLimit = 300
 
   public static func content(name: String?, text: String, choices: [String]?, task: String?) -> (title: String, body: String) {
-    var body: String
+    let body: String
     if let choices {
       body = CueAsk(choices: choices).question(task: task) + "\n" + choices.joined(separator: " / ")
     } else {
-      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-      if body.count > bodyLimit { body = String(body.prefix(bodyLimit - 1)) + "…" }
+      body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }
     let name = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return (name.isEmpty ? CueProfile.defaultName : name, body)

@@ -201,7 +201,7 @@ public enum CueEnvelope {
 
   static func clip(_ text: String, _ limit: Int) -> String {
     let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-    return flat.count > limit ? String(flat.prefix(limit - 1)) + "…" : flat
+    return flat.clipped(limit)
   }
 
   static func duration(_ seconds: TimeInterval) -> String {

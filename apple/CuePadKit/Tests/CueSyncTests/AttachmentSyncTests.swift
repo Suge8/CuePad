@@ -59,7 +59,7 @@ import Testing
     let record = remoteRecord(.attachments, attachmentFields(hash: hash, byteCount: data.count))
     record["file"] = CKAsset(fileURL: try assetFile(data))
 
-    await rig.coordinator.handle(.fetched(modifications: [record], deletions: []))
+    try await rig.coordinator.pulled([record], [])
 
     #expect(try store.files.original(hash: hash) == data)
     #expect(try RawDB(rig.fixture.url).count("attachments") == 1)
@@ -74,7 +74,7 @@ import Testing
     corrupt["file"] = CKAsset(fileURL: try assetFile(Data("tampered".utf8)))
     let missing = remoteRecord(.attachments, attachmentFields(hash: sha256(Data("other".utf8)), byteCount: 5))
 
-    await rig.coordinator.handle(.fetched(modifications: [corrupt, missing], deletions: []))
+    try await rig.coordinator.pulled([corrupt, missing], [])
 
     #expect(try RawDB(rig.fixture.url).count("attachments") == 0)
     #expect(throws: CueStoreError.notFound) { try store.files.original(hash: hash) }
@@ -89,8 +89,8 @@ import Testing
     try await store.updateCard(freeCard.id) { $0.body = "图片删掉了" }
     try await rig.simulatePush()
 
-    await rig.coordinator.handle(.fetched(
-      modifications: [], deletions: [(recordID(free.id), "attachments"), (recordID(used.id), "attachments")]))
+    try await rig.coordinator.pulled(
+      [], [(recordID(free.id), "attachments"), (recordID(used.id), "attachments")])
 
     #expect(throws: CueStoreError.notFound) { try store.files.original(hash: free.hash) }
     #expect(try !store.files.original(hash: used.hash).isEmpty)

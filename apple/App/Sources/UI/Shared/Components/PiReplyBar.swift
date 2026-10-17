@@ -109,14 +109,14 @@ struct PiReplyBar: View {
 
     private var composer: some View {
             Composer(
-                draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
+                draft: box, prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty {
                         PiQueueStack(
                             requests: queued, folded: Self.foldsQueue && focused, steers: session.capabilities.contains(.steer),
-                            box: services.settings.replyDraftBinding(for: session.id))
+                            box: box)
                     }
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }

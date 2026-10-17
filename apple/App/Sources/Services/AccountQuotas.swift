@@ -15,14 +15,14 @@ final class AccountQuotas {
     @ObservationIgnored private var running: Task<Bool, any Error>?
     @ObservationIgnored private var nextAllowed = Date.distantPast
 
-    nonisolated static let failureCooldown: TimeInterval = 2 * 60
+    private static let failureCooldown: TimeInterval = 2 * 60
 
     func follow(_ store: CueStore) async throws {
         for try await items in store.observe({ try $0.accountQuotas() }) where items != self.items { self.items = items }
     }
 
     /// 还一条都没有，或有一条陈旧了。
-    func needsRefresh(at now: Date) -> Bool { items.isEmpty || items.contains { $0.isStale(at: now) } }
+    private func needsRefresh(at now: Date) -> Bool { items.isEmpty || items.contains { $0.isStale(at: now) } }
 
     /// 需要时用 `refresh` 查一次（Mac 经在线会话里的扩展，手机请 Mac 查）；正在查就等那一次。
     /// `refresh` 返回 false 是此刻没有可问的（没有在线会话、不知道哪台 Mac）：不算查过，有了可问的再来（见 `refreshesQuota`）。
