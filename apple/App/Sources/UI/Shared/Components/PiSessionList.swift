@@ -258,7 +258,7 @@ private struct SubagentCount: View {
 
     var body: some View {
         let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.signature : palette.ink2).fontWeight(.semibold)
-        let icon = branch ? Text("\(Image(systemName: "arrow.triangle.branch"))\u{2009}") : Text(verbatim: "")
+        let icon = branch ? Text("\(Image(.branch))\u{2009}") : Text(verbatim: "")
         Text("\(icon)\(running)/\(summary.total)")
             .monospacedDigit().foregroundStyle(palette.ink2)
             .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
@@ -278,7 +278,7 @@ private struct PlaceLine: View {
                 ProjectGlyph(project: project, size: Self.icon)
                 Text(Highlight.matches(project.name, highlight)).foregroundStyle(palette.ink2)
             } else if let folder {
-                Image(systemName: "folder").font(.system(size: Self.icon - 1, weight: .medium)).foregroundStyle(palette.ink3).frame(width: Self.icon + 6)
+                Image(.folder).font(.system(size: Self.icon - 1, weight: .medium)).foregroundStyle(palette.ink3).frame(width: Self.icon + 6)
                     .accessibilityHidden(true)
                 Text(Highlight.matches(folder, highlight)).foregroundStyle(palette.ink3)
             }
@@ -331,7 +331,7 @@ private struct SubagentRoster: View {
         HStack(spacing: 5) {
             SubagentCount(summary: summary).fixedSize().padding(.trailing, 2)
             ForEach(Array(summary.lineup.prefix(Self.shown).enumerated()), id: \.offset) { _, agent in
-                Image(systemName: agent.roleSymbol).imageScale(.small).foregroundStyle(color(agent)).accessibilityHidden(true)
+                Image(agent.roleIcon).imageScale(.small).foregroundStyle(color(agent)).accessibilityHidden(true)
             }
         }
         .frame(minWidth: 0, alignment: .leading).clipped()
@@ -442,7 +442,7 @@ struct PiReloadFold: View {
                 PiStateDot(shown: PiShown(status: .restart), size: style.dot)
                 Text("\(count) 个会话需要 /reload").font(style.name).foregroundStyle(palette.ink2).lineLimit(1)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(style.line.weight(.semibold)).foregroundStyle(palette.ink3)
+                Image(.forward).font(style.line.weight(.semibold)).foregroundStyle(palette.ink3)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
                     .accessibilityHidden(true)
             }
@@ -463,7 +463,7 @@ struct MarkUnreadButton: View {
 
     var body: some View {
         if services.settings.canMarkUnread(session) {
-            Button("标为未读", systemImage: "circle.fill") { services.settings.markUnread(session) }
+            Button("标为未读", icon: .markUnread) { services.settings.markUnread(session) }
         }
     }
 }

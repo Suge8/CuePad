@@ -30,7 +30,7 @@ struct PiSubagentList: View {
                 if summary.running > 0 {
                     PiStateDot(shown: PiShown(status: .working(.delegating)), size: 6)
                 } else {
-                    Image(systemName: "arrow.triangle.branch").imageScale(.small)
+                    Image(.branch).imageScale(.small)
                 }
             } label: {
                 Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)

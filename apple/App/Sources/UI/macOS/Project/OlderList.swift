@@ -30,7 +30,7 @@ struct OlderList: View {
         let open = isExpanded(group)
         let header = HStack {
             if group.isMonth {
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).accessibilityHidden(true)
+                Image(.forward).font(.system(size: 10, weight: .bold)).accessibilityHidden(true)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
             Text(OlderGroupTitle.text(group.period)).font(Typography.label).foregroundStyle(palette.ink2)
@@ -141,9 +141,9 @@ private struct RowGlyph: View {
     var body: some View {
         Group {
             if selected {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onFill, palette.signature)
+                Image(.picked).foregroundStyle(palette.onFill, palette.signature)
             } else {
-                Image(systemName: images ? "photo" : "doc.text").foregroundStyle(palette.ink3)
+                Image(images ? .photo : .document).foregroundStyle(palette.ink3)
             }
         }
         .font(.system(size: 13)).frame(width: 18)

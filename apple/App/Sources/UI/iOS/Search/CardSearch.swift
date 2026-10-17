@@ -179,7 +179,7 @@ private struct Chip: View {
                     Text(value).fontWeight(.medium)
                 }
                 if value != nil {
-                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
+                    Image(.expand).font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
                 }
             }
         }

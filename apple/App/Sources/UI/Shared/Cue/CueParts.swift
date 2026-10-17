@@ -43,7 +43,7 @@ struct CueEnableCard: View {
                 .font(Typography.secondary).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             if hosts.isEmpty {
-                Label("先到 Mac 上打开 CuePad，它会出现在这里", systemImage: "desktopcomputer")
+                Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
                 HStack(spacing: 8) {
@@ -80,7 +80,7 @@ struct CueEnableCard: View {
         } else {
             MenuButton(
                 sections: [ChoiceMenu.Section(choices: hosts.map { host in
-                    ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .symbol("desktopcomputer")) {
+                    ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .icon(.mac)) {
                         model.enable(on: host.id, services)
                     }
                 })],
@@ -89,7 +89,7 @@ struct CueEnableCard: View {
             ) {
                 HStack(spacing: 6) {
                     Text(here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用")
-                    Image(systemName: "chevron.down").font(.footnote.weight(.semibold))
+                    Image(.expand).font(.footnote.weight(.semibold))
                 }
                 .modifier(ControlSurface(kind: .primary))
             }
@@ -114,7 +114,7 @@ struct CueTaskLine: View {
                 if let progress = ref.progress, !ref.done {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().foregroundStyle(palette.ink3)
                 }
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                Image(.forward).font(.system(size: 9, weight: .semibold))
             }
             .font(Typography.meta).foregroundStyle(palette.ink2)
             .frame(minHeight: 24)
@@ -138,7 +138,7 @@ struct CueNotes: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button { expanded.toggle() } label: {
-                NoteLine(symbol: "ellipsis.bubble", open: expanded) {
+                NoteLine(icon: .thinking, open: expanded) {
                     Text(expanded ? "\(notes.count) 条动态" : Dotted(notes.last.flatMap(Self.line), notes.count > 1 ? "\(notes.count) 条" : nil))
                         .lineLimit(1)
                 }
@@ -225,7 +225,7 @@ private struct AnswerChip: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Label { Text(answer).lineLimit(2) } icon: { Image(systemName: "arrowshape.turn.up.left.fill").imageScale(.small) }
+        Label { Text(answer).lineLimit(2) } icon: { Image(.yourAnswer).imageScale(.small) }
             .font(Typography.secondary).foregroundStyle(palette.ink)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(palette.bubble, in: .capsule)
@@ -346,7 +346,7 @@ struct CueWaitingDock: View {
         return Button { reading = open ? nil : message.id } label: {
             HStack(spacing: 4) {
                 Text("原话")
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
+                Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             .frame(minHeight: 24).contentShape(.rect)
@@ -364,7 +364,7 @@ struct CueWaitingDock: View {
                 .submitLabel(.send)
                 .onSubmit { sayOtherwise(message) }
             if !empty {
-                Button("发送", systemImage: "arrow.up.circle.fill") { sayOtherwise(message) }
+                Button("发送", icon: .sendAnswer) { sayOtherwise(message) }
                     .labelStyle(.iconOnly).font(.system(size: 18)).foregroundStyle(palette.signature)
                     .buttonStyle(PressStyle(.button))
             }

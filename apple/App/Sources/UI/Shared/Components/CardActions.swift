@@ -23,27 +23,27 @@ struct CardActions: View {
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
         let id = card.id
         switch item {
-        case .makeTask, .makeIdea: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.setTodo(id, item == .makeTask) } }
+        case .makeTask, .makeIdea: Button(item.title, icon: item.icon) { workspace.attempt { try await workspace.setTodo(id, item == .makeTask) } }
         case .complete, .reopen:
-            Button(item.title, systemImage: item.symbol) {
+            Button(item.title, icon: item.icon) {
                 let task = card
                 workspace.attempt { try await workspace.toggle(task.id) }
             }
-        case .archive: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.archive(id) } }
+        case .archive: Button(item.title, icon: item.icon) { workspace.attempt { try await workspace.archive(id) } }
         case .resource, .unresource:
-            Button(item.title, systemImage: item.symbol) {
+            Button(item.title, icon: item.icon) {
                 workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
             }
         case .move: moveMenu
-        case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(Outgoing.text(of: card)) }
-        case .trash: Button(item.title, systemImage: item.symbol, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
+        case .copy: Button(item.title, icon: item.icon) { workspace.copy(Outgoing.text(of: card)) }
+        case .trash: Button(item.title, icon: item.icon, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
         case .select:
             #if os(macOS)
-            Button(item.title, systemImage: item.symbol) { workspace.presses.toggle(id) }
+            Button(item.title, icon: item.icon) { workspace.presses.toggle(id) }
             #endif
         case .bindSession:
             #if os(macOS)
-            Menu(item.title, systemImage: item.symbol) { SessionBindItems(leaf: card) }
+            Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
             #endif
         // 只在轻扫里（`CardMenu.swipes`）
         case .indent, .outdent: EmptyView()
@@ -52,7 +52,7 @@ struct CardActions: View {
 
     private var moveMenu: some View {
         let id = card.id, here = card.parentID == nil ? card.projectID : nil
-        return Menu(CardMenu.Item.move.title, systemImage: CardMenu.Item.move.symbol) {
+        return Menu(CardMenu.Item.move.title, icon: CardMenu.Item.move.icon) {
             ForEach(workspace.catalog?.projects ?? []) { project in
                 Button(project.name) { workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) } }
                     .disabled(card.parentID == nil && project.id == here)
@@ -84,22 +84,22 @@ extension CardMenu.Item {
         }
     }
 
-    var symbol: String {
+    var icon: Icon {
         switch self {
-        case .makeTask: "checklist"
-        case .makeIdea: "lightbulb"
-        case .complete: "checkmark.circle"
-        case .reopen: "arrow.uturn.backward.circle"
-        case .move: "folder"
-        case .archive: "archivebox"
-        case .resource: "books.vertical"
-        case .unresource: "books.vertical.fill"
-        case .copy: "doc.on.doc"
-        case .trash: "trash"
-        case .select: "checkmark.circle"
-        case .bindSession: "link"
-        case .indent: "increase.indent"
-        case .outdent: "decrease.indent"
+        case .makeTask: .task
+        case .makeIdea: .idea
+        case .complete: .complete
+        case .reopen: .reopen
+        case .move: .folder
+        case .archive: .archive
+        case .resource: .resource
+        case .unresource: .isResource
+        case .copy: .copy
+        case .trash: .trash
+        case .select: .complete
+        case .bindSession: .link
+        case .indent: .indent
+        case .outdent: .outdent
         }
     }
 
@@ -124,7 +124,7 @@ extension RowSwipes {
             // 不在轻扫里（`CardMenu.swipes` 不给）
             default: nil
             }
-            return run.map { RowAction(item.title, symbol: item.symbol, tone: item.tone, run: $0) }
+            return run.map { RowAction(item.title, icon: item.icon, tone: item.tone, run: $0) }
         }
         return RowSwipes(leading: swipes.leading.compactMap(action), trailing: swipes.trailing.compactMap(action))
     }

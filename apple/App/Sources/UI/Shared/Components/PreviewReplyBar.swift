@@ -31,8 +31,8 @@ struct PreviewReplyBar: View {
                 .textFieldStyle(.plain).font(Typography.body)
                 .submitLabel(.send)
                 .onSubmit { send(to: listener) }
-            Button { send(to: listener) } label: { SubmitGlyph(.send, enabled: !empty) }
-                .buttonStyle(.plain)
+            Button { send(to: listener) } label: { SendGlyph(empty ? .idle : .ready) }
+                .buttonStyle(PressStyle(.button))
                 .disabled(empty)
                 .accessibilityLabel("发送")
         }

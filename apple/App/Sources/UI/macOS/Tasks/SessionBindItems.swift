@@ -11,7 +11,7 @@ struct SessionBindItems: View {
 
     var body: some View {
         let sessions = workspace.sendState.onlineTargets(for: leaf.projectID).filter { $0.state.projectID == leaf.projectID }
-        Button("开新会话", systemImage: "plus") { workspace.startFresh(leaf) }
+        Button("开新会话", icon: .add) { workspace.startFresh(leaf) }
         Divider()
         ForEach(sessions) { item in
             let sessionID = item.state.sessionID
@@ -20,7 +20,7 @@ struct SessionBindItems: View {
         if sessions.isEmpty { Button("本项目没有在跑的会话") {}.disabled(true) }
         if leaf.piSessionID != nil {
             Divider()
-            Button("解除绑定", systemImage: "link.badge.minus") {
+            Button("解除绑定", icon: .unlink) {
                 let id = leaf.id
                 workspace.perform { try await $0.unbindSession(from: id) }
             }

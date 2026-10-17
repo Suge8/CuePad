@@ -41,7 +41,7 @@ struct TaskPage: View {
         .sheet(isPresented: $editingBrief) {
             NavigationStack {
                 CardEditorScreen(cardID: card.id, part: .rest)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成", systemImage: "checkmark") { editingBrief = false } } }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成", icon: .save) { editingBrief = false } } }
             }
             .presentationBackground(palette.paper)
         }
@@ -54,7 +54,7 @@ struct TaskPage: View {
             AgentStatusCard(sessionID: session, item: agents.items[card.id])
         } else if case .start(let leaf) = workspace.next(for: card, in: agents, steps: nil) {
             Button { navigation.handToAgent(leaf) } label: {
-                Label("开始", systemImage: "play.fill")
+                Label("开始", icon: .start)
                     .font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 22).frame(height: TaskMetrics.rowHeight)
                     .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
@@ -83,7 +83,7 @@ struct TaskPage: View {
     }
 
     private var more: some View {
-        Menu { CardActions(card: card, more: true) } label: { Image(systemName: "ellipsis") }
+        Menu { CardActions(card: card, more: true) } label: { Image(.more) }
             .accessibilityLabel("更多")
     }
 }
@@ -101,7 +101,7 @@ private struct TaskBrief: View {
                     Text(CueFormat.plainText(rest)).font(TaskMetrics.font).foregroundStyle(palette.ink2).lineLimit(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    Label("写正文：要 Agent 做什么", systemImage: "plus")
+                    Label("写正文：要 Agent 做什么", icon: .add)
                         .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
                         .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
                         .padding(.horizontal, TaskMetrics.cardPadding)
@@ -149,7 +149,7 @@ private struct AgentStatusCard: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             .padding(TaskMetrics.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)

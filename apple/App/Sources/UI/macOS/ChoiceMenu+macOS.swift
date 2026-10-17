@@ -50,7 +50,7 @@ extension ChoiceMenu {
 extension ChoiceMenu.Glyph {
     var nsImage: NSImage? {
         switch self {
-        case .symbol(let name): NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        case .icon(let icon): icon.platformImage
         case .brand(let mark): mark.nsImage
         }
     }

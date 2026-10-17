@@ -97,7 +97,7 @@ private struct AgentPanelButton: View {
     var body: some View {
         let waiting = workspace.cue.waiting
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
-            Label(workspace.cue.name, systemImage: "bubble.left.and.text.bubble.right")
+            Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
                 .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
         }
         .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
@@ -143,7 +143,7 @@ private struct SplitSidebar: View {
         .background(palette.sidebar)
         .navigationTitle("CuePad")
         .toolbar {
-            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+            Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
         }
         .task {
             await NextFrame.wait()
@@ -170,7 +170,7 @@ private struct SplitSidebar: View {
                     if !outline.recent.isEmpty || outline.unfiled > 0 {
                         header("最近")
                         ForEach(outline.recent) { row($0, catalog, now: now[$0.id]) }
-                        if outline.unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, symbol: "tray", badge: outline.unfiled) }
+                        if outline.unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, icon: .unfiled, badge: outline.unfiled) }
                     }
                     // 没有最近一组（项目全置顶、还没有项目）时也在：书架是新建项目与看全部的地方。
                     // 上面一个项目分组都没有时，它自成一组，与去处隔开分组间距
@@ -228,7 +228,7 @@ private struct SidebarSearchField: View {
     var body: some View {
         Button { navigation.openSearch() } label: {
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3)
+                Image(.search).foregroundStyle(palette.ink3)
                 // 窄侧栏（iPad）放不下整句时只写"搜索"，不截成半句
                 ViewThatFits(in: .horizontal) {
                     Text("搜索灵感、任务与会话")
@@ -272,7 +272,7 @@ private struct SidebarRow: View {
 
     let route: Route
     let title: String
-    var symbol: String?
+    var icon: Icon?
     var project: Project?
     var badge = 0
     /// 项目行的"此刻"（项目行总留着这一行的高度）。
@@ -282,7 +282,7 @@ private struct SidebarRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 图标随字号放大（侧栏列表里的符号默认不跟随辅助字号）。
-    @ScaledMetric(relativeTo: .body) private var icon: CGFloat = 16
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 16
 
     var body: some View {
         let selected = navigation.shows(route)
@@ -303,7 +303,7 @@ private struct SidebarRow: View {
                     if project != nil { ProjectNowLine(now: now, font: .footnote) }
                 }
             } icon: {
-                if let symbol { Image(systemName: symbol).font(.system(size: icon)) } else { ProjectGlyph(project: project, size: icon) }
+                if let icon { IconImage(icon, accent: selected ? .lit : .none).font(.system(size: glyph)) } else { ProjectGlyph(project: project, size: glyph) }
             }
             .foregroundStyle(palette.ink)
             .padding(.vertical, 4).frame(minHeight: 44)
@@ -317,7 +317,7 @@ private struct SidebarRow: View {
 
 private extension SidebarRow {
     init(entry: SidebarOutline.Entry, badge: Int = 0, alert: Alert? = nil) {
-        self.init(route: entry.route, title: entry.title, symbol: entry.symbol, badge: badge, alert: alert)
+        self.init(route: entry.route, title: entry.title, icon: entry.icon, badge: badge, alert: alert)
     }
 }
 

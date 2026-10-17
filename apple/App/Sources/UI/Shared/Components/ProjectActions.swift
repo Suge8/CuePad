@@ -11,18 +11,18 @@ struct ProjectActions<Extra: View>: View {
 
     var body: some View {
         let id = project.id, pinned = !project.isPinned
-        Button(project.isPinned ? "取消置顶" : "置顶", systemImage: project.isPinned ? "pin.slash" : "pin") {
+        Button(project.isPinned ? "取消置顶" : "置顶", icon: project.isPinned ? .unpin : .pin) {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
-        Button("编辑名称与图标…", systemImage: "pencil", action: edit)
+        Button("编辑名称与图标…", icon: .rename, action: edit)
         let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
-        Button(folders.bindTitle, systemImage: "folder") { workspace.chooseFolder(for: project) }
+        Button(folders.bindTitle, icon: .folder) { workspace.chooseFolder(for: project) }
         ForEach(folders.unbinds, id: \.binding.id) { unbind in
-            Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(systemName: "folder.badge.minus") } }
+            Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(.unbindFolder) } }
         }
         extra
         Divider()
-        Button("移到回收站", systemImage: "trash", role: .destructive) {
+        Button("移到回收站", icon: .trash, role: .destructive) {
             #if os(macOS)
             // 正看着它：换到未分类（iOS 上项目页自己发现项目不在了就退回，见 `ProjectScreen`）
             if workspace.currentProject == id { workspace.show(.unfiled) }

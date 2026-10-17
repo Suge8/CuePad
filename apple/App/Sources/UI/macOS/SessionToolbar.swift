@@ -163,10 +163,10 @@ struct SessionMenuItems: View {
         if let link = state.task {
             let open = link.tasks.filter { $0.task.status != .done }
             ForEach(open) { item in
-                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", systemImage: "checkmark.circle") { workspace.completeTask(item.task.id) }
+                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
             }
             if !link.bindable.isEmpty {
-                Menu("绑定到任务", systemImage: "link") {
+                Menu("绑定到任务", icon: .link) {
                     ForEach(link.bindable) { item in
                         Button(Dotted(item.parent?.title, item.task.title).visible) {
                             let (sessionID, task) = (session.sessionID, item.task.id)
@@ -177,7 +177,7 @@ struct SessionMenuItems: View {
             }
             let using = link.tasks.filter { $0.task.piSessionID == session.sessionID }
             if !using.isEmpty {
-                Menu("解除绑定", systemImage: "link.badge.minus") {
+                Menu("解除绑定", icon: .unlink) {
                     ForEach(using) { item in
                         Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
                     }
@@ -186,13 +186,13 @@ struct SessionMenuItems: View {
             Divider()
         }
         if state.canRename {
-            Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
+            Button("重命名…", icon: .rename) { workspace.sessionHeader.rename(state.session) }
         }
         if let id = state.liveID {
-            Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
+            Button("跳到终端窗口", icon: .terminalWindow) { workspace.jumpToTerminal(id) }
         }
         if state.canEnd {
-            Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
+            Button("结束会话", icon: .endSession, role: .destructive) { workspace.sessionHeader.end(state.session) }
                 .disabled(state.ending)
         }
     }

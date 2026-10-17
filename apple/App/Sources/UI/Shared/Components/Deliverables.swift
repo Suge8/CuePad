@@ -191,14 +191,14 @@ private struct DeliverableTile: View {
                 } else if file == nil {
                     // 还没到本机：迷你一排没有下面那行字，下载中写在画面上
                     VStack(spacing: 3) {
-                        Image(systemName: "icloud.and.arrow.down").font(.callout)
+                        Image(.downloading).font(.callout)
                         Text("下载中").font(Typography.caption)
                     }
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if preview.kind == .audio {
                     VStack(spacing: 4) {
-                        Image(systemName: "waveform").font(.title2)
+                        Image(.audio).font(.title2)
                         if let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
                     }
                     .foregroundStyle(palette.ink3)
@@ -206,7 +206,7 @@ private struct DeliverableTile: View {
             }
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
-                    Image(systemName: "play.fill").font(.caption.weight(.bold)).foregroundStyle(palette.onMedia)
+                    Image(.play).font(.caption.weight(.bold)).foregroundStyle(palette.onMedia)
                         .padding(7).background(palette.mediaScrim, in: .circle).padding(8)
                 }
             }

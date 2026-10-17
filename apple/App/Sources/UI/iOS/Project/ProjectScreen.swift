@@ -134,8 +134,8 @@ struct ProjectScreen: View {
 
     /// 顶栏右边的"⋯"：新建卡片在前，其后是共用的项目操作。
     private var actions: some View {
-        Menu("更多", systemImage: "ellipsis") {
-            Button("记一条灵感", systemImage: "square.and.pencil", action: newCard)
+        Menu("更多", icon: .more) {
+            Button("记一条灵感", icon: .write, action: newCard)
             if let project {
                 Divider()
                 ProjectActions(project: project) { navigation.projectForm = .init(project: project) }
@@ -218,7 +218,7 @@ private struct FocusCard: View {
                 let done = data.taskCounts.done
                 if !roots.isEmpty {
                     Group {
-                        SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
+                        SectionLabel(text: "任务", icon: .task).padding(.bottom, 4)
                         TaskOutline(
                             tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks),
                             lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
@@ -248,13 +248,13 @@ private struct FocusCard: View {
             }
             if let pi, !pi.now.isEmpty, let project = data.project {
                 VStack(alignment: .leading, spacing: 2) {
-                    SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
+                    SectionLabel(text: "Agent", icon: .session).padding(.bottom, 6)
                     ForEach(pi.now) { item in sessionLine(item) }
                     if pi.total > 0 {
                         Button { navigation.push(.projectSessions(project.id)) } label: {
                             HStack(spacing: 4) {
                                 Text("全部 \(pi.now.count + pi.total) 个会话")
-                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                                Image(.forward).font(.caption.weight(.semibold)).accessibilityHidden(true)
                             }
                             .font(Typography.secondary).foregroundStyle(palette.ink3)
                             .frame(minHeight: 44).contentShape(.rect)
@@ -264,7 +264,7 @@ private struct FocusCard: View {
                 }
             } else if let project = guided {
                 VStack(alignment: .leading, spacing: 2) {
-                    SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
+                    SectionLabel(text: "Agent", icon: .session).padding(.bottom, 6)
                     ProjectFolderGuide(project: project, guide: guide, style: .inset)
                 }
             }
@@ -288,7 +288,7 @@ private struct FocusCard: View {
         Button { toggle(key) } label: {
             HStack(spacing: 4) {
                 Text(title)
-                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                Image(open ? .collapse : .expand).font(.caption.weight(.semibold)).accessibilityHidden(true)
             }
             .frame(minHeight: 44).contentShape(.rect)
         }

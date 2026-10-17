@@ -22,7 +22,7 @@ struct ProjectStylePicker: View {
                     let symbol = choice.symbol, selected = icon == symbol
                     let shape = RoundedRectangle(cornerRadius: cell / 4, style: .continuous)
                     Button { icon = symbol } label: {
-                        Image(systemName: symbol).frame(width: cell, height: cell)
+                        Image(.project(symbol)).frame(width: cell, height: cell)
                             // 选中：墨色描边加浅底，深浅色下都清楚，不靠图标本身的颜色
                             .background(selected ? palette.selection : .clear, in: shape)
                             .overlay { if selected { shape.strokeBorder(palette.ink, lineWidth: 2) } }

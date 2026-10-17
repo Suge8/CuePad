@@ -41,7 +41,7 @@ struct ArchiveList: View {
                     if card.isTask {
                         TaskRingView(status: card.status, done: card.status == .done, size: 17)
                     } else {
-                        Image(systemName: "lightbulb").foregroundStyle(palette.ink3)
+                        Image(.idea).foregroundStyle(palette.ink3)
                     }
                 }
                 .frame(width: 20)
@@ -73,8 +73,8 @@ struct ArchiveList: View {
     private func swipes(_ card: Card) -> RowSwipes {
         let id = card.id
         return RowSwipes(
-            leading: [RowAction("取回", symbol: "arrow.uturn.backward", tone: .primary) { workspace.perform { try await $0.unarchive(id) } }],
-            trailing: [RowAction(CardMenu.Item.trash.title, symbol: CardMenu.Item.trash.symbol, tone: .destructive) {
+            leading: [RowAction("取回", icon: .restore, tone: .primary) { workspace.perform { try await $0.unarchive(id) } }],
+            trailing: [RowAction(CardMenu.Item.trash.title, icon: CardMenu.Item.trash.icon, tone: .destructive) {
                 workspace.attempt { try await workspace.trash(id) }
             }])
     }

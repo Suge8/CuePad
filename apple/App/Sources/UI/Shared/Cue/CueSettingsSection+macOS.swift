@@ -35,7 +35,7 @@ struct CueSettingsSection: View {
     @ViewBuilder private func rows(_ settings: CueSettings) -> some View {
         let here = services.hostID
         SettingRow(
-            title: settings.profile.name, icon: Image(systemName: "face.smiling"), tone: model.failure == nil ? .calm : .failure,
+            title: settings.profile.name, icon: Image(.profile), tone: model.failure == nil ? .calm : .failure,
             busy: model.enabling != nil, status: model.failure.map { Dotted($0) } ?? settings.status(here: here)
         ) {
             Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: { model.live(on: $0, services) })) {
@@ -45,7 +45,7 @@ struct CueSettingsSection: View {
             }
             .labelsHidden().fixedSize()
         }
-        SettingRow(title: "名字", icon: Image(systemName: "tag")) {
+        SettingRow(title: "名字", icon: Image(.name)) {
             TextField("名字", text: $name, prompt: Text(CueProfile.defaultName)).labelsHidden().multilineTextAlignment(.trailing)
                 .frame(width: Self.fieldWidth)
                 .focused($editing)
@@ -56,12 +56,12 @@ struct CueSettingsSection: View {
     /// 允许清单：每类一行"所有项目"的开关；只管一个项目的各一行，可撤销。
     @ViewBuilder private func allowRows(_ settings: CueSettings) -> some View {
         ForEach(settings.allowGroups) { group in
-            SettingRow(title: group.ask.name, icon: Image(systemName: "checkmark.shield"), status: Dotted(group.all ? "所有项目都不用问" : "先问你")) {
+            SettingRow(title: group.ask.name, icon: Image(.autoApprove), status: Dotted(group.all ? "所有项目都不用问" : "先问你")) {
                 Toggle("所有项目都不用问", isOn: Binding(get: { group.all }, set: { model.allow(group.everywhere, $0, services) }))
                     .labelsHidden().toggleStyle(.switch)
             }
             ForEach(group.projects, id: \.allow) { item in
-                SettingRow(title: "\(item.name)里\(group.ask.name)", icon: Image(systemName: "folder"), status: "不用问") {
+                SettingRow(title: "\(item.name)里\(group.ask.name)", icon: Image(.folder), status: "不用问") {
                     Button("撤销") { model.allow(item.allow, false, services) }.settingButton()
                 }
             }

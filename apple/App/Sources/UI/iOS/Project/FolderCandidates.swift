@@ -37,7 +37,7 @@ struct FolderCandidateList: View {
                     ForEach(group.items) { candidate in
                         Button { pick(candidate) } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "folder").foregroundStyle(palette.ink3).accessibilityHidden(true)
+                                Image(.folder).foregroundStyle(palette.ink3).accessibilityHidden(true)
                                 Text(candidate.folder).foregroundStyle(palette.ink).lineLimit(1)
                                 Spacer(minLength: 8)
                                 if let usedBy = candidate.usedBy { Text("「\(usedBy)」在用").font(.footnote).foregroundStyle(palette.ink3).lineLimit(1) }

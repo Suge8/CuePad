@@ -59,7 +59,7 @@ struct Sidebar: View {
         let now = ProjectNow.byProject(pages.outline.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: workspace.shown)
         return VStack(alignment: .leading, spacing: 0) {
             SidebarHeader(title: "项目") {
-                Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
+                Button("新建项目", icon: .add) { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
             }
             SidebarScroll(revealsPage: true) {
                 ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.column)
@@ -93,7 +93,7 @@ struct Sidebar: View {
                 }
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
-                Button(settings.title, systemImage: settings.symbol) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                Button(settings.title, icon: settings.icon) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .font(.system(size: 15))
@@ -252,7 +252,7 @@ private struct PlaceRows: View {
 
     private func row(_ entry: SidebarOutline.Entry, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
         PageRow(count: count, selected: selected, action: action) {
-            Image(systemName: entry.symbol).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
+            Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
         } title: {
             Text(entry.title)
         }
@@ -363,7 +363,7 @@ private struct FooterPage: View {
     var body: some View {
         let selected = workspace.page == page
         Button { select(page) } label: {
-            Image(systemName: entry.symbol).font(.system(size: 15))
+            IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
                 .frame(width: 32, height: 32)
                 .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
@@ -445,10 +445,10 @@ private struct PiSection: View {
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                    Button("重命名…", icon: .rename) { renaming = session }
                 }
                 if let bridge, bridge.canJump {
-                    Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
+                    Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
                 }
             }
     }
@@ -462,7 +462,7 @@ private struct AgentConnectCard: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "puzzlepiece.extension").font(.system(size: 14)).foregroundStyle(palette.ink2)
+            Image(.extensionNote).font(.system(size: 14)).foregroundStyle(palette.ink2)
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {

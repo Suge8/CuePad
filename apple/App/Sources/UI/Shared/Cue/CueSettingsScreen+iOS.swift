@@ -50,7 +50,7 @@ struct CueSettingsScreen: View {
         let hosts = settings.hosts(here: nil)
         Section {
             if hosts.isEmpty {
-                Label("先到 Mac 上打开 CuePad，它会出现在这里", systemImage: "desktopcomputer").foregroundStyle(palette.ink3)
+                Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac).foregroundStyle(palette.ink3)
             } else {
                 Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: { model.live(on: $0, services) })) {
                     Text("不启用").tag(String?.none)
@@ -86,7 +86,7 @@ struct CueSettingsScreen: View {
                 }
                 ForEach(group.projects, id: \.allow) { item in
                     HStack {
-                        Label("\(item.name)里\(group.ask.name)", systemImage: "folder").foregroundStyle(palette.ink2)
+                        Label("\(item.name)里\(group.ask.name)", icon: .folder).foregroundStyle(palette.ink2)
                         Spacer(minLength: 8)
                         Button("撤销") { model.allow(item.allow, false, services) }.buttonStyle(.borderless)
                     }

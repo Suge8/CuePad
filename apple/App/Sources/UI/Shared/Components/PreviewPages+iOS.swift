@@ -165,13 +165,13 @@ struct PreviewStill: View {
                 if let image = look?.image {
                     Image(decorative: image, scale: scale).resizable().scaledToFit()
                 } else {
-                    Image(systemName: "doc").font(.system(size: 56)).foregroundStyle(palette.ink3)
+                    Image(.file).font(.system(size: 56)).foregroundStyle(palette.ink3)
                 }
             }
             .frame(maxWidth: 360, maxHeight: 360)
             Text(preview.name).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).multilineTextAlignment(.center)
             if preview.kind == .model {
-                Button("转动查看", systemImage: "rotate.3d") { inspecting = file }
+                Button("转动查看", icon: .inspect3D) { inspecting = file }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
             }
         }

@@ -25,7 +25,7 @@ struct RoundProcess: View {
         case took(String?)
         /// 在跑：状态标按 `shown`；`doing` 是此刻在做的。有 `step`（那一步的图标）时它是正在跑的那一步、单列一行；
         /// 没有时（正在说话、等子代理）只写在标题行末
-        case live(PiShown, doing: String, step: String?)
+        case live(PiShown, doing: String, step: Icon?)
 
         /// 正在说话（Mac 上逐字长出的草稿上方）：状态标是在说话，标题行末写状态词。
         static var speaking: Ending {
@@ -44,7 +44,7 @@ struct RoundProcess: View {
                 if expanded {
                     NoteThread {
                         list(tools)
-                        if case .live(_, let doing, let step?) = ending { liveStep(doing, symbol: step) }
+                        if case .live(_, let doing, let step?) = ending { liveStep(doing, icon: step) }
                     }
                 } else if case .live(let shown, let doing, let step) = ending {
                     // 它最近说的那段；已在对话里的（Cue 对你说的）不再列一遍
@@ -52,7 +52,7 @@ struct RoundProcess: View {
                     if said != nil || step != nil {
                         NoteThread {
                             if let said { SaidRow(text: said.target, lines: 3) }
-                            if let step { liveStep(doing, symbol: step) }
+                            if let step { liveStep(doing, icon: step) }
                         }
                     }
                 }
@@ -77,7 +77,7 @@ struct RoundProcess: View {
     private func header(_ line: Dotted) -> some View {
         NoteLine(open: expanded) {
             switch ending {
-            case .took: Image(systemName: "wrench.and.screwdriver").imageScale(.small)
+            case .took: Image(.tool).imageScale(.small)
             case .live(let shown, _, _): PiStateDot(shown: shown, size: 6)
             }
         } label: {
@@ -126,7 +126,7 @@ struct RoundProcess: View {
         // Cue 的动作写的是人话（哪件任务、说了什么），用正文字形；其余是路径、命令，用等宽
         let prose = item.kind.acts && item.kind != .edit
         return ToolRow(
-            symbol: Self.symbol(item.kind), target: prose ? Text(item.target).font(Typography.caption) : Text(item.target),
+            icon: Self.icon(item.kind), target: prose ? Text(item.target).font(Typography.caption) : Text(item.target),
             truncation: prose || item.kind == .command ? .tail : .middle
         ) { status(item) }
     }
@@ -141,9 +141,9 @@ struct RoundProcess: View {
     }
 
     /// 正在跑的那一步：与清单同一种行，文字是会话状态里的当前动作、带流光，放得下两行。
-    private func liveStep(_ doing: String, symbol: String) -> some View {
+    private func liveStep(_ doing: String, icon: Icon) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: symbol).font(Typography.caption2).foregroundStyle(palette.ink3)
+            Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
                 .frame(width: Note.glyphWidth).accessibilityHidden(true)
             Text(doing).font(Typography.codeNote).lineLimit(2).truncationMode(.middle).shimmering()
         }
@@ -153,31 +153,31 @@ struct RoundProcess: View {
     }
 
     /// 正在跑的那一步的图标，按会话状态里的工具名（`PiSessionState.detail` 的前一截）：与清单里同一类同一个图标；还没调工具（在想）是省略号。
-    static func symbol(tool: String?) -> String {
+    static func icon(tool: String?) -> Icon {
         switch tool?.lowercased() {
-        case nil: "ellipsis"
-        case "edit", "write": symbol(.edit)
-        case "bash": symbol(.command)
-        case "read": symbol(.read)
-        case "grep", "find", "glob", "ls": symbol(.search)
-        default: symbol(.other)
+        case nil: .pondering
+        case "edit", "write": icon(.edit)
+        case "bash": icon(.command)
+        case "read": icon(.read)
+        case "grep", "find", "glob", "ls": icon(.search)
+        default: icon(.other)
         }
     }
 
-    static func symbol(_ kind: PiChatMessage.Tools.Kind) -> String {
+    static func icon(_ kind: PiChatMessage.Tools.Kind) -> Icon {
         switch kind {
-        case .edit: "pencil"
-        case .command: "terminal"
-        case .read: "doc.text"
-        case .search: "magnifyingglass"
-        case .other: "wrench.and.screwdriver"
-        case .said: "text.bubble"
-        case .talk: "paperplane"
-        case .start: "play.circle"
-        case .add: "plus.circle"
-        case .done: "checkmark.circle"
-        case .stop: "stop.circle"
-        case .ask: "questionmark.bubble"
+        case .edit: .editFile
+        case .command: .terminal
+        case .read: .readFile
+        case .search: .search
+        case .other: .tool
+        case .said: .said
+        case .talk: .handOff
+        case .start: .started
+        case .add: .added
+        case .done: .complete
+        case .stop: .endSession
+        case .ask: .cueAsking
         }
     }
 }
@@ -188,7 +188,7 @@ struct DisclosureChevron: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+        Image(.expand).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
             .rotationEffect(.degrees(open ? 180 : 0))
             .accessibilityHidden(true)
     }
@@ -196,7 +196,7 @@ struct DisclosureChevron: View {
 
 /// 工具清单的一行（会话里回答注脚的清单、Cue 的运行情况共用）：图标、等宽小字的目标、右侧状态。
 struct ToolRow<Status: View>: View {
-    let symbol: String
+    let icon: Icon
     let target: Text
     let truncation: Text.TruncationMode
     @ViewBuilder let status: Status
@@ -204,7 +204,7 @@ struct ToolRow<Status: View>: View {
 
     var body: some View {
         HStack(spacing: Note.spacing) {
-            Image(systemName: symbol)
+            Image(icon)
                 .font(Typography.caption2).foregroundStyle(palette.ink3)
                 .frame(width: Note.glyphWidth).accessibilityHidden(true)
             target.font(Typography.codeNote).foregroundStyle(palette.ink3)
@@ -225,7 +225,7 @@ struct SaidRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            Image(systemName: RoundProcess.symbol(.said)).font(Typography.caption2).foregroundStyle(palette.ink3)
+            Image(RoundProcess.icon(.said)).font(Typography.caption2).foregroundStyle(palette.ink3)
                 .frame(width: Note.glyphWidth).accessibilityHidden(true)
             let said = Text(text).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(lines)
                 .frame(maxWidth: .infinity, alignment: .leading)

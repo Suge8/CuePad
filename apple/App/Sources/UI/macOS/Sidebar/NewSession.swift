@@ -13,7 +13,7 @@ struct NewSessionButton: View {
 
     var body: some View {
         let none = agents?.agents.isEmpty != false
-        Button("新会话", systemImage: "plus") { showing = true }
+        Button("新会话", icon: .add) { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .disabled(none)
             .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
@@ -148,11 +148,11 @@ struct NewSessionForm: View {
                 ProjectGlyph(project: place.project, size: 13)
                 Text(place.project.name).foregroundStyle(place.binding == nil ? palette.ink2 : palette.ink).lineLimit(1)
                 if place.binding == nil {
-                    Image(systemName: "folder.badge.questionmark").font(Typography.meta).foregroundStyle(palette.ink3)
+                    Image(.folderMissing).font(Typography.meta).foregroundStyle(palette.ink3)
                         .help("还没有文件夹").accessibilityLabel("还没有文件夹")
                 }
                 Spacer(minLength: 4)
-                if selected { Image(systemName: "checkmark").foregroundStyle(palette.ink2).accessibilityHidden(true) }
+                if selected { Image(.checked).foregroundStyle(palette.ink2).accessibilityHidden(true) }
             }
             .padding(.vertical, 5)
             .contentShape(.rect)

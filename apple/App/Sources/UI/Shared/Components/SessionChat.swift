@@ -32,7 +32,7 @@ struct SessionChat: View {
         ) { window, showEarlier in
             VStack(spacing: 14) {
                 if digest.fetchingTranscript(at: services.speech) {
-                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
+                    Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 conversation(window: window, showEarlier: showEarlier)
             }

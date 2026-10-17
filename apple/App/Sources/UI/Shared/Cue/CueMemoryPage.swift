@@ -51,7 +51,7 @@ struct CueMemoryPage: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Image(.add).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 TextField("记一条", text: $text).textFieldStyle(.plain).font(Typography.body)
                     .focused($adding)
                     .onSubmit(add)
@@ -85,9 +85,9 @@ struct CueMemoryPage: View {
         let id = line.id, pinned = line.pinned, text = line.text
         return MemoryRow(
             line: line,
-            copy: RowAction(MessageMenu.Item.copy.title, symbol: MessageMenu.Item.copy.symbol) { workspace.copy(text) },
-            pin: RowAction(pinned ? "不再一直记着" : "一直记着", symbol: pinned ? "pin.slash" : "pin") { workspace.pinCueLine(id, !pinned) },
-            forget: RowAction("忘掉", symbol: "xmark", tone: .destructive) { forgetting = line })
+            copy: RowAction(MessageMenu.Item.copy.title, icon: MessageMenu.Item.copy.icon) { workspace.copy(text) },
+            pin: RowAction(pinned ? "不再一直记着" : "一直记着", icon: pinned ? .unpin : .pin) { workspace.pinCueLine(id, !pinned) },
+            forget: RowAction("忘掉", icon: .remove, tone: .destructive) { forgetting = line })
     }
 
     private func add() {
@@ -118,7 +118,7 @@ struct CueMemoryPage: View {
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                 }
         }
         .presentationDetents([.large])
@@ -189,7 +189,7 @@ private struct MemoryHoverActions: View {
         if hovered {
             HStack(spacing: 2) {
                 ForEach(actions.keyed, id: \.key) { item in
-                    Button(item.action.title, systemImage: item.action.symbol, action: item.action.run)
+                    Button(item.action.title, icon: item.action.icon, action: item.action.run)
                         .labelStyle(.iconOnly)
                         .font(Typography.meta.weight(.medium))
                         .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)

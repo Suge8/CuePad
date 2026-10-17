@@ -27,6 +27,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（新会话的第一句话可不填；会话回复框在 Agent 跑一轮时空着的钮是"停止"）。
     /// 输入框写着"可不填"的，都靠它——空草稿能不能提交只在这里定。
     var submitsEmpty = false
+    /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
+    var showsSendEmpty = false
     /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
@@ -49,7 +51,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
     @State private var highlighted = 0
     @State private var dismissedPalette: String?
-    /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
+    /// "＋"与提交钮在一行与两层之间挪位时各是同一颗（连续移动）。
     @Namespace private var layout
 
 
@@ -66,7 +68,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
     private static var overhang: CGFloat { 120 }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
-    private var sendVisible: Bool { !shrunk && (hasContent || submitsEmpty) }
+    private var sendVisible: Bool { !shrunk && (hasContent || submitsEmpty || showsSendEmpty) }
 
     private var paletteCommands: [PiSlashCommand] {
         guard expanded, dismissedPalette != draft.text else { return [] }
@@ -155,21 +157,24 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                                 .transition(.identity)
                         }
                     }
-                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
+                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, expanded || shrunk ? 18 : 2)
                     .padding(.top, ComposerMetrics.textTop).padding(.bottom, expanded ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
                     .frame(minHeight: expanded ? nil : ComposerMetrics.slot)
-                if !expanded, sendVisible { sendSlot }
+                if !expanded, !shrunk { slotSpace }
             }
             if expanded {
                 HStack(spacing: 0) {
                     if !accepts.isEmpty { plus }
                     if showsTools { tools().transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
                     Spacer(minLength: 0)
-                    sendSlot
+                    slotSpace
                 }
                 .transition(.opacity)
             }
         }
+        // 提交钮只有一颗，两种形态都在右下角：浮在留出的位置上，不随一行 ↔ 两层的那一排进出（放在排里的话收起时
+        // 旧排里那颗停在发出前的样子淡出，与新位置的钮叠成两颗）
+        .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
@@ -189,7 +194,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 提交钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
+    /// 提交钮的位置一直留着（收成短胶囊时除外）：有内容才放进来，输入框的宽度不随它变，文字不会因此重排——
+    /// 宽度跟着钮进出变的话，动画的每一帧文字区（UITextView/NSTextView）都要重新排版，发出、送达、打第一个字各多一段主线程开销。
+    private var slotSpace: some View { Color.clear.frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot) }
+
     private var sendSlot: some View {
         ZStack {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
@@ -198,12 +206,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 
     private var plus: some View {
-        let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .symbol("rectangle.on.rectangle")) { source = .cards }] : []
+        let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
         let images = accepts.contains(.images) ? ComposerSource.imageChoices.map { choice in
-            ChoiceMenu.Choice(title: choice.title, image: .symbol(choice.symbol)) { source = choice.source }
+            ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
         return MenuButton(sections: [ChoiceMenu.Section(choices: cards + images)], press: .button, accessibilityLabel: "添加") {
-            CircleGlyph(fill: palette.fill) { Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
+            CircleGlyph(fill: palette.fill) { Image(.add).font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
                 .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
                 .matchedGeometryEffect(id: "plus", in: layout)
         }
@@ -216,13 +224,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         let removable = outbox.card != keeps
         let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
         let menu = removable ? [ChoiceMenu.Section(choices: [
-            ChoiceMenu.Choice(title: "展开编辑", image: .symbol("text.cursor")) { expand(outbox) },
-            ChoiceMenu.Choice(title: "不带了", image: .symbol("xmark"), destructive: true) { drop(outbox) },
+            ChoiceMenu.Choice(title: "展开编辑", image: .icon(.expandEdit)) { expand(outbox) },
+            ChoiceMenu.Choice(title: "不带了", image: .icon(.remove), destructive: true) { drop(outbox) },
         ])] : []
         return HStack(spacing: 0) {
             AttachmentButton(label: "带上：\(card.title.nonEmpty ?? "图片")", menu: menu, open: { previewing = outbox }) {
                 HStack(spacing: 10) {
-                    Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
+                    Image(.pickCards).foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
@@ -237,7 +245,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 .contentShape(.rect)
             }
             if removable {
-                Button("不带了", systemImage: "xmark") { drop(outbox) }
+                Button("不带了", icon: .remove) { drop(outbox) }
                     .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
                     .frame(width: 44, height: 44).contentShape(.rect)
                     .buttonStyle(.plain)
@@ -256,7 +264,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                             .clipShape(.rect(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair))
                         Button { draft.images.removeAll { $0.id == image.id } } label: {
-                            Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
+                            Image(.clear).symbolRenderingMode(.palette)
                                 .foregroundStyle(palette.onMedia, palette.mediaScrim).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }

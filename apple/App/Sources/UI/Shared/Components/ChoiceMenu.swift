@@ -22,14 +22,14 @@ enum ChoiceMenu {
         let choose: () -> Void
     }
 
-    /// 菜单项与组名旁的图：系统符号，或品牌标志（`BrandMark`）。说的是"哪一个"（对象而非动作），两端都要显示出来。
+    /// 菜单项与组名旁的图：App 的图标（`Icon`），或品牌标志（`BrandMark`）。说的是"哪一个"（对象而非动作），两端都要显示出来。
     enum Glyph {
-        case symbol(String)
+        case icon(Icon)
         case brand(BrandMark)
 
         var image: Image {
             switch self {
-            case .symbol(let name): Image(systemName: name)
+            case .icon(let icon): Image(icon)
             case .brand(let mark): mark.image
             }
         }
@@ -197,7 +197,7 @@ private final class TriggerButton: UIButton {
 extension ChoiceMenu.Glyph {
     var uiImage: UIImage? {
         switch self {
-        case .symbol(let name): UIImage(systemName: name)
+        case .icon(let icon): icon.platformImage
         case .brand(let mark): mark.uiImage
         }
     }

@@ -33,8 +33,8 @@ struct NoteLine<Glyph: View, Label: View>: View {
 }
 
 extension NoteLine where Glyph == Image {
-    init(symbol: String, open: Bool? = nil, @ViewBuilder label: () -> Label) {
-        self.init(open: open, glyph: { Image(systemName: symbol) }, label: label)
+    init(icon: Icon, open: Bool? = nil, @ViewBuilder label: () -> Label) {
+        self.init(open: open, glyph: { Image(icon) }, label: label)
     }
 }
 

@@ -10,6 +10,7 @@ import SwiftUI
 /// - 交给（Cue → 会话：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
 ///   头像的环先亮一下、外扩到 1.25 倍淡去（0.6s），0.12s 后环离开头像，同一条弧、同一条曲线飞到会话的状态标，落下时那里一圈细环外扩、垫一层淡光。
 ///   方向一眼分得出：起点先亮的是谁、飞的是点还是环。
+/// - 发出（你 → Cue："对 Cue 说"的发送钮）：同叫醒那一程，只是起点没有外扩的环——光就是钮上的箭镞，当场起飞（`RelayLaunch`）。
 /// 光后面拖一截由亮到暗的尾巴（同一条弧上的描边，起点追着终点走、落下时被收进去），比单独一个点更看得出从哪来、到哪去。
 /// 弧向窗口竖中线那边鼓（从侧栏、屏边起飞时弧在屏内）；来回两个方向走同一条弧。整个过程约 1.3～1.4s：
 /// 这是全 App 唯一超过 300ms 的动效（docs/ui.md），它讲的是一件低频的事从哪到哪，短了看不清起点。
@@ -102,6 +103,44 @@ struct CueRelayStage: ViewModifier {
     }
 }
 
+/// 发出（"对 Cue 说"的发送钮 → Cue 的头像）：钮上挂一个锚（`relayLaunch`），发出的那一刻量出箭镞与头像在窗口里的位置，
+/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正淡出的箭镞）。头像几处都在屏上时取等级高的（`CueSpot`）。
+final class RelayLaunch {
+    fileprivate weak var pad: RelayAnchorView?
+    fileprivate var color: CGColor?
+
+    func fly(reduceMotion: Bool) {
+        guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
+              let from = pad.frame(in: root) else { return }
+        let cue = RelayAnchorView.all(in: window).compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
+            guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
+            return (spot, frame)
+        }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
+        // 箭镞在钮心往上约一成半
+        let up: CGFloat = RelayFlight.up(in: root)
+        let head = CGPoint(x: from.midX, y: from.midY + up * from.height * 0.15)
+        RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root)
+    }
+}
+
+extension View {
+    /// 发出的起点：`launch.fly` 从这里起飞（颜色是此刻配色里的 `color`）。
+    func relayLaunch(_ launch: RelayLaunch, color: Color) -> some View {
+        background(RelayLaunchPad(launch: launch, color: color))
+    }
+}
+
+private struct RelayLaunchPad {
+    let launch: RelayLaunch
+    let color: Color
+
+    func make() -> RelayAnchorView {
+        let view = RelayAnchorView(role: .launch)
+        launch.pad = view
+        return view
+    }
+}
+
 /// 接力的一头的那个会话：会话 id（开新会话时还没有）与它的任务（请求带着的那张卡）。
 nonisolated struct RelayEnd: Equatable, Sendable {
     var session: String?
@@ -167,6 +206,8 @@ private struct RelayAnchor {
 final class RelayAnchorView: RelayAnchorBase {
     enum Role: Equatable {
         case stage
+        /// 发出的起点（`RelayLaunch`）。
+        case launch
         case cue(CueSpot)
         case session(String)
         case task(UUID, session: String?)
@@ -233,6 +274,11 @@ extension CueRelayStage.Probe: UIViewRepresentable {
     func makeUIView(context: Context) -> RelayAnchorView { make() }
     func updateUIView(_ view: RelayAnchorView, context: Context) { stage.color = color.resolve(in: context.environment).cgColor }
 }
+
+extension RelayLaunchPad: UIViewRepresentable {
+    func makeUIView(context: Context) -> RelayAnchorView { make() }
+    func updateUIView(_ view: RelayAnchorView, context: Context) { launch.color = color.resolve(in: context.environment).cgColor }
+}
 #else
 typealias RelayAnchorBase = NSView
 
@@ -244,6 +290,11 @@ extension RelayAnchor: NSViewRepresentable {
 extension CueRelayStage.Probe: NSViewRepresentable {
     func makeNSView(context: Context) -> RelayAnchorView { make() }
     func updateNSView(_ view: RelayAnchorView, context: Context) { stage.color = color.resolve(in: context.environment).cgColor }
+}
+
+extension RelayLaunchPad: NSViewRepresentable {
+    func makeNSView(context: Context) -> RelayAnchorView { make() }
+    func updateNSView(_ view: RelayAnchorView, context: Context) { launch.color = color.resolve(in: context.environment).cgColor }
 }
 #endif
 
@@ -278,6 +329,37 @@ struct RelayFlight {
     /// `cue` 是头像在屏上的那块，`ends` 是会话那头在屏上的几处（都可能不在）。
     func play(_ direction: CueFlight.Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer) {
         guard !ends.isEmpty || cue != nil else { return }
+        stage(in: root) { scene in
+            if reduceMotion {
+                if let cue { scene.glow(ring: cue) }
+                for end in ends { scene.glow(dot: end) }
+            } else {
+                switch direction {
+                case .wake: wake(scene, from: ends, to: cue)
+                case .relay: relay(scene, from: cue, to: ends)
+                }
+            }
+        }
+    }
+
+    /// 发出（输入框的发送钮 → Cue 的头像）：钮上的箭镞就是那点光，从箭镞处（`head`，根层坐标）当场起飞——满大、不透明，
+    /// 不在钮上外扩起飞环、也不从半大淡入：钮在这一刻换成发送中，起飞环与淡入的光叠在正淡出的箭上，录屏里是一团糊。
+    /// 落进头像同叫醒；头像不在屏上时往上飘一小段淡去。减弱动态效果：只有头像的环淡亮一下（起点的钮自己已换成发送中，不再压一层光）。
+    func launch(from head: CGPoint, to cue: CGRect?, in root: CALayer) {
+        stage(in: root) { scene in
+            if reduceMotion {
+                if let cue { scene.glow(ring: cue) }
+            } else if let cue {
+                let duration = scene.fly(from: head, to: cue.center, head: .dot, delay: 0, launches: true)
+                scene.land(on: cue, delay: duration * 0.9)
+            } else {
+                scene.drift(from: head, rise: scene.up * Self.drift, head: .dot, delay: 0, launches: true)
+            }
+        }
+    }
+
+    /// 在窗口根层最上面铺一层画布交给 `draw` 画，所有动画一次提交给 Core Animation，播完画布拿掉。
+    private func stage(in root: CALayer, _ draw: (Scene) -> Void) {
         let canvas = CALayer()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -285,16 +367,7 @@ struct RelayFlight {
         canvas.frame = root.bounds
         canvas.zPosition = 10_000
         root.addSublayer(canvas)
-        let scene = Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root))
-        if reduceMotion {
-            if let cue { scene.glow(ring: cue) }
-            for end in ends { scene.glow(dot: end) }
-        } else {
-            switch direction {
-            case .wake: wake(scene, from: ends, to: cue)
-            case .relay: relay(scene, from: cue, to: ends)
-            }
-        }
+        draw(Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root)))
         CATransaction.commit()
     }
 
@@ -333,7 +406,7 @@ struct RelayFlight {
     }
 
     /// 屏幕上的"上"在这层坐标里是 y 的哪个方向（iOS 的层 y 朝下；Mac 的层默认 y 朝上）。
-    private static func up(in root: CALayer) -> CGFloat {
+    static func up(in root: CALayer) -> CGFloat {
         #if os(iOS)
         -1
         #else
@@ -364,7 +437,7 @@ struct RelayFlight {
         }
 
         /// 沿弧飞到 `end`，返回飞了多久。弧向窗口的竖中线那边鼓：从侧栏、屏边起飞时弧在屏内；几乎横着飞时往上鼓。
-        func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double) -> Double {
+        func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double, launches: Bool = false) -> Double {
             let length = RelayFlight.distance(start, end)
             let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             var normal = CGPoint(x: -(end.y - start.y) / max(length, 1), y: (end.x - start.x) / max(length, 1))
@@ -375,21 +448,22 @@ struct RelayFlight {
             path.move(to: start)
             path.addQuadCurve(to: end, control: CGPoint(x: mid.x + normal.x * bend, y: mid.y + normal.y * bend))
             let duration = min(max(0.42 + Double(length) / 1800, 0.42), 0.72)
-            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide)
+            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide, launches: launches)
             return duration
         }
 
         /// 另一头不在屏上：从 `start` 沿 `rise`（层坐标里的竖直位移）飘一小段淡去。
-        func drift(from start: CGPoint, rise: CGFloat, head: Head, delay: Double) {
+        func drift(from start: CGPoint, rise: CGFloat, head: Head, delay: Double, launches: Bool = false) {
             let path = CGMutablePath()
             path.move(to: start)
             path.addQuadCurve(to: CGPoint(x: start.x + 6, y: start.y + rise), control: CGPoint(x: start.x, y: start.y + rise * 0.6))
-            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true)
+            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true, launches: launches)
         }
 
         /// 一道光加它的尾巴：尾巴是同一条弧上的描边，终点跟着光走、起点晚一点出发、到终点时追上——尾巴越飞越短，落下时被收进去。
         /// 三层叠出由亮到暗的尾巴：短而亮的芯、长而淡的身子、宽而很淡的光晕（描边上不能铺沿着弧走的渐变）。
-        private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false) {
+        /// `launches`：光是从钮上的箭镞变来的，第一帧就满大、不透明（不从半大淡入）。
+        private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false, launches: Bool = false) {
             for (width, alpha, lag) in [(CGFloat(8), 0.12, 0.14), (2.5, 0.3, 0.3), (2, 0.9, 0.12)] {
                 let trail = CAShapeLayer()
                 trail.frame = canvas.bounds
@@ -412,8 +486,8 @@ struct RelayFlight {
             move.calculationMode = .paced
             animate(dot, delay: delay, duration: duration, timing: timing, [
                 move,
-                Self.keyframes("transform.scale", [0.5, 1.15, 1, fades ? 0.6 : 0.4], times: [0, 0.2, 0.85, 1]),
-                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, fades ? 0.5 : 0.88, 1]),
+                Self.keyframes("transform.scale", [launches ? 1 : 0.5, 1.15, 1, fades ? 0.6 : 0.4], times: [0, 0.2, 0.85, 1]),
+                Self.keyframes("opacity", [launches ? 1 : 0, 1, 1, 0], times: [0, 0.12, fades ? 0.5 : 0.88, 1]),
             ])
         }
 

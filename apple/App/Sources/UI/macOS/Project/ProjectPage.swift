@@ -272,7 +272,7 @@ private struct Welcome: View {
     var body: some View {
         EmptyLibrary {
             // 不挂 ↩：弹出的项目表单里 ↩ 是"创建"，下面的页再挂一个会抢
-            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: { workspace.projectForm = .init() })
+            EmptyStateButton(title: "新建项目", icon: .newProject, action: { workspace.projectForm = .init() })
         }
         .padding(.top, 160)
     }

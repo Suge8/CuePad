@@ -8,7 +8,7 @@ struct UpdateRow: View {
 
     var body: some View {
         @Bindable var updates = services.updates
-        SettingRow(title: "自动检查更新", icon: Image(systemName: "arrow.down.circle"), status: Dotted("CuePad \(AppServices.version)", updates.waitingNote)) {
+        SettingRow(title: "自动检查更新", icon: Image(.updates), status: Dotted("CuePad \(AppServices.version)", updates.waitingNote)) {
             Toggle("自动检查更新", isOn: $updates.automaticallyChecks).labelsHidden().toggleStyle(.switch).disabled(!updates.isAvailable)
         } fix: {
             if updates.waitingNote != nil {

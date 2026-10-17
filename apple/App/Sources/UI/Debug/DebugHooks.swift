@@ -161,6 +161,14 @@ enum DebugHooks {
         #endif
     }
 
+    /// "对 Cue 说"的输入框或会话回复框（`session`）出现时：`-CuePadSpeech press` 在它出现 3 秒后按一下它的发送钮
+    /// （`press` 就是点按发送钮做的事），录屏看发出的那一下。
+    static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
+        #if DEBUG
+        await DebugScene.pressSendIfAsked(session: session, press)
+        #endif
+    }
+
     /// 预览网页要打开了（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里拍一张同样规则下载入完的快照。
     static func previewWebLoaded(_ file: URL) {
         #if DEBUG

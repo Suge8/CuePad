@@ -67,7 +67,7 @@ struct PiContextGauge: View {
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .fixedSize(horizontal: false, vertical: true)
                 if compacts {
-                    Button("压缩上下文", systemImage: "arrow.down.right.and.arrow.up.left", action: compact)
+                    Button("压缩上下文", icon: .compact, action: compact)
                         .buttonStyle(.glass).controlSize(.small)
                 }
             }

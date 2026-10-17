@@ -47,7 +47,7 @@ struct ProjectFolderGuide: View {
     /// 图标 + 一句说明，下面是进度或按钮。
     private var block: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "folder.badge.plus")
+            Image(.newProject)
                 .font(.system(size: Self.iconSize, weight: .medium)).foregroundStyle(palette.ink2)
                 .frame(width: Self.tile, height: Self.tile)
                 .background(palette.fill, in: .rect(cornerRadius: 9, style: .continuous))

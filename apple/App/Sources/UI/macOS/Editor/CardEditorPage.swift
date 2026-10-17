@@ -124,9 +124,9 @@ struct CardEditorPage: View {
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             SaveStatus(editing: editing)
-            if data.card.isPinned { Label("资料", systemImage: "books.vertical") }
+            if data.card.isPinned { Label("资料", icon: .resource) }
             Spacer(minLength: 0)
-            Menu("更多", systemImage: "ellipsis") {
+            Menu("更多", icon: .more) {
                 CardActions(card: data.card, more: true)
             }
             .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()

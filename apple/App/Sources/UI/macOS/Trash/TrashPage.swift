@@ -51,7 +51,7 @@ struct TrashPage: View {
             group("灵感与任务") {
                 ForEach(data.cards) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
-                        Image(systemName: "doc.text").foregroundStyle(palette.ink3).accessibilityHidden(true)
+                        Image(.document).foregroundStyle(palette.ink3).accessibilityHidden(true)
                     }
                 }
             }

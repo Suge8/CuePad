@@ -48,15 +48,15 @@ extension MessageMenu.Item {
         }
     }
 
-    var symbol: String {
+    var icon: Icon {
         switch self {
-        case .copy: "doc.on.doc"
-        case .selectText: "selection.pin.in.out"
-        case .share: "square.and.arrow.up"
-        case .saveAsIdea: "square.and.arrow.down"
-        case .editAgain: "square.and.pencil"
-        case .resend: "arrow.clockwise"
-        case .remove: "xmark"
+        case .copy: .copy
+        case .selectText: .selectText
+        case .share: .share
+        case .saveAsIdea: .saveAsIdea
+        case .editAgain: .write
+        case .resend: .retry
+        case .remove: .remove
         }
     }
 }

@@ -57,7 +57,7 @@ struct MainWindow: View {
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
             // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-            Button("搜索", systemImage: "magnifyingglass") { workspace.searching.toggle() }
+            Button("搜索", icon: .search) { workspace.searching.toggle() }
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
         }
@@ -245,7 +245,7 @@ private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("侧栏", systemImage: "sidebar.left") { workspace.pages.toggleSidebar() }
+        Button("侧栏", icon: .sidebar) { workspace.pages.toggleSidebar() }
             .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
@@ -263,7 +263,7 @@ private struct CloseButton: View {
         if workspace.openCard != nil {
             Button { workspace.openCard = nil } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                    Image(.back).font(.system(size: 13, weight: .semibold))
                     Text("收起").font(Typography.toolbarLabel)
                 }
                 .foregroundStyle(palette.ink2)
@@ -333,7 +333,7 @@ private struct SyncAlert: View {
             Button {
                 NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
             } label: {
-                Image(systemName: summary.symbol).foregroundStyle(palette.color(summary.tone))
+                Image(summary.icon).foregroundStyle(palette.color(summary.tone))
             }
             .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
             .accessibilityLabel(summary.title)
@@ -404,8 +404,8 @@ private struct NoticeView: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
-                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? Failure.symbol : "checkmark.circle.fill") }
-                            if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
+                            Label { Text(notice.text) } icon: { Image(notice.isError ? .failure : .done) }
+                            if notice.link != nil { Image(.forward).font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))
                         .foregroundStyle(notice.isError ? palette.failure : palette.ink)

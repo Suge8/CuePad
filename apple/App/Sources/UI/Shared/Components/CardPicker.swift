@@ -39,7 +39,7 @@ struct CardPicker: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: Self.prompt)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                 }
         }
         .presentationDetents([.medium, .large])

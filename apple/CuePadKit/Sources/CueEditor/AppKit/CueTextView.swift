@@ -146,7 +146,7 @@ extension CueTextView {
         if let stored = selectedStoredText, !selectionActions.isEmpty {
             for (index, action) in selectionActions.enumerated() {
                 let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
-                item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
+                item.image = action.image
                 item.target = self
                 item.tag = index
                 item.representedObject = stored

@@ -37,10 +37,10 @@ struct AgentPage: View {
         HStack(spacing: 10) {
             filterMenu
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
+                Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField(searchPrompt, text: $model.query).textFieldStyle(.plain)
                 if !model.query.isEmpty {
-                    Button("清除", systemImage: "xmark.circle.fill") { model.query = "" }
+                    Button("清除", icon: .clear) { model.query = "" }
                         .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)
                 }
             }
@@ -63,7 +63,7 @@ struct AgentPage: View {
         let current = workspace.catalog?.project(filter)
         return Menu {
             Picker("按项目看", selection: $filter) {
-                Label("全部", systemImage: "square.stack").tag(UUID?.none)
+                Label("全部", icon: .all).tag(UUID?.none)
                 ForEach(projects) { project in
                     Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
                 }
@@ -71,7 +71,7 @@ struct AgentPage: View {
             .pickerStyle(.inline)
         } label: {
             HStack(spacing: 6) {
-                if let current { ProjectGlyph(project: current, size: 13) } else { Image(systemName: "line.3.horizontal.decrease") }
+                if let current { ProjectGlyph(project: current, size: 13) } else { Image(.filter) }
                 Text(current?.name ?? "全部").lineLimit(1)
             }
             .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
@@ -135,10 +135,10 @@ struct AgentPage: View {
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", systemImage: "pencil") { model.renaming = session }
+                    Button("重命名…", icon: .rename) { model.renaming = session }
                 }
                 if endable {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { model.confirmingEnd = session }
+                    Button("结束会话", icon: .endSession, role: .destructive) { model.confirmingEnd = session }
                 }
             }
     }

@@ -64,7 +64,7 @@ struct OlderGroupHeader: View {
         } label: {
             HStack {
                 if collapsible {
-                    Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                    Image(.forward).font(.caption2.weight(.bold))
                         .rotationEffect(.degrees(open ? 90 : 0)).accessibilityHidden(true)
                 }
                 Text(OlderGroupTitle.text(group.period)).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)

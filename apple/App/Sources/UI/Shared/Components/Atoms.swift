@@ -95,7 +95,7 @@ struct ProjectGlyph: View {
 
     var body: some View {
         // 旁边总有项目名：图标只是装饰，读屏不念它的系统名
-        Image(systemName: Self.symbol(project?.icon))
+        Image(Self.icon(project?.icon))
             .accessibilityHidden(true)
             .font(.system(size: size, weight: .medium))
             // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
@@ -104,22 +104,17 @@ struct ProjectGlyph: View {
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
 
-    /// 项目图标存的是 lucide 图标名，映射到 SF Symbols；认不出的用文件夹。
+    /// 项目的图标：没有项目（未分类）与没存图标的都是未分类的托盘。
+    static func icon(_ name: String?) -> Icon { name.map { .project(symbol($0)) } ?? .unfiled }
+
+    /// 项目图标存的名字认成系统符号：系统符号名照用，lucide 名映射过去；认不出的用文件夹。表单里没存图标的从 "tray" 起选。
     static func symbol(_ name: String?) -> String {
         guard let name else { return "tray" }
-        if isSymbol(name) { return name }
+        if Icon.projectSymbolExists(name) { return name }
         return lucide[name] ?? "folder"
     }
 
     /// 新建项目时可选的图标：SF Symbol 名 → 读屏与提示用的中文含义。
-    private static func isSymbol(_ name: String) -> Bool {
-        #if canImport(UIKit)
-        UIImage(systemName: name) != nil
-        #else
-        NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil
-        #endif
-    }
-
     static let choices: [(symbol: String, name: String)] = [
         ("folder", "文件夹"), ("sparkles", "闪光"), ("bubble.left.and.bubble.right", "对话"), ("terminal", "终端"),
         ("globe", "地球"), ("hammer", "锤子"), ("book", "书"), ("target", "靶心"),
@@ -142,12 +137,12 @@ struct ProjectGlyph: View {
 /// 分段标题：小号半粗次要色。
 struct SectionLabel: View {
     let text: Dotted
-    var systemImage: String?
+    var icon: Icon?
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
-            if let systemImage { Label { Text(text) } icon: { Image(systemName: systemImage) } } else { Text(text) }
+            if let icon { Label { Text(text) } icon: { Image(icon) } } else { Text(text) }
         }
         .font(Typography.label)
         .foregroundStyle(palette.ink3)

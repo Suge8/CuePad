@@ -152,7 +152,7 @@ struct DeleteCardButton: View {
             let id = card
             workspace.attempt { try await workspace.trash(id) }
         } label: {
-            Image(systemName: "trash")
+            Image(.trash)
                 .font(Typography.meta.weight(.medium))
                 .foregroundStyle(hovering ? palette.failure : palette.ink2)
                 .frame(width: 24, height: 24)
@@ -179,7 +179,7 @@ private struct SelectedFrame: View {
         if selected {
             RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.signature, lineWidth: 2)
                 .overlay(alignment: .topTrailing) {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
+                    Image(.picked).font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
                         .padding(10)
                 }
                 .allowsHitTesting(false)

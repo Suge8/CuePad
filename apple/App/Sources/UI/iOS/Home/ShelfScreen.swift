@@ -20,7 +20,7 @@ struct ShelfScreen: View {
         }
         .refreshable { await services.syncNow() }
         .floatingHeader(SidebarOutline.Entry.allProjects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
-            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+            Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
         }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
@@ -132,7 +132,7 @@ struct ShelfScreen: View {
 /// 书架顶上的一行：图标、标题、说明，点进一页。
 private struct ShelfLine: View {
     let route: Route
-    let symbol: String
+    let icon: Icon
     let title: String
     let detail: Dotted
     @Environment(\.palette) private var palette
@@ -143,7 +143,7 @@ private struct ShelfLine: View {
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: symbol).foregroundStyle(palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
+                Image(icon).foregroundStyle(palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
                 // 辅助字号下说明换到标题下面，不被截成省略号
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 10))) {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
@@ -151,7 +151,7 @@ private struct ShelfLine: View {
                         .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 52)
@@ -168,7 +168,7 @@ private struct UnfiledReminder: View {
     let count: Int
 
     var body: some View {
-        ShelfLine(route: .unfiled, symbol: "tray", title: CaptureCopy.unfiled, detail: "\(count) 条待整理")
+        ShelfLine(route: .unfiled, icon: .unfiled, title: CaptureCopy.unfiled, detail: "\(count) 条待整理")
     }
 }
 
@@ -177,7 +177,7 @@ private struct TasksLine: View {
     let tasks: TaskCounts
 
     var body: some View {
-        ShelfLine(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary)
+        ShelfLine(route: .tasks, icon: .task, title: "任务", detail: tasks.summary)
     }
 }
 
@@ -266,7 +266,7 @@ private struct EmptyShelf: View {
 
     var body: some View {
         EmptyLibrary {
-            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: create)
+            EmptyStateButton(title: "新建项目", icon: .newProject, action: create)
         }
         .padding(.top, 80)
     }
@@ -331,7 +331,7 @@ private struct ShelfRow: View {
                 .animation(Motion.quick, value: now == nil)
                 Spacer(minLength: 8)
                 if !stacked { counts }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+                Image(.forward).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, Self.horizontalPadding).padding(.vertical, 11)
@@ -386,7 +386,7 @@ private struct ActiveTasks: View {
         NavigationLink(value: Route.tasks) {
             HStack(spacing: 4) {
                 Text("还有 \(more) 项")
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                Image(.forward).font(.caption.weight(.semibold)).accessibilityHidden(true)
                 Spacer(minLength: 0)
             }
             .font(.subheadline).foregroundStyle(palette.ink3)
@@ -410,7 +410,7 @@ private struct ActiveTasks: View {
         NavigationLink(value: Route.tasks) {
             HStack(spacing: 3) {
                 Text(counts.summary).contentTransition(.numericText()).animation(Motion.snappy, value: counts.summary)
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)
+                Image(.forward).font(.footnote.weight(.semibold)).accessibilityHidden(true)
             }
             .font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink2)
             .frame(minHeight: 44).contentShape(.rect)

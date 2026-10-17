@@ -15,10 +15,10 @@ struct ContextBoundary: View {
     var body: some View {
         ChatMarker(ruled: true, highlighted: highlighted, action: memo == nil ? nil : { showsMemo = true }) {
             HStack(spacing: 5) {
-                Image(systemName: "arrow.triangle.2.circlepath").imageScale(.small)
+                Image(.renew).imageScale(.small)
                 Text(title).foregroundStyle(palette.ink2)
                 if let time { Text(ChatTime.time(time)) }
-                if memo != nil { Image(systemName: "chevron.right").imageScale(.small) }
+                if memo != nil { Image(.forward).imageScale(.small) }
             }
         }
         .accessibilityHint(memo == nil ? "" : "看交接备忘")
@@ -65,7 +65,7 @@ private struct HandoffMemo: View {
                 .navigationTitle(Self.title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                 }
         }
         .presentationDetents([.medium, .large])

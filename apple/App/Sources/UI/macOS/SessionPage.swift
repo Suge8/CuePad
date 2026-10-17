@@ -94,6 +94,7 @@ struct SessionPage: View {
                                 session: session, config: digest.config(at: services.speech), catalog: digest.catalog,
                                 stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
                                 commandProgress: MacDelivery.commandProgress(digest.deliveries, messages: digest.messages, at: services.speech),
+                                sending: PiChat.sending(digest.deliveries, messages: digest.messages, at: services.speech),
                                 queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),
                                 recall: PiChat.lastSaid(digest.messages),
                                 revealNote: { follow.seek($0.entry) }

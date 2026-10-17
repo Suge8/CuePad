@@ -21,14 +21,14 @@ nonisolated struct SidebarOutline: Equatable {
             }
         }
 
-        var symbol: String {
+        var icon: Icon {
             switch self {
-            case .tasks: "checklist"
-            case .sessions: "waveform.path.ecg"
-            case .allProjects: "square.grid.2x2"
-            case .archive: "archivebox"
-            case .trash: "trash"
-            case .settings: "gearshape"
+            case .tasks: .task
+            case .sessions: .session
+            case .allProjects: .allProjects
+            case .archive: .archive
+            case .trash: .trash
+            case .settings: .settings
             }
         }
     }

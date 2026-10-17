@@ -87,7 +87,7 @@ struct FocusBand: View {
         Button { toggle(key) } label: {
             HStack(spacing: 3) {
                 Text(title)
-                Image(systemName: open ? "chevron.up" : "chevron.down").font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
+                Image(open ? .collapse : .expand).font(.system(size: 8, weight: .semibold)).accessibilityHidden(true)
             }
             .contentShape(.rect)
         }
@@ -109,7 +109,7 @@ struct CompactFocus: View {
                     ProjectGlyph(project: data.project, size: 13)
                     Text(data.project?.name ?? CaptureCopy.unfiled).font(Typography.toolbarTitle).lineLimit(1)
                 }
-                Label(data.taskCounts.open > 0 ? "任务 \(data.taskCounts.open)" : "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
+                Label(data.taskCounts.open > 0 ? "任务 \(data.taskCounts.open)" : "任务", icon: .task).foregroundStyle(palette.ink2)
             }
             .font(Typography.toolbarLabel)
             .foregroundStyle(palette.ink)

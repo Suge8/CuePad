@@ -77,10 +77,10 @@ struct SearchCapsule: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
+            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField(prompt, text: $query).submitLabel(.search).focused(focus).accessibilityLabel("搜索")
             if !query.isEmpty || focus.wrappedValue {
-                Button("清除", systemImage: "xmark.circle.fill") {
+                Button("清除", icon: .clear) {
                     query = ""
                     focus.wrappedValue = false
                 }

@@ -103,14 +103,14 @@ struct EmptyStateButton: View {
     enum Kind { case small, primary }
 
     let title: String
-    let systemImage: String?
+    let icon: Icon?
     var kind = Kind.primary
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            if let systemImage {
-                Label(title, systemImage: systemImage)
+            if let icon {
+                Label(title, icon: icon)
             } else {
                 Text(title)
             }
@@ -139,7 +139,7 @@ struct EmptyIdeas: View {
 
     var body: some View {
         EmptyState(mascot: .empty, title: "还没有灵感", message: "随时记下新的想法", compact: compact, waitsForSync: true) {
-            EmptyStateButton(title: "记一条", systemImage: "square.and.pencil", kind: compact ? .small : .primary, action: write)
+            EmptyStateButton(title: "记一条", icon: .write, kind: compact ? .small : .primary, action: write)
                 .accessibilityLabel("记一条灵感")
         }
     }

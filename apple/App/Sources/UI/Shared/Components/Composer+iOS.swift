@@ -8,13 +8,13 @@ extension PickedImage {
         let image = UIImage(data: data)
         self.init(
             data: Self.keeps(data) ? data : image?.jpegData(compressionQuality: Self.quality) ?? data,
-            preview: image.map(Image.init(uiImage:)) ?? Image(systemName: "photo"))
+            preview: image.map(Image.init(uiImage:)) ?? Image(.photo))
     }
 }
 
 extension ComposerSource {
-    static var imageChoices: [(title: String, symbol: String, source: ComposerSource)] {
-        [("相册", "photo.on.rectangle", .photos)] + (CameraPicker.isAvailable ? [("拍照", "camera", .camera)] : [])
+    static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] {
+        [("相册", .photoLibrary, .photos)] + (CameraPicker.isAvailable ? [("拍照", .camera, .camera)] : [])
     }
 }
 
@@ -111,7 +111,7 @@ struct AttachmentSheet: View {
                 .navigationTitle(CardText(outbox.content).label)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", icon: .close, role: .cancel) { close() } }
                     if let expand {
                         ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
                     }

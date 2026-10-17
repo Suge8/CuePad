@@ -46,16 +46,16 @@ struct PageMenuSlot: View {
             case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
             case .project(let id): ProjectMenuItems(projectID: id)
             case .cue:
-                Button("\(workspace.cue.name) 记得什么", systemImage: "brain") { workspace.cue.showsMemory = true }
+                Button("\(workspace.cue.name) 记得什么", icon: .memory) { workspace.cue.showsMemory = true }
                 // 运行情况给开发者看：只在 Cue 于这台 Mac 值班时有（经过只在值班的管理器里）
                 if workspace.services.cue.keeper != nil {
-                    Toggle("运行情况", systemImage: "waveform.path.ecg", isOn: Bindable(workspace.cue).showsRun)
+                    Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)
                 }
-                Button("Cue 设置…", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                Button("Cue 设置…", icon: .settings) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
             case .session(nil), .none: EmptyView()
             }
         } label: {
-            Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.ink)
+            Image(.more).font(.system(size: 15, weight: .medium)).foregroundStyle(palette.ink)
                 .frame(width: Spacing.toolbarControl, height: Spacing.toolbarControl)
                 .contentShape(.circle)
         }
@@ -76,9 +76,9 @@ private struct ProjectMenuItems: View {
 
     var body: some View {
         let ready = workspace.isLibraryReady
-        Button("选择灵感", systemImage: CardMenu.Item.select.symbol) { workspace.presses.beginSelecting() }
+        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
             .disabled(!ready || (workspace.catalog?.cardCounts[projectID] ?? 0) == 0)
-        Button("新建任务", systemImage: "checklist") { workspace.showsTasks = true }
+        Button("新建任务", icon: .task) { workspace.showsTasks = true }
             .disabled(!ready)
         if let project = projectID.flatMap({ workspace.catalog?.project($0) }) {
             Divider()
