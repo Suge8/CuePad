@@ -11,15 +11,3 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
         try LaunchProgress.read(request: request, token: token, from: store)
     }
 }
-
-extension AppServices {
-    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话，`prompt` 作开场；`card` 是从哪条灵感或任务开的
-    /// （开好后关联它，会话名按它定，`CueStore.requestLaunch`）。
-    func launchSession(
-        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind
-    ) async throws -> SessionLaunch {
-        let token = UUID().uuidString
-        let request = try await launch(PiLaunch(project: project, prompt: prompt, token: token, agent: agent), title: title, on: host, card: card)
-        return SessionLaunch(request: request.id, token: token)
-    }
-}
