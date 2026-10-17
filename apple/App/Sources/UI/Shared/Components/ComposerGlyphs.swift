@@ -66,8 +66,8 @@ struct SendGlyph: View {
         let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
         case .stop: (.stop, palette.paper, 14)
         case .save(let enabled): (.save, enabled ? palette.onFill : palette.ink3, 17)
-        case .ready: (.send, palette.onFill, 20)
-        default: (.send, palette.ink3, 20)
+        case .ready: (.send, palette.onFill, Self.sendSide)
+        default: (.send, palette.ink3, Self.sendSide)
         }
         return Image(icon)
             .font(.system(size: size, weight: .semibold))
@@ -78,12 +78,15 @@ struct SendGlyph: View {
             .symbolEffect(.bounce.up.byLayer, options: .nonRepeating, value: hops)
     }
 
+    /// 发送的箭与发送中的三块 V 一样大：发出时箭原地换成往上爬的 V。
+    private static let sendSide: CGFloat = 20
+
     /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.climb`；减弱动态效果时是状态标同一个静止符号。
     @ViewBuilder private var onTheWay: some View {
         if reduceMotion {
             Image(.onTheWay).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.signature)
         } else {
-            LoopLayer(kind: .climb, color: palette.signature).frame(width: 20, height: 20)
+            LoopLayer(kind: .climb, color: palette.signature).frame(width: Self.sendSide, height: Self.sendSide)
         }
     }
 }

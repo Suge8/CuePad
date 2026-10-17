@@ -287,6 +287,7 @@ extension View {
             Task { await DebugScene.wakeIfAsked(workspace) }
             Task { await DebugScene.relayIfAsked(workspace) }
             Task { await DebugScene.closeIfAsked(workspace) }
+            Task { await DebugScene.openMenuIfAsked() }
             await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
@@ -300,7 +301,18 @@ extension View {
     /// 窗口根上：按启动参数摆好调试画面（样板页盖在最上层），摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
     func debugScene(_ workspace: Workspace, _ navigation: Navigation) -> some View {
         #if DEBUG
-        overlay { if DebugScene.scene == "style" { StyleBoard() } }
+        overlay {
+            // 盖在根上（在注入配色的那层外面），自己按外观取配色
+            Group {
+                switch DebugScene.scene {
+                case "style": StyleBoard()
+                case "widgets": DebugWidgetStage()
+                case "share": DebugShareStage(location: workspace.services.location)
+                default: EmptyView()
+                }
+            }
+            .withPalette()
+        }
             .task {
                 await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services)

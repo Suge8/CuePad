@@ -140,14 +140,34 @@
 			};
 			target = A10000000000000000000030 /* CuePad */;
 		};
+		A1000000000000000000E0A3 /* Exceptions for "Widget" folder in "CuePad" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CuePadWidgets.swift,
+			);
+			platformFiltersByRelativePath = {
+				WidgetViews.swift = (ios, );
+			};
+			target = A10000000000000000000030 /* CuePad */;
+		};
+		A1000000000000000000E0A4 /* Exceptions for "ShareExtension" folder in "CuePad" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				ShareViewController.swift,
+			);
+			platformFiltersByRelativePath = {
+				ShareViews.swift = (ios, );
+			};
+			target = A10000000000000000000030 /* CuePad */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000020 /* Sources */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A2 /* Exceptions for "Sources" folder in "CuePad" target */, ); path = App/Sources; sourceTree = "<group>"; };
 		A10000000000000000000021 /* Tests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Tests; sourceTree = "<group>"; };
 		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (C1000000000000000000E0A1 /* Exceptions for "AppGroup" folder in "CuePadShare" target */, ); path = App/AppGroup; sourceTree = "<group>"; };
-		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };
-		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Widget; sourceTree = "<group>"; };
+		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A4 /* Exceptions for "ShareExtension" folder in "CuePad" target */, ); path = App/ShareExtension; sourceTree = "<group>"; };
+		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A3 /* Exceptions for "Widget" folder in "CuePad" target */, ); path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
 		D20000000000000000000001 /* NotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/NotificationService; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -314,6 +334,8 @@
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000020 /* Sources */,
 				C10000000000000000000001 /* AppGroup */,
+				C10000000000000000000002 /* ShareExtension */,
+				C10000000000000000000003 /* Widget */,
 			);
 			name = CuePad;
 			packageProductDependencies = (

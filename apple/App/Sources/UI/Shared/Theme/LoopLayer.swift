@@ -13,8 +13,8 @@ struct LoopLayer {
         case orbit(lineWidth: CGFloat? = nil)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
-        /// 三块实心的 V 从下往上依次亮起再暗下去，1.2s 一轮，相邻两层差 0.18s；形状只在 `ClimbBlocks`（与符号 cue.climb 同出 design/tools/cue-symbols.py）。
-        /// 不播时（截图、Mac 不在前台时只画的那一帧）是最上面一块亮着、往下渐暗，看得出方向。
+        /// 三块实心的 V 从下往上依次亮起再暗下去（节奏见 `Climb`）；形状只在 `ClimbBlocks`（与符号 cue.climb 同出 design/tools/cue-symbols.py）。
+        /// 起播那一帧与不播时（截图、Mac 不在前台时只画的那一帧）都是最上面一块亮着、往下渐暗，看得出方向。
         case climb
         /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
         case ripple
@@ -97,9 +97,7 @@ struct LoopLayer {
                     shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
                     shape.path = paths[index]
                     if kind == .climb {
-                        // 实心块：填色，不描边
                         shape.fillColor = color
-                        shape.strokeColor = nil
                         continue
                     }
                     shape.lineWidth = side * (kind == .ripple ? 0.07 : 0.09)
@@ -158,18 +156,19 @@ struct LoopLayer {
                 return layer
             case .climb:
                 let layer = CALayer()
-                // 从下往上：每层比下面一层晚亮一点（用相位而不是 beginTime：层进窗口前就开始算时间）
-                for delay in [0, 0.18, 0.36] {
-                    let chevron = stroke()
+                let top = ClimbBlocks.blocks.count - 1
+                for index in ClimbBlocks.blocks.indices {
+                    let block = CAShapeLayer()
                     let glow = CAKeyframeAnimation(keyPath: "opacity")
-                    glow.values = [0.2, 1, 0.2, 0.2]
-                    glow.keyTimes = [0, 0.25, 0.6, 1]
-                    glow.duration = 1.2
-                    // 整体往后错 0.66s：起播那一帧正好是最上面一块亮着、往下渐暗；三层之间的节奏不变
-                    glow.timeOffset = glow.duration - delay + 0.66
+                    glow.values = [Climb.dim, 1, Climb.dim, Climb.dim]
+                    glow.keyTimes = [0, NSNumber(value: Climb.peak), NSNumber(value: Climb.settled), 1]
+                    glow.duration = Climb.period
+                    // 从下往上每块比下面一块晚 `step` 亮（用相位而不是 beginTime：层进窗口前就开始算时间）；
+                    // 相位让顶块的亮峰落在第 0 帧，下面的块已经亮过、依次暗下去
+                    glow.timeOffset = Climb.peak * Climb.period + Double(top - index) * Climb.step
                     // 没有动画时（模型值）也是最上面一块亮着
-                    chevron.opacity = delay == 0.36 ? 1 : 0.2
-                    layer.addSublayer(loop(glow, on: chevron))
+                    block.opacity = index == top ? 1 : Float(Climb.dim)
+                    layer.addSublayer(loop(glow, on: block))
                 }
                 return layer
             case .ripple:
@@ -221,7 +220,16 @@ struct LoopLayer {
             }
         }
 
-        /// 只描边、圆头圆角的一层（心电线、箭头、波纹）。
+        /// "话在路上"的节奏：一轮 `period` 秒，相邻两块差 `step` 秒；每块在一轮的 `peak` 处最亮，到 `settled` 暗回 `dim`，余下的时间歇着。
+        private enum Climb {
+            static let period = 1.2
+            static let step = 0.18
+            static let peak = 0.25
+            static let settled = 0.6
+            static let dim = 0.2
+        }
+
+        /// 只描边、圆头圆角的一层（心电线、波纹）。
         private static func stroke() -> CAShapeLayer {
             let shape = CAShapeLayer()
             shape.fillColor = nil

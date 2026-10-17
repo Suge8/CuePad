@@ -31,9 +31,16 @@ extension PiShown {
         isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
-    /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）铺一层很淡的状态色，其余是纸。
+    /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）是这种状态的淡底令牌，其余是纸（nil）。
     /// 在跑的不铺：会动的心电线与靛青字已经够醒目，整屏都上色颜色就不再表示"要你看"。
-    func wash(_ palette: Palette) -> Color? { needsYou || isUnread ? tint(palette) : nil }
+    func wash(_ palette: Palette) -> Color? {
+        switch status {
+        case .asking: palette.waitingWash
+        case .failed, .delivery(.failed): palette.failureWash
+        case .unread: palette.repliedWash
+        default: nil
+        }
+    }
 
     /// 状态的静止图形（`Icon`），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
     /// `PiStateGlyph`（问题卡、出错与没能结束的提示、Cue 的等你、前台横幅、通知设置）都从这里取。在跑、话在路上在状态标里是
@@ -86,16 +93,16 @@ struct PiStateDot: View {
     /// 字的中线在基线以上多高，按标的外框算（外框约等于旁边的字号）。
     private nonisolated static let midline = 0.36
 
-    /// 画法：自绘的循环动效，或一个静止符号。换画法时整块换（缩放淡入淡出），同为符号时原地替换。
-    private enum Look: Hashable { case heartbeat, climb, symbol }
+    /// 画法：自绘的循环动效，或一个静止图标。换画法时整块换（缩放淡入淡出），同为图标时原地替换。
+    private enum Look: Hashable { case heartbeat, climb, icon }
 
     private var look: Look {
-        guard !reduceMotion else { return .symbol }
+        guard !reduceMotion else { return .icon }
         switch shown.status {
         case .working: return .heartbeat
-        case .delivery(.failed): return .symbol
+        case .delivery(.failed): return .icon
         case .delivery: return .climb
-        default: return .symbol
+        default: return .icon
         }
     }
 
@@ -105,7 +112,7 @@ struct PiStateDot: View {
             switch look {
             case .heartbeat: LoopLayer(kind: .heartbeat, color: tint).transition(Self.swap)
             case .climb: LoopLayer(kind: .climb, color: tint).transition(Self.swap)
-            case .symbol:
+            case .icon:
                 Image(shown.icon)
                     .font(.system(size: box * 0.86, weight: .semibold))
                     .foregroundStyle(tint)

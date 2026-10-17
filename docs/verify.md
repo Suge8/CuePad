@@ -12,7 +12,9 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 - 截图与 App 测试以后台 App 运行，不抢前台（`DebugHooks.staysInBackground`）。要前台的只有量交互与动画（见"性能测量"），它会抢焦点、动指针，跑之前先确认用户此刻不在用这台 Mac。
 - 后台窗口里的网页截图不可信：同一次运行里先有内容、过几秒就成了空白，WebKit 自己的快照却一直有内容。看网页预览用快照：`-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview` 打开那一页，载入完存成 PNG）。
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸。
-- 动效与状态切换录屏看：`xc.sh rec ios|ipad <out.mov> -- …`；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。冷启动的首屏给 `CUEPAD_REC_LAUNCH=1`，从启动前开录；配 `-CuePadSync arrive` 看启动后拉到一批别的设备写下的话时页面怎么变。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …` 按真实时刻取。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
+- Mac 截图、录屏只认窗口本身的像素尺寸：调度中心、台前调度开着时系统把窗口缩小显示，截到的是缩小的画面，`xc.sh` 比对尺寸后报错不出图——关掉再拍。
+- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完按 PID 结束。会到前台。
+- 动效与状态切换录屏看：`xc.sh rec ios|ipad|mac <out.mov> -- …`（Mac 按窗口录，挡着的窗口与系统录屏标记不进画面）；会话状态切换配 `-CuePadCycle YES`（演示会话循环走过各种状态，参数见 `DebugScene.swift`）。冷启动的首屏给 `CUEPAD_REC_LAUNCH=1`，从启动前开录；配 `-CuePadSync arrive` 看启动后拉到一批别的设备写下的话时页面怎么变。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …` 按真实时刻取。逐帧铺成一张图再看：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`（坐标是录屏的像素）。
 - 裁图、缩放用系统自带的 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 模拟器（选哪台、启停、隔离库）只经 `xc.sh`，规则见它与 `_sim.sh` 的头注释。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。

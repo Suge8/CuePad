@@ -24,7 +24,7 @@ struct SessionAlert: Equatable, Identifiable {
 
     var status: PiShown.Status { Self.status(kind) }
 
-    /// 提示带的状态图形与会话状态标同一个（`PiShown.symbol`）：等你是赭黄问号圆，做完了是有新回复的铃铛。
+    /// 提示带的状态图形与会话状态标同一个（`PiShown.icon`）：等你是赭黄问号圆，做完了是有新回复的铃铛。
     static func status(_ kind: PiAlert) -> PiShown.Status { kind == .waitingForUser ? .asking : .unread }
 }
 
