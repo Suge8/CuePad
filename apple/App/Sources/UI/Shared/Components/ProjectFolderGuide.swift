@@ -88,16 +88,16 @@ struct ProjectFolderGuide: View {
     private func buttons(first: ProjectFolders.Candidate?, others: [ProjectFolders.Candidate], showsMac: Bool) -> some View {
         let choose = Button("选文件夹…") { workspace.chooseFolder(for: project) }
         if style == .page {
-            if let first { suggestion(first, showsMac: showsMac).modifier(GuideButton(kind: .solid)) }
-            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).modifier(GuideButton(kind: .plain)) }
-            choose.modifier(GuideButton(kind: first == nil ? .solid : .plain))
+            if let first { suggestion(first, showsMac: showsMac).guideButton(.primary) }
+            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).guideButton(.quiet) }
+            choose.guideButton(first == nil ? .primary : .quiet)
         } else {
             // 主次同一排：一键绑在前、"选文件夹…"跟在后面；多出来的建议各占一行、次要样式
             HStack(spacing: 8) {
-                if let first { suggestion(first, showsMac: showsMac).modifier(GuideButton(kind: .soft)) }
-                choose.modifier(GuideButton(kind: first == nil ? .soft : .plain))
+                if let first { suggestion(first, showsMac: showsMac).guideButton(.highlight) }
+                choose.guideButton(first == nil ? .highlight : .quiet)
             }
-            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).modifier(GuideButton(kind: .plain)) }
+            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).guideButton(.quiet) }
         }
     }
 
@@ -111,12 +111,11 @@ struct ProjectFolderGuide: View {
         workspace.attempt { try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID) }
     }
 
+    private static let titleFont = Typography.secondary.weight(.medium), noteFont = Typography.meta
     #if os(iOS)
     private static let tile: CGFloat = 32, iconSize: CGFloat = 15
-    private static let titleFont = Typography.secondary.weight(.medium), noteFont = Typography.meta
     #else
     private static let tile: CGFloat = 26, iconSize: CGFloat = 12
-    private static let titleFont = Typography.secondary.weight(.medium), noteFont = Typography.meta
     #endif
 }
 
@@ -144,21 +143,10 @@ nonisolated struct FolderGuide: Sendable, Equatable {
     }
 }
 
-/// 引导里的按钮：实心主按钮（空态页的第一个建议）、浅底强调钮（签名色字垫选中底，其余地方的那一颗）、次要的墨色字。
-/// 高矮一致（iOS 点得到 44），同一排里底边对齐。
-private struct GuideButton: ViewModifier {
-    enum Kind { case solid, soft, plain }
-    let kind: Kind
-
-    func body(content: Content) -> some View {
-        content.buttonStyle(ControlButtonStyle(kind: tone, compact: kind != .solid))
-    }
-
-    private var tone: ControlButtonStyle.Kind {
-        switch kind {
-        case .solid: .primary
-        case .soft: .highlight
-        case .plain: .quiet
-        }
+private extension View {
+    /// 引导里的按钮：实心主按钮（空态页的第一个建议）、浅底强调钮（签名色字垫选中底，其余地方的那一颗）、次要的墨色字。
+    /// 高矮一致（iOS 点得到 44），同一排里底边对齐；只有实心的是整号，其余是小号。
+    func guideButton(_ kind: ControlButtonStyle.Kind) -> some View {
+        buttonStyle(ControlButtonStyle(kind: kind, compact: kind != .primary))
     }
 }
