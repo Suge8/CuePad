@@ -129,13 +129,4 @@ final class RecordingCueNotifier: CueNotifying {
 
     func post(title: String, body: String) async { posted.append((title, body)) }
 }
-
-final class RecordingWindow: ShellWindow {
-    var isVisible = true
-    var isFocused = true
-    private(set) var events: [String] = []
-
-    func show() { events.append("show"); isVisible = true; isFocused = true }
-    func hide() { events.append("hide"); isVisible = false; isFocused = false }
-}
 #endif

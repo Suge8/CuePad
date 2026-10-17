@@ -87,7 +87,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     }
 }
 
-/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键、窗口；iOS 的私有命名剪贴板，
+/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
 /// 模拟器的通用剪贴板会与 Mac 同步）。`relaunch()` 用同一批目录与偏好再起一个实例。
 final class TestApp {
     let directory = TestLibraries.makeDirectory()
@@ -105,7 +105,6 @@ final class TestApp {
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
     /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
     nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
-    let window = RecordingWindow()
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -240,9 +239,7 @@ final class TestApp {
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
-        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
-        services.windowShell = WindowShell(window: window)
-        return services
+        return try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
     }
     #else
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }

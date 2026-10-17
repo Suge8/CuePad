@@ -105,8 +105,8 @@ final class AppServices {
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
-    /// 主窗口显隐；全局快捷键经它。
-    @ObservationIgnored var windowShell: WindowShell?
+    /// 主窗口（显隐规则在它身上）；全局快捷键经它。测试没有窗口。
+    @ObservationIgnored var windowShell: MainShellWindow?
     /// 系统通知（App 代理持有的那一个，`start()` 前接上）；测试没有，不发真实通知。
     @ObservationIgnored weak var alerts: AlertCenter?
 

@@ -7,7 +7,6 @@ import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var services: AppServices?
-    private var windowDelegate: MainWindowDelegate?
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
     private var cueBar: CueBar?
@@ -54,16 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let workspace = Workspace(services: services)
         Task { await workspace.follow() }
         let window = makeMainWindow(services, workspace: workspace)
-        let shell = WindowShell(window: window)
-        let windowDelegate = MainWindowDelegate(shell: shell)
-        window.delegate = windowDelegate
-        services.windowShell = shell
+        services.windowShell = window
         services.alerts = alerts
         alerts.services = services
         alerts.workspace = workspace
         followAlertTaps(workspace)
         self.services = services
-        self.windowDelegate = windowDelegate
         self.workspace = workspace
         mainWindow = window
 
@@ -71,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // 菜单栏面板点会话或 Cue：收起面板、把主窗口叫到前面，在它的内容区打开那一页（与侧栏同一处）
         panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] route in
             panel?.hide()
-            shell.show()
+            window.show()
             workspace.show(route)
         })
         menuBarPanel = panel
@@ -81,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 // 面板常驻、内容不重建：弹出时在这里看额度是否陈旧
                 if panel.isVisible { Task { await services.refreshQuotaIfStale() } }
             },
-            toggleWindow: { shell.toggleFromMenu() })
+            toggleWindow: { window.toggleFromMenu() })
 
         services.start()
         let cueBar = CueBar(services: services, workspace: workspace)
