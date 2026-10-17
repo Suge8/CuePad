@@ -194,14 +194,10 @@ extension Workspace {
         in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
         launched: @escaping () -> Void
     ) async throws -> String {
-        let token = UUID().uuidString
         services.settings.lastAgent = agent
-        let request = try await services.launch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent), title: title, on: host ?? services.hostID, card: card)
+        let launch = try await services.launchSession(in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent)
         var reported = false
-        for try await progress in services.store.observe({
-            try LaunchProgress.read(request: request.id, token: token, from: $0)
-        }) {
+        for try await progress in services.store.observe({ try launch.progress(from: $0) }) {
             if let claimed = progress.claimed { return claimed.sessionID }
             switch progress.phase(at: services.speech) {
             case .failed(let failure): throw SendError.notDelivered(failure.text(sync: services.syncStatus))
