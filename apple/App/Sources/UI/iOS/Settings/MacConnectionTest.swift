@@ -65,7 +65,7 @@ struct MacConnectionTest: View {
 
     /// "0.8 秒"、"12 秒"。
     private static func text(_ duration: Duration) -> String {
-        let seconds = Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
+        let seconds = duration.seconds
         return abs(seconds) < 10 ? String(format: "%.1f 秒", seconds) : "\(Int(seconds.rounded())) 秒"
     }
 }

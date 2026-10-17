@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 一次命令行调用的结果：进程退出码与两路输出（原样，不追加换行）。
-struct CLIResult: Equatable {
+struct CLIResult {
   var code: Int32
   var out: String
   var err: String
@@ -58,7 +58,7 @@ enum CLI {
         kind: .noLibrary,
         message: "找不到 CuePad 资料库（\(location.databaseURL.path)）：先打开一次 CuePad.app，或用 \(LibraryLocation.environmentKey) 指向隔离目录")
     }
-    do { return try CueStore(location: location) } catch {
+    do { return try CueStore(url: location.databaseURL) } catch {
       throw CLIError(kind: .store, message: "无法打开资料库 \(location.databaseURL.path)：\(error)")
     }
   }
