@@ -4,6 +4,11 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing, succeeded, failed
 }
 
+extension DeliveryStatus {
+  /// 还没有结果的（等领取、执行中；同 `DeliveryRequest.isOpen`），SQL `IN (…)` 里的列表。
+  static let openSQL = sqlList([pending, executing])
+}
+
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
 /// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
 /// 说话的三种（`talk`）在请求上有两层含义：执行前是请求的方式；成功后 Mac 改写成 Agent 实际收下的方式（`DeliveryOutcome.accepted`）——
@@ -43,11 +48,6 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 你说的话的几种方式（直接说、马上说、等它做完再说）：没能送达时留着等你重发。
   public static let talk: [DeliveryMode] = [.send, .steer, .followUp]
-
-  /// SQL `mode IN (…)` 里的列表。
-  static func sqlList(_ modes: some Sequence<DeliveryMode>) -> String {
-    modes.map { "'\($0.rawValue)'" }.joined(separator: ", ")
-  }
 }
 
 /// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。

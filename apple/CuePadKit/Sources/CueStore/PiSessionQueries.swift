@@ -13,7 +13,7 @@ extension CueStore {
       conditions.append(
         """
         (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
-          WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession)))))
+          WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession)))))
         """)
     }
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
@@ -90,7 +90,7 @@ extension CueStore {
     let requests = try select(
       DeliveryRequest.self,
       where: """
-        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk)))
+        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.talk)))
           AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (\(refs))
         """, sessionIDs, orderBy: "createdAt, rowid")
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }
@@ -103,7 +103,7 @@ extension CueStore {
     let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
     let requests = try select(
       DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession))) AND targetRef IN (\(refs))",
+      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession))) AND targetRef IN (\(refs))",
       sessionIDs, orderBy: "createdAt DESC, rowid DESC")
     var latest: [String: DeliveryRequest] = [:]
     for request in requests {

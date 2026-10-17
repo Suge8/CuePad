@@ -285,7 +285,7 @@ extension CueStore {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
     let ending = Set(try db.query(
-      "SELECT targetRef FROM deliveryRequests WHERE mode = '\(DeliveryMode.end.rawValue)' AND status IN ('pending', 'executing') AND targetRef IS NOT NULL"
+      "SELECT targetRef FROM deliveryRequests WHERE mode = '\(DeliveryMode.end.rawValue)' AND status IN (\(DeliveryStatus.openSQL)) AND targetRef IS NOT NULL"
     ) { $0.text(0) })
     let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
     return sessions.values
@@ -391,7 +391,7 @@ extension CueStore {
     return Set(try db.query(
       """
       SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND status IN ('pending', 'executing')
+      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode IN (\(sqlList(DeliveryMode.talk))) AND status IN (\(DeliveryStatus.openSQL))
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 
@@ -524,7 +524,7 @@ extension CueStore {
         SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
           AND id NOT IN (\(subtree(from: "SELECT ?2"))))
       OR EXISTS (
-        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession))) AND status IN ('pending', 'executing'))
+        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(sqlList(DeliveryMode.toSession))) AND status IN (\(DeliveryStatus.openSQL)))
     """
 
   /// 任务此刻在做的叶子：叶子就是它自己，有步骤的是第一个没完成的步骤（没有就第一个）。不是任务抛 `notATask`。

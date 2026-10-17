@@ -146,11 +146,11 @@ extension CueStore {
   /// 在路上的（还没执行完的）最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），
   /// 不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上（`claimLaunchedCards`）。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
-    let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession)))))"
+    let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(sqlList(DeliveryMode.toSession)))))"
       + " AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)"
     let rows = try db.query(
       """
-      SELECT r.cardID, r.targetRef, 0, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND \(Self.openRequest)
+      SELECT r.cardID, r.targetRef, 0, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND r.status IN (\(DeliveryStatus.openSQL))
       UNION ALL
       SELECT id, piSessionID, 0, 1 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
       UNION ALL
@@ -162,9 +162,6 @@ extension CueStore {
     ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
-
-  /// 还没执行完的请求（`r`）。
-  private static let openRequest = "r.status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.executing.rawValue)')"
 
   /// 一张任务的下级（步骤与挂在下面的灵感），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
