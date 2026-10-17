@@ -65,5 +65,4 @@ import Testing
     #expect(now.alert(since: now) == nil)  // 同一版本读两遍不重复提示
     #expect(seen.alert(since: nil) == nil)
   }
-
 }

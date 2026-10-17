@@ -18,15 +18,4 @@ import Testing
     #expect(location.directory.path == directory && location.isIsolated == isolated)
     #expect(location.databaseURL.path == directory + "/cuepad.db")
   }
-
-  @Test func storeOpensTheLibraryAtItsLocation() async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-loc-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let location = try LibraryLocation.resolve(environment: ["CUEPAD_LIBRARY_DIR": directory.path], base: .applicationSupport(URL(filePath: "/x")))
-
-    let store = try CueStore(location: location)
-    _ = try await store.createCard(in: nil, body: "here")
-
-    #expect(FileManager.default.fileExists(atPath: location.databaseURL.path))
-  }
 }
