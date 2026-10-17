@@ -8,6 +8,10 @@ public struct CueMCPServer: Sendable {
 
   /// 接受的协议版本：回客户端请求的那个；别的版本回最新的，由客户端决定是否继续（MCP 的版本协商）。
   static let protocolVersions = ["2025-11-25", "2025-06-18"]
+  /// 大脑登记这个服务用的名字。三家运行时给模型的工具名都是 `mcp__<名字>__<工具>`（`toolPrefix`），系统提示照这个写：
+  /// 只写 task 时模型多半先按 task 调，被运行时以"没有这个工具"拒掉，偶尔就此认定工具调不起来。
+  public static let name = "cuepad"
+  public static let toolPrefix = "mcp__\(name)__"
 
   public init(store: CueStore) { tools = CueTools(store: store) }
 
@@ -39,7 +43,7 @@ public struct CueMCPServer: Sendable {
         [
           "protocolVersion": requested.flatMap { Self.protocolVersions.contains($0) ? $0 : nil } ?? Self.protocolVersions[0],
           "capabilities": ["tools": ["listChanged": false]],
-          "serverInfo": ["name": "cuepad", "title": "CuePad", "version": "1"],
+          "serverInfo": ["name": Self.name, "title": "CuePad", "version": "1"],
         ])
     case "ping":
       return Self.result(id: id, [:])

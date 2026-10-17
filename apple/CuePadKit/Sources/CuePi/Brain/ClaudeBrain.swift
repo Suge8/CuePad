@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import Foundation
 
@@ -32,10 +33,10 @@ final class ClaudeBrain: CueBrain {
             let directory = try session.makeDirectory()
             let prompt = directory.appending(path: "system-prompt.md")
             try config.systemPrompt.write(to: prompt, atomically: true, encoding: .utf8)
-            let mcp = ["mcpServers": ["cuepad": ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
+            let mcp = ["mcpServers": [CueMCPServer.name: ["command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment]]]
             var arguments = [
                 "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob",
-                "--allowedTools", "Read,Grep,Glob,mcp__cuepad__*", "--permission-prompts", "none", "--strict-mcp-config",
+                "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
                 "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands",
             ]
             if let model = config.model { arguments += ["--model", model] }
