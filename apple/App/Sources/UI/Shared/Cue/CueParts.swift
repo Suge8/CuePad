@@ -124,36 +124,6 @@ struct CueTaskLine: View {
     }
 }
 
-/// 一份预览的缩略图（"等你"里的证据）：图片是图本身，其余是类型图标；点它全屏看（`previewPresenter`）。
-struct CuePreviewThumb: View {
-    let preview: PiPreview
-    let open: (PiPreview) -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button { open(preview) } label: {
-            Group {
-                if preview.kind == .image {
-                    Thumbnail(hash: preview.hash, height: Self.side, radius: 8)
-                } else {
-                    Image(PreviewCard.icon(preview.kind)).font(.title3).foregroundStyle(palette.ink3)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
-                }
-            }
-            .frame(width: Self.side, height: Self.side)
-            .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.button))
-        .accessibilityLabel("预览：\(preview.title)")
-        #if os(macOS)
-        .help(preview.title)
-        #endif
-    }
-
-    private static let side: CGFloat = 44
-}
-
 /// 连着的几条动态（Cue 自己醒来的那几轮：每轮先是它的经过，再是它说的那句；没推给你）：一行旁注（`NoteLine`），
 /// 图标是一颗收着的话（与气泡里对你说的话分开：没有纸、不靠气泡、字小一档），写最新一条的首行（没有正文的写它的经过）与条数；
 /// 点开在细线下按先后列全（`NoteThread`）——经过与回答注脚同一个样子（`RoundProcess`），说的话是小字。展开后那一行只写条数，最新一条就在列表末尾，不写两遍。
@@ -265,15 +235,54 @@ private struct AnswerChip: View {
     }
 }
 
+/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsk.question`）。"等你"卡与全屏预览的底栏共用。
+struct CueQuestionLine: View {
+    let question: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            PiStateGlyph(status: .asking)
+            Text(question)
+                .font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// "等你"的选项：推荐的答案（第一个）作主按钮、其余次按钮，一行放不下就竖排。"等你"卡与全屏预览的底栏共用。
+struct CueChoices: View {
+    let options: [String]
+    var disabled = false
+    let pick: (String) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { buttons }
+            VStack(alignment: .leading, spacing: 8) { buttons }
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+            Button(option) { pick(option) }
+                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
+                .lineLimit(2)
+                .disabled(disabled)
+        }
+    }
+}
+
 /// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
-/// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务发来看的文件
-/// （小缩略图，看完再定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
+/// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务的全部交付物
+/// （迷你一排，新的在前；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
 /// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
-    let open: (PiPreview) -> Void
+    let open: (PreviewOpening) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     /// 正在结束的那条（写成后它从 `waiting` 里消失，写不成就清掉）。
@@ -292,22 +301,17 @@ struct CueWaitingDock: View {
     var body: some View {
         if let message = waiting.first {
             let ref = message.taskID.flatMap { tasks[$0] }
+            let question = (message.ask ?? .rule).question(task: ref?.task.heading)
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PiStateGlyph(status: .asking)
-                    Text((message.ask ?? .rule).question(task: ref?.task.heading))
-                        .font(Typography.bodyStrong).foregroundStyle(palette.ink)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
+                CueQuestionLine(question: question)
                 if reading == message.id { original(message.text).transition(.opacity) }
-                // 关联任务发来看的文件：在手机上看完图再决定允不允许
-                if let previews = ref?.previews, !previews.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) { ForEach(previews) { CuePreviewThumb(preview: $0, open: open) } }
+                if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
+                    let batch = Array(deliverables)
+                    DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 12) {
+                        open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
                     }
                 }
-                choices(message)
+                CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
                 otherwiseField(message)
                 HStack(spacing: 10) {
                     if let ref { CueTaskLine(ref: ref) }
@@ -349,23 +353,6 @@ struct CueWaitingDock: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
-    }
-
-    private func choices(_ message: CueMessage) -> some View {
-        let options = message.choices ?? []
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { buttons(message, options) }
-            VStack(alignment: .leading, spacing: 8) { buttons(message, options) }
-        }
-    }
-
-    @ViewBuilder private func buttons(_ message: CueMessage, _ options: [String]) -> some View {
-        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-            Button(option) { answer(message, option) }
-                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
-                .lineLimit(2)
-                .disabled(ending == message.id)
-        }
     }
 
     /// 不允许时另外说：回车或点发送交给 Cue。

@@ -3,7 +3,7 @@ import Foundation
 
 /// 去哪一页：Mac 内容区挂哪一页与 iOS 导航栈里推入哪一页是同一个类型，平台只差呈现（Mac 只用其中的 `project`、`unfiled`、`archive`、`trash`、`cue`、`agent`、`session`）。
 nonisolated enum Route: Hashable {
-    /// 项目书架（iPhone 灵感标签的根；iPad 侧栏的"灵感"）。
+    /// 项目书架：全部项目（iPhone、iPad 侧栏的"全部项目"）。
     case shelf
     case project(UUID)
     case unfiled
@@ -12,13 +12,13 @@ nonisolated enum Route: Hashable {
     case trash
     case settings
     case conflicts
-    /// 跨项目的任务看板（书架上一行入口、iPad 侧栏进入）。
+    /// 跨项目的任务看板（iPhone、iPad 侧栏的"任务"，书架上一行入口）。
     case tasks
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
     /// Cue 的设置（手机从 Cue 面板推入，`CueSettingsScreen`；Mac 的在设置窗口里）。
     case cueSettings
-    /// Agent 页：全部 Pi 会话。
+    /// Agent 页：全部 Pi 会话（侧栏的"会话"）。
     case agent
     /// 一个项目的全部 Pi 会话（同 Agent 页，只列这个项目的）。
     case projectSessions(UUID)

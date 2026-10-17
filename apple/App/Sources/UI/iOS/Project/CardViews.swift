@@ -96,6 +96,12 @@ struct OlderRow: View {
 
     private static let radius: CGFloat = 12
 
+    private var shape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
+            bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous)
+    }
+
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
@@ -114,12 +120,12 @@ struct OlderRow: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
-        .background(palette.paper)
+        .buttonStyle(.row)
+        .background(palette.paper, in: .rect)
         .overlay(alignment: .top) { if !isFirst { Divider().padding(.leading, 14) } }
-        .clipShape(UnevenRoundedRectangle(
-            topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
-            bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous))
+        // 一组行拼成一张纸：每行按它在组里的位置裁角，也是它的行容器
+        .clipShape(shape)
+        .rowContainer(shape, flush: true)
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace))
         .contextMenu { CardActions(card: card) }

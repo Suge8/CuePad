@@ -1,6 +1,5 @@
 import CueStore
 import SwiftUI
-import WebKit
 #if os(macOS)
 import AppKit
 #endif
@@ -26,8 +25,6 @@ enum DebugHooks {
         var demoMac = false
         /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、又没装同步替身时（替身自己报通断，`-CuePadSync`）。
         var alwaysReachable = false
-        /// 这个账号的额度明细直接弹出（`-CuePadQuotaDetail <提供方>`）。
-        var quotaDetail: String?
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
         /// Cue 页的输入框一出现就聚焦（`-CuePadCueFocus`）。
@@ -37,7 +34,7 @@ enum DebugHooks {
         /// 整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`，`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
         #if os(macOS)
-        /// 正文以它开头的那张灵感卡或那条任务一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
+        /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
         #endif
@@ -50,14 +47,15 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
-        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`）。
+        /// Cue 页头一出现就展开成面板（`-CuePadCuePanel YES`；`end` 再滚到面板底，看额度与记忆）。
         var cuePanelOpen = false
+        var cuePanelEnd = false
         #endif
     }
 
     #if os(macOS)
-    /// 这张卡或这条任务是否按 `Preset.hovered` 一出现就画成悬停的样子。
-    static func hovers(_ card: Card) -> Bool { preset.hovered.map { card.body.hasPrefix($0) } ?? false }
+    /// 正文是这样开头的卡、任务、记忆或这一行（回收站按名字）是否按 `Preset.hovered` 一出现就画成悬停的样子。
+    static func hovers(_ text: String) -> Bool { preset.hovered.map(text.hasPrefix) ?? false }
     #endif
 
     static let preset: Preset = {
@@ -171,10 +169,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 预览网页开始载入（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里给它拍快照。
-    static func previewWebLoaded(_ page: WebPage) {
+    /// 预览网页要打开了（`PreviewWeb`）：`-CuePadWebSnapshot` 在这里拍一张同样规则下载入完的快照。
+    static func previewWebLoaded(_ file: URL) {
         #if DEBUG
-        DebugScene.snapshotWeb(page)
+        DebugScene.snapshotWeb(file)
         #endif
     }
 
@@ -240,17 +238,6 @@ enum DebugHooks {
 }
 
 extension View {
-    #if os(iOS)
-    /// 底部栏换标签的那条路（含推移）交给测量脚本（`IOSInteractionBench`）按它换标签。
-    func debugExposesTabSelect(_ select: @escaping (Navigation.Tab) -> Void) -> some View {
-        #if DEBUG
-        onAppear { DebugScene.selectTab = select }
-        #else
-        self
-        #endif
-    }
-    #endif
-
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {

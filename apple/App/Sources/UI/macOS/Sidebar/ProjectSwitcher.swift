@@ -26,7 +26,7 @@ struct ProjectSwitcher: View {
                 }
             }
             Divider()
-            if (workspace.catalog?.cardCounts[nil] ?? 0) > 0 {
+            if (workspace.catalog?.unfiledCount ?? 0) > 0 {
                 Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, icon: .unfiled).labelStyle(.titleAndIcon) }
             }
             Button { workspace.show(.agent) } label: { Label("Agent", icon: .agent).labelStyle(.titleAndIcon) }

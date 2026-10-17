@@ -50,7 +50,7 @@ struct CueContextCard: View {
     }
 }
 
-/// 上下文的刻度尺：底是整把尺，铺色到已用，换新线一道刻线、上面标"换新"。
+/// 上下文的刻度尺：底是整把尺，铺色到已用，换新线一道刻线（`MarkedBar`，与额度的匀速线同一种画法）、上面标"换新"。
 private struct RenewRuler: View {
     let used: Int
     let renewAt: Int
@@ -60,25 +60,14 @@ private struct RenewRuler: View {
     /// 尺的全长：窗口；不知道窗口时让换新线落在八成处
     private var scale: Double { Double(max(window ?? Int(Double(renewAt) / 0.8), used, renewAt)) }
 
-    private var fill: Color {
-        switch PiContextMeter.level(of: Double(used) / Double(renewAt)) {
-        case .critical: palette.failure
-        case .tight: palette.ink2
-        case .roomy: palette.ink3
-        }
-    }
-
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let mark = width * Double(renewAt) / scale
             ZStack(alignment: .bottomLeading) {
-                Capsule().fill(palette.hair).frame(height: 6)
-                Capsule().fill(fill).frame(width: max(6, width * Double(used) / scale), height: 6)
-                    .opacity(used > 0 ? 1 : 0)
-                Rectangle().fill(palette.ink2).frame(width: 2, height: 12).offset(x: mark - 1, y: 3)
+                MarkedBar(fill: Double(used) / scale, mark: Double(renewAt) / scale, level: PiContextMeter.level(of: Double(used) / Double(renewAt)))
                 Text("换新").font(Typography.caption2).foregroundStyle(palette.ink3).fixedSize()
-                    .offset(x: mark - 12, y: -12)
+                    .offset(x: mark - 12, y: -MarkedBar.height - 1)
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
         }

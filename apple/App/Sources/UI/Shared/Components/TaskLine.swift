@@ -11,7 +11,7 @@ import SwiftUI
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务（手机推入任务页，Mac 弹出任务浮窗）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务页的"⋯"。
-/// Mac 上指针停在行上时铺一层淡底，"开始"与状态词这时才露出来（`TaskNextMark.lit`）。
+/// Mac 上指针停在行上时铺行的淡底（`RowStyle`），"开始"与状态词这时才露出来（`TaskNextMark` 读 `rowHovered`）。
 struct TaskLine: View {
     let task: Card
     /// 步骤进度（有它的不是叶子，不给"开始"）。
@@ -31,7 +31,6 @@ struct TaskLine: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     #else
     @Environment(\.taskStructure) private var structure
-    @State private var hovering = false
     #endif
 
     var body: some View {
@@ -110,7 +109,7 @@ struct TaskLine: View {
         if !done, let subtasks {
             Text("\(subtasks.done)/\(subtasks.total)").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
         }
-        if !done, let next { TaskNextMark(next: next, lit: lit).transition(.opacity) }
+        if !done, let next { TaskNextMark(next: next).transition(.opacity) }
     }
 
     private func open() {
@@ -133,7 +132,6 @@ struct TaskLine: View {
     #if os(iOS)
     private var inline: Bool { sizeClass == .regular }
     private var stacked: Bool { typeSize.isAccessibilitySize }
-    private var lit: Bool { false }
     private var titleLines: Int { typeSize.isAccessibilitySize ? 4 : 2 }
     /// 标题折成两行时上下留的白：单行时行高由 44pt 的点按高度撑着。
     private static let titlePadding: CGFloat = 10
@@ -152,7 +150,6 @@ struct TaskLine: View {
     #else
     private var inline: Bool { true }
     private var stacked: Bool { false }
-    private var lit: Bool { hovering }
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = 15
@@ -160,11 +157,9 @@ struct TaskLine: View {
 
     private func framed(_ content: some View) -> some View {
         content
-            .padding(.horizontal, TaskMetrics.rowInset)
-            .background(hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
             .contentShape(.rect)
-            .onHover { hovering = $0 }
-            .onAppear { if DebugHooks.hovers(task) { hovering = true } }
+            .row(hovers: true)
+            .environment(\.rowHoverPreset, DebugHooks.hovers(task.body))
             .onTapGesture(perform: open)
             .contextMenu { CardActions(card: task, leaf: subtasks == nil) }
             // 只给带项目图标的行挂悬停提示：每行一块提示的跟踪区，滚动时跟着重算
@@ -177,10 +172,10 @@ struct TaskLine: View {
 /// 任务行上"下一步"那一格（`TaskNext`），Mac 与手机同一份，不垫底、不成胶囊——一屏可能有十几格，胶囊排成一列就成了一墙按钮：
 /// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（等你确认、出错、没送到）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
-/// Mac 上指针停在这一行时（`lit`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
+/// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
 struct TaskNextMark: View {
     let next: TaskNext
-    var lit = false
+    @Environment(\.rowHovered) private var lit
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     #if os(iOS)

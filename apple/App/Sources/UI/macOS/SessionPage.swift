@@ -170,27 +170,27 @@ struct SessionPage: View {
 }
 
 extension View {
-    /// 会话行：点按在内容区打开这个会话的整页；正打开着的那个垫选中底。
-    func sessionLink(_ sessionID: String, press: Press = .control) -> some View { modifier(SessionLink(sessionID: sessionID, press: press)) }
+    /// 点按在内容区打开这个会话的整页。不给 `press` 是侧栏里的一行（`RowStyle`，正打开着的那个是选中底），给了是卡片或圆钮的按压。
+    func sessionLink(_ sessionID: String, press: Press? = nil) -> some View { modifier(SessionLink(sessionID: sessionID, press: press)) }
 }
 
 private struct SessionLink: ViewModifier {
     let sessionID: String
-    let press: Press
+    let press: Press?
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         let opened = workspace.page == .session(sessionID)
-        Button {
+        let button = Button {
             workspace.searching = false
             workspace.showsTasks = false
             workspace.show(.session(sessionID))
         } label: {
             content.contentShape(.rect)
         }
-        .buttonStyle(PressStyle(press))
-        .background(opened ? palette.selection : .clear, in: .rect(cornerRadius: 8))
+        Group {
+            if let press { button.buttonStyle(PressStyle(press)) } else { button.buttonStyle(RowStyle(selected: opened)) }
+        }
         .accessibilityAddTraits(opened ? .isSelected : [])
         .accessibilityHint("打开会话")
     }

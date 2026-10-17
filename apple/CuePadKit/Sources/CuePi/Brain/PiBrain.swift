@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import Foundation
 
@@ -43,11 +44,11 @@ final class PiBrain: CueBrain {
             let server: [String: Any] = [
                 "command": config.mcp[0], "args": Array(config.mcp.dropFirst()), "env": config.environment, "exposure": "direct",
             ]
-            try "export default function (pi: any) { pi.registerMcpServer(\"cuepad\", \(jsonString(server))); }\n"
+            try "export default function (pi: any) { pi.registerMcpServer(\"\(CueMCPServer.name)\", \(jsonString(server))); }\n"
                 .write(to: mcpExtension, atomically: true, encoding: .utf8)
             var arguments = [
                 "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", "builtin:mcp", "-e", mcpExtension.path,
-                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "--tools", "read,grep,find,ls,mcp__cuepad__*",
+                "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "--tools", "read,grep,find,ls,\(CueMCPServer.toolPrefix)*",
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }

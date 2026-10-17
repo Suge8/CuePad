@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：窄宽是两个标签（Cue / 灵感）加底部一行（标签与搜索圆钮），宽 iPad 用分栏。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：各种宽度都是同一个分栏（`SplitRoot`），iPhone 上由系统折叠成一层层的页。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -21,11 +21,9 @@ struct IOSRoot: View {
     var body: some View {
         @Bindable var navigation = navigation
         CatalogGate {
-            Group {
-                if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
-            }
+            SplitRoot()
             // 浮起的输入框（新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
-            // 否则键盘一出来、一收起，底下整页（连同另一个标签里的页）都要按新的安全区重排一遍
+            // 否则键盘一出来、一收起，底下整页都要按新的安全区重排一遍
             .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
             .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
             // 收起时等键盘落下再恢复躲键盘（收起的一刻键盘还在，马上恢复就是多排一遍）；页里自己的输入框要弹键盘时立刻恢复
@@ -63,9 +61,8 @@ struct IOSRoot: View {
         .environment(navigation)
         .environment(workspace.services)
         .preferredColorScheme(scheme)
-        .onChange(of: sizeClass, initial: true) { _, size in
-            navigation.layout = size == .regular ? .split : .tabs
-        }
+        // 变宽后两栏都在：此后再变窄，折叠出来的是右边那一页（不停在列表上）
+        .onChange(of: sizeClass) { _, size in if size == .regular { navigation.column = .detail } }
         .task { await workspace.follow() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
@@ -90,29 +87,26 @@ struct IOSRoot: View {
     }
 }
 
-/// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用，标签的根页也经这里）。页底色在这里一处铺在导航容器上：
+/// 右边那一栏的页（侧栏选中的根页与其上推入的页都经这里）。页底色在这里一处铺在导航容器上：
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Route
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
+        // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
         // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏时间那一段的内容淡出（`fadesUnderBars`）。
-        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（`RootBar`、Cue 页头）
+        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（搜索页、Cue 页头）
         // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
             .fadesUnderBars()
             .containerBackground(background, for: .navigation)
+            // 右边的页都不用大标题（推入页的标题在顶栏玻璃里，Cue、搜索自带顶上一排）：不随打开的第一页是谁而变
+            .navigationBarTitleDisplayMode(.inline)
             .scrollEdgeEffectHidden()
-            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
-            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的 `Navigation.ownsBottom`：那个值在推入、返回会话页与纸页时变，
-            // 读它的话每个标签里每一页（包括被盖住的）都要跟着重排一遍
-            .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
             .modifier(KeyboardHold())
     }

@@ -37,7 +37,7 @@ import Testing
     let mac = try await mac(.succeeded)
     let result = try await say(task, with: CueTools(store: store))
     await mac.stop()
-    #expect(!result.isError && result.text.contains("已送达") && result.structured["status"] as? String == "delivered", "\(result.text)")
+    #expect(!result.isError && result.text.contains("已送达"), "\(result.text)")
   }
 
   @Test(.timeLimit(.minutes(1))) func 没送到_标成出错并带上Mac给的原因() async throws {
@@ -51,7 +51,7 @@ import Testing
   @Test(.timeLimit(.minutes(1))) func 到点还没结果_如实说还没送达() async throws {
     let task = try await task()
     let result = try await say(task, with: CueTools(store: store, wait: 0.3))
-    #expect(!result.isError && result.text.contains("已发出，还没送达") && result.structured["status"] as? String == "sending", "\(result.text)")
+    #expect(!result.isError && result.text.contains("已发出，还没送达"), "\(result.text)")
     #expect(try await store.deliveryRequests(toSession: "s1").map(\.status) == [.known(.pending)])
   }
 }

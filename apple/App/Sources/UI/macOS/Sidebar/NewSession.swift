@@ -88,7 +88,8 @@ struct NewSessionForm: View {
                     .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView {
-                    VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }
+                    // 行的底向两边让出一截，留在滚动区里不被裁
+                    VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
                 }
                 .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
                 TextField("开场的话（可不填）", text: $prompt, axis: .vertical)
@@ -153,11 +154,10 @@ struct NewSessionForm: View {
                 Spacer(minLength: 4)
                 if selected { Image(.checked).foregroundStyle(palette.ink2).accessibilityHidden(true) }
             }
-            .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 7))
+            .padding(.vertical, 5)
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 

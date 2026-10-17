@@ -3,16 +3,16 @@ import CueStore
 import SwiftUI
 
 /// 手机与 iPad 的 Cue 页头：一块玻璃，平时是 56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
-/// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
+/// 点它从顶部长出面板（同一块玻璃长高、变宽；iPhone 上页头在导航栏那一排里，左边让着系统的返回）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
-/// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
+/// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueBrainMenu`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
-    /// 左边留着设置钮（iPhone 标签栏布局；iPad 的设置在侧栏）。
-    let showsSettings: Bool
+    /// 页头在导航栏那一排里、左边让着系统的返回（iPhone，`inNavigationBarRow`）。
+    let inBar: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -20,11 +20,13 @@ struct CueHeader: View {
 
     static let height: CGFloat = 56
     private static let radius: CGFloat = 28
+    /// 面板里行与行之间的空（会话一列的行距），行的底上下各伸进一半。
+    static let rowGap: CGFloat = 12
     /// 离页面两侧与上安全区的距离（同 `RootBar`）。
     private static let edge: CGFloat = 16
     private static let top: CGFloat = 4
-    /// 对话在顶上让出的高度：页头一条加上下的空。
-    static let reserve: CGFloat = top + height + 8
+    /// 对话在顶上让出的高度：页头一条加上下的空。页头在导航栏那一排里时只让出它比导航栏多出的那一点与下面的空。
+    static func reserve(inBar: Bool) -> CGFloat { inBar ? 12 : top + height + 8 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,15 +36,9 @@ struct CueHeader: View {
                     .onTapGesture(perform: toggle)
                     .accessibilityHidden(true)
             }
-            if showsSettings {
-                SettingsButton()
-                    .buttonStyle(ControlButtonStyle(kind: .circular)).labelStyle(.iconOnly)
-                    .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .leading)
-                    .padding(.horizontal, Self.edge).padding(.top, Self.top)
-            }
             glass
-                .padding(.leading, expanded || !showsSettings ? 0 : ControlMetrics.height + 8)
-                .padding(.horizontal, Self.edge).padding(.top, Self.top)
+                .inNavigationBarRow(inBar, height: Self.height, tap: toggle)
+                .padding(.horizontal, Self.edge).padding(.top, inBar ? 0 : Self.top)
         }
         .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
         .sensoryFeedback(.impact(weight: .light), trigger: expanded)
@@ -68,6 +64,7 @@ struct CueHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
+        .rowContainer(.rect(cornerRadius: Self.radius, style: .continuous), gap: Self.rowGap)
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), ink: .solid)
     }
 
@@ -117,10 +114,13 @@ private struct CueNowPanel: View {
 
     /// 面板只是一瞥：在做的会话最多列这么多，全部在 Agent 整页里。
     private static let limit = 5
+    /// "在做"区头的高度（钉住时滚过的行在它下沿淡去，`FadesUnderHeader`）。
+    @ScaledMetric(relativeTo: .footnote) private var headerHeight: CGFloat = 30
 
     var body: some View {
         HugHeight {
             ScrollView { content }.scrollBounceBehavior(.basedOnSize)
+                .defaultScrollAnchor(DebugHooks.preset.cuePanelEnd ? .bottom : nil)
         }
         .refreshesQuota()
     }
@@ -179,7 +179,7 @@ private struct CueNowPanel: View {
             .font(.subheadline)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
         .accessibilityHint("收起面板，看下面等你的事")
     }
 
@@ -195,9 +195,7 @@ private struct CueNowPanel: View {
                     Spacer(minLength: 8)
                     if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
                 }
-                .padding(.vertical, 6)
-                // 面板的底色（`GlassInk.solid` 垫的页面底色），实的：钉住时下面滚过的行不透上来
-                .background(palette.desk)
+                .frame(height: headerHeight)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -207,7 +205,7 @@ private struct CueNowPanel: View {
         if work.rows.isEmpty {
             Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
         } else {
-            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
+            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: CueHeader.rowGap) { session in
                 Button {
                     close()
                     navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
@@ -218,15 +216,17 @@ private struct CueNowPanel: View {
                     ).equatable()
                         .contentShape(.rect)
                 }
-                .buttonStyle(RowPressStyle())
+                .buttonStyle(.row)
+                .modifier(FadesUnderHeader(header: headerHeight))
             } fold: { count, expanded in
-                PiReloadFold(count: count, expanded: expanded)
+                PiReloadFold(count: count, expanded: expanded).modifier(FadesUnderHeader(header: headerHeight))
             }
         }
         link("全部会话", count: live.total) {
             close()
             navigation.push(.agent)
         }
+        .modifier(FadesUnderHeader(header: headerHeight))
     }
 
     private func link(_ title: String, icon: Icon? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
@@ -242,7 +242,22 @@ private struct CueNowPanel: View {
             .frame(minHeight: 32)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
+    }
+}
+
+/// 钉住的"在做"区头不铺底，滚到它下面的行就地淡去：铺什么颜色都与面板的玻璃对不上（玻璃的光随背后变，深色下曾是一条直角色带），
+/// 不铺底它就是玻璃本身。行顶离区头下沿还有 `fade` 的一半时开始淡，碰到区头的字之前淡完，字不会叠在一起。
+/// 读的是渲染时的几何（`visualEffect`），不进状态、不挂几何回调：滚动时每帧只改透明度。
+private struct FadesUnderHeader: ViewModifier {
+    let header: CGFloat
+    private static let fade: CGFloat = 12
+
+    func body(content: Content) -> some View {
+        content.visualEffect { [header] content, proxy in
+            let top = proxy.frame(in: .scrollView).minY - (header - Self.fade / 2)
+            return content.opacity(min(max(top / Self.fade, 0), 1))
+        }
     }
 }
 #endif

@@ -1,18 +1,14 @@
 #if os(iOS)
-import CueSync
 import SwiftUI
 
-/// 标签根页（iPhone 的 Cue、灵感、搜索）顶上一排：左边设置（`SettingsButton`，只在标签栏布局有，iPad 的设置在侧栏），
-/// 中间是这一页的主体（搜索框；Cue 页头浮在这一排上，见 `CueHeader`；没有就空着，不写标签名），右边是本页唯一的新建（没有就空着）。
-/// 不放搜索框以外的状态与"⋯"：顶栏的规则见 docs/ui.md。浮在内容上（滚动到它下面的内容渐隐），不放进导航栏：导航栏中间那一格按内容宽度居中，占不满。
+/// 宽屏上自带顶上一排的页（搜索页）的那一排：中间是这一页的主体（搜索框），右边是本页唯一的新建（没有就空着）。
+/// 不放搜索框以外的状态与"⋯"：顶栏的规则见 docs/ui.md。iPhone 上搜索框在导航栏中间（`SearchScreen`），Cue 页头在导航栏那一排里（`inNavigationBarRow`）。
 struct RootBar<Center: View, Trailing: View>: View {
     @ViewBuilder let center: Center
     @ViewBuilder let trailing: Trailing
-    @Environment(Navigation.self) private var navigation
 
     var body: some View {
         HStack(spacing: 8) {
-            if navigation.layout == .tabs { SettingsButton() }
             if Center.self == EmptyView.self { Spacer(minLength: 0) } else { center.frame(maxWidth: .infinity) }
             trailing
         }
@@ -28,25 +24,46 @@ extension RootBar where Trailing == EmptyView {
     init(@ViewBuilder center: () -> Center) { self.init(center: center) { EmptyView() } }
 }
 
-/// 设置的唯一入口（iPhone 每个标签根页的左上角，同 Mac 侧栏底栏那颗一直在的齿轮）：同步到不了 Mac 时右上带一个点，
-/// 颜色是同步状态的（提示赭黄、真出错胭脂），点进设置看 iCloud 那一节；平时不带。
-struct SettingsButton: View {
-    @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
+extension View {
+    /// iPhone 上自带顶上一排的页（Cue 页头）留着导航栏：左边是系统的返回，左缘右滑回到列表也要导航栏在
+    /// （藏起导航栏的页系统不给滑回）。这一排挪进导航栏那一排、与返回钮竖向居中，左边让出返回钮。
+    /// 导航栏盖在页面上、接走它那一排里的点按：`tap` 是点在这一排上要做的（导航栏中间那一格里铺一层透明的点按区转过来）。
+    func inNavigationBarRow(_ active: Bool, height: CGFloat, tap: @escaping () -> Void) -> some View {
+        modifier(NavigationBarRow(active: active, height: height, tap: tap))
+    }
+}
 
-    var body: some View {
-        let status = services.syncStatus
-        Button { navigation.push(.settings) } label: {
-            Label("设置", icon: .settings)
-                .overlay(alignment: .topTrailing) {
-                    if !status.reachesMac {
-                        Circle().fill(palette.color(SyncSummary(status).tone)).frame(width: 7, height: 7).offset(x: 3, y: -1)
+/// 导航栏那一排的高 = 这一排原本的上沿（导航栏下沿）减状态栏下沿。挪是位移（画面与点按区一起挪），量的是位移外面不动的布局位置；
+/// 布局上从底下收回同样的高，不空出一排。
+private struct NavigationBarRow: ViewModifier {
+    let active: Bool
+    let height: CGFloat
+    let tap: () -> Void
+    @Environment(\.statusBarBottom) private var statusBar
+    @State private var frame: CGRect = .zero
+
+    private static let back = ControlMetrics.height + 8
+
+    func body(content: Content) -> some View {
+        let row = max(0, frame.minY - statusBar)
+        let lift = active ? row - (row - height) / 2 : 0
+        content
+            .padding(.leading, active ? Self.back : 0)
+            .offset(y: -lift)
+            .padding(.bottom, -lift)
+            // 量在位移外面：位移里面量到的全局位置跟着位移变，量与挪成环
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .toolbar {
+                if active {
+                    // 导航栏中间那一格不会自己铺满：按这一排的宽给定宽度，系统把它摆在返回钮右边
+                    ToolbarItem(placement: .principal) {
+                        Color.clear.contentShape(.rect).onTapGesture(perform: tap)
+                            .frame(width: max(0, frame.width - Self.back), height: height)
                             .accessibilityHidden(true)
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
-        }
-        .accessibilityValue(status.reachesMac ? "" : SyncSummary(status).title)
+            }
     }
 }
 

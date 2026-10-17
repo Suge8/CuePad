@@ -14,6 +14,34 @@ import SwiftUI
 /// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
 /// 没启用。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
 extension DebugScene {
+    /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你记的与 Cue 记的，时间从刚刚到几个月前。
+    private static var demoMemory: [SeedCueLine] {
+        let hour: TimeInterval = 3600, day = 24 * hour
+        func ago(_ seconds: TimeInterval) -> Date { .now.addingTimeInterval(-seconds) }
+        return [
+            SeedCueLine("回复要短，先说结论", source: .you, pinned: true, createdAt: ago(80 * day)),
+            SeedCueLine("部署前先在测试群说一声，等有人回了再推；周五下午之后不发版，紧急修复除外", source: .you, pinned: true, createdAt: ago(40 * day)),
+            SeedCueLine("提交信息用中文，一个提交只做一件事", source: .you, pinned: true, createdAt: ago(9 * day)),
+            SeedCueLine(
+                "改界面之前先拍改前截图，深浅色各一张；做完拍改后的放在一起比，交给我看的时候发到手机上，不要只贴本机路径",
+                source: .cue, pinned: true, createdAt: ago(2 * day)),
+            SeedCueLine("圆桌的预发环境是 staging-2，正式环境要过 CI 才部署", source: .cue, createdAt: ago(60 * day)),
+            SeedCueLine("用户住在上海，晚上十一点以后别叫醒", source: .cue, createdAt: ago(33 * day)),
+            SeedCueLine("CuePad 的发布只在干净检出里跑 release，对外发布要先问", source: .cue, createdAt: ago(21 * day)),
+            SeedCueLine("喜欢先看原型截图再定方案", source: .cue, createdAt: ago(12 * day)),
+            SeedCueLine(
+                "登录回调的超时问题：等 token 刷新时没设超时，网络慢会一直挂着；改成 10 秒超时、超时后回登录页重新授权",
+                source: .cue, createdAt: ago(6 * day)),
+            SeedCueLine("atlas 会话用 Claude，别的用默认模型", source: .you, createdAt: ago(4 * day)),
+            SeedCueLine("周会是每周一上午十点", source: .cue, createdAt: ago(3 * day)),
+            SeedCueLine("乱序的根因在重连时重新入队，修复要保留首次加入的时间", source: .cue, createdAt: ago(day + 2 * hour)),
+            SeedCueLine("README 的截图换成 Swift 版", source: .you, createdAt: ago(20 * hour)),
+            SeedCueLine("导入旧数据会话上回卡在 schema 迁移，再开工前先看它的报错", source: .cue, createdAt: ago(5 * hour)),
+            SeedCueLine("测试只用替身，不向别的应用发键鼠事件", source: .cue, createdAt: ago(40 * 60)),
+            SeedCueLine("今天先把圆桌发了", source: .you, createdAt: ago(3 * 60)),
+        ]
+    }
+
     static func seedCue(_ services: AppServices) async {
         let store = services.store
         guard (try? await store.cueMessages(limit: 1).isEmpty) == true else { return }
@@ -36,7 +64,6 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            await seedEvidence(store, session: "deploy", title: "预发上的发言顺序")
             await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
@@ -87,6 +114,7 @@ extension DebugScene {
                 **和他之间没了结的**
                 - 推送到 origin/main 要先问他（会触发正式环境部署）。
                 """)
+            try await seedDeliveries(store)
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
@@ -106,9 +134,7 @@ extension DebugScene {
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, ask: .push, task: order?.id)
-            for (text, pinned) in [("部署前先在测试群说一声", true), ("回复要短，先说结论", true), ("圆桌的预发环境是 staging-2", false), ("周五不发版", false)] {
-                _ = try await store.noteCueLine(text, source: pinned ? .you : .cue, pinned: pinned)
-            }
+            try await store.seed(cueLines: demoMemory)
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）

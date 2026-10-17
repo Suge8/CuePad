@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import Foundation
 
@@ -97,9 +98,9 @@ extension CueBrainError: LocalizedError {
     }
 }
 
-/// 工具名去掉 CuePad 的 MCP 前缀（Pi 与 Claude Code 写成 `mcp__cuepad__task`）并小写（Claude Code 的 `Read`）。
+/// 工具名去掉 CuePad 的 MCP 前缀（`CueMCPServer.toolPrefix`）并小写（Claude Code 的 `Read`）。
 func brainToolName(_ name: String) -> String {
-    let prefix = "mcp__cuepad__"
+    let prefix = CueMCPServer.toolPrefix
     return (name.hasPrefix(prefix) ? String(name.dropFirst(prefix.count)) : name).lowercased()
 }
 

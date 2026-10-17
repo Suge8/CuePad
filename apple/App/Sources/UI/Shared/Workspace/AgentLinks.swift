@@ -63,7 +63,7 @@ struct AgentDot: View {
             #else
             PiStateDot(shown: shown, size: 7)
                 .relaySpot(session: item.state.sessionID)
-                .sessionLink(item.state.sessionID)
+                .sessionLink(item.state.sessionID, press: .control)
                 .help("交给了 Agent 会话「\(item.state.title)」：\(shown.presence)，点开看近况")
             #endif
         }

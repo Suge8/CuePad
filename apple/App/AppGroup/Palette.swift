@@ -61,7 +61,7 @@ struct Palette {
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
     /// 模态浮层下面压暗整窗的底（Mac 的 ⌘K、窗口内浮层）。
     var backdrop: Color { Color.black.opacity(dark ? 0.35 : 0.18) }
-    /// 浮起的东西的投影：悬停的卡片、提示横幅、抬起的纸、底部栏。
+    /// 浮起的东西的投影：悬停的卡片、提示横幅、抬起的纸。
     var shadow: Color { Color.black.opacity(dark ? 0.3 : 0.08) }
     /// 窗口内浮层的投影：比 `shadow` 重，浮层要从整窗里浮出来。
     var panelShadow: Color { Color.black.opacity(dark ? 0.45 : 0.18) }
@@ -95,21 +95,19 @@ struct Palette {
         case (true, true): Color(hex: 0x3F5AAE)
         }
     }
-    /// 选中的底：侧栏与列表的当前项、选中的胶囊、iPhone 底部栏选中的那一格；字保持墨色。
+    /// 选中的底：侧栏与列表的当前项、选中的胶囊；字保持墨色。
     var selection: Color { signature.opacity(highContrast ? 0.28 : (dark ? 0.2 : 0.12)) }
     /// 搜索命中的字垫的底：命中是在构造富文本时标的、拿不到外观，两种外观共用一份中等明度的靛青（浅纸上是淡蓝、暗纸上是暗蓝）。
     static let searchMatch = Color(hex: indigoMid).opacity(0.22)
     private static let indigoMid: UInt32 = 0x4A64B8
 
-    /// 靛青、胭脂、赭黄实底上的字与图标：暖白。
+    /// 靛青、胭脂实底上的字与图标：暖白。
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
     // MARK: 状态（只上状态图形与紧挨着的那个词，不给整段字上色）
 
     /// 等你确认：赭黄，全 App 只有等你用它（问号圆、"等你 N"、Cue 头像的环）；表达等你经 Waiting.swift。对比度 4.7，深色 6.9。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
-    /// 等你的角标底。字 6.0，深色 4.6。
-    var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。

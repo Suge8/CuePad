@@ -60,7 +60,7 @@ struct OlderList: View {
                         OlderRow(card: card, lastTarget: lastTarget[card.id])
                     }
                 }
-                .paper(radius: 12)
+                .rowPaper(radius: 12)
             }
         }
     }
@@ -71,16 +71,31 @@ struct OlderList: View {
     }
 }
 
+/// "更早"与"资料"里的一行：点开编辑页；指针停着时铺行的淡底、露出删除，批量选择里选上的是选中底（`RowStyle`）。
 struct OlderRow: View {
     let card: Card
     let lastTarget: String?
     @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button(action: open) { OlderRowLine(card: card, lastTarget: lastTarget) }
+            .buttonStyle(CardOpenStyle())
+            .cardPresence(card.id, in: workspace)
+            .environment(\.rowHoverPreset, DebugHooks.hovers(card.body))
+            .contextMenu { CardActions(card: card, selectable: true) }
+            .accessibilityElement(children: .combine)
+    }
+}
+
+/// 行的内容与底：选中读自卡片的批量选择（`cardSelected`，挂在按钮外面），所以在按钮里面单拆一层。
+private struct OlderRowLine: View {
+    let card: Card
+    let lastTarget: String?
+    @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
-    @State private var hovering = false
 
     var body: some View {
         let text = CardText(card.body)
-        Button(action: open) {
         HStack(spacing: 10) {
             RowGlyph(images: !text.images.isEmpty)
             Text(text.label)
@@ -89,21 +104,24 @@ struct OlderRow: View {
             Spacer(minLength: 12)
             AgentDot(card: card.id)
             if let lastTarget { SentMark(target: lastTarget) }
-            if hovering, !workspace.presses.isSelecting { DeleteCardButton(card: card.id).transition(.opacity) }
+            HoverDelete(card: card.id)
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, 12).frame(height: 38)
-        .background(hovering ? palette.fill : .clear)
-        .background { SelectedFill() }
         .contentShape(.rect)
-        }
-        .buttonStyle(CardOpenStyle())
-        .cardPresence(card.id, in: workspace)
-        .onHover { hovering = $0 }
-        .animation(Motion.quick, value: hovering)
-        .contextMenu { CardActions(card: card, selectable: true) }
-        .accessibilityElement(children: .combine)
+        .row(selected: selected, hovers: true)
+    }
+}
+
+/// 指针停在行上时露出的删除（批量选择时不出现）。
+private struct HoverDelete: View {
+    let card: UUID
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.rowHovered) private var hovered
+
+    var body: some View {
+        if hovered, !workspace.presses.isSelecting { DeleteCardButton(card: card).transition(.opacity) }
     }
 }
 
@@ -133,13 +151,4 @@ private struct RowGlyph: View {
     }
 }
 
-/// 选上的行垫一层选中色。
-private struct SelectedFill: View {
-    @Environment(\.cardSelected) private var selected
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if selected { palette.selection }
-    }
-}
 #endif

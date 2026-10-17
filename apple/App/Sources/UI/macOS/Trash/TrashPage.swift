@@ -61,11 +61,12 @@ struct TrashPage: View {
     private func group(_ title: String, @ViewBuilder rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
-            VStack(spacing: 0) { rows() }.paper(radius: 12)
+            VStack(spacing: 0) { rows() }.rowPaper(radius: 12)
         }
     }
 }
 
+/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），删除时间换成恢复与永久删除（右键菜单里也有）。
 private struct TrashRow<Icon: View>: View {
     let item: TrashItem
     let restore: () -> Void
@@ -73,7 +74,6 @@ private struct TrashRow<Icon: View>: View {
     @ViewBuilder let icon: Icon
     @Environment(\.palette) private var palette
     @State private var confirming = false
-    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -81,25 +81,11 @@ private struct TrashRow<Icon: View>: View {
             Text(item.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(item.detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
-            // 操作在悬停时出现（右键菜单里也有），平时只看得到删除时间
-            ZStack(alignment: .trailing) {
-                if let deletedAt = item.deletedAt {
-                    Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
-                        .opacity(hovering ? 0 : 1)
-                }
-                HStack(spacing: 6) {
-                    Button("恢复", action: restore).controlSize(.small)
-                    Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
-                }
-                .opacity(hovering ? 1 : 0)
-                .allowsHitTesting(hovering)
-            }
+            TrashRowEnd(deletedAt: item.deletedAt, restore: restore, confirm: { confirming = true })
         }
         .padding(.horizontal, 12).frame(minHeight: 40)
-        .background(hovering ? palette.fill : .clear)
-        .contentShape(.rect)
-        .onHover { hovering = $0 }
-        .animation(Motion.quick, value: hovering)
+        .row(hovers: true)
+        .environment(\.rowHoverPreset, DebugHooks.hovers(item.title))
         .contextMenu {
             Button("恢复", action: restore)
             Button("永久删除…", role: .destructive) { confirming = true }
@@ -107,6 +93,30 @@ private struct TrashRow<Icon: View>: View {
         .dialog("永久删除「\(item.title)」？", isPresented: $confirming, message: "此操作无法撤销。", buttons: [
             DialogButton(title: "永久删除", role: .destructive) { purge() }
         ])
+    }
+}
+
+/// 行尾：平时是删除时间，指针停在行上时换成两个操作。
+private struct TrashRowEnd: View {
+    let deletedAt: Date?
+    let restore: () -> Void
+    let confirm: () -> Void
+    @Environment(\.rowHovered) private var hovered
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            if let deletedAt {
+                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
+                    .opacity(hovered ? 0 : 1)
+            }
+            HStack(spacing: 6) {
+                Button("恢复", action: restore).controlSize(.small)
+                Button("永久删除…", action: confirm).controlSize(.small).foregroundStyle(palette.failure)
+            }
+            .opacity(hovered ? 1 : 0)
+            .allowsHitTesting(hovered)
+        }
     }
 }
 #endif

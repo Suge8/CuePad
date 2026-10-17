@@ -3,25 +3,6 @@ import CueStore
 import SwiftUI
 import UIKit
 
-/// 列表行的按下反馈：铺一层底色（整卡用共用的 `PressStyle(.card)`）。按下即出现，松开 160ms 淡去。
-struct RowPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        RowPress(configuration: configuration)
-    }
-
-    /// 一行的按下反馈：底亮一层（不缩放，一屏几十行缩放会让列表显得软），按下即亮、松开慢慢退。
-    private struct RowPress: View {
-        let configuration: Configuration
-        @Environment(\.palette) private var palette
-
-        var body: some View {
-            configuration.label
-                .background { configuration.isPressed ? palette.fill : .clear }
-                .animation(configuration.isPressed ? nil : Motion.quick, value: configuration.isPressed)
-        }
-    }
-}
-
 extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }

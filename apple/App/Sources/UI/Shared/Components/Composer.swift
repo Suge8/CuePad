@@ -189,6 +189,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
         .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
+        .rowContainer(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded, ink: composerInk)
         .frame(maxWidth: .infinity)
     }

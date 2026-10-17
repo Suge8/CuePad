@@ -86,7 +86,7 @@ struct CardTile: View {
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .onAppear {
-            guard DebugHooks.hovers(card) else { return }
+            guard DebugHooks.hovers(card.body) else { return }
             hovering = true
             workspace.presses.hover(card.id, inside: true)
         }

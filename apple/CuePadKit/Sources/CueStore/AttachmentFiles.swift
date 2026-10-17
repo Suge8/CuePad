@@ -50,6 +50,24 @@ public struct AttachmentFiles: Sendable {
     return FileManager.default.fileExists(atPath: url.path) ? url : nil
   }
 
+  /// 按文件名放的一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）：附件目录里的文件以哈希为名、没有扩展名，
+  /// 系统的快速查看、"存到文件"与 Agent 的读文件工具都按扩展名认类型。文件不在本机返回 nil。
+  public func named(_ hash: String, as name: String) -> URL? {
+    guard let original = fileURL(for: hash) else { return nil }
+    let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+      .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
+    // 文件名来自同步的记录：不能带路径
+    let target = directory.appending(path: name.replacing("/", with: "_").replacing("..", with: "_"))
+    guard !FileManager.default.fileExists(atPath: target.path) else { return target }
+    do {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try FileManager.default.copyItem(at: original, to: target)
+      return target
+    } catch {
+      return nil
+    }
+  }
+
   /// 原图字节。哈希格式不合法或文件不存在都是 notFound（不会越出附件目录）。
   public func original(hash: String) throws -> Data {
     guard let url = fileURL(for: hash), let data = try? Data(contentsOf: url) else { throw CueStoreError.notFound }

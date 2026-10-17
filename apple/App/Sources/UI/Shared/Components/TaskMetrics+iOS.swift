@@ -22,6 +22,5 @@ enum TaskMetrics {
     /// 圈那一列（也是它的点按区）多宽、与标题隔多少；行没有左右内边距（纸自己留了）。
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
-    static let rowInset: CGFloat = 0
 }
 #endif

@@ -47,7 +47,6 @@ struct NewTaskField: View {
                 .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? CaptureCopy.unfiled)")
             }
         }
-        .padding(.horizontal, TaskMetrics.rowInset)
         .frame(minHeight: TaskMetrics.rowHeight)
         .onAppear { focused = autofocus }
     }

@@ -18,7 +18,7 @@ nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
     case idea, task, session, search, settings, unfiled, archive, trash, sidebar
-    case agent, allSessions, all, filter, extensionNote
+    case agent, allSessions, allProjects, all, filter, extensionNote
     // 状态
     case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, resting, fresh, ended, interrupted, unknown
     case done, donePending, picked
@@ -40,6 +40,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case profile, name, autoApprove, hotkey, talkToCue, appearance, testConnection, updates
     // 文件预览的类型
     case web, markdown, video, audio, pdf, document, spreadsheet, presentation, model, plainText
+    /// 交付物：还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
+    case downloading, play, file, inspect3D
     /// 项目存的图标名（系统符号名，`ProjectGlyph` 定能认哪些）。
     case project(String)
 
@@ -116,6 +118,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .outdent: .system("decrease.indent")
         case .link: .system("link")
         case .unlink: .system("link.badge.minus")
+        case .allProjects: .system("square.grid.2x2")
         case .folder: .system("folder")
         case .newProject: .system("folder.badge.plus")
         case .unbindFolder: .system("folder.badge.minus")
@@ -194,6 +197,10 @@ nonisolated enum Icon: Hashable, Sendable {
         case .spreadsheet: .system("tablecells")
         case .model: .system("cube")
         case .plainText: .system("doc.plaintext")
+        case .downloading: .system("icloud.and.arrow.down")
+        case .play: .system("play.fill")
+        case .file: .system("doc")
+        case .inspect3D: .system("rotate.3d")
         case .project(let name): .system(name)
         }
     }
@@ -296,7 +303,7 @@ struct IconImage: View {
     }
 }
 
-/// Cue 的标签图标（iPhone 底栏、iPad 侧栏与面板钮）：表情跟着 `CueMood`（`Icon.cue(_:)`），被叫醒、做完时软糖地弹一下、在最低点换表情（`Jelly`）。
+/// Cue 的标签图标（iPad 工具栏的 Cue 面板钮）：表情跟着 `CueMood`（`Icon.cue(_:)`），被叫醒、做完时软糖地弹一下、在最低点换表情（`Jelly`）。
 /// 点睛（折角）：有等你时赭黄；选中、话在路上或在做事时靛青。
 struct CueMark: View {
     var selected = false

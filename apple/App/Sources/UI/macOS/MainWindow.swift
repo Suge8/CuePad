@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页（侧栏点项目、Agent、会话，任务与灵感都在内容区整页切换；没有返回、前进与往上一层，
+/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、会话、项目，都在内容区整页切换，侧栏的"任务"开合任务面板；没有返回、前进与往上一层，
 /// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
@@ -60,7 +60,6 @@ struct MainWindow: View {
             Button("搜索", icon: .search) { workspace.searching.toggle() }
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
-            TasksButton().disabled(!workspace.isLibraryReady)
         }
         ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
             .sharedBackgroundVisibility(.hidden)
@@ -339,29 +338,6 @@ private struct SyncAlert: View {
             .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
             .accessibilityLabel(summary.title)
         }
-    }
-}
-
-/// 工具栏右上角：未完成任务数。Pi 的状态只在侧栏 Pi 区与项目页 Pi 栏出现，不挂在任务计数旁（会被读成任务出了问题）。
-private struct TasksButton: View {
-    @Environment(Workspace.self) private var workspace
-
-    /// 读项目目录里的数（`CueStore.taskCounts`，与别处同一个数，不另订阅再读）。
-    private var openCount: Int { workspace.catalog?.openTasks.values.reduce(0, +) ?? 0 }
-
-    var body: some View {
-        Button {
-            workspace.showsTasks.toggle()
-        } label: {
-            HStack(spacing: 6) {
-                Image(.task)
-                // 数字的位置从工具栏项建好起就留着（两位数的宽）：数字比工具栏项晚到时，AppKit 不会按后来加出的内容重新量它的宽，数字就画不出来
-                Text("00").hidden().overlay(alignment: .leading) { Text("\(openCount)").opacity(openCount > 0 ? 1 : 0) }
-                    .monospacedDigit()
-            }
-        }
-        .help("任务")
-        .accessibilityLabel("任务，\(openCount) 条未完成")
     }
 }
 

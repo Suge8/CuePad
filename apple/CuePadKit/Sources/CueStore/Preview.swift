@@ -125,6 +125,11 @@ extension PiPreview: Record {
   }
 }
 
+extension AttachmentFiles {
+  /// 一份预览在本机按原文件名放的那份（界面交给快速查看、Cue 的读文件工具用的都是它）；还没同步到本机为 nil。
+  public func url(of preview: PiPreview) -> URL? { named(preview.hash, as: preview.systemFileName) }
+}
+
 /// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
 public struct PiPreviewAdded: Equatable, Sendable {
   public var preview: PiPreview
@@ -184,8 +189,10 @@ extension CueStore {
 
 extension PiPreviewAdded {
   /// 页面里 `<link href>`（样式、图标）与 `<script|img|source|video|audio|iframe src>` 指向的不是 data:、blob:、页内锚点的地址，按出现的先后、去重。
+  /// 先去掉内联脚本的正文：脚本里拼出来的标签（`'<img src="' + x + '">'`）不是页面引用的文件。
   static func outsideReferences(inHTMLAt url: URL) -> [String] {
-    guard let html = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+    guard let source = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+    let html = source.replacing(scriptBody) { String($0.output.1) + "</script>" }
     var seen: [String] = []
     for match in reference.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
       guard let range = Range(match.range(at: 2), in: html) else { continue }
@@ -196,6 +203,8 @@ extension PiPreviewAdded {
     }
     return seen
   }
+
+  private static var scriptBody: Regex<(Substring, Substring)> { /(?is)(<script\b[^>]*>).*?<\/script\s*>/ }
 
   private static let reference = try! NSRegularExpression(
     pattern: #"<(?:link\b[^>]*?\bhref|(?:script|img|source|video|audio|iframe)\b[^>]*?\bsrc)\s*=\s*(["'])(.*?)\1"#, options: [.caseInsensitive])

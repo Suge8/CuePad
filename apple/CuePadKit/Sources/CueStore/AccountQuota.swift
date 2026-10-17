@@ -102,9 +102,6 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
 
   public func isStale(at now: Date) -> Bool { now.timeIntervalSince(modifiedAt) > Self.staleAfter }
 
-  /// 整个账号的窗口（不含按模型的），从短到长：仪表的外圈到内圈。
-  public var accountWindows: [QuotaWindow] { windows.filter { $0.model == nil } }
-
   /// 卡着的窗口：提供方说了是哪个（`QuotaWindow.isBinding`，Claude）且还没过重置时间就是它；没说（Codex、用量接口刚替换过）
   /// 或它已重置时，是此刻用得最多的那个。`model` 给了时按模型的周额度也参与比较（只算名字出现在模型 id 或名字里的，如 Fable 之于 claude-fable-5）。
   public func binding(at now: Date, model: String? = nil) -> QuotaWindow? {
@@ -134,7 +131,7 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
 
   /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。这次观测没说哪个卡着（用量接口、Codex）时，沿用已存的那个说法：
   /// 提供方的判定只来自 Claude 的响应头，下一次回复会更新它。
-  /// 同一个窗口报了几次的只留第一次：存下的窗口一个窗口一条（界面按窗口认圈与明细的行）。
+  /// 同一个窗口报了几次的只留第一次：存下的窗口一个窗口一条（界面按窗口认总览的行）。
   func merged(into stored: [QuotaWindow]) -> [QuotaWindow] {
     var reported: [QuotaWindow] = []
     for window in windows where !reported.contains(where: { $0.id == window.id }) { reported.append(window) }

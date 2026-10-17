@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、底栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
+/// 一个窗口里 Cue 的现状和 Cue 页的输入草稿：侧栏、菜单栏面板与 Cue 页都读这一份，不各自订阅。
 /// 事实只有库里那一页摘要（`CueDigest`）与此刻（`SpeechClock`）；这里按读的人要的粒度把它拆成一项项存下，每项只在变了时才写——
 /// Observation 按存储属性追踪，存整份摘要时任何一项变（在想→用工具、等你数、最近一句……），读名字的每一行会话（`Workspace.cueOnDuty`）、
 /// 书架与侧栏都要跟着重算。

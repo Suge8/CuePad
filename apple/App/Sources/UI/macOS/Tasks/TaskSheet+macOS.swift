@@ -97,12 +97,14 @@ struct TaskSheet: View {
                     ForEach(data.steps) { StepRow(step: $0, selected: $0.id == selected) }
                     NewTaskField(project: data.goal.projectID, parent: data.goal.id)
                 }
+                // 步骤行的底向两边让出一截，落在栏的边距里
+                .padding(.horizontal, RowMetrics.bleed)
                 .padding(.top, 14)
             }
             .padding(.horizontal, 12).padding(.vertical, 18)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(palette.sidebar)
+        .background(palette.sidebar, in: .rect)
     }
 
     private var closeButton: some View {
@@ -115,6 +117,7 @@ struct TaskSheet: View {
 }
 
 /// 左栏的一个步骤：圈（完成它，它的会话也结束）、名字（选中时就地可改）、会话在动或在等你时一个状态点；点行在右边看这一步。
+/// 选中的是行的选中底，指针停着铺行的淡底（`RowStyle`）。
 private struct StepRow: View {
     let step: Card
     let selected: Bool
@@ -122,7 +125,6 @@ private struct StepRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
-    @State private var hovering = false
     @State private var check = TaskCheck()
 
     var body: some View {
@@ -142,10 +144,10 @@ private struct StepRow: View {
             if case .agent(let shown, let session) = next { PiStateDot(shown: shown, size: 6).relaySpot(session: session.sessionID) }
         }
         .animation(Motion.quick, value: done)
-        .padding(.horizontal, TaskMetrics.rowInset).frame(minHeight: 32)
-        .background(selected ? palette.paperLit : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
+        .frame(minHeight: 32)
         .contentShape(.rect)
-        .onHover { hovering = $0 }
+        .row(selected: selected, hovers: true)
+        .environment(\.rowHoverPreset, DebugHooks.hovers(step.body))
         .onTapGesture(perform: select)
         .contextMenu { CardActions(card: step, leaf: true) }
     }
