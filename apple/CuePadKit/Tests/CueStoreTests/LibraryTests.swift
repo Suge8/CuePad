@@ -133,7 +133,7 @@ import Testing
     try RawDB(fixture.url).exec(
       """
       ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
-      DROP INDEX piSessionStates_folder; DROP INDEX piMessages_sessionID_at; DROP INDEX piSessions_agent; PRAGMA user_version = 50;
+      DROP INDEX piSessionStates_folder; DROP INDEX piMessages_sessionID_at; DROP INDEX piSessions_agent; DROP INDEX cueMessages_open; PRAGMA user_version = 50;
       """)
 
     let upgraded = try CueStore(url: fixture.url)

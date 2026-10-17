@@ -60,8 +60,8 @@ enum Schema {
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
-    // 55：启动与每次会话变化都要读的几处聚合走覆盖索引，不再整表读带长文的行（见 `create` 里各自的注释）
-    "\(folderIndex) \(transcriptAgeIndex) \(agentIndex)",
+    // 55：启动与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（见 `create` 里各自的注释）
+    "\(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
   ]
 
   /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，
@@ -74,6 +74,8 @@ enum Schema {
   private static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式要与查询里的一字不差。
   private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(COALESCE(agent, 'pi'));"
+  /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
+  private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
@@ -238,6 +240,7 @@ enum Schema {
       notify TEXT, tools TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
+    \(openQuestionIndex)
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
