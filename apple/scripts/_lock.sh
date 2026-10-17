@@ -7,7 +7,7 @@
 # 3. iOS 的测试、截图、录屏从固定的 SIM_POOL 台模拟器里领一台（每台一把锁，见 _sim.sh），全占着就等空出一台。
 # 锁都是 flock，持有进程退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<模拟器号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着。
-# 用法：脚本开头 xc_enter <plain|sim|exclusive> "$0" "$@"；exclusive 是性能测量（用 0 号模拟器）。
+# 用法：xc_enter <plain|sim|exclusive> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）；exclusive 是交互的性能测量（用 0 号模拟器）。
 
 SIM_POOL=3
 HOLD_LIMIT=1800

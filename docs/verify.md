@@ -64,7 +64,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 测量只有两个入口，都是 Release 构建（带 DEBUG 条件留下测量代码，产物在 `apple/.derived-perf`）、每次全新进程、多次取中位，前后对比就是两个检出各跑同一条命令：
 
 - 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，构建完只在测量那段独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
-- 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] -- …`，从进程外读内核记账，`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh` 头注释）。
+- 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] [启动参数…]`，从进程外读内核记账，不独占机器：前后对比看指令与唤醒，CPU 毫秒、能耗、启动到就绪受调度影响只作参考；`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh`、`rusage.py` 头注释）。
 
 方法与坑：
 
@@ -72,7 +72,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
-- Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 -- …`；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
+- Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 …`；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
 - `Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。
 - 会话页与 Cue 页滚动（Mac，可不碰指针、不抢焦点）：`-CuePadBench chatscroll`，跑法、指标与屏幕外量不到的部分见 `DebugScene+LongChat.swift` 里 `ChatScrollBench` 的注释。
@@ -100,4 +100,4 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 `Diagnostics` 把 MetricKit 交来的诊断存在资料库目录下（隔离库不订阅）。真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来（摘要未符号化，靠 dSYM 还原：每次发布的归档按构建号存在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`）。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）。
 
-先在模拟器里复现：`xc.sh shot`/`rec` 报"截图前 App 退出了"就是崩了，报告带源码行，在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来（见 `DebugScene+LongChat.swift`）；真实数据用只读副本，改会话状态复现当时的样子。
+先在模拟器里复现：`xc.sh shot`/`rec` 报"App 在画面就绪前退出了"就是崩了，报告带源码行，在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来（见 `DebugScene+LongChat.swift`）；真实数据用只读副本，改会话状态复现当时的样子。

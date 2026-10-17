@@ -29,34 +29,28 @@ rows="$derived/idle.jsonl"
 for run in $(seq "$runs"); do
   library="$derived/library-idle" ready="$derived/idle-ready"
   rm -rf "$library" "$ready"
-  helpers=()
   library_args=(-CuePadDemo YES)
   if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); else mkdir -p "$library"; fi
+  launch=(${library_args[@]+"${library_args[@]}"} ${args[@]+"${args[@]}"})
+  hooks=()
   if [ "$platform" = mac ]; then
     # app.py exec 占住本检出那一份 Mac 实例后 exec 成 CuePad：$! 就是 CuePad
-    CUEPAD_SHOT_READY="$ready" python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "${library_args[@]}" ${args[@]+"${args[@]}"} >/dev/null 2>&1 &
+    CUEPAD_SHOT_READY="$ready" python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- ${launch[@]+"${launch[@]}"} >/dev/null 2>&1 &
     pid=$!
     stop() { kill -TERM "$pid"; wait "$pid" || true; }
   else
     pid="$(SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" SIMCTL_CHILD_CUEPAD_SHOT_READY="$ready" \
-      xcrun simctl launch "$udid" "$BUNDLE_ID" "${library_args[@]}" ${args[@]+"${args[@]}"} | sed 's/.*: //')"
+      xcrun simctl launch "$udid" "$BUNDLE_ID" ${launch[@]+"${launch[@]}"} | sed 's/.*: //')"
     stop() { xcrun simctl terminate "$udid" "$BUNDLE_ID" || true; }
-    if [ -n "${CUEPAD_IDLE_BACKGROUND:-}" ]; then
-      ( while [ ! -f "$ready" ]; do sleep 0.1; done; xcrun simctl launch "$udid" com.apple.Preferences >/dev/null ) &
-      helpers+=($!)
-    fi
+    if [ -n "${CUEPAD_IDLE_BACKGROUND:-}" ]; then hooks+=(--on-ready "xcrun simctl launch $udid com.apple.Preferences"); fi
   fi
   if [ -n "${CUEPAD_TRACE:-}" ]; then
     trace="/tmp/cuepad-perf/idle-$platform-$run.trace"
     rm -rf "$trace"
-    device=(); [ "$platform" = mac ] || device=(--device "$udid")
-    ( while [ ! -f "$ready" ]; do sleep 0.1; done; sleep "$settle"
-      xcrun xctrace record --template "$CUEPAD_TRACE" ${device[@]+"${device[@]}"} --attach "$pid" --time-limit "${seconds}s" --output "$trace" >/dev/null 2>&1 ) &
-    helpers+=($!)
+    device=""; [ "$platform" = mac ] || device="--device $udid"
+    hooks+=(--during "xcrun xctrace record --template $(printf %q "$CUEPAD_TRACE") $device --attach $pid --time-limit ${seconds}s --output $(printf %q "$trace")")
   fi
-  python3 "$APPLE_DIR/scripts/rusage.py" "$pid" "$ready" "$settle" "$seconds" >>"$rows" || { stop; exit 1; }
-  # trace 写完（xctrace 到时限后还要收尾）再结束 App
-  for helper in ${helpers[@]+"${helpers[@]}"}; do wait "$helper" || true; done
+  python3 "$APPLE_DIR/scripts/rusage.py" "$pid" "$ready" "$settle" "$seconds" ${hooks[@]+"${hooks[@]}"} >>"$rows" || { stop; exit 1; }
   stop
 done
 rm -rf "$derived/library-idle"

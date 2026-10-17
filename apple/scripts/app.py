@@ -5,6 +5,7 @@
       app.py stop                                       结束本检出 run 起的 Mac 实例
       app.py sockets                                    本检出实例的连接目录（终端里的会话 export CUEPAD_PI_SOCKET_DIR 为它才连得上）
       app.py preflight                                  Mac 截图、录屏前查台前调度
+另有 wait_ready（kqueue 等就绪文件）给 rusage.py 用。
 规则：
 1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或本检出的 SOCKETS 下
    （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin 与 ~/Applications/CuePad.app。
@@ -48,9 +49,17 @@ def die(message):
     sys.exit(1)
 
 
+REAL_LIBRARY = os.path.expanduser("~/Library/Application Support/CuePad")
+
+
 def isolated_env(library, sockets=SOCKETS):
+    library = os.path.realpath(library)
+    if library == REAL_LIBRARY or library.startswith(REAL_LIBRARY + "/"):
+        die(f"{library} 是真实资料库：本机构建一打开就升级结构、改写并同步出去。用只读副本（docs/verify.md「真实数据复现」）")
     agents = f"{library}/agents"
-    return dict(os.environ, CUEPAD_LIBRARY_DIR=library, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_PI_SOCKET_DIR=sockets,
+    # 锁与测量构建的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
+    inherited = {k: v for k, v in os.environ.items() if k not in ("CUEPAD_SIM", "CUEPAD_PERF_BUILD")}
+    return dict(inherited, CUEPAD_LIBRARY_DIR=library, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_PI_SOCKET_DIR=sockets,
                 PI_CODING_AGENT_DIR=f"{agents}/pi", CLAUDE_CONFIG_DIR=f"{agents}/claude",
                 CODEX_HOME=f"{agents}/codex", OPENCODE_CONFIG_DIR=f"{agents}/opencode")
 
@@ -145,11 +154,17 @@ def take_slot():
         return slot
     except BlockingIOError:
         pass
-    note = read_note(slot)
+    note = read_note(slot)  # 锁被占着，记录就是占着的那个写的
     if holder_alive(note):
         os.kill(note["holder"], signal.SIGTERM)
     fcntl.flock(slot, fcntl.LOCK_EX)
     return slot
+
+
+def write_note(slot, **note):
+    slot.truncate(0)
+    slot.write(json.dumps(note))
+    slot.flush()
 
 
 class Mac:
@@ -173,9 +188,7 @@ class Mac:
             os.remove(self.ready)
         self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
-        self.slot.truncate(0)
-        self.slot.write(json.dumps({"holder": os.getpid(), "app": self.proc.pid, "what": self.what}))
-        self.slot.flush()
+        write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
         return wait_ready(self.ready, self.proc.pid, self.log)
 
     def quit(self):
@@ -239,9 +252,9 @@ def exec_mac(app, library, args):
     if not BUILD.fullmatch(app):
         die(f"只起 apple/.derived* 里的构建，不起 {app}")
     slot = take_slot()
-    slot.truncate(0)
-    slot.write(json.dumps({"holder": os.getpid(), "app": os.getpid(), "what": "bench"}))
-    slot.flush()
+    # execAt：rusage.py 的"启动到就绪"从这里算，不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
+    # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
+    write_note(slot, holder=os.getpid(), app=os.getpid(), what="bench", execAt=time.monotonic_ns())
     os.set_inheritable(slot.fileno(), True)
     os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
     exe = f"{app}/Contents/MacOS/CuePad"
@@ -251,9 +264,15 @@ def exec_mac(app, library, args):
 def stop():
     os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     with open(SLOT, "a+") as slot:
+        try:
+            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)  # 拿得到就是没有实例，留下的记录是旧的
+            print("本检出没有在跑的 Mac 实例")
+            return
+        except BlockingIOError:
+            pass
         note = read_note(slot)
         if not holder_alive(note):
-            print("本检出没有 run 起的 Mac 实例")
+            print("本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完")
             return
         os.kill(note["holder"], signal.SIGTERM)
         fcntl.flock(slot, fcntl.LOCK_EX)  # 看守收完实例才放锁
@@ -302,6 +321,7 @@ def sim(cmd, device, app, library, out, args):
     simctl("status_bar", device, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
            "--cellularMode", "active", "--cellularBars", "4", "--wifiBars", "3")
     signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))
+    rec = None
     try:
         if cmd == "rec" and os.environ.get("CUEPAD_REC_LAUNCH"):
             rec = recorder(device, out)  # 冷启动：先开录再起 App，录满秒数、不等就绪
@@ -314,11 +334,15 @@ def sim(cmd, device, app, library, out, args):
                 print(pid, device)
                 return
             if cmd == "rec":
-                stop_recording(recorder(device, out))
+                rec = recorder(device, out)
+                stop_recording(rec)
             else:
                 simctl("io", device, "screenshot", out, capture_output=True)
         print(out)
     finally:
+        if rec and rec.poll() is None:
+            rec.send_signal(signal.SIGINT)
+            rec.wait()
         if cmd != "run":
             subprocess.run(["xcrun", "simctl", "terminate", device, BUNDLE_ID], capture_output=True)
 

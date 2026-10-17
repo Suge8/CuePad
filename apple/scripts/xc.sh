@@ -157,5 +157,6 @@ case "$cmd" in
     CUEPAD_PERF_BUILD=1 "$0" build "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
     mode=exclusive
     if [ "$perf_script" = perf-idle.sh ]; then if [ "$platform" = ios ]; then mode=sim; else mode=plain; fi; fi
-    xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;
+    xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
+    exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;  # 已在锁里（脚本调脚本）时 xc_enter 直接返回
 esac
