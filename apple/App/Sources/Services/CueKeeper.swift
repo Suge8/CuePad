@@ -79,7 +79,7 @@ nonisolated struct CueTiming: Sendable {
 @Observable
 final class CueKeeper {
     /// 上下文用到这么多 token 就请 Cue 换新。
-    nonisolated static let renewAt = 60_000
+    nonisolated static let renewAt = CueContext.renewAt
     nonisolated static let patrolsPerDay = 3
     /// 运行情况里留最近这么多轮
     nonisolated static let roundsKept = 50
@@ -138,8 +138,8 @@ final class CueKeeper {
         var resumed = false
         let startedAt = Date.now
         var turn: Turn?
-        /// 最近一次模型请求的上下文用量与窗口（token）
-        var context: (used: Int, window: Int?)?
+        /// 最近一次模型请求的上下文用量与窗口（token）：随状态写进库（`CueState.context`），各端读那一份
+        var context: CueContext?
         /// 这个班次里请过合并的块（同一块只请一次）
         var mergesTried: Set<[Int]> = []
         /// 起好之前连续失败的次数：一轮做完清零
@@ -237,7 +237,7 @@ final class CueKeeper {
     /// 最近的几轮，旧的在前，在跑的一轮在最后。
     var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
     /// 此刻班次的上下文用量与窗口；没在值班或这个班次还没请求过模型为 nil。
-    var context: (used: Int, window: Int?)? { shift?.context }
+    var context: (used: Int, window: Int?)? { shift?.context.map { ($0.used, $0.window) } }
     /// 此刻班次从什么时候起。
     var shiftStartedAt: Date? { shift?.startedAt }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
@@ -273,6 +273,7 @@ final class CueKeeper {
         do {
             let work = work
             try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke)
+            if let context = shift?.context { try await setup.store.setCueContext(context) }
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -423,7 +424,7 @@ final class CueKeeper {
             updateShift { $0.turn?.speaking = draft }
             speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used, let window):
-            updateShift { $0.context = (used, window ?? $0.context?.window) }
+            updateShift { $0.context = CueContext(used: used, window: window ?? $0.context?.window, since: $0.startedAt) }
         case .tool(let id, let name, let arguments):
             updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, startedAt: .now)) }
             await recordRound()
