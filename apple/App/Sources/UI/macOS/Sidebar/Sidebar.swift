@@ -1,5 +1,4 @@
 #if os(macOS)
-import CuePi
 import CueStore
 import SwiftUI
 
@@ -390,7 +389,6 @@ private struct PiSection: View {
         let agents = services.agents
         let detected = AgentKind.allCases.contains { agents.status($0) != nil }
         let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
-        let live = services.pi.sessions
         let work = workspace.liveWork, rows = work.rows
         let total = services.liveSessions.total
         if detected || total > 0 {
@@ -402,7 +400,7 @@ private struct PiSection: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isHeader)
                 // 没接入：本机的会话看不到，在这一区里接入，别的 Mac 上在线的照样列在下面
-                if detected, !connected, live.isEmpty {
+                if detected, !connected, services.pi.slots.isEmpty {
                     AgentConnectCard().padding(.horizontal, SidebarMetrics.edge)
                 } else if rows.isEmpty {
                     // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
@@ -416,7 +414,7 @@ private struct PiSection: View {
                 if !rows.isEmpty {
                     SidebarScroll {
                         LiveSessionList(sessions: rows, spacing: SidebarMetrics.rowGap) {
-                            sessionRow($0, live: live)
+                            sessionRow($0)
                         } fold: { count, expanded in
                             PiReloadFold(count: count, expanded: expanded, style: SidebarMetrics.session)
                                 .padding(.leading, SidebarMetrics.dotInset)
@@ -430,8 +428,8 @@ private struct PiSection: View {
         }
     }
 
-    private func sessionRow(_ session: PiSessionState, live: [CuePi.PiSession]) -> some View {
-        let bridge = live.first { $0.sessionID == session.sessionID }, sessions = services.liveSessions
+    private func sessionRow(_ session: PiSessionState) -> some View {
+        let sessions = services.liveSessions
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
             rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
@@ -439,11 +437,25 @@ private struct PiSection: View {
             .padding(.leading, SidebarMetrics.dotInset)
             .frame(height: Spacing.sidebarProjectRow)
             .sessionLink(session.sessionID)
+            .modifier(SessionRowMenu(session: session) { renaming = session })
+    }
+}
+
+/// 侧栏会话行的悬停原文与右键菜单。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：整个 Agent 区读全部会话的话，任一会话一变整区重算。
+private struct SessionRowMenu: ViewModifier {
+    let session: PiSessionState
+    let rename: () -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    func body(content: Content) -> some View {
+        let bridge = services.pi.session(sessionID: session.sessionID)
+        content
             .help(bridge?.errorMessage ?? "")
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", icon: .rename) { renaming = session }
+                    Button("重命名…", icon: .rename, action: rename)
                 }
                 if let bridge, bridge.canJump {
                     Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }

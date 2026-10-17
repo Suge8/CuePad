@@ -46,8 +46,8 @@ final class SendState {
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async throws {
         var result: [String: UUID] = [:]
-        for session in services.pi.sessions {
-            if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
+        for slot in services.pi.slots {
+            if let project = try await services.store.project(containing: slot.cwd) { result[slot.id] = project.id }
         }
         projects = result
     }
