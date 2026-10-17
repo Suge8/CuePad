@@ -200,8 +200,8 @@ struct Check {
 }
 
 /// 真的 Claude Code 当 Cue 的大脑。`launch` 写一个起 claude 的外壳：配置目录与 HOME 在临时目录（不碰 ~/.claude），
-/// 订阅令牌由跑评测的人经 `CUEPAD_CUE_EVAL_TOKEN` 给（`claude setup-token` 生成），外壳把它换成 `CLAUDE_CODE_OAUTH_TOKEN`，
-/// 只进 claude 的环境、不落盘，也不碰 ~/.pi 与 ~/.claude；继承来的 ANTHROPIC_* 清掉，不会走到别的提供方；XDG_* 也清掉，Claude Code 的缓存与状态只落在临时 HOME 下。
+/// 登录用本机 Claude Code 自己的（`ClaudeLogin`），外壳起 claude 时现取、只进它的环境；继承来的 ANTHROPIC_* 清掉，不会走到别的提供方；
+/// XDG_* 也清掉，Claude Code 的缓存与状态只落在临时 HOME 下。
 struct ClaudeCue {
     let model: String
     let effort: PiThinkingLevel
@@ -216,13 +216,12 @@ struct ClaudeCue {
         let config = root.appending(path: "claude-config"), home = root.appending(path: "home")
         for directory in [config, home] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try Data(#"{"hasCompletedOnboarding":true}"#.utf8).write(to: config.appending(path: ".claude.json"))
-        _ = try #require(environment["CUEPAD_CUE_EVAL_TOKEN"], "TEST_RUNNER_CUEPAD_CUE_EVAL_TOKEN 给 Claude 订阅令牌（claude setup-token）")
+        _ = try #require(ClaudeLogin.token, "这台 Mac 上的 Claude Code 没登录")
         let script = root.appending(path: "claude")
         try #"""
             #!/bin/sh
             for name in $(env | sed -nE 's/^((ANTHROPIC|XDG)_[A-Za-z0-9_]*)=.*/\1/p'); do unset "$name"; done
-            CLAUDE_CODE_OAUTH_TOKEN=$CUEPAD_CUE_EVAL_TOKEN
-            unset CUEPAD_CUE_EVAL_TOKEN
+            CLAUDE_CODE_OAUTH_TOKEN=$(\#(ClaudeLogin.tokenCommand)) || exit 1
             export CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='\#(config.path)' HOME='\#(home.path)' DISABLE_AUTOUPDATER=1
             exec '\#(claude.path)' "$@"
             """#.write(to: script, atomically: true, encoding: .utf8)
