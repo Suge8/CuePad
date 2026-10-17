@@ -3,6 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 菜单栏面板：最上面一行 Cue（点它在主窗口里打开 Cue 页；右边"交给 Cue"把这次随手记直接说给 Cue），再是订阅额度的总览（`QuotaStrip`，没有额度记录时没有；面板弹出时数据陈旧就查一次，见 `AppDelegate`）+ 在做的会话（区头"在做"与一共几个会话、几个子代理在跑，`LiveWorkCount`；`LiveSessionList`，与侧栏 Agent 区、手机 Cue 页头的面板同一列，先列 4 个、多的在列末就地展开；点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
+/// 面板最高到屏幕可用的高（`MenuBarPanel`），放不下时"在做"那一块在里面滚，其余几块始终整块可见。
 /// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。资料库读到之前没有输入框；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
     /// 在主窗口里打开一页（会话、Cue 页）。
@@ -31,9 +32,13 @@ struct MenuBarPad: View {
                         LiveWorkCount(work: work)
                     }
                     .accessibilityElement(children: .combine)
-                    sessions(work.rows)
+                    HugHeight {
+                        ScrollView { sessions(work.rows) }.scrollBounceBehavior(.basedOnSize)
+                    }
                 }
                 .modifier(Block())
+                // 屏幕矮、面板放不下时只有这一块让出高度（在里面滚）：Cue 行、额度与随手记始终整块可见
+                .layoutPriority(-1)
             }
             if workspace.isLibraryReady {
                 CaptureComposer(state: $capture, defaultProject: services.settings.currentProject, pinnedOpen: true)

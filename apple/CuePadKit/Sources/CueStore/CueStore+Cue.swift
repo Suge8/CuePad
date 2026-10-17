@@ -376,35 +376,22 @@ extension CueStore {
     }
   }
 
-  /// 值班的 Mac 写下 Cue 此刻在做什么；和库里一样就不写（不触发同步）。
-  public func setCueState(_ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil) throws {
+  /// 值班的 Mac 写下 Cue 此刻的样子（在做什么、这个班次的上下文），整行一次写；和库里一样就不写（不触发同步）。不在值班写歇着、没有上下文。
+  public func setCueState(
+    _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil
+  ) throws {
     try write {
-      let current = try cueState()
-      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, context: current?.context, modifiedAt: Date.stamp)
-      if let current, (current.state, current.detail, current.round, current.woke) == (next.state, next.detail, next.round, next.woke) {
+      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, context: context, modifiedAt: Date.stamp)
+      if let current = try cueState(),
+        (current.state, current.detail, current.round, current.woke, current.context) == (next.state, next.detail, next.round, next.woke, next.context)
+      {
         return
       }
       try db.run(
         """
         INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
-          woke = excluded.woke
-        """, next.bindings)
-    }
-  }
-
-  /// 值班的 Mac 写下 Cue 此刻的上下文（一轮做完时）；和库里一样就不写。还没有状态那一行时先按歇着建。
-  public func setCueContext(_ context: CueContext?) throws {
-    try write {
-      let current = try cueState()
-      guard current?.context != context else { return }
-      var next = current ?? CueState(state: .known(.settled))
-      next.context = context
-      next.modifiedAt = Date.stamp
-      try db.run(
-        """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET context = excluded.context, modifiedAt = excluded.modifiedAt
+          woke = excluded.woke, context = excluded.context
         """, next.bindings)
     }
   }

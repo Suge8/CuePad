@@ -22,8 +22,10 @@ final class CueSettingsModel {
         }
     }
 
-    func disable(_ services: AppServices) {
-        run { try await services.disableCue() }
+    /// 住到哪台：选一台就是住过去并启用，nil（"不启用"）是停用。
+    func live(on host: String?, _ services: AppServices) {
+        guard let host else { return run { try await services.disableCue() } }
+        enable(on: host, services)
     }
 
     /// 改名：空的写回默认名；和库里一样就不写。

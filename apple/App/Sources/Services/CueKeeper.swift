@@ -266,8 +266,7 @@ final class CueKeeper {
     private func publish() async {
         do {
             let work = work
-            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke)
-            if let context = shift?.context { try await setup.store.setCueContext(context) }
+            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke, context: shift?.context)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }

@@ -111,16 +111,17 @@ extension DebugScene {
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
-            try await store.setCueContext(CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000)))
+            let context = CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000))
+            try await store.setCueState(.settled, context: context)
             switch presence {
             case "thinking":
                 try await you("顺便看看登录回调那个超时")
-                try await store.setCueState(.thinking)
+                try await store.setCueState(.thinking, context: context)
             case "tool":
                 try await you("顺便看看登录回调那个超时")
                 let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
                     step(.read, "看板"), step(.search, "登录回调 超时"), step(.add, "建任务「登录回调超时」"), step(.start, "开工「登录回调超时」")))
-                try await store.setCueState(.tool, detail: "跟会话说话", round: row)
+                try await store.setCueState(.tool, detail: "跟会话说话", round: row, context: context)
             case "sending":
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
             case "asleep":

@@ -7,7 +7,8 @@ import Foundation
 /// - 线程是临时的（`thread/start` 的 `ephemeral`）：不写会话文件，不进 Codex 的历史；
 /// - 系统提示经 `baseInstructions` 整份替换内置提示（与配置里的 `model_instructions_file` 同一处，参数优先）；
 /// - 沙箱只读、从不请求批准：Codex 读文件靠 shell，写入被沙箱拒绝；
-/// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`；
+/// - MCP：先读出用户配置里的 MCP 服务（`config/read`），在这个线程上逐个停用，只开 CuePad 的 `cuepad`，它的工具一律放行
+///   （`default_tools_approval_mode`）：新版 Codex 的 MCP 工具默认要批准，在"从不请求批准"下就是直接拒掉；
 /// - 关掉会在 Cue 身上留下痕迹或替它动手的功能（见 `disabledFeatures`），回合结束不跑用户的 `notify`、不联网搜索；
 /// - 模型看到的输入只有系统提示、沙箱说明与环境（工作目录、日期）：用户的 skill 清单（`skills.include_instructions`）、
 ///   工作目录里的 AGENTS.md（`project_doc_max_bytes` 为 0）、子代理的角色说明与工具（`agents.enabled`；只停用 `multi_agent` 功能不够，
@@ -72,7 +73,7 @@ final class CodexBrain: CueBrain {
         var overrides: [String: JSONValue] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
         overrides["mcp_servers.cuepad"] = [
             "command": .string(config.mcp[0]), "args": .array(config.mcp.dropFirst().map(JSONValue.string)),
-            "env": .object(config.environment.mapValues(JSONValue.string)),
+            "env": .object(config.environment.mapValues(JSONValue.string)), "default_tools_approval_mode": "approve",
         ]
         var params: [String: JSONValue] = [
             "cwd": .string(config.workingDirectory.path), "approvalPolicy": "never", "sandbox": "read-only", "ephemeral": true,

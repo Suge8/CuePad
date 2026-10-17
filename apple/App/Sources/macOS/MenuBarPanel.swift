@@ -60,10 +60,12 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// 面板跟随内容尺寸，顶边始终留在图标下方。
+    /// 面板跟随内容尺寸，顶边始终留在图标下方；最高到图标下方到屏幕可见区域底边（留边）那么高，再高的部分由内容自己滚
+    /// （菜单栏面板里是"在做"那一块，`MenuBarPad`）。
     private func fitToContent() {
         guard let placement else { return }
-        let size = host.fittingSize
+        var size = host.fittingSize
+        size.height = min(size.height, Self.maxHeight(below: placement.anchor, in: placement.visible))
         let origin = Self.origin(for: size, below: placement.anchor, in: placement.visible)
         panel.setFrame(NSRect(origin: origin, size: size), display: panel.isVisible)
     }
@@ -78,11 +80,15 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         hide()
     }
 
-    /// 面板在图标正下方居中，并留在屏幕可见区域内。
+    /// 面板最高多高：从图标下方到屏幕可见区域的底边，两头留边。
+    static func maxHeight(below anchor: CGRect, in visible: CGRect) -> CGFloat {
+        min(anchor.minY, visible.maxY) - anchorGap - (visible.minY + edgeMargin)
+    }
+
+    /// 面板在图标正下方居中，顶边贴着图标下方（高度已按 `maxHeight` 收住，不会顶出屏幕上沿），左右留在屏幕可见区域内。
     static func origin(for size: CGSize, below anchor: CGRect, in visible: CGRect) -> CGPoint {
         let x = min(max(anchor.midX - size.width / 2, visible.minX + edgeMargin), visible.maxX - edgeMargin - size.width)
-        let y = max(anchor.minY - anchorGap - size.height, visible.minY + edgeMargin)
-        return CGPoint(x: x, y: y)
+        return CGPoint(x: x, y: min(anchor.minY, visible.maxY) - anchorGap - size.height)
     }
 }
 

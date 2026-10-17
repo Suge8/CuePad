@@ -52,7 +52,7 @@ struct CueSettingsScreen: View {
             if hosts.isEmpty {
                 Label("先到 Mac 上打开 CuePad，它会出现在这里", systemImage: "desktopcomputer").foregroundStyle(palette.ink3)
             } else {
-                Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: live)) {
+                Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: { model.live(on: $0, services) })) {
                     Text("不启用").tag(String?.none)
                     ForEach(hosts) { host in
                         VStack(alignment: .leading, spacing: 2) {
@@ -93,10 +93,6 @@ struct CueSettingsScreen: View {
                 }
             }
         }
-    }
-
-    private func live(_ host: String?) {
-        if let host { model.enable(on: host, services) } else { model.disable(services) }
     }
 }
 #endif
