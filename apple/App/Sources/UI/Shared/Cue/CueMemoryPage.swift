@@ -167,7 +167,8 @@ private struct MemoryRow: View {
             #if os(iOS)
             // 长按抬起的预览是这一行的快照：没有底色时抬起来是透明的一条。形状要写明：不写时 iOS 26 按所在容器取同心圆角，行与行之间露出缺口
             .background(palette.paper, in: .rect)
-            .contentShape(.contextMenuPreview, .rect)
+            // 抬起的预览与纸卡同一圆角、同宽（行本来就与纸卡同宽）
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Metrics.radius, style: .continuous))
             .contextMenu { RowActionButtons(actions: [copy, pin, forget]) }
             .rowSwipes(RowSwipes(leading: [pin], trailing: [forget]))
             #else
