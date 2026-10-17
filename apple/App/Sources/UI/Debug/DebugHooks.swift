@@ -55,8 +55,8 @@ enum DebugHooks {
     }
 
     #if os(macOS)
-    /// 这张卡或这条任务是否按 `Preset.hovered` 一出现就画成悬停的样子。
-    static func hovers(_ card: Card) -> Bool { preset.hovered.map { card.body.hasPrefix($0) } ?? false }
+    /// 正文是这样开头的卡、任务或记忆是否按 `Preset.hovered` 一出现就画成悬停的样子。
+    static func hovers(_ text: String) -> Bool { preset.hovered.map(text.hasPrefix) ?? false }
     #endif
 
     static let preset: Preset = {

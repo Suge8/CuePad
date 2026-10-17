@@ -26,7 +26,28 @@ public struct SeedCard: Sendable {
   }
 }
 
+/// 演示记忆的一条：记下的时刻原样写入，记忆页才有"刚刚""昨天""几月几日"的分布。
+public struct SeedCueLine: Sendable {
+  public var text: String, source: CueLineSource, pinned: Bool, createdAt: Date
+
+  public init(_ text: String, source: CueLineSource, pinned: Bool = false, createdAt: Date) {
+    (self.text, self.source, self.pinned, self.createdAt) = (text, source, pinned, createdAt)
+  }
+}
+
 extension CueStore {
+  /// 一次写入演示记忆（按记下的时刻排位，与正常记下的一样）。
+  public func seed(cueLines: [SeedCueLine]) throws {
+    try write {
+      for line in cueLines {
+        try insert(
+          CueMemoryLine(
+            id: UUID(), text: line.text, pinned: line.pinned, source: .known(line.source), remindAt: nil, createdAt: line.createdAt,
+            modifiedAt: line.createdAt, deletedAt: nil))
+      }
+    }
+  }
+
   /// 一次写入全部项目与卡片（同类按给定顺序排）。
   public func seed(projects: [SeedProject], cards: [SeedCard]) throws {
     let now = Date.stamp
