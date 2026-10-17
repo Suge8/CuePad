@@ -46,7 +46,7 @@ import Testing
       #expect(try await store.subtaskProgress(in: project) == progress)
     }
     // 只算步骤：上线下面一条已完成的步骤加一条提示词，进度是 1/1
-    #expect(try await store.subtaskProgress(of: release.id) == [release.id: TaskProgress(done: 1, total: 1)])
+    #expect(try await store.subtaskProgress(of: [release.id]) == [release.id: TaskProgress(done: 1, total: 1)])
   }
 
   @Test func 一批会话的列表项_等于分页查询里的同一项() async throws {

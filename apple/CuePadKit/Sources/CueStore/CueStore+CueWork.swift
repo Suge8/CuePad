@@ -610,7 +610,7 @@ extension CueStore {
     let candidates = tasks.map { task in (steps[task.id] ?? []) + [fallback[task.id]!] }
     let all = candidates.flatMap { $0 }
     let sessions = try sessionStates(all.compactMap(\.piSessionID))
-    let progress = try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(tasks.map(\.id))])
+    let progress = try subtaskProgress(of: tasks.map(\.id))
     let launching = try launchingLeaves(all.map(\.id))
     let sending = try sendingLeaves(all.filter { $0.piSessionID == nil }.map(\.id))
     return zip(tasks, candidates).map { task, candidates in
@@ -771,7 +771,7 @@ extension CueStore {
         leaf: leaf, session: try leaf.piSessionID.flatMap { sessions[$0] }.map { try sessionDetail($0, rounds: rounds) },
         sending: sending.contains(leaf.id))
     }
-    return CueTaskDetail(task: card, progress: try subtaskProgress(of: top)[top], leaves: details)
+    return CueTaskDetail(task: card, progress: try subtaskProgress(of: [top])[top], leaves: details)
   }
 
   /// 一个会话的细节（Cue 的 peek 给会话时）；没有记录为 nil。

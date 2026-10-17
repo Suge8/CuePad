@@ -242,7 +242,7 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
+  /// 改任务的状态：进行中在叶子上记开始时间（有步骤的记在此刻该做的那一步 `homeLeaf`，上级从步骤推出；已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
   /// （做完过的步骤还在时它仍算开始过，见 `TaskStatus`）；
   /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
   /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
@@ -266,7 +266,7 @@ extension CueStore {
         UPDATE cards SET startedAt = NULL, modifiedAt = ?1
         WHERE startedAt IS NOT NULL AND completedAt IS NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
-    case .inProgress: try db.run("UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND startedAt IS NULL", [now, id])
+    case .inProgress: try db.run("UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND startedAt IS NULL", [now, try homeLeaf(id)])
     case .done:
       try db.run(
         """

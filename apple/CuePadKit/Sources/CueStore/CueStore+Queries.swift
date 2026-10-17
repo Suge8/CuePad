@@ -265,14 +265,16 @@ extension CueStore {
   }
 
   /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
-  /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
+  /// 不带参数读全库；`of` 只读这几条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
   public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
-  public func subtaskProgress(of parent: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND parentID = ?", [parent]) }
+  public func subtaskProgress(of parents: some Sequence<UUID>) throws -> [UUID: TaskProgress] {
+    try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(parents)])
+  }
 
   public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
 
-  func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
+  private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
       SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards
