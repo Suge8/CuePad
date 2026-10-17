@@ -184,7 +184,7 @@ private struct DeliverableTile: View {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）
-                        .overlay { if palette.dark, preview.kind != .video { Color.black.opacity(0.14) } }
+                        .overlay { if preview.kind != .video { palette.mediaDim } }
                 } else if file == nil {
                     // 还没到本机：迷你一排没有下面那行字，下载中写在画面上
                     VStack(spacing: 3) {
@@ -203,12 +203,12 @@ private struct DeliverableTile: View {
             }
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
-                    Image(systemName: "play.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
-                        .padding(7).background(.black.opacity(0.42), in: .circle).padding(8)
+                    Image(systemName: "play.fill").font(.caption.weight(.bold)).foregroundStyle(palette.onMedia)
+                        .padding(7).background(palette.mediaScrim, in: .circle).padding(8)
                 }
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
+            .overlay(shape.strokeBorder(palette.hair))
             .zoomSource(zoom, in: namespace)
     }
 
