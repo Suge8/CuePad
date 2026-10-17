@@ -20,7 +20,7 @@ struct AgentPage: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 topRow.padding(.bottom, 16)
-                QuotaStrip().padding(.horizontal, 4).padding(.bottom, 4)
+                QuotaStrip().padding(.horizontal, 4).padding(.bottom, 12)
                 if let list = model.list { sessions(list) }
             }
             .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
