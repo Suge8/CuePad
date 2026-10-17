@@ -63,21 +63,15 @@ enum PreviewWebGuard {
 
     static func mimeType(of file: URL) -> String { UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "text/html" }
 
-    /// 不显示的网页（缩略图快照，`PageSnapshots`）：装好规则、载入这个文件，`untilLoaded` 时等载入完再返回。
-    static func page(for file: URL, untilLoaded: Bool = false) async throws -> WebPage {
-        try await page(loading: try await read(file), mimeType: mimeType(of: file), untilLoaded: untilLoaded)
-    }
-
-    /// 同上，载入一段内容（Markdown 拼出的页面也走这里）。
-    static func page(loading data: Data, mimeType: String, untilLoaded: Bool = false) async throws -> WebPage {
+    /// 不显示的网页（缩略图快照 `PageSnapshots` 与调试快照）：装好规则、载入这个文件，载入完才返回。不上屏的渲染用 `WebPage`
+    /// （没有视图也能导出画面）；上屏的是 `OfflineWebView`。
+    static func page(for file: URL) async throws -> WebPage {
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(try await rules())
         let page = WebPage(configuration: configuration, navigationDecider: InlineOnly())
-        let events = page.load(data, mimeType: mimeType, characterEncoding: .utf8, baseURL: blank)
-        if untilLoaded {
-            for try await event in events where event == .finished { break }
-        }
+        let events = page.load(try await read(file), mimeType: mimeType(of: file), characterEncoding: .utf8, baseURL: blank)
+        for try await event in events where event == .finished { break }
         return page
     }
 

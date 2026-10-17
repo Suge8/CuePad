@@ -159,14 +159,13 @@ public struct CueLeafDetail: Equatable, Sendable {
   public var sending: Bool
 }
 
-/// 一个会话的细节（Cue 的 peek）：记录、最近几轮问答与预览。
+/// 一个会话的细节（Cue 的 peek）：记录与最近几轮问答。
 public struct CueSessionDetail: Equatable, Sendable {
   public var session: PiSessionState
   /// 最近几轮问答（会话里用户一方说的与 Agent 的回答），从早到晚。
   public var recent: [PiChatMessage]
   /// `recent` 里 Cue 说的那几条的请求 id（`cueSentDeliveries`，与会话页同一条规则，见 `PiChatMessage.saidByCue`）。
   public var cueSent: Set<UUID>
-  public var previews: [PiPreview]
 }
 
 extension PiChatMessage {
@@ -230,9 +229,10 @@ extension CueStore {
   /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时等它做完再说，开新会话时它是第一句。正文发出后留在任务上。
   /// 接着用上一步的会话时，话送到才绑上（同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
   /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
-  /// `agent` 缺省是 Pi，给了就只接着用这一家的会话；`agent`、`model` 与 `thinking` 只用于开新会话。
+  /// `agent` 给了就只接着用这一家的会话；`agent`、`model`（这家的写法，`AgentKind.modelKey`）与 `thinking` 只用于开新会话，
+  /// 开哪家见 `launchAgent`。
   public func startLeaf(
-    _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
+    _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: String? = nil, thinking: PiThinkingLevel? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
@@ -245,13 +245,27 @@ extension CueStore {
       return try write { try say(content, to: try sessionTarget(sessionID, name: card.heading), mode: .followUp, card: card.id, host: host, cue: cue) }
     case .launch(let project, let host):
       guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
+      let kind = try launchAgent(agent, on: host)
+      let key = try model.map(kind.requiredModelKey)
       let launch = PiLaunch(
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
-        agent: agent ?? .pi, model: model, thinking: thinking)
+        agent: kind, model: key, thinking: thinking)
       return try requestLaunch(launch, title: plan.name ?? "", on: host, card: card.id, cue: cue)
     case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
     case .unfiled: throw CueStoreError.noFolder("")
     }
+  }
+
+  /// 在 `host` 上开新会话用哪家：没指定是那台 Mac 的默认（`MacAgents.preferred`，同界面的新会话），一家都不能用抛 `noAgent`；
+  /// 指定的那家那台 Mac 记着不能用（没装、没登录……）抛 `agentUnavailable` 带原因，不开出一个起不来的会话。
+  private func launchAgent(_ agent: AgentKind?, on host: String) throws -> AgentKind {
+    let agents = try macAgents(on: host)
+    guard let agent else {
+      guard let preferred = agents.preferred(nil) else { throw CueStoreError.noAgent(agents.whyNone) }
+      return preferred
+    }
+    if let problem = agents.problems.first(where: { $0.kind == agent }) { throw CueStoreError.agentUnavailable("\(agent.name) \(problem.reason)") }
+    return agent
   }
 
   /// 开工的第一句（界面的"开始"与 Cue 的 start 都按它）：开新会话的步骤先带上顶层任务的标题与正文作背景，空一行接这一步的；
@@ -785,8 +799,7 @@ extension CueStore {
       orderBy: "seq DESC, id DESC", limit: rounds * 2
     ).reversed()
     return CueSessionDetail(
-      session: session, recent: Array(recent), cueSent: try cueSentDeliveries(among: recent.compactMap(\.deliveryID)),
-      previews: try previews(of: session.sessionID))
+      session: session, recent: Array(recent), cueSent: try cueSentDeliveries(among: recent.compactMap(\.deliveryID)))
   }
 
   /// Cue 说的会话：会话 id、至少 4 位的 id 前缀，或会话名（不分大小写）；id 对上的优先，都按最近有动静的在前。

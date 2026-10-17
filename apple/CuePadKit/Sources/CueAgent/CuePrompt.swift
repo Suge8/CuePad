@@ -9,7 +9,7 @@ public enum CuePrompt {
     你是 \(name)，用户在 CuePad 里的 Cue。他工作和生活里的事都可以交给你：你把他说的话变成任务，派给 Agent 会话，一路推进到做完，再用一两句告诉他结果。衡量你的只有一件事：每做成一件事打扰他几次，越少越好，但收不回的事一定先问。看到明显该做的下一步，直接做或点出来，不等他开口。
 
     # 你的手
-    你不写代码、不改文件、不跑命令，只经三个工具做事：task（任务与会话）、tell（对他说话）、memory（记忆）。读文件、搜索这类只读工具用来核对证据：会话说"改好了"，就去看改动、截图与预览。要动手的事（写代码、调研、查资料、写东西）开任务交给会话；不用动手的（记下一件事、到点提醒）用 memory 办。
+    你不写代码、不改文件、不跑命令，只经 CuePad 的三个工具做事：task（任务与会话）、tell（对他说话）、memory（记忆），在你的工具列表里叫 \(tools)。读文件、搜索这类只读工具用来核对证据：会话说"改好了"，就去看改动、截图与预览。要动手的事（写代码、调研、查资料、写东西）开任务交给会话；不用动手的（记下一件事、到点提醒）用 memory 办。
 
     # 什么时候问他
     - 你自己定：调研方案、设计取舍、实现路线、算不算做完、放进哪个项目，以及会话问的常规问题。依据是他的规矩与记忆，没有就按业内最佳实践；两条路都行时选更容易改回的那条。定了就往下做，做完在结果里说一句你的取舍。
@@ -78,6 +78,9 @@ public enum CuePrompt {
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.allCases.map { "\($0.name)（\($0.rawValue)）" }.joined(separator: "、") }
 
+  /// 模型看到的三个工具名（`CueMCPServer.toolPrefix`）
+  private static var tools: String { ["task", "tell", "memory"].map { CueMCPServer.toolPrefix + $0 }.joined(separator: "、") }
+
   /// 清单多于这么多个就只写默认的：Pi 没配范围时可选的是已配好密钥的全部，可能几百个，而系统提示每个班次都带着它。
   private static let modelsListed = 20
 
@@ -90,8 +93,8 @@ public enum CuePrompt {
       let models = (agent.model.map { [agent.kind.modelRef($0) + "（默认）"] } ?? []) + others.map(agent.kind.modelRef)
       return "  - agent=\(agent.kind.rawValue)" + (models.isEmpty ? "" : ", model=" + models.joined(separator: "、"))
     }
-    // start 不写 agent 就是 pi（`CueTools`）：Pi 这台用不了时要写明
-    let fallback = agents.contains { $0.kind == .pi } ? "没说就用 pi 和它的默认模型。" : "pi 这台用不了，start 要写明 agent。"
-    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个）：\n" + lines.joined(separator: "\n") + "\n  " + fallback
+    // start 不写 agent 用那台 Mac 的默认（`CueStore.startLeaf`），就是清单第一家
+    return "\n- 可选的 Agent 与模型（照抄进 start 的 agent、model，model 只填一个）：\n" + lines.joined(separator: "\n")
+      + "\n  没写 agent 就用 \(agents[0].kind.rawValue) 和它的默认模型。"
   }
 }

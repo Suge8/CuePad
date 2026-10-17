@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// Cue 的三个工具（task、tell、memory）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
-/// 返回一两句人话加 id，`structuredContent` 放 id 等字段；出错给出路（`isError`）。
+/// 返回一两句人话加 id，只有正文（三家大脑给模型看的都是这一份）；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
   /// 说话类请求写下后等结果多久（`Speech.cueWait`；测试给短的）。
@@ -15,12 +15,11 @@ public struct CueTools: Sendable {
   }
 
   /// 一次调用的结果（MCP 的 `CallToolResult`）。
-  public struct Result: @unchecked Sendable {
+  public struct Result: Sendable {
     public var text: String
-    public var structured: [String: Any]
     public var isError: Bool
 
-    static func ok(_ text: String, _ structured: [String: Any] = [:]) -> Result { Result(text: text, structured: structured, isError: false) }
+    static func ok(_ text: String) -> Result { Result(text: text, isError: false) }
   }
 
   /// 给 Cue 看的出错：说清楚、给出路。
@@ -40,7 +39,7 @@ public struct CueTools: Sendable {
           任务与每个步骤各有正文：标题下面要交代给 Agent 的话，开工时连同标题作为第一句发出（步骤开新会话时先带上顶层任务的标题与正文作背景，接着用上一步会话的只发这一步的），发出后留在任务上；
           add{title,project?,steps?,body?,session?} 建任务，body 是它的正文（各步骤自己要交代的用 edit 写在步骤上）；带 session 把会话绑到新建的任务上：没绑任务的会话（你要为它的结果负责时），或已完成的事用过的会话（在它上面做别的事，旧任务照旧完成）；不写 body，话用 say 说；project 缺省是会话所在的项目；
           edit{task,title?,body?,steps?,project?,reopen?} 改标题、换掉正文、追加步骤或挪到项目；追加步骤与 reopen:true 都让已完成的任务不再算做完（同用户点掉圆圈），只在确认它其实没做完时用；
-          start{task,agent?,model?,effort?,fresh?} 开工：叶子（task 有步骤时是第一个没做完的步骤）还没会话时，同一任务的上一步有会话就接着用它（哪怕已结束，执行时恢复），否则在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；已绑着会话就用 say；上下文太长或要换 Agent 时用 fresh:true 开新的（上一步的会话随之结束）；
+          start{task,agent?,model?,effort?,fresh?} 开工：叶子（task 有步骤时是第一个没做完的步骤）还没会话时，同一任务的上一步有会话就接着用它（哪怕已结束，执行时恢复），否则在项目文件夹用 agent（pi/claude/codex/opencode，缺省是那台 Mac 的默认）开新会话，model 写 provider/id（claude、codex 只写 id）；已绑着会话就用 say；上下文太长或要换 Agent 时用 fresh:true 开新的（上一步的会话随之结束）；
           say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它。说话不改任务的状态；
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?} 只读：都不带看所有没做完的事、不归没做完的事的活会话（"在做"的归你管）与最近完成的几件（各带会话与它此刻的状态），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与发到手机的文件（带本机路径），带 session 看那个会话；
@@ -126,10 +125,10 @@ public struct CueTools: Sendable {
       default: return nil
       }
     } catch let failure as Failure {
-      return Result(text: failure.message, structured: [:], isError: true)
+      return Result(text: failure.message, isError: true)
     } catch {
       // Kit 里只有 Cue 会碰到的错误，文案本来就是写给 Cue 的（见 `CueStoreError`）
-      return Result(text: (error as? LocalizedError)?.errorDescription ?? "\(error)", structured: [:], isError: true)
+      return Result(text: (error as? LocalizedError)?.errorDescription ?? "\(error)", isError: true)
     }
   }
 
@@ -147,8 +146,8 @@ public struct CueTools: Sendable {
       return try await board()
     case "stop":
       let target = try await speaker(args)
-      let request = try await store.stopSession(target.session, host: try await host(), cue: true)
-      return .ok("已请\(target.label)停下这一轮。（\(target.short)）", ["session": target.session, "request": id(request.id)])
+      _ = try await store.stopSession(target.session, host: try await host(), cue: true)
+      return .ok("已请\(target.label)停下这一轮。（\(target.short)）")
     case "done": return try await done(args)
     case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done")
     }
@@ -158,14 +157,13 @@ public struct CueTools: Sendable {
   private func done(_ args: Args) async throws -> Result {
     let card = try await task(args.required("task"))
     _ = try await host()  // 停用后不能再做完事
-    if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
+    if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。") }
     let evidence = card.parentID == nil ? try Self.evidence(args) : []
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
     let delivered = report == nil ? 0 : try await store.deliverables(of: [card.id])[card.id]?.count ?? 0
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束")
-        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (delivered > 0 ? "，下面挂着发到手机的 \(delivered) 份。" : "。") } ?? "。"),
-      ["task": id(card.id), "requests": ends.map { id($0.id) }, "report": report.map { id($0.id) } ?? NSNull()])
+        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (delivered > 0 ? "，下面挂着发到手机的 \(delivered) 份。" : "。") } ?? "。"))
   }
 
   /// 证据（done 做完顶层任务时）：1–`evidenceCount` 条，每条宽不过 `evidenceLimit`；不合就整件退回，什么都不写。
@@ -209,7 +207,7 @@ public struct CueTools: Sendable {
       text += "，" + (leaf.id == top.id ? "" : "「\(leaf.heading)」") + "绑上了会话「\(session.title)」"
     }
     text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里。"
-    return .ok(text, ["task": id(top.id), "steps": steps.map(id), "session": session?.sessionID ?? NSNull()])
+    return .ok(text)
   }
 
   private func edit(_ args: Args) async throws -> Result {
@@ -249,7 +247,7 @@ public struct CueTools: Sendable {
       done.append("连同步骤挪到了项目「\(project.name)」" + (try await store.cueProjects().first { $0.id == project.id }?.hasFolder == true ? "" : "（它没绑文件夹，开工前请用户绑一个）"))
     }
     guard !done.isEmpty else { throw Failure("edit 至少给 title、body、steps、project、reopen 之一") }
-    return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。", ["task": id(card.id)])
+    return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。")
   }
 
   private func start(_ args: Args) async throws -> Result {
@@ -258,14 +256,10 @@ public struct CueTools: Sendable {
       return agent
     }
     let leaf = try await workingLeaf(try args.required("task"))
-    let model = try args.string("model").map { try Self.model($0, of: agent ?? .pi) }
-    let effort = try Self.effort(args)
     let request = try await store.startLeaf(
-      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: model, thinking: effort, host: try await host(), cue: true)
-    let started = request.mode == .known(.start)
-    let structured: [String: Any] = ["task": id(leaf.id), "request": id(request.id), "started": started, "continued": !started]
-    if started { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）", structured) }
-    return try await spoken(request, "「\(leaf.heading)」接着用上一步的会话，正文作为下一句（送到后这一步绑上它）", tail: leaf.id.shortID, structured)
+      leaf.id, agent: agent, fresh: args.bool("fresh") == true, model: args.string("model"), thinking: try Self.effort(args), host: try await host(), cue: true)
+    if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）") }
+    return try await spoken(request, "「\(leaf.heading)」接着用上一步的会话，正文作为下一句（送到后这一步绑上它）", tail: leaf.id.shortID)
   }
 
   private static func effort(_ args: Args) throws -> PiThinkingLevel? {
@@ -277,15 +271,6 @@ public struct CueTools: Sendable {
 
   /// `agent` 的取值。
   private static let agents = AgentKind.allCases.map(\.rawValue).joined(separator: " / ")
-
-  /// 模型：provider/id；模型在这家自己命名空间里的（`AgentKind.modelProvider`：Claude Code、Codex）只写 id，提供方补成这一家，
-  /// 与给大脑的 Agent 与模型清单同一种写法，照抄就行。
-  private static func model(_ ref: String, of agent: AgentKind) throws -> PiModelKey {
-    guard let key = agent.modelKey(ref) else {
-      throw Failure("\(agent.name) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）")
-    }
-    return key
-  }
 
   private func say(_ args: Args) async throws -> Result {
     let target = try await speaker(args)
@@ -305,9 +290,7 @@ public struct CueTools: Sendable {
     case .steer: "\(switched)对\(target.label)说（马上说）"
     default: "\(switched)对\(target.label)说（等它做完再说）"
     }
-    var structured: [String: Any] = ["session": target.session, "mode": request.mode.rawValue]
-    if let card = target.card { structured["task"] = id(card) }
-    return try await spoken(request, what, tail: target.short, structured)
+    return try await spoken(request, what, tail: target.short)
   }
 
   /// say、stop 对的会话：给 task 是它在做的叶子绑着的会话（带上叶子），给 session 是那个会话。`label` 是工具结果里对它的称呼。
@@ -323,30 +306,22 @@ public struct CueTools: Sendable {
 
   /// 说的话写下后等结果，至多到写下后 `wait`：结果按说的话那条规则（`Speech`）读——已送达、没送到（工具结果标成出错，带 Mac 报的原因），
   /// 或还在路上（如实说还没送达；之后没送到会写进下一轮的变化，见 `CueChange.Kind.undelivered`）。`what` 是做了什么。
-  private func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, _ structured: [String: Any]) async throws -> Result {
+  private func spoken(_ request: DeliveryRequest, _ what: String, tail short: String) async throws -> Result {
     let latest = try await settled(request)
-    var structured = structured
-    structured["request"] = id(request.id)
     let tail = "（\(short)）"
     switch Speech.trip(latest, at: .always()) {
     case .delivered:
-      structured["status"] = "delivered"
-      return .ok("\(what)：已送达。\(tail)", structured)
+      return .ok("\(what)：已送达。\(tail)")
     case .failed(let failure):
-      structured["status"] = "failed"
       let reason = if case .reported(let reason) = failure { reason } else { DeliveryRequest.unexplainedFailure }
-      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", structured: structured, isError: true)
+      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", isError: true)
     case .sending:
-      structured["status"] = "sending"
-      return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)", structured)
+      return .ok("\(what)：已发出，还没送达，结果会写进变化。\(tail)")
     }
   }
 
   /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
   /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
-  /// 认的是正文而不是结构化结果（`structured["request"]`）：三家大脑的工具结果事件里正文都在，结构化结果只有 Codex 的
-  /// `mcpToolCall` 带回（`structuredContent`）；Claude 的 stream-json 工具结果块只有文字与 `is_error`，Pi 的 `tool_execution_end`
-  /// 是它自己的结果形状（`content` 与扩展自定的 `details`）。为一家改走结构化就成了两条路，所以三家都认正文。
   static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
 
   /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。
@@ -376,7 +351,7 @@ public struct CueTools: Sendable {
     let effort = try Self.effort(args)
     guard let raw = args.string("model") else { return effort.map { PiConfig(thinking: $0) } }
     let agent = try await store.piSessions(sessionIDs: [session])[session]?.state.agent.known
-    return PiConfig(model: try Self.model(raw, of: agent ?? .pi), thinking: effort)
+    return PiConfig(model: try (agent ?? .pi).requiredModelKey(raw), thinking: effort)
   }
 
   /// 看板：所有没做完的顶层任务，按项目分组（未分类在最后），再是不归没做完的事的活会话，至多 `overviewLimit` 行；在做的归 Cue 管，其余是用户手上的清单。
@@ -412,28 +387,7 @@ public struct CueTools: Sendable {
     }
     return .ok(
       (total == 0 ? "没有没做完的事。" : "没做完的 \(total) 件，在做 \(items.count(where: \.isActive) + board.sessions.count) 件：")
-        + (lines.isEmpty ? "" : "\n" + lines.map(\.text).joined(separator: "\n")),
-      [
-        "tasks": items.map { item -> [String: Any] in
-          [
-            "id": id(item.task.id), "title": item.task.heading, "project": item.task.projectID.map(id) ?? NSNull(), "active": item.isActive,
-            "progress": item.progress.map { ["done": $0.done, "total": $0.total] as [String: Any] } ?? NSNull(),
-            "leaves": item.leaves.map { leaf -> [String: Any] in
-              [
-                "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "session": leaf.session?.sessionID ?? NSNull(),
-                "state": leaf.session?.state.rawValue ?? NSNull(),
-                "launching": leaf.launching, "sending": leaf.sending, "since": iso(leaf.since),
-              ]
-            },
-          ]
-        },
-        "sessions": board.sessions.map { session -> [String: Any] in
-          ["id": session.sessionID, "title": session.title, "state": session.state.rawValue, "since": iso(session.stateSince)]
-        },
-        "recentlyDone": recent.map { item -> [String: Any] in
-          ["id": id(item.task.id), "title": item.task.heading, "session": item.session.sessionID, "state": item.session.state.rawValue]
-        },
-      ])
+        + (lines.isEmpty ? "" : "\n" + lines.map(\.text).joined(separator: "\n")))
   }
 
   /// 不带参数的 peek 末尾列几件最近完成的。
@@ -466,20 +420,8 @@ public struct CueTools: Sendable {
       if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
       if let session = leaf.session { lines += Self.conversation(session) }
     }
-    let deliverables = try await store.deliverables(of: [detail.task.id])[detail.task.id] ?? []
-    lines += deliveredLines(deliverables)
-    return .ok(
-      lines.joined(separator: "\n"),
-      [
-        "task": id(detail.task.id),
-        "leaves": detail.leaves.map { leaf -> [String: Any] in
-          [
-            "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "status": leaf.leaf.status?.rawValue ?? NSNull(),
-            "session": leaf.session?.session.sessionID ?? NSNull(), "state": leaf.session?.session.state.rawValue ?? NSNull(),
-          ]
-        },
-        "deliverables": deliverables.map(delivered),
-      ])
+    lines += deliveredLines(try await store.deliverables(of: [detail.task.id])[detail.task.id] ?? [])
+    return .ok(lines.joined(separator: "\n"))
   }
 
   private func peek(_ session: PiSessionState) async throws -> Result {
@@ -490,13 +432,8 @@ public struct CueTools: Sendable {
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
     lines += Self.conversation(detail)
-    lines += deliveredLines(detail.previews)
-    return .ok(
-      lines.joined(separator: "\n"),
-      [
-        "session": session.sessionID, "state": detail.session.state.rawValue, "tasks": bound.map { id($0.task.id) },
-        "deliverables": detail.previews.map(delivered),
-      ])
+    lines += deliveredLines(try await store.previews(of: session.sessionID))
+    return .ok(lines.joined(separator: "\n"))
   }
 
   /// 发到手机的文件，每份一行：标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
@@ -508,14 +445,10 @@ public struct CueTools: Sendable {
     }
   }
 
-  private func delivered(_ preview: PiPreview) -> [String: Any] {
-    [
-      "title": preview.title, "name": preview.name, "kind": preview.kind?.rawValue ?? NSNull(), "at": iso(preview.createdAt),
-      "path": store.files.url(of: preview)?.path ?? NSNull(),
-    ]
+  /// 发来的时刻写成"10-17 15:34"（同信封的 24 小时制）。
+  private static func clock(_ date: Date) -> String {
+    date.formatted(.verbatim("\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
   }
-
-  private static func clock(_ date: Date) -> String { date.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour().minute()) }
 
   /// 会话那一段：哪家、名字、状态与多久、在等的提问。
   private static func sessionHead(_ session: PiSessionState, now: Date) -> String {
@@ -562,18 +495,15 @@ public struct CueTools: Sendable {
     let withdrawn = try await args.string("withdraw").asyncMap(withdraw)
     guard let text = args.string("text") else {
       guard let withdrawn else { throw Failure("要给 text（说什么）或 withdraw（撤回哪条提问）") }
-      return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。", ["withdrawn": id(withdrawn.id)])
+      return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。")
     }
     let ask = try args.string("ask").map { raw -> CueAsk in
       guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
       return ask
     }
     let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)
-    let waits = message.choices != nil
-    var structured: [String: Any] = ["message": id(message.id), "waiting": waits]
-    if let withdrawn { structured["withdrawn"] = id(withdrawn.id) }
     return .ok(
-      (withdrawn == nil ? "" : "已撤回原来那条，") + (waits ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）", structured)
+      (withdrawn == nil ? "" : "已撤回原来那条，") + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）")
   }
 
   /// 撤回"等你"里的一条提问（id 或前缀）。
@@ -593,37 +523,35 @@ public struct CueTools: Sendable {
     switch try args.required("action") {
     case "note":
       let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, pinned: args.bool("pin") ?? false)
-      return .ok("记下了 #\(index)\(line.pinned ? "，一直记着" : "")。", ["line": index, "id": id(line.id)])
+      return .ok("记下了 #\(index)\(line.pinned ? "，一直记着" : "")。")
     case "recall":
       let found = try await store.recallCue(try args.required("query"))
       var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(CueEnvelope.clip(CueFormat.plainText($0.text), 160))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
-      return .ok(
-        lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"),
-        ["lines": found.lines.map(\.index), "messages": found.messages.map { id($0.id) }, "cards": found.cards.map { id($0.id) }])
+      return .ok(lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"))
     case "forget":
       let (line, index) = try await line(args)
       try await store.forgetCueLine(line.id)
-      return .ok("忘掉了 #\(index)。", ["line": index])
+      return .ok("忘掉了 #\(index)。")
     case "pin":
       let (line, index) = try await line(args)
       guard let pinned = args.bool("pinned") else { throw Failure("pin 要给 pinned: true 或 false") }
       try await store.pinCueLine(line.id, pinned)
-      return .ok(pinned ? "#\(index) 一直记着。" : "#\(index) 不再一直记着。", ["line": index, "pinned": pinned])
+      return .ok(pinned ? "#\(index) 一直记着。" : "#\(index) 不再一直记着。")
     case "remind":
       let raw = try args.required("at")
       guard let at = Self.date(raw) else { throw Failure("at 写 ISO 8601（2026-10-15T09:00:00+08:00）或 yyyy-MM-dd HH:mm（本机时区）") }
       guard at > Date() else { throw Failure("提醒时刻已经过了：\(raw)") }
-      let (line, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
-      return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。", ["line": index, "id": id(line.id), "at": iso(at)])
+      let (_, index) = try await store.noteCueLine(try args.required("text"), source: .cue, remindAt: at)
+      return .ok("记下了 #\(index)，\(iso(at)) 叫醒你。")
     case "merge":
       guard let lo = args.int("lo"), let hi = args.int("hi") else { throw Failure("merge 要给 lo 与 hi（区间 [lo, hi)）") }
       try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
-      return .ok("#\(lo)-\(hi - 1) 合成了一行。", ["lo": lo, "hi": hi])
+      return .ok("#\(lo)-\(hi - 1) 合成了一行。")
     case "renew":
       let message = try await store.addCueMessage(.handoff, text: try args.required("handoff"))
-      return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）", ["message": id(message.id)])
+      return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")
     case "allow": return try await allow(args)
     case let other: throw Failure("memory 没有 \(other)：可用 note / recall / forget / pin / remind / merge / renew / allow")
     }
@@ -638,7 +566,7 @@ public struct CueTools: Sendable {
     let changed = try await store.setCueAllow(CueAllow(ask, project: project?.id), allowed: allowed)
     let scope = project.map { "项目「\($0.name)」里" } ?? "所有项目里"
     let what = "\(scope)\(ask.name)" + (allowed ? "以后不用问" : "又要先问")
-    return .ok((changed ? "记下了：" : "本来就是：") + what + "。", ["ask": ask.rawValue, "project": project.map { id($0.id) } ?? NSNull(), "allowed": allowed])
+    return .ok((changed ? "记下了：" : "本来就是：") + what + "。")
   }
 
   /// `line`：序号（可带 #）或 id。

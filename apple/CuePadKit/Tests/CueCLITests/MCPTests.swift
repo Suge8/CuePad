@@ -52,11 +52,12 @@ import Testing
       return try #require(reply["result"] as? [String: Any], "\(reply)")
     }
 
-    /// 调一个工具，返回 structuredContent；期望不出错。
-    func call(_ tool: String, _ arguments: [String: Any]) async throws -> [String: Any] {
+    /// 调一个工具，返回正文；期望不出错。
+    @discardableResult
+    func call(_ tool: String, _ arguments: [String: Any]) async throws -> String {
       let result = try await request("tools/call", ["name": tool, "arguments": arguments])
       #expect(result["isError"] as? Bool == false, "\(result)")
-      return try #require(result["structuredContent"] as? [String: Any])
+      return try #require((result["content"] as? [[String: Any]])?.first?["text"] as? String)
     }
   }
 
@@ -70,6 +71,7 @@ import Testing
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
+    try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
 
       let hello = try await server.request("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "pi", "version": "1"]])
@@ -77,14 +79,11 @@ import Testing
       let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
       #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
 
-      let added = try await server.call(
-        "task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"]])
-      let taskID = try #require(added["task"] as? String)
-      let task = try #require(UUID(uuidString: taskID))
+      try await server.call("task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"]])
+      let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "重写发布脚本" }).id
       let research = try #require(try await store.children(of: task).first)
       _ = try await server.call("task", ["action": "edit", "task": research.id.uuidString, "body": "先读 release.sh"])
-      let board = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
-      #expect(board.compactMap { $0["title"] as? String } == ["重写发布脚本"])
+      #expect(try await server.call("task", ["action": "peek"]).contains("重写发布脚本（\(task.shortID)）"))
       // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
       for long: [String: Any] in [["title": "让 Agent 编译测试排队、模拟器复用、测试快速失败"], ["title": "发布", "steps": ["调研", "把发布脚本改成按渠道分别打包上传"]]] {
         let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "add"].merging(long) { $1 }])
@@ -100,14 +99,12 @@ import Testing
       #expect(launch.launch?.project == project.id && launch.launch?.prompt == "重写发布脚本\n\n调研\n先读 release.sh")  // 开新会话：顶层任务作背景在前
       #expect(launch.launch?.model == PiModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
       #expect(try await store.workingLeaf(of: task).id == step.id)
-      let starting = try #require(try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])
-      #expect((starting.first?["leaves"] as? [[String: Any]])?.first?["launching"] as? Bool == true)
+      #expect(try await server.call("task", ["action": "peek"]).contains("调研 › 正在开会话"))
 
       _ = try await server.call("tell", ["text": "调研结论要推送到 origin/main 吗？", "ask": "push", "task": task.uuidString])
       #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["调研结论要推送到 origin/main 吗？"])
 
-      let noted = try await server.call("memory", ["action": "note", "text": "发布前先跑检查", "pin": true])
-      #expect(noted["line"] as? Int == 0)
+      #expect(try await server.call("memory", ["action": "note", "text": "发布前先跑检查", "pin": true]).contains("#0"))
       #expect(try await store.recallCue("发布前").lines.map(\.line.pinned) == [true])
       _ = try await server.call("memory", ["action": "forget", "line": "#0"])
       #expect(try await store.cueMemory().lines.map { $0.deletedAt != nil } == [true])
@@ -145,11 +142,12 @@ import Testing
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
+    try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
 
-      let added = try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "body": "先看现有问候"])
-      let taskID = try #require(added["task"] as? String)
-      let task = try #require(UUID(uuidString: taskID))
+      try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "body": "先看现有问候"])
+      let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "加问候语" }).id
+      let taskID = task.uuidString
       let step = try #require(try await store.children(of: task).first)
       #expect(try await store.card(task)?.projectID == nil)
       #expect(try await store.card(task)?.body == "加问候语\n先看现有问候")
@@ -211,8 +209,8 @@ import Testing
 
       let all = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek"]])
       let text = try #require((all["content"] as? [[String: Any]])?.first?["text"] as? String)
-      let tasks = try #require((all["structuredContent"] as? [String: Any])?["tasks"] as? [[String: Any]])
-      #expect(tasks.compactMap { $0["id"] as? String } == [mine.id, unfiled.id].map { $0.uuidString.lowercased() })
+      #expect(text.split(separator: "\n").filter { $0.hasPrefix("- ") }.map { String($0.prefix(while: { $0 != "（" })) } == ["- 用户自己的事", "- 未分类的事"])
+      #expect(text.contains(mine.id.shortID) && text.contains(unfiled.id.shortID) && !text.contains(done.heading))
       #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "未分类："])
 
       for index in 0..<70 { _ = try await store.createTask("事 \(index)", in: nil) }
@@ -282,9 +280,9 @@ import Testing
       #expect(try await store.cueMessagesWaitingForYou().isEmpty)
 
       let reply = try await server.call("tell", ["text": "改好了，要推送到 origin/main 吗？", "ask": "push", "task": task.id.uuidString])
-      let asked = try #require((reply["message"] as? String).flatMap(UUID.init(uuidString:)))
       let question = try #require(try await store.cueMessagesWaitingForYou().first)
-      #expect(question.id == asked && question.choices == ["允许一次", "以后推送都不用问"])
+      let asked = question.id
+      #expect(reply.contains(asked.shortID) && question.choices == ["允许一次", "以后推送都不用问"])
 
       #expect(try await store.endCueQuestion(asked, .answered("以后推送都不用问")))
       #expect(try await store.cueProfile()?.allows == [CueAllow(.push, project: demo.id)])
@@ -311,7 +309,7 @@ import Testing
   }
 
   /// Cue 派活时选哪家 Agent 开会话：请求带着这家与模型（写法同给大脑的清单：Claude Code、Codex 只写 id，提供方补成这家；
-  /// Pi、OpenCode 要写 provider/id）。
+  /// Pi、OpenCode 要写 provider/id）。不写 agent 用那台 Mac 的默认（能用的第一家）；写了那台 Mac 记着不能用的那家，当场退回并说原因。
   /// 那台 Mac 开不了这家时，失败是这件事的一条变化（还没开成会话也报），写着"开工：原因"，Cue 下次醒来看得到。
   @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
     try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
@@ -324,22 +322,34 @@ import Testing
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页\n登录页白屏，查一下", in: project.id)
+    try await store.recordMacAgents(
+      host: "mac-a", name: nil, [MacAgent(kind: .claudeCode, model: nil, models: []), MacAgent(kind: .codex, model: nil, models: [])],
+      problems: [MacAgentProblem(kind: .pi, reason: "没登录")])
     try await Server.run(library: sandbox.directory) { server in
 
-      for bad in [["agent": "pi", "model": "gpt-5.1"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
+      for bad in [["agent": "pi"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
         let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString].merging(bad) { $1 }])
         #expect(refused["isError"] as? Bool == true, "\(bad)")
       }
+      let piRefused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString, "agent": "pi"]])
+      #expect(((piRefused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("Pi 没登录") == true)
       #expect(try await store.deliveryRequests().isEmpty)
+
+      let other = try await store.createTask("改文案", in: project.id)
+      try await server.call("task", ["action": "start", "task": other.id.uuidString, "model": "sonnet"])
+      let byDefault = try #require(try await store.deliveryRequests().first)
+      #expect(byDefault.launch?.agent == .claudeCode && byDefault.launch?.model == PiModelKey(provider: "claude", id: "sonnet"))
 
       let since = CueMarks(try await store.lastWrite())
       _ = try await server.call("task", ["action": "start", "task": task.id.uuidString, "agent": "codex", "model": "gpt-5.1", "effort": "high"])
-      let launch = try #require(try await store.deliveryRequests().first)
+      let launch = try #require(try await store.deliveryRequests().first { $0.cardID == task.id })
       #expect(launch.isFromCue && launch.mode == .known(.start))
       #expect(launch.launch?.agent == .codex && launch.launch?.model == PiModelKey(provider: "codex", id: "gpt-5.1") && launch.launch?.thinking == .high)
 
       // 那台 Mac 上没有 Codex：执行器把失败写回
-      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上没有找到 Codex") }
+      let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) {
+        $0.launch?.agent == .codex ? .failed("这台 Mac 上没有找到 Codex") : .succeeded
+      }
       try await executor.start()
       defer { Task { await executor.stop() } }
       let changes = try await eventually(store, { try $0.cueChanges(after: since) }) { !$0.isEmpty }
@@ -386,8 +396,7 @@ import Testing
       #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
       // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
-      let board = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
-      #expect((board["leaves"] as? [[String: Any]])?.first?["sending"] as? Bool == true)
+      #expect(try await server.call("task", ["action": "peek"]).contains("改脚本 › 发送中"))
       let peek = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "task": task.id.uuidString]])
       #expect(((peek["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("发送中") == true)
       #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("送到") == true)
@@ -431,6 +440,7 @@ import Testing
     try await store.linkCard(sound.id, toSession: "s1")
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
     for session in ["s1", "s3"] { try await recorder.update(sessionID: session, state: .settled, title: session) }
+    try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
       let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref).sorted() }
 
@@ -466,7 +476,8 @@ import Testing
     let store = sandbox.store
     try await Server.run(library: sandbox.directory) { server in
 
-      let asked = try #require(try await server.call("tell", ["text": "要删掉旧的 release 分支吗？", "ask": "delete"])["message"] as? String)
+      try await server.call("tell", ["text": "要删掉旧的 release 分支吗？", "ask": "delete"])
+      let asked = try #require(try await store.cueMessagesWaitingForYou().first).id.uuidString.lowercased()
       _ = try await server.call("tell", ["withdraw": String(asked.prefix(8)), "text": "旧分支先留着。要删掉 build 目录吗？", "ask": "delete"])
       #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["旧分支先留着。要删掉 build 目录吗？"])
       #expect(try await store.cueMessagesToDeliver().isEmpty)
@@ -489,14 +500,10 @@ import Testing
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
     for session in ["s1", "s2"] { try await recorder.update(sessionID: session, state: .settled) }
     try await Server.run(library: sandbox.directory) { server in
-      func shown() async throws -> (leaf: String?, session: String?) {
-        let item = try #require((try await server.call("task", ["action": "peek"])["tasks"] as? [[String: Any]])?.first)
-        let leaf = try #require((item["leaves"] as? [[String: Any]])?.first)
-        return (leaf["id"] as? String, leaf["session"] as? String)
-      }
+      func shown(_ step: Card) async throws -> Bool { try await server.call("task", ["action": "peek"]).contains("· \(step.heading) ›") }
 
       _ = try await store.toggleDone(first.id)
-      #expect(try await shown().session == "s2")  // 在做第二步
+      #expect(try await shown(second))  // 在做第二步
       _ = try await store.toggleDone(second.id)
       // 完成时刻直接给定先后（毫秒）：取的是最后做完的那一步，不是排在最后的那一步
       func finish(_ step: Card, atMinute minute: Int) throws {
@@ -505,10 +512,9 @@ import Testing
       }
       try finish(first, atMinute: 0)
       try finish(second, atMinute: 1)
-      let done = try await shown()
-      #expect(done.session == "s2" && done.leaf == second.id.uuidString.lowercased())
+      #expect(try await shown(second))
       try finish(first, atMinute: 2)
-      #expect(try await shown().session == "s1")
+      #expect(try await shown(first))
     }
   }
 

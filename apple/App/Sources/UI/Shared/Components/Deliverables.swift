@@ -38,6 +38,9 @@ struct DeliverableStrip: View {
             .scrollIndicators(.hidden)
             .contentMargins(.horizontal, bleed, for: .scrollContent)
             .padding(.horizontal, -bleed)
+            // 这一排滑动后滚动区不裁前沿（三端实测，与内容边距、负内边距、scrollClipDisabled(false) 都无关）：滑过去的缩略图画到纸外、
+            // 压在桌面上。明写裁到滚动区的框，也就是纸边
+            .clipShape(.rect)
         }
     }
 

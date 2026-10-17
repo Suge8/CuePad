@@ -24,7 +24,7 @@ enum PreviewReply: Equatable {
 
 extension View {
     /// 点交付物后的全屏页：同一组的几份左右翻；手机上每类都由 CuePad 自己显示（`PreviewPages+iOS`；网页与文稿只读、不联网），
-/// Mac 上网页与 Markdown 自己显示，其余嵌系统的快速查看（缩放、播放、翻页都有）。
+    /// Mac 上网页与 Markdown 自己显示，其余嵌系统的快速查看（缩放、播放、翻页都有；Mac 上它不抢翻页的手势）。
     /// 手机上从点的那张缩略图放大出来（系统 zoom 转场），下滑缩回翻到的那一份原处；减弱动态效果时整块交叉淡入淡出。Mac 是窗口内浮层。
     /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>) -> some View { modifier(PreviewPresenter(opened: opened)) }
@@ -184,7 +184,7 @@ private extension View {
     }
 }
 
-/// 一个文件的内容：网页、Markdown 自己显示，其余嵌快速查看。
+/// 一个文件的内容：哪类怎么显示见 `previewPresenter`。
 private struct PreviewContent: View {
     let preview: PiPreview
     let file: URL?

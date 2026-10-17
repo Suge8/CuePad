@@ -8,7 +8,7 @@ extension DebugScene {
     static func snapshotWeb(_ file: URL) {
         guard let path = defaults.string(forKey: "CuePadWebSnapshot") else { return }
         Task {
-            guard let page = try? await PreviewWebGuard.page(for: file, untilLoaded: true),
+            guard let page = try? await PreviewWebGuard.page(for: file),
                 let data = try? await page.exported(as: .image())
             else { return }
             try? data.write(to: URL(filePath: path))

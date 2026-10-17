@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import Foundation
 
@@ -71,7 +72,7 @@ final class CodexBrain: CueBrain {
         let effective = try await rpc.call("config/read", [:])
         let userServers = effective["config"]?["mcp_servers"]?.object?.keys ?? [:].keys
         var overrides: [String: JSONValue] = Dictionary(uniqueKeysWithValues: userServers.map { ("mcp_servers.\($0).enabled", false) })
-        overrides["mcp_servers.cuepad"] = [
+        overrides["mcp_servers.\(CueMCPServer.name)"] = [
             "command": .string(config.mcp[0]), "args": .array(config.mcp.dropFirst().map(JSONValue.string)),
             "env": .object(config.environment.mapValues(JSONValue.string)), "default_tools_approval_mode": "approve",
         ]

@@ -26,8 +26,11 @@ public struct MacAgents: Equatable, Sendable {
 
   public var kinds: [AgentKind] { agents.map(\.kind) }
 
-  /// 开新会话默认用哪家：上次用的（`last`）这台还能用就是它，否则第一家；一家都不能用为 nil。
-  public func preferred(_ last: AgentKind) -> AgentKind? { kinds.contains(last) ? last : kinds.first }
+  /// 开新会话默认用哪家：上次用的（`last`，界面记在本机偏好里；Cue 没有）这台还能用就是它，否则第一家；一家都不能用为 nil。
+  public func preferred(_ last: AgentKind?) -> AgentKind? {
+    if let last, kinds.contains(last) { return last }
+    return kinds.first
+  }
 
   /// 一家都不能用时为什么（"Pi 没登录 · Codex 没装"）；还没有这台 Mac 写的记录时说还没查过。
   public var whyNone: String {

@@ -10,7 +10,6 @@ struct PreviewReplyBar: View {
     let about: String
     let done: () -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
     @State private var draft = ComposerDraft()
 
     var body: some View {
@@ -51,27 +50,13 @@ struct PreviewReplyBar: View {
 
     private func choices(_ message: CueMessage, question: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                PiStateGlyph(status: .asking)
-                Text(question).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { buttons(message) }
-                VStack(alignment: .leading, spacing: 8) { buttons(message) }
+            CueQuestionLine(question: question)
+            CueChoices(options: message.choices ?? []) { option in
+                workspace.attempt { try await workspace.answerCueQuestion(message, option) }
+                done()
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private func buttons(_ message: CueMessage) -> some View {
-        ForEach(Array((message.choices ?? []).enumerated()), id: \.offset) { index, option in
-            Button(option) {
-                workspace.attempt { try await workspace.answerCueQuestion(message, option) }
-                done()
-            }
-            .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
-            .lineLimit(2)
-        }
     }
 }
