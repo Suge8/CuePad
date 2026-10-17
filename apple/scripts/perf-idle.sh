@@ -2,10 +2,10 @@
 # 用法：xc.sh perf idle <mac|ios> [次数=3] [秒=30] [启动参数…]   启动参数原样传给 App，如 -CuePadScene cue
 #   空闲与常驻开销：每次全新进程、全新的演示库（给了 CUEPAD_PERF_SEED=<库目录> 时从那份库克隆，如真实库的只读副本），
 #   等就绪后静置 CUEPAD_IDLE_SETTLE 秒（默认 5），量接下来 <秒> 内的唤醒、指令、CPU、能耗与内存（口径见 rusage.py），各次取中位数。
-#   Mac 实例在后台（给了 CUEPAD_SHOT_READY，窗口排在最后，不抢前台）；iOS 在每次重开机的 0 号模拟器上（同 perf-ios.sh）。
+#   Mac 实例在后台（给了 CUEPAD_SHOT_READY，窗口排在最后，不抢前台）；iOS 在领到的模拟器上，每次先重开机（同 perf-ios.sh）。
 #   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存 /tmp/cuepad-perf/idle-<平台>-<第几次>.trace。
-# xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）、独占机器后调这里，第一个参数是 CuePad.app。
+# xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）后调这里，第一个参数是 CuePad.app。不独占机器：量的都是进程自己的内核记账。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

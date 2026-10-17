@@ -10,7 +10,7 @@
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 15 分钟后自己退出
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh），独占机器
-#   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh），独占机器
+#   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、全机一份、一定退出见 app.py 头注释；排队与时限见 _lock.sh；模拟器池见 _sim.sh。
@@ -49,7 +49,8 @@ case "$cmd" in
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
-  perf) xc_enter exclusive "$0" "$@" ;;
+  # 静置开销读的是进程自己的内核记账（指令、CPU 时间、唤醒），不随机器忙闲变，不必独占机器、让别的任务排队
+  perf) case "$platform:${3:-}" in idle:ios) xc_enter sim "$0" "$@" ;; idle:*) xc_enter plain "$0" "$@" ;; *) xc_enter exclusive "$0" "$@" ;; esac ;;
   test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
   check|build) xc_enter plain "$0" "$@" ;;
   *) echo "$USAGE" >&2; exit 2 ;;

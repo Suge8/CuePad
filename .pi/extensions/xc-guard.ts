@@ -1,16 +1,21 @@
-// CuePad 的编译、测试、截图与模拟器开关只经 apple/scripts/xc.sh：那里产物目录按检出固定、同一检出排队、性能测量独占，
-// 模拟器固定一小池、开着复用并停用 PosterBoard（见 xc.sh、_lock.sh、_sim.sh 的头注释）。绕开它直接调就是多一份冷编译、
-// 多一台模拟器反复冷启动，所以这里拦下 Agent 直接调的 xcodebuild、swift build/test/run 与 simctl 的开关机、建删、装卸。
+// CuePad 的编译、测试、截图、测量与模拟器开关只经 apple/scripts/xc.sh，调试实例只经它起停（见 xc.sh、app.py 的头注释）。
+// 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"全机一份"管、忘了退就堆在 Dock 里；
+// 按名字或 bundle id 起停会碰到用户正在用的正式版（它与调试构建同一个 bundle id）。这里拦下 Agent 直接这样做的命令。
 // 只看每段命令的第一个词（跳过变量赋值与 env、xcrun 这类前缀），grep、日志里出现这些词不算。
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const PREFIXES = new Set(["env", "command", "exec", "time", "nohup", "nice", "caffeinate", "timeout", "xcrun"]);
 const SWIFT_BLOCKED = new Set(["build", "test", "run"]);
-// io、launch、terminate、spawn、list 等照常可用：xc.sh shot 之后在开着的模拟器上点按、起画面（docs/verify.md）
+// io、launch、terminate、spawn、list 等照常可用：xc.sh run 之后在开着的模拟器上点按、起画面（docs/verify.md）
 const SIMCTL_BLOCKED = new Set(["boot", "shutdown", "create", "clone", "erase", "delete", "rename", "install", "uninstall", "upgrade"]);
-const REASON =
+const BUILD =
 	"CuePad 的编译、测试、截图与模拟器开关只经 apple/scripts/xc.sh（产物目录与模拟器固定，用法见它的头注释）：" +
 	"xc.sh build|test <mac|ios|ipad>、xc.sh test kit [swift test 参数]、xc.sh shot|rec|run …、xc.sh check。";
+const INSTANCE =
+	"CuePad 调试实例只经 xc.sh shot|rec|run 起（隔离、全机一份、一定退出），run 起的用 xc.sh stop 收，" +
+	"别的进程按自己拿到的 PID 结束。按名字或 bundle id 起停会碰到用户在用的正式版。";
+// 指向 CuePad 本身：名字、bundle id 或 .app 包（不含路径里的 CuePad 检出目录名）
+const CUEPAD = /^(?:CuePad|com\.sugeh\.cuepad)$|(?:^|\/)CuePad\.app(?:\/|$)/i;
 
 function blocked(command: string): string | undefined {
 	for (const segment of command.split(/&&|\|\||[;|&\n()`]|\$\(/)) {
@@ -19,9 +24,14 @@ function blocked(command: string): string | undefined {
 		while (i < words.length && (/^\w+=/.test(words[i]) || PREFIXES.has(words[i]) || /^-|^\d+$/.test(words[i]))) i++;
 		const program = words[i]?.split("/").pop();
 		const sub = words[i + 1];
-		if (program === "xcodebuild" || program === "swift-build" || program === "swift-test") return program;
-		if (program === "swift" && SWIFT_BLOCKED.has(sub)) return `swift ${sub}`;
-		if (program === "simctl" && SIMCTL_BLOCKED.has(sub)) return `simctl ${sub}`;
+		const args = words.slice(i + 1);
+		if (program === "xcodebuild" || program === "swift-build" || program === "swift-test") return `不直接调 ${program}。${BUILD}`;
+		if (program === "swift" && SWIFT_BLOCKED.has(sub)) return `不直接调 swift ${sub}。${BUILD}`;
+		if (program === "simctl" && SIMCTL_BLOCKED.has(sub)) return `不直接调 simctl ${sub}。${BUILD}`;
+		if (program === "CuePad" || (program === "open" && args.some((a) => CUEPAD.test(a)))) return `不直接起 CuePad。${INSTANCE}`;
+		if ((program === "killall" || program === "pkill") && args.some((a) => /cuepad/i.test(a))) return `不按名字结束 CuePad。${INSTANCE}`;
+		if (program === "xctrace" && args.some((a) => /^(?:CuePad|com\.sugeh\.cuepad)$/i.test(a)))
+			return `xctrace 按名字或 bundle id 认 CuePad 会认到正式版：先 xc.sh run mac 拿 PID，再 xctrace record --attach <PID>。`;
 	}
 	return undefined;
 }
@@ -29,7 +39,7 @@ function blocked(command: string): string | undefined {
 export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event) => {
 		if (event.toolName !== "bash") return undefined;
-		const hit = blocked(String(event.input.command ?? ""));
-		return hit ? { block: true, reason: `不直接调 ${hit}。${REASON}` } : undefined;
+		const reason = blocked(String(event.input.command ?? ""));
+		return reason ? { block: true, reason } : undefined;
 	});
 }
