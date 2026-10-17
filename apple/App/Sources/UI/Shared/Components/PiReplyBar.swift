@@ -8,7 +8,7 @@ import SwiftUI
 /// Pi 空闲时直接发，正忙时点按（⌘↩）等它做完再说、长按（⌘⇧↩）马上说，停止也在长按菜单里；文字型问题是作答。
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
-/// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
+/// 发出后空着、Agent 还没接过去时钮是发送中（`PiChat.sending`，同 Cue 页输入框）；停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
 /// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
@@ -26,6 +26,8 @@ struct PiReplyBar: View {
     let stopping: Bool
     /// 斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方显示一行，成功、之后有新请求或对话时就收起。
     var commandProgress: MacDelivery.CommandProgress?
+    /// 你的话还在路上（`PiChat.sending`，页面传进来）：空着而 Agent 没在跑时，发送钮是发送中（同 Cue 页输入框）。
+    var sending = false
     /// 排队的话（`PiChat.queued`，页面传进来）。
     var queued: [DeliveryRequest] = []
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
@@ -39,6 +41,9 @@ struct PiReplyBar: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @State private var sentCount = 0
+    /// 刚发出、页面还没读到这句：库里那条请求要下一次读库才进 `sending`，这一小段钮先当帧换成发送中，不先缩没再长出来。
+    /// 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面。
+    @State private var launched = false
     @FocusState private var focused: Bool
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
     @State private var opening: PiConfigPick?
@@ -78,6 +83,8 @@ struct PiReplyBar: View {
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && reachable }
     private var canStop: Bool { session.canStop }
+    private var shownSending: Bool { !hasDraft && !canStop && (launched || sending) }
+    private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
     /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
     private var commandLine: String? { commands.isEmpty ? nil : PiSlash.line(of: draft, in: commands) }
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
@@ -103,7 +110,7 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty {
@@ -124,6 +131,8 @@ struct PiReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
+            .onChange(of: sending) { launched = false }
+            .onChange(of: canStop) { launched = false }
             #if os(macOS)
             .onAppear { focused = active }
             #endif
@@ -175,7 +184,9 @@ struct PiReplyBar: View {
     }
 
     /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
-    private func didSend() {
+    /// `talked`：发出的是说的话（命令有自己的进度行，钮不转发送中）。
+    private func didSend(talked: Bool = true) {
+        launched = talked
         #if os(iOS)
         focused = false
         #endif
@@ -199,14 +210,14 @@ struct PiReplyBar: View {
                 .disabled(stopping || !reachable)
                 .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
         case .answer:
-            Button(action: answer) { SendGlyph(canSend ? .ready : .idle) }
+            Button(action: answer) { SendGlyph(glyph) }
                 .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
         case .send(let tap, let hold) where hold != tap:
             holdMenu(tap: tap, hold: hold)
         case .send(let tap, _):
-            Button { send(tap) } label: { SendGlyph(canSend ? .ready : .idle) }
+            Button { send(tap) } label: { SendGlyph(glyph) }
                 .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
@@ -225,7 +236,7 @@ struct PiReplyBar: View {
             sections: [ChoiceMenu.Section(choices: [held])] + stopSection, primary: { send(tap) }, press: .button,
             accessibilityLabel: tap.label, hint: [tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；")
         ) {
-            SendGlyph(canSend ? .ready : .idle)
+            SendGlyph(glyph)
         }
         .fixedSize()
         .disabled(!canSend)
@@ -298,15 +309,15 @@ struct PiReplyBar: View {
         if held { services.settings.holdSendLearned = true }
         guard canSend else { return }
         let accepts = accepts, files = services.store.files
-        let card = draft.attachments.first?.card
-        let written = if let line = commandLine {
+        let card = draft.attachments.first?.card, command = commandLine
+        let written = if let line = command {
             // 命令不是说的话：批注留着，跟下一句发
             workspace.speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }) { _ in line }
         } else {
             workspace.speak(to: .session(session, mode: mode, card: card), from: box) { try $0.accepting(accepts).stored(in: files) }
         }
         // 图片存不进图片库时什么都没发：不收键盘、不当作发出
-        if written != nil { didSend() }
+        if written != nil { didSend(talked: command == nil) }
     }
 }
 

@@ -21,8 +21,9 @@ struct CueComposer: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
-    /// 刚发出、还没读到"话在路上"：库里那条记录要下一次读库才变成 `CuePresence.sending`，这一小段钮先当帧换成发送中，
-    /// 不先缩没再长出来。Cue 的现状一变（读到了在路上，或已经不在路上）就交还给它。
+    /// 刚发出、还没读到这一句：库里那条记录要下一次读库才变成 `CueWatch.sending`，这一小段钮先当帧换成发送中，
+    /// 不先缩没再长出来。读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）就交还给它。
+    /// 只看这两项不看整个现状：在想、用工具时每一步都变，读它的话整个输入框跟着重算。
     @State private var launched = false
     /// 光从发送钮的箭镞起飞、落进 Cue 的头像。
     @State private var launch = RelayLaunch()
@@ -43,7 +44,7 @@ struct CueComposer: View {
             send: { sendButton })
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: focusRequests) { focused = true }
-            .onChange(of: workspace.cue.presence) { launched = false }
+            .onChange(of: workspace.cue.lastYouSaid) { launched = false }
             .task { if style == .page { await DebugHooks.pressCueSendIfAsked(send) } }
     }
 
@@ -77,8 +78,8 @@ struct CueComposer: View {
     }
 
     private var hasDraft: Bool { !workspace.cue.draft.isEmpty(accepting: .images) }
-    /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CuePresence.sending`）。
-    private var sending: Bool { workspace.cue.canHear && (launched || workspace.cue.presence == .sending) }
+    /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CueWatch.sending`）。
+    private var sending: Bool { workspace.cue.canHear && (launched || workspace.cue.sending) }
 
     private var form: ComposerForm {
         #if os(iOS)

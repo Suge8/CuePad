@@ -237,9 +237,10 @@ extension DebugScene {
     #endif
 
     /// 量的一段比接力的那一下（约 1.3～1.4 秒）长一点。
-    private static let flightProbe = 1.6
+    static let flightProbe = 1.6
 
-    private static func measureFlight(_ kind: String, seconds: Double, into log: URL) async {
+    /// `act`：开始量之后当场做的那一下（按发送钮，`pressCueSendIfAsked`）。
+    static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async {
         let turns = TurnLog(), frames = FrameRecorder()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
@@ -249,6 +250,7 @@ extension DebugScene {
         frames.start()
         #endif
         turns.begin(CACurrentMediaTime(), root: nil)
+        act()
         try? await Task.sleep(for: .seconds(seconds))
         var line = TurnLog.metrics(turns.finish(), instructions: instructions, frames: frames.stop())
         line["kind"] = kind

@@ -16,6 +16,13 @@ final class CueWatch {
     private(set) var presence = CuePresence.derive(.empty, at: .always())
     /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
     private(set) var canHear = false
+    /// 你最近一句还在路上（`CuePresence.sending`）：输入框的发送钮只看它，不随在想、用工具重算。
+    private(set) var sending = false
+    /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
+    private(set) var lastYouSaid: Date?
+    /// 在路上或在做事（`CuePresence.shown` 有值）与此刻的表情（不算你正在写）：标签图标只看这两项。
+    private(set) var busy = false
+    private(set) var expression = CueMood.sleeping
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
     private(set) var lastSaid: String?
@@ -94,6 +101,10 @@ final class CueWatch {
         let presence = CuePresence.derive(digest, at: moment)
         set(\.presence, presence)
         set(\.canHear, presence != .disabled)
+        set(\.sending, presence == .sending)
+        set(\.lastYouSaid, digest.lastYou?.said)
+        set(\.busy, presence.shown != nil)
+        set(\.expression, CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone))
         set(\.waiting, digest.waiting)
         set(\.lastSaid, digest.lastSaid)
         set(\.lastSaidDone, digest.lastSaidDone)

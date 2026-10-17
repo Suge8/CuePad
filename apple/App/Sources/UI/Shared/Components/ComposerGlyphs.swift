@@ -17,8 +17,8 @@ struct CircleGlyph<Content: View>: View {
 /// 输入框右下角的主按钮，全 App 的输入框只此一颗（"对 Cue 说"、会话回复框、随手记、新会话、发给 Agent）。墨块的样子：钮是一块实心圆，
 /// 字形是刻出来的反色——发送是燕尾箭镞（点睛层）加一截箭杆，记下是勾，停止是一块圆角方墨。
 /// - 不可发送：淡底、淡墨；可发送（主动作）：靛青实心，变成可发送的那一下箭杆、箭镞依次往上一跳。
-/// - 发送中（话在路上，与会话状态标同一个）：淡底上三块靛青的 V 从下往上依次亮（`LoopLayer.climb`）；发出那一刻钮当帧换成发送中，
-///   同一刻箭镞处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
+/// - 发送中（话在路上，与会话状态标同一个）：淡底上三块靛青的 V 从下往上依次亮（`LoopLayer.climb`）；发出那一刻钮底当帧换掉、
+///   整支箭往上走掉淡出，同一刻箭镞处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
 /// - 停止（Agent 跑一轮时代替发送）：墨色实心方块；停止请求发出、这一轮还没歇下时换成转圈，不能再点。
 /// 按下照 `PressFeedback`（由外面的按钮给）。减弱动态效果：换状态只淡入淡出，不跳、不走，发送中是静止的"话在路上"。
 struct SendGlyph: View {
@@ -42,12 +42,14 @@ struct SendGlyph: View {
                 switch phase {
                 case .sending: onTheWay.transition(.opacity)
                 case .stopping: Spinner(.small).transition(.opacity)
-                default: glyph.transition(.opacity)
+                default:
+                    glyph.transition(.asymmetric(insertion: .opacity, removal: reduceMotion ? .opacity : .offset(y: -16).combined(with: .opacity)))
                 }
             }
+            .animation(Motion.quick, value: phase)
         }
-        // 发出那一刻钮底与字形当帧换掉（箭镞就是飞走的那点光，箭不留残影；发出后主线程还要忙一阵收输入框，渐变会卡在半路），其余换状态时渐变
-        .animation(phase == .sending ? nil : Motion.quick, value: phase)
+        // 钮底：发出那一刻当帧换掉，其余换状态时渐变
+        .animation(phase == .sending ? nil : Motion.quick, value: disc)
         .onChange(of: phase) { _, new in if new == .ready, !reduceMotion { hops += 1 } }
     }
 

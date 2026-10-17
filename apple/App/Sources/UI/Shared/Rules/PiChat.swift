@@ -106,6 +106,11 @@ nonisolated enum PiChat {
         unread(deliveries, messages: messages).filter { !isQueued($0, at: moment) }
     }
 
+    /// 回复框空着时的发送中：接在末尾的你的话里还有在路上的（与那个气泡同一个事实）。
+    static func sending(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> Bool {
+        outgoing(deliveries, messages: messages, at: moment).contains { Speech.trip($0, at: moment) == .sending }
+    }
+
     /// 排队的话：Agent 在跑时"等它做完再说""马上说"发出、它还没读到的，按发出先后，在回复框上方一叠（`PiQueueStack`）。
     /// 事实只有投送请求与对话两处：方式在执行前是你选的，送到后是 Agent 实际怎么收下的（`DeliveryMode`，排进它的队列才是这两种）；
     /// 它读到的那一刻对话里出现这句（`deliveryID`），就从这一叠移进对话、落在被读到的位置。没能送达的不算（含超时）——它是对话末尾的气泡。
