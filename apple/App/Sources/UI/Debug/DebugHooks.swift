@@ -306,6 +306,7 @@ extension View {
             Group {
                 switch DebugScene.scene {
                 case "style": StyleBoard()
+                case "icons": IconSheet()
                 case "widgets": DebugWidgetStage()
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()

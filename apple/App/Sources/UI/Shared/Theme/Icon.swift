@@ -48,6 +48,8 @@ nonisolated enum Icon: Hashable, Sendable {
     private enum Source {
         /// 自家的墨块符号（资源 Symbols/cue.<名>）。
         case ink(String)
+        /// 自家的反白符号：记号在第一层、实心底在第二层（同系统的 *.circle.fill），不按层级渲染，调用方给两种颜色时按层上色。
+        case filled(String)
         case system(String)
     }
 
@@ -79,37 +81,36 @@ nonisolated enum Icon: Hashable, Sendable {
         case .done: .ink("done")
         case .donePending: .ink("done.pre")
         case .onTheWay: .ink("climb")
+        case .agent: .ink("agent")
+        case .waiting: .ink("waiting")
+        case .cueAsking: .ink("asking")
+        case .failure: .ink("failure")
+        case .undelivered: .ink("undelivered")
+        case .needsReload: .ink("reload")
+        case .replied, .alertsPending: .ink("bell")
+        case .yourTurn: .ink("cursor")
+        case .fresh: .ink("sparkle")
+        case .ended: .ink("ended")
+        case .interrupted: .ink("interrupted")
+        case .unknown: .ink("unknown")
+        case .picked: .filled("picked")
+        case .syncStarting: .ink("cloud")
+        case .synced: .ink("cloud.done")
+        case .syncing: .ink("cloud.sync")
+        case .syncOff: .ink("cloud.off")
+        case .syncRestricted: .ink("cloud.lock")
+        case .syncTrouble: .ink("cloud.alert")
+        case .syncPaused: .ink("cloud.pause")
+        case .uploadLocal: .ink("cloud.up")
+        case .replaceWithCloud: .ink("cloud.down")
+        case .syncNow, .renew: .ink("renew")
+        case .alertsOn: .ink("bell.on")
+        case .alertsOff: .ink("bell.off")
 
-        case .agent: .system("sparkles")
         case .allSessions: .system("rectangle.stack")
         case .all: .system("square.stack")
         case .filter: .system("line.3.horizontal.decrease")
         case .extensionNote: .system("puzzlepiece.extension")
-        case .waiting: .system("questionmark.circle.fill")
-        case .cueAsking: .system("questionmark.bubble")
-        case .failure: .system("exclamationmark.circle.fill")
-        case .undelivered: .system("arrow.uturn.backward.circle.fill")
-        case .needsReload: .system("arrow.clockwise.circle")
-        case .replied: .system("bell.fill")
-        case .yourTurn: .system("character.cursor.ibeam")
-        case .fresh: .system("sparkle")
-        case .ended: .system("circle.slash")
-        case .interrupted: .system("bolt.slash")
-        case .unknown: .system("questionmark.circle")
-        case .picked: .system("checkmark.circle.fill")
-        case .syncStarting: .system("icloud")
-        case .synced: .system("checkmark.icloud")
-        case .syncing: .system("arrow.triangle.2.circlepath.icloud")
-        case .syncOff: .system("icloud.slash")
-        case .syncRestricted: .system("lock.icloud")
-        case .syncTrouble: .system("exclamationmark.icloud")
-        case .syncPaused: .system("pause.circle")
-        case .uploadLocal: .system("icloud.and.arrow.up")
-        case .replaceWithCloud: .system("icloud.and.arrow.down")
-        case .syncNow, .renew: .system("arrow.triangle.2.circlepath")
-        case .alertsPending: .system("bell")
-        case .alertsOn: .system("bell.badge")
-        case .alertsOff: .system("bell.slash")
         case .complete: .system("checkmark.circle")
         case .reopen: .system("arrow.uturn.backward.circle")
         case .restore: .system("arrow.uturn.backward")
@@ -231,7 +232,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// UIKit 的菜单与工具条用。
     var platformImage: UIImage? {
         switch source {
-        case .ink(let name): UIImage(named: Self.ink(name))
+        case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
         case .system(let name): UIImage(systemName: name)
         }
     }
@@ -239,7 +240,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// AppKit 的菜单与工具条用。
     var platformImage: NSImage? {
         switch source {
-        case .ink(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)
+        case .ink(let name), .filled(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)
         case .system(let name): NSImage(systemSymbolName: name, accessibilityDescription: nil)
         }
     }
@@ -249,6 +250,7 @@ nonisolated enum Icon: Hashable, Sendable {
         switch source {
         // 层级渲染：点睛是前景色的次一级。写在 Image 上，外面再设渲染方式也不覆盖它（要点亮用 `IconImage`）
         case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
+        case .filled(let name): Image(Self.ink(name))
         case .system(let name): Image(systemName: name)
         }
     }
