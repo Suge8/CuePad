@@ -281,11 +281,12 @@ public enum PiExtensionBundle {
         return text
     }()
 
-    public static let version: Int = declaredVersion(in: source) ?? 0
-
-    static func declaredVersion(in source: String) -> Int? {
-        source.firstMatch(of: /const EXTENSION_VERSION = (\d+);/).flatMap { Int($0.1) }
-    }
+    public static let version: Int = {
+        guard let version = source.firstMatch(of: /const EXTENSION_VERSION = (\d+);/).flatMap({ Int($0.1) }) else {
+            preconditionFailure("bundled cuepad-bridge.ts declares no EXTENSION_VERSION")
+        }
+        return version
+    }()
 }
 
 /// 写给 Agent 的技能：CuePad 是什么、怎么把文件发到手机、做 HTML 页给手机看的约定（只写在这里），其余让 Agent 看 `--help`（命令行唯一的文档）。

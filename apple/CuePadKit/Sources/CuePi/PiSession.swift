@@ -37,14 +37,14 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public let id: String
     public let sessionID: String
     public let agent: AgentKind
-    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。只有测试读（读会话文件核对对话）
+    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。下线时据它判断说没说过话（`spoke`）
     public let sessionFile: URL?
     /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
     public let pid: Int32
     public let cwd: URL
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
-    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）；只有测试读（核对 /reload 后载入的是随包的扩展）
+    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）：协议号不同的托管会话会不会自己重新载入看它（`PiBridge.selfReloadingExtension`）
     public let extensionVersion: Int
     public internal(set) var state: PiWorkState
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil

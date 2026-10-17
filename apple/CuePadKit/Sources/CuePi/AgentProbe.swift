@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// 由已检测出的接入状态（`AgentIntegration.status(of:)`）得出这台 Mac 上各家能不能用（同步表 macAgents 里这台的那条）：
@@ -59,7 +60,7 @@ struct AgentProbe {
             return agent.map(Outcome.usable) ?? .unusable("没登录")
         } catch {
             let message = error.localizedDescription
-            return .unusable("问不出模型（\(message.count > Self.messageLimit ? message.prefix(Self.messageLimit - 1) + "…" : message)）")
+            return .unusable("问不出模型（\(message.clipped(Self.messageLimit))）")
         }
     }
 
