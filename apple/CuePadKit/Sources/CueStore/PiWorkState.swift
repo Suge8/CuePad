@@ -52,12 +52,15 @@ public enum PiWorkState: String, Sendable, CaseIterable {
 extension PiWorkState {
   /// 还有事没做完的状态（`hasPendingWork`），SQL `IN (…)` 里的列表。
   static let pendingWorkSQL = sqlList(allCases.filter(\.hasPendingWork))
-  /// 收尾了的状态（已结束、被打断），SQL `IN (…)` 里的列表。
-  static let closedSQL = sqlList([ended, interrupted])
-  /// `column`（会话记录的 state 列）不是已结束的 SQL 条件。写成已结束两侧的两段范围而不是 `!=`：`!=` 用不上 (state, stateSince) 索引，
-  /// 库里的会话绝大多数已结束，会整表扫一遍（真实库四千多条、冷读约 50ms，在主线程的首屏读里）；两段范围只走索引里没结束的那几条。
-  static func notEndedSQL(_ column: String = "state") -> String {
-    "(\(column) < '\(ended.rawValue)' OR \(column) > '\(ended.rawValue)')"
+  /// 收尾了的状态（已结束、被打断）。
+  static let closed: [PiWorkState] = [.ended, .interrupted]
+  /// `column`（会话记录的 state 列）不是 `states` 里任何一个的 SQL 条件。写成这几个值隔开的几段范围而不是 `NOT IN`、`!=`：
+  /// 后者用不上 (state, stateSince) 索引，库里的会话绝大多数已结束，会整表读一遍带问答长文的行（真实库四千多条、冷读 50～65ms，
+  /// 有的就在主线程的首屏读里）；几段范围只走索引里不在其中的那几条。
+  static func outsideSQL(_ states: [PiWorkState], column: String = "state") -> String {
+    let values = states.map(\.rawValue).sorted()
+    let between = zip(values, values.dropFirst()).map { "(\(column) > '\($0)' AND \(column) < '\($1)')" }
+    return "(" + (["\(column) < '\(values[0])'"] + between + ["\(column) > '\(values[values.count - 1])'"]).joined(separator: " OR ") + ")"
   }
 }
 

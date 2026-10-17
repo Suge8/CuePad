@@ -69,7 +69,8 @@ extension CueStore {
   func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
     try write {
       let before = try db.query(
-        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE hostID = ? AND state NOT IN (\(PiWorkState.closedSQL))", [host]
+        // `+hostID`：不走 hostID 索引（这台 Mac 的会话几乎就是全部），改走 state 索引只读没收尾的那几条
+        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE +hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]
       ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3))) }
       let open = Dictionary(before.compactMap { id, state, times in state.map { (id, ($0, times)) } }) { $1 }
       let processes = try db.query(
@@ -101,7 +102,7 @@ extension CueStore {
       """
       UPDATE piSessionStates SET stateSince = CASE WHEN \(kept) THEN stateSince ELSE ? END,
         state = \(state), \(Self.cleared), detail = CASE WHEN \(failed) THEN detail END, modifiedAt = ?
-      WHERE state NOT IN (\(PiWorkState.closedSQL)) AND \(condition)
+      WHERE \(PiWorkState.outsideSQL(PiWorkState.closed)) AND \(condition)
       """, [now, Date.stamp] + arguments)
   }
 
