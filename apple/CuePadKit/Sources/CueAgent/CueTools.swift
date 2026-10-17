@@ -489,13 +489,14 @@ public struct CueTools: Sendable {
     lines.append(
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
+    let previews = try await store.previews(of: session.sessionID)
     lines += Self.conversation(detail)
-    lines += deliveredLines(detail.previews)
+    lines += deliveredLines(previews)
     return .ok(
       lines.joined(separator: "\n"),
       [
         "session": session.sessionID, "state": detail.session.state.rawValue, "tasks": bound.map { id($0.task.id) },
-        "deliverables": detail.previews.map(delivered),
+        "deliverables": previews.map(delivered),
       ])
   }
 
@@ -515,7 +516,10 @@ public struct CueTools: Sendable {
     ]
   }
 
-  private static func clock(_ date: Date) -> String { date.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour().minute()) }
+  /// 发来的时刻写成"10-17 15:34"（同信封的 24 小时制）。
+  private static func clock(_ date: Date) -> String {
+    date.formatted(.verbatim("\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
+  }
 
   /// 会话那一段：哪家、名字、状态与多久、在等的提问。
   private static func sessionHead(_ session: PiSessionState, now: Date) -> String {

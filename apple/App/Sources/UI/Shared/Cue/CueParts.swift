@@ -235,6 +235,45 @@ private struct AnswerChip: View {
     }
 }
 
+/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsk.question`）。"等你"卡与全屏预览的底栏共用。
+struct CueQuestionLine: View {
+    let question: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            PiStateGlyph(status: .asking)
+            Text(question)
+                .font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+/// "等你"的选项：推荐的答案（第一个）作主按钮、其余次按钮，一行放不下就竖排。"等你"卡与全屏预览的底栏共用。
+struct CueChoices: View {
+    let options: [String]
+    var disabled = false
+    let pick: (String) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { buttons }
+            VStack(alignment: .leading, spacing: 8) { buttons }
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+            Button(option) { pick(option) }
+                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
+                .lineLimit(2)
+                .disabled(disabled)
+        }
+    }
+}
+
 /// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
 /// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务的全部交付物
 /// （迷你一排，新的在前；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
@@ -264,13 +303,7 @@ struct CueWaitingDock: View {
             let ref = message.taskID.flatMap { tasks[$0] }
             let question = (message.ask ?? .rule).question(task: ref?.task.heading)
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PiStateGlyph(status: .asking)
-                    Text(question)
-                        .font(Typography.bodyStrong).foregroundStyle(palette.ink)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
+                CueQuestionLine(question: question)
                 if reading == message.id { original(message.text).transition(.opacity) }
                 if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
                     let batch = Array(deliverables)
@@ -278,7 +311,7 @@ struct CueWaitingDock: View {
                         open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
                     }
                 }
-                choices(message)
+                CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
                 otherwiseField(message)
                 HStack(spacing: 10) {
                     if let ref { CueTaskLine(ref: ref) }
@@ -320,23 +353,6 @@ struct CueWaitingDock: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
-    }
-
-    private func choices(_ message: CueMessage) -> some View {
-        let options = message.choices ?? []
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { buttons(message, options) }
-            VStack(alignment: .leading, spacing: 8) { buttons(message, options) }
-        }
-    }
-
-    @ViewBuilder private func buttons(_ message: CueMessage, _ options: [String]) -> some View {
-        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-            Button(option) { answer(message, option) }
-                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
-                .lineLimit(2)
-                .disabled(ending == message.id)
-        }
     }
 
     /// 不允许时另外说：回车或点发送交给 Cue。

@@ -2,6 +2,7 @@ import AVFoundation
 import CueEditor
 import CueStore
 import QuickLookThumbnailing
+import SwiftUI
 import WebKit
 
 /// 一份交付物的缩略图里画什么：画面、宽高比（宽 / 高）与类型后面那一截（视频、音频的时长，PDF 的页数）。
@@ -12,7 +13,8 @@ nonisolated struct DeliverableLook: Sendable {
     var detail: String?
 }
 
-/// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按像素降采样；网页与 Markdown 是离线 WebKit 渲的一张快照（`PageSnapshots`）；
+/// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按像素降采样；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
+/// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
 /// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与生成都不在主线程。
 /// 读到的按"哈希 + 像素"留在内存里（系统内存紧张时自动清），同一份在别处再出现、滚走再滚回来都不重读，第一帧就是它该有的比例。
 enum DeliverableLooks {
@@ -34,8 +36,10 @@ enum DeliverableLooks {
         switch preview.kind {
         case .image:
             look.image = await decode(file, pixels: pixels)
-        case .web, .markdown:
+        case .web:
             if let snapshot = await PageSnapshots.png(for: preview, file: file) { look.image = await decode(snapshot, pixels: pixels) }
+        case .markdown:
+            look.image = await markdown(file, pixels: pixels)
         case .audio:
             look.detail = await duration(file)
         case .video:
@@ -54,6 +58,27 @@ enum DeliverableLooks {
     }
 
     private static func key(_ preview: PiPreview, _ pixels: Int) -> NSString { "\(preview.hash)@\(pixels)" as NSString }
+
+    /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；
+    /// 按浅色画，深色下由缩略图统一压暗（同网页快照）。
+    private static func markdown(_ file: URL, pixels: Int) async -> CGImage? {
+        guard let source = await head(of: file) else { return nil }
+        let palette = Palette(dark: false)
+        let page = MarkdownText(source: source)
+            .padding(28)
+            .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
+            .background(palette.paper)
+            .environment(\.palette, palette)
+        let renderer = ImageRenderer(content: page)
+        renderer.scale = CGFloat(pixels) / markdownPage.width
+        return renderer.cgImage
+    }
+
+    private static let markdownPage = CGSize(width: 480, height: 360)
+
+    @concurrent private static func head(of file: URL) async -> String? {
+        (try? String(contentsOf: file, encoding: .utf8)).map { String($0.prefix(3000)) }
+    }
 
     @concurrent private static func decode(_ file: URL, pixels: Int) async -> CGImage? {
         Thumbnails.image(at: file, maxPixel: pixels)
@@ -81,7 +106,7 @@ enum DeliverableLooks {
     }
 }
 
-/// 网页与 Markdown 的缩略图：同全屏预览的拦截规则（`PreviewWebGuard`，脚本照跑、不联网）离线载入，渲首屏一张快照，
+/// 网页的缩略图：同全屏预览的拦截规则（`PreviewWebGuard`，脚本照跑、不联网）离线载入，渲首屏一张快照，
 /// 按内容哈希存在缓存目录（系统可随时清，清了下次再渲）。一次只渲一张：每张要起一个网页进程，一屏几张同时渲会把内存与 CPU 一起顶上去。
 enum PageSnapshots {
     /// 渲染时的视口（CSS 像素）与快照宽（像素）：4:3 的一屏，够结果卡的主图在 Mac 上铺满。
@@ -98,7 +123,7 @@ enum PageSnapshots {
             _ = await previous?.value
             // 排在前面的可能刚渲过同一份
             if FileManager.default.fileExists(atPath: target.path) { return target }
-            return await render(preview.kind, file: file, into: target)
+            return await render(file, into: target)
         }
         tail = task
         return await task.value
@@ -108,15 +133,9 @@ enum PageSnapshots {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "CuePadSnapshots", directoryHint: .isDirectory)
     }
 
-    private static func render(_ kind: PiPreviewKind?, file: URL, into target: URL) async -> URL? {
+    private static func render(_ file: URL, into target: URL) async -> URL? {
         do {
-            let page: WebPage
-            if kind == .markdown {
-                page = try await PreviewWebGuard.page(
-                    loading: Data(MarkdownHTML.page(try await read(file)).utf8), mimeType: "text/html", untilLoaded: true)
-            } else {
-                page = try await PreviewWebGuard.page(for: file, untilLoaded: true)
-            }
+            let page = try await PreviewWebGuard.page(for: file)
             // 载入完再等两帧（没有视图时帧可能不来，最多等 300ms）：脚本画的图表、字体落定后才是首屏的样子
             _ = try await page.callJavaScript("""
                 await new Promise(done => { requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 300) })
@@ -129,48 +148,8 @@ enum PageSnapshots {
         }
     }
 
-    @concurrent private static func read(_ file: URL) async throws -> String { try String(contentsOf: file, encoding: .utf8) }
-
     @concurrent private static func write(_ data: Data, to target: URL) async throws {
         try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: target, options: .atomic)
-    }
-}
-
-/// Markdown 拼成一页给 WebKit 渲缩略图：块照 `MarkdownBlock` 认，行内的记号只留文字（缩略图里看的是版面）。
-nonisolated enum MarkdownHTML {
-    static func page(_ source: String) -> String {
-        let body = MarkdownBlock.parse(source).map { block in
-            switch block {
-            case .paragraph(let text): "<p>\(inline(text))</p>"
-            case .heading(let level, let text): "<h\(min(level, 4))>\(inline(text))</h\(min(level, 4))>"
-            case .item(let marker, let text, let depth): "<p class=li style=\"margin-left:\(depth * 20 + 4)px\">\(escape(marker)) \(inline(text))</p>"
-            case .quote(let text): "<blockquote>\(inline(text))</blockquote>"
-            case .code(let text): "<pre>\(escape(text))</pre>"
-            case .rule: "<hr>"
-            case .table(let table):
-                "<table><tr>" + table.header.map { "<th>\(inline($0))</th>" }.joined() + "</tr>"
-                    + table.rows.map { "<tr>" + $0.map { "<td>\(inline($0))</td>" }.joined() + "</tr>" }.joined() + "</table>"
-            }
-        }.joined(separator: "\n")
-        return """
-            <!doctype html><html><head><meta charset="utf-8"><style>
-            body{margin:0;padding:48px 64px;background:#FCFBF8;color:#1C1B19;font:22px/1.6 -apple-system,"PingFang SC",sans-serif}
-            h1{font-size:40px;margin:0 0 20px}h2{font-size:32px;margin:28px 0 14px}h3,h4{font-size:26px;margin:24px 0 10px}
-            p{margin:0 0 14px}.li{margin-bottom:6px}blockquote{margin:0 0 14px;padding-left:16px;border-left:4px solid #ddd;color:#666}
-            pre{background:#F1EFEA;padding:16px;border-radius:10px;font:18px ui-monospace,monospace;white-space:pre-wrap}
-            table{border-collapse:collapse;margin-bottom:14px}th,td{border-bottom:1px solid #e4e1da;padding:6px 14px;text-align:left}th{background:#F1EFEA}
-            hr{border:0;border-top:1px solid #e4e1da;margin:20px 0}
-            </style></head><body>\(body)</body></html>
-            """
-    }
-
-    private static func inline(_ text: String) -> String {
-        let plain = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))).map { String($0.characters) } ?? text
-        return escape(plain).replacing("\n", with: "<br>")
-    }
-
-    private static func escape(_ text: String) -> String {
-        text.replacing("&", with: "&amp;").replacing("<", with: "&lt;").replacing(">", with: "&gt;")
     }
 }

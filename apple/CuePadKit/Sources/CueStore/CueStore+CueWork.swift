@@ -159,14 +159,13 @@ public struct CueLeafDetail: Equatable, Sendable {
   public var sending: Bool
 }
 
-/// 一个会话的细节（Cue 的 peek）：记录、最近几轮问答与预览。
+/// 一个会话的细节（Cue 的 peek）：记录与最近几轮问答。
 public struct CueSessionDetail: Equatable, Sendable {
   public var session: PiSessionState
   /// 最近几轮问答（会话里用户一方说的与 Agent 的回答），从早到晚。
   public var recent: [PiChatMessage]
   /// `recent` 里 Cue 说的那几条的请求 id（`cueSentDeliveries`，与会话页同一条规则，见 `PiChatMessage.saidByCue`）。
   public var cueSent: Set<UUID>
-  public var previews: [PiPreview]
 }
 
 extension PiChatMessage {
@@ -785,8 +784,7 @@ extension CueStore {
       orderBy: "seq DESC, id DESC", limit: rounds * 2
     ).reversed()
     return CueSessionDetail(
-      session: session, recent: Array(recent), cueSent: try cueSentDeliveries(among: recent.compactMap(\.deliveryID)),
-      previews: try previews(of: session.sessionID))
+      session: session, recent: Array(recent), cueSent: try cueSentDeliveries(among: recent.compactMap(\.deliveryID)))
   }
 
   /// Cue 说的会话：会话 id、至少 4 位的 id 前缀，或会话名（不分大小写）；id 对上的优先，都按最近有动静的在前。
