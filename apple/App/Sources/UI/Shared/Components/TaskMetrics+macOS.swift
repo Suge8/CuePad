@@ -14,5 +14,14 @@ enum TaskMetrics {
     static let cardPadding: CGFloat = 12
     static let cardRadius: CGFloat = 10
     static let cardGap: CGFloat = 8
+    // 任务行（`TaskLine`）：上级正文字号加一点字重、步骤小一档，圈也小一档
+    static let lineFont = Typography.body.weight(.medium)
+    static let stepFont = Typography.secondary
+    static let ring: CGFloat = 15
+    static let stepRing: CGFloat = 13
+    /// 圈那一列多宽（浮窗里的新建行按它缩进，字与任务标题对齐）、与标题隔多少；行的左右内边距里铺悬停的淡底。
+    static let ringColumn: CGFloat = 16
+    static let columnGap: CGFloat = 10
+    static let rowInset: CGFloat = 8
 }
 #endif

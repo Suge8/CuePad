@@ -8,7 +8,7 @@ nonisolated struct ShelfData: Sendable, Equatable {
     /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
     var leading: [UUID: [ProjectNow.InProgress]]
     /// 正在推进的任务（顶层进行中的，最近开始的在前，规则 `TaskBoard.active`），书架最上面。
-    var active: [Card]
+    var active: [TaskBoard.ActiveTask]
     /// 纸上列不下的进行中任务数：纸底写"还有 N 项"（点开是任务页）。
     var activeMore: Int
     var trashCount: Int

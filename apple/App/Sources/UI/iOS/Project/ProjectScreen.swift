@@ -223,7 +223,7 @@ private struct FocusCard: View {
                             tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks),
                             lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
                         ) { row in
-                            TaskLine(task: row.task, subtasks: data.subtasks[row.id])
+                            TaskLine(task: row.task, subtasks: data.subtasks[row.id], step: row.depth > 0)
                         }
                     }
                     .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in

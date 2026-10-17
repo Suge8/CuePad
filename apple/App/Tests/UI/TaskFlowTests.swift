@@ -224,7 +224,7 @@ struct TaskFlowTests {
         let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
         #expect(catalog.openTasks[project] == open.count && board.counts.open == open.count)
-        #expect(board.inProgress.count + board.todo.count == open.count)
+        #expect(Set(board.inProgress.map(\.id) + board.todo.flatMap(\.roots)) == Set(open))
         let done = [fix.id, shipped.id]
         #expect(Set(board.done.map(\.id)) == Set(done) && board.counts.done == done.count)
         #expect(page.taskCounts == board.counts)
@@ -245,6 +245,8 @@ struct TaskFlowTests {
         let active = try await TaskBoard.active(limit: 2, from: store)
 
         #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
+        // 任务页的"进行中"与它同一批、同一个顺序
+        #expect(try await TaskBoard.read(from: store).inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
         #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 

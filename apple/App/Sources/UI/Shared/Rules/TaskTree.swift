@@ -58,10 +58,10 @@ nonisolated struct TaskTree: Equatable, Sendable {
     /// 要显示的任务，按输入顺序。
     var ordered: [Card] { order }
 
-    /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条）：缩进、反缩进与拖放都只在里面算。
+    /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条），顶层按给的先后排（看板的进行中按开始时间）：
+    /// 排出的行、缩进、反缩进与拖放的落点都按这个顺序算，与看到的一致。
     func scoped(to roots: [UUID]) -> TaskTree {
-        let kept = Set(roots.flatMap { [$0] + descendants(of: $0) })
-        return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
+        TaskTree(roots.flatMap { [$0] + descendants(of: $0) }.compactMap { tasks[$0] }, all: everything)
     }
     func task(_ id: UUID) -> Card? { tasks[id] }
     func children(of id: UUID) -> [UUID] { links.children(of: id) }
@@ -101,8 +101,9 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
     /// （右正左负）。停在一行中部是成为它的步骤（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
-    /// 不能落进自己的子树；与原位置相同时为 nil。
-    func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
+    /// 不能落进自己的子树；与原位置相同时为 nil。`gaps` 为 false 时这组行的先后不是同级的手动顺序（看板的进行中按开始时间排），
+    /// 两行之间不成落点（不改顺序、不改项目），只有停在一行中部成为它的步骤。
+    func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int, gaps: Bool = true) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
         let candidates = rows.filter { !excluded.contains($0.id) && frames[$0.id] != nil }
         let height = structure.height(of: dragged)
@@ -110,8 +111,10 @@ nonisolated struct TaskTree: Equatable, Sendable {
         if let (index, fraction) = hit(point, in: candidates, frames: frames) {
             let row = candidates[index]
             if (0.25..<0.75).contains(fraction), fits(dragged, under: row.id) { return onto(row.id, dragged: dragged) }
+            guard gaps else { return nil }
             gap = fraction < 0.5 ? index : index + 1
         } else {
+            guard gaps else { return nil }
             gap = candidates.filter { frames[$0.id]!.midY < point.y }.count
         }
         let previous = gap > 0 ? candidates[gap - 1] : nil
