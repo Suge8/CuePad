@@ -23,7 +23,6 @@ nonisolated struct QuotaMeter: Equatable {
         let id: QuotaWindow.ID
 
         var percent: String { "\(Int((left * 100).rounded()))%" }
-        var isSpent: Bool { left <= 0 }
         /// 只算某个模型的（按模型的周额度）
         var isScoped: Bool { id.model != nil }
 
