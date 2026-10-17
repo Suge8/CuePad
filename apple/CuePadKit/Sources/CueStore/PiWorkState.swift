@@ -18,6 +18,12 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 会自己重载的扩展等空闲后换上新版本；更早的要在终端里 /reload。不是"已结束"，不进历史。
   case incompatible
 
+  /// `column`（会话记录的 state 列）不是已结束的 SQL 条件。写成已结束两侧的两段范围而不是 `!=`：`!=` 用不上 (state, stateSince) 索引，
+  /// 库里的会话绝大多数已结束，会整表扫一遍（真实库四千多条、冷读约 50ms，在主线程的首屏读里）；两段范围只走索引里没结束的那几条。
+  static func notEndedSQL(_ column: String = "state") -> String {
+    "(\(column) < '\(ended.rawValue)' OR \(column) > '\(ended.rawValue)')"
+  }
+
   /// 粗状态（状态起点只在它变的时候前进）：工作中、等你确认、出错、空闲。
   public var phase: Int {
     if isWorking { return 0 }
