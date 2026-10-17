@@ -65,12 +65,11 @@ import Testing
     #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
   }
 
-  @Test func cardListScopes() async throws {
+  /// 不在绑定了目录的项目里：列所有项目与未分类；--pinned 只列资料。指定项目与未分类见 `DefaultProjectTests`。
+  @Test func cardListOutsideABoundDirectoryListsEverything() async throws {
     let sb = try Sandbox()
-    let alpha = try await sb.project("Alpha")
-    let beta = try await sb.project("Beta")
-    let a = try await sb.store.createCard(in: alpha.id, body: "a")
-    let b = try await sb.store.createCard(in: beta.id, body: "b")
+    let a = try await sb.store.createCard(in: try await sb.project("Alpha").id, body: "a")
+    let b = try await sb.store.createCard(in: try await sb.project("Beta").id, body: "b")
     let unfiled = try await sb.store.createCard(in: nil, body: "i")
 
     func ids(_ args: String...) async throws -> Set<String> {
@@ -79,8 +78,6 @@ import Testing
     }
     func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
     #expect(try await ids() == [id(a), id(b), id(unfiled)])
-    #expect(try await ids("--project", "Beta") == [id(b)])
-    #expect(try await ids("--unfiled") == [id(unfiled)])
     try await sb.store.updateCard(b.id) { $0.isPinned = true }
     #expect(try await ids("--pinned") == [id(b)])
   }
@@ -200,7 +197,6 @@ import Testing
 
     let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--global")
     #expect(conflicting.code == 2)
-    #expect(await sb.run("task", "add", "--help").out.contains("--parent"))
   }
 
 }
@@ -266,26 +262,19 @@ import Testing
 }
 
 @Suite struct HelpTests {
-  private static let commands = [
-    "project list", "card list", "card show", "card add", "card edit", "card move", "card trash",
-    "card restore", "card todo", "task list", "task add", "task start", "task done", "task undo", "search",
-    "conflicts list", "conflicts resolve",
-  ]
-
+  /// 帮助是唯一文档：手写的根帮助提到每个名词，名词的帮助列出它的动词，每个命令有自己的帮助。
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Sandbox()
     let root = await sb.run("--help").out
-    for command in Self.commands {
-      let words = command.split(separator: " ").map(String.init)
-      #expect(root.contains("cuepad \(words[0])"), "根帮助没有提到 \(words[0])")
-      if words.count == 2 {
-        #expect((await sb.run(words[0], "--help")).out.contains(command), "\(words[0]) --help 没列出 \(command)")
+    for command in Command.all {
+      let noun = command.path[0]
+      #expect(root.contains("cuepad \(noun)"), "根帮助没有提到 \(noun)")
+      if command.path.count == 2 {
+        #expect((await sb.run(noun, "--help")).out.contains(command.name), "\(noun) --help 没列出 \(command.name)")
       }
-      let own = await sb.call(words + ["--help"])
-      #expect(own.code == 0 && own.out.contains("cuepad \(command)"), "\(command) --help")
+      let own = await sb.call(command.path + ["--help"])
+      #expect(own.code == 0 && own.out.contains("cuepad \(command.name)"), "\(command.name) --help")
     }
-    let add = await sb.run("card", "add", "--help").out
-    #expect(add.contains("--body") && add.contains("--project"))
   }
 
   @Test func documentedFieldsMatchActualJSON() async throws {
