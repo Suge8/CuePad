@@ -6,7 +6,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 
 - 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`；调试实例只用 `xc.sh shot|rec|run` 起、`xc.sh stop` 收：隔离、全机只留一份、一定退出。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。`cuepad --help` 是命令行唯一文档。测试摘要里的 "Executed N tests" 只数 XCTest，Swift Testing 的用例不在内。
 - 提交前跑 `apple/scripts/xc.sh check`。
-- 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：旧的模块缓存，依赖它的模块还按旧内存布局读。删 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 再编，仍不行就删掉 `apple/.derived` 整编。
+- 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：旧的模块缓存，依赖它的模块还按旧内存布局读。删 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 再编，仍不行就删掉 `apple/.derived` 整编（系统 SDK 的预编译模块在 `~/Library/Caches/cuepad-xc`，各检出共用，不随它删）。
 
 ## 护栏
 

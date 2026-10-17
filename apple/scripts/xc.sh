@@ -88,13 +88,17 @@ esac
 # 本机 ad-hoc 签名：工程默认是团队 + 自动签名（给发布用），iCloud 这类受限能力在 ad-hoc 下无法启动，
 # 所以覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。
 local_signing=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements)
+# 系统 SDK 的预编译模块（约 166 个，冷编前 10 秒都在生成它们）所有检出共用一份：Xcode 默认就放在各工程共用的 DerivedData 根下，
+# 这里的产物目录按检出分开，不指定就每个新检出从头编一遍。实测换检出路径照样命中，冷编约快 17%。删 .derived 不会清掉它
+shared_cache="$HOME/Library/Caches/cuepad-xc"
+shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPrecompiledModules" MODULE_CACHE_DIR="$shared_cache/ModuleCache.noindex" SDK_STAT_CACHE_DIR="$shared_cache")
 
 # 退出码即 xcodebuild 的退出码（pipefail）。-quiet 下只有警告的编译步骤会被打成
 # "error: the following command failed with exit code 0 but produced no further output"——不是失败，滤掉这一行免得误读。
 xcb() {
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" ${asc_auth[@]+"${asc_auth[@]}"} "$@" \
-    "${local_signing[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
+    "${local_signing[@]}" "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
 
@@ -119,8 +123,12 @@ sign_development() {
 case "$cmd" in
   check)
     "$APPLE_DIR/scripts/lint.sh"
-    (cd "$APPLE_DIR/CuePadKit" && swift build --quiet)
-    xcb -quiet build ;;
+    # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
+    (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) & kit=$!
+    status=0
+    xcb -quiet build || status=$?
+    wait "$kit" || status=$?
+    exit $status ;;
   build) xcb -quiet build; sign_development ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
