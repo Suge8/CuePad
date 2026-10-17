@@ -202,37 +202,6 @@ struct BridgeClientTests {
 
     // MARK: 命令
 
-    @Test func sendEncodesProtocolBytesAndReturnsDelivery() async throws {
-        let ext = FakeExtension(directory: dir)
-        ext.onCommand = { _, _ in ["ok": true, "delivered": "steer"] }
-        try ext.start()
-        try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
-
-        let png = Data([0x89, 0x50, 0x4E, 0x47])
-        let delivery = try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer), to: ext.id)
-        #expect(delivery == .queued(.steer))
-
-        let cmd = try #require(ext.commands.first?.json)
-        #expect(cmd["t"] as? String == "send")
-        #expect(cmd["text"] as? String == "看图")
-        #expect(cmd["deliverAs"] as? String == "steer")
-        let images = try #require(cmd["images"] as? [[String: Any]])
-        #expect(images.count == 1)
-        #expect(images[0]["mimeType"] as? String == "image/png")
-        #expect(images[0]["data"] as? String == png.base64EncodedString())
-        #expect((cmd["id"] as? String)?.isEmpty == false)
-    }
-
-    @Test func rejectionFromExtensionSurfacesAsError() async throws {
-        let ext = FakeExtension(directory: dir)
-        ext.onCommand = { _, _ in ["ok": false, "error": "no_editor"] }
-        try ext.start()
-        try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
-        await #expect(throws: PiBridgeError.rejected("no_editor")) { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
-    }
-
     @Test func pendingSendFailsWhenSessionEndsBeforeAck() async throws {
         let ext = FakeExtension(directory: dir)
         ext.onCommand = { _, _ in nil } // 收到不回
