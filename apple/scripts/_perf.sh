@@ -21,7 +21,7 @@ perf_build() {
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
     -destination "$destination" -derivedDataPath "$derived" -quiet build \
-    DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' "${extra[@]}" \
+    DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' ${extra[@]+"${extra[@]}"} \
     >"$derived/build.log" 2>&1 || { tail -30 "$derived/build.log" >&2; exit 1; }
 }
 
