@@ -15,7 +15,7 @@ extra=("${@:3}")
 DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
 LIBRARY="$DERIVED/library-perf"
 
-# 实例经 app.py（隔离、全机一份、被打断也收干净）；后台调用时 $! 是看守进程，结束它连同 CuePad 一起收
+# 实例经 app.py exec（隔离、占住本检出那一份后 exec 成 CuePad）：后台调用时 $! 就是 CuePad
 launch() {
   local library="$1"; shift
   exec python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "$@"

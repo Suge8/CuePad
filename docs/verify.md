@@ -40,10 +40,10 @@ CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
 ```bash
 pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene projectagent -CuePadProject 圆桌)
 bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
-apple/scripts/xc.sh stop       # 验完；忘了收 15 分钟后也会自己退出
+apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己退出，不够就再 run 一次
 ```
 
-- 机器上常开着用户的正式版：只按 PID 认根，按应用名找窗口会点到用户的。全机同一时间只有一个调试实例，别的检出在用时 `run` 排队。
+- 机器上常开着用户的正式版和别的检出的调试实例：只按 PID 认根，按应用名找窗口会点到别人的。
 - `projectagent` 场景带演示会话（另一台 Mac 上在线的），任务、步骤与会话的绑定都有。
 - SwiftUI 输入框用 `setText` 只改了无障碍的值、进不了绑定（不保存）：先 `click` 再 `typeText`（状态要 `--image always`）。
 - 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
@@ -63,7 +63,7 @@ apple/scripts/xc.sh stop       # 验完；忘了收 15 分钟后也会自己退�
 
 测量只有两个入口，都是 Release 构建（带 DEBUG 条件留下测量代码，产物在 `apple/.derived-perf`）、每次全新进程、多次取中位，前后对比就是两个检出各跑同一条命令：
 
-- 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
+- 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，构建完只在测量那段独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
 - 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] -- …`，从进程外读内核记账，`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh` 头注释）。
 
 方法与坑：

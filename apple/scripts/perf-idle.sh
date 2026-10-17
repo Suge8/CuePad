@@ -33,7 +33,7 @@ for run in $(seq "$runs"); do
   library_args=(-CuePadDemo YES)
   if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); else mkdir -p "$library"; fi
   if [ "$platform" = mac ]; then
-    # app.py exec 占住全机那一份 Mac 实例后 exec 成 CuePad：$! 就是 CuePad
+    # app.py exec 占住本检出那一份 Mac 实例后 exec 成 CuePad：$! 就是 CuePad
     CUEPAD_SHOT_READY="$ready" python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "${library_args[@]}" ${args[@]+"${args[@]}"} >/dev/null 2>&1 &
     pid=$!
     stop() { kill -TERM "$pid"; wait "$pid" || true; }

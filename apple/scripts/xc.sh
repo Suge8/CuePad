@@ -7,13 +7,13 @@
 #   xc.sh test kit [swift test 参数…]               CuePadKit 在 macOS 上的 swift test，如 --filter SuiteName
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…]  构建 → 起隔离实例 → 画面就绪后截窗口 → 退出
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
-#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 15 分钟后自己退出
+#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
-#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh），独占机器
+#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）；构建完只在测量那段独占机器
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
-# 实例的隔离、全机一份、一定退出见 app.py 头注释；排队与时限见 _lock.sh；模拟器池见 _sim.sh。
+# 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队与时限见 _lock.sh；模拟器池见 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（不联网、不要账号）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
@@ -49,8 +49,7 @@ case "$cmd" in
   device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
-  # 静置开销读的是进程自己的内核记账（指令、CPU 时间、唤醒），不随机器忙闲变，不必独占机器、让别的任务排队
-  perf) case "$platform:${3:-}" in idle:ios) xc_enter sim "$0" "$@" ;; idle:*) xc_enter plain "$0" "$@" ;; *) xc_enter exclusive "$0" "$@" ;; esac ;;
+  perf) ;;  # 先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
   check|build) xc_enter plain "$0" "$@" ;;
   *) echo "$USAGE" >&2; exit 2 ;;
@@ -67,7 +66,7 @@ if [ "$cmd" = perf ]; then
 fi
 
 # perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
-if [ "$cmd" = perf ]; then
+if [ "$cmd" = perf ] || [ -n "${CUEPAD_PERF_BUILD:-}" ]; then
   DERIVED="$APPLE_DIR/.derived-perf"; configuration=Release
   # 关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
@@ -153,6 +152,10 @@ case "$cmd" in
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
   perf)
-    xcb -quiet build >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
-    exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;
+    # 构建照普通任务排队；独占机器只给交互测量那一段（帧与主线程时间怕别的进程抢），其间别的检出的构建、截图才等它。
+    # 静置开销读的是进程自己的内核记账（指令、CPU 时间、唤醒），不随机器忙闲变，不独占
+    CUEPAD_PERF_BUILD=1 "$0" build "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
+    mode=exclusive
+    if [ "$perf_script" = perf-idle.sh ]; then if [ "$platform" = ios ]; then mode=sim; else mode=plain; fi; fi
+    xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;
 esac

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """CuePad 的调试实例：起一份隔离实例，做一件事，一定退出。xc.sh 构建完调它，perf-mac.sh 用 exec。
 用法：app.py <shot|rec|run> <mac|ios|ipad> <CuePad.app> <库目录> [--device <UDID>] [--out <图|片>] [-- 启动参数…]
-      app.py exec <CuePad.app> <库目录> [-- 启动参数…]   占住全机那一份后 exec 成 CuePad（量完自己退出的 bench 用，$! 就是 CuePad）
+      app.py exec <CuePad.app> <库目录> [-- 启动参数…]   占住本检出那一份后 exec 成 CuePad（量完自己退出的 bench 用，$! 就是 CuePad）
       app.py stop                                       结束本检出 run 起的 Mac 实例
+      app.py sockets                                    本检出实例的连接目录（终端里的会话 export CUEPAD_PI_SOCKET_DIR 为它才连得上）
       app.py preflight                                  Mac 截图、录屏前查台前调度
 规则：
-1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或固定的 SOCKETS 下
+1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或本检出的 SOCKETS 下
    （isolated_env 是唯一一份，sync-bench.py 也用它），不碰真实资料库、~/.pi、~/.local/bin 与 ~/Applications/CuePad.app。
-2. Mac 全机同一时间只有一份：看守进程（就是本进程）持 /tmp/cuepad-xc-<uid>/mac-app 的 flock，锁随看守进程释放，崩了也不留；
-   本检出 run 起的旧实例直接换掉，别的检出的在用就排队（打印在等谁）。
-3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL）都走 quit：先 TERM 走 App 的正常退出，
+2. Mac 每个检出最多一份：看守进程（就是本进程）持 apple/.derived/mac-app.lock 的 flock，锁随看守进程释放，崩了也不留；
+   新起的直接换掉 run 留着的旧实例。检出之间互不等待：几个 Agent 并行开发时各自截图、验收。
+3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL，验完就 stop）都走 quit：先 TERM 走 App 的正常退出，
    5 秒不退再 KILL，连同它起的子进程（Cue 的 pi、cuepad mcp）一起结束。exec 起的 bench 由调用方按 PID 结束，锁随 CuePad 进程释放。
 4. 不靠固定等待：Debug 构建摆好画面后写就绪文件（CUEPAD_SHOT_READY，DebugScene.signalReady），这里用 kqueue 等它出现或 App 退出。
    给了 CUEPAD_SHOT_READY 的 Mac 实例在后台跑、不进 Dock、不抢前台（DebugHooks.staysInBackground）。
@@ -17,6 +18,7 @@
 iOS、iPadOS：模拟器里本就隔离，同一台上再 launch 就换掉旧的；状态栏固定成 9:41、满格满电，做完 terminate，run 留着。
 """
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -29,14 +31,15 @@ import time
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECKOUT = os.path.dirname(APPLE)
 BUNDLE_ID = "com.sugeh.cuepad"
-RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # 与 _lock.sh 同一处
-SLOT = f"{RUNTIME}/mac-app"
-SOCKETS = f"/tmp/cuepad-app-{os.getuid()}"  # 终端里的会话要连这个实例就 export CUEPAD_PI_SOCKET_DIR 为它；sun_path 限 104 字节
+RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # 与 _lock.sh 同一处；模拟器的就绪文件放这里（按设备分）
+SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
+# 连接目录放 /tmp 下按检出分：socket 路径受 sun_path 104 字节限制，检出路径太长
+SOCKETS = f"/tmp/cuepad-app-{os.getuid()}-{hashlib.sha1(CHECKOUT.encode()).hexdigest()[:8]}"
 BUILD = re.compile(r".*/apple/\.derived[^/]*/Build/Products/[^/]+/CuePad\.app")
 WINDOW = "1440x900"
 READY_TIMEOUT = 60
 HOLD = 300  # 截图类的看守上限（另加录屏、测量的秒数）：卡在哪一步都不留实例
-RUN_TTL = 15 * 60  # 够一轮 bcu 交互验收；忘了收的实例曾活过 14 小时
+RUN_TTL = 5 * 60  # 一轮 bcu 交互验收用不完；不够就再 run 一次（换掉旧的）。忘了收的实例曾活过 14 小时
 REC_SECONDS = float(os.environ.get("CUEPAD_REC_SECONDS", 12))
 
 
@@ -134,7 +137,8 @@ def read_note(slot):
 
 
 def take_slot():
-    os.makedirs(RUNTIME, exist_ok=True)
+    """占住本检出那一份。占着的只会是 run 留下的看守（本检出的命令由 _lock.sh 排队），换掉它。"""
+    os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     slot = open(SLOT, "a+")
     try:
         fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -142,23 +146,20 @@ def take_slot():
     except BlockingIOError:
         pass
     note = read_note(slot)
-    if note.get("checkout") == CHECKOUT and holder_alive(note):
-        os.kill(note["holder"], signal.SIGTERM)  # 本检出 run 起的旧实例：换掉
-    else:
-        print(f"排队：Mac 调试实例在用（全机只开一份）\n  {note.get('what', '?')}  {note.get('checkout', '?')}  {note.get('since', '')} 起",
-              file=sys.stderr, flush=True)
+    if holder_alive(note):
+        os.kill(note["holder"], signal.SIGTERM)
     fcntl.flock(slot, fcntl.LOCK_EX)
     return slot
 
 
 class Mac:
-    """持着全机那一份的看守：start 起实例，quit 收掉（with 块结束时一定收）。"""
+    """持着本检出那一份的看守：start 起实例，quit 收掉（with 块结束时一定收）。"""
 
     def __init__(self, app, library, what):
         if not BUILD.fullmatch(app):
             die(f"只起 apple/.derived* 里的构建，不起 {app}")
         self.app, self.library, self.what, self.proc = app, os.path.abspath(library), what, None
-        self.ready, self.log = f"{RUNTIME}/mac-ready", re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+        self.ready, self.log = READY, re.sub(r"/Build/Products/.*", "/app-mac.log", app)
 
     def __enter__(self):
         self.slot = take_slot()
@@ -173,8 +174,7 @@ class Mac:
         self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         self.slot.truncate(0)
-        self.slot.write(json.dumps({"holder": os.getpid(), "app": self.proc.pid, "checkout": CHECKOUT, "what": self.what,
-                                    "since": time.strftime("%H:%M:%S")}, ensure_ascii=False))
+        self.slot.write(json.dumps({"holder": os.getpid(), "app": self.proc.pid, "what": self.what}))
         self.slot.flush()
         return wait_ready(self.ready, self.proc.pid, self.log)
 
@@ -234,14 +234,13 @@ def run_mac(app, library, args):
 
 
 def exec_mac(app, library, args):
-    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住全机那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
-    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，结束它不会留下看守进程。run 才会被本检出换掉，bench 只排队等。"""
+    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
+    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束，不留看守进程。"""
     if not BUILD.fullmatch(app):
         die(f"只起 apple/.derived* 里的构建，不起 {app}")
     slot = take_slot()
     slot.truncate(0)
-    slot.write(json.dumps({"holder": os.getpid(), "checkout": CHECKOUT, "what": "bench", "since": time.strftime("%H:%M:%S")},
-                          ensure_ascii=False))
+    slot.write(json.dumps({"holder": os.getpid(), "app": os.getpid(), "what": "bench"}))
     slot.flush()
     os.set_inheritable(slot.fileno(), True)
     os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
@@ -250,11 +249,11 @@ def exec_mac(app, library, args):
 
 
 def stop():
-    os.makedirs(RUNTIME, exist_ok=True)
+    os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     with open(SLOT, "a+") as slot:
         note = read_note(slot)
-        if note.get("checkout") != CHECKOUT or not holder_alive(note):
-            print("本检出没有在跑的 Mac 实例")
+        if not holder_alive(note):
+            print("本检出没有 run 起的 Mac 实例")
             return
         os.kill(note["holder"], signal.SIGTERM)
         fcntl.flock(slot, fcntl.LOCK_EX)  # 看守收完实例才放锁
@@ -334,6 +333,8 @@ def main(argv):
         return stop()
     if cmd == "preflight":
         return preflight()
+    if cmd == "sockets":
+        return print(SOCKETS)
     if cmd == "exec":
         return exec_mac(argv[1], argv[2], launch_args)
     if cmd not in ("shot", "rec", "run") or len(argv) < 4:
