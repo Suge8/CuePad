@@ -63,14 +63,14 @@ private struct LiveMoreFold: View {
 
 /// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：在线会话按要你注意的先后，与这些会话里在跑的子代理数。
 /// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算），
-/// 在跑同会话卡片上的口径（`PiSubagentState.isRunning`：在跑与在被审查）。
+/// 只数状态是在跑的（`PiSubagentPhase.running`）：在被审查的那个子代理自己是闲的，"同时在跑几个 Agent"不算它。
 nonisolated struct LiveWork: Equatable {
     let rows: [PiSessionState]
     let subagents: Int
 
     init(rows: [PiSessionState]) {
         self.rows = rows
-        subagents = rows.reduce(0) { $0 + $1.subagents.count(where: \.isRunning) }
+        subagents = rows.reduce(0) { $0 + $1.subagents.count { $0.phase == .known(.running) } }
     }
 
     var sessions: Int { rows.count }
