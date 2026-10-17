@@ -3,7 +3,7 @@ import UIKit
 
 /// 截菜单用：`-CuePadMenuAt x,y`（窗口里的点，左上为原点）弹出那里按钮的菜单（顶栏的"⋯"、胶囊这类 `Menu`），弹好再报就绪，
 /// `xc.sh shot` 截到的就是开着菜单的样子。系统没有从代码打开菜单的公开接口：找到盖住那一点、挂着 `UIContextMenuInteraction` 的最小视图，
-/// 调它的私有方法 `_presentMenuAtLocation:`。列表行的长按菜单是 SwiftUI 按住才装上的，打不开。只在 Debug 构建里。
+/// 调它的私有方法 `_presentMenuAtLocation:`。列表行的长按菜单是 SwiftUI 按住才装上的，打不开，用 `DebugRowMenu` 把同一份菜单弹出来。只在 Debug 构建里。
 extension DebugScene {
     static func openMenuIfAsked() async {
         guard let value = defaults.string(forKey: "CuePadMenuAt") else { return }

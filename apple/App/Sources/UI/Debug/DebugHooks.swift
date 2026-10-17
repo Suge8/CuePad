@@ -311,6 +311,10 @@ extension View {
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }
+                if let kind = DebugScene.defaults.string(forKey: "CuePadRowMenu") {
+                    // 盖在根上，在注入环境的那层外面：菜单项要的工作区自己带上
+                    DebugRowMenu(kind: kind).environment(workspace).environment(workspace.services).environment(navigation)
+                }
             }
             .withPalette()
         }
