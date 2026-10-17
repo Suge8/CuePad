@@ -140,7 +140,7 @@ final class Navigation {
         column = .detail
     }
 
-    /// iPhone：回到列表（同系统的返回与左缘右滑；藏起导航栏的页上的 `BackButton`）。
+    /// iPhone：回到列表，效果同系统的返回与左缘右滑。界面上不调它（返回交给系统），只给调试画面（sidebar）与交互测量（"回到列表"一步）。
     func showList() { column = .sidebar }
 
     /// 宽屏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在书架。
