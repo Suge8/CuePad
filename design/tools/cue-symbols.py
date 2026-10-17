@@ -6,6 +6,8 @@
 - 主体是实心的体块，细节是刻进去的缝与孔，不描边。外形圆、刀口直：剪影的拐角与自由端是圆的，刻进体块的缝是直的、利的。
 - 体块之间、点睛与它的槽之间都隔一条刻缝（`CARVE`），层与层不重叠：单色下（系统菜单、工具栏里所有层同色）缝还在，认得出。生成时逐个检查，窄了就报错。
 - 最多一块点睛，放在第二层（hierarchical 的 secondary，调色板渲染的第二个颜色）。点睛平时什么颜色、什么时候点亮是 App 代码里的着色规则，符号只管分层。
+  点睛只能是小部件（一处点、一条缝里的块，不超过整个图形墨量的 `ACCENT_SHARE`，按 Regular 量、生成时检查——细的母版里主体墨少，占比自然高）：主体在主层——点睛平时是次一级的颜色，
+  主体放进点睛层的话，没选中时整个图标是灰的，像被禁用。没有合适的小部件就不设点睛。
 - 字重：体块按母版外扩 / 内缩（`GROW`），孔跟着缩 / 扩，缝在粗的母版里收窄一点——重量来自墨，不来自线。
 - 品牌的物件：纸（圆角方纸 + 右上折角）、C 环（logo 的粗 C）、Cue（纸身体 + 斜着的腰环 + 竖着的眼）。
 
@@ -28,6 +30,7 @@ G = 35.6 / 12  # 一格的模板单位（系统 circle 在 S 号 100pt 下中线
 WEIGHTS = ("Ultralight", "Regular", "Black")
 GROW = {"Ultralight": -0.9, "Regular": 0.0, "Black": 0.85}  # 体块外扩多少格
 CARVE = {"Ultralight": 1.4, "Regular": 1.15, "Black": 0.9}  # 刻缝多宽（格）
+ACCENT_SHARE = 0.2  # 点睛最多占整个图形墨量的多少
 MID = 70.459 / 2  # 大写字母高度的一半：图形中心落在这条线上
 BEARING = 7.0  # 两侧留白（系统符号实测）
 BASELINE = 696.0
@@ -387,12 +390,14 @@ def mascot(eyes="open"):
 
 
 def idea(m):
-    """灵感：灯泡。泡（圆头接收窄的颈）是点睛——点亮就是有了灵感；灯座一块，与泡隔一道平刀口。"""
+    """灵感：灯泡。泡（圆头接收窄的颈）与灯座一块墨，中间一道平刀口；泡里挖一道弯槽，嵌着一弯灯丝（点睛）——点亮就是有了灵感。"""
     g, c = GROW[m], CARVE[m]
     neck = grown([(-4.8, -0.8), (4.8, -0.8), (3.6, 5.0), (-3.6, 5.0)], [0, 0, 0.6, 0.6], g)
     head = disc((0, -3.8), 7.9 + g)
     base = grown([(-3.6, 5.0 + c + 2 * g), (3.6, 5.0 + c + 2 * g), (3.6, 10.2), (-3.6, 10.2)], [0, 0, 1.7, 1.7], g)
-    return [Layer("base", [base]), Layer("bulb", [head, neck], "secondary")]
+    w = 1.5 + 0.5 * g
+    def loop(width): return bow((0, -6.2), 2.4, 15, 150, width)
+    return [Layer("bulb", [head, neck, rev(loop(w + 2 * c)), base]), Layer("filament", [loop(w)], "secondary")]
 
 
 def task(m):
@@ -441,11 +446,11 @@ def settings(m):
 
 
 def inbox(m):
-    """未分类：一只托盘（上沿中间凹下去一块），上方一张纸条（点睛）正落进去。"""
+    """未分类：一只托盘（上沿中间凹下去一块），上方一张小纸条（点睛）正落进去。"""
     g, c = GROW[m], CARVE[m]
     tray = grown([(-11, -1.2), (-5.2, -1.2), (-3.6, 2.0), (3.6, 2.0), (5.2, -1.2), (11, -1.2), (11, 8.4), (-11, 8.4)],
                  [0.8, 0.5, 0.6, 0.6, 0.5, 0.8, 2.8, 2.8], g)
-    slip = grown([(-4.6, -11.0), (4.6, -11.0), (4.6, -1.2 - c - 2 * g), (-4.6, -1.2 - c - 2 * g)], [1.2, 1.2, 0, 0], g)
+    slip = grown([(-3.2, -8.6), (3.2, -8.6), (3.2, -1.2 - c - 2 * g), (-3.2, -1.2 - c - 2 * g)], [1.0, 1.0, 0, 0], g)
     return [Layer("tray", [tray]), Layer("slip", [slip], "secondary")]
 
 
@@ -470,12 +475,12 @@ def trash(m):
 
 
 def sidebar(m):
-    """侧栏：一扇窗切成两块，左边窄的那块是侧栏（点睛），中间一道竖刀口。"""
+    """侧栏：一扇窗切成两块，左边窄的那块是侧栏，中间一道竖刀口。没有点睛（侧栏占了三分之一，不是小部件）。"""
     g, c = GROW[m], CARVE[m]
     y0, y1, split = -9.0, 9.0, -3.8
     panel = grown([(-11.2, y0), (split, y0), (split, y1), (-11.2, y1)], [2.8, 0, 0, 2.8], g)
     main = grown([(split + c + 2 * g, y0), (11.2, y0), (11.2, y1), (split + c + 2 * g, y1)], [0, 2.8, 2.8, 0], g)
-    return [Layer("window", [main]), Layer("panel", [panel], "secondary")]
+    return [Layer("window", [main]), Layer("panel", [panel])]
 
 
 def cross_shape(L, w, deg=0):
@@ -521,7 +526,8 @@ def chevron(deg):
 
 
 def send(m):
-    """发送：一枚燕尾箭镞（点睛）——高而尖，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
+    """发送：一枚燕尾箭镞——高而尖，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
+    两块都在主层（箭镞比箭杆还大，不是小部件），分两层只为按层动效（箭杆、箭镞依次一跳）。
     先按 Regular 画，两块各自外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝。"""
     g, c = GROW[m], CARVE[m]
     k, notch, bx = 0.75, -1.6, 7.6  # V 的斜率、谷底、两翼半宽
@@ -529,7 +535,7 @@ def send(m):
     head = grown([(0, -12.0), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
     w, top = 2.4, notch + cut
     shaft = grown([(0, top), (w, top + w * k), (w, 11.4), (-w, 11.4), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
-    return [Layer("shaft", [shaft]), Layer("head", [head], "secondary")]
+    return [Layer("shaft", [shaft]), Layer("head", [head])]
 
 
 def stop(m):
@@ -540,14 +546,15 @@ def stop(m):
 
 
 def done(stage="done"):
-    """做完：C 环（logo 的 C，开口朝右上）里伸出一个勾（点睛）；勾的拐点在圆心附近，最粗的母版里也离 C 一条刻缝。
+    """做完：C 环（logo 的 C，开口朝右上）里伸出一个勾；勾的拐点在圆心附近，最粗的母版里也离 C 一条刻缝。
+    勾与 C 都在主层（勾是一整笔，不是小部件）；分两层只为按层动效。
     pre 是做完之前的那一下：勾缩成拐点处一颗点（同一种笔画、两臂几乎为零，结构与勾一致），动效里弹成勾。"""
     def build(m):
         g = GROW[m]
         T, tc = 4.2 + 1.2 * g, 3.3 + 1.0 * g
         v = (-1.4, 2.2)
         tick = bar([(v[0] - 0.03, v[1]), v, (v[0] + 0.03, v[1] - 0.001)], tc) if stage == "pre" else bar([(v[0] - 2.55, v[1] - 2.55), v, (10.6, -8.6)], tc)
-        return [Layer("seal", [bow((-1.0, 0.8), 9.2, 4, 268, T)]), Layer("tick", [tick], "secondary")]
+        return [Layer("seal", [bow((-1.0, 0.8), 9.2, 4, 268, T)]), Layer("tick", [tick])]
     return build
 
 
@@ -636,6 +643,13 @@ def check_gaps(name, layers, m):
             assert d >= CARVE[m] * 0.9, f"{name} {m}：{layers[i].name} 与 {layers[j].name} 之间的缝只有 {d:.2f} 格（刻缝 {CARVE[m]}）"
 
 
+def check_accent(name, layers):
+    """点睛只能是小部件：主体放进点睛层，平时次一级的颜色下整个图标是灰的。"""
+    ink = [abs(sum(area(c) for c in L.contours)) for L in layers]
+    accent = sum(a for a, L in zip(ink, layers) if L.tier == "secondary")
+    assert accent <= ACCENT_SHARE * sum(ink), f"{name}：点睛占了墨量的 {accent / sum(ink):.0%}（最多 {ACCENT_SHARE:.0%}），主体要在主层"
+
+
 def template(per):
     """per：{母版: [Layer]}。"""
     s = {w: structure(per[w]) for w in WEIGHTS}
@@ -680,6 +694,7 @@ def write_symbols():
     for name, build in SYMBOLS.items():
         per = {w: build(w) for w in WEIGHTS}
         for w in WEIGHTS: check_gaps(name, per[w], w)
+        check_accent(name, per["Regular"])
         full = f"{PREFIX}.{name}"
         folder = OUT / f"{full}.symbolset"
         folder.mkdir()

@@ -15,7 +15,7 @@ struct CircleGlyph<Content: View>: View {
 }
 
 /// 输入框右下角的主按钮，全 App 的输入框只此一颗（"对 Cue 说"、会话回复框、随手记、新会话、发给 Agent）。墨块的样子：钮是一块实心圆，
-/// 字形是刻出来的反色——发送是燕尾箭镞（点睛层）加一截箭杆，记下是勾，停止是一块圆角方墨。
+/// 字形是刻出来的反色——发送是燕尾箭镞加一截箭杆，记下是勾，停止是一块圆角方墨。
 /// - 不可发送：淡底、淡墨；可发送（主动作）：靛青实心，变成可发送的那一下箭杆、箭镞依次往上一跳。
 /// - 发送中（话在路上，与会话状态标同一个）：淡底上三块靛青的 V 从下往上依次亮（`LoopLayer.climb`）；发出那一刻钮底当帧换掉、
 ///   整支箭往上走掉淡出，同一刻箭镞处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
@@ -61,7 +61,7 @@ struct SendGlyph: View {
         }
     }
 
-    /// 发送、记下、停止共用一个 Image：颜色跟着钮插值，符号原地替换。箭镞（点睛）与箭杆同色：钮本身就是主动作的颜色。
+    /// 发送、记下、停止共用一个 Image：颜色跟着钮插值，符号原地替换。
     private var glyph: some View {
         let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
         case .stop: (.stop, palette.paper, 14)
@@ -69,7 +69,7 @@ struct SendGlyph: View {
         case .ready: (.send, palette.onFill, 20)
         default: (.send, palette.ink3, 20)
         }
-        return IconImage(icon, accent: .state(ink))
+        return Image(icon)
             .font(.system(size: size, weight: .semibold))
             .foregroundStyle(ink)
             // 减弱动态效果时系统把符号的替换换成淡入淡出

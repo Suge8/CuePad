@@ -10,7 +10,7 @@ import AppKit
 /// 别处不写符号名、不调 `Image(systemName:)` 一类（lint 拦）：界面用 `Image(_:)`、`Label(_:icon:)`、`Button(_:icon:)`、`Menu(_:icon:)`，
 /// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标暂按项目存的名字走 `project`（第 5 批收成自家图标表）。
 ///
-/// 着色（墨块符号的第二层是点睛，见 design/tools/cue-symbols.py）：
+/// 着色（墨块符号的第二层是点睛，只是小部件，主体都在主层，见 design/tools/cue-symbols.py）：
 /// - 平时点睛是这一处前景色的次一级（层级渲染：墨色前景时就是次墨），不用另上色；单色场合（系统菜单、工具栏）照系统。
 /// - 选中或正在发生时点睛靛青、状态图标的点按状态色（调色板渲染）：用 `IconImage(_:accent:)`，只在那个状态存在时给。
 /// - 系统符号照原样，不受这两条影响。
