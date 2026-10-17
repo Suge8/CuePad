@@ -2,11 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// iPhone 的灵感标签：项目书架。顶上一排（`RootBar`）：左设置，右"新建项目"；搜索在右下的搜索圆钮。
-/// iPad 分栏里这些都在侧栏，顶上不放。这一页只管灵感与任务，Agent 的事都在 Cue 页（这里不写会话在做什么）：
-/// 最上面是"正在推进"：进行中的任务排在一张纸上（点开推入任务页），标题右边是全部任务的计数、点它进任务页；
-/// 没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行；
-/// 页末一行归档与回收站（同 Mac 侧栏的底栏）。宽屏（iPad）放得下时，上面这几样与置顶项目并排两栏。
+/// 书架：全部项目（侧栏项目区末尾的"全部项目"，侧栏只列置顶与最近的几个），右上"新建项目"。这一页只管灵感与任务，
+/// Agent 的事都在 Cue 页（这里不写会话在做什么）：最上面是"正在推进"：进行中的任务排在一张纸上（点开推入任务页），
+/// 标题右边是全部任务的计数、点它进任务页；没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；
+/// 置顶项目是大卡，其余按最近排成行。宽屏（iPad）放得下时，上面这几样与置顶项目并排两栏。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -14,26 +13,15 @@ struct ShelfScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
-    @Environment(\.tabPageReady) private var tabPageReady
 
     var body: some View {
         ScrollView {
             if let data, let catalog = workspace.catalog { content(data, catalog) }
         }
         .refreshable { await services.syncNow() }
-        // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
-        .navigationTitle("灵感")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(removing: .title)
-        .safeAreaBar(edge: .top) {
-            if navigation.layout == .tabs {
-                RootBar { EmptyView() } trailing: {
-                    Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
-                }
-            }
+        .floatingHeader(SidebarOutline.Entry.allProjects.title, detail: workspace.catalog.map { "\($0.projects.count) 个项目" } ?? "") {
+            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
-        .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
@@ -87,10 +75,8 @@ struct ShelfScreen: View {
                     .paper(radius: 16)
                 }
             }
-            if navigation.layout == .tabs { BinsRow(trashCount: data.trashCount) }
         }
         .padding(.horizontal, 16)
-        .padding(.top, Bars.contentGap)
         .padding(.bottom, 24)
         // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
         .animation(Motion.snappy, value: data.active.map(\.id))
@@ -146,26 +132,6 @@ struct ShelfScreen: View {
 }
 
 /// 书架顶上的一行：图标、标题、说明，点进一页。
-/// 页末一行：归档、回收站（有东西时写条数），同 Mac 侧栏的底栏；iPad 的在侧栏里。低频，只用次要墨色的小字。
-private struct BinsRow: View {
-    let trashCount: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 20) {
-            NavigationLink(value: Route.archive) { Label("归档", systemImage: "archivebox") }
-            NavigationLink(value: Route.trash) {
-                Label { Text(Dotted("回收站", trashCount > 0 ? "\(trashCount)" : nil)) } icon: { Image(systemName: "trash") }
-            }
-        }
-        .buttonStyle(PressStyle(.control))
-        .font(.subheadline)
-        .foregroundStyle(palette.ink2)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
-    }
-}
-
 private struct ShelfLine: View {
     let route: Route
     let symbol: String

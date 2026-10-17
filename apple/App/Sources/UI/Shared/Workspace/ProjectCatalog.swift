@@ -17,6 +17,8 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
 
     /// 未完成的顶层任务数，键同上。
     var openTasks: [UUID?: Int] { taskCounts.mapValues(\.open) }
+    /// 未分类的灵感与任务数。
+    var unfiledCount: Int { cardCounts[nil] ?? 0 }
     /// 全部项目与未分类的顶层任务数。
     var allTasks: TaskCounts { taskCounts.values.reduce(.zero, +) }
 

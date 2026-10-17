@@ -71,42 +71,35 @@ struct SessionNoticeTests {
 
     // MARK: 正看着
 
-    private func navigation(_ layout: Navigation.Layout) -> Navigation {
-        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.layout = layout
-        return navigation
+    private func navigation() -> Navigation {
+        Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
     }
 
     /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
-    /// iPhone 的 Agent 整页推在 Cue 标签里（页头面板的"全部会话"）；Cue 页本身与 iPad 右侧面板不是会话列表。
+    /// Agent 整页是侧栏的"会话"；Cue 页本身与 iPad 右侧面板不是会话列表；iPhone 回到了侧栏列表就是没在看。
     @Test func 正看着Agent列表或那个会话时不弹提示_别处照弹() {
         let session = UUID()
-        let tabs = navigation(.tabs)
-        #expect(tabs.showsAlert(about: session))  // Cue 页
-        tabs.cuePath = [.agent]
-        #expect(!tabs.showsAlert(about: session))
-        tabs.cuePath = [.agent, .session(UUID())]  // 列表上推了别的会话
-        #expect(tabs.showsAlert(about: session))
-        tabs.cuePath = [.agent, .session(session)]
-        #expect(!tabs.showsAlert(about: session))
-        tabs.cuePath = [.session(session)]  // Cue 页里点进了这个会话
-        #expect(!tabs.showsAlert(about: session))
-        tabs.tab = .projects
-        #expect(tabs.showsAlert(about: session))
-
-        let split = navigation(.split)
-        #expect(split.showsAlert(about: session))
-        split.agentPanel = true  // iPad 右侧的面板开着：那是 Cue 页
-        #expect(split.showsAlert(about: session))
-        split.agentPanel = false
-        split.splitRoot = .agent
-        #expect(!split.showsAlert(about: session))
+        let navigation = navigation()
+        #expect(navigation.showsAlert(about: session))  // Cue 页
+        navigation.agentPanel = true  // iPad 右侧的面板开着：那是 Cue 页
+        #expect(navigation.showsAlert(about: session))
+        navigation.select(.agent)
+        #expect(!navigation.showsAlert(about: session))
+        navigation.push(.session(UUID()))  // 列表上推了别的会话
+        #expect(navigation.showsAlert(about: session))
+        navigation.path = [.session(session)]
+        #expect(!navigation.showsAlert(about: session))
+        navigation.showList()  // iPhone 返回到了侧栏列表
+        #expect(navigation.showsAlert(about: session))
+        navigation.select(.cue)
+        navigation.push(.session(session))  // Cue 页里点进了这个会话
+        #expect(!navigation.showsAlert(about: session))
     }
 
     /// 提示弹出后才进了那个会话（或 Agent 列表）：横幅当场撤下，不在正看着的会话页上停满 5 秒。
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
-        let navigation = navigation(.tabs)
+        let navigation = navigation()
         let banner = Workspace.Notice(text: "notes · 完成了", isError: false, link: .session(session))
         let other = Workspace.Notice(text: "已复制", isError: false)
         #expect(navigation.keeps(banner) && navigation.keeps(other))

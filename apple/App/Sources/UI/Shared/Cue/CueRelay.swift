@@ -5,7 +5,7 @@ import SwiftUI
 /// Cue 与会话之间的"接力"：一点靛青的光在 Cue 的头像与会话的状态标之间沿一道弧飞过。靛青是正在发生的颜色（`Palette.signature`，在跑也是它）：
 /// 两个方向都是把"在跑"交棒给对方。iOS 与 Mac 同一套样子、同一份时长；只在那一刻出现，一次最多三道、错开 90ms（再多就成了一片光，看不出谁是谁）。
 /// - 叫醒（会话 → Cue）：飞的是一颗实心的点（会话的状态标）。起飞处一圈细环外扩（0.45s，缓出）；光飞 0.42～0.72s
-///   （随距离：侧栏里一跳短，手机上从列表飞到底栏长），先加速、后长长地减速，落进头像时已经很慢——"被接住"，不是"撞上"；还差最后一成路时
+///   （随距离：侧栏里一跳短，手机 Cue 页上从对话飞到页头长），先加速、后长长地减速，落进头像时已经很慢——"被接住"，不是"撞上"；还差最后一成路时
 ///   头像的环亮起（带一圈同色光晕）、停一下再外扩到 1.6 倍淡去（0.7s），晚 0.12s 一圈细涟漪扩到 2.1 倍（0.75s）；不盖住它的脸。
 /// - 交给（Cue → 会话：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
 ///   头像的环先亮一下、外扩到 1.25 倍淡去（0.6s），0.12s 后环离开头像，同一条弧、同一条曲线飞到会话的状态标，落下时那里一圈细环外扩、垫一层淡光。
@@ -19,7 +19,7 @@ import SwiftUI
 ///
 /// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
 /// - 会话那头不在屏上（不在这一页、滚出去了）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
-/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，手机在会话页、纸页这类收起了底栏的页）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
+/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，手机在 Cue 页与列表以外的页）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
 ///   交给是只在会话那头外扩一圈、垫一层淡光。
 /// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己就在转环，会话的状态标自己会变。
 /// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
@@ -110,7 +110,7 @@ nonisolated struct RelayEnd: Equatable, Sendable {
 
 /// Cue 的头像出现的几处，同时在屏上时取等级高的那处。
 enum CueSpot: Int {
-    /// 入口：Mac 侧栏最上面 Cue 那一行（也是菜单栏面板、输入条的那一行）、iPad 侧栏的 Cue 那一行、手机底栏 Cue 那一格。
+    /// 入口：Mac 侧栏最上面 Cue 那一行（也是菜单栏面板、输入条的那一行）、手机与 iPad 侧栏的 Cue 那一行。
     case entry
     /// 页头：Mac 与手机 Cue 页的页头——正看着 Cue 时落在它脸上。
     case header
@@ -123,7 +123,7 @@ extension View {
     /// 任务行（任务圈、正在开会话的那个空心点）：任务交给的会话没有状态标在屏上、或正为它开新会话时，接力落在这里。
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
-    /// Cue 的头像（或底栏那一格的图标）：接力的 Cue 那一头，环在这里亮起。
+    /// Cue 的头像：接力的 Cue 那一头，环在这里亮起。
     func relaySpot(cue spot: CueSpot?) -> some View {
         background { if let spot { RelayAnchor(role: .cue(spot)) } }
     }
@@ -324,7 +324,7 @@ struct RelayFlight {
             let duration = scene.fly(from: source.center, to: target, head: .ring, delay: start)
             scene.depart(at: target, delay: start + duration * 0.9, fills: true)
         }
-        // 会话不在屏上：从头像朝窗口中间那侧的边上飘出一段（从页头往下、从底栏往上）——从脸的中心起飘，还没出头像就淡了
+        // 会话不在屏上：从头像朝窗口中间那侧的边上飘出一段（从页头往下、从窗口下沿的头像往上）——从脸的中心起飘，还没出头像就淡了
         if targets.isEmpty {
             let inward: CGFloat = scene.canvas.bounds.midY > source.midY ? 1 : -1
             let edge = CGPoint(x: source.midX, y: source.midY + inward * source.height / 2)

@@ -81,7 +81,7 @@ struct ProjectPage: View {
     /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         let catalog = workspace.catalog
-        if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.cardCounts[nil] ?? 0) == 0 {
+        if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.unfiledCount ?? 0) == 0 {
             Welcome()
         } else {
             VStack(alignment: .leading, spacing: Spacing.section) {
