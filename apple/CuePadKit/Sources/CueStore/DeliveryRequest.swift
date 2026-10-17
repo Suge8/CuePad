@@ -5,8 +5,10 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 }
 
 extension DeliveryStatus {
-  /// 还没有结果的（等领取、执行中；同 `DeliveryRequest.isOpen`），SQL `IN (…)` 里的列表。
-  static let openSQL = sqlList([pending, executing])
+  /// 还没有结果的状态（等领取、执行中）：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
+  static let open: Set<DeliveryStatus> = [.pending, .executing]
+  /// `open` 的 SQL `IN (…)` 列表。
+  static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
 
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
@@ -81,7 +83,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isFromCue: Bool { origin == .known(.cue) }
 
   /// 还没有结果（等待执行或执行中）。
-  public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
+  public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 还没被 Mac 领取（仍是 pending）：撤得回、改得了说法。领取后它已交给 Pi，Pi 的扩展接口收不回进了 Pi 队列的话。
   public var isWithdrawable: Bool { status == .known(.pending) }
