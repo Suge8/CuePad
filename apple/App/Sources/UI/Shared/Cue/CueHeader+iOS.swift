@@ -5,8 +5,8 @@ import SwiftUI
 /// 手机与 iPad 的 Cue 页头：一块玻璃，平时是 56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
 /// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
-/// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveSessionRows`）。
-/// 点页头、点面板外、往上划都收起；点面板里的一项先收起再去那里。
+/// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
+/// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueBrainMenu`，当场读）；其余都是已经在订阅的。
@@ -52,8 +52,12 @@ struct CueHeader: View {
 
     private var glass: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 往上划收起只认页头那一条：面板里放不下时要往上划着滚
             Button(action: toggle) { head }
                 .buttonStyle(.plain)
+                .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
+                    if expanded, drag.translation.height < -24 { toggle() }
+                })
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHint(expanded ? "收起" : "换模型，看上下文、在做的会话、等你的事、记忆与设置")
             if expanded {
@@ -65,9 +69,6 @@ struct CueHeader: View {
         // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), ink: .solid)
-        .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
-            if expanded, drag.translation.height < -24 { toggle() }
-        })
     }
 
     private var head: some View {
@@ -105,7 +106,8 @@ struct CueHeader: View {
 /// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选住哪台时没有），右边是它住在哪与齿轮，点它推入设置
 /// （`CueSettingsScreen`：名字、住在哪台 Mac、允许清单；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
-/// 同 Mac 侧栏的 Agent 区）、全部会话（推入 Agent 整页）、额度与记忆。放不下时面板里面滚。
+/// 同 Mac 侧栏的 Agent 区；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
+/// 放不下时面板里面滚。
 private struct CueNowPanel: View {
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -117,8 +119,7 @@ private struct CueNowPanel: View {
     private static let limit = 5
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            content
+        HugHeight {
             ScrollView { content }.scrollBounceBehavior(.basedOnSize)
         }
         .refreshesQuota()
@@ -182,13 +183,18 @@ private struct CueNowPanel: View {
     }
 
     private var sessions: some View {
-        let live = services.liveSessions, rows = workspace.liveSessionRows
+        let live = services.liveSessions, work = workspace.liveWork
         return VStack(alignment: .leading, spacing: 10) {
-            Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-            if rows.isEmpty {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
+            }
+            .accessibilityElement(children: .combine)
+            if work.rows.isEmpty {
                 Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
             } else {
-                LiveSessionList(sessions: rows, limit: Self.limit, spacing: 12) { session in
+                LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
                     Button {
                         close()
                         navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
@@ -225,6 +231,20 @@ private struct CueNowPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
+    }
+}
+
+/// 让滚动区贴着内容的高：放得下就是内容那么高（玻璃不往下多长一截），放不下就是给的那么高、在里面滚。
+/// 不用 `ViewThatFits` 排两份：两份内容各有各的状态（"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
+private struct HugHeight: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let scroll = subviews.first else { return .zero }
+        let ideal = scroll.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, proposal.height ?? ideal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 #endif

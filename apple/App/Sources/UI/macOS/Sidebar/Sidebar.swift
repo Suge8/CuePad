@@ -347,7 +347,7 @@ private struct FooterPage: View {
 }
 
 /// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的，各家 Agent 一起），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
-/// 同一列（`LiveSessionList`：与菜单栏面板、手机 Cue 页头的面板同一个顺序与折叠），全部列出；
+/// 同一列（`LiveSessionList`：与菜单栏面板、手机 Cue 页头的面板同一个顺序与折叠），全部列出；区头写一共几个会话、几个子代理在跑（`LiveWorkCount`）；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。
 /// 点会话在内容区打开它的整页，开在终端里的在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话（这台 Mac 上没有能用的 Agent 时置灰）。
 /// 没有在线会话时一行说怎么开始；一个 Agent 都没接入、本机也没有会话时，这里是接入小卡（`AgentConnectCard`）。
@@ -364,11 +364,12 @@ private struct PiSection: View {
         let detected = AgentKind.allCases.contains { agents.status($0) != nil }
         let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
         let live = services.pi.sessions
-        let rows = workspace.liveSessionRows
+        let work = workspace.liveWork, rows = work.rows
         let total = services.liveSessions.total
         if detected || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") {
+                    if !rows.isEmpty { LiveWorkCount(work: work, font: Typography.sidebarDetail) }
                     NewSessionButton(showing: $startingSession)
                 }
                 .accessibilityElement(children: .contain)

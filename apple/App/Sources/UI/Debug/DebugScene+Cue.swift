@@ -149,7 +149,7 @@ extension DebugScene {
         await everyIfAsked("CuePadWake") {
             // 演示会话的 sessionID 与会话名相同
             let opened = defaults.string(forKey: "CuePadSession")
-            let live = Array(workspace.liveSessionRows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
+            let live = Array(workspace.liveWork.rows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
             let count = round % 2 + 1
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
@@ -177,7 +177,7 @@ extension DebugScene {
 
     /// 对一个在线会话说一句（Cue 发起）。
     private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
-        let rows = workspace.liveSessionRows.filter { $0.state != .known(.ended) }
+        let rows = workspace.liveWork.rows.filter { $0.state != .known(.ended) }
         guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
         return try await workspace.services.store.requestDelivery(
             "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
