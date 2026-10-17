@@ -316,6 +316,7 @@ extension View {
         }
             .task {
                 await DebugScene.prepare(workspace, navigation)
+                await DebugScene.openMenuIfAsked()
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
