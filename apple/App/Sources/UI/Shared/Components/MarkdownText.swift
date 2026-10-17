@@ -161,7 +161,7 @@ struct MarkdownText: View, Equatable {
     }
 }
 
-/// 对话里成块的东西（代码块、表格、一轮回答上方的工具注脚）同一套圆角、底色（`Palette.fill`）与内边距。
+/// 成块的内容（回答里的表格，Cue 面板里的上下文卡与"运行情况"里的全文）同一套圆角、底色（`Palette.fill`）与内边距；对话里的旁注不铺底（`NoteLine`）。
 enum ChatBlock {
     static let radius: CGFloat = 12
     static let inset: CGFloat = 12

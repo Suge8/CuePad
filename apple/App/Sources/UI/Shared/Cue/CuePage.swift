@@ -257,7 +257,9 @@ private struct CueEnding: View {
     let joined: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    #if os(macOS)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #endif
 
     var body: some View {
         #if os(macOS)

@@ -16,7 +16,7 @@ enum Typography {
     static let meta = Font.system(size: 12)
     /// 小节标签（任务与 Agent 栏的"任务""Agent"、资料、步骤）：小号加粗、次要墨色。
     static let label = Font.system(size: 12, weight: .semibold)
-    /// 最小的字：折起的计数、工具注脚这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
+    /// 最小的字：折起的计数、对话里的旁注（`NoteLine`）这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
     static let caption = Font.system(size: 12)
     static let caption2 = Font.system(size: 11)
     /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大一号；标题与代码同属这一列。
