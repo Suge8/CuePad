@@ -59,5 +59,4 @@ import Testing
     #expect(folders[0].sessionID == "new" && folders[0].projectID == project.id)  // 代表会话是最近那个
     #expect(folders[2].sessionID == "other-mac" && folders[2].projectID == nil)
   }
-
 }

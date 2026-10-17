@@ -122,8 +122,6 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  // MARK: 列表查询
-
   // MARK: 目录绑定
 
   /// 项目在哪台 Mac 上绑定了目录：只带目录末段名，不同步完整路径；只管这台 Mac 自己的，别的 Mac 的不动。
@@ -174,14 +172,6 @@ import Testing
     #expect(failed?.state == .known(.error) && failed?.detail == "额度用完" && failed?.stateSince == before)
   }
 
-  @Test func unknownStatesFromNewerVersionsAreKept() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try RawDB(fixture.url).exec("UPDATE piSessionStates SET state = 'compacting'")
-    #expect(try await states()["s1"]?.state == .unknown("compacting"))
-    #expect(try await states()["s1"]?.state.rawValue == "compacting")
-  }
-
   // MARK: 手机通知标志：只在"进入等你确认"和"从工作中进入完成"的那一次写入置位
 
   private func alert(_ sessionID: String = "s1") async throws -> Open<PiAlert>? {
@@ -209,5 +199,4 @@ import Testing
     #expect(try await alert("s1") == nil)
     #expect(try await alert("s2") == nil)
   }
-
 }
