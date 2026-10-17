@@ -1,11 +1,14 @@
 #if os(iOS)
 import AVKit
 import CueEditor
+import CueStore
 import PDFKit
+import QuickLook
 import SwiftUI
+import WebKit
 
-// 全屏预览里 CuePad 自己画的几类页（手机）。快速查看把内容放在另一个进程里画，触摸进不来这边：嵌着它的页左右滑翻不了页、
-// 下拉收不起，所以能自己画的都自己画，快速查看只留给文稿、表格、演示文稿与 3D（`PreviewPager.quickLooks`）。
+// 全屏预览里每类页都由 CuePad 自己画（手机）。不嵌快速查看：它把内容放在另一个进程里画，触摸进不来这边，嵌着它的页左右滑翻不了页、
+// 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewDocument`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
 
 /// 图片自己显示（不嵌快速查看，它把左右滑与下拉都吃掉）：没放大时左右滑翻页、下拉收起都给外面；双指或双击放大，放大了拖着看，双击回原样。
 struct PreviewImage: View {
@@ -58,11 +61,11 @@ struct PreviewImage: View {
         Thumbnails.image(at: file, maxPixel: pixels)
     }
 }
-/// 全屏页上的下拉收起（挂在整个翻页上，CuePad 自己画的页都接得到）：UIKit 的拖动手势，开始那一刻看方向——往下、手指下面的滚动区
-/// （网页、Markdown、PDF、文本）都在顶上、图片没放大时才接，跟着手指往下走，松手过一截就收起、缩回缩略图原处；横着的当场放弃交给分页翻页。
+/// 全屏页上的下拉收起（挂在整个翻页上，所有页都接得到）：UIKit 的拖动手势，开始那一刻看方向——往下、手指下面的滚动区都在顶上、
+/// 图片没放大时才接，跟着手指往下走，松手过一截就收起、缩回缩略图原处；横着的当场放弃交给分页翻页（页里横着能滚的先滚到头，再滑就翻）。
 /// 和页里自己的滚动同时认（SwiftUI 的拖动手势会把翻页与页里的滚动一起吃掉）。系统 zoom 转场自带的下滑收起在翻页的分页里接不到手势，所以自己接。
 struct PageSwipe: UIGestureRecognizerRepresentable {
-    let pulls: Bool
+    let enabled: Bool
     let pulled: (CGFloat) -> Void
     let released: (CGFloat) -> Void
 
@@ -72,7 +75,7 @@ struct PageSwipe: UIGestureRecognizerRepresentable {
         return pan
     }
 
-    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { pan.isEnabled = pulls }
+    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { pan.isEnabled = enabled }
 
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
         let down = max(pan.translation(in: pan.view).y, 0)
@@ -142,6 +145,106 @@ struct PreviewPlayer: View {
                 }
             }
             .onDisappear { player?.pause() }
+    }
+}
+
+/// 文稿、表格、演示文稿（Office、iWork、RTF）：WebKit 按文件类型把它们转成页面，滚动区在这个进程里，下拉与翻页照常。
+/// 只读、不联网（同网页预览）：只能读这一个文件，除了它自己与转出来的页内资源（x-apple-ql-id:）什么都不载入，点链接不跳转。
+/// 必须按文件载入：交给 WebKit 一段字节它不转，只会把字节铺出来。规则没能装上时不打开，不退回到不设防。
+struct PreviewDocument: View {
+    let file: URL
+    @State private var rules: WKContentRuleList?
+    @State private var failure: String?
+
+    private static let onlyThisFile = """
+        [{"trigger":{"url-filter":".*"},"action":{"type":"block"}},
+         {"trigger":{"url-filter":"^file:","resource-type":["document"]},"action":{"type":"ignore-previous-rules"}},
+         {"trigger":{"url-filter":"^x-apple-ql-id"},"action":{"type":"ignore-previous-rules"}},
+         {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}},
+         {"trigger":{"url-filter":"^blob:"},"action":{"type":"ignore-previous-rules"}},
+         {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}}]
+        """
+
+    var body: some View {
+        Group {
+            if let rules {
+                DocumentView(file: file, rules: rules)
+            } else if let failure {
+                EmptyState(mascot: .error, title: "没法安全地打开这个文稿", message: failure).padding(24).frame(maxHeight: .infinity)
+            } else {
+                Spinner(.regular)
+            }
+        }
+        .task {
+            do {
+                rules = try await WKContentRuleListStore.default().compileContentRuleList(
+                    forIdentifier: "cuepad.preview.document", encodedContentRuleList: Self.onlyThisFile)
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
+    }
+
+    private struct DocumentView: UIViewRepresentable {
+        let file: URL
+        let rules: WKContentRuleList
+        func makeCoordinator() -> Coordinator { Coordinator() }
+
+        func makeUIView(context: Context) -> WKWebView {
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = .nonPersistent()
+            configuration.userContentController.add(rules)
+            let view = WKWebView(frame: .zero, configuration: configuration)
+            view.navigationDelegate = context.coordinator
+            view.isOpaque = false
+            view.backgroundColor = .clear
+            view.loadFileURL(file, allowingReadAccessTo: file)
+            return view
+        }
+
+        func updateUIView(_ view: WKWebView, context: Context) {}
+
+        /// 只放行我们自己装载的那一次；点链接一律不动。
+        final class Coordinator: NSObject, WKNavigationDelegate {
+            func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+                action.navigationType == .other ? .allow : .cancel
+            }
+        }
+    }
+}
+
+/// 3D 与这台设备认不出的类型：一张系统缩略图与文件名，分页与下拉照常。3D 要转着看时点"转动查看"，进系统的快速查看
+/// （拖动在那里是转模型），不让同一个拖动既转模型又翻页。
+struct PreviewStill: View {
+    let preview: PiPreview
+    let file: URL
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var scale
+    @State private var look: DeliverableLook?
+    @State private var inspecting: URL?
+
+    private static let side: CGFloat = 600
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Group {
+                if let image = look?.image {
+                    Image(decorative: image, scale: scale).resizable().scaledToFit()
+                } else {
+                    Image(systemName: "doc").font(.system(size: 56)).foregroundStyle(palette.ink3)
+                }
+            }
+            .frame(maxWidth: 360, maxHeight: 360)
+            Text(preview.name).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2).multilineTextAlignment(.center)
+            if preview.kind == .model {
+                Button("转动查看", systemImage: "rotate.3d") { inspecting = file }
+                    .buttonStyle(ControlButtonStyle(kind: .secondary, compact: true))
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task(id: file) { look = await DeliverableLooks.load(preview, file: file, pixels: Int(Self.side * scale), scale: scale) }
+        .quickLookPreview($inspecting)
     }
 }
 

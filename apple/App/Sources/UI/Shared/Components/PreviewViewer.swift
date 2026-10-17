@@ -1,8 +1,6 @@
 import CueStore
 #if os(macOS)
 import Quartz
-#else
-import QuickLook
 #endif
 import SwiftUI
 
@@ -25,7 +23,8 @@ enum PreviewReply: Equatable {
 }
 
 extension View {
-    /// 点交付物后的全屏页：同一组的几份左右翻；网页与 Markdown 由 CuePad 自己显示（网页只读、不联网），其余嵌系统的快速查看（缩放、播放、翻页都有）。
+    /// 点交付物后的全屏页：同一组的几份左右翻；手机上每类都由 CuePad 自己显示（`PreviewPages+iOS`；网页与文稿只读、不联网），
+/// Mac 上网页与 Markdown 自己显示，其余嵌系统的快速查看（缩放、播放、翻页都有）。
     /// 手机上从点的那张缩略图放大出来（系统 zoom 转场），下滑缩回翻到的那一份原处；减弱动态效果时整块交叉淡入淡出。Mac 是窗口内浮层。
     /// 一个页面只在这里挂一次，不在每张缩略图上各挂一个。
     func previewPresenter(_ opened: Binding<PreviewOpening?>) -> some View { modifier(PreviewPresenter(opened: opened)) }
@@ -95,7 +94,7 @@ private struct PreviewPager: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .scaleEffect(1 - min(pull, 400) / 1600)
             .offset(y: pull)
-            .gesture(PageSwipe(pulls: !zoomedIn) { pull = $0 } released: { pulled in
+            .gesture(PageSwipe(enabled: !zoomedIn) { pull = $0 } released: { pulled in
                 if pulled > Self.pullToClose { dismiss() } else { withAnimation(Motion.snappy) { pull = 0 } }
             })
             .onChange(of: current) { zoomedIn = false }
@@ -108,12 +107,8 @@ private struct PreviewPager: View {
                 if let file = file(of: preview) { ToolbarItem(placement: .primaryAction) { ShareLink(item: file) } }
             }
             .safeAreaBar(edge: .bottom) {
-                HStack(spacing: 8) {
-                    if Self.quickLooks(preview.kind), batch.count > 1 { arrow(-1) }
-                    PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
-                    if Self.quickLooks(preview.kind), batch.count > 1 { arrow(1) }
-                }
-                .padding(.horizontal, 12).padding(.bottom, 8)
+                PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
+                    .padding(.horizontal, 12).padding(.bottom, 8)
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
             }
@@ -144,17 +139,6 @@ private struct PreviewPager: View {
     /// 拉过这么多松手就收起
     private static let pullToClose: CGFloat = 110
 
-    /// 还嵌着快速查看的页（文稿、表格、演示文稿、3D）：它的内容在另一个进程里画，触摸进不来这边，左右滑与下拉都接不到，
-    /// 只能靠底栏两头的箭头翻、关闭钮收起。其余类型都由 CuePad 自己画（`PreviewPages+iOS`），滑动与下拉照常
-    private static func quickLooks(_ kind: PiPreviewKind?) -> Bool { [.document, .spreadsheet, .presentation, .model, nil].contains(kind) }
-
-    private func arrow(_ offset: Int) -> some View {
-        Button(offset < 0 ? "上一个" : "下一个", systemImage: offset < 0 ? "chevron.left" : "chevron.right") { step(offset) }
-            .labelStyle(.iconOnly).font(.body.weight(.semibold)).foregroundStyle(palette.ink2)
-            .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
-            .glass(in: .circle, interactive: true)
-            .disabled(!batch.indices.contains(index + offset))
-    }
     #endif
 
     #if os(macOS)
@@ -164,12 +148,11 @@ private struct PreviewPager: View {
         Text(position).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
         if batch.count > 1 { Button("下一个", systemImage: "chevron.right") { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1) }
     }
-    #endif
 
     private func step(_ offset: Int) {
-        guard batch.indices.contains(index + offset) else { return }
         withAnimation(Motion.quick) { current = batch[index + offset].id }
     }
+    #endif
 
     /// 关掉：减弱动态效果时先淡出再无动画地收起，其余照系统的（手机上缩回那张缩略图）。
     private func dismiss() {
@@ -222,11 +205,10 @@ private struct PreviewContent: View {
                 case .pdf: PreviewPDF(file: file)
                 case .video, .audio: PreviewPlayer(file: file, active: active)
                 case .text: PreviewText(file: file)
-                #endif
-                #if os(macOS)
-                default: QuickLookPage(file: file)
+                case .document, .spreadsheet, .presentation: PreviewDocument(file: file)
+                case .model, nil: PreviewStill(preview: preview, file: file)
                 #else
-                default: QuickLookPage(file: file, active: active)
+                default: QuickLookPage(file: file)
                 #endif
                 }
             } else {
@@ -255,35 +237,6 @@ private struct QuickLookPage: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ view: QLPreviewView, coordinator: ()) { view.close() }
-}
-#else
-/// 嵌在页里的快速查看（只放这一个文件，切换由外面的分页做）。快速查看在另一个进程里播音视频，控制器拆掉或翻走了它还接着播：
-/// 不在当前页时换成空列表让它停下，翻回来再放回这个文件。
-private struct QuickLookPage: UIViewControllerRepresentable {
-    let file: URL
-    var active = true
-
-    func makeCoordinator() -> Source { Source() }
-
-    func makeUIViewController(context: Context) -> QLPreviewController {
-        let controller = QLPreviewController()
-        context.coordinator.file = active ? file : nil
-        controller.dataSource = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
-        let shown = active ? file : nil
-        guard context.coordinator.file != shown else { return }
-        context.coordinator.file = shown
-        controller.reloadData()
-    }
-
-    final class Source: NSObject, QLPreviewControllerDataSource {
-        var file: URL?
-        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { file == nil ? 0 : 1 }
-        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> any QLPreviewItem { file! as NSURL }
-    }
 }
 #endif
 
