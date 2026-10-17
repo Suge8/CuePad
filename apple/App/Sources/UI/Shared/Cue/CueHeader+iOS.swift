@@ -171,7 +171,7 @@ private struct CueNowPanel: View {
     private func waiting(_ count: Int) -> some View {
         Button(action: close) {
             HStack(spacing: 8) {
-                Image(systemName: Waiting.symbol).foregroundStyle(Waiting.tint(dark: palette.dark)).accessibilityHidden(true)
+                Image(systemName: Waiting.symbol).foregroundStyle(palette.waiting).accessibilityHidden(true)
                 WaitingCount(count: count)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)

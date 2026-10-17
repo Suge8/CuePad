@@ -192,12 +192,12 @@ struct PiThinkingDial: View {
     private func meterBars(_ drawn: PiThinkingMeter) -> some View {
         // 不知道此刻的档（"默认"）：空格画深一点，不像停用
         bars(drawn) { index in
-            index < drawn.filled ? (drawn.isMax ? palette.signature : palette.ink) : palette.ink.opacity(drawn.current == nil ? 0.32 : 0.14)
+            index < drawn.filled ? palette.ink : drawn.current == nil ? palette.ink3 : palette.track
         }
             .overlay {
                 if drawn.isMax, !reduceMotion {
                     // 最高档：一道亮光从左往右扫过填满的格
-                    LoopLayer(kind: .sheen, color: .white.opacity(0.75)).mask { bars(drawn) { _ in .black } }.allowsHitTesting(false)
+                    LoopLayer(kind: .sheen, color: palette.onFill).mask { bars(drawn) { _ in .black } }.allowsHitTesting(false)
                 }
             }
             .overlay {

@@ -3,7 +3,7 @@ import SwiftUI
 /// 分享面板的界面。`model` 负责数据，保存成功后调用 `dismiss`，取消调用 `cancel`。
 enum ShareViews {
     static func root(_ model: ShareModel, dismiss: @escaping () -> Void, cancel: @escaping () -> Void) -> some View {
-        ShareForm(model: model, dismiss: dismiss, cancel: cancel)
+        ShareForm(model: model, dismiss: dismiss, cancel: cancel).withPalette()
     }
 }
 
@@ -11,23 +11,30 @@ private struct ShareForm: View {
     @Bindable var model: ShareModel
     let dismiss: () -> Void
     let cancel: () -> Void
+    @Environment(\.palette) private var palette
 
     var body: some View {
         NavigationStack {
             Form {
-                if case .failed(let message) = model.state { Text(message) }
+                if case .failed(let message) = model.state { Text(message).foregroundStyle(palette.failure).listRowBackground(palette.paper) }
                 if let content = model.content {
                     Section("内容") {
                         if let text = content.text { Text(text).lineLimit(4) }
                         ForEach(content.urls, id: \.self) { Text($0.absoluteString).lineLimit(1) }
                         if !content.images.isEmpty { Text("\(content.images.count) 张图片") }
                     }
+                    .listRowBackground(palette.paper)
                 }
                 Picker("存到", selection: $model.selectedProject) {
                     Text("未分类").tag(UUID?.none)
                     ForEach(model.projects, id: \.id) { Text($0.name).tag(UUID?.some($0.id)) }
                 }
+                .listRowBackground(palette.paper)
             }
+            // 纸与墨：桌面色的底、纸色的行、墨色的字与按钮（tint 由 withPalette 设成墨），不是系统灰底蓝字
+            .scrollContentBackground(.hidden)
+            .background(palette.desk)
+            .foregroundStyle(palette.ink)
             .navigationTitle("存为灵感")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消", action: cancel) }

@@ -12,7 +12,7 @@ struct ProjectFormSheet: View {
     @State private var name = ""
     @State private var intro = ""
     @State private var icon = "folder"
-    @State private var color = ProjectStylePicker.colors[0].hex
+    @State private var color = Palette.projectColors[0].stored
     /// 新建时选的文件夹；项目建好后请那台 Mac 绑。编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: ProjectFolders.Candidate?
 

@@ -32,7 +32,6 @@ struct BottomBar: View {
     /// 内容在安全区之上还要给底部栏让出的高度（栏顶到安全区底边）；键盘盖住底部栏时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
 
-    private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -48,7 +47,7 @@ struct BottomBar: View {
     /// 一块玻璃是轨道，选中滴是轨道里的一层底（玻璃不叠玻璃）；字与图标在最上面。在搜索页时轨道里没有滴。
     private var tabs: some View {
         let index = Self.track.firstIndex(of: navigation.tab)
-        return Capsule().fill(drop)
+        return Capsule().fill(palette.selection)
             .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
             .scaleEffect(pressed == navigation.tab && !reduceMotion ? 0.94 : 1)
             .animation(Motion.press, value: pressed)
@@ -76,7 +75,7 @@ struct BottomBar: View {
             Image(systemName: "magnifyingglass").font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
                 .foregroundStyle(selected ? palette.signature : palette.ink)
                 .frame(width: Self.height, height: Self.height)
-                .background { if selected { Circle().fill(drop).padding(Self.inset).transition(.opacity) } }
+                .background { if selected { Circle().fill(palette.selection).padding(Self.inset).transition(.opacity) } }
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle(.button))
@@ -104,7 +103,7 @@ struct BottomBar: View {
             .background {
                 // 按住没选中的这一格：手指下亮出一层比选中滴淡一半的底，与滴同大同心
                 if pressed == tab, !selected {
-                    Capsule().fill(drop.opacity(0.5)).padding(Self.inset).transition(.opacity)
+                    Capsule().fill(palette.fill).padding(Self.inset).transition(.opacity)
                 }
             }
             .animation(Motion.press, value: pressed)
@@ -126,8 +125,8 @@ private struct BarLift<S: Shape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay { if !palette.dark { shape.stroke(palette.ink.opacity(0.1), lineWidth: 0.5).allowsHitTesting(false) } }
-            .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 8, y: 2)
+            .overlay { if !palette.dark { shape.stroke(palette.hair, lineWidth: 0.5).allowsHitTesting(false) } }
+            .shadow(color: palette.dark ? .clear : palette.shadow, radius: 8, y: 2)
     }
 }
 

@@ -27,10 +27,8 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var backgroundColor: CueColor
     public var variableColor: CueColor
     public var variableBackground: CueColor
-    /// 链接 `[文字](地址)` 里文字的颜色（其余标记用 `markerColor`）。
-    public var linkColor: CueColor
     /// 图片加载中或缺失时的底色。
-    public var placeholderColor: CueColor
+    public var imagePlaceholderColor: CueColor
     /// 文字离编辑区左右边的最小距离。
     public var horizontalInset: CGFloat
     /// 一行字最宽多少（AppKit）：编辑区更宽时左右留白加大，让这一列字居中；nil 时只有 `horizontalInset`。
@@ -44,8 +42,7 @@ public struct CueEditorTheme: @unchecked Sendable {
     public init(
         font: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
         codeBackground: CueColor, textColor: CueColor, backgroundColor: CueColor, variableColor: CueColor,
-        variableBackground: CueColor, linkColor: CueColor,
-        placeholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
+        variableBackground: CueColor, imagePlaceholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
         headingSpacing: CGFloat, imageCornerRadius: CGFloat
     ) {
         self.font = font
@@ -57,8 +54,7 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.backgroundColor = backgroundColor
         self.variableColor = variableColor
         self.variableBackground = variableBackground
-        self.linkColor = linkColor
-        self.placeholderColor = placeholderColor
+        self.imagePlaceholderColor = imagePlaceholderColor
         self.horizontalInset = horizontalInset
         self.maxTextWidth = maxTextWidth
         self.verticalInset = verticalInset

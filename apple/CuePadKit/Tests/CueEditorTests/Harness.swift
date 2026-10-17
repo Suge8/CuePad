@@ -23,7 +23,7 @@ extension CueEditorTheme {
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
         markerColor: .gray, codeBackground: NSColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
         variableColor: .purple, variableBackground: NSColor.purple.withAlphaComponent(0.12),
-        linkColor: .blue, placeholderColor: .lightGray,
+        imagePlaceholderColor: .lightGray,
         horizontalInset: 20, verticalInset: 16, lineSpacing: 3, headingSpacing: 8, imageCornerRadius: 6)
 }
 

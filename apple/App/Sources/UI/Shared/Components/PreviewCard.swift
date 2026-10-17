@@ -86,12 +86,12 @@ struct PreviewCard: View {
             if let thumbnail {
                 // 深色下缩略图（多是白底的页面）压暗一点，不在暗处亮成一块白
                 Image(decorative: thumbnail, scale: scale).resizable().scaledToFill()
-                    .brightness(palette.dark ? -0.18 : 0)
+                    .overlay { palette.mediaDim }
             } else {
                 Image(systemName: Self.symbol(preview.kind)).font(.title2).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
             if preview.kind == .video, thumbnail != nil {
-                Image(systemName: "play.fill").font(.footnote).foregroundStyle(.white).shadow(radius: 2).accessibilityHidden(true)
+                Image(systemName: "play.fill").font(.footnote).foregroundStyle(palette.onMedia).shadow(radius: 2).accessibilityHidden(true)
             }
         }
         .frame(width: Self.side, height: Self.side)

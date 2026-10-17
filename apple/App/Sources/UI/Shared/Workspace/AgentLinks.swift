@@ -46,7 +46,7 @@ struct AgentDot: View {
 
     var body: some View {
         if agents.launching.contains(card) {
-            Circle().strokeBorder(palette.live, lineWidth: 1.5).frame(width: 8, height: 8)
+            Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
                 .relaySpot(task: card)
                 .frame(width: 28, height: 28)
                 .accessibilityLabel("正在开会话")

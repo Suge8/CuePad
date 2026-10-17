@@ -227,7 +227,7 @@ struct QuotaRings: View, Animatable {
 
     var body: some View {
         let rings = [values.first, values.second].prefix(levels.count)
-        let (track, tick, markInk) = (palette.ink.opacity(0.1), palette.ink.opacity(0.85), palette.ink2)
+        let (track, tick, markInk) = (palette.track, palette.ink, palette.ink2)
         let fills = levels.map { QuotaInk.fill($0, palette) }
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -327,7 +327,7 @@ private struct QuotaBarRow: View {
     /// 细条：铺到已用，匀速刻度一道竖线（两侧压出缝），一块画布。
     private var bar: some View {
         let (used, pace) = (window.used, window.pace)
-        let (track, fill, tick) = (palette.ink.opacity(0.1), QuotaInk.fill(window.level, palette), palette.ink.opacity(0.85))
+        let (track, fill, tick) = (palette.track, QuotaInk.fill(window.level, palette), palette.ink)
         return Canvas { context, size in
             let y = size.height / 2
             context.fill(Path(roundedRect: CGRect(x: 0, y: y - 2, width: size.width, height: 4), cornerRadius: 2), with: .color(track))

@@ -45,7 +45,7 @@ struct MenuBarPad: View {
             } else if let failure = workspace.catalogFailure {
                 VStack(alignment: .leading, spacing: 8) {
                     Label { Text("读不出资料库") } icon: { FailureMark() }.font(Typography.secondary.weight(.medium))
-                    Text(failure).font(Typography.meta).foregroundStyle(.secondary).lineLimit(4)
+                    Text(failure).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(4)
                     Button("重试") { workspace.retryCatalog() }
                 }
                 .foregroundStyle(palette.ink)

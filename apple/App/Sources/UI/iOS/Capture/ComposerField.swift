@@ -55,7 +55,7 @@ struct ComposerField: UIViewRepresentable {
             context.coordinator.ink = ink
             view.textColor = UIColor(ink)
         }
-        view.placeholder.textColor = UIColor(palette.placeholder)
+        view.placeholder.textColor = UIColor(palette.ink3)
         view.accessibilityLabel = label
         view.maxLines = maxLines
         view.animatesScroll = !reduceMotion

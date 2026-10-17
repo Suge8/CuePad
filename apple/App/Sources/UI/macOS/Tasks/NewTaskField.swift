@@ -40,7 +40,7 @@ struct NewTaskField: View {
                     }
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 8).frame(height: 24)
-                    .background(palette.fill.opacity(2), in: .capsule)
+                    .background(palette.fill, in: .capsule)
                     .contentShape(.capsule)
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()

@@ -108,7 +108,7 @@ struct DestinationChip<Icon: View>: View {
         }
         .font(ChipMetrics.font)
         .padding(.horizontal, ChipMetrics.inset).frame(height: ChipMetrics.height)
-        .background(palette.fill.opacity(ChipMetrics.fill), in: .capsule)
+        .background(palette.fill, in: .capsule)
         .contentShape(.capsule)
     }
 }
@@ -116,11 +116,11 @@ struct DestinationChip<Icon: View>: View {
 /// 胶囊的尺寸（泛型类型里放不了静态存储属性）。
 private enum ChipMetrics {
     #if os(macOS)
-    static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24, fill = 2.0
+    static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24
     static let font = Typography.meta
     static let chevron = Font.system(size: 9, weight: .semibold)
     #else
-    static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32, fill = 1.0
+    static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32
     static let font = Font.subheadline.weight(.medium)
     static let chevron = Font.caption2
     #endif

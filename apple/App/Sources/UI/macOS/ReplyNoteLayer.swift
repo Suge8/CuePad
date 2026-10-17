@@ -153,7 +153,7 @@ private struct NoteEditor: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "text.bubble").font(Typography.secondary).foregroundStyle(palette.signature).accessibilityHidden(true)
+            Image(systemName: "text.bubble").font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
             TextField("写批注，↩ 挂到下一句", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typography.secondary).foregroundStyle(palette.ink)

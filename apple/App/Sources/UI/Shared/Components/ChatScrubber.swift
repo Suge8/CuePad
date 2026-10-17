@@ -76,15 +76,15 @@ struct ChatScrubber: View {
                     let near = finger.map { max(0, 1 - abs(y - $0) / Self.reach) } ?? 0
                     let swell = near * near
                     if marks[index].kind == .boundary {
-                        // 上下文换了的地方：一个签名色的点，放大时跟着变大
+                        // 上下文换了的地方：一个墨点，放大时跟着变大
                         let side = 5 + 4 * swell
                         let rect = CGRect(x: size.width - Self.edge - 3.5 - side / 2, y: y - side / 2, width: side, height: side)
-                        context.fill(Path(ellipseIn: rect), with: .color(palette.signature.opacity(index == pointed ? 1 : 0.85)))
+                        context.fill(Path(ellipseIn: rect), with: .color(index == pointed ? palette.signature : palette.ink2))
                         continue
                     }
                     let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
                     let rect = CGRect(x: size.width - length - Self.edge, y: y - thickness / 2, width: length, height: thickness)
-                    let color = index == pointed ? palette.signature : swell > 0 ? palette.ink.opacity(0.45 + 0.4 * swell) : palette.ink3
+                    let color = index == pointed ? palette.signature : palette.ink3.mix(with: palette.ink, by: swell)
                     context.fill(Path(roundedRect: rect, cornerRadius: thickness / 2), with: .color(color))
                 }
             }
@@ -138,7 +138,7 @@ struct ChatScrubber: View {
     private func preview(_ mark: ChatMark) -> some View {
         HStack(spacing: 5) {
             if mark.kind == .boundary {
-                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.signature)
+                Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.ink2)
             }
             Text(mark.preview).lineLimit(1)
         }

@@ -13,7 +13,7 @@ enum CueImageRendering {
     static func placeholder(size: CGSize, style: CueEditorTheme, missing: Bool) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { _ in
             let rect = CGRect(origin: .zero, size: size)
-            style.placeholderColor.setFill()
+            style.imagePlaceholderColor.setFill()
             UIBezierPath(roundedRect: rect, cornerRadius: style.imageCornerRadius).fill()
             guard missing else { return }
             let label = "图片缺失" as NSString

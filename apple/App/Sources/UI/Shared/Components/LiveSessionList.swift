@@ -62,7 +62,7 @@ private struct LiveMoreFold: View {
 }
 
 /// 此刻在做的（各端"在做"读的唯一一份，`Workspace.liveWork`）：列出来的在线会话（按要你注意的先后），与同时在跑的 Agent——
-/// 显示的状态是工作中的会话（思考、用工具、压缩、子代理工作中，`PiShown.Status.working`，与行上那颗晴蓝状态标同一个判断；
+/// 显示的状态是工作中的会话（思考、用工具、压缩、子代理工作中，`PiShown.Status.working`，与行上那颗在跑的状态标同一个判断；
 /// 等你、出错、没能送达、歇着、新会话都不算），加上各会话里在跑的子代理（`PiSubagentState.isRunning`）。
 /// 子代理只数会话自己报上来的（同步记录的 `PiSessionState.subagents`，四家同一个来源；报不出的那家就是 0，不估算）。
 nonisolated struct LiveWork: Equatable {
