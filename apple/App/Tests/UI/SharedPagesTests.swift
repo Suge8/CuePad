@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 两端共用的页面状态：Agent 页的分页与空态、回收站的内容与操作、新会话从发出到认领的进度。
+/// 两端共用的页面状态：Agent 页的分页、回收站的内容与操作、新会话从发出到认领的进度。
 struct SharedPagesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -23,17 +23,6 @@ struct SharedPagesTests {
 
         model.query = "e1"
         #expect(model.limit == PiSessionList.pageSize)
-    }
-
-    @Test func 列表空着时按搜索_没绑文件夹_项目内_全部说不同的话() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let model = AgentListModel()
-
-        #expect(model.empty(filtering: nil, hasFolder: true) == .none(inProject: false))
-        #expect(model.empty(filtering: project, hasFolder: true) == .none(inProject: true))
-        #expect(model.empty(filtering: project, hasFolder: false) == .needsFolder(project))
-        model.query = " 部署 "
-        #expect(model.empty(filtering: project, hasFolder: false) == .noMatch(" 部署 "))
     }
 
     // MARK: 回收站

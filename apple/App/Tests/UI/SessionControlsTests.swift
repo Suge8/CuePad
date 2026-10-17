@@ -75,8 +75,4 @@ struct SessionControlsTests {
 
         #expect(try await shown(atlas) == PiConfigShown(model: opus, thinking: .low, pending: false, failure: .reported("Pi 没在运行")))
     }
-
 }
-
-#if os(iOS)
-#endif
