@@ -57,7 +57,6 @@ struct SessionPage: View {
     private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
     @State private var task: SessionTaskLink?
-    @State private var askedForTranscript = false
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
@@ -73,7 +72,6 @@ struct SessionPage: View {
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
-        let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)
         VStack(spacing: 0) {
             if let session = digest.session {
                 FloatingReply {
@@ -86,21 +84,7 @@ struct SessionPage: View {
                 } reply: {
                     VStack(spacing: 8) {
                         if secondary {
-                            PiQuestionDock(session: session, deliveries: digest.deliveries)
-                            if let failure = shownEnd?.failure, session.state != .known(.ended) {
-                                Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
-                            }
-                            PiReplyBar(
-                                session: session, config: digest.config(at: services.speech), catalog: digest.catalog,
-                                stopping: MacDelivery.stopping(session, deliveries: digest.deliveries, at: services.speech),
-                                commandProgress: MacDelivery.commandProgress(digest.deliveries, messages: digest.messages, at: services.speech),
-                                sending: PiChat.sending(digest.deliveries, messages: digest.messages, at: services.speech),
-                                queued: PiChat.queued(digest.deliveries, messages: digest.messages, at: services.speech),
-                                recall: PiChat.lastSaid(digest.messages),
-                                revealNote: { follow.seek($0.entry) }
-                            ) {
-                                follow.sent()
-                            }
+                            SessionDock(session: session, digest: digest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
                         } else {
                             // 留出回复框平时的高度，它到了时对话不被顶上去
                             Color.clear.frame(height: ComposerMetrics.openOneLine)
@@ -119,7 +103,7 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
+        .onChange(of: headerState(digest, live: live, menu: secondary, task: task), initial: true) { _, state in header.set(state) }
         .onAppear {
             header.rename = { renaming = $0 }
             header.end = { confirmingEnd = $0 }
@@ -139,17 +123,17 @@ struct SessionPage: View {
                    onError: workspace.fail) { [sessionID, project = digest.session?.projectID] store in
             try SessionTaskLink.read(sessionID: sessionID, project: project, from: store)
         }
-        .onChange(of: stored) { askForTranscriptIfNeeded() }
+        .requestsTranscript(stored)
         // 开着这页就算看过：侧栏与菜单栏里的"有新回复"据此消失
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
     /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: Speech.Trip?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
+    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
             session: session, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
-            ending: shownEnd == .sending, place: PiPlace.menuTitle(of: session, project: digest.project),
+            ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech) == .sending, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.canJump ? $0.id : nil }, canEnd: session.canEnd, canRename: MacDelivery.canRename(session),
             showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
@@ -158,14 +142,6 @@ struct SessionPage: View {
     private struct TaskKey: Equatable {
         var session: String
         var project: UUID?
-    }
-
-    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
-    private func askForTranscriptIfNeeded() {
-        guard !askedForTranscript, let stored, let session = stored.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: stored.messages) else { return }
-        askedForTranscript = true
-        workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
 }
 
@@ -248,16 +224,6 @@ extension Workspace {
                 fail(error)
             }
         }
-    }
-}
-
-private extension View {
-    /// 顶栏让开：淡到透明、不可点、读屏跳过（位置留着，工具栏不重排）。
-    func headerVisibility(_ shown: Bool) -> some View {
-        opacity(shown ? 1 : 0)
-            .animation(Motion.quick, value: shown)
-            .allowsHitTesting(shown)
-            .accessibilityHidden(!shown)
     }
 }
 #endif
