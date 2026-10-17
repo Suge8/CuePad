@@ -215,7 +215,7 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
 
         let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
-        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter(\.isUser).map(\.fromCue) == [true, false, false])
+        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false, false])
         let cue = CueTools(store: store)
         let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
         #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
