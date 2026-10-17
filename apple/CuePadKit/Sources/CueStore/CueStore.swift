@@ -253,7 +253,7 @@ public actor CueStore {
   ) throws -> [R] {
     try db.query(
       """
-      SELECT \(R.columns.joined(separator: ", ")) FROM \(R.table.rawValue)
+      SELECT \(R.selection) FROM \(R.table.rawValue)
       WHERE \(condition) ORDER BY \(orderBy) LIMIT \(limit) OFFSET \(offset)
       """,
       arguments

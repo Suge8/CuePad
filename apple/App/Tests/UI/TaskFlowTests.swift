@@ -287,7 +287,8 @@ struct TaskFlowTests {
     }
 
     /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
-    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回。
+    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
+    /// 上级从步骤推出开始，步骤开始过它就跟着进行中。
     @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
         let task = try await store.createTask("发布", in: nil)
         let step = try await store.createTask("跑检查", under: task.id)
@@ -300,7 +301,7 @@ struct TaskFlowTests {
 
         try await workspace.toggle(step.id)
         #expect(try await store.card(step.id)?.status == .inProgress)
-        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.card(task.id)?.status == .inProgress)
         #expect(try await store.archived().isEmpty)
     }
 
