@@ -63,7 +63,8 @@ extension Command {
       let scope = try await call.scope(implicit: false)
       if case .any = scope { throw CLIError.usage("需要 --project <项目> 或 --unfiled") }
       let card = try await call.card(call.args.positionals[0])
-      let previous = try await call.args.value("after").asyncMap { try await call.card($0).id }
+      var previous: UUID?
+      if let after = call.args.value("after") { previous = try await call.card(after).id }
       try await call.store.moveCard(card.id, to: .top(project: scope.target), after: previous)
       return reply(try await fresh(call, card.id))
     },
