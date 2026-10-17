@@ -83,7 +83,7 @@ import Testing
 
   /// 拉到的一页没能应用（这里是期间换了账号、停下来等你决定）：令牌不前移，之后从同一处再拉。
   @Test func aPageThatWasNotAppliedDoesNotMoveTheToken() async throws {
-    await rig.coordinator.handle(.account("user-a"))
+    await rig.coordinator.account("user-a")
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
     let fresh = remoteRecord(.cards, cardFields(project: nil, body: "别处新建", modifiedAt: 2_000))
     let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator)
@@ -163,7 +163,7 @@ import Testing
       self.coordinator = coordinator
     }
     func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
-      await coordinator.handle(.account("user-b"))
+      await coordinator.account("user-b")
       return page
     }
     func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { [] }

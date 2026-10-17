@@ -46,8 +46,7 @@ public struct PiEnvelope: Equatable, Sendable {
   static func clipped(_ blocks: [PiEnvelope], limit: Int) -> String {
     let share = limit / blocks.count
     return blocks.map { block in
-      let body = block.body.count <= share ? block.body : String(block.body.prefix(share - 1)) + "…"
-      return "<\(block.name)>\n\(body)\n</\(block.name)>"
+      "<\(block.name)>\n\(block.body.clipped(share))\n</\(block.name)>"
     }.joined(separator: "\n")
   }
 }

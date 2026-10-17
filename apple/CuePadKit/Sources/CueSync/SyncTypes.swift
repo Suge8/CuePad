@@ -108,21 +108,6 @@ public struct SyncState: Equatable, Sendable {
   }
 }
 
-/// 拉取器、发送者与账号检查交给协调器的事件（测试直接构造）。
-enum CloudEvent: Sendable {
-  case accountStatus(CKAccountStatus)
-  /// 此刻登录的账号（用户记录名）
-  case account(String)
-  /// 拉取时同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）
-  case zoneMissing(deletedByUser: Bool)
-  /// 发送者开始、结束一轮上传
-  case sending(Bool)
-  /// 拉取器开始、结束按版本对账（没有令牌时那一遍）
-  case catchingUp(Bool)
-  case fetched(modifications: [CKRecord], deletions: [(id: CKRecord.ID, recordType: String)])
-  case sent(SentRecords)
-}
-
 /// 一批上传之后发送者怎么接着做。
 struct SendOutcome: Sendable {
   /// 有记录被收下，或被拒的已处理好（带上了服务器的版本标签等），接着发下一批不会原样再被拒

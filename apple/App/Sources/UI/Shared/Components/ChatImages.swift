@@ -55,9 +55,7 @@ private struct ChatImage: View {
         .disabled(arrived == false)
         .accessibilityLabel("图片")
         .accessibilityHint("查看大图")
-        .observing(services.store, id: hash, into: $arrived, immediately: false) { [files = services.store.files, hash] store in
-            try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
-        }
+        .observingArrival(of: hash, in: services.store, into: $arrived)
     }
 
     private func show() {

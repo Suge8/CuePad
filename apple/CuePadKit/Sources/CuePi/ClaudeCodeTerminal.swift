@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Darwin
 import Foundation
 
@@ -122,7 +123,7 @@ final class ClaudeTerminalSession: SessionLink {
     /// MCP 服务请求输入（`Elicitation`）：只有一个字段的表单（文字、选项、是否）能从 CuePad 答，其余（多个字段、要打开网址）只显示。
     private func elicit(_ input: JSONValue, call: AgentHookCall, agent: String?, at now: Date) {
         let message = input["message"]?.string ?? ""
-        let text = ToolDetail.clip([input["mcp_server_name"]?.string, message].compactMap { $0 }.joined(separator: "\n"), 500)
+        let text = [input["mcp_server_name"]?.string, message].compactMap { $0 }.joined(separator: "\n").clipped(500)
         let properties = input["requested_schema"]?["properties"]?.object ?? [:]
         guard input["mode"]?.string ?? "form" == "form", properties.count == 1, let (field, schema) = properties.first,
               let type = schema["type"]?.string, ["string", "boolean"].contains(type) else {

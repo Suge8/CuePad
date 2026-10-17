@@ -89,7 +89,7 @@ private struct MachineCard: View {
             .buttonStyle(.plain)
             .disabled(note.detail.isEmpty)
             .accessibilityLabel("\(note.who)：\(note.line)")
-            .accessibilityValue(note.detail.isEmpty ? "" : open ? "已展开" : "已收起")
+            .accessibilityExpanded(note.detail.isEmpty ? nil : open)
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
