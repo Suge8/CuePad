@@ -25,7 +25,9 @@ enum ScrollAnchor {
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
-/// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；`-CuePadWakeLog <路径>` 另量每次叫醒在 App 进程里的开销（同一处）；
+/// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；
+///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
+///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；

@@ -138,22 +138,15 @@ extension DebugScene {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
     /// 带上叫醒它的会话（`CueState.woke`，同值班的 Mac 起一轮时写下的样子），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
     /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
-    /// 录"叫醒"的动效用（`CueWakeStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
-    /// `-CuePadWakeLog <路径>`：每次叫醒前歇着的 `probe` 秒与叫醒后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
+    /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
+    /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
     /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
-    /// 叫醒那段减去歇着那段是一次叫醒在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（状态照样变、不飞），两者之差是飞的那一下。
+    /// 那一下的那段减去歇着那段是一次接力在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（库照样变、不飞），两者之差是飞的那一下。
     /// 不抢前台：窗口在后台、留在屏上（display link 照走）；动画本身在渲染服务里插值，渲染服务的开销不在这个进程里，量不到。
     static func wakeIfAsked(_ workspace: Workspace) async {
-        let every = defaults.double(forKey: "CuePadWake")
-        guard every > 0 else { return }
         let store = workspace.services.store
-        let log = defaults.string(forKey: "CuePadWakeLog").map { URL(fileURLWithPath: $0) }
-        let probe = log == nil ? 0 : wakeProbe
         var round = 0
-        while !Task.isCancelled {
-            // 叫醒的间隔是演示节奏，不是在等别的事
-            try? await Task.sleep(for: .seconds(max(every - probe, 0)))
-            if let log { await measureWake("idle", seconds: probe, into: log) }
+        await everyIfAsked("CuePadWake") {
             // 演示会话的 sessionID 与会话名相同
             let opened = defaults.string(forKey: "CuePadSession")
             let live = Array(workspace.liveSessionRows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
@@ -161,16 +154,65 @@ extension DebugScene {
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
             round += 1
-            guard !woke.isEmpty else { continue }
-            try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))
-            if let log { await measureWake("wake", seconds: probe, into: log) }
+            guard !woke.isEmpty, (try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))) != nil else { return nil }
+            return ("wake", { try? await store.setCueState(.settled) })
+        }
+    }
+
+    /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
+    /// （同 Cue 的 say 与 start 写下的样子，`CueRelay`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
+    /// 给一件还没交出去的待办开新会话（带着那张卡，还没有会话 id，落在它的任务行）；`-CuePadRelayKind say|start` 只做其中一种。
+    /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，会话与任务回到原样。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
+    static func relayIfAsked(_ workspace: Workspace) async {
+        let store = workspace.services.store
+        let kind = defaults.string(forKey: "CuePadRelayKind")
+        var round = 0
+        await everyIfAsked("CuePadRelay") {
+            let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
+            round += 1
+            guard let request = try? await (starts ? relayStart(store) : relaySay(workspace)) else { return nil }
+            return (starts ? "start" : "say", { try? await store.deleteDelivery(request.id) })
+        }
+    }
+
+    /// 对一个在线会话说一句（Cue 发起）。
+    private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
+        let rows = workspace.liveSessionRows.filter { $0.state != .known(.ended) }
+        guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
+        return try await workspace.services.store.requestDelivery(
+            "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
+    }
+
+    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡）。
+    private static func relayStart(_ store: CueStore) async throws -> DeliveryRequest? {
+        let tasks = try await store.tasks(.todo).flatMap(\.tasks)
+        let parents = Set(tasks.compactMap(\.parentID))
+        guard let task = tasks.first(where: { $0.piSessionID == nil && $0.projectID != nil && !parents.contains($0.id) }), let project = task.projectID else {
+            return nil
+        }
+        return try await store.requestLaunch(
+            PiLaunch(project: project, prompt: task.body, token: UUID().uuidString), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+    }
+
+    /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
+    private static func everyIfAsked(_ key: String, _ act: () async -> (kind: String, undo: () async -> Void)?) async {
+        let every = defaults.double(forKey: key)
+        guard every > 0 else { return }
+        let log = defaults.string(forKey: "CuePadFlightLog").map { URL(fileURLWithPath: $0) }
+        let probe = log == nil ? 0 : flightProbe
+        while !Task.isCancelled {
+            // 间隔是演示节奏，不是在等别的事
+            try? await Task.sleep(for: .seconds(max(every - probe, 0)))
+            if let log { await measureFlight("idle", seconds: probe, into: log) }
+            guard let done = await act() else { continue }
+            if let log { await measureFlight(done.kind, seconds: probe, into: log) }
             try? await Task.sleep(for: .seconds(max(1.5 - probe, 0)))
-            try? await store.setCueState(.settled)
+            await done.undo()
         }
     }
 
     #if os(macOS)
-    /// `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口（同点关闭钮：内容摘下，`MainShellWindow`），配 `-CuePadWakeLog` 量关着窗时
+    /// `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口（同点关闭钮：内容摘下，`MainShellWindow`），配 `-CuePadFlightLog` 量关着窗时
     /// 一次叫醒的开销；`-CuePadReopen <秒>`：关上这么久后再打开（真的显示，会到前台），关着的这段中途把 Cue 此刻的状态写成用工具
     /// "读看板 · 关窗时写下"，看重新打开的第一眼是不是关窗期间变过的样子。
     static func closeIfAsked(_ workspace: Workspace) async {
@@ -187,10 +229,10 @@ extension DebugScene {
     }
     #endif
 
-    /// 量的一段比叫醒的那一下（约 1.3 秒）长一点。
-    private static let wakeProbe = 1.5
+    /// 量的一段比接力的那一下（约 1.3～1.4 秒）长一点。
+    private static let flightProbe = 1.6
 
-    private static func measureWake(_ kind: String, seconds: Double, into log: URL) async {
+    private static func measureFlight(_ kind: String, seconds: Double, into log: URL) async {
         let turns = TurnLog(), frames = FrameRecorder()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
