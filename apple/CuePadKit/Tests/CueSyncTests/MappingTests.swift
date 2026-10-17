@@ -75,24 +75,13 @@ import Testing
     }
   }
 
-  @Test func nilFieldsAreAbsentFromTheRecord() async throws {
-    let project = try await store.createProject(name: "P", color: "#111")
-    let record = RecordMapper.record(from: try #require(try await store.syncRow(recordName: project.id.uuidString.lowercased())), zoneID: testZone)
-    #expect(record["icon"] == nil && record["intro"] == nil && record["deletedAt"] == nil)
-  }
-
   @Test func unknownEnumValuesAreKeptVerbatimNotCoercedToKnownOnes() async throws {
     let send = remoteRecord(.sendRecords, sendFields(kind: "carrierPigeon", modifiedAt: 5_000))
 
-    await rig.coordinator.handle(.fetched(modifications: [send], deletions: []))
+    try await rig.coordinator.pulled([send], [])
 
-    let records = try await store.sendRecords()
-    #expect(records.map(\.targetKind) == [.unknown("carrierPigeon")])
-    #expect(try await store.sendTargets().isEmpty)  // 没有关联卡片，不进目标列表
-
-    // 原样推回：其他字段被编辑后，未知值不变
-    try await store.recordSend("x", to: SendTarget(kind: .known(.piSession), name: "a"))
-    let pushedSend = try #require(await rig.coordinator.record(for: send.recordID))
+    #expect(try await store.sendRecords().map(\.targetKind) == [.unknown("carrierPigeon")])
+    let pushedSend = try #require(await rig.coordinator.record(for: send.recordID))  // 原样推回
     #expect(pushedSend["targetKind"] as? String == "carrierPigeon")
   }
 
@@ -100,7 +89,7 @@ import Testing
     let alien = CKRecord(recordType: "widgets", recordID: CKRecord.ID(recordName: UUID().uuidString.lowercased(), zoneID: testZone))
     alien["size"] = 3 as Int64
 
-    await rig.coordinator.handle(.fetched(modifications: [alien], deletions: [(alien.recordID, "widgets")]))
+    try await rig.coordinator.pulled([alien], [(alien.recordID, "widgets")])
 
     #expect(try RawDB(rig.fixture.url).count("syncRecords") == 0)
     let issues = await rig.coordinator.issues

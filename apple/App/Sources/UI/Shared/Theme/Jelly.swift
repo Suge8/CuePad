@@ -9,27 +9,32 @@ struct Jelly<Value: Equatable, Content: View>: View {
     let move: (Value, Value) -> JellyMove?
     @ViewBuilder let content: (Value, Bool) -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 正在放的动作、它之前的值、放了几次（关键帧的触发）。
-    @State private var playing: JellyMove?
-    @State private var before: Value?
-    @State private var plays = 0
+    /// 正在放的这一下。
+    @State private var play = Play()
+
+    /// 放的动作、换之前的值、第几下（关键帧的触发）：三样总是一起换。
+    private struct Play {
+        var move: JellyMove?
+        var before: Value?
+        var count = 0
+    }
 
     var body: some View {
         content(value, false)
-            .keyframeAnimator(initialValue: JellyPose(), trigger: plays) { [before, value] _, pose in
+            .keyframeAnimator(initialValue: JellyPose(), trigger: play.count) { [before = play.before, value] _, pose in
                 content(pose.swap < 0.5 ? before ?? value : value, pose.swap < 0.5)
                     .scaleEffect(x: pose.sx, y: pose.sy, anchor: .bottom)
                     .rotationEffect(.degrees(pose.rot), anchor: .bottom)
                     .visualEffect { content, proxy in content.offset(y: pose.y * proxy.size.height) }
             } keyframes: { _ in
-                let steps = playing?.steps ?? []
+                let steps = play.move?.steps ?? []
                 KeyframeTrack(\.sx) { for step in steps { CubicKeyframe(step.pose.sx, duration: step.time) } }
                 KeyframeTrack(\.sy) { for step in steps { CubicKeyframe(step.pose.sy, duration: step.time) } }
                 KeyframeTrack(\.rot) { for step in steps { CubicKeyframe(step.pose.rot, duration: step.time) } }
                 KeyframeTrack(\.y) { for step in steps { CubicKeyframe(step.pose.y, duration: step.time) } }
                 KeyframeTrack(\.swap) {
                     MoveKeyframe(0)
-                    LinearKeyframe(0, duration: playing?.swapAt ?? 0)
+                    LinearKeyframe(0, duration: play.move?.swapAt ?? 0)
                     MoveKeyframe(1)
                 }
             }
@@ -37,9 +42,7 @@ struct Jelly<Value: Equatable, Content: View>: View {
             .transaction(value: value) { if reduceMotion { $0.animation = Motion.crossfade } }
             .onChange(of: value) { old, new in
                 guard !reduceMotion, let next = move(old, new) else { return }
-                playing = next
-                before = old
-                plays += 1
+                play = Play(move: next, before: old, count: play.count + 1)
             }
     }
 }

@@ -516,8 +516,8 @@ struct MacSyncTests {
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
         let name = request.id.uuidString.lowercased()
 
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
+        #expect(await uploads.next() == name)
+        #expect(await uploads.next() == name)
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 

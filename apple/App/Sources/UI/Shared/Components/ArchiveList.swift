@@ -74,9 +74,7 @@ struct ArchiveList: View {
         let id = card.id
         return RowSwipes(
             leading: [RowAction("取回", icon: .restore, tone: .primary) { workspace.perform { try await $0.unarchive(id) } }],
-            trailing: [RowAction(CardMenu.Item.trash.title, icon: CardMenu.Item.trash.icon, tone: .destructive) {
-                workspace.attempt { try await workspace.trash(id) }
-            }])
+            trailing: [CardMenu.Item.trash.rowAction(on: card, in: workspace)].compactMap { $0 })
     }
 
     private func open(_ card: Card) {

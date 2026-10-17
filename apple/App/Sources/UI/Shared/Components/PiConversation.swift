@@ -94,7 +94,7 @@ struct PiConversation: View {
     /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
     @ViewBuilder private func segment(_ index: Int, of all: [PiChatEntry], last: Int, notes: [ReplyNote]) -> some View {
         let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
-        if let size = sizes[index], width > 0, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
+        if let size = sizes[index], width > 0, index != last, !onScreen.contains(where: { abs($0 - index) <= Self.spare }),
             !items.contains(where: { $0.id == highlight })
         {
             Color.clear.frame(height: (size.height * size.width / width).rounded())
