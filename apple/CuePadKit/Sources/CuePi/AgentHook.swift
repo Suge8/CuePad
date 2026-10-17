@@ -31,8 +31,6 @@ public final class AgentHookCall {
         connection.close()
     }
 
-    public var isFinished: Bool { done }
-
     fileprivate func peerClosed() {
         guard !done else { return }
         done = true
