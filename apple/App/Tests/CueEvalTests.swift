@@ -201,7 +201,7 @@ struct Check {
 
 /// 真的 Claude Code 当 Cue 的大脑。`launch` 写一个起 claude 的外壳：配置目录与 HOME 在临时目录（不碰 ~/.claude），
 /// 订阅令牌在启动时从 ~/.pi/agent/auth.json 现读（同 `ClaudeTestbed`，Pi 会换新的），只进子进程环境、不落盘；
-/// 继承来的 ANTHROPIC_* 清掉，不会走到别的提供方。
+/// 继承来的 ANTHROPIC_* 清掉，不会走到别的提供方；XDG_* 也清掉，Claude Code 的缓存与状态只落在临时 HOME 下。
 struct ClaudeCue {
     let model: String
     let effort: PiThinkingLevel
@@ -220,7 +220,7 @@ struct ClaudeCue {
         let script = root.appending(path: "claude")
         try #"""
             #!/bin/sh
-            for name in $(env | sed -n 's/^\(ANTHROPIC_[A-Za-z0-9_]*\)=.*/\1/p'); do unset "$name"; done
+            for name in $(env | sed -nE 's/^((ANTHROPIC|XDG)_[A-Za-z0-9_]*)=.*/\1/p'); do unset "$name"; done
             CLAUDE_CODE_OAUTH_TOKEN=$(/usr/bin/plutil -extract anthropic.access raw -o - '\#(auth.path)') || exit 1
             export CLAUDE_CODE_OAUTH_TOKEN CLAUDE_CONFIG_DIR='\#(config.path)' HOME='\#(home.path)' DISABLE_AUTOUPDATER=1
             exec '\#(claude.path)' "$@"

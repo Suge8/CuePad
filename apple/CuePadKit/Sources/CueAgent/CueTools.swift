@@ -199,7 +199,8 @@ public struct CueTools: Sendable {
     if session == nil, let same = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: {
       $0.parentID == nil && $0.projectID == project?.id && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
     }) {
-      return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建：同一件事接着用它。")
+      let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与步骤也没写（要改用 edit）" : ""
+      return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
     }
     let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: project?.id)
     var steps: [UUID] = []
@@ -556,7 +557,7 @@ public struct CueTools: Sendable {
     case "renew":
       let handoff = try args.required("handoff")
       guard handoff.count <= Self.handoffLimit else {
-        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：在做的事信封每轮都列着，只写各自的下一步和他之间没了结的事")
+        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：只写你在管的事各自做到哪、下一步，和他之间没了结的事，每件一两句")
       }
       let message = try await store.addCueMessage(.handoff, text: handoff)
       return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")

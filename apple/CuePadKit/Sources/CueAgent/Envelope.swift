@@ -16,13 +16,13 @@ public enum CueWake: Equatable, Sendable {
   case reminder([CueIndexedLine])
   /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
   case renewed
-  /// 他改了名字或 Agent，要换大脑：先写交接
+  /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认，`CueKeeper.BrainSettings.needsNewBrain`）：先写交接
   case settingsChanged
 }
 
-/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（你的话若有，由值班的管理器接在块后面）。
+/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
 /// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
-/// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或他改了名字、Agent）末尾一行要它先写交接。
+/// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或 `CueWake.settingsChanged`）末尾一行要它先写交接：这一条只在这里判断。
 /// 信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
@@ -94,12 +94,12 @@ public enum CueEnvelope {
     case .idle: "空闲，例行看一眼"
     case .reminder: "提醒到点"
     case .renewed: "换了新上下文，从接上的地方接着做"
-    case .settingsChanged: "他改了你的名字或 Agent"
+    case .settingsChanged: "他改了你的设置"
     }
   }
 
   /// 要换新上下文时的那一行。
-  static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
+  private static let renew = "要换新上下文：先 memory renew 写交接，再结束这一轮。"
 
   /// 接上：交接原样，之后的对话每条一行，从最近的往前取到 `resumeCharacters` 字。
   private static func resume(_ resume: CueResume, _ calendar: Calendar) -> [String] {
