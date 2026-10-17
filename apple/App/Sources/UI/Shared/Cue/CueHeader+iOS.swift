@@ -128,10 +128,10 @@ private struct CueNowPanel: View {
     private var content: some View {
         let cue = workspace.cue
         return VStack(alignment: .leading, spacing: 16) {
+            // 胶囊先排（模型、强度不被挤成省略号），右端拿剩下的宽：放得下写住在哪，放不下只留齿轮
             HStack(spacing: 8) {
-                if cue.hostID != nil { CueConfigControls() }
-                Spacer(minLength: 0)
-                settings(cue)
+                if cue.hostID != nil { CueConfigControls().fixedSize(horizontal: true, vertical: false) }
+                settings(cue).frame(maxWidth: .infinity, alignment: .trailing)
             }
             if cue.canHear { CueContextCard(context: cue.context) }
             if cue.waiting > 0 { waiting(cue.waiting) }
@@ -145,7 +145,7 @@ private struct CueNowPanel: View {
         .padding(.horizontal, 16).padding(.top, 2).padding(.bottom, 16)
     }
 
-    /// 大脑那一行的右端：它住在哪（放不下时只留齿轮），点它推入设置。
+    /// 大脑那一行的右端：它住在哪与齿轮，窄屏放不下名字时只留齿轮（名字在设置页的顶栏里看得到），点它推入设置。
     private func settings(_ cue: CueWatch) -> some View {
         let home = cue.canHear ? cue.hostName : "没启用"
         return Button {
@@ -160,7 +160,8 @@ private struct CueNowPanel: View {
                 Image(systemName: "gearshape")
             }
             .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
-            .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+            // 贴右对齐：与下面各行右端的字落在同一条竖线上
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing).contentShape(.rect)
         }
         .buttonStyle(PressStyle(.button))
         .accessibilityLabel("\(cue.name) 的设置")
@@ -242,20 +243,6 @@ private struct CueNowPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
-    }
-}
-
-/// 让滚动区贴着内容的高：放得下就是内容那么高（玻璃不往下多长一截），放不下就是给的那么高、在里面滚。
-/// 不用 `ViewThatFits` 排两份：两份内容各有各的状态（"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
-private struct HugHeight: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let scroll = subviews.first else { return .zero }
-        let ideal = scroll.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, proposal.height ?? ideal.height))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 #endif

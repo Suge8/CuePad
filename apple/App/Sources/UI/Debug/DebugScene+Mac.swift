@@ -220,7 +220,8 @@ struct DebugMenuBarStage: View {
         ZStack(alignment: .top) {
             LinearGradient(colors: [Color(hex: 0xC98F5A), Color(hex: 0x3E5566)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
-            if cueBar { CueBarView(bar: nil).padding(.top, 120) } else { MenuBarPad().padding(.top, 40) }
+            // 窗口当屏幕：面板顶在上方、底下留边，窗口矮时同真面板一样"在做"在里面滚（`MenuBarPanel.maxHeight`）
+            if cueBar { CueBarView(bar: nil).padding(.top, 120) } else { MenuBarPad().padding(.top, 40).padding(.bottom, 8) }
         }
     }
 }
