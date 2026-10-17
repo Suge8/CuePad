@@ -226,6 +226,7 @@ private struct PanelLayer: View {
             }
             shown.content
                 .clipShape(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
+                .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: PanelStyle.radius, style: .continuous).strokeBorder(palette.hair) }
                 .shadow(color: palette.panelShadow, radius: 28, y: 10)
                 .accessibilityAddTraits(.isModal)

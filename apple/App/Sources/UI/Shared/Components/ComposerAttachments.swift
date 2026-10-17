@@ -24,7 +24,7 @@ struct AttachmentBody: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height?.wrappedValue = $0 }
         }
-        .background(palette.paper)
+        .background(palette.paper, in: .rect)
     }
 
     /// 文字与图片按原顺序各成一块；去掉标题时删掉正文开头的标题那一行。

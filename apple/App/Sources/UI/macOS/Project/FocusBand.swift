@@ -51,7 +51,7 @@ struct FocusBand: View {
         let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
         let shown = fold.shown(roots, limit: Self.visibleTasks)
         let done = data.taskCounts.done
-        // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
+        // 与任务面板同一种行；悬停的淡底是行的底，向两边让出去，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
             TaskOutline(
                 tree: data.tasks, roots: shown,
@@ -66,7 +66,7 @@ struct FocusBand: View {
                     if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                .padding(.horizontal, TaskMetrics.rowInset + TaskMetrics.ringColumn + TaskMetrics.columnGap).padding(.vertical, 6)
+                .padding(.horizontal, TaskMetrics.ringColumn + TaskMetrics.columnGap).padding(.vertical, 6)
                 .taskFoldBar(anchor)
             }
             if fold.showsDone {
@@ -75,7 +75,6 @@ struct FocusBand: View {
             }
             NewTaskField(project: data.project?.id).padding(.top, 2)
         }
-        .padding(.horizontal, -TaskMetrics.rowInset)
     }
 
     /// 展开或收起：一步到位（不让大纲自己的挪位动画接手）；收起其余任务时把纸底这一行留在原处（`TaskFoldAnchor`）。

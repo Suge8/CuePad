@@ -30,7 +30,7 @@ struct Sidebar: View {
         let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
         VStack(spacing: 0) {
             CueSidebarRow(select: select)
-            PlaceRows(select: select).padding(.horizontal, SidebarMetrics.edge).padding(.top, 6)
+            PlaceRows(select: select).padding(.horizontal, SidebarMetrics.column).padding(.top, 6)
             SidebarSplit {
                 if let data, let catalog, let pages {
                     projects(pages, catalog, data: data)
@@ -62,7 +62,7 @@ struct Sidebar: View {
                 Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
             }
             SidebarScroll(revealsPage: true) {
-                ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.edge)
+                ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.column)
             }
         }
     }
@@ -108,16 +108,16 @@ struct Sidebar: View {
     }
 }
 
-/// 侧栏一行的横向尺寸（任务、会话、项目行、未分类、会话行共用）：侧栏边缘到行的选中底 `edge`，选中底到图标列 `inset`，
-/// 图标列宽 `Spacing.sidebarIcon`；会话的状态标（外框是点径的 1.8 倍，`PiStateDot`）在图标列里居中，名字离它 `dot + 2`
+/// 侧栏一行的横向尺寸（任务、会话、项目行、未分类、会话行共用）：侧栏边缘到行的图标列 `column`，行的底（`RowStyle`）向外让出 `RowMetrics.bleed`、
+/// 离侧栏边缘 `edge`；图标列宽 `Spacing.sidebarIcon`；会话的状态标（外框是点径的 1.8 倍，`PiStateDot`）在图标列里居中，名字离它 `dot + 2`
 /// （`PiSessionRow` 的排法），项目名离图标列 `titleGap`，两种名字就落在同一条竖线上。
-private enum SidebarMetrics {
+enum SidebarMetrics {
     static let edge: CGFloat = 10
-    static let inset: CGFloat = 8
+    static let column = edge + RowMetrics.bleed
     static let rowGap: CGFloat = 2
     static let dot: CGFloat = 6
     private static let dotBox = dot * 1.8
-    static let dotInset = inset + (Spacing.sidebarIcon - dotBox) / 2
+    static let dotInset = (Spacing.sidebarIcon - dotBox) / 2
     static let titleGap = dotBox / 2 + dot + 2 - Spacing.sidebarIcon / 2
     static let session = PiSessionRow.Style(
         name: Typography.sidebarRow, line: Typography.sidebarDetail, meta: Typography.sidebarDetail, dot: dot, spacing: 2)
@@ -207,7 +207,7 @@ private struct SidebarHeader<Action: View>: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(palette.ink2)
         }
-        .padding(.leading, SidebarMetrics.edge + SidebarMetrics.inset).padding(.trailing, SidebarMetrics.edge + 4)
+        .padding(.leading, SidebarMetrics.column).padding(.trailing, SidebarMetrics.edge + 4)
         .padding(.top, 10).padding(.bottom, 4)
     }
 }
@@ -290,7 +290,7 @@ private struct ProjectRows: View {
     }
 }
 
-/// 侧栏里的一行：图标列、名字、行尾的计数；当前页（任务面板开着时的任务）垫选中底色、文字加粗；其余用 85% 的墨，不发灰。
+/// 侧栏里的一行：图标列、名字、行尾的计数；当前页（任务面板开着时的任务）是行的选中底（`RowStyle`）、文字加粗；其余用 85% 的墨，不发灰。
 private struct PageRow<Icon: View, Title: View>: View {
     let count: Int
     var height = Spacing.sidebarRow
@@ -312,12 +312,10 @@ private struct PageRow<Icon: View, Title: View>: View {
                 }
             }
             .foregroundStyle(palette.ink)
-            .padding(.horizontal, SidebarMetrics.inset)
             .frame(height: height)
-            .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])
         // macOS 不把按钮的"已选中"特征交给读屏，当前页另用值念出来
         .accessibilityValue(selected ? "当前页" : "")
@@ -415,7 +413,7 @@ private struct PiSection: View {
                         Text("在终端里开一个，或点 + 在后台开").foregroundStyle(palette.ink3)
                     }
                     .font(Typography.meta)
-                    .padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset).padding(.vertical, 4)
+                    .padding(.horizontal, SidebarMetrics.column).padding(.vertical, 4)
                 }
                 if !rows.isEmpty {
                     SidebarScroll {
@@ -423,10 +421,10 @@ private struct PiSection: View {
                             sessionRow($0, live: live)
                         } fold: { count, expanded in
                             PiReloadFold(count: count, expanded: expanded, style: SidebarMetrics.session)
-                                .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
+                                .padding(.leading, SidebarMetrics.dotInset)
                                 .frame(height: Spacing.sidebarRow)
                         }
-                        .padding(.horizontal, SidebarMetrics.edge)
+                        .padding(.horizontal, SidebarMetrics.column)
                     }
                 }
             }
@@ -440,7 +438,7 @@ private struct PiSection: View {
             session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
             rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
             .equatable()
-            .padding(.leading, SidebarMetrics.dotInset).padding(.trailing, SidebarMetrics.inset)
+            .padding(.leading, SidebarMetrics.dotInset)
             .frame(height: Spacing.sidebarProjectRow)
             .sessionLink(session.sessionID)
             .help(bridge?.errorMessage ?? "")

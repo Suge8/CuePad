@@ -22,7 +22,7 @@ struct PiSlashPalette: View {
                         row(command, highlighted: index == highlighted).id(command.id)
                     }
                 }
-                .padding(6)
+                .padding(.horizontal, 18).padding(.vertical, 6)
             }
             .frame(maxHeight: Self.maxHeight)
             .fixedSize(horizontal: false, vertical: true)
@@ -50,12 +50,11 @@ struct PiSlashPalette: View {
                 Spacer(minLength: 8)
                 Text(command.source.label).font(Typography.caption).foregroundStyle(palette.ink3)
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(highlighted ? palette.selection : .clear, in: .rect(cornerRadius: 12, style: .continuous))
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowStyle(selected: highlighted))
         .accessibilityLabel("/" + command.name)
         .accessibilityValue([command.hint, command.summary, command.source.label].compactMap { $0 }.joined(separator: "，"))
         .accessibilityAddTraits(highlighted ? .isSelected : [])

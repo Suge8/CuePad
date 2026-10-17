@@ -96,6 +96,7 @@ struct SearchPalette: View {
         // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
+        .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous), ink: .solid)
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
@@ -167,7 +168,7 @@ struct SearchPalette: View {
                         if data.cards.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
                                 .font(Typography.secondary).foregroundStyle(palette.ink2)
-                                .padding(16)
+                                .padding(.vertical, 16)
                         }
                         ForEach(groups(data), id: \.owner) { group in
                             let project = data.projects.first { $0.id == group.owner }
@@ -177,17 +178,18 @@ struct SearchPalette: View {
                                 Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
                             .font(Typography.label).foregroundStyle(palette.ink2)
-                            .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
+                            .padding(.top, 10).padding(.bottom, 2)
                             ForEach(group.cards) { card in row(card).id(card.id) }
                         }
                         if data.total > data.cards.count {
                             Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
                                 .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2)
-                                .padding(10)
+                                .padding(.vertical, 10)
                         }
                     }
                 }
-                .padding(8)
+                // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里
+                .padding(.vertical, 8).padding(.horizontal, 18)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
         }
@@ -212,9 +214,9 @@ struct SearchPalette: View {
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(palette.ink2)
         }
-        .padding(.horizontal, 10).frame(height: 34)
-        .background(isSelected ? palette.selection : .clear, in: .rect(cornerRadius: 9))
+        .frame(height: 34)
         .contentShape(.rect)
+        .row(selected: isSelected)
         // 单击即选中、双击打开（同访达）：双击与单击并列识别——单击排在双击后面时要等过双击间隔才选中，点下去顿半拍
         .onTapGesture { selection = card.id }
         .simultaneousGesture(TapGesture(count: 2).onEnded { open(card) })

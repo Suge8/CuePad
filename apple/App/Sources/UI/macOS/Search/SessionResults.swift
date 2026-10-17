@@ -71,7 +71,7 @@ struct SessionResultList: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
                         Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
-                            .font(Typography.secondary).foregroundStyle(palette.ink2).padding(16)
+                            .font(Typography.secondary).foregroundStyle(palette.ink2).padding(.vertical, 16)
                     }
                     ForEach(groups, id: \.key) { group in
                         header(group)
@@ -79,10 +79,11 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2).padding(10)
+                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink2).padding(.vertical, 10)
                     }
                 }
-                .padding(8)
+                // 字离滚动区的边 18；行的底向两边让出一截，留在滚动区里
+                .padding(.vertical, 8).padding(.horizontal, 18)
             }
             .onChange(of: selection) { if let selection { proxy.scrollTo(selection) } }
         }
@@ -97,7 +98,7 @@ struct SessionResultList: View {
             Text("\(group.sessions.count)").foregroundStyle(palette.ink3)
         }
         .font(Typography.label).foregroundStyle(palette.ink2)
-        .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
+        .padding(.top, 10).padding(.bottom, 2)
         .accessibilityAddTraits(.isHeader)
     }
 
@@ -106,9 +107,9 @@ struct SessionResultList: View {
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
             undelivered: undelivered[session.sessionID] ?? 0).equatable()
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(isSelected ? palette.selection : .clear, in: .rect(cornerRadius: 9))
+            .padding(.vertical, 7)
             .contentShape(.rect)
+            .row(selected: isSelected)
             .onTapGesture { open(session.sessionID) }
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { open(session.sessionID) }

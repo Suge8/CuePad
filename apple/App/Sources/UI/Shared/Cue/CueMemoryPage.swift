@@ -4,7 +4,8 @@ import SwiftUI
 /// "Cue 记得什么"（Cue 页"⋯"打开的弹层）：没忘掉的记忆分两组，"一直记着"（钉住的）与其他，各按时间从新到旧；
 /// 最上面一行你自己记一条（记为你记的）。一条超过 `CueMemoryLine.maxBytes` 字节时就地说明、不写。
 /// 每条一行占满宽度，时间与"你记的"是正文后面一小截淡字：一屏要看得到十来条，操作不常驻、不占一列。
-/// 钉住与忘掉（另有复制）按平台惯例收起：手机右滑钉住、左滑忘掉、长按出菜单；Mac 右键出菜单，指针停在一行时右下角露出两颗小钮。
+/// 钉住与忘掉（另有复制）按平台惯例收起：手机右滑钉住、左滑忘掉、长按出菜单；Mac 右键出菜单，指针停在一行时铺行的淡底（`RowStyle`）、右下角露出两颗小钮。
+/// 一组记忆拼成一张纸（`rowPaper`），行铺满纸。
 /// 忘掉先确认：库里忘掉是软删、界面上没有拨回去的路。
 struct CueMemoryPage: View {
     @Environment(Workspace.self) private var workspace
@@ -76,8 +77,7 @@ struct CueMemoryPage: View {
                         .transition(Motion.item)
                 }
             }
-            .clipShape(.rect(cornerRadius: Metrics.radius, style: .continuous))
-            .paper(radius: Metrics.radius)
+            .rowPaper(radius: Metrics.radius)
         }
     }
 
@@ -133,9 +133,6 @@ private struct MemoryRow: View {
     let pin: RowAction
     let forget: RowAction
     @Environment(\.palette) private var palette
-    #if os(macOS)
-    @State private var hovering = false
-    #endif
 
     private var meta: Dotted { Dotted(DateLabel.short(line.createdAt), line.source == .known(.you) ? "你记的" : nil) }
     /// 淡字整截不断开（"10/8 · 你记的"断成两行像两件事）：字间垫不换行的连接符，放不下就整截挪到下一行。
@@ -172,36 +169,44 @@ private struct MemoryRow: View {
             .contextMenu { RowActionButtons(actions: [copy, pin, forget]) }
             .rowSwipes(RowSwipes(leading: [pin], trailing: [forget]))
             #else
-            .overlay(alignment: .bottomTrailing) { if hovering { hoverActions } }
-            .onHover { hovering = $0 }
-            .onAppear { if DebugHooks.hovers(line.text) { hovering = true } }
+            .overlay(alignment: .bottomTrailing) { MemoryHoverActions(actions: [pin, forget]) }
+            .row(hovers: true)
+            .environment(\.rowHoverPreset, DebugHooks.hovers(line.text))
             .contextMenu { RowActionButtons(actions: [copy, pin, forget]) }
             .accessibilityActions { RowActionButtons(actions: [copy, pin, forget]) }
             #endif
     }
-
-    #if os(macOS)
-    /// 指针停着时右下角的钉住与忘掉：叠在行上、不挤正文，垫一块纸色免得压着最后一行的字。
-    private var hoverActions: some View {
-        HStack(spacing: 2) {
-            ForEach([pin, forget].keyed, id: \.key) { item in
-                Button(item.action.title, systemImage: item.action.symbol, action: item.action.run)
-                    .labelStyle(.iconOnly)
-                    .font(Typography.meta.weight(.medium))
-                    .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
-                    .frame(width: 24, height: 24)
-                    .contentShape(.rect)
-                    .buttonStyle(PressStyle(.button))
-                    .help(item.action.title)
-            }
-        }
-        .padding(.horizontal, 4)
-        .background(palette.paper, in: .capsule)
-        .padding(.trailing, 8).padding(.bottom, 4)
-        .transition(.opacity.animation(Motion.quick))
-    }
-    #endif
 }
+
+#if os(macOS)
+/// 指针停在行上时（`rowHovered`）右下角的钉住与忘掉：叠在行上、不挤正文，垫一块纸色免得压着最后一行的字。
+private struct MemoryHoverActions: View {
+    let actions: [RowAction]
+    @Environment(\.rowHovered) private var hovered
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if hovered {
+            HStack(spacing: 2) {
+                ForEach(actions.keyed, id: \.key) { item in
+                    Button(item.action.title, systemImage: item.action.symbol, action: item.action.run)
+                        .labelStyle(.iconOnly)
+                        .font(Typography.meta.weight(.medium))
+                        .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
+                        .frame(width: 24, height: 24)
+                        .contentShape(.rect)
+                        .buttonStyle(PressStyle(.button))
+                        .help(item.action.title)
+                }
+            }
+            .padding(.horizontal, 4)
+            .background(palette.paper, in: .capsule)
+            .padding(.trailing, 8).padding(.bottom, 4)
+            .transition(.opacity)
+        }
+    }
+}
+#endif
 
 /// 页边距、纸与行的内边距、圆角、分组间距：Mac 是 480 宽的浮层，手机是整屏 sheet。
 private enum Metrics {

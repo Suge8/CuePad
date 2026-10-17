@@ -257,33 +257,12 @@ private struct CueSidebarItem: View {
         Button { navigation.select(.cue) } label: {
             CueStatusRow(font: .body.weight(selected ? .semibold : .medium)).frame(minHeight: 60).contentShape(.rect)
         }
-        .buttonStyle(SidebarRowStyle(selected: selected))
+        .buttonStyle(RowStyle(selected: selected))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-/// 侧栏一行的底：选中是共用的选中底色（不是实心胶囊，只告诉你"在这里"，不抢内容的注意），按住亮一层浅底；
-/// 按下即亮、松开与选中的变化都淡出。行内容在底里，底比内容两侧各宽出一截，同一列圆角块对齐。
-private struct SidebarRowStyle: ButtonStyle {
-    let selected: Bool
-    @Environment(\.palette) private var palette
-
-    private static let bleed: CGFloat = 10
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, Self.bleed)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(selected ? palette.selection : configuration.isPressed ? palette.fill : .clear)
-            }
-            .padding(.horizontal, -Self.bleed)
-            .animation(configuration.isPressed ? nil : Motion.quick, value: configuration.isPressed)
-            .animation(Motion.quick, value: selected)
-    }
-}
-
-/// 侧栏的一项。选中态是共用的选中底色加粗字（`SidebarRowStyle`）。
+/// 侧栏的一项。选中是行的选中底（`RowStyle`，不是实心胶囊，只告诉你"在这里"，不抢内容的注意）加粗字。
 private struct SidebarRow: View {
     /// 行尾一个点（设置：同步到不了 Mac）与它给读屏的话。
     struct Alert {
@@ -330,7 +309,7 @@ private struct SidebarRow: View {
             .padding(.vertical, 4).frame(minHeight: 44)
             .contentShape(.rect)
         }
-        .buttonStyle(SidebarRowStyle(selected: selected))
+        .buttonStyle(RowStyle(selected: selected))
         .accessibilityValue(alert?.text ?? "")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

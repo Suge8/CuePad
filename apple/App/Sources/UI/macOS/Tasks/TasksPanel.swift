@@ -46,6 +46,7 @@ struct TasksPanel: View {
         .frame(maxHeight: 640)
         .fixedSize(horizontal: false, vertical: !lazy)
         // 浮在项目页上、背后是卡片与任务纸，自己是一整页字（`GlassInk.solid`）
+        .rowContainer(.rect(cornerRadius: 26))
         .glass(in: .rect(cornerRadius: 26), ink: .solid)
         // 面板挂在页面之外：读"交给了哪个会话"的行在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
@@ -81,7 +82,7 @@ struct TasksPanel: View {
             TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), gaps: false, lazyAfter: lazy ? 0 : nil) { row in
                 TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 20)
         }
         if !board.todo.isEmpty {
             group("待办", count: board.counts.todo)
@@ -117,13 +118,13 @@ struct TasksPanel: View {
         TaskOutline(tree: board.tree, roots: section.roots, lazyAfter: lazy ? 0 : nil) { row in
             TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 20)
     }
 
     private func rows(_ items: [TaskBoard.Row]) -> some View {
         ForEach(items) { row in
             TaskLine(task: row.task, project: row.project)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 20)
         }
     }
 }

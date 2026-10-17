@@ -19,9 +19,8 @@ enum TaskMetrics {
     static let stepFont = Typography.secondary
     static let ring: CGFloat = 15
     static let stepRing: CGFloat = 13
-    /// 圈那一列多宽（浮窗里的新建行按它缩进，字与任务标题对齐）、与标题隔多少；行的左右内边距里铺悬停的淡底。
+    /// 圈那一列多宽（浮窗里的新建行按它缩进，字与任务标题对齐）、与标题隔多少；悬停的淡底是行的底（`RowStyle`），向两边让出去。
     static let ringColumn: CGFloat = 16
     static let columnGap: CGFloat = 10
-    static let rowInset: CGFloat = 8
 }
 #endif

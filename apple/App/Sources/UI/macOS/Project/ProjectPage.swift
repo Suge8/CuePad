@@ -140,7 +140,7 @@ struct ProjectPage: View {
                     OlderRow(card: card, lastTarget: lastTarget[card.id])
                 }
             }
-            .paper(radius: 12)
+            .rowPaper(radius: 12)
         }
     }
 

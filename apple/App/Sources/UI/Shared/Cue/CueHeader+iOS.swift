@@ -20,6 +20,8 @@ struct CueHeader: View {
 
     static let height: CGFloat = 56
     private static let radius: CGFloat = 28
+    /// 面板里行与行之间的空（会话一列的行距），行的底上下各伸进一半。
+    static let rowGap: CGFloat = 12
     /// 离页面两侧与上安全区的距离（同 `RootBar`）。
     private static let edge: CGFloat = 16
     private static let top: CGFloat = 4
@@ -62,6 +64,7 @@ struct CueHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
+        .rowContainer(.rect(cornerRadius: Self.radius, style: .continuous), gap: Self.rowGap)
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), ink: .solid)
     }
 
@@ -174,7 +177,7 @@ private struct CueNowPanel: View {
             .font(.subheadline)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
         .accessibilityHint("收起面板，看下面等你的事")
     }
 
@@ -192,7 +195,7 @@ private struct CueNowPanel: View {
                 }
                 .padding(.vertical, 6)
                 // 面板的底色（`GlassInk.solid` 垫的页面底色），实的：钉住时下面滚过的行不透上来
-                .background(palette.desk)
+                .background(palette.desk, in: .rect)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -202,7 +205,7 @@ private struct CueNowPanel: View {
         if work.rows.isEmpty {
             Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
         } else {
-            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
+            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: CueHeader.rowGap) { session in
                 Button {
                     close()
                     navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
@@ -213,7 +216,7 @@ private struct CueNowPanel: View {
                     ).equatable()
                         .contentShape(.rect)
                 }
-                .buttonStyle(RowPressStyle())
+                .buttonStyle(.row)
             } fold: { count, expanded in
                 PiReloadFold(count: count, expanded: expanded)
             }
@@ -237,7 +240,7 @@ private struct CueNowPanel: View {
             .frame(minHeight: 32)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
     }
 }
 #endif
