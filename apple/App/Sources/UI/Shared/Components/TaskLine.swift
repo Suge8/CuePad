@@ -52,8 +52,7 @@ struct TaskLine: View {
                 case nil: EmptyView()
                 }
                 #if os(macOS)
-                if let indent = structure?.indent { Button("缩进", action: indent) }
-                if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
+                RowActionButtons(actions: [CardMenu.Item.indent, .outdent].compactMap { $0.rowAction(on: task, in: workspace, structure: structure) })
                 #endif
             }
     }
@@ -198,7 +197,7 @@ struct TaskNextMark: View {
             switch next {
             case .agent(let shown, let session):
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID)
-                if shown.needsYou || bright { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
+                if shown.needsYou || lit { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)
                 #if os(macOS)
@@ -208,7 +207,7 @@ struct TaskNextMark: View {
         }
         .font(TaskMetrics.caption)
         // 没亮起的"▶"与待办的圈同一个淡墨：它是这一行可以做的事，不是要你看的事
-        .foregroundStyle(starts ? (bright ? palette.signature : palette.ink3) : palette.ink2)
+        .foregroundStyle(starts ? (lit ? palette.signature : palette.ink3) : palette.ink2)
         .lineLimit(1).fixedSize()
         // 点按区比图形宽；图形贴着行的那一边（手机行尾的一列右缘对齐，紧跟标题时靠左），不在点按区里居中
         .frame(minWidth: Self.target, minHeight: Self.target, alignment: edge)
@@ -216,12 +215,11 @@ struct TaskNextMark: View {
         .animation(Motion.quick, value: lit)
     }
 
-    private var bright: Bool { lit }
     private var starts: Bool { if case .start = next { true } else { false } }
 
     #if os(macOS)
     /// "开始"只在指针停在这一行时出现。
-    private var shows: Bool { !starts || bright }
+    private var shows: Bool { !starts || lit }
     private var edge: Alignment { .leading }
     private static let dot: CGFloat = 6
     private static let glyph = Font.system(size: 8, weight: .bold)

@@ -57,7 +57,7 @@ private struct LiveMoreFold: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(expanded ? "收起" : "还有 \(hidden) 个会话")
-        .accessibilityValue(expanded ? "已展开" : "已收起")
+        .accessibilityExpanded(expanded)
     }
 }
 
