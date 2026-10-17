@@ -117,7 +117,6 @@ struct BridgeClientTests {
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()
         try await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
-        await quietPeriod(.milliseconds(600)) // 覆盖对存活属主的一次重试
         #expect(!fileGone(pending))
     }
 
