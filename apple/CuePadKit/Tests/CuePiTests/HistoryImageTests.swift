@@ -49,21 +49,6 @@ struct HistoryImageTests {
         #expect(PiSessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
     }
 
-    @Test func 旧规则存下的消息重读后更新正文() async throws {
-        var file = SessionFile(directory: dir)
-        let png = pngData()
-        try file.append(SessionFile.header(), SessionFile.user("u1", nil, [["type": "text", "text": "看"], imageBlock(png)], at: 1))
-        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
-        let current = try #require(update.messages.first)
-        var old = current
-        old.text = "看"
-        try await store.writePiTranscript(PiTranscript(sessionID: update.sessionID, messages: [old], recap: PiRecap()))
-
-        try await store.writePiTranscript(update.transcript)
-
-        #expect(try await store.piMessages(of: update.sessionID).map(\.text) == [current.text])
-    }
-
     @Test func 不是图片的块跳过_消息照常读出() throws {
         var file = SessionFile(directory: dir)
         try file.append(

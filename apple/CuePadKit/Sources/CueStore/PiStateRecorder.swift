@@ -68,9 +68,8 @@ extension CueStore {
   /// 返回对账之前还没收尾的各会话的状态与计时（会话 id → ），重新接上时沿用（`PiStateRecorder.update`）。
   func reconcilePiStates(host: String, running: (PiProcess) -> Bool, at now: Date) throws -> [String: (state: PiWorkState, times: PiTimes)] {
     try write {
-      let finals = [PiWorkState.ended, .interrupted].map { "'\($0.rawValue)'" }.joined(separator: ", ")
       let before = try db.query(
-        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE hostID = ? AND state NOT IN (\(finals))", [host]
+        "SELECT sessionID, state, stateSince, busySince FROM piSessionStates WHERE hostID = ? AND state NOT IN (\(PiWorkState.closedSQL))", [host]
       ) { row in (row.text(0), PiWorkState(rawValue: row.text(1)), PiTimes(stateSince: row.date(2), busySince: row.dateOrNil(3))) }
       let open = Dictionary(before.compactMap { id, state, times in state.map { (id, ($0, times)) } }) { $1 }
       let processes = try db.query(
@@ -92,7 +91,6 @@ extension CueStore {
   /// 被打断与已结束的起点是此刻；托管的本来就歇着或出错的不动起点（"多久前"仍从那时算起）。
   /// 托管标记照旧：托管的被打断了也由本机在后台唤醒。
   private func close(where condition: String, _ arguments: [any SQLBindable], at now: Date) throws {
-    let finals = [PiWorkState.ended, .interrupted].map { "'\($0.rawValue)'" }.joined(separator: ", ")
     let failed = "(hosted = 1 AND state = '\(PiWorkState.error.rawValue)')"
     let state = """
       CASE WHEN \(Self.hadWork) THEN '\(PiWorkState.interrupted.rawValue)' WHEN \(failed) THEN state
@@ -103,7 +101,7 @@ extension CueStore {
       """
       UPDATE piSessionStates SET stateSince = CASE WHEN \(kept) THEN stateSince ELSE ? END,
         state = \(state), \(Self.cleared), detail = CASE WHEN \(failed) THEN detail END, modifiedAt = ?
-      WHERE state NOT IN (\(finals)) AND \(condition)
+      WHERE state NOT IN (\(PiWorkState.closedSQL)) AND \(condition)
       """, [now, Date.stamp] + arguments)
   }
 
@@ -112,11 +110,10 @@ extension CueStore {
   private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL"
 
   /// 记录上手上还有活（在跑一轮、等你确认、子代理还在跑）：进程这时没了就是做到一半被打断。用在 UPDATE 的 SET 里，读的是更新前的行。
-  private static let hadWork: String = {
-    let pending = PiWorkState.allCases.filter(\.hasPendingWork).map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    let running = "EXISTS (SELECT 1 FROM json_each(subagents) WHERE json_extract(value, '$.state') = '\(PiSubagentPhase.running.rawValue)')"
-    return "(state IN (\(pending)) OR \(running))"
-  }()
+  private static let hadWork = """
+    (state IN (\(PiWorkState.pendingWorkSQL))
+      OR EXISTS (SELECT 1 FROM json_each(subagents) WHERE json_extract(value, '$.state') = '\(PiSubagentPhase.running.rawValue)'))
+    """
 
   /// 删掉这台 Mac 上这家 Agent 歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
   func deleteUnindexedHostedStates(host: String, agent: AgentKind, except live: Set<String>) throws {

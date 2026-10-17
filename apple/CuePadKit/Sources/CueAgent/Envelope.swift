@@ -31,7 +31,6 @@ public enum CueEnvelope {
 
   public struct Input: Sendable {
     public var now: Date
-    public var timeZone: TimeZone
     /// 上下文已用多少 token；不知道为 nil。
     public var contextUsed: Int?
     /// 用到这么多 token 就该换新上下文。
@@ -49,12 +48,11 @@ public enum CueEnvelope {
     public var said: String?
 
     public init(
-      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
+      now: Date, contextUsed: Int?, renewAt: Int, projects: [CueProject], changes: [CueChange],
       board: CueBoard, waiting: [CueMessage], wake: CueWake, resume: CueResume? = nil, said: String?
     ) {
       self.resume = resume
       self.now = now
-      self.timeZone = timeZone
       self.contextUsed = contextUsed
       self.renewAt = renewAt
       self.projects = projects
@@ -67,8 +65,7 @@ public enum CueEnvelope {
   }
 
   public static func render(_ input: Input) -> String {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = input.timeZone
+    let calendar = Calendar(identifier: .gregorian)
     let used = input.contextUsed.map(CueContext.tokens) ?? "未知"
     var lines = ["<cue>", "\(stamp(input.now, calendar)) · 上下文 \(used) / 换新线 \(CueContext.tokens(input.renewAt))"]
 
@@ -207,7 +204,7 @@ public enum CueEnvelope {
 
   static func clip(_ text: String, _ limit: Int) -> String {
     let flat = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-    return flat.count > limit ? String(flat.prefix(limit - 1)) + "…" : flat
+    return flat.clipped(limit)
   }
 
   static func duration(_ seconds: TimeInterval) -> String {
