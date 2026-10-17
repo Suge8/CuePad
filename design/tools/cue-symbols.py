@@ -690,13 +690,22 @@ def ring_slash(m):
     return [Layer("ring", [bow((0, 0), r, 45 + d, 180 - 2 * d, T), bow((0, 0), r, 225 + d, 180 - 2 * d, T)]), Layer("slash", [bar_])]
 
 
-def bolt_slash(m):
-    """断了（做到一半停下）：一道闪电被斜杠劈开。"""
-    g = GROW[m]
-    # 闪电腰上的两个凹角离斜杠近：三个母版里都落进刀口、一起被切掉，切口的结构才一致
-    bolt = grown(sc(K, [(3.4, -11.4), (0.4, -1.0), (8.2, -1.0), (-3.4, 11.4), (-0.4, 1.0), (-8.2, 1.0)]), [0.9, 0, 0.8, 0.9, 0, 0.8], g)
-    w, bar_ = slash(m, 11.0 * K)
-    return [Layer("bolt", slash_cut(bolt, m, w)), Layer("slash", [bar_])]
+BOLT = [(-1.4, -11.6), (6.6, -11.6), (2.0, -2.8), (7.8, -2.8), (-5.0, 11.8), (-1.4, 0.8), (-7.6, 0.8)]
+BOLT_CUT = 4.2
+
+
+def bolt_cut(m):
+    """断了（做到一半停下）：一道闪电（上宽下尖的 Z 字折线，一块实心）在下半截的尾巴上被一道横缝截断，尖头断开。
+    不压斜杠：杠与闪电交叉，小字号下读成 × 或星，闪电认不出；缝开在尾巴上（`BOLT_CUT` 格高处），上面整个 Z 字不动，12pt 也认得出。
+    缝宽 `GAP` 加两侧刻缝，比一条刻缝宽，小字号下还看得见。"""
+    g, c = GROW[m], CARVE[m]
+    bolt = grown(sc(K, BOLT), [1.0, 1.0, 0, 0.9, 0.8, 0, 0.9], g)
+    line = [mul((-16, BOLT_CUT), G), mul((16, BOLT_CUT), G)]
+    off = (GAP / 2 + c) * G
+    return [Layer("bolt", [clip(bolt, Along(line, off, 1)), clip(bolt, Along(line, -off, -1))])]
+
+
+GAP = 1.0
 
 
 def cursor(m):
@@ -781,14 +790,17 @@ def cloud_slash(m):
     return [Layer("cloud", slash_cut(cloud_shape(GROW[m]), m, w, -0.8)), Layer("slash", [bar_])]
 
 
+LOCK = (7.4, 3.4)  # 锁体左上角的位置（乘 CK 之前的格）
+
+
 def cloud_lock(m):
-    """账号受限：云的右下角让出一个圆位（锁的外接圆再加一条刻缝），嵌一把小锁（点睛）。"""
+    """账号受限：云的右下角让出一个圆位（锁的外接圆再加一条刻缝），嵌一把锁（点睛）。锁体是一整块方墨、锁梁粗，12pt 下还是锁的样子。"""
     g, c = GROW[m], CARVE[m]
-    x, top = 7.4 * CK, 3.8 * CK
-    bw, bottom = 4.0 + 0.4 * g, top + 5.0 + 0.3 * g
-    lock = rpoly([(x - bw, top), (x + bw, top), (x + bw, bottom), (x - bw, bottom)], [0.7] * 4)
-    shackle = bow((x, top), 2.6, 180, 180, 1.9 + 0.5 * g)
-    o = (x, (top - 2.5 + bottom) / 2)
+    x, top = LOCK[0] * CK, LOCK[1] * CK
+    bw, bottom, r, t = 4.8 + 0.4 * g, top + 6.2 + 0.3 * g, 3.0, 2.3 + 0.5 * g
+    lock = rpoly([(x - bw, top), (x + bw, top), (x + bw, bottom), (x - bw, bottom)], [1.0] * 4)
+    shackle = bow((x, top), r, 180, 180, t)
+    o = (x, (top - r - t / 2 + bottom) / 2)
     R = max(dist(sample(sg, k / 16), mul(o, G)) for ct in (lock, shackle) for sg in ct for k in range(17)) / G
     return [Layer("cloud", [clip(cloud_shape(g), Outside(o, R + c))]), Layer("lock", [lock, shackle], "secondary")]
 
@@ -872,7 +884,7 @@ SYMBOLS = {
     "picked": picked,
     "asking": bubble_question,
     "ended": ring_slash,
-    "interrupted": bolt_slash,
+    "interrupted": bolt_cut,
     "cursor": cursor,
     "sparkle": sparkle,
     "agent": sparkles,
