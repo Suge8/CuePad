@@ -27,7 +27,8 @@ struct SharedPagesTests {
 
     // MARK: 回收站
 
-    @Test func 回收站列出删除的项目与卡片_恢复与永久删除() async throws {
+    /// 永久删除走界面同一个入口（`Workspace.purge`）：项目连同它的卡一起没了，单独删的卡还在回收站。恢复见下一条。
+    @Test func 回收站列出删除的项目与卡片_永久删除项目连同它的卡() async throws {
         let project = try await store.createProject(name: "旧项目", color: "#000000")
         _ = try await store.createCard(in: project.id, body: "项目里的一条")
         _ = try await store.createCard(in: project.id, body: "项目里的另一条")
@@ -36,14 +37,14 @@ struct SharedPagesTests {
         try await store.trashCard(lone.id)
 
         let summary = try await TrashSummary.read(from: store)
+        #expect(summary.projects.map(\.title) == ["旧项目"] && summary.projects.map(\.detail) == ["2 条"])
+        #expect(summary.cards.map(\.title) == ["单独删的"])
 
-        #expect(summary.count == 2 && !summary.isEmpty)
-        #expect(summary.projects.map(\.title) == ["旧项目"] && summary.projects.first?.detail.contains("2") == true)
-        #expect(summary.cards.map(\.title) == [CardText(lone.body).label])
-        try await summary.cards[0].restore(store)
-        try await summary.projects[0].purge(store)
-        #expect(try await TrashSummary.read(from: store).isEmpty)
-        #expect(try await store.card(lone.id)?.deletedAt == nil)
+        Workspace(services: app.services).purge(try #require(summary.projects.first))
+        let after = try await eventually(store, { try TrashSummary.read(from: $0) }) { $0.projects.isEmpty }
+        #expect(after.cards.map(\.id) == [lone.id])
+        #expect(try await store.project(project.id) == nil)
+        #expect(try await store.cards(in: project.id).isEmpty)
     }
 
     /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到未分类。
