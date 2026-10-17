@@ -3,10 +3,11 @@ import SwiftUI
 /// "对 Cue 说"的输入框（全 App 只此一个）：草稿是 Cue 的那一份（`CueWatch.draft`），可带图片。要做事就在这里说，随手记也在这里：
 /// 发送是对 Cue 说（它定项目、建任务、开工），长按发送是"只记下"——记成未分类的一条灵感，不交给它；Cue 没启用时发送就是记下
 /// （`Workspace.sayToCue`、`note`）。按下就清空输入框，不等上传；这里只管输入与发完之后做什么（`sent`）。
-/// Cue 页上工具排里是 Cue 的模型与思考强度（`CueConfigControls`，形态同会话页回复框；Mac 上 ⌘⇧M、⌘⇧E 弹出菜单）；浮起的输入条不放。
+/// Mac 的 Cue 页上工具排里是 Cue 的模型与思考强度（`CueConfigControls`，形态同会话页回复框；⌘⇧M、⌘⇧E 弹出菜单）；浮起的输入条不放。
+/// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
 struct CueComposer: View {
     enum Style: Equatable {
-        /// Cue 页底部：Mac 一直展开，手机一行、聚焦就展开（工具排出现），发完收起键盘。
+        /// Cue 页底部：Mac 一直展开，手机一行、打了字再长，发完收起键盘。
         case page
         /// 浮起的输入条（⌥⇧Space）：一直展开；`opens` 每变一次（又唤出了）就拿到焦点。
         case bar(opens: Int)
@@ -18,8 +19,10 @@ struct CueComposer: View {
     var sent: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @FocusState private var focused: Bool
-    /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
+    #if os(macOS)
+    /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单。
     @State private var opening: PiConfigPick?
+    #endif
 
     var body: some View {
         let cue = workspace.cue
@@ -29,7 +32,7 @@ struct CueComposer: View {
             focus: $focused, accepts: .images,
             form: form, shortcuts: shortcuts,
             header: { EmptyView() },
-            tools: { if style == .page { CueConfigControls(opening: $opening) } },
+            tools: { tools },
             send: { sendButton })
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: focusRequests) { focused = true }
@@ -56,9 +59,15 @@ struct CueComposer: View {
         }
     }
 
+    @ViewBuilder private var tools: some View {
+        #if os(macOS)
+        if style == .page { CueConfigControls(opening: $opening) }
+        #endif
+    }
+
     private var form: ComposerForm {
         #if os(iOS)
-        if style == .page { return .line(opensOnFocus: true) }
+        if style == .page { return .line(opensOnFocus: false) }
         #endif
         return .open
     }

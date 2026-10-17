@@ -12,7 +12,7 @@ enum ScrollAnchor {
 /// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张散放的灵感进编辑页）、task（在任务浮窗里打开本项目第一条任务；给了 `-CuePadTask <标题开头>` 是那一条）、search、tasks、agentsetup（接入 Agent 的面板）、connected（几家 Agent 接进隔离目录、打开 Agent 页：看接入后的侧栏与 + 的新会话里选 Agent）、select（批量选择本页前三条灵感）、wallgap（配 -CuePadProject Flow：新记两条再删最早那条，看删卡后卡片墙的排布）、trash、archive、settings（拍真的设置窗口，主窗口收起）、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
-///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac，Cue 在这台值班时才有；演示数据见 `DebugScene+Cue.swift`）；
+///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"、cuerun 再打开"运行情况"（仅 Mac；演示数据里 Cue 这时住在这台，见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
@@ -30,7 +30,7 @@ enum ScrollAnchor {
 ///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
-/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦（手机上聚焦才展开出模型与思考强度的胶囊）；
+/// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；

@@ -242,17 +242,55 @@ public struct CueState: Equatable, Sendable {
   public var round: UUID?
   /// 在跑的这一轮是会话的动静叫醒的（`CueWake.sessionActivity`）；别的原因醒来、歇着时没有
   public var woke: CueWoke?
+  /// 它此刻的上下文（`CueContext`），值班的 Mac 在一轮做完时写；还没跑过一轮为 nil
+  public var context: CueContext?
   public var modifiedAt: Date
 
-  public init(state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, modifiedAt: Date = .now) {
+  public init(
+    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil, modifiedAt: Date = .now
+  ) {
     self.state = state
     self.detail = detail
     self.round = round
     self.woke = woke
+    self.context = context
     self.modifiedAt = modifiedAt
   }
 
   static let recordID = DeterministicID.uuid("cue-state")
+}
+
+public enum CueEnableError: LocalizedError, Equatable {
+  /// 那台 Mac 上没有能当大脑的 Agent（参数是各家为什么不能用，`MacAgents.whyNone`）
+  case noRuntime(String)
+
+  public var errorDescription: String? {
+    switch self {
+    case .noRuntime(let why): "那台 Mac 上没有能当 Cue 的 Agent：\(why)"
+    }
+  }
+}
+
+/// Cue 此刻的上下文（一个班次一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个班次几点起。用到 `renewAt` 后，
+/// 下一次醒来先写交接备忘再换新（`CueKeeper`）。随 `CueState` 同步，各端的上下文用量只读它。
+public struct CueContext: StoredJSON, Equatable, Sendable {
+  public var used: Int
+  public var window: Int?
+  public var since: Date
+
+  /// 换新线：6 万 token。
+  public static let renewAt = 60_000
+
+  /// token 数的写法（交给大脑的信封与各端的上下文用量同一种）：不到一千写原数，往上写 5.3k、128k。
+  public static func tokens(_ count: Int) -> String {
+    count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
+  }
+
+  public init(used: Int, window: Int?, since: Date) {
+    self.used = used
+    self.window = window
+    self.since = since
+  }
 }
 
 /// 叫醒 Cue 这一轮的会话动静：醒来的时刻（一轮一个，接连几次叫醒各是各的）与带来变化的那几个会话（`CueChange.session`；
@@ -269,12 +307,12 @@ public struct CueWoke: StoredJSON, Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke"]
-  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored] }
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke", "context"]
+  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored, context?.stored] }
   init(row: Row) {
     self.init(
       state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), woke: row.textOrNil(5).flatMap(CueWoke.init(stored:)),
-      modifiedAt: row.date(3))
+      context: row.textOrNil(6).flatMap(CueContext.init(stored:)), modifiedAt: row.date(3))
   }
 }
 

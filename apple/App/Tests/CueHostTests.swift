@@ -51,7 +51,7 @@ struct CueHostTests {
             try await app.services.store.setDirectory(folder.path, for: project.id)
             try await app.connect(.pi)
             app.services.start()
-            try await app.services.cue.enable()
+            try await app.services.enableCue(on: TestApp.hostID)
             try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }
 

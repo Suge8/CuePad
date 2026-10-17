@@ -212,14 +212,14 @@ struct CueEnableTests {
     @Test func 全新设置启用后强度是低() async throws {
         let app = TestApp()
         try await app.connect(.pi)
-        try await app.services.cue.enable()
+        try await app.services.enableCue(on: TestApp.hostID)
         #expect(try await app.services.store.cueProfile()?.effort == .known(.low))
     }
 
     @Test func 启用不动你选的Agent与模型() async throws {
         let app = TestApp()
         try await app.connect(.pi)
-        let cue = app.services.cue, store = app.services.store
+        let services: AppServices = app.services, store = app.services.store
         func profile() async throws -> CueProfile { try #require(try await store.cueProfile()) }
 
         try await app.services.updateCue {
@@ -227,17 +227,17 @@ struct CueEnableTests {
             $0.model = "fake/m"
             $0.effort = .known(.high)
         }
-        try await cue.enable()
+        try await services.enableCue(on: TestApp.hostID)
         var now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.runtime == .known(.pi) && now.model == "fake/m" && now.effort == .known(.high))
 
-        try await cue.disable()
-        try await cue.enable()
+        try await services.disableCue()
+        try await services.enableCue(on: TestApp.hostID)
         now = try await profile()
         #expect(now.activeHost == TestApp.hostID && now.model == "fake/m" && now.effort == .known(.high))
 
         try await app.services.updateCue { $0.runtime = .known(.claudeCode) }
-        try await cue.enable()
+        try await services.enableCue(on: TestApp.hostID)
         now = try await profile()
         #expect(now.runtime == .known(.pi) && now.model == nil && now.effort == .known(.high))
     }
@@ -245,9 +245,9 @@ struct CueEnableTests {
     @Test func 一家都不能用时启用报出各家为什么() async throws {
         let app = TestApp()
         await #expect {
-            try await app.services.cue.enable()
+            try await app.services.enableCue(on: TestApp.hostID)
         } throws: {
-            $0.localizedDescription == "这台 Mac 上没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
+            $0.localizedDescription == "那台 Mac 上没有能当 Cue 的 Agent：Pi 没装 · Claude Code 没装 · Codex 没装 · OpenCode 没装"
         }
         #expect(try await app.services.store.cueProfile()?.enabledAt == nil)
     }

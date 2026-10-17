@@ -94,7 +94,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
     var enabled: Bool
-    /// 它住（或停用前住）的那台 Mac 与它的名字：绑过文件夹的 Mac 才知道名字（没启用时说去哪台启用）。
+    /// 它住（或停用前住）的那台 Mac 与它的名字（那台自报的，`MacAgents.name`；更旧版本的 Mac 没写）。
     var hostID: String?
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
@@ -128,7 +128,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             name: profile?.name ?? CueProfile.defaultName,
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
-            hostName: try profile?.hostID.flatMap { host in try store.directoryBindings().first { $0.hostID == host }?.hostName },
+            hostName: try profile?.hostID.flatMap { try store.macAgents(on: $0).name },
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.flatMap { $0.ask?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,

@@ -23,6 +23,8 @@ final class CueWatch {
     /// 它住的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
+    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文用量（`CueContextCard`）只读它。
+    private(set) var context: CueContext?
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
     /// 最近一次接力（`CueRelayStage`）：比已算过的更新的叫醒（`CueState.woke`）或交给（`Reading.relays`），`at` 变成新的就播一次。
@@ -98,6 +100,7 @@ final class CueWatch {
         set(\.hostID, digest.hostID)
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)
+        set(\.context, digest.state?.context)
         if let next = reading.flight(after: seen) {
             seen = reading.latest
             flight = next

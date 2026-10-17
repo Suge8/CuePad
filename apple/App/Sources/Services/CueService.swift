@@ -40,11 +40,8 @@ protocol CueNotifying: AnyObject {
 }
 
 /// Mac 上的 Cue：界面的唯一接口（`services.cue`）。手机与别的 Mac 不跑这里，界面直接读写库（`cueProfile` 等）。
-/// - 启用、停用经这里写，与别处改设置同一个写入口（`AppServices.updateCue`，写完立即上传）。
-/// - 启用：住到这台 Mac、记下启用时刻，你选的运行时、模型、强度不动；选的运行时这台用不了（不在这台 Mac 能用的 Agent 里：启用前
-///   重新问一次并写下，`MacAgentsRecorder.record`，再按库里的判断）才换成 `CueProfile.runtimes` 里第一家能用的，模型随原来那家清掉；
-///   一家都不能用时报出各家为什么不能用（`MacAgents.whyNone`）；
-///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。停用只清 `enabledAt`。
+/// - 启用、停用不经这里：两端同一个入口（`AppServices.enableCue(on:)`、`disableCue`，规则在 `CueStore.enableCue`）；
+///   另一台 Mac 启用就是接管，这台看到 `activeHost` 不是自己就停下。
 /// - `activeHost` 是这台时起一个 `CueKeeper` 值班，不是就停掉；名字、运行时、模型、强度变了由值班的它自己对上（就地换或写交接后换大脑）。
 /// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：你没在看 Cue 页时，这台 Mac 发本机通知
 ///   （算"等你"那种提示，开关与提示音在设置里），并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
@@ -58,7 +55,6 @@ final class CueService {
     @ObservationIgnored private let store: CueStore
     @ObservationIgnored private let sync: (any SyncControlling)?
     @ObservationIgnored private let hostID: String
-    @ObservationIgnored private let macAgents: MacAgentsRecorder
     @ObservationIgnored private let library: URL
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
@@ -66,50 +62,14 @@ final class CueService {
     private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     init(
-        store: CueStore, sync: (any SyncControlling)?, hostID: String, macAgents: MacAgentsRecorder, library: URL, piAgentDirectory: URL,
-        dependencies: CueDependencies
+        store: CueStore, sync: (any SyncControlling)?, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies
     ) {
         self.store = store
         self.sync = sync
         self.hostID = hostID
-        self.macAgents = macAgents
         self.library = library
         self.piAgentDirectory = piAgentDirectory
         self.dependencies = dependencies
-    }
-
-    enum EnableError: LocalizedError {
-        /// 参数是各家为什么不能用
-        case noRuntime(String)
-        var errorDescription: String? {
-            switch self {
-            case .noRuntime(let why): "这台 Mac 上没有能当 Cue 的 Agent：\(why)"
-            }
-        }
-    }
-
-    /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）：只改住在哪、启用时刻。选的 Agent 这台用不了才换成第一家能用的，
-    /// 模型属于原来那家，一并清掉；强度留着（运行时自己取档）。
-    func enable() async throws {
-        let agents = try await macAgents.record()
-        let available = CueProfile.runtimes.filter(agents.kinds.contains)
-        guard let first = available.first else { throw EnableError.noRuntime(agents.whyNone) }
-        try await update { [hostID] profile in
-            profile.hostID = hostID
-            profile.enabledAt = .now
-            if profile.runtime.known.map(available.contains) != true {
-                profile.runtime = .known(first)
-                profile.model = nil
-            }
-        }
-    }
-
-    func disable() async throws {
-        try await update { $0.enabledAt = nil }
-    }
-
-    private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
-        try await AppServices.updateCue(edit, store: store, sync: sync)
     }
 
     /// 跟着设置值班，直到任务取消。

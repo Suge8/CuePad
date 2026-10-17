@@ -66,11 +66,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         }
     }
 
-    #if os(macOS)
-    /// 最近一次换新写下的交接备忘（"运行情况"读）。
-    var lastHandoff: CueMessage? { messages.last { $0.author == .known(.handoff) } }
-    #endif
-
     private static func rows(_ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage]) -> [Row] {
         let waiting = Set(waiting.map(\.id))
         var shown = Set<UUID>()

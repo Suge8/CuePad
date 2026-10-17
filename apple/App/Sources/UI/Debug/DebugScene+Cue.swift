@@ -6,7 +6,7 @@ import SwiftUI
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
-/// 记忆有钉住的与其他，还有一条忘掉的。
+/// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 住在这台 Mac，"运行情况"才有。
 /// `-CuePadCuePresence <thinking|tool|sending|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
@@ -17,12 +17,18 @@ extension DebugScene {
         let store = services.store
         guard (try? await store.cueMessages(limit: 1).isEmpty) == true else { return }
         let presence = defaults.string(forKey: "CuePadCuePresence")
+        // "运行情况"只在 Cue 值班的这台 Mac 上有：cuerun 让它住在这台（大脑在隔离目录里起不来，几轮是空的或出错）
+        #if os(macOS)
+        let host = scene == "cuerun" ? services.hostID : "demo-mac"
+        #else
+        let host = "demo-mac"
+        #endif
         do {
             _ = try await store.updateCueProfile { profile in
-                profile.hostID = "demo-mac"
+                profile.hostID = host
                 profile.enabledAt = presence == "disabled" ? nil : .now
             }
-            if presence != "asleep" { try await store.recordMacPresence(host: "demo-mac") { true } }
+            if presence != "asleep" { try await store.recordMacPresence(host: host) { true } }
             let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
             func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
             let order = task("发言轮次"), importing = task("导入旧数据"), panel = task("README 截图")
@@ -104,6 +110,8 @@ extension DebugScene {
             }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
+            // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
+            try await store.setCueContext(CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000)))
             switch presence {
             case "thinking":
                 try await you("顺便看看登录回调那个超时")
@@ -141,7 +149,7 @@ extension DebugScene {
         await everyIfAsked("CuePadWake") {
             // 演示会话的 sessionID 与会话名相同
             let opened = defaults.string(forKey: "CuePadSession")
-            let live = Array(workspace.liveSessionRows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
+            let live = Array(workspace.liveWork.rows.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
             let count = round % 2 + 1
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
@@ -169,7 +177,7 @@ extension DebugScene {
 
     /// 对一个在线会话说一句（Cue 发起）。
     private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
-        let rows = workspace.liveSessionRows.filter { $0.state != .known(.ended) }
+        let rows = workspace.liveWork.rows.filter { $0.state != .known(.ended) }
         guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
         return try await workspace.services.store.requestDelivery(
             "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)

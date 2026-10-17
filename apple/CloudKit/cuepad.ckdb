@@ -241,6 +241,7 @@ DEFINE SCHEMA
         modifiedAt    INT64,
         round         STRING,
         woke          STRING,
+        context       STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -260,6 +261,7 @@ DEFINE SCHEMA
         agents        ENCRYPTED STRING,
         problems      ENCRYPTED STRING,
         modifiedAt    INT64,
+        name          ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

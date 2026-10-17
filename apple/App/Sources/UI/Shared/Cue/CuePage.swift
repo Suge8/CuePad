@@ -72,7 +72,7 @@ struct CuePage: View {
                     .frame(maxWidth: Self.readingWidth)
             }
             if cue.showsRun, let keeper = services.cue.keeper {
-                CueRunPanel(keeper: keeper, handoff: thread?.lastHandoff)
+                CueRunPanel(keeper: keeper)
                     .padding([.trailing, .bottom], 12)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }

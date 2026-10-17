@@ -205,29 +205,36 @@ enum ControlMetrics {
 }
 
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
+/// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 struct ControlButtonStyle: ButtonStyle {
     enum Kind { case primary, highlight, secondary, quiet, circular }
     var kind = Kind.secondary
     var compact = false
-    @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        surface(configuration.label)
+        configuration.label.modifier(ControlSurface(kind: kind, compact: compact))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
             .opacity(isEnabled ? 1 : 0.45)
     }
+}
 
-    @ViewBuilder private func surface(_ label: ButtonStyleConfiguration.Label) -> some View {
+/// 控件的外形（`ControlButtonStyle` 的样子，不含按压）。
+struct ControlSurface: ViewModifier {
+    var kind = ControlButtonStyle.Kind.secondary
+    var compact = false
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
         if kind == .circular {
-            label
+            content
                 .font(Typography.body.weight(.medium))
                 .foregroundStyle(palette.ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
                 .glass(in: .circle, interactive: true)
         } else {
-            label
+            content
                 .font((compact ? Typography.meta : Typography.secondary).weight(.medium))
                 .foregroundStyle(kind == .primary ? palette.onSignature : kind == .highlight ? palette.signature : palette.ink)
                 .padding(.horizontal, compact ? 10 : 16)

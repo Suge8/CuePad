@@ -3,12 +3,13 @@ import CueStore
 import SwiftUI
 
 /// 手机与 iPad 的 Cue 页头：一块玻璃，平时是 56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
-/// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：等你、在做（`LiveSessionList`）、全部会话、额度（`QuotaStrip`）、记忆。
-/// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveSessionRows`）。
-/// 点页头、点面板外、往上划都收起；点面板里的一项先收起再去那里。
+/// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
+/// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
+/// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
+/// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
-/// 打开时不读库：面板里的数据都是已经在订阅的。
+/// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueBrainMenu`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
     /// 左边留着设置钮（iPhone 标签栏布局；iPad 的设置在侧栏）。
     let showsSettings: Bool
@@ -51,10 +52,14 @@ struct CueHeader: View {
 
     private var glass: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 往上划收起只认页头那一条：面板里放不下时要往上划着滚
             Button(action: toggle) { head }
                 .buttonStyle(.plain)
+                .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
+                    if expanded, drag.translation.height < -24 { toggle() }
+                })
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityHint(expanded ? "收起" : "看在做的会话、等你的事与记忆")
+                .accessibilityHint(expanded ? "收起" : "换模型，看上下文、在做的会话、等你的事、记忆与设置")
             if expanded {
                 CueNowPanel(close: toggle)
                     .transition(.opacity.combined(with: .offset(y: -6)))
@@ -64,9 +69,6 @@ struct CueHeader: View {
         // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), ink: .solid)
-        .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
-            if expanded, drag.translation.height < -24 { toggle() }
-        })
     }
 
     private var head: some View {
@@ -100,7 +102,12 @@ struct CueHeader: View {
     }
 }
 
-/// 页头展开后的面板：等你（卡片就在页面下方，点它收起面板）、在做（前几个，同 Mac 侧栏的 Agent 区）、全部会话（推入 Agent 整页）、额度、记忆。
+/// 页头展开后的面板，手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）：
+/// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选住哪台时没有），右边是它住在哪与齿轮，点它推入设置
+/// （`CueSettingsScreen`：名字、住在哪台 Mac、允许清单；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
+/// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
+/// 同 Mac 侧栏的 Agent 区；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
+/// 放不下时面板里面滚。
 private struct CueNowPanel: View {
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -112,49 +119,23 @@ private struct CueNowPanel: View {
     private static let limit = 5
 
     var body: some View {
-        let cue = workspace.cue, sessions = services.liveSessions
-        let rows = workspace.liveSessionRows
-        VStack(alignment: .leading, spacing: 16) {
-            if cue.waiting > 0 {
-                Button(action: close) {
-                    HStack(spacing: 8) {
-                        Image(systemName: Waiting.symbol).foregroundStyle(Waiting.tint(dark: palette.dark)).accessibilityHidden(true)
-                        WaitingCount(count: cue.waiting)
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                    }
-                    .font(.subheadline)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(RowPressStyle())
-                .accessibilityHint("收起面板，看下面等你的事")
+        HugHeight {
+            ScrollView { content }.scrollBounceBehavior(.basedOnSize)
+        }
+        .refreshesQuota()
+    }
+
+    private var content: some View {
+        let cue = workspace.cue
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                if cue.hostID != nil { CueConfigControls() }
+                Spacer(minLength: 0)
+                settings(cue)
             }
-            VStack(alignment: .leading, spacing: 10) {
-                Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                if rows.isEmpty {
-                    Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
-                } else {
-                    LiveSessionList(sessions: rows, limit: Self.limit, spacing: 12) { session in
-                        Button {
-                            close()
-                            navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
-                        } label: {
-                            PiSessionRow(
-                                session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
-                                rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0
-                            ).equatable()
-                                .contentShape(.rect)
-                        }
-                        .buttonStyle(RowPressStyle())
-                    } fold: { count, expanded in
-                        PiReloadFold(count: count, expanded: expanded)
-                    }
-                }
-                link("全部会话", count: sessions.total) {
-                    close()
-                    navigation.push(.agent)
-                }
-            }
+            if cue.canHear { CueContextCard(context: cue.context) }
+            if cue.waiting > 0 { waiting(cue.waiting) }
+            sessions
             QuotaStrip()
             link("记忆", symbol: "brain") {
                 close()
@@ -162,13 +143,95 @@ private struct CueNowPanel: View {
             }
         }
         .padding(.horizontal, 16).padding(.top, 2).padding(.bottom, 16)
-        .refreshesQuota()
+    }
+
+    /// 大脑那一行的右端：它住在哪（放不下时只留齿轮），点它推入设置。
+    private func settings(_ cue: CueWatch) -> some View {
+        let home = cue.canHear ? cue.hostName : "没启用"
+        return Button {
+            close()
+            navigation.push(.cueSettings)
+        } label: {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    if let home { Text(home).lineLimit(1) }
+                    Image(systemName: "gearshape")
+                }
+                Image(systemName: "gearshape")
+            }
+            .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
+            .frame(minWidth: 44, minHeight: 44).contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.button))
+        .accessibilityLabel("\(cue.name) 的设置")
+        .accessibilityValue(home ?? "")
+    }
+
+    private func waiting(_ count: Int) -> some View {
+        Button(action: close) {
+            HStack(spacing: 8) {
+                Image(systemName: Waiting.symbol).foregroundStyle(Waiting.tint(dark: palette.dark)).accessibilityHidden(true)
+                WaitingCount(count: count)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            }
+            .font(.subheadline)
+            .contentShape(.rect)
+        }
+        .buttonStyle(RowPressStyle())
+        .accessibilityHint("收起面板，看下面等你的事")
+    }
+
+    private var sessions: some View {
+        let live = services.liveSessions, work = workspace.liveWork
+        // 区头钉在面板顶上：展开后一屏放不下，往下翻会话时还看得到有几个在跑
+        return LazyVStack(alignment: .leading, spacing: 10, pinnedViews: .sectionHeaders) {
+            Section {
+                sessionRows(work, live: live)
+            } header: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("在做").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    if !work.rows.isEmpty { LiveWorkCount(work: work, font: .footnote) }
+                }
+                .padding(.vertical, 6)
+                // 面板的底色（`GlassInk.solid` 垫的页面底色），实的：钉住时下面滚过的行不透上来
+                .background(palette.desk)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    @ViewBuilder private func sessionRows(_ work: LiveWork, live: LiveSessions) -> some View {
+        if work.rows.isEmpty {
+            Text("没有在跑的会话").font(.subheadline).foregroundStyle(palette.ink3)
+        } else {
+            LiveSessionList(sessions: work.rows, limit: Self.limit, spacing: 12) { session in
+                Button {
+                    close()
+                    navigation.openSession(session.id, sessionID: session.sessionID, store: services.store)
+                } label: {
+                    PiSessionRow(
+                        session: session, project: workspace.catalog?.project(session.projectID), delivery: live.deliveries[session.sessionID],
+                        rename: live.renames[session.sessionID], undelivered: live.undelivered[session.sessionID] ?? 0
+                    ).equatable()
+                        .contentShape(.rect)
+                }
+                .buttonStyle(RowPressStyle())
+            } fold: { count, expanded in
+                PiReloadFold(count: count, expanded: expanded)
+            }
+        }
+        link("全部会话", count: live.total) {
+            close()
+            navigation.push(.agent)
+        }
     }
 
     private func link(_ title: String, symbol: String? = nil, count: Int? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if let symbol { Image(systemName: symbol).foregroundStyle(palette.ink2).accessibilityHidden(true) }
+                if let symbol { Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 20).accessibilityHidden(true) }
                 Text(title).foregroundStyle(palette.ink)
                 if let count, count > 0 { Text("\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
                 Spacer(minLength: 8)
@@ -179,6 +242,20 @@ private struct CueNowPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
+    }
+}
+
+/// 让滚动区贴着内容的高：放得下就是内容那么高（玻璃不往下多长一截），放不下就是给的那么高、在里面滚。
+/// 不用 `ViewThatFits` 排两份：两份内容各有各的状态（"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
+private struct HugHeight: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let scroll = subviews.first else { return .zero }
+        let ideal = scroll.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, proposal.height ?? ideal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 #endif

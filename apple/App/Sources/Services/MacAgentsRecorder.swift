@@ -3,6 +3,7 @@ import AppKit
 import CuePi
 import CueStore
 import Foundation
+import SystemConfiguration
 
 /// 这台 Mac 上的 Agent 能不能用、各家的模型（同步表 macAgents）只经这里写：按检测出的接入状态问（`AgentIntegrations.probe`），
 /// 内容变了才写，写了立即上传；各处读库，这里不留结果。
@@ -38,7 +39,8 @@ final class MacAgentsRecorder {
             if redetecting || agents.statuses.count < AgentKind.allCases.count { await agents.redetect() }
             probed = agents.statuses
             let found = await agents.probe()
-            if let id = try await store.recordMacAgents(host: host, found.agents, problems: found.problems) { await sync?.upload(id) }
+            let name = SCDynamicStoreCopyComputerName(nil, nil) as String?
+            if let id = try await store.recordMacAgents(host: host, name: name, found.agents, problems: found.problems) { await sync?.upload(id) }
             return try await store.macAgents(on: host)
         }
         latest = round
