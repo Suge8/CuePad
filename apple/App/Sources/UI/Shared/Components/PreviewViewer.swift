@@ -1,4 +1,3 @@
-import CueEditor
 import CueStore
 #if os(macOS)
 import Quartz
@@ -74,6 +73,10 @@ private struct PreviewPager: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 减弱动态效果时整页的淡入淡出
     @State private var shown = false
+    /// 往下拉了多少（`PageSwipe`）
+    @State private var pull: CGFloat = 0
+    /// 图片页放大着：拖动是看图，不是收起
+    @State private var zoomedIn = false
     #endif
 
     private var batch: [PiPreview] { opening.batch }
@@ -87,9 +90,15 @@ private struct PreviewPager: View {
         #if os(iOS)
         NavigationStack {
             TabView(selection: $current) {
-                ForEach(batch) { PreviewContent(preview: $0, file: file(of: $0), active: $0.id == current, pulledDown: dismiss).tag($0.id) }
+                ForEach(batch) { PreviewContent(preview: $0, file: file(of: $0), active: $0.id == current, zoomedIn: $zoomedIn).tag($0.id) }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .scaleEffect(1 - min(pull, 400) / 1600)
+            .offset(y: pull)
+            .gesture(PageSwipe(pulls: !zoomedIn) { pull = $0 } released: { pulled in
+                if pulled > Self.pullToClose { dismiss() } else { withAnimation(Motion.snappy) { pull = 0 } }
+            })
+            .onChange(of: current) { zoomedIn = false }
             .background(palette.desk)
             .navigationTitle(title)
             .navigationSubtitle(position.visible)
@@ -100,11 +109,11 @@ private struct PreviewPager: View {
             }
             .safeAreaBar(edge: .bottom) {
                 HStack(spacing: 8) {
-                    if batch.count > 1 { arrow(-1) }
+                    if Self.quickLooks(preview.kind), batch.count > 1 { arrow(-1) }
                     PreviewReplyBar(reply: opening.reply, about: title, done: dismiss)
-                    if batch.count > 1 { arrow(1) }
+                    if Self.quickLooks(preview.kind), batch.count > 1 { arrow(1) }
                 }
-                    .padding(.horizontal, 12).padding(.bottom, 8)
+                .padding(.horizontal, 12).padding(.bottom, 8)
                     .frame(maxWidth: 640)
                     .frame(maxWidth: .infinity)
             }
@@ -132,16 +141,19 @@ private struct PreviewPager: View {
     }
 
     #if os(iOS)
-    /// 底栏两头的前后箭头：快速查看的页（PDF、视频、文稿……）自己吃掉左右滑与下滑，翻到它那页时靠它们翻、靠关闭钮收起。
+    /// 拉过这么多松手就收起
+    private static let pullToClose: CGFloat = 110
+
+    /// 还嵌着快速查看的页（文稿、表格、演示文稿、3D）：它的内容在另一个进程里画，触摸进不来这边，左右滑与下拉都接不到，
+    /// 只能靠底栏两头的箭头翻、关闭钮收起。其余类型都由 CuePad 自己画（`PreviewPages+iOS`），滑动与下拉照常
+    private static func quickLooks(_ kind: PiPreviewKind?) -> Bool { [.document, .spreadsheet, .presentation, .model, nil].contains(kind) }
+
     private func arrow(_ offset: Int) -> some View {
-        let target = index + offset
-        return Button(offset < 0 ? "上一个" : "下一个", systemImage: offset < 0 ? "chevron.left" : "chevron.right") {
-            withAnimation(Motion.quick) { current = batch[target].id }
-        }
-        .labelStyle(.iconOnly).font(.body.weight(.semibold)).foregroundStyle(palette.ink2)
-        .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
-        .glass(in: .circle, interactive: true)
-        .disabled(!batch.indices.contains(target))
+        Button(offset < 0 ? "上一个" : "下一个", systemImage: offset < 0 ? "chevron.left" : "chevron.right") { step(offset) }
+            .labelStyle(.iconOnly).font(.body.weight(.semibold)).foregroundStyle(palette.ink2)
+            .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+            .glass(in: .circle, interactive: true)
+            .disabled(!batch.indices.contains(index + offset))
     }
     #endif
 
@@ -152,11 +164,12 @@ private struct PreviewPager: View {
         Text(position).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
         if batch.count > 1 { Button("下一个", systemImage: "chevron.right") { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1) }
     }
+    #endif
 
     private func step(_ offset: Int) {
+        guard batch.indices.contains(index + offset) else { return }
         withAnimation(Motion.quick) { current = batch[index + offset].id }
     }
-    #endif
 
     /// 关掉：减弱动态效果时先淡出再无动画地收起，其余照系统的（手机上缩回那张缩略图）。
     private func dismiss() {
@@ -194,8 +207,8 @@ private struct PreviewContent: View {
     let file: URL?
     /// 是不是翻到的这一页（翻页留着的邻页不是）
     var active = true
-    /// 图片页下拉到底：收起全屏页（手机）
-    var pulledDown: () -> Void = {}
+    /// 图片页放大着（手机：这时拖动是看图，不收起）
+    var zoomedIn: Binding<Bool> = .constant(false)
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -205,7 +218,10 @@ private struct PreviewContent: View {
                 case .web: PreviewWeb(file: file)
                 case .markdown: PreviewMarkdown(file: file)
                 #if os(iOS)
-                case .image: PreviewImage(file: file, pulledDown: pulledDown)
+                case .image: PreviewImage(file: file, zoomedIn: active ? zoomedIn : .constant(false))
+                case .pdf: PreviewPDF(file: file)
+                case .video, .audio: PreviewPlayer(file: file, active: active)
+                case .text: PreviewText(file: file)
                 #endif
                 #if os(macOS)
                 default: QuickLookPage(file: file)
@@ -267,102 +283,6 @@ private struct QuickLookPage: UIViewControllerRepresentable {
         var file: URL?
         func numberOfPreviewItems(in controller: QLPreviewController) -> Int { file == nil ? 0 : 1 }
         func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> any QLPreviewItem { file! as NSURL }
-    }
-}
-#endif
-
-#if os(iOS)
-/// 图片自己显示（不嵌快速查看）：没放大时左右滑翻页给外面，往下拉跟着手指走、拉过一截松手就缩回原处（`pulledDown`；
-/// 系统 zoom 转场自带的下滑收起在翻页的分页里接不到手势）；双指或双击放大，放大了拖着看，双击回原样。
-private struct PreviewImage: View {
-    let file: URL
-    let pulledDown: () -> Void
-    @Environment(\.displayScale) private var scale
-    @State private var image: CGImage?
-    @State private var zoom: CGFloat = 1
-    @State private var pinch: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var drag: CGSize = .zero
-    /// 没放大时往下拉了多少
-    @State private var pull: CGFloat = 0
-
-    /// 拉过这么多松手就收起
-    private static let pullToClose: CGFloat = 110
-
-    /// 解码的最长边（像素）：够全屏放大两倍看清字
-    private static let maxPoints: CGFloat = 1600
-
-    var body: some View {
-        Group {
-            if let image {
-                let zoomed = zoom * pinch > 1
-                Image(decorative: image, scale: 1).resizable().scaledToFit()
-                    .scaleEffect(zoom * pinch)
-                    .offset(x: offset.width + drag.width, y: offset.height + drag.height)
-                    .scaleEffect(1 - min(pull, 400) / 1600)
-                    .offset(y: pull)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(.rect)
-                    .gesture(MagnifyGesture().onChanged { pinch = $0.magnification }.onEnded { _ in settle(zoom * pinch) })
-                    .simultaneousGesture(DragGesture().onChanged { drag = $0.translation }.onEnded { value in
-                        offset.width += value.translation.width
-                        offset.height += value.translation.height
-                        drag = .zero
-                    }, isEnabled: zoomed)
-                    .gesture(PullDown(enabled: !zoomed) { pull = $0 } ended: {
-                        if pull > Self.pullToClose { pulledDown() } else { withAnimation(Motion.snappy) { pull = 0 } }
-                    })
-                    .onTapGesture(count: 2) { withAnimation(Motion.snappy) { settle(zoomed ? 1 : 2.5) } }
-            } else {
-                Color.clear
-            }
-        }
-        .task(id: file) { image = await Self.decode(file, pixels: Int(Self.maxPoints * scale)) }
-    }
-
-    private func settle(_ value: CGFloat) {
-        pinch = 1
-        zoom = min(max(value, 1), 5)
-        if zoom == 1 { offset = .zero }
-    }
-
-    @concurrent private static func decode(_ file: URL, pixels: Int) async -> CGImage? {
-        Thumbnails.image(at: file, maxPixel: pixels)
-    }
-}
-/// 往下拉（手机图片页）：UIKit 的拖动手势，一开始就判方向——横着的当场放弃、交给外面的翻页，SwiftUI 的拖动手势会把翻页的滑动一起吃掉。
-private struct PullDown: UIGestureRecognizerRepresentable {
-    let enabled: Bool
-    let changed: (CGFloat) -> Void
-    let ended: () -> Void
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) { pan.isEnabled = enabled }
-
-    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
-        switch pan.state {
-        case .changed: changed(max(pan.translation(in: pan.view).y, 0))
-        case .ended, .cancelled, .failed: ended()
-        default: break
-        }
-    }
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
-            let velocity = pan.velocity(in: pan.view)
-            return velocity.y > abs(velocity.x)
-        }
-
-        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     }
 }
 #endif

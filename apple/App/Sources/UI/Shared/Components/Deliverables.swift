@@ -3,9 +3,9 @@ import SwiftUI
 
 /// 交付物（会话发到手机看的文件）全 App 只有这一个样子，三处共用、三种尺寸（`Size`）：会话页的那张卡（`PreviewBatch`）、
 /// Cue 页的结果卡（`CueResultCard`）、"等你"里的迷你一排。
-/// 一份是整宽主图（按内容真实比例夹在 4:3～16:9），两份并排，三份起横向滑、各按比例定宽同高，放不下的露出一截；
+/// 一份是整宽主图（按内容真实比例夹在 4:3～16:9），两份并排（各按真实比例，不高过主图），三份起横向滑、各按真实比例定宽同高，放不下的露出一截；
 /// 每张下面一行"标题 · 类型（时长、页数）"，迷你一排没有这一行。缩略图全是真内容（`DeliverableLooks`）。
-/// 文件还在从 iCloud 下载时写明、点不开，到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
+/// 文件还在从 iCloud 下载时画面上写"下载中"（三种尺寸都有）、点不开，到了自动换成内容。点一张交给 `open`，全屏页从这张放大出来（`previewPresenter`）。
 struct DeliverableStrip: View {
     enum Size {
         case result, chat, mini
@@ -155,10 +155,8 @@ private struct DeliverableTile: View {
 
     private var aspect: CGFloat {
         let raw = shown?.aspect ?? 4 / 3
-        return switch shape {
-        case .hero: min(max(raw, 4 / 3), 16 / 9)
-        case .pair, .strip: min(max(raw, 3 / 4), 16 / 9)
-        }
+        guard case .hero = shape else { return raw }
+        return min(max(raw, 4 / 3), 16 / 9)
     }
 
     private var radius: CGFloat {
@@ -187,6 +185,14 @@ private struct DeliverableTile: View {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）
                         .overlay { if palette.dark, preview.kind != .video { Color.black.opacity(0.14) } }
+                } else if file == nil {
+                    // 还没到本机：迷你一排没有下面那行字，下载中写在画面上
+                    VStack(spacing: 3) {
+                        Image(systemName: "icloud.and.arrow.down").font(.callout)
+                        Text("下载中").font(Typography.caption)
+                    }
+                    .foregroundStyle(palette.ink3)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if preview.kind == .audio {
                     VStack(spacing: 4) {
                         Image(systemName: "waveform").font(.title2)
@@ -218,12 +224,13 @@ private struct DeliverableTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 画面最长边的像素：主图按阅读栏宽，排里的按最宽的比例。
+    /// 画面最长边的像素：主图按阅读栏宽，并排的按半栏。
     private var pixels: Int {
         let points: CGFloat = switch shape {
         case .hero: 760
         case .pair: 380
-        case .strip(let height): height * 16 / 9
+        // 排里按真实比例定宽：最长边给到高的 4 倍，宽图也清楚（比例要读到画面才知道，像素数得先定）
+        case .strip(let height): height * 4
         }
         return Int(points * scale)
     }
