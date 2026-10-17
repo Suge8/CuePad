@@ -7,16 +7,10 @@ import Testing
 @testable import CuePi
 
 /// 真 Claude Code 的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，绝不碰 ~/.claude 与真实资料库。
-/// 模型走本机用户自己的 Claude 订阅（`haiku`，省额度）：OAuth 令牌约 1 小时过期、由 Pi 自动刷新，所以录制与直连时现从
-/// ~/.pi/agent/auth.json 的 `anthropic.access` 读，只放进子进程环境（`CLAUDE_CODE_OAUTH_TOKEN`），不落盘，也不进录像带。
+/// 模型走本机 Claude Code 自己的登录（`ClaudeLogin`，模型 `haiku` 省额度），录制与直连时现取。
 /// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let claudeURL = ExecutableLocator.standard.candidates("claude").first
 let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
-/// 此刻的订阅令牌（现读：Pi 会换新的）
-var claudeToken: String? {
-    let auth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
-    return (try? Data(contentsOf: auth)).flatMap(JSONValue.parse)?["anthropic"]?["access"]?.string
-}
 /// 测试用的模型与换模型时换到的另一个
 let claudeTestModel = "haiku", claudeOtherModel = "sonnet"
 
@@ -69,7 +63,7 @@ final class ClaudeTestbed {
             "XDG_DATA_HOME": root.appending(path: "xdg-data").path, "XDG_STATE_HOME": root.appending(path: "xdg-state").path,
             "XDG_CACHE_HOME": root.appending(path: "xdg-cache").path, "XDG_CONFIG_HOME": root.appending(path: "xdg-config").path,
             "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path,
-            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : claudeToken ?? "", "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": AgentTape.current?.mode == .replay ? "" : ClaudeLogin.token ?? "", "ANTHROPIC_API_KEY": "",
             // 不要自动记忆：叫它"记住"什么时它会先去翻记忆文件、要用 Bash，等你确认
             "ANTHROPIC_MODEL": claudeTestModel, "DISABLE_AUTOUPDATER": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         ]

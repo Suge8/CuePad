@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import Testing
 
@@ -16,7 +17,7 @@ import Testing
 ///
 /// - pi：`~/.local/bin/pi`，假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
-/// - claude：本机的 claude，用 `~/.pi/agent/auth.json` 里的 Claude 订阅令牌、模型 haiku（`ClaudeTestbed`）；
+/// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
 /// - 大脑（`RealBrainTests`）用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
@@ -39,7 +40,7 @@ enum RealAgents {
         switch agent {
         case .pi: realPiInstalled
         case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path)
-        case .claudeCode: claudeURL != nil && claudeToken != nil
+        case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil
         case .opencode: realOpenCodeURL != nil
         }
     }

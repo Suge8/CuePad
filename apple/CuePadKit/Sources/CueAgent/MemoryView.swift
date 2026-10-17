@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：一直记着的全部列出；其余按序号铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
-/// （按预算二分 alpha，见 `cover`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；缺的摘要列成"待合并"，空闲时让 Cue 写。
+/// （按预算二分 alpha，见 `cover`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；缺的摘要列成"待合并"（`merges`），由值班的管理器空闲时逐块请 Cue 写，视图里不列（系统提示一个班次不变，列了也会过时）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public enum Entry: Equatable, Sendable {
@@ -88,7 +88,6 @@ public struct CueMemoryView: Equatable, Sendable {
       }
     }
     if out.isEmpty { out.append("还没有记忆。") }
-    if !merges.isEmpty { out.append("待合并 \(merges.count) 块（空闲时用 memory merge 写摘要，先合小的）") }
     return out.joined(separator: "\n")
   }
 

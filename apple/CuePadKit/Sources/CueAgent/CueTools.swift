@@ -102,7 +102,7 @@ public struct CueTools: Sendable {
   static let evidenceLimit = 40
   /// 交接备忘至多这么多字：新上下文每次接上都带着它，在做的事信封里本来就有。
   static let handoffLimit = 600
-  /// 证据的示例（系统提示、工具说明与证据超长的报错共用）：一句行为上的结论。
+  /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。
   static let evidenceExample = "登录后进到首页"
 
 

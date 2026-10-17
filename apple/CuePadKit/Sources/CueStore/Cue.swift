@@ -331,7 +331,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .delete: "删除"
     case .outside: "动项目以外的东西"
     case .budget: "超出预算"
-    case .rule: "违反或改动用户的规矩，或他的规矩要你先问的事"
+    case .rule: "违反或改动他的规矩，或他的规矩要你先问的事"
     }
   }
 
