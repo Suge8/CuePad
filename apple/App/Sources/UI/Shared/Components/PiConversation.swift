@@ -40,7 +40,7 @@ struct PiConversation: View {
         let first = Self.firstSegment(count: all.count, window: window)
         VStack(alignment: .leading, spacing: Self.spacing) {
             if first > 0 {
-                EarlierRow(hidden: first * Self.segment, action: showEarlier)
+                EarlierRow(count: Self.segment, action: showEarlier)
             }
             if all.isEmpty { RecapPreview(session: session) }
             // 一段一段排，每段只按内容比较：上面再排开一段、下面来了新消息时，没变的段不重算也不重排，
@@ -240,30 +240,26 @@ private struct ChatSegment: View, Equatable {
 }
 
 
-/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行小字，不是分隔（上下文没换），刻度滑条上也没有它。
+/// 这一轮怎么结束的（被停下、被你拒绝）：回答下面一行旁注，不是分隔（上下文没换），刻度滑条上也没有它。
 private struct RoundEndNote: View {
     let notice: PiNotice
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        Label(notice.rawValue, systemImage: notice == .declined ? "hand.raised" : "stop.circle")
-            .font(Typography.meta).foregroundStyle(palette.ink3)
+        NoteLine(symbol: notice == .declined ? "hand.raised" : "stop.circle") { Text(notice.rawValue) }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
             .transition(.entry)
     }
 }
 
-/// 排开的最上面一行：还有更早的对话。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
+/// 排开的最上面一行：还有更早的对话（居中的标记）。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {
-    let hidden: Int
+    /// 点一下再排开几条。
+    let count: Int
     let action: () -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        Button("更早的 \(min(hidden, PiConversation.segment)) 条", action: action)
-            .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, minHeight: 28)
+        ChatMarker(action: action) { Label("更早的 \(count) 条", systemImage: "arrow.up").labelStyle(.titleAndIcon) }
     }
 }
 

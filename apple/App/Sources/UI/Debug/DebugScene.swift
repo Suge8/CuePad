@@ -31,7 +31,7 @@ enum ScrollAnchor {
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
-/// - `-CuePadToolsOpen YES`：会话页每一轮的经过一开始就展开整份清单（`RoundProcess`）；
+/// - `-CuePadToolsOpen YES`：每一轮的经过与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`CueNotes`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡或那条任务一出现就画成指针停着的样子（"设为任务"、亮起的"开始"）；

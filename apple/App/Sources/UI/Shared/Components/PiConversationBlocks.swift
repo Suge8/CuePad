@@ -29,7 +29,7 @@ struct RecapPreview: View {
 /// 新到的淡入；`fadesIn` 为 false 时（它原位换下正在说的话，见 `DraftReply`）直接出现。
 struct ReplyBlock: View {
     let text: String
-    /// 这一轮做了多久；没有（读不出开始时间）时不画经过那一块
+    /// 这一轮做了多久；没有（读不出开始时间）时不画经过那一行
     let took: String?
     let tools: PiChatMessage.Tools?
     let session: PiSessionState
@@ -54,8 +54,8 @@ struct ReplyBlock: View {
 }
 
 
-/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一张卡片（`MachineNote`）：一行是谁发来的与它交回了什么，其余收着、点开看全文（Markdown）。
-/// 它在对话里落在被读到的位置，与回答同一列、全宽，淡底与经过那一块同一套。
+/// 扩展投进会话的机器消息（`PiEnvelope`），一块信封一行旁注（`NoteLine`，`MachineNote`）：谁发来的与它交回了什么，其余收着、点开在细线下看全文（Markdown）。
+/// 它在对话里落在被读到的位置，与回答同一列；不是谁对你说的话，与经过同一种样子。
 struct MachineCards: View {
     let text: String
 
@@ -78,32 +78,26 @@ private struct MachineCard: View {
     @State private var open = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             Button { open.toggle() } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Image(systemName: note.fromFireCode ? "flame" : "puzzlepiece.extension").font(Typography.caption).foregroundStyle(palette.ink3)
-                        .accessibilityHidden(true)
-                    Text(note.who).font(Typography.caption).foregroundStyle(palette.ink3).fixedSize()
-                    Text(note.line).font(Typography.secondary).foregroundStyle(note.failed ? palette.failure : palette.ink)
+                NoteLine(symbol: note.fromFireCode ? "flame" : "puzzlepiece.extension", open: note.detail.isEmpty ? nil : open) {
+                    Text(note.who).foregroundStyle(palette.ink3).fixedSize()
+                    Text(note.line).foregroundStyle(note.failed ? palette.failure : palette.ink2)
                         .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
-                    if !note.detail.isEmpty { DisclosureChevron(open: open) }
                 }
-                .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .disabled(note.detail.isEmpty)
             .accessibilityLabel("\(note.who)：\(note.line)")
             .accessibilityValue(note.detail.isEmpty ? "" : open ? "已展开" : "已收起")
-            if open { MarkdownText(source: note.detail).equatable().transition(.opacity) }
+            if open { NoteThread { MarkdownText(source: note.detail).equatable() } }
         }
-        .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 8)
-        .background(palette.fill, in: ChatBlock.shape)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: open)
     }
 }
 
 
-/// 正在说的那条回答（Mac：会话页、Cue 页）：与说完落库后的那条同一套渲染、同一个位置，`header` 占着那条上方经过那一块的位置（同样高，见 `RoundProcess`），
+/// 正在说的那条回答（Mac 会话页；Cue 页的在气泡里，`CueEnding`）：与说完落库后的那条同一套渲染、同一个位置，`header` 占着那条上方经过那一行的位置（同样高，见 `RoundProcess`），
 /// 所以落库时原位换下、正文不动。开始出字时淡入；换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
 struct DraftReply<Header: View>: View {
     let text: String
@@ -137,7 +131,7 @@ struct LiveStatus: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// 经过那一块的结尾。正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；
+    /// 经过那一行的结尾。正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；
     /// 其余没在跑一轮时没有。在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
     static func ending(of session: PiSessionState, speaking: Bool) -> RoundProcess.Ending? {
         if speaking { return .speaking }

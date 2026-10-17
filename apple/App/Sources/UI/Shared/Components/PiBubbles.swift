@@ -10,11 +10,46 @@ extension AnyTransition {
 }
 
 
-/// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
+/// 对话气泡（你的话、Cue 的话）共用的样子。说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
+/// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
+enum Bubble {
+    static let radius: CGFloat = 20
+    static let corner: CGFloat = 6
+    static let padding = EdgeInsets(top: 11, leading: 16, bottom: 11, trailing: 16)
+    /// 同一边连着说的两颗之间。
+    static let joinedGap: CGFloat = 3
+    /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
+    static let noteInset: CGFloat = padding.leading
+    /// 最宽占所在一栏的比例：你的话短，窄一些；Cue 的回答常带列表与代码，宽一些（手机上窄，再宽一点）。
+    static let youWidth: CGFloat = 0.78
+    #if os(macOS)
+    static let cueWidth: CGFloat = 0.86
+    #else
+    static let cueWidth: CGFloat = 0.9
+    #endif
+
+    /// `joined`：上面紧挨着同一边的一颗。
+    static func shape(_ edge: HorizontalEdge, joined: Bool = false) -> UnevenRoundedRectangle {
+        let top = joined ? corner : radius
+        return switch edge {
+        case .trailing: UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: corner, topTrailingRadius: top, style: .continuous)
+        case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: corner, bottomTrailingRadius: radius, topTrailingRadius: radius, style: .continuous)
+        }
+    }
+
+    /// 新说出的一颗从说话那一边的下角长出来（淡入并从 92% 放大到位）：你发出的从回复框那一角冒出，与对话上滑是同一段；只动变换，不改排版。
+    /// 消失只淡出。减弱动态效果时只淡入淡出。
+    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion else { return .entry }
+        let grow = AnyTransition.opacity.combined(with: .scale(scale: 0.92, anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
+        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
+    }
+}
+
+
+/// 你的一句话：右侧气泡（样子见 `Bubble`）；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
-    private static var widthFraction: CGFloat { 0.78 }
-
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     private static var foldedLines: Int { 6 }
 
@@ -23,6 +58,8 @@ struct UserBubble<Menu: View>: View {
     var highlighted = false
     /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
     var fromCue = false
+    /// 上面紧挨着你的另一句（`Bubble.shape`）。
+    var joined = false
     @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
@@ -30,18 +67,18 @@ struct UserBubble<Menu: View>: View {
 
     var body: some View {
         let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
-        TrailingFraction(fraction: Self.widthFraction) {
+        BubbleWidth(fraction: Bubble.youWidth, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
+                        text: text, highlighted: highlighted, trip: trip, joined: joined, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil)
                 }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
             }
             #if os(iOS)
-            .contentShape(.contextMenuPreview, BubbleText.shape)
+            .contentShape(.contextMenuPreview, Bubble.shape(.trailing, joined: joined))
             #endif
             .contextMenu { menu }
         }
@@ -51,19 +88,18 @@ struct UserBubble<Menu: View>: View {
 
 extension UserBubble where Menu == EmptyView {
     /// 没有长按菜单的气泡（近况里的上一句）。
-    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false, fromCue: Bool = false) {
-        self.init(stored: stored, trip: trip, highlighted: highlighted, fromCue: fromCue) { EmptyView() }
+    init(stored: String) {
+        self.init(stored: stored) { EmptyView() }
     }
 }
 
 
 /// 气泡本身（颜色是 `Palette.bubble`）。Mac 上可以直接拖选文字。
 struct BubbleText: View {
-    static let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-
     let text: String
     var highlighted = false
     var trip = BubbleTrip.arrived
+    var joined = false
     var lineLimit: Int?
     /// 给了时报告文字是否被 `lineLimit` 截掉。
     var truncated: Binding<Bool>?
@@ -72,7 +108,7 @@ struct BubbleText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = Self.shape
+        let shape = Bubble.shape(.trailing, joined: joined)
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
                 PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
@@ -81,7 +117,7 @@ struct BubbleText: View {
                 .font(Typography.reading).foregroundStyle(palette.ink)
                 .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
                 .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
-                .padding(.horizontal, 16).padding(.vertical, 11)
+                .padding(Bubble.padding)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
                 // 在路上：半透明加虚线边，浅色深色一样看得出还没到
@@ -121,11 +157,12 @@ struct BubbleText: View {
         }
     }
 
-    @ViewBuilder private func edge(_ shape: RoundedRectangle) -> some View {
+    @ViewBuilder private func edge(_ shape: UnevenRoundedRectangle) -> some View {
         switch trip {
         case .inTransit: shape.strokeBorder(palette.ink2, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
-        case .arrived: shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1)
+        case .arrived:
+            if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
         }
     }
 }
@@ -137,11 +174,12 @@ enum BubbleTrip { case arrived, inTransit, failed }
 
 /// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
 /// 编辑后重发放回这个会话的回复框（文字进输入框、图片进图片条），已经写了字就接在后面。只属于某一行的动作（选择文本、重发、移除）由那一行给。
-/// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 的回答是 Markdown。
+/// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 与 Cue 的回答是 Markdown。
+/// `session`：会话里的消息才有（存为灵感、编辑后重发要它）；Cue 页的菜单（`.cue`）没有这两项。
 struct MessageActions: View {
     let text: String
     let kind: MessageMenu.Kind
-    let session: PiSessionState
+    var session: PiSessionState?
     var selectText: (() -> Void)?
     var resend: (() -> Void)?
     var remove: (() -> Void)?
@@ -161,11 +199,13 @@ struct MessageActions: View {
         case .selectText: if let selectText { Button(item.title, systemImage: item.symbol, action: selectText) }
         case .share: ShareLink(item: kind == .reply ? text : CueFormat.plainText(text)) { Label(item.title, systemImage: item.symbol) }
         case .saveAsIdea:
-            Button(item.title, systemImage: item.symbol) {
-                let text = text, session = session
-                workspace.attempt { try await workspace.saveReply(text, of: session) }
+            if let session {
+                Button(item.title, systemImage: item.symbol) {
+                    let text = text
+                    workspace.attempt { try await workspace.saveReply(text, of: session) }
+                }
             }
-        case .editAgain: Button(item.title, systemImage: item.symbol, action: editAgain)
+        case .editAgain: if let session { Button(item.title, systemImage: item.symbol) { editAgain(session) } }
         case .resend:
             if let resend { Button(item.title, systemImage: item.symbol, action: resend).disabled(!workspace.services.reachesPiHost) }
         case .remove: if let remove { Button(item.title, systemImage: item.symbol, role: .destructive, action: remove) }
@@ -173,7 +213,7 @@ struct MessageActions: View {
     }
 
     /// 草稿只有一份（`AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
-    private func editAgain() {
+    private func editAgain(_ session: PiSessionState) {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
         draft.append(stored: text, files: workspace.services.store.files)
@@ -194,34 +234,36 @@ struct SpeechBubble<Menu: View>: View {
     /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
     var transit: PiDelivery.Transit?
     var fromCue = false
-    /// 长按菜单（会话页的消息菜单）；给的是此刻到哪了。
+    /// 上面紧挨着你的另一句（Cue 页）。
+    var joined = false
+    /// 长按菜单（消息菜单）；给的是此刻到哪了。
     @ViewBuilder var menu: (Speech.Trip) -> Menu
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 刚从刻度滑条跳到的那一句（Cue 页里你的话）描一圈。
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         let trip = said.trip(at: services.speech)
-        VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            status(trip).font(Typography.caption)
+        VStack(alignment: .trailing, spacing: 2) {
+            UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue, joined: joined) { menu(trip) }
+            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .transition(.entry)
+        .transition(Bubble.arrival(.trailing, reduceMotion: reduceMotion))
     }
 
     @ViewBuilder private func status(_ trip: Speech.Trip) -> some View {
         switch trip {
         case .sending:
-            HStack(spacing: 6) { Spinner(.mini); Text(transit?.label ?? "发送中") }.foregroundStyle(palette.ink2)
+            NoteLine { Spinner(.mini) } label: { Text(transit?.label ?? "发送中") }
+                .accessibilityElement(children: .combine)
         case .delivered:
             if showsDelivered {
-                Label { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: {
-                    Image(systemName: "paperplane.fill")
-                }
-                .foregroundStyle(palette.ink2)
+                NoteLine(symbol: "paperplane.fill") { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
+                    .accessibilityElement(children: .combine)
             }
         case .failed(let failure):
             HStack(spacing: 10) {
@@ -245,11 +287,6 @@ struct SpeechBubble<Menu: View>: View {
     private func remove() { workspace.remove(said) }
 }
 
-extension SpeechBubble where Menu == EmptyView {
-    init(said: Said, box: Binding<ComposerDraft>, showsDelivered: Bool = true) {
-        self.init(said: said, box: box, showsDelivered: showsDelivered) { _ in EmptyView() }
-    }
-}
 
 extension Speech.Trip {
     var bubble: BubbleTrip {
