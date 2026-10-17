@@ -154,12 +154,11 @@ def take_slot():
 class Mac:
     """持着全机那一份的看守：start 起实例，quit 收掉（with 块结束时一定收）。"""
 
-    def __init__(self, app, library, what, ready=True):
+    def __init__(self, app, library, what):
         if not BUILD.fullmatch(app):
             die(f"只起 apple/.derived* 里的构建，不起 {app}")
         self.app, self.library, self.what, self.proc = app, os.path.abspath(library), what, None
-        self.ready = f"{RUNTIME}/mac-ready" if ready else None
-        self.log = re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+        self.ready, self.log = f"{RUNTIME}/mac-ready", re.sub(r"/Build/Products/.*", "/app-mac.log", app)
 
     def __enter__(self):
         self.slot = take_slot()
@@ -169,19 +168,15 @@ class Mac:
         if "-CuePadWindowSize" not in args:
             args = [*args, "-CuePadWindowSize", WINDOW]
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
-        env = isolated_env(self.library)
-        if self.ready:
-            env["CUEPAD_SHOT_READY"] = self.ready
-            if os.path.exists(self.ready):
-                os.remove(self.ready)
-        out = open(self.log, "w") if self.ready else None
-        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=env, stdin=subprocess.DEVNULL,
-                                     stdout=out, stderr=subprocess.STDOUT if out else None)
+        if os.path.exists(self.ready):
+            os.remove(self.ready)
+        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready),
+                                     stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         self.slot.truncate(0)
         self.slot.write(json.dumps({"holder": os.getpid(), "app": self.proc.pid, "checkout": CHECKOUT, "what": self.what,
                                     "since": time.strftime("%H:%M:%S")}, ensure_ascii=False))
         self.slot.flush()
-        return wait_ready(self.ready, self.proc.pid, self.log) if self.ready else None
+        return wait_ready(self.ready, self.proc.pid, self.log)
 
     def quit(self):
         if self.proc:
@@ -204,8 +199,8 @@ def wincap():
 def mac(cmd, app, library, out, args):
     if cmd == "run":
         return run_mac(app, library, args)
-    signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))
     with Mac(app, library, cmd) as m:
+        signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))  # 从拿到那一份算起，排队等别人的不算
         size = m.start(args)
         if len(size) != 2:
             die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
@@ -226,8 +221,8 @@ def run_mac(app, library, args):
         return
     os.close(report_r)
     os.setsid()
-    signal.alarm(RUN_TTL)
     with Mac(app, library, "run") as m:
+        signal.alarm(RUN_TTL)
         m.start(args)
         os.write(report_w, str(m.proc.pid).encode())
         os.close(report_w)
