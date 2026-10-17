@@ -278,6 +278,38 @@ struct RelayFlight {
     /// `cue` 是头像在屏上的那块，`ends` 是会话那头在屏上的几处（都可能不在）。
     func play(_ direction: CueFlight.Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer) {
         guard !ends.isEmpty || cue != nil else { return }
+        stage(in: root) { scene in
+            if reduceMotion {
+                if let cue { scene.glow(ring: cue) }
+                for end in ends { scene.glow(dot: end) }
+            } else {
+                switch direction {
+                case .wake: wake(scene, from: ends, to: cue)
+                case .relay: relay(scene, from: cue, to: ends)
+                }
+            }
+        }
+    }
+
+    /// 发出（输入框的发送钮 → Cue 的头像）：钮上的箭镞就是那点光，从箭镞处（`head`，根层坐标）当场起飞——满大、不透明，
+    /// 不在钮上外扩起飞环、也不从半大淡入：钮在这一刻换成发送中，起飞环与淡入的光叠在正淡出的箭上，录屏里是一团糊。
+    /// 落进头像同叫醒；头像不在屏上时往上飘一小段淡去。减弱动态效果：头像的环与起点同时淡亮一下。
+    func launch(from head: CGPoint, to cue: CGRect?, in root: CALayer) {
+        stage(in: root) { scene in
+            if reduceMotion {
+                if let cue { scene.glow(ring: cue) }
+                scene.glow(dot: head)
+            } else if let cue {
+                let duration = scene.fly(from: head, to: cue.center, head: .dot, delay: 0, launches: true)
+                scene.land(on: cue, delay: duration * 0.9)
+            } else {
+                scene.drift(from: head, rise: scene.up * Self.drift, head: .dot, delay: 0, launches: true)
+            }
+        }
+    }
+
+    /// 在窗口根层最上面铺一层画布交给 `draw` 画，所有动画一次提交给 Core Animation，播完画布拿掉。
+    private func stage(in root: CALayer, _ draw: (Scene) -> Void) {
         let canvas = CALayer()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -285,16 +317,7 @@ struct RelayFlight {
         canvas.frame = root.bounds
         canvas.zPosition = 10_000
         root.addSublayer(canvas)
-        let scene = Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root))
-        if reduceMotion {
-            if let cue { scene.glow(ring: cue) }
-            for end in ends { scene.glow(dot: end) }
-        } else {
-            switch direction {
-            case .wake: wake(scene, from: ends, to: cue)
-            case .relay: relay(scene, from: cue, to: ends)
-            }
-        }
+        draw(Scene(canvas: canvas, color: color, now: canvas.convertTime(CACurrentMediaTime(), from: nil), up: Self.up(in: root)))
         CATransaction.commit()
     }
 
@@ -364,7 +387,7 @@ struct RelayFlight {
         }
 
         /// 沿弧飞到 `end`，返回飞了多久。弧向窗口的竖中线那边鼓：从侧栏、屏边起飞时弧在屏内；几乎横着飞时往上鼓。
-        func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double) -> Double {
+        func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double, launches: Bool = false) -> Double {
             let length = RelayFlight.distance(start, end)
             let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
             var normal = CGPoint(x: -(end.y - start.y) / max(length, 1), y: (end.x - start.x) / max(length, 1))
@@ -375,21 +398,22 @@ struct RelayFlight {
             path.move(to: start)
             path.addQuadCurve(to: end, control: CGPoint(x: mid.x + normal.x * bend, y: mid.y + normal.y * bend))
             let duration = min(max(0.42 + Double(length) / 1800, 0.42), 0.72)
-            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide)
+            streak(path, head: head, delay: delay, duration: duration, timing: RelayFlight.glide, launches: launches)
             return duration
         }
 
         /// 另一头不在屏上：从 `start` 沿 `rise`（层坐标里的竖直位移）飘一小段淡去。
-        func drift(from start: CGPoint, rise: CGFloat, head: Head, delay: Double) {
+        func drift(from start: CGPoint, rise: CGFloat, head: Head, delay: Double, launches: Bool = false) {
             let path = CGMutablePath()
             path.move(to: start)
             path.addQuadCurve(to: CGPoint(x: start.x + 6, y: start.y + rise), control: CGPoint(x: start.x, y: start.y + rise * 0.6))
-            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true)
+            streak(path, head: head, delay: delay, duration: 0.55, timing: RelayFlight.easeOut, fades: true, launches: launches)
         }
 
         /// 一道光加它的尾巴：尾巴是同一条弧上的描边，终点跟着光走、起点晚一点出发、到终点时追上——尾巴越飞越短，落下时被收进去。
         /// 三层叠出由亮到暗的尾巴：短而亮的芯、长而淡的身子、宽而很淡的光晕（描边上不能铺沿着弧走的渐变）。
-        private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false) {
+        /// `launches`：光是从钮上的箭镞变来的，第一帧就满大、不透明（不从半大淡入）。
+        private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false, launches: Bool = false) {
             for (width, alpha, lag) in [(CGFloat(8), 0.12, 0.14), (2.5, 0.3, 0.3), (2, 0.9, 0.12)] {
                 let trail = CAShapeLayer()
                 trail.frame = canvas.bounds
@@ -412,8 +436,8 @@ struct RelayFlight {
             move.calculationMode = .paced
             animate(dot, delay: delay, duration: duration, timing: timing, [
                 move,
-                Self.keyframes("transform.scale", [0.5, 1.15, 1, fades ? 0.6 : 0.4], times: [0, 0.2, 0.85, 1]),
-                Self.keyframes("opacity", [0, 1, 1, 0], times: [0, 0.12, fades ? 0.5 : 0.88, 1]),
+                Self.keyframes("transform.scale", [launches ? 1 : 0.5, 1.15, 1, fades ? 0.6 : 0.4], times: [0, 0.2, 0.85, 1]),
+                Self.keyframes("opacity", [launches ? 1 : 0, 1, 1, 0], times: [0, 0.12, fades ? 0.5 : 0.88, 1]),
             ])
         }
 

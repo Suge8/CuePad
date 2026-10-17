@@ -13,7 +13,8 @@ struct LoopLayer {
         case orbit(lineWidth: CGFloat? = nil)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
-        /// 三层向上的箭头从下往上依次亮起再暗下去，1.2s 一轮，相邻两层差 0.18s；线宽是边长的 9%。
+        /// 三块实心的 V 从下往上依次亮起再暗下去，1.2s 一轮，相邻两层差 0.18s；形状只在 `ClimbBlocks`（与符号 cue.climb 同出 design/tools/cue-symbols.py）。
+        /// 不播时（截图、Mac 不在前台时只画的那一帧）是最上面一块亮着、往下渐暗，看得出方向。
         case climb
         /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
         case ripple
@@ -95,6 +96,12 @@ struct LoopLayer {
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
                     shape.path = paths[index]
+                    if kind == .climb {
+                        // 实心块：填色，不描边
+                        shape.fillColor = color
+                        shape.strokeColor = nil
+                        continue
+                    }
                     shape.lineWidth = side * (kind == .ripple ? 0.07 : 0.09)
                     // 心电线的第一层是垫底的淡波形
                     shape.strokeColor = kind == .heartbeat && index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
@@ -158,8 +165,10 @@ struct LoopLayer {
                     glow.values = [0.2, 1, 0.2, 0.2]
                     glow.keyTimes = [0, 0.25, 0.6, 1]
                     glow.duration = 1.2
-                    glow.timeOffset = glow.duration - delay
-                    chevron.opacity = 0.2
+                    // 整体往后错 0.66s：起播那一帧正好是最上面一块亮着、往下渐暗；三层之间的节奏不变
+                    glow.timeOffset = glow.duration - delay + 0.66
+                    // 没有动画时（模型值）也是最上面一块亮着
+                    chevron.opacity = delay == 0.36 ? 1 : 0.2
                     layer.addSublayer(loop(glow, on: chevron))
                 }
                 return layer
@@ -221,11 +230,11 @@ struct LoopLayer {
             return shape
         }
 
-        /// 描边类动效每一层的路径，画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。macOS 的层 y 朝上，
-        /// 统一翻过来，否则箭头朝下、心电线上下颠倒。
+        /// 形状类动效每一层的路径（心电线、波纹是描边，三块 V 是闭合的实心块），画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。
+        /// macOS 的层 y 朝上，统一翻过来，否则箭头朝下、心电线上下颠倒。
         private static func strokes(_ kind: Kind, side: CGFloat) -> [CGPath] {
             let unit = side / 22
-            func path(_ points: [CGPoint]) -> CGPath {
+            func path(_ points: [CGPoint], closed: Bool = false) -> CGPath {
                 let path = CGMutablePath()
                 path.addLines(between: points.map { point in
                     #if os(macOS)
@@ -234,6 +243,7 @@ struct LoopLayer {
                     CGPoint(x: point.x * unit, y: point.y * unit)
                     #endif
                 })
+                if closed { path.closeSubpath() }
                 return path
             }
             switch kind {
@@ -242,7 +252,7 @@ struct LoopLayer {
                                  CGPoint(x: 13.5, y: 8), CGPoint(x: 15, y: 11), CGPoint(x: 21, y: 11)])
                 return [wave, wave]
             case .climb:
-                return [15.4, 11, 6.6].map { tip in path([CGPoint(x: 6.5, y: tip + 4.5), CGPoint(x: 11, y: tip), CGPoint(x: 15.5, y: tip + 4.5)]) }
+                return ClimbBlocks.blocks.map { path($0, closed: true) }
             case .ripple:
                 let inset = side * 0.07 / 2
                 return [CGPath(ellipseIn: CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2), transform: nil)]
