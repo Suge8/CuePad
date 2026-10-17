@@ -1,7 +1,6 @@
 import CueStore
 import CueTestSupport
 import Foundation
-import Synchronization
 import Testing
 
 /// 什么算历史（会话记录的去留）：说过话的进程退出——托管的歇着、其余进历史，手上还有活的记为被打断；没留下会话文件的删除；
@@ -40,17 +39,12 @@ import Testing
   @Test func 托管会话进程没了时订阅收到变更() async throws {
     let recorder = recorder
     try await recorder.update(sessionID: "hosted", state: .thinking, title: "hosted", hosted: true)
-    let seen = Mutex<[Open<PiWorkState>]>([])
-    let watcher = Task { [store] in
-      for try await states in store.observe({ try $0.piSessionPage(.current).items.map(\.state.state) }) { seen.withLock { $0 += states } }
-    }
-    defer { watcher.cancel() }
-    try await Task.sleep(for: .milliseconds(200))
+    var states = store.observe { try $0.piSessionPage(.current).items.map(\.state.state) }.makeAsyncIterator()
+    #expect(try await states.next() == [.known(.thinking)])
 
     try await recorder.exited(sessionID: "hosted", spoke: true)
 
-    for _ in 0..<300 where seen.withLock({ $0.last }) != .known(.interrupted) { try await Task.sleep(for: .milliseconds(10)) }
-    #expect(seen.withLock { $0.last } == .known(.interrupted), "订阅收到被打断")
+    #expect(try await states.next() == [.known(.interrupted)], "订阅收到被打断")
   }
 
   /// 启动对账收尾的是记下的进程已经不在了的（这里一律判为不在）。
