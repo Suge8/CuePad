@@ -4,10 +4,10 @@ import SwiftUI
 
 /// Cue 与会话之间的"接力"：一点晴蓝的光在 Cue 的头像与会话的状态标之间沿一道弧飞过。晴蓝是在跑的颜色（`Palette.live`）：
 /// 两个方向都是把"在跑"交棒给对方。iOS 与 Mac 同一套样子、同一份时长；只在那一刻出现，一次最多三道、错开 90ms（再多就成了一片光，看不出谁是谁）。
-/// - 叫醒（会话 → Cue，`CueWatch.woke`）：飞的是一颗实心的点（会话的状态标）。起飞处一圈细环外扩（0.45s，缓出）；光飞 0.42～0.72s
+/// - 叫醒（会话 → Cue）：飞的是一颗实心的点（会话的状态标）。起飞处一圈细环外扩（0.45s，缓出）；光飞 0.42～0.72s
 ///   （随距离：侧栏里一跳短，手机上从列表飞到底栏长），先加速、后长长地减速，落进头像时已经很慢——"被接住"，不是"撞上"；还差最后一成路时
 ///   头像的环亮起（带一圈同色光晕）、停一下再外扩到 1.6 倍淡去（0.7s），晚 0.12s 一圈细涟漪扩到 2.1 倍（0.75s）；不盖住它的脸。
-/// - 交给（Cue → 会话，`CueWatch.relay`：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
+/// - 交给（Cue → 会话：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
 ///   头像的环先亮一下、外扩到 1.25 倍淡去（0.6s），0.12s 后环离开头像，同一条弧、同一条曲线飞到会话的状态标，落下时那里一圈细环外扩、垫一层淡光。
 ///   方向一眼分得出：起点先亮的是谁、飞的是点还是环。
 /// 光后面拖一截由亮到暗的尾巴（同一条弧上的描边，起点追着终点走、落下时被收进去），比单独一个点更看得出从哪来、到哪去。
@@ -25,7 +25,7 @@ import SwiftUI
 /// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
 /// - 减弱动态效果：不飞、不扩，头像的环与会话那头的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度。
 ///
-/// 动画状态只来自库里的事实，经 `CueWatch` 投影成只在变了时才写的值（窗口读到的第一份不算），不另存动画状态；页面换来换去也不播
+/// 动画状态只来自库里的事实，经 `CueWatch.flight`（两个方向一个值，规则在 `CueFlight`）投影成只在变了时才写的值（窗口读到的第一份不算），不另存动画状态；页面换来换去也不播
 /// （挂在窗口根上，不随页面出现）。
 ///
 /// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与），只在播时把一层画布挂到窗口的根层最上面，播完拿掉。
@@ -39,7 +39,7 @@ struct CueRelayStage: ViewModifier {
     // 窗口根上什么都不读：接力只在背景里那个小视图里看（`Watcher`），Cue 的现状怎么变根都不重算
     func body(content: Content) -> some View { content.background(Watcher(workspace: workspace)) }
 
-    /// 只读 `CueWatch.woke` 与 `relay`（都只在变了时才写）：又有一次就播。
+    /// 只读 `CueWatch.flight`（只在变了时才写）：又有一次就播。
     private struct Watcher: View {
         let workspace: Workspace
         @Environment(\.palette) private var palette
@@ -47,19 +47,11 @@ struct CueRelayStage: ViewModifier {
         @State private var stage = Stage()
 
         var body: some View {
-            let cue = workspace.cue
             Probe(stage: stage, color: palette.live)
-                .onChange(of: cue.woke?.at) {
-                    if let woke = cue.woke { play(.wake, woke.sessions.map { RelayEnd(session: $0) }) }
+                .onChange(of: workspace.cue.flight?.at) {
+                    guard let flight = workspace.cue.flight, !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
+                    stage.play(flight, reduceMotion: reduceMotion)
                 }
-                .onChange(of: cue.relay?.at) {
-                    if let relay = cue.relay { play(.relay, relay.ends) }
-                }
-        }
-
-        private func play(_ direction: RelayFlight.Direction, _ ends: [RelayEnd]) {
-            guard !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
-            stage.play(direction, ends, reduceMotion: reduceMotion)
         }
     }
 
@@ -68,7 +60,7 @@ struct CueRelayStage: ViewModifier {
         fileprivate weak var host: RelayAnchorView?
         fileprivate var color: CGColor?
 
-        func play(_ direction: RelayFlight.Direction, _ ends: [RelayEnd], reduceMotion: Bool) {
+        func play(_ flight: CueFlight, reduceMotion: Bool) {
             Task {
                 // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
                 await NextFrame.wait()
@@ -78,8 +70,8 @@ struct CueRelayStage: ViewModifier {
                     guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
                     return (spot, frame)
                 }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
-                let places = ends.compactMap { Self.place(of: $0, among: anchors, in: root, near: cue?.center) }
-                RelayFlight(color: color, reduceMotion: reduceMotion).play(direction, cue: cue, ends: Array(places.prefix(RelayFlight.most)), in: root)
+                let places = flight.ends.compactMap { Self.place(of: $0, among: anchors, in: root, near: cue?.center) }
+                RelayFlight(color: color, reduceMotion: reduceMotion).play(flight.direction, cue: cue, ends: Array(places.prefix(RelayFlight.most)), in: root)
             }
         }
 
@@ -258,9 +250,6 @@ extension CueRelayStage.Probe: NSViewRepresentable {
 /// 一次接力的画（样子与时长见 `CueRelayStage`）：在窗口根层最上面铺一层画布，所有动画一次交给 Core Animation，全部播完画布拿掉。
 /// 画布上每一层的模型值都是透明的：动画之前、之后都看不见，只在动画里出现。
 struct RelayFlight {
-    /// 叫醒：会话 → Cue；交给：Cue → 会话。
-    enum Direction { case wake, relay }
-
     let color: CGColor
     let reduceMotion: Bool
 
@@ -287,7 +276,7 @@ struct RelayFlight {
     }
 
     /// `cue` 是头像在屏上的那块，`ends` 是会话那头在屏上的几处（都可能不在）。
-    func play(_ direction: Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer) {
+    func play(_ direction: CueFlight.Direction, cue: CGRect?, ends: [CGPoint], in root: CALayer) {
         guard !ends.isEmpty || cue != nil else { return }
         let canvas = CALayer()
         CATransaction.begin()
