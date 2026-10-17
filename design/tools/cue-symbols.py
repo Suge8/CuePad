@@ -339,6 +339,7 @@ def clip(contour, cut):
             p = piece(s, t0, t1)
             parts.append((p, cut.f(sample(p, 0.5)) > 0))
     if all(inside for _, inside in parts): return contour
+    if not any(inside for _, inside in parts): return None
     start = next(i for i in range(len(parts)) if parts[i][1] and not parts[i - 1][1])
     parts = parts[start:] + parts[:start]
     out, i = [], 0
@@ -629,11 +630,11 @@ def mark_cycle(c, s, w):
 
 
 def slash_cut(shape, m, w, k=0.0):
-    """被一道左上到右下的斜杠劈开：两块各离斜杠一条刻缝，斜杠是自己一块（关掉、停掉、断了）。k 把斜杠往右上平移（格），
+    """被一道左上到右下的斜杠劈开：两块各离斜杠一条刻缝，斜杠是自己一块（关掉、停掉、断了）。整块落在一侧的不切，原样留下。k 把斜杠往右上平移（格），
     躲开切口正好落在圆角与直边交界处的位置——那里三个母版会一个切在弧上、一个切在直边上，结构对不上。"""
     line = [mul((-16 + k, -16 - k), G), mul((16 + k, 16 - k), G)]
     off = (w / 2 + CARVE[m]) * G
-    return [clip(shape, Along(line, off, 1)), clip(shape, Along(line, -off, -1))]
+    return [p for p in (clip(shape, Along(line, off, 1)), clip(shape, Along(line, -off, -1))) if p]
 
 
 def slash(m, a=9.6, k=0.0):
@@ -945,13 +946,10 @@ def books(m):
     return [Layer("books", out)]
 
 
-def pin_parts(g, c, lift=0.0):
-    """斜放的图钉（钉帽朝右上、钉尖朝左下，同系统 pin）：钉帽、钉身、钉尖三块，之间各一条刻缝。先竖着画，再转 45°。
-    lift：钉帽再往上提多少格（取消置顶时给斜杠让位）。"""
+def pin_parts(g, c):
+    """竖着的图钉：钉帽、钉身、钉尖三块，之间各一条横的刻缝。不斜放：斜放时刻缝正好与取消置顶的斜杠平行，斜杠读成又一道缝。"""
     k = 1.2
     head = grown(sc(k, [(-4.6, -11.0), (4.6, -11.0), (4.6, -8.2), (-4.6, -8.2)]), [1.4, 1.4, 0.6, 0.6], g)
-    head = [Line(add(s.a, (0, -lift * G)), add(s.b, (0, -lift * G))) if isinstance(s, Line) else Arc(add(s.c, (0, -lift * G)), s.r, s.a0, s.sweep, s.pieces)
-            for s in head]
     top = -8.2 * k + g + c + g
     body = grown([(-2.8 * k, top), (2.8 * k, top)] + sc(k, [(2.8, -2.2), (5.8, 1.2), (5.8, 3.0), (-5.8, 3.0), (-5.8, 1.2), (-2.8, -2.2)]),
                  [0, 0, 1.6, 0.8, 0.6, 0.6, 0.8, 1.6], g)
@@ -962,19 +960,18 @@ def pin_parts(g, c, lift=0.0):
 
 def pin(m):
     """置顶：一枚图钉，钉尖是点睛。"""
-    head, body, needle = turned(pin_parts(GROW[m], CARVE[m]), 45)
+    head, body, needle = pin_parts(GROW[m], CARVE[m])
     return [Layer("pin", [head, body]), Layer("needle", [needle], "secondary")]
 
 
+UNPIN_K = -1.0  # 斜杠往右上平移多少格（切口避开三个母版结构不一的位置）
+
+
 def unpin(m):
-    """取消置顶：钉帽与钉身之间那道缝撑开，斜杠横在缝里（缝本来就是斜杠的方向），不切开任何一块，小字号也干净。"""
-    g, c = GROW[m], CARVE[m]
-    w = 2.6 + 1.2 * g
-    head, body, needle = pin_parts(g, c, w + c)
-    y = -8.2 * 1.2 + g + c / 2 - (w + c) / 2
-    slash_bar = bar([(-9.4, y), (9.4, y)], w)
-    head, body, needle, slash_bar = turned([head, body, needle, slash_bar], 45)
-    return [Layer("pin", [head, body, needle]), Layer("slash", [slash_bar])]
+    """取消置顶：同"没有在同步""通知已关"，一道斜杠斜着贯穿图钉，钉身被劈开、切口一条刻缝；斜杠与横的刻缝成 45°，12pt 也看得出被划掉。"""
+    head, body, needle = pin_parts(GROW[m], CARVE[m])
+    w, bar_ = slash(m, 13.0, UNPIN_K)
+    return [Layer("pin", [p for part in (head, body, needle) for p in slash_cut(part, m, w, UNPIN_K)]), Layer("slash", [bar_])]
 
 
 def sheets(fold):
@@ -995,19 +992,33 @@ def sheets(fold):
     return build
 
 
-def stack(wide):
-    """一叠（全部、全部会话）：前面一张圆角块，后面两条越来越窄的边露在上面，各隔一条刻缝。wide 是横的长方（会话），否则方的。"""
-    def build(m):
-        g, c = GROW[m], CARVE[m]
-        hw, top, bottom = (11.0, -3.0, 9.0) if wide else (9.0, -5.0, 11.0)
-        out = [grown([(-hw, top), (hw, top), (hw, bottom), (-hw, bottom)], [2.4] * 4, g)]
-        y = top - c - 2 * g
-        for k, inset in enumerate((1.8, 3.6)):
-            h = 2.4 + 0.5 * g
-            out.append(grown([(-hw + inset, y - h), (hw - inset, y - h), (hw - inset, y), (-hw + inset, y)], [1.2, 1.2, 0, 0], g * 0.5))
-            y -= h + c + g
-        return [Layer("stack", out)]
-    return build
+def deck(m):
+    """全部：错开的一叠卡片，前一张完整，后两张同样大、依次往右上错开，只露出上边与右边的 L 形，各隔一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    d, size = 3.6, 14.8
+    out = []
+    for k in range(3):
+        x0, y1 = -11.0 + k * d, 11.0 - k * d
+        x1, y0 = x0 + size, y1 - size
+        if k == 0:
+            out.append(grown([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], [2.4] * 4, g))
+            continue
+        ix, iy = x1 - d + c + 2 * g, y0 + d - c - 2 * g
+        out.append(grown([(x0, y0), (x1, y0), (x1, y1), (ix, y1), (ix, iy), (x0, iy)], [1.4, 2.4, 1.4, 0.4, 0, 0.4], g))
+    return [Layer("deck", out)]
+
+
+def stack(m):
+    """全部会话：前面一张横长的圆角块，后面两条越来越窄的边露在上面，各隔一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    hw, top, bottom = 11.0, -3.0, 9.0
+    out = [grown([(-hw, top), (hw, top), (hw, bottom), (-hw, bottom)], [2.4] * 4, g)]
+    y = top - c - 2 * g
+    for inset in (1.8, 3.6):
+        h = 2.4 + 0.5 * g
+        out.append(grown([(-hw + inset, y - h), (hw - inset, y - h), (hw - inset, y), (-hw + inset, y)], [1.2, 1.2, 0, 0], g * 0.5))
+        y -= h + c + g
+    return [Layer("stack", out)]
 
 
 def grid(m):
@@ -1172,8 +1183,8 @@ SYMBOLS = {
     "unpin": unpin,
     "copy": sheets(True),
     "conflict": sheets(False),
-    "stack": stack(False),
-    "stack.wide": stack(True),
+    "deck": deck,
+    "stack": stack,
     "grid": grid,
     "share": tray_arrow(True),
     "save": tray_arrow(False),
