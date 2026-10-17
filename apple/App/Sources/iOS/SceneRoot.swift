@@ -48,14 +48,19 @@ private struct ScenePhaseWork: ViewModifier {
 /// 让进入后台后的收尾工作有时间跑完（系统随后才挂起进程）。
 enum BackgroundWork {
     static func run(_ work: @MainActor () async -> Void) async {
-        // 到期回调与下面的收尾都要用这个标识，回调先于赋值的窗口只有一瞬，用锁盒子传
+        // 到期回调与做完的收尾谁先到谁结束、只结束一次（到期后再结束同一个标识系统会报错）；回调先于赋值的窗口只有一瞬，用锁盒子传
         let task = Mutex(UIBackgroundTaskIdentifier.invalid)
-        let id = UIApplication.shared.beginBackgroundTask(withName: "CuePad.flush") {
-            UIApplication.shared.endBackgroundTask(task.withLock { $0 })
+        let end: @MainActor () -> Void = {
+            let id = task.withLock { id in
+                defer { id = .invalid }
+                return id
+            }
+            if id != .invalid { UIApplication.shared.endBackgroundTask(id) }
         }
+        let id = UIApplication.shared.beginBackgroundTask(withName: "CuePad.flush") { end() }
         task.withLock { $0 = id }
         await work()
-        UIApplication.shared.endBackgroundTask(id)
+        end()
     }
 }
 #endif
