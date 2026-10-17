@@ -36,7 +36,6 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            await seedEvidence(store, session: "deploy", title: "预发上的发言顺序")
             await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
@@ -87,6 +86,7 @@ extension DebugScene {
                 **和他之间没了结的**
                 - 推送到 origin/main 要先问他（会触发正式环境部署）。
                 """)
+            try await seedDeliveries(store)
             let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）

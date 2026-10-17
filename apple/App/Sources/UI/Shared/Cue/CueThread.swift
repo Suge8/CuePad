@@ -5,7 +5,7 @@ import SwiftUI
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
-    /// 对话与"等你"提到的活（消息上收成一行的引用、"等你"的证据缩略图）。
+    /// 对话与"等你"提到的活（消息上收成一行的引用、结果卡与"等你"里的交付物）。
     let tasks: [UUID: CueTaskRef]
     /// 在等你的（Kit 的 `cueMessagesWaitingForYou` 是唯一的规则）。
     let waiting: [CueMessage]
@@ -36,7 +36,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
             case .renewed(let handoff):
                 ChatMark(id: handoff.id, kind: .boundary, preview: Dotted("换了新上下文", handoff.createdAt.formatted(date: .omitted, time: .shortened)).visible)
-            case .cue, .notes, .process: nil
+            case .cue, .result, .notes, .process: nil
             }
         })
     }
@@ -45,23 +45,26 @@ nonisolated struct CueThread: Equatable, Sendable {
         let messages = try store.cueMessages(limit: limit)
         let waiting = try store.cueMessagesWaitingForYou()
         let mentioned = Set((messages + waiting).compactMap(\.taskID))
-        // 提到的一次取完预览与步骤进度，不逐件读细节
-        let previews = try store.deliverables(of: Array(mentioned))
+        // 提到的一次取完交付物与步骤进度，不逐件读细节
+        let deliverables = try store.deliverables(of: Array(mentioned))
         let progress = try store.subtaskProgress()
         var tasks: [UUID: CueTaskRef] = [:]
         for id in mentioned {
             guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { continue }
-            tasks[id] = CueTaskRef(task: card, progress: progress[id], previews: CueTaskRef.newest(previews[id]))
+            tasks[id] = CueTaskRef(task: card, progress: progress[id], deliverables: deliverables[id] ?? [])
         }
         return CueThread(messages: messages, tasks: tasks, waiting: waiting)
     }
 
-    /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活），
+    /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
+    /// 下面挂着交付物的是结果卡，见 `rows`），
     /// 连着的几条动态（含 Cue 自己醒来的那几轮的经过）收成一格，换新的地方一条分隔（点开是交接备忘）。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置（选了的带着你选的那一项）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         case cue(CueMessage, task: UUID?)
+        /// 挂着交付物的 Cue 的话（结果卡）：从早到晚
+        case result(CueMessage, task: UUID, deliverables: [PiPreview])
         case notes([CueMessage])
         /// 你发起的一轮的经过（`CueAuthor.round`）
         case process(CueMessage)
@@ -70,24 +73,24 @@ nonisolated struct CueThread: Equatable, Sendable {
 
         var id: UUID {
             switch self {
-            case .you(let message), .cue(let message, _), .renewed(let message), .process(let message): message.id
+            case .you(let message), .cue(let message, _), .result(let message, _, _), .renewed(let message), .process(let message): message.id
             case .notes(let group): group[0].id
             }
         }
 
         var date: Date {
             switch self {
-            case .you(let message), .cue(let message, _), .renewed(let message), .process(let message): message.createdAt
+            case .you(let message), .cue(let message, _), .result(let message, _, _), .renewed(let message), .process(let message): message.createdAt
             case .notes(let group): group[0].createdAt
             }
         }
 
-        /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（经过、动态、分隔）不是气泡。
+        /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（结果卡、经过、动态、分隔）不是气泡，不与上下的气泡连成一串。
         var speaker: HorizontalEdge? {
             switch self {
             case .you: .trailing
             case .cue: .leading
-            case .notes, .process, .renewed: nil
+            case .result, .notes, .process, .renewed: nil
             }
         }
     }
@@ -108,15 +111,28 @@ nonisolated struct CueThread: Equatable, Sendable {
         return stamps
     }
 
+    /// 交付物挂在哪句话下面（只此一处）：一件活的 Cue 的话（还在"等你"里的除外）挂上这件活从上一次挂出之后、到这句话为止新发来的交付物
+    /// （按发来的时刻切），挂了的就是结果卡——Cue 做完时写下的"「X」做完了"自然是一张。还在"等你"里的不消耗：答完它回到对话里时才挂。
     private static func rows(_ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage]) -> [Row] {
         let waiting = Set(waiting.map(\.id))
         var shown = Set<UUID>()
+        /// 每件活上一次挂到的时刻
+        var hung: [UUID: Date] = [:]
         var rows: [Row] = []
         for message in messages {
             switch message.author.known {
             case .you: rows.append(.you(message))
             case .cue:
                 if waiting.contains(message.id) { continue }
+                if let id = message.taskID, let ref = tasks[id] {
+                    let fresh = ref.deliverables.filter { $0.createdAt <= message.createdAt && $0.createdAt > hung[id, default: .distantPast] }
+                    if !fresh.isEmpty {
+                        hung[id] = message.createdAt
+                        shown.insert(id)
+                        rows.append(.result(message, task: id, deliverables: fresh))
+                        continue
+                    }
+                }
                 let task = message.taskID.flatMap { tasks[$0] != nil && shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
@@ -130,17 +146,12 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 }
 
-/// 对话或"等你"提到的一件活：任务、步骤进度、各步骤会话发来看的文件。
+/// 对话或"等你"提到的一件活：任务、步骤进度、交付物。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
 nonisolated struct CueTaskRef: Equatable, Sendable {
     var task: Card
     var progress: TaskProgress?
-    /// 新的在前，至多 `previewLimit` 份（"等你"放全部：定不定看的就是它们）。提到的卡不在了（删掉、改回灵感）就没有引用，那句话照常显示。
-    var previews: [PiPreview]
-
-    static let previewLimit = 4
-
-    /// `previews(ofTasks:)` 给的是从早到晚：取最新的 `previewLimit` 份，新的在前。
-    static func newest(_ previews: [PiPreview]?) -> [PiPreview] { Array((previews ?? []).suffix(previewLimit).reversed()) }
+    /// 全部交付物，从早到晚（`CueStore.deliverables` 是唯一的规则）
+    var deliverables: [PiPreview]
 
     var done: Bool { task.status == .done }
 }

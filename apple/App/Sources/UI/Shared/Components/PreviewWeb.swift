@@ -38,18 +38,25 @@ enum PreviewWebGuard {
          {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}}]
         """
 
-    /// 装好拦截规则、开始载入这个文件的网页。规则装不上或文件读不了都抛出，没有"不设防"的退路。
-    static func page(for file: URL) async throws -> WebPage {
+    /// 装好拦截规则、开始载入这个文件的网页（`untilLoaded`：等载入完再返回）。规则装不上或文件读不了都抛出，没有"不设防"的退路。
+    static func page(for file: URL, untilLoaded: Bool = false) async throws -> WebPage {
+        let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "text/html"
+        return try await page(loading: try await read(file), mimeType: type, untilLoaded: untilLoaded)
+    }
+
+    /// 同一套拦截规则载入一段内容（交付物缩略图拿 Markdown 拼出的页面也走这里，`PageSnapshots`）。
+    static func page(loading data: Data, mimeType: String, untilLoaded: Bool = false) async throws -> WebPage {
         guard let rules = try await WKContentRuleListStore.default().compileContentRuleList(
             forIdentifier: "cuepad.preview.offline", encodedContentRuleList: blockEverythingButInline)
         else { throw CocoaError(.featureUnsupported) }
-        let data = try await read(file)
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(rules)
         let page = WebPage(configuration: configuration, navigationDecider: InlineOnly())
-        let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "text/html"
-        _ = page.load(data, mimeType: type, characterEncoding: .utf8, baseURL: URL(string: "about:blank")!)
+        let events = page.load(data, mimeType: mimeType, characterEncoding: .utf8, baseURL: URL(string: "about:blank")!)
+        if untilLoaded {
+            for try await event in events where event == .finished { break }
+        }
         return page
     }
 
