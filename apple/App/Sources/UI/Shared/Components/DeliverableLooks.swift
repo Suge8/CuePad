@@ -65,7 +65,7 @@ enum DeliverableLooks {
         guard let source = await head(of: file) else { return nil }
         let palette = Palette(dark: false)
         let page = MarkdownText(source: source)
-            .padding(28)
+            .padding(20)
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
             .background(palette.paper)
             .environment(\.palette, palette)
@@ -74,7 +74,8 @@ enum DeliverableLooks {
         return renderer.cgImage
     }
 
-    private static let markdownPage = CGSize(width: 480, height: 360)
+    /// 画成多大的一页再缩进卡片：比阅读栏窄，缩进主图、横排时字仍认得出（480 宽时列表只剩七八磅）
+    private static let markdownPage = CGSize(width: 360, height: 270)
 
     @concurrent private static func head(of file: URL) async -> String? {
         (try? String(contentsOf: file, encoding: .utf8)).map { String($0.prefix(3000)) }
