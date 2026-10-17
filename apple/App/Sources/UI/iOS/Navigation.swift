@@ -5,20 +5,11 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签（Cue / 灵感 / 搜索）、各标签的推入路径、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
-/// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。当前项目只从路径推出（`currentProject`）。
+/// iOS 的导航状态，三种宽度同一个状态机：侧栏选中的页（`root`）与其上推入的页（`path`），iPhone 上分栏折叠后此刻在列表还是在页里（`column`），
+/// 外加发到 Mac 与项目表单、iPad 的右侧 Cue 面板。数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。
+/// 当前项目只从路径推出（`currentProject`）。
 @Observable
 final class Navigation {
-    /// 底部从左到右的顺序就是声明的顺序；打开 App 先到 Cue。搜索是右下那颗圆钮（同 Mac 的 ⌘K），Agent 整页从 Cue 页头的面板推入。
-    enum Tab: Hashable, CaseIterable {
-        case cue, projects, search
-    }
-
-    /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
-    enum Layout {
-        case tabs, split
-    }
-
     /// 新建（`project` 为 nil）或编辑项目的表单；书架、侧栏与项目页的入口都经这里，在根视图弹出。
     struct ProjectForm: Identifiable {
         let id = UUID()
@@ -68,11 +59,13 @@ final class Navigation {
         }
     }
 
-    var layout: Layout = .tabs
-    var tab: Tab = .cue
-    var cuePath: [Route] = []
-    var projectsPath: [Route] = []
-    var searchPath: [Route] = []
+    /// 侧栏选中的页（宽屏右边那一栏、iPhone 从列表推进去那一层的根）：打开 App 先到 Cue。
+    var root: Route = .cue
+    /// 根页上推入的页（打开的卡片纸页、会话页……）。
+    var path: [Route] = []
+    /// iPhone（与窄窗口 iPad）上分栏折叠成一层层的页：此刻在页里（`.detail`，根页与其上推入的页）还是在列表（`.sidebar`）。
+    /// 打开 App 就在页里（Cue）；系统的返回与左缘右滑回到列表时由系统改成 `.sidebar`。宽屏两栏都在，一直是 `.detail`（变宽时 `IOSRoot` 改回）。
+    var column: NavigationSplitViewColumn = .detail
     /// 每次请"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）加一：Cue 页的输入框看它变了就聚焦。
     private(set) var cueFocusRequests = 0
 
@@ -87,11 +80,8 @@ final class Navigation {
     var handOffDraft = ComposerDraft()
     var projectForm: ProjectForm?
     var newSession: NewSession?
-    /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
-    var splitRoot: Route = .shelf
-    var splitPath: [Route] = []
     var sidebar: NavigationSplitViewVisibility = .automatic
-    /// 分栏：右侧的 Agent 面板是否展开。
+    /// 宽屏：右侧的 Cue 面板是否展开。
     var agentPanel = false
     /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
@@ -102,46 +92,18 @@ final class Navigation {
     }
 
     /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页、项目页进的任务页），否则没有（未分类）。iOS 上"在哪个项目"
-    /// 只有这一份——书架点进项目只改路径；任务页新建任务、⌘N 的默认落点都读它。
+    /// 只有这一份——列表或书架点进项目只改路径；任务页新建任务、⌘N 的默认落点都读它。
     var currentProject: UUID? {
-        let visible: [Route] = switch layout {
-        case .split: [splitRoot] + splitPath
-        case .tabs: tab == .projects ? projectsPath : []
-        }
-        for route in visible.reversed() {
+        for route in ([root] + path).reversed() {
             if case .project(let id) = route { return id }
         }
         return nil
     }
 
-    /// 标签栏布局：此刻这个标签推入的页。
-    private var path: [Route] {
-        get {
-            switch tab {
-            case .cue: cuePath
-            case .projects: projectsPath
-            case .search: searchPath
-            }
-        }
-        set {
-            switch tab {
-            case .cue: cuePath = newValue
-            case .projects: projectsPath = newValue
-            case .search: searchPath = newValue
-            }
-        }
-    }
-
-    /// 屏上最上面的是独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部）：iPhone 收起底部栏。只从路径推出，
-    /// 不按页面出现、消失计数——那种计数在页面没走完消失回调就被拆掉时（浮窗收起的同时推入一页）会漏扣，底部栏就再也回不来。
-    var ownsBottom: Bool { layout == .tabs && path.last?.ownsBottom == true }
-
-    /// 在当前位置推入一页。
+    /// 在当前页上推入一页（iPhone 在列表上时连同当前页一起推进去）。
     func push(_ route: Route) {
-        switch layout {
-        case .split: splitPath.append(route)
-        case .tabs: path.append(route)
-        }
+        path.append(route)
+        column = .detail
     }
 
     /// 开新会话的输入框。会话开在项目的文件夹里：还没有项目时先新建项目，建好接着开这个项目的新会话（入口只有这一处，输入框不再另写没有项目的样子）。
@@ -171,59 +133,54 @@ final class Navigation {
         newSession = NewSession(project: project, draft: draft, card: card, name: plan?.name, host: host)
     }
 
-    /// 分栏：侧栏选中一页，清掉其上推入的页。
+    /// 侧栏选中一页，清掉其上推入的页；iPhone 上推进那一页。
     func select(_ route: Route) {
-        splitRoot = route
-        splitPath = []
+        root = route
+        path = []
+        column = .detail
     }
 
-    /// 分栏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在书架。
+    /// iPhone：回到列表（同系统的返回与左缘右滑；藏起导航栏的页上的 `BackButton`）。
+    func showList() { column = .sidebar }
+
+    /// 宽屏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在书架。
     /// 分栏只在目录读到后才建出（`CatalogGate`），这里当场判定，不先推一张空的项目页再退回。
     /// 已经选着它时不动：分栏随窗口宽窄重建（宽 → 窄 → 宽）时，项目页上推入的页留着。
     func restore(project: UUID?, catalog: ProjectCatalog?) {
-        guard let project, splitRoot != .project(project), catalog?.project(project) != nil else { return }
+        guard let project, root != .project(project), catalog?.project(project) != nil else { return }
         select(.project(project))
     }
 
-    /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
+    /// 进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
     private var beforeSearch: (root: Route, path: [Route])?
 
-    /// 每次 ⌘K（或点搜索圆钮、侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    /// 每次 ⌘K（或点列表顶上的搜索框）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
     private(set) var searchFocusRequests = 0
 
-    /// 搜索页聚焦它的搜索框（点搜索圆钮时）。
-    func focusSearch() { searchFocusRequests += 1 }
-
-    /// 去搜索页并聚焦搜索框：iPhone 换到搜索标签（回到它的根页），iPad 选中侧栏的搜索。
+    /// 去搜索页并聚焦搜索框。
     func openSearch() {
-        focusSearch()
-        guard layout == .split else {
-            tab = .search
-            searchPath = []
-            return
-        }
-        guard splitRoot != .search else { return }
-        beforeSearch = (splitRoot, splitPath)
+        searchFocusRequests += 1
+        column = .detail
+        guard root != .search else { return }
+        beforeSearch = (root, path)
         select(.search)
     }
 
     /// 退出搜索，回到进入前的页；没有记录时回到书架。
     func closeSearch() {
-        guard splitRoot == .search else { return }
+        guard root == .search else { return }
         let back = beforeSearch ?? (.shelf, [])
         beforeSearch = nil
-        splitRoot = back.root
-        splitPath = back.path
+        root = back.root
+        path = back.path
     }
 
-    /// 项目进了回收站：从所有路径里移除它的页面。
+    /// 项目进了回收站：从路径里移除它的页面。
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.cuePath, \.projectsPath, \.searchPath, \.splitPath] {
-            if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
-        }
-        if splitRoot == gone { select(.shelf) }
+        if let index = path.firstIndex(of: gone) { path.removeSubrange(index...) }
+        if root == gone { select(.shelf) }
     }
 
     /// 小组件与分享扩展的链接：对 Cue 说、项目、卡片。
@@ -234,7 +191,6 @@ final class Navigation {
         case .project(let id):
             show(.project(id))
         case .card(let id):
-            if layout == .tabs { tab = .projects }
             push(.card(id))
         case .cue:
             show(.cue)
@@ -252,44 +208,26 @@ final class Navigation {
         cueFocusRequests += 1
     }
 
-    /// 去一页（通知、小组件、侧栏共用）：Cue、Agent 整页与会话的近况在 Cue 标签里（Agent 整页从 Cue 页头的面板进，
-    /// iPad 推入详情栏），搜索在搜索标签，其余在灵感标签里（iPad 选中侧栏）。在项目页里要能返回项目的入口（任务页）用 `push`。
+    /// 去一页（通知、小组件、提示共用）：会话的近况推在当前页上（返回回到原处），搜索经 `openSearch`，其余选中侧栏那一页。
+    /// 在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
-        switch (route, layout) {
-        case (.cue, .tabs):
-            tab = .cue
-            cuePath = []
-        case (.agent, .tabs), (.session, .tabs):
-            tab = .cue
-            cuePath = [route]
-        case (.search, .tabs):
-            openSearch()
-        case (.session, .split):
-            if splitPath.last != route { splitPath.append(route) }
-        case (_, .split): select(route)
-        case (_, .tabs):
-            tab = .projects
-            projectsPath = [route]
+        switch route {
+        case .session:
+            if path.last != route { path.append(route) }
+            column = .detail
+        case .search: openSearch()
+        default: select(route)
         }
     }
 
-    /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
-    func isViewing(session id: UUID) -> Bool {
-        let top = switch layout {
-        case .tabs: path.last
-        case .split: splitPath.last
-        }
-        return top == .session(id)
-    }
+    /// 此刻屏幕上右边那一栏最上面的页；iPhone 回到了列表时没有。
+    private var top: Route? { column == .detail ? path.last ?? root : nil }
+
+    /// 这个会话的近况页此刻正在屏幕上。
+    func isViewing(session id: UUID) -> Bool { top == .session(id) }
 
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 整页（那一行已经在变）时不弹。
-    func showsAlert(about session: UUID) -> Bool {
-        let onAgentList = switch layout {
-        case .tabs: tab == .cue && cuePath.last == .agent
-        case .split: splitRoot == .agent && splitPath.isEmpty
-        }
-        return !onAgentList && !isViewing(session: session)
-    }
+    func showsAlert(about session: UUID) -> Bool { top != .agent && !isViewing(session: session) }
 
     /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话或 Agent 列表就当场撤下
     /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。
@@ -319,21 +257,8 @@ final class Navigation {
 extension Route {
     var isCard: Bool { if case .card = self { true } else { false } }
 
-    /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `Navigation.ownsBottom`）。
-    var ownsBottom: Bool {
-        switch self {
-        case .card, .session: true
-        default: false
-        }
-    }
-
-    /// 页顶上自带一排（标签根页的 `RootBar`、Cue 页头）：内容让到那一排下面，离栏的距离由那一页自己给。
-    var ownsTopBar: Bool {
-        switch self {
-        case .shelf, .search, .cue: true
-        default: false
-        }
-    }
+    /// 页顶上自带一排（搜索页的搜索框与范围、Cue 页头）：内容让到那一排下面，离栏的距离由那一页自己给。
+    var ownsTopBar: Bool { self == .search || self == .cue }
 }
 
 /// 卡片 ↔ 编辑纸页的缩放过渡共用的命名空间。

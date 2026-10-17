@@ -3,16 +3,16 @@ import CueStore
 import SwiftUI
 
 /// 手机与 iPad 的 Cue 页头：一块玻璃，平时是 56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
-/// 点它从顶部长出面板（同一块玻璃长高、变宽，盖住左边的设置钮）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
+/// 点它从顶部长出面板（同一块玻璃长高、变宽；iPhone 上页头在导航栏那一排里，左边让着系统的返回）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
-/// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：底栏、侧栏都读它）。
+/// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueBrainMenu`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
-    /// 左边留着设置钮（iPhone 标签栏布局；iPad 的设置在侧栏）。
-    let showsSettings: Bool
+    /// 页头在导航栏那一排里、左边让着系统的返回（iPhone，`inNavigationBarRow`）。
+    let inBar: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,8 +23,8 @@ struct CueHeader: View {
     /// 离页面两侧与上安全区的距离（同 `RootBar`）。
     private static let edge: CGFloat = 16
     private static let top: CGFloat = 4
-    /// 对话在顶上让出的高度：页头一条加上下的空。
-    static let reserve: CGFloat = top + height + 8
+    /// 对话在顶上让出的高度：页头一条加上下的空。页头在导航栏那一排里时只让出它比导航栏多出的那一点与下面的空。
+    static func reserve(inBar: Bool) -> CGFloat { inBar ? 12 : top + height + 8 }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,15 +34,9 @@ struct CueHeader: View {
                     .onTapGesture(perform: toggle)
                     .accessibilityHidden(true)
             }
-            if showsSettings {
-                SettingsButton()
-                    .buttonStyle(ControlButtonStyle(kind: .circular)).labelStyle(.iconOnly)
-                    .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .leading)
-                    .padding(.horizontal, Self.edge).padding(.top, Self.top)
-            }
             glass
-                .padding(.leading, expanded || !showsSettings ? 0 : ControlMetrics.height + 8)
-                .padding(.horizontal, Self.edge).padding(.top, Self.top)
+                .inNavigationBarRow(inBar, height: Self.height, tap: toggle)
+                .padding(.horizontal, Self.edge).padding(.top, inBar ? 0 : Self.top)
         }
         .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
         .sensoryFeedback(.impact(weight: .light), trigger: expanded)

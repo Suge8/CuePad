@@ -88,11 +88,7 @@ struct ProjectsNavigationTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func navigation(_ layout: Navigation.Layout) -> Navigation {
-        let navigation = Navigation(settings: app.services.settings)
-        navigation.layout = layout
-        return navigation
-    }
+    private func navigation() -> Navigation { Navigation(settings: app.services.settings) }
 
     @Test func 书架点进项目_新建落在这个项目_iPad恢复窗口_深链进项目() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -101,28 +97,28 @@ struct ProjectsNavigationTests {
         let catalog = try await ProjectCatalog.read(from: store)
         let workspace = Workspace(services: app.services)
 
-        let phone = navigation(.tabs)
-        phone.tab = .projects
-        phone.projectsPath.append(.project(project.id))  // 书架上的项目卡
+        let phone = navigation()
+        phone.select(.shelf)  // 侧栏的"全部项目"
+        phone.push(.project(project.id))  // 书架上的项目卡
         phone.push(.tasks)  // 项目页的"已完成 N"
         #expect(try await workspace.createTask("补重连用例", in: phone.currentProject).projectID == project.id)
-        phone.projectsPath = [.tasks]  // 书架上的"全部任务"：不在哪个项目里
+        phone.select(.tasks)  // 侧栏的"任务"：不在哪个项目里
         #expect(phone.currentProject == nil)
         phone.open(DeepLink.project(project.id))
         #expect(phone.currentProject == project.id)
 
-        // iPad 恢复窗口：选回上次的项目；已进回收站时留在书架；侧栏选别的页后不再算在项目里
-        let pad = navigation(.split)
+        // iPad 恢复窗口：选回上次的项目；已进回收站时留在打开 App 的那一页；侧栏选别的页后不再算在项目里
+        let pad = navigation()
         pad.restore(project: project.id, catalog: catalog)
-        #expect(pad.splitRoot == .project(project.id))
+        #expect(pad.root == .project(project.id))
         pad.push(.card(UUID()))
         pad.restore(project: project.id, catalog: catalog)  // 窗口宽窄变化、分栏重建
-        #expect(pad.splitPath.count == 1 && pad.currentProject == project.id)
+        #expect(pad.path.count == 1 && pad.currentProject == project.id)
         pad.select(.tasks)
         #expect(pad.currentProject == nil)
-        let gone = navigation(.split)
+        let gone = navigation()
         gone.restore(project: trashed.id, catalog: catalog)
-        #expect(gone.splitRoot == .shelf)
+        #expect(gone.root == .cue)
     }
 }
 #endif

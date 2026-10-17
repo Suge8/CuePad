@@ -33,7 +33,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
 
-    /// 顶层任务数（`CueStore.taskCounts` 一处定义）：任务页页头、面板标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
+    /// 顶层任务数（`CueStore.taskCounts` 一处定义）：任务页页头、面板标题与"最近完成"、书架的"任务"一行都读它。
     var counts: TaskCounts
     /// 从上到下的任务 id（含步骤）：列表增删、挪动的动画键，读库时算一次（放在 body 里每次重算都要分配）。
     var order: [UUID]

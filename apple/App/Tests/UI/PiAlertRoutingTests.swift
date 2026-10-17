@@ -22,24 +22,19 @@ struct PiAlertRoutingTests {
         ]
     }
 
-    @Test(arguments: [Navigation.Layout.tabs, .split])
-    func 点Pi通知_打开该会话的近况(layout: Navigation.Layout) {
+    /// 推在正看着的页上（返回回到原处）；iPhone 停在侧栏列表上时也推进去。
+    @Test func 点Pi通知_打开该会话的近况() {
         let session = UUID()
         let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.layout = layout
-        navigation.projectsPath = [.unfiled]
+        navigation.select(.unfiled)
+        navigation.showList()
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
         navigation.open(alert: alerts.consumeTap())
 
-        switch layout {
-        case .tabs:
-            #expect(navigation.tab == .cue)
-            #expect(navigation.cuePath == [.session(session)])
-        case .split:
-            #expect(navigation.splitPath.last == .session(session))
-        }
+        #expect(navigation.root == .unfiled && navigation.path == [.session(session)])
+        #expect(navigation.isViewing(session: session))
         #expect(alerts.consumeTap() == nil)
     }
 
@@ -51,13 +46,12 @@ struct PiAlertRoutingTests {
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
         let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
-        navigation.layout = .split
-        navigation.splitPath = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
+        navigation.path = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: id))
         navigation.open(alert: alerts.consumeTap())
 
-        #expect(navigation.splitPath.count == 1)
+        #expect(navigation.path.count == 1)
     }
 
     @Test func 别的通知_不改导航() {
@@ -67,9 +61,7 @@ struct PiAlertRoutingTests {
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
         navigation.open(alert: alerts.consumeTap())
 
-        #expect(navigation.tab == .cue)
-        #expect(navigation.cuePath.isEmpty)
-        #expect(navigation.splitPath.isEmpty)
+        #expect(navigation.root == .cue && navigation.path.isEmpty)
     }
 
     /// 系统（UIKit）交来的完成块只能在主线程调用，否则抛异常崩溃（真机点锁屏通知进 App 的崩溃）。
@@ -122,7 +114,7 @@ struct PiAlertRoutingTests {
         return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
     }
 
-    /// 冷启动点通知：点开的通知在界面建好之前就记下了，页面带着只有记录 id 的路由挂上，打开后要能读到对话，底部栏让位给回复框。
+    /// 冷启动点通知：点开的通知在界面建好之前就记下了，页面带着只有记录 id 的路由挂上，打开后要能读到对话。
     @Test func 点通知进会话页_对话显示出来() async throws {
         let app = TestApp()
         let store = app.services.store
@@ -136,11 +128,7 @@ struct PiAlertRoutingTests {
         let window = try show(IOSRoot(services: app.services, alerts: alerts).environment(alerts))
         defer { window.isHidden = true }
 
-        try await eventually("会话页显示对话、底部栏让位给回复框") {
-            let text = try visibleText(in: window)
-            // 底部栏收起就是屏幕上看不到它那一格的"灵感"二字；底部栏改了文案，这里跟着改
-            return text.contains("接口约定") && !text.contains("灵感")
-        }
+        try await eventually("会话页显示对话") { try visibleText(in: window).contains("接口约定") }
     }
 }
 #endif

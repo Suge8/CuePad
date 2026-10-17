@@ -3,10 +3,10 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// Agent 整页（iPhone 从 Cue 页头面板的"全部会话"、项目页的"全部 N 个会话"推入；iPad 侧栏的"会话"）：只回答"每个会话在做什么、
+/// Agent 整页（侧栏的"会话"；也从 Cue 页头面板的"全部会话"、项目页的"全部 N 个会话"推入）：只回答"每个会话在做什么、
 /// 现在到哪了、结果或卡点是什么"。会话列表是 `SessionList`；顶栏是推入页的悬浮顶栏（筛着的项目名或"全部会话"、会话数、新会话），
 /// 列表最上面一排项目胶囊按项目筛（只有在 Mac 上绑了文件夹的项目能筛：会话按工作目录归入项目），筛选只留在这一页上、不记。
-/// 搜会话在搜索页（右下的搜索圆钮），这里不另放搜索框；订阅额度在 Cue 页头的面板里。
+/// 搜会话在搜索页（列表顶上的搜索框），这里不另放搜索框；订阅额度在 Cue 页头的面板里。
 struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
     @State private var model = AgentListModel()

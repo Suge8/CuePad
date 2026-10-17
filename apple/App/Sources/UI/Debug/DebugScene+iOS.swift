@@ -4,8 +4,8 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架）、cue（Cue 标签；iPad 侧栏的 Cue，侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、unfiled、editor、tasks、agent（Agent 整页，iPhone 推在 Cue 标签里）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（iPhone 是 Cue 标签）。
-/// search 是搜索页（iPhone 的搜索标签），出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板，`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、unfiled、editor、tasks、agent（Agent 整页，侧栏的"会话"）、send、search、trash、archive、settings、sidebar（侧栏列表：iPad 展开侧栏，iPhone 回到列表）；不给是打开 App 的第一屏（Cue 页）。
+/// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// task 在书架上推入"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条；`-CuePadBrief YES` 再弹出正文的编辑页）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -25,16 +25,13 @@ extension DebugScene {
             Task { await IOSInteractionBench.run(workspace, navigation) }
             return
         }
-        let split = navigation.layout == .split
-        func open(_ route: Route) {
-            if split { navigation.select(route) } else { navigation.tab = .projects; navigation.projectsPath = [route] }
-        }
+        func open(_ route: Route) { navigation.select(route) }
         func openCard() async {
             if let project { open(.project(project)) }
             if let card = await card(in: project, store: workspace.services.store) { navigation.push(.card(card)) }
         }
         switch scene {
-        case "shelf": if !split { navigation.tab = .projects }
+        case "shelf": open(.shelf)
         case "project", "older": if let project { open(.project(project)) }
         case "projectform":
             // 给了项目是编辑它，否则新建
@@ -43,6 +40,7 @@ extension DebugScene {
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
+            if UIDevice.current.userInterfaceIdiom == .phone { navigation.showList() }
         case "unfiled": open(.unfiled)
         case "trash": open(.trash)
         case "archive": open(.archive)
@@ -64,13 +62,13 @@ extension DebugScene {
         case "cue", "cuememory", "cuesettings":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             navigation.show(.cue)
-            if split { navigation.sidebar = .all }
+            navigation.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if scene == "cuesettings" { navigation.push(.cueSettings) }
             if defaults.bool(forKey: "CuePadPanelCycle") { Task { await cyclePanel() } }
         case "cuepanel":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
-            if let project { open(.project(project)) }
+            open(project.map(Route.project) ?? .shelf)
             navigation.agentPanel = true
         case "cuerows":
             await seedCueRows(workspace.services)
@@ -84,7 +82,7 @@ extension DebugScene {
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
             if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { open(.card(task.id)) }
         case "session":
-            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 推在 Cue 标签的 Agent 整页上
+            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，推在 Agent 整页上
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
@@ -120,8 +118,7 @@ extension DebugScene {
             navigation.show(.agent)
         case "search":
             navigation.openSearch()
-        default:
-            if let project, split { open(.project(project)) }
+        default: break
         }
         await presetSpeech(workspace)
     }
@@ -148,9 +145,6 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1.5))
         }
     }
-
-    /// 底部栏换标签的那条路（`debugExposesTabSelect`）。
-    static var selectTab: (Navigation.Tab) -> Void = { _ in }
 }
 #endif
 

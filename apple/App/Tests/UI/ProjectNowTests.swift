@@ -120,20 +120,16 @@ struct ProjectNowShelfTests {
         #expect(shelf.now(projects: projects)[project.id]?.text == "多 Agent 调度本月可上线")
     }
 
-    @Test func 改一条普通灵感不改变书架读到的数据_进回收站才变() async throws {
+    @Test func 改一条普通灵感不改变书架读到的数据() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let task = try await store.createTask("补重连用例", in: project.id)
         try await store.setStatus(task.id, .inProgress)
         let idea = try await store.createCard(in: project.id, body: "想法")
         let before = try await ShelfData.read(from: store)
+        #expect(before.active.map(\.id) == [task.id])
 
         try await store.updateCard(idea.id) { $0.body = "想法，补一句" }
         #expect(try await ShelfData.read(from: store) == before)  // 灵感数在项目目录里，书架数据不含，不跟着重画
-
-        try await store.trashCard(idea.id)
-        let after = try await ShelfData.read(from: store)
-        #expect(after != before && after.trashCount == 1)
-        #expect(after.active.map(\.id) == [task.id])
     }
 }
 #endif

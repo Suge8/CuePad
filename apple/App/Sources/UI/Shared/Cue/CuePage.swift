@@ -4,7 +4,7 @@ import SwiftUI
 import CuePi
 #endif
 
-/// Cue 页（Mac 内容区的一页、iPhone 的 Cue 标签、iPad 侧栏最上面与右侧面板），与会话页同一套消息版式：
+/// Cue 页（Mac 内容区的一页、iPhone 与 iPad 侧栏最上面那一行点进的页、iPad 右侧面板；iPhone 打开 App 就在这一页），与会话页同一套消息版式：
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
 /// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`Bubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
@@ -26,8 +26,8 @@ struct CuePage: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     #if os(iOS)
-    @Environment(\.tabPageReady) private var tabPageReady
     @Environment(Navigation.self) private var navigation
+    @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -54,9 +54,6 @@ struct CuePage: View {
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
                 DebugHooks.mark("cue")
-                #if os(iOS)
-                tabPageReady?()
-                #endif
             }
     }
 
@@ -82,14 +79,14 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。标签栏布局下页头左边是设置（标签根页的规则）；
-    /// iPad 分栏与右侧面板里设置在侧栏。
+    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。iPhone 上页头在导航栏那一排里，左边是系统的返回
+    /// （自带顶上一排的页的规则，同搜索页）；宽屏与右侧面板里列表就在旁边，没有返回。
     private var page: some View {
         chat
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaPadding(.top, CueHeader.reserve)
-            .overlay(alignment: .top) { CueHeader(showsSettings: !inPanel && navigation.layout == .tabs) }
+            .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
+            .overlay(alignment: .top) { CueHeader(inBar: inBar) }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 bottom
                     .padding(.horizontal, 12).padding(.bottom, 8)
@@ -98,9 +95,12 @@ struct CuePage: View {
                     .environment(\.composerInk, .solid)
             }
             .navigationTitle(cue.name)
-            .toolbar(removing: .title)
-            .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
+            // 标题只给读屏与系统；iPhone 上标题那一格让给页头的点按区（`inNavigationBarRow`）
+            .toolbar(removing: inBar ? nil : .title)
     }
+
+    /// 页头在导航栏那一排里（iPhone）。
+    private var inBar: Bool { !inPanel && sizeClass == .compact }
     #endif
 
     // MARK: 对话
