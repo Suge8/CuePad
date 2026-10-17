@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// 由已检测出的接入状态（`AgentIntegration.status(of:)`）得出这台 Mac 上各家能不能用（同步表 macAgents 里这台的那条）：

@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// 一个会话此刻的事实：各家把自己的事件（钩子、stream-json、app-server 通知、服务事件）翻译成对它的修改，桥上的状态、那句说明、
@@ -165,13 +166,6 @@ enum ToolDetail {
             .joined(separator: PiSessionState.detailSeparator)
     }
 
-}
-
-extension String {
-    /// 至多 `limit` 个字符，超出的以省略号结尾（省略号算在内）。
-    func clipped(_ limit: Int) -> String {
-        count <= limit ? self : String(prefix(limit - 1)) + "…"
-    }
 }
 
 /// 挂在钩子上、要你回答的（Codex 的权限确认、Claude Code 的 `AskUserQuestion` 与 MCP 请求输入）在哪里答：按人在不在这台 Mac 前（`UserPresence`）。

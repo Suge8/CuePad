@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 
 /// Cue 的一次工具调用给人看的样子，两处用：正在用时那一句（`CueState.detail`，同会话的工具说明"动作 · 目标"，界面经 `PiProgress.action` 读），
@@ -10,7 +11,7 @@ public enum CueActivity {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {
       guard let target else { return action }
-      return action + PiSessionState.detailSeparator + clip(target, targetLimit)
+      return action + PiSessionState.detailSeparator + target.clipped(targetLimit)
     }
     switch tool {
     case "task":
@@ -55,7 +56,7 @@ public enum CueActivity {
     let sessionName = await session.asyncMap { ref in (try? await store.sessions(matching: ref).first?.title) ?? ref }
     let named = "「\(task?.heading ?? args.line("task") ?? args.line("title") ?? sessionName ?? "")」"
     func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, message: UUID? = nil) -> PiChatMessage.Tools.Item {
-      .init(kind: kind, target: clip(target, PiChatMessage.Tools.targetLimit), failed: failed, task: task?.id, message: message)
+      .init(kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task?.id, message: message)
     }
     switch tool {
     case "task":
@@ -93,7 +94,6 @@ public enum CueActivity {
 
   static let targetLimit = 80
 
-  private static func clip(_ text: String, _ limit: Int) -> String { text.count <= limit ? text : String(text.prefix(limit - 1)) + "…" }
 
   /// 大脑报的参数：JSON 对象，取各项的第一个非空行。
   private struct Parsed {
