@@ -141,7 +141,7 @@ private struct RowGlyph: View {
     var body: some View {
         Group {
             if selected {
-                IconImage(.picked, accent: .state(palette.onFill)).foregroundStyle(palette.signature)
+                Image(.picked).foregroundStyle(palette.onFill, palette.signature)
             } else {
                 Image(images ? .photo : .document).foregroundStyle(palette.ink3)
             }

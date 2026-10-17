@@ -48,6 +48,8 @@ nonisolated enum Icon: Hashable, Sendable {
     private enum Source {
         /// 自家的墨块符号（资源 Symbols/cue.<名>）。
         case ink(String)
+        /// 自家的反白符号：记号在第一层、实心底在第二层（同系统的 *.circle.fill），不按层级渲染，调用方给两种颜色时按层上色。
+        case filled(String)
         case system(String)
     }
 
@@ -91,7 +93,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .ended: .ink("ended")
         case .interrupted: .ink("interrupted")
         case .unknown: .ink("unknown")
-        case .picked: .ink("picked")
+        case .picked: .filled("picked")
         case .syncStarting: .ink("cloud")
         case .synced: .ink("cloud.done")
         case .syncing: .ink("cloud.sync")
@@ -230,7 +232,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// UIKit 的菜单与工具条用。
     var platformImage: UIImage? {
         switch source {
-        case .ink(let name): UIImage(named: Self.ink(name))
+        case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
         case .system(let name): UIImage(systemName: name)
         }
     }
@@ -238,7 +240,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// AppKit 的菜单与工具条用。
     var platformImage: NSImage? {
         switch source {
-        case .ink(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)
+        case .ink(let name), .filled(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)
         case .system(let name): NSImage(systemSymbolName: name, accessibilityDescription: nil)
         }
     }
@@ -248,6 +250,7 @@ nonisolated enum Icon: Hashable, Sendable {
         switch source {
         // 层级渲染：点睛是前景色的次一级。写在 Image 上，外面再设渲染方式也不覆盖它（要点亮用 `IconImage`）
         case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
+        case .filled(let name): Image(Self.ink(name))
         case .system(let name): Image(systemName: name)
         }
     }
@@ -269,7 +272,7 @@ extension Image {
 }
 
 /// 点睛上色的图标（着色规则只在这里）：平时同 `Image(_:)`，点睛是前景色的次一级；`lit`（选中、正在发生）点睛靛青；
-/// `state(色)` 是状态图标的点按状态色（等你赭黄…；选上的勾是纸色，嵌在签名色的圆里），只在那个状态存在时给。主体照外面的前景色。系统符号没有点睛，整个照前景色。
+/// `state(色)` 是状态图标的点按状态色（等你赭黄…），只在那个状态存在时给。主体照外面的前景色。系统符号没有点睛，整个照前景色。
 struct IconImage: View {
     enum Accent: Equatable {
         case none, lit

@@ -179,7 +179,7 @@ private struct SelectedFrame: View {
         if selected {
             RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.signature, lineWidth: 2)
                 .overlay(alignment: .topTrailing) {
-                    IconImage(.picked, accent: .state(palette.onFill)).font(.system(size: 18)).foregroundStyle(palette.signature)
+                    Image(.picked).font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
                         .padding(10)
                 }
                 .allowsHitTesting(false)

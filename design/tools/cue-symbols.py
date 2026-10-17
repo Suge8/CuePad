@@ -355,6 +355,7 @@ class Layer:
     name: str
     contours: list
     tier: str = "primary"  # secondary 是点睛
+    ground: bool = False  # 反白符号的实心底（见 `picked`）：在第二层，但不是点睛，不受点睛占比限制
 
 
 # ---------- 图标：每个函数（母版名）→ [Layer]，第一层是墨，第二层（有的话）是点睛 ----------
@@ -663,11 +664,12 @@ def sc(k, points): return [(x * k, y * k) for x, y in points]
 
 
 def picked(m):
-    """选上：实心圆里刻一道勾槽，勾自己一块嵌在槽里（点睛）——调色板渲染时圆是签名色、勾是纸色。"""
+    """选上：反白符号，同系统 checkmark.circle.fill 的分层——勾在第一层，刻了勾槽的实心圆是第二层的底。
+    调用方给两种颜色（勾色、底色）时按层上色；只给一种时单色，勾嵌在槽里。App 里不按层级渲染（`Icon` 的 `.filled`）。"""
     g, c = GROW[m], CARVE[m]
     w = MARK_W(m, 2.6)
-    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(mark_tick((0, 0.3), 1.1, w + 2 * c))),
-            Layer("tick", mark_tick((0, 0.3), 1.1, w), "secondary")]
+    return [Layer("tick", mark_tick((0, 0.3), 1.1, w)),
+            Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(mark_tick((0, 0.3), 1.1, w + 2 * c)), "secondary", ground=True)]
 
 
 def bubble_question(m):
@@ -933,7 +935,7 @@ def check_gaps(name, layers, m):
 def check_accent(name, layers):
     """点睛只能是小部件：主体放进点睛层，平时次一级的颜色下整个图标是灰的。"""
     ink = [abs(sum(area(c) for c in L.contours)) for L in layers]
-    accent = sum(a for a, L in zip(ink, layers) if L.tier == "secondary")
+    accent = sum(a for a, L in zip(ink, layers) if L.tier == "secondary" and not L.ground)
     assert accent <= ACCENT_SHARE * sum(ink), f"{name}：点睛占了墨量的 {accent / sum(ink):.0%}（最多 {ACCENT_SHARE:.0%}），主体要在主层"
 
 
