@@ -2,9 +2,11 @@
 import CueStore
 import SwiftUI
 
-/// iOS 的分栏，各种宽度同一个：左栏是侧栏列表（`SplitSidebar`），右边是选中的页与其上推入的页（打开的卡片纸页推在项目页上）。
-/// 宽屏两栏并排，Cue 可在右侧面板里与项目并排看；iPhone（与窄窗口 iPad）上由系统折叠成一层层的页：列表是首页，打开 App 落在 Cue，
-/// 系统的返回与左缘右滑回到列表（`Navigation.column`）。不另写抽屉、手势或标签栏。
+/// iOS 的根导航：结构同一份（侧栏列表 `SplitSidebar`，选中的页与其上推入的页，状态都在 `Navigation`），宽窄只换长相。
+/// 宽屏是分栏：左栏列表，右边选中的页（打开的卡片纸页推在项目页上），Cue 可在右侧面板里与项目并排看。
+/// iPhone（与窄窗口 iPad）是一个导航栈：列表是根，打开 App 落在推在它上面的 Cue，系统的返回与左缘右滑回到列表（`Navigation.stack`）。
+/// 窄屏不用分栏自己折叠：折叠后的分栏在冷启动多花约 3000M 指令（同口径交替量：去掉分栏、只留导航栈比留着分栏少这么多，比改前标签栏还少），
+/// 而折叠出来的样子与导航栈一样。不另写抽屉、手势或标签栏。
 /// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
@@ -24,27 +26,44 @@ struct SplitRoot: View {
     private var wide: Bool { sizeClass == .regular }
 
     var body: some View {
+        Group {
+            if wide { split } else { pages }
+        }
+        .background { SplitShortcuts() }
+        .onChange(of: navigation.root) { _, root in
+            if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
+        }
+    }
+
+    /// 窄屏：列表是根，打开的页一层层推在上面。
+    private var pages: some View {
         @Bindable var navigation = navigation
-        NavigationSplitView(columnVisibility: $navigation.sidebar, preferredCompactColumn: $navigation.column) {
-            SplitSidebar(underPage: !wide)
+        return NavigationStack(path: $navigation.stack) {
+            SplitSidebar(underPage: true)
+                .navigationDestination(for: Route.self) { page($0) }
+        }
+    }
+
+    private var split: some View {
+        @Bindable var navigation = navigation
+        return NavigationSplitView(columnVisibility: $navigation.sidebar) {
+            SplitSidebar(underPage: false)
                 .navigationSplitViewColumnWidth(
                     min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
         } detail: {
-            // 折叠时右边这一栏的导航栈直接接在列表后面，外面不能再包一层：包了系统就认不出它，推入的页成了栈里套栈
-            if wide {
-                // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
-                // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
-                HStack(spacing: 0) {
-                    stack
-                    if navigation.agentPanel {
-                        Divider().ignoresSafeArea()
-                        AgentPanel()
-                            .frame(width: min(panelWidth, Self.maxPanelWidth))
-                            .transition(.move(edge: .trailing))
-                    }
+            // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
+            // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
+            HStack(spacing: 0) {
+                NavigationStack(path: $navigation.path) {
+                    page(navigation.root)
+                        .navigationDestination(for: Route.self) { page($0) }
                 }
-            } else {
-                stack
+                if navigation.agentPanel {
+                    Divider().ignoresSafeArea()
+                    AgentPanel()
+                        .frame(width: min(panelWidth, Self.maxPanelWidth))
+                        .transition(.move(edge: .trailing))
+                }
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -55,19 +74,7 @@ struct SplitRoot: View {
         .onChange(of: navigation.path) { _, path in
             if case .card = path.last { collapseSidebarIfNarrow() }
         }
-        .background { SplitShortcuts() }
-        .onAppear { if wide { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) } }
-        .onChange(of: navigation.root) { _, root in
-            if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
-        }
-    }
-
-    private var stack: some View {
-        @Bindable var navigation = navigation
-        return NavigationStack(path: $navigation.path) {
-            page(navigation.root)
-                .navigationDestination(for: Route.self) { page($0) }
-        }
+        .onAppear { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) }
     }
 
     /// 右边的页：宽屏上 Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
@@ -82,7 +89,7 @@ struct SplitRoot: View {
     }
 
     private func collapseSidebarIfNarrow() {
-        guard wide, width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
+        guard width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
         withAnimation(Motion.panel) { navigation.sidebar = .detailOnly }
     }
 }
@@ -119,7 +126,7 @@ private struct AgentPanel: View {
 
 /// 侧栏列表，结构见 `SidebarOutline`：顶上是搜索框（点它去搜索页并聚焦），Cue（`CueSidebarItem`），任务与会话，置顶与最近的项目
 /// （末尾未分类与"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。
-/// iPhone 上它就是首页：宽屏选中的那一行垫选中底，iPhone 只在推进去的那一页还在时垫着，回到列表时淡掉（同系统列表返回时的取消选中）。
+/// iPhone 上它就是首页（导航栈的根）：宽屏选中的那一行垫选中底，iPhone 只在推进去的那一页还在时垫着，回到列表时淡掉（同系统列表返回时的取消选中）。
 private struct SplitSidebar: View {
     /// iPhone：列表压在打开的那一页底下，不在第一帧里。
     let underPage: Bool
@@ -351,7 +358,7 @@ private extension SidebarOutline.Entry {
 
 private extension Navigation {
     /// 侧栏这一行此刻垫不垫选中底：选中的那一页，iPhone 上只在推进去的那一页还在时（回到列表时淡掉；宽屏一直在页里）。
-    /// 不按尺寸类判断宽窄：侧栏这一栏里的尺寸类总是窄的。
+    /// 不按尺寸类判断宽窄：分栏的侧栏那一栏里尺寸类总是窄的。
     func shows(_ route: Route) -> Bool { root == route && column == .detail }
 }
 

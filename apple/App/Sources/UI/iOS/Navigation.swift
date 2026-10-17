@@ -5,7 +5,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态，三种宽度同一个状态机：侧栏选中的页（`root`）与其上推入的页（`path`），iPhone 上分栏折叠后此刻在列表还是在页里（`column`），
+/// iOS 的导航状态，三种宽度同一个状态机：侧栏选中的页（`root`）与其上推入的页（`path`），iPhone 上此刻在列表还是在页里（`column`，导航栈经 `stack` 读写），
 /// 外加发到 Mac 与项目表单、iPad 的右侧 Cue 面板。数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。
 /// 当前项目只从路径推出（`currentProject`）。
 @Observable
@@ -63,9 +63,21 @@ final class Navigation {
     var root: Route = .cue
     /// 根页上推入的页（打开的卡片纸页、会话页……）。
     var path: [Route] = []
-    /// iPhone（与窄窗口 iPad）上分栏折叠成一层层的页：此刻在页里（`.detail`，根页与其上推入的页）还是在列表（`.sidebar`）。
-    /// 打开 App 就在页里（Cue）；系统的返回与左缘右滑回到列表时由系统改成 `.sidebar`。宽屏两栏都在，一直是 `.detail`（变宽时 `IOSRoot` 改回）。
+    /// iPhone（与窄窗口 iPad）上一层层的页：此刻在页里（`.detail`，根页与其上推入的页）还是在列表（`.sidebar`）。
+    /// 打开 App 就在页里（Cue）；系统的返回与左缘右滑回到列表时经 `stack` 改成 `.sidebar`。宽屏两栏都在，一直是 `.detail`（变宽时 `IOSRoot` 改回）。
     var column: NavigationSplitViewColumn = .detail
+
+    /// iPhone 的导航栈：列表上推着的根页与其上推入的页；回到列表是空的。系统返回、左缘右滑写回这里：退到空就是回了列表，
+    /// 根页与推入的页照旧记着（列表上那一行还知道上次在哪）。
+    var stack: [Route] {
+        get { column == .detail ? [root] + path : [] }
+        set {
+            guard let first = newValue.first else { column = .sidebar; return }
+            root = first
+            path = Array(newValue.dropFirst())
+            column = .detail
+        }
+    }
     /// 每次请"对 Cue 说"拿到焦点（⌘⇧N、随手记小组件）加一：Cue 页的输入框看它变了就聚焦。
     private(set) var cueFocusRequests = 0
 
