@@ -53,7 +53,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     func receive(_ userInfo: [AnyHashable: Any]) {
         switch AlertRoute(userInfo: userInfo) {
         case .session(let tap): pendingTap = tap
-        case .cue: services?.setDeepLink(.cue)
+        case .cue: services?.pendingDeepLink = .cue
         case nil: return
         }
         #if os(macOS)

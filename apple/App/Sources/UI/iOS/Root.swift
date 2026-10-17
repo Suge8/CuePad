@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：各种宽度都是同一个分栏（`SplitRoot`），iPhone 上由系统折叠成一层层的页。

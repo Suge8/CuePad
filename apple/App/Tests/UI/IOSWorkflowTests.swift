@@ -1,17 +1,16 @@
 #if os(iOS)
 import CueStore
-import CueSync
 import Foundation
 import Testing
 @testable import CuePad
 
-/// iOS 界面的三条跨边界合同：发到 Mac 的请求形状（Mac 执行器按它执行）、活动页的会话顺序与角标、随手记带图入库。
+/// iOS 界面的跨边界合同：发到 Mac 的请求形状（Mac 执行器按它执行）、发给 Agent 默认开新会话、随手记带图入库。
 struct IOSWorkflowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func session(_ id: String, _ state: PiWorkState, host: String = "mac-a", detail: String? = nil) async throws -> PiSessionState {
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: id, state: state, detail: detail, title: id)
+    private func session(_ id: String, _ state: PiWorkState, host: String) async throws -> PiSessionState {
+        try await PiStateRecorder(store: store, hostID: host).update(sessionID: id, state: state, title: id)
         return try #require(try await store.allPiSessionStates().first { $0.sessionID == id })
     }
 
@@ -86,8 +85,6 @@ struct IOSWorkflowTests {
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)
         #expect(request.launch?.prompt == "修乱序\n先复现")
     }
-
-    // MARK: Agent 页
 
     // MARK: 随手记
 

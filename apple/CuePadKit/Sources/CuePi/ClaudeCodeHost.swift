@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
@@ -62,7 +63,7 @@ final class ClaudeHostedSession: SessionLink {
             guard let name = command["name"]?.string else { return nil }
             let hint = command["argumentHint"]?.string.flatMap { $0.isEmpty ? nil : $0 }
             return PiSlashCommand(
-                name: name, summary: command["description"]?.string.map { ToolDetail.clip($0) }, source: .known(.builtin), hint: hint)
+                name: name, summary: command["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.builtin), hint: hint)
         }
         commands = Set(listed.map(\.name))
         let pid = process.pid
@@ -165,7 +166,7 @@ final class ClaudeHostedSession: SessionLink {
             facts.startSubagent(task, name: message["description"]?.string ?? "", role: message["subagent_type"]?.string ?? "", at: now)
         case "task_progress":
             if let task = message["task_id"]?.string, let action = message["description"]?.string {
-                facts.updateSubagent(task) { $0.action = ToolDetail.clip(action) }
+                facts.updateSubagent(task) { $0.action = action.clipped(ToolDetail.limit) }
             }
         case "task_notification":
             guard let task = message["task_id"]?.string else { return }

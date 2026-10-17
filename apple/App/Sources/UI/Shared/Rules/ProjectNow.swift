@@ -63,19 +63,10 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     static func byProject(
         _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let intros = Dictionary(uniqueKeysWithValues: projects.compactMap { project in project.intro.map { (project.id, $0) } })
-        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, shown: shown)
-    }
-
-    static func byProject(
-        _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], intros: [UUID: String],
-        shown: (PiSessionListItem) -> PiShown
-    ) -> [UUID: ProjectNow] {
         let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
-            let task = tasks[project]?.first?.title
-            result[project] = pick(byProject[project] ?? [], shown: shown, task: task, intro: intros[project])
+            result[project.id] = pick(byProject[project.id] ?? [], shown: shown, task: tasks[project.id]?.first?.title, intro: project.intro)
         }
         return result
     }

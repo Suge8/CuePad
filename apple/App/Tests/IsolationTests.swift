@@ -35,8 +35,7 @@ struct IsolationTests {
         #expect(reread.currentProject == settings.currentProject)
         #expect(reread.windowFrame(for: "main") == "10 20 300 200 0 0 1440 900")
         let plist = directory.appending(path: "preferences.plist")
-        try await eventually("FileManager.default.fileExists(atPath: plist.path)") { FileManager.default.fileExists(atPath: plist.path) }
-        #expect(FileManager.default.fileExists(atPath: plist.path), "隔离偏好没有落在库目录里")
+        try await eventually("隔离偏好落在库目录里") { FileManager.default.fileExists(atPath: plist.path) }
     }
 
     @Test func 启动参数覆盖已存的设置() throws {
@@ -56,17 +55,17 @@ struct IsolationTests {
         let before = realDomain()
         let window = NSWindow(contentRect: NSRect(x: 100, y: 120, width: 640, height: 480), styleMask: [.titled, .resizable], backing: .buffered, defer: true)
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: settings)
-        #expect(!keeper.restore(), "没有存过位置时不应恢复")
 
         window.setFrame(NSRect(x: 200, y: 220, width: 700, height: 500), display: false)
         await Task.yield()  // 让订阅的任务先到位，再发通知
         NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)
-        try await eventually("settings.windowFrame(for: \"main\") != nil") { settings.windowFrame(for: "main") != nil }
+        try await eventually("窗口位置存进设置") { settings.windowFrame(for: "main") != nil }
 
         #expect(realDomain() == before)
         let other = NSWindow(contentRect: .zero, styleMask: [.titled, .resizable], backing: .buffered, defer: true)
-        #expect(WindowFrameKeeper(window: other, name: "main", settings: settings).restore())
+        _ = WindowFrameKeeper(window: other, name: "main", settings: settings)
         #expect(other.frame.size == CGSize(width: 700, height: 500))
+        withExtendedLifetime(keeper) {}
     }
 }
 #endif

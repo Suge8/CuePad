@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 typealias Tools = PiChatMessage.Tools
@@ -35,8 +36,7 @@ struct PiToolLog: Codable, Equatable {
 
     /// 助手说了一段话（空白的不来）。
     mutating func say(_ text: String) {
-        let clipped = text.count <= Tools.saidLimit ? text : String(text.prefix(Tools.saidLimit - 1)) + "…"
-        activity.record(.init(kind: .said, target: clipped))
+        activity.record(.init(kind: .said, target: text.clipped(Tools.saidLimit)))
     }
 
     /// 到目前为止做完的调用与说过的话（还在跑的调用不算）；什么都还没有为 nil。进行中这一轮的实时清单读它（`PiRecap.pendingTools`）。
@@ -109,25 +109,18 @@ private extension PiToolLog.Call {
     /// Pi 自带的 read / edit / write / bash / grep / find / ls，加别的提供方里同类工具的常见名字。
     init(name: String, arguments: PiToolArguments, cwd: String?) {
         let file = arguments.path.map { Self.relative($0, to: cwd) }
-        switch name.lowercased() {
-        case "edit", "write", "strreplace", "str_replace", "multiedit":
-            let change = arguments.lineChange
-            let written = arguments.content.map { PiToolArguments.lines($0).count }
-            self.init(kind: .edit, target: Self.clip(file ?? name), added: change?.added ?? written, removed: change?.removed)
-        case "read":
-            self.init(kind: .read, target: Self.clip(file ?? name))
+        let (kind, target): (Tools.Kind, String) = switch name.lowercased() {
+        case "edit", "write", "strreplace", "str_replace", "multiedit": (.edit, file ?? name)
+        case "read": (.read, file ?? name)
         case "bash", "shell":
-            let line = arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-            self.init(kind: .command, target: Self.clip(line ?? name))
-        case "grep", "find", "ls", "glob":
-            self.init(kind: .search, target: Self.clip(arguments.pattern ?? file ?? name))
-        default:
-            self.init(kind: .other, target: Self.clip(name))
+            (.command, arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? name)
+        case "grep", "find", "ls", "glob": (.search, arguments.pattern ?? file ?? name)
+        default: (.other, name)
         }
-    }
-
-    static func clip(_ text: String) -> String {
-        text.count <= Tools.targetLimit ? text : String(text.prefix(Tools.targetLimit - 1)) + "…"
+        // 改文件带从参数算出的增删行数（整文件写入只有新增）
+        let change = kind == .edit ? arguments.lineChange : nil
+        let written = kind == .edit ? arguments.content.map { PiToolArguments.lines($0).count } : nil
+        self.init(kind: kind, target: target.clipped(Tools.targetLimit), added: change?.added ?? written, removed: change?.removed)
     }
 
     /// 相对工作目录；工作目录之外的家目录路径写成 ~/…（完整路径不同步）。

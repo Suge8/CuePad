@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// Pi 上报的模型调用错误（`error` 状态的原文）的人话摘要。Pi 只给出一段文字——常见是
@@ -121,6 +122,6 @@ public struct PiErrorSummary: Sendable, Equatable {
         let line = raw.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let text = (line.firstIndex(of: "{").map { String(line[..<$0]) } ?? line).trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return "模型调用出错" }
-        return text.count > firstLineLimit ? text.prefix(firstLineLimit - 1) + "…" : text
+        return text.clipped(firstLineLimit)
     }
 }

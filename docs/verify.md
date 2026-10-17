@@ -96,6 +96,19 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - 口径：预热（默认 90 秒，含冷启动翻整个同步区）之后的固定窗口。CloudKit 操作按进程统计，来源是 debug 日志里每个操作结束时的 `CKOperationMetrics`：次数按类型与操作组分，字节是 CloudKit 自己计的请求与响应体，不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。时延用同一台机器的时钟。
 - 两个实例共用这台 Mac 的 cloudd，CloudKit 操作在里面排同一个队：一个操作慢（服务端或网络，偶尔几十秒），两边排在后面的一起等，结束在同一刻（报告里的"排队"）。真机上手机有自己的 cloudd，所以尾部时延比真实的大；前后对比在同一网络、同一时段交替跑，主要看中位数。开发环境的同步区随每次运行积累会话记录，只影响冷启动。
 
+## Cue 评测
+
+改 Cue 的提示词（系统提示、工具说明、信封）前后各跑一遍，比同一套场景里真模型的做法：
+
+```bash
+TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_TOKEN=<令牌> TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/after CUEPAD_TEST_TIME_LIMIT=900 \
+  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
+```
+
+- 大脑是真的 Claude Code，用 Claude 订阅：令牌由跑的人用 `claude setup-token` 生成后经 `TEST_RUNNER_CUEPAD_CUE_EVAL_TOKEN` 给，评测不读 `~/.pi`、`~/.claude`；默认 opus · medium；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
+- 输出目录里每个场景一个 .md（信封、工具调用与结果、Cue 写的消息、判定），`summary.md` 汇总，`system-prompt.md` 是这次的系统提示。有场景没过时命令非零退出，输出照样写完。
+- 场景与判定在 `CueEvalTests` 里；模型每次答得不完全一样，结论看两遍以上。
+
 ## 崩溃诊断
 
 `Diagnostics` 把 MetricKit 交来的诊断存在资料库目录下（隔离库不订阅）。真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来（摘要未符号化，靠 dSYM 还原：每次发布的归档按构建号存在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`）。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）。

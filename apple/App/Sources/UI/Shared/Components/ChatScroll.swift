@@ -99,6 +99,17 @@ nonisolated struct ChatFollow: Equatable {
     }
 }
 
+/// 跳到对话里的某一条（`chatJump`）。按所在的对话区比较：同一个对话区每次更新换出的闭包做的是同一件事（改的是同一个 `ChatFollow`），
+/// 读它的行（每轮的经过）不因换了一个闭包跟着重算；闭包本身不能比较，直接放进环境时每次更新都让读它的视图失效。
+struct ChatJump: Equatable {
+    let column: UUID
+    let seek: (UUID) -> Void
+
+    func callAsFunction(_ id: UUID) { seek(id) }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
+}
+
 enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
     static let edge: CGFloat = 16
@@ -108,7 +119,7 @@ extension EnvironmentValues {
     /// 刚跳到的那条你的话：短暂描一圈（刻度滑条）。
     @Entry var chatHighlight: UUID?
     /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
-    @Entry var chatJump: ((UUID) -> Void)?
+    @Entry var chatJump: ChatJump?
     /// 浮在对话底上的回复框占的高（Mac，`FloatingReply`）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
 }

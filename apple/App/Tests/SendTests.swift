@@ -41,20 +41,30 @@ struct SendTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    @Test func 发给Pi_文字去掉图片标记_图片按序带原图和类型_记录会话id与目录名() async throws {
+    /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，写出就返回、
+    /// 不等送达，由本机执行器照远端请求的流程执行；会话收到去掉图片标记的文字与按序的原图，资料库里只多这条请求与它的发送记录
+    /// （内容快照、关联的卡片、会话 id 与目录名）。
+    @Test(.timeLimit(.minutes(1)))
+    func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
         let ext = try await connectedSession()
         let body = try await bodyWithImage()
+        let task = try await services.store.createTask("do it", in: nil)
 
-        #expect(Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID)))
+        #expect(Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID, mode: .steer), card: task.id))
 
         let request = try await settled()
+        #expect(request.status == .known(.succeeded))
+        #expect(request.hostID == TestApp.hostID)
+        #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(ext.messages == [
-            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
+            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer, deliveryID: request.id.uuidString)
         ])
-        let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .known(.piSession))
-        #expect(record.targetName == "work")
-        #expect(record.targetRef == "sess-1")
+        #expect(try await services.store.deliveryRequests().count == 1)
+        let records = try await services.store.sendRecords()
+        #expect(records.count == 1)
+        let record = try #require(records.first)
+        #expect(record.targetKind == .known(.piSession) && record.targetName == "work" && record.targetRef == "sess-1")
+        #expect(record.content == body && record.cardID == task.id)
     }
 
     @Test func Pi会话忙时_直接发送先问马上说还是等它做完再说_不写请求_选了按方式发送() async throws {
@@ -93,32 +103,6 @@ struct SendTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    // MARK: Mac 上发给 Pi 会话
-
-    /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，
-    /// 由本机执行器照远端请求的流程执行；送达后资料库里只多这条请求与它的发送记录。
-    @Test(.timeLimit(.minutes(1)))
-    func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
-        let ext = try await connectedSession()
-        let workspace = Workspace(services: services)
-
-        #expect(workspace.send("hi", to: AgentTarget(session: ext.sessionID, mode: .steer)))
-
-        // 写出就返回，不等送达
-        let request = try #require(try await eventually(services.store, { try $0.deliveryRequests().first }) { $0 != nil })
-        #expect(request.hostID == TestApp.hostID)
-        #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
-        #expect(request.mode == .known(.steer))
-        for try await status in services.store.observe({ try $0.deliveryRequest(request.id)?.status }) {
-            if status == .known(.succeeded) { break }
-        }
-        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
-        #expect(try await services.store.deliveryRequests().count == 1)
-        let record = try #require(try await services.store.sendRecords().first)
-        #expect(try await services.store.sendRecords().count == 1)
-        #expect(record.targetRef == "sess-1")
-    }
-
     /// Cue 发进会话的话（投送请求 origin 是 cue）送达、请求清理之后，会话页里那条消息仍标着 Cue：认的是发送记录，不是请求。
     @Test(.timeLimit(.minutes(1)))
     @MainActor
@@ -141,20 +125,6 @@ struct SendTests {
         #expect(digest.deliveries.isEmpty)
         let entry = try #require(derived.items.first)
         #expect(entry.fromCue)
-    }
-
-    // MARK: 记录
-
-    @Test func 记录带内容快照与关联的卡片() async throws {
-        let ext = try await connectedSession()
-        let task = try await services.store.createTask("do it", in: nil)
-
-        #expect(Workspace(services: services).send("snapshot text", to: AgentTarget(session: ext.sessionID), card: task.id))
-        _ = try await settled()
-
-        let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.content == "snapshot text")
-        #expect(record.cardID == task.id)
     }
 
     @Test func 复制时图片文件缺失就报错_剪贴板不动() async throws {

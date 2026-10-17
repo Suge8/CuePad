@@ -696,16 +696,15 @@ final class CueKeeper {
         }
         let changes = try await changes()
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.context?.used, renewAt: CueContext.renewAt, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
             changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
-            resume: resume, said: nil))
+            resume: resume))
         var woke: CueWoke?
         if wake == .sessionActivity {
             var seen = Set<String>()
             woke = CueWoke(at: now, sessions: changes.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
-        if let used = shift.context?.used, used >= CueContext.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
@@ -794,8 +793,8 @@ final class CueKeeper {
     private static func answerLine(_ message: CueMessage) -> String {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let answer = message.answer ?? ""
-        guard message.choices?.contains(answer) != false else { return "你没允许「\(question)」，另外说：\(answer)" }
-        return "你回答了「\(question)」：\(answer)"
+        guard message.choices?.contains(answer) != false else { return "他没允许「\(question)」，另外说：\(answer)" }
+        return "他回答了「\(question)」：\(answer)"
     }
 
     private static func day(_ date: Date) -> String {
