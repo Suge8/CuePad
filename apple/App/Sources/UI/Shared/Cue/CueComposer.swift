@@ -45,7 +45,7 @@ struct CueComposer: View {
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: focusRequests) { focused = true }
             .onChange(of: workspace.cue.lastYouSaid) { launched = false }
-            .task { if style == .page { await DebugHooks.pressCueSendIfAsked(send) } }
+            .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }
     }
 
     /// 发送钮：点是发送，长按是"只记下"（`MenuButton`：菜单开着时输入框锁在原位）。Cue 没启用时只有记下。

@@ -157,21 +157,24 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                                 .transition(.identity)
                         }
                     }
-                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
+                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, expanded || shrunk ? 18 : 2)
                     .padding(.top, ComposerMetrics.textTop).padding(.bottom, expanded ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
                     .frame(minHeight: expanded ? nil : ComposerMetrics.slot)
-                if !expanded, sendVisible { sendSlot }
+                if !expanded, !shrunk { slotSpace }
             }
             if expanded {
                 HStack(spacing: 0) {
                     if !accepts.isEmpty { plus }
                     if showsTools { tools().transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
                     Spacer(minLength: 0)
-                    sendSlot
+                    slotSpace
                 }
                 .transition(.opacity)
             }
         }
+        // 提交钮只有一颗，两种形态都在右下角：浮在留出的位置上，不随一行 ↔ 两层的那一排进出（放在排里的话收起时
+        // 旧排里那颗停在发出前的样子淡出，与新位置的钮叠成两颗）
+        .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
@@ -190,14 +193,15 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 提交钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。一行与两层之间挪位时是同一颗（同"＋"，
-    /// 不然发出后收成一行的那一下，旧位置淡出的钮与新位置的钮会叠成两颗）。
+    /// 提交钮的位置一直留着（收成短胶囊时除外）：有内容才放进来，输入框的宽度不随它变，文字不会因此重排——
+    /// 宽度跟着钮进出变的话，动画的每一帧文字区（UITextView/NSTextView）都要重新排版，发出、送达、打第一个字各多一段主线程开销。
+    private var slotSpace: some View { Color.clear.frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot) }
+
     private var sendSlot: some View {
         ZStack {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
         .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
-        .matchedGeometryEffect(id: "send", in: layout)
     }
 
     private var plus: some View {

@@ -239,7 +239,7 @@ extension DebugScene {
     /// 量的一段比接力的那一下（约 1.3～1.4 秒）长一点。
     static let flightProbe = 1.6
 
-    /// `act`：开始量之后当场做的那一下（按发送钮，`pressCueSendIfAsked`）。
+    /// `act`：开始量之后当场做的那一下（按发送钮，`pressSendIfAsked`）。
     static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async {
         let turns = TurnLog(), frames = FrameRecorder()
         let instructions = instructionsMillions(), energy = energyMillijoules()

@@ -133,6 +133,7 @@ struct PiReplyBar: View {
             .sensoryFeedback(.success, trigger: sentCount)
             .onChange(of: sending) { launched = false }
             .onChange(of: canStop) { launched = false }
+            .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
             #if os(macOS)
             .onAppear { focused = active }
             #endif
