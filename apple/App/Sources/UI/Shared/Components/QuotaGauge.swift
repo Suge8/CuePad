@@ -174,7 +174,7 @@ private struct QuotaWindowRow: View {
                     .contentTransition(.numericText(value: window.left))
             }
             // 剩余条：剩的少于匀速线就是用快了
-            MarkedBar(fill: window.left, mark: window.even, color: QuotaInk.fill(window.level, palette))
+            MarkedBar(fill: window.left, mark: window.even, level: window.level)
             if let runway = window.runway(from: .now) {
                 Text("照这速度\(runway)后用完").font(Typography.caption).foregroundStyle(critical ? palette.failure : palette.ink2)
                     .transition(.opacity)
@@ -213,7 +213,7 @@ struct QuotaRing: View, Animatable {
     }
 
     var body: some View {
-        let (track, fill, left) = (palette.track, QuotaInk.fill(level, palette), left)
+        let (track, fill, left) = (palette.track, level.ink(palette), left)
         Canvas { context, size in
             let center = CGPoint(x: size.width / 2, y: size.height / 2)
             let radius = min(size.width, size.height) / 2 - Self.line / 2
@@ -224,17 +224,6 @@ struct QuotaRing: View, Animatable {
                 $0.addArc(center: center, radius: radius, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(left, 1)), clockwise: false)
             }
             context.stroke(arc, with: .color(fill), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
-        }
-    }
-}
-
-/// 额度的墨（按已用的档位）：余量足次要墨色，七成起墨色，九成起胭脂。
-private enum QuotaInk {
-    static func fill(_ level: PiContextMeter.Level, _ palette: Palette) -> Color {
-        switch level {
-        case .roomy: palette.ink2
-        case .tight: palette.ink
-        case .critical: palette.failure
         }
     }
 }
