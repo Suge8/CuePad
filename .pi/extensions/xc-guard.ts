@@ -30,19 +30,25 @@ function structure(command: string): string {
 			while (i + 1 < lines.length && lines[i + 1].trim() !== heredoc[1]) i++;
 	}
 	const text = kept.join("\n");
+	// 栈顶是当前所在：单引号、双引号，或双引号里的 $( 与括号（那里又是要执行的代码）
+	const stack: string[] = [];
 	let out = "";
-	let quote = "";
 	for (let i = 0; i < text.length; i++) {
 		const ch = text[i];
-		if (quote === "'") {
-			if (ch === "'") quote = "";
+		const top = stack.at(-1);
+		if (top === "'") {
+			if (ch === "'") stack.pop();
 			out += /[|&;()`\n$]/.test(ch) ? " " : ch;
-		} else if (quote === '"') {
-			if (ch === '"') quote = "";
-			const substitution = ch === "`" || (ch === "$" && text[i + 1] === "(") || (ch === "(" && text[i - 1] === "$");
-			out += !substitution && /[|&;()\n]/.test(ch) ? " " : ch;
+		} else if (top === '"') {
+			if (ch === '"') stack.pop();
+			if (ch === "$" && text[i + 1] === "(") {
+				stack.push("(");
+				out += "$(";
+				i++;
+			} else out += ch !== "`" && /[|&;()\n]/.test(ch) ? " " : ch;
 		} else {
-			if (ch === "'" || ch === '"') quote = ch;
+			if (ch === "'" || ch === '"' || ch === "(") stack.push(ch);
+			else if (ch === ")" && top === "(") stack.pop();
 			out += ch;
 		}
 	}
