@@ -39,17 +39,35 @@ extension CueStore {
       PiSessionState.self, where: condition, arguments, orderBy: "state = 'ended', stateSince DESC, id",
       limit: query.limit, offset: query.offset)
     let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
+    return PiSessionPage(items: try listItems(states), total: total)
+  }
+
+  /// 一批会话（Pi 的会话 id）的列表项，按会话 id 索引；没有记录的 id 不在结果里。行与卡上要显示几十个会话的状态时一次读出，
+  /// 不必一个会话查一次。
+  public func piSessions(sessionIDs: [String]) throws -> [String: PiSessionListItem] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let ids = String(decoding: try JSONEncoder().encode(sessionIDs), as: UTF8.self)
+    let states = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [ids])
+    return Dictionary(try listItems(states).map { ($0.state.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
+  }
+
+  /// 全部会话记录数（在线的与历史）。
+  public func piSessionCount() throws -> Int {
+    try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
+  }
+
+  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话）：分页与按 id 取的唯一组装处。
+  private func listItems(_ states: [PiSessionState]) throws -> [PiSessionListItem] {
+    let ids = states.map(\.sessionID)
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
-    let deliveries = try latestDeliveries(to: states.map(\.sessionID))
-    let renames = try latestRenames(to: states.map(\.sessionID))
-    let unsettled = try unsettledTalk(to: states.map(\.sessionID))
-    return PiSessionPage(
-      items: states.map {
-        PiSessionListItem(
-          state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          unsettled: unsettled[$0.sessionID] ?? [])
-      },
-      total: total)
+    let deliveries = try latestDeliveries(to: ids)
+    let renames = try latestRenames(to: ids)
+    let unsettled = try unsettledTalk(to: ids)
+    return states.map {
+      PiSessionListItem(
+        state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
+        unsettled: unsettled[$0.sessionID] ?? [])
+    }
   }
 
   /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。

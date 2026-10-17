@@ -388,11 +388,10 @@ extension CueStore {
   /// 接着用上一步的会话时，开工到话送到之间就是这样：还没绑上，看板与 peek 写"发送中"。
   public func sendingLeaves(_ leaves: [UUID]) throws -> Set<UUID> {
     guard !leaves.isEmpty else { return [] }
-    let modes = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
     return Set(try db.query(
       """
       SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode IN (\(modes)) AND status IN ('pending', 'executing')
+      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND status IN ('pending', 'executing')
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 
@@ -525,7 +524,7 @@ extension CueStore {
         SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
           AND id NOT IN (\(subtree(from: "SELECT ?2"))))
       OR EXISTS (
-        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(toSessionModes)) AND status IN ('pending', 'executing'))
+        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession))) AND status IN ('pending', 'executing'))
     """
 
   /// 任务此刻在做的叶子：叶子就是它自己，有步骤的是第一个没完成的步骤（没有就第一个）。不是任务抛 `notATask`。
