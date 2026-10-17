@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页输入框里的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）：选的是 Cue 的大脑。
+/// Cue 的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）：选的是 Cue 的大脑。Mac 在 Cue 页输入框的工具排里，
+/// 手机在 Cue 面板的第一行（`CueHeader`），各只一处。
 /// 值只在同步的 `CueProfile`（`runtime`、`model`、`effort`），选了经 `AppServices.updateCue` 写入并上传；Cue 住的那台 Mac 读到就按它值班。
 /// 规则见 `CueBrainMenu`。
 struct CueConfigControls: View {

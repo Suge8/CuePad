@@ -281,6 +281,11 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   /// 换新线：6 万 token。
   public static let renewAt = 60_000
 
+  /// token 数的写法（交给大脑的信封与各端的上下文用量同一种）：不到一千写原数，往上写 5.3k、128k。
+  public static func tokens(_ count: Int) -> String {
+    count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
+  }
+
   public init(used: Int, window: Int?, since: Date) {
     self.used = used
     self.window = window

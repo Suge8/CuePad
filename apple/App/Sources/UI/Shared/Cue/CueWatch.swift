@@ -22,6 +22,8 @@ final class CueWatch {
     /// 它住的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
+    /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文用量（`CueContextCard`）只读它。
+    private(set) var context: CueContext?
     /// 在跑的这一轮的经过那一行（`CueState.round`）。
     private(set) var round: UUID?
     /// 此刻叫醒它的这一轮（`CueState.woke`）。这个窗口读到的第一份不算（App 刚打开、窗口刚开时已有的叫醒不是此刻发生的），
@@ -68,6 +70,7 @@ final class CueWatch {
         set(\.hostID, digest.hostID)
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)
+        set(\.context, digest.state?.context)
         let woke = digest.state?.woke
         set(\.woke, woke?.at == stale ? nil : woke)
     }

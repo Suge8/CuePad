@@ -133,6 +133,7 @@ struct RouteView: View {
         case .conflicts: ConflictsScreen()
         case .tasks: TasksScreen()
         case .cue: CuePage().countsAsPiViewer()
+        case .cueSettings: CueSettingsScreen()
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()

@@ -69,8 +69,8 @@ public enum CueEnvelope {
   public static func render(_ input: Input) -> String {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = input.timeZone
-    let used = input.contextUsed.map(tokens) ?? "未知"
-    var lines = ["<cue>", "\(stamp(input.now, calendar)) · 上下文 \(used) / 换新线 \(tokens(input.renewAt))"]
+    let used = input.contextUsed.map(CueContext.tokens) ?? "未知"
+    var lines = ["<cue>", "\(stamp(input.now, calendar)) · 上下文 \(used) / 换新线 \(CueContext.tokens(input.renewAt))"]
 
     lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
@@ -216,11 +216,6 @@ public enum CueEnvelope {
     if minutes < 60 { return "\(minutes) 分钟" }
     if minutes < 48 * 60 { return "\(minutes / 60) 小时" + (minutes % 60 == 0 ? "" : " \(minutes % 60) 分") }
     return "\(minutes / 1440) 天"
-  }
-
-  /// token 数的写法（信封第一行与 Mac 的"运行情况"同一种）：不到一千写原数，往上写 5.3k、128k。
-  public static func tokens(_ count: Int) -> String {
-    count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
   }
 
   private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]

@@ -26,60 +26,79 @@ struct CueTaskButton<Label: View>: View {
     }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块：Mac 上主按钮直接是"在这台 Mac 上启用"（经管理器，挑这台装好并登录了的 Agent；
-/// 一家都没有时就地说明）；手机上说明去哪台 Mac 启用（之前住过的那台写出名字）。没启用时输入框发不出去。
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：一句说明，下面直接选一台 Mac 启用（Cue 能住的几台，`CueSettings.hosts`）——
+/// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
+/// Mac 上点按是住在这台、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
+/// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var enabling = false
-    @State private var failure: String?
+    @State private var model = CueSettingsModel()
 
     var body: some View {
-        let cue = workspace.cue
+        let hosts = (model.settings ?? .empty).hosts(here: here)
         VStack(alignment: .leading, spacing: 10) {
-            #if os(macOS)
-            Text("启用后 \(cue.name) 住在这台 Mac 上，替你派活、跟进，只在要你拿主意时找你").font(Typography.secondary).foregroundStyle(palette.ink2)
-            HStack(spacing: 10) {
-                Button(action: enable) {
-                    HStack(spacing: 6) {
-                        if enabling { Spinner(.mini) }
-                        Text("在这台 Mac 上启用")
-                    }
+            Text("启用后 \(workspace.cue.name) 住在一台 Mac 上，替你派活、跟进，只在要你拿主意时找你")
+                .font(Typography.secondary).foregroundStyle(palette.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            if hosts.isEmpty {
+                Label("先到 Mac 上打开 CuePad，它会出现在这里", systemImage: "desktopcomputer")
+                    .font(Typography.secondary).foregroundStyle(palette.ink3)
+            } else {
+                HStack(spacing: 8) {
+                    enableButton(hosts)
+                    if model.enabling != nil { Spinner(.small) }
                 }
-                .buttonStyle(ControlButtonStyle(kind: .primary))
-                .disabled(enabling)
-                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure).lineLimit(2) }
+                .disabled(model.enabling != nil)
             }
-            #else
-            Label {
-                Text(cue.hostName.map { "到「\($0)」上打开 CuePad，在设置里启用 \(cue.name)" } ?? "到你的 Mac 上打开 CuePad，在设置里启用 \(cue.name)")
-            } icon: {
-                Image(systemName: "desktopcomputer")
+            if let failure = model.failure {
+                Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(Typography.secondary).foregroundStyle(palette.ink2)
-            #endif
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+        .cueSettings(model)
+        .animation(Motion.quick, value: model.failure)
     }
 
-    #if os(macOS)
-    private func enable() {
-        enabling = true
-        failure = nil
-        let services = services
-        Task {
-            defer { enabling = false }
-            do {
-                try await services.enableCue(on: services.hostID)
-            } catch {
-                failure = error.localizedDescription
+    /// 这台 Mac（手机没有）：Mac 上它排第一、点按就住这台。
+    private var here: String? {
+        #if os(macOS)
+        services.hostID
+        #else
+        nil
+        #endif
+    }
+
+    @ViewBuilder private func enableButton(_ hosts: [CueSettings.Host]) -> some View {
+        if hosts.count == 1, let host = hosts.first {
+            Button(title(host)) { model.enable(on: host.id, services) }
+                .buttonStyle(ControlButtonStyle(kind: .primary))
+        } else {
+            MenuButton(
+                sections: [ChoiceMenu.Section(choices: hosts.map { host in
+                    ChoiceMenu.Choice(title: host.name, subtitle: host.note.isEmpty ? nil : host.note, image: .symbol("desktopcomputer")) {
+                        model.enable(on: host.id, services)
+                    }
+                })],
+                primary: here.map { here in { model.enable(on: here, services) } },
+                accessibilityLabel: here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用", hint: here == nil ? nil : "长按选别的 Mac"
+            ) {
+                HStack(spacing: 6) {
+                    Text(here == nil ? "选一台 Mac 启用" : "在这台 Mac 上启用")
+                    Image(systemName: "chevron.down").font(.footnote.weight(.semibold))
+                }
+                .modifier(ControlSurface(kind: .primary))
             }
         }
     }
-    #endif
+
+    private func title(_ host: CueSettings.Host) -> String {
+        host.id == here ? "在这台 Mac 上启用" : "在「\(host.name)」上启用"
+    }
 }
 
 /// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务。
