@@ -23,6 +23,8 @@ public struct PiSessionHistory: Sendable, Equatable {
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
+    /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
+    var modified: Date?
     var fingerprint: UInt64 = 0
     var fingerprintLength = 0
     var sessionID: String?
@@ -39,6 +41,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var recap = PiRecap()
     /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
     var excluded = false
+
+    /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
+    /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
+    func isCurrent(size: UInt64, modified: Date) -> Bool { offset == size && self.modified == modified }
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
@@ -154,6 +160,7 @@ public enum PiHistory {
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
         state.offset = consumed
+        state.modified = modified
         try refreshFingerprint(&state, handle: handle)
         let history = PiSessionHistory(
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
