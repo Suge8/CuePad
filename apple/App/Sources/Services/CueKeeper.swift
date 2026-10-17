@@ -803,8 +803,4 @@ final class CueKeeper {
         return "\(parts.year!)-\(parts.month!)-\(parts.day!)"
     }
 }
-
-extension Duration {
-    nonisolated var seconds: TimeInterval { TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18 }
-}
 #endif
