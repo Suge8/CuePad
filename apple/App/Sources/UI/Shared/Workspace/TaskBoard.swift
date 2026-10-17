@@ -46,10 +46,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let done = recentlyDone(all)
         func row(_ task: Card) -> Row { Row(task: task, project: task.projectID.flatMap { projects[$0] }) }
         let roots = tree.roots.compactMap(tree.task)
-        // 顶层已按项目顺序、同级顺序排好：稳定排序后同刻开始的照原来的先后（同 `CueStore.startedTasks`）
-        let started = roots.filter { $0.status == .inProgress }.enumerated()
-            .sorted { ($0.element.startedAt ?? .distantPast, -$0.offset) > ($1.element.startedAt ?? .distantPast, -$1.offset) }
-            .map { row($0.element) }
+        // 先后只在 `CueStore.startedTasks` 定义一处（书架"正在推进"同一批、同一个顺序）
+        let started = try store.startedTasks(topLevelOnly: true).compactMap { tree.task($0.id) }.map(row)
         // 相邻同项目的归成一段
         var todo: [Section] = []
         for task in roots where task.status == .todo {
