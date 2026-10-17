@@ -18,6 +18,7 @@ public actor CloudSync {
   private let zoneID: CKRecordZone.ID
   private let coordinator: SyncCoordinator
   private let subscribesToAlerts: Bool
+  private var container: CKContainer?
   private var puller: ZonePuller?
   private var sender: RecordSender?
   /// 认过账号、拉取与上传都开始了。认不了（离线、没登录）时不拉也不传：本机的同步元数据可能属于上一个账号。
@@ -55,6 +56,7 @@ public actor CloudSync {
   public func start() async throws {
     guard sender == nil else { return }
     let container = CKContainer(identifier: containerIdentifier)
+    self.container = container
     let database = CloudDatabase(database: container.privateCloudDatabase, zoneID: zoneID)
     puller = ZonePuller(source: database, coordinator: coordinator)
     sender = RecordSender(uploader: database, coordinator: coordinator)
@@ -75,6 +77,7 @@ public actor CloudSync {
     await sender?.stop()
     sender = nil
     puller = nil
+    container = nil
     ready = false
   }
 
@@ -112,7 +115,7 @@ public actor CloudSync {
   /// 立即同步：拉一次（返回时拉完），顺带把待推送发出去（不等）。下拉刷新、立即同步按钮、回到前台、按节奏的拉取（`SyncPoller`）、
   /// 手机收到推送都只调它。通知订阅没建成的话顺带在后台重试（见 `alertsAttemptedAt`）。
   public func syncNow() async throws {
-    let container = CKContainer(identifier: containerIdentifier)
+    guard let container else { return }
     if !ready { await checkAccount(container) }
     guard ready, let puller, let sender else { return }
     if subscribesToAlerts, await coordinator.alertSubscription != .active,

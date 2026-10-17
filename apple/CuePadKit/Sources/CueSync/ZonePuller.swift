@@ -80,7 +80,8 @@ actor ZonePuller {
   }
 
   private func drainPages() async throws {
-    var token = try await store.syncState(Self.tokenKey)
+    var stored = try await store.syncState(Self.tokenKey)
+    var token = stored
     if token == nil {
       await showBusy(true)
       token = try await catchUp()
@@ -91,7 +92,10 @@ actor ZonePuller {
       if batch.moreComing { await showBusy(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
       token = batch.token
-      try await store.setSyncState(Self.tokenKey, batch.token)
+      if batch.token != stored {  // 没有变化的一拉不写库
+        try await store.setSyncState(Self.tokenKey, batch.token)
+        stored = batch.token
+      }
     } while batch.moreComing
   }
 
