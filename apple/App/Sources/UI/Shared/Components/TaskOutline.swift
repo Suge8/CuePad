@@ -8,7 +8,7 @@ import UIKit
 /// 大纲自己的坐标系：行的位置与拖放的落点都在这里量。
 private nonisolated let outlineSpace = "TaskOutline"
 
-/// 一行任务在大纲里能做的结构操作；做不了的为 nil。手机上它进轻扫与同源的读屏动作（`RowSwipes.card`），Mac 的任务行从环境里取来放进右键菜单与读屏动作。
+/// 一行任务在大纲里能做的结构操作；做不了的为 nil。手机上它进轻扫与同源的读屏动作（`RowSwipes.card`），Mac 的任务行从环境里取来放进读屏动作；做什么只在 `CardMenu.Item.run`。
 struct TaskStructure {
     var indent: (() -> Void)?
     var outdent: (() -> Void)?

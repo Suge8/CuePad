@@ -21,32 +21,16 @@ struct CardActions: View {
     }
 
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
-        let id = card.id
         switch item {
-        case .makeTask, .makeIdea: Button(item.title, icon: item.icon) { workspace.attempt { try await workspace.setTodo(id, item == .makeTask) } }
-        case .complete, .reopen:
-            Button(item.title, icon: item.icon) {
-                let task = card
-                workspace.attempt { try await workspace.toggle(task.id) }
-            }
-        case .archive: Button(item.title, icon: item.icon) { workspace.attempt { try await workspace.archive(id) } }
-        case .resource, .unresource:
-            Button(item.title, icon: item.icon) {
-                workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
-            }
         case .move: moveMenu
-        case .copy: Button(item.title, icon: item.icon) { workspace.copy(Outgoing.text(of: card)) }
-        case .trash: Button(item.title, icon: item.icon, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
-        case .select:
-            #if os(macOS)
-            Button(item.title, icon: item.icon) { workspace.presses.toggle(id) }
-            #endif
         case .bindSession:
             #if os(macOS)
             Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
             #endif
-        // 只在轻扫里（`CardMenu.swipes`）
-        case .indent, .outdent: EmptyView()
+        default:
+            if let run = item.run(on: card, in: workspace) {
+                Button(item.title, icon: item.icon, role: item.tone == .destructive ? .destructive : nil, action: run)
+            }
         }
     }
 
@@ -111,21 +95,45 @@ extension CardMenu.Item {
     }
 }
 
+extension CardMenu.Item {
+    /// 这一项对 `card` 做什么，菜单、"⋯"与轻扫都按它执行；子菜单（移到项目、绑定会话）与此处做不了的（手机上的选择、
+    /// 不在大纲里的缩进）为 nil。`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
+    func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
+        let id = card.id
+        switch self {
+        case .makeTask, .makeIdea:
+            let todo = self == .makeTask
+            return { workspace.attempt { try await workspace.setTodo(id, todo) } }
+        case .complete, .reopen: return { workspace.attempt { try await workspace.toggle(id) } }
+        case .archive: return { workspace.attempt { try await workspace.archive(id) } }
+        case .resource, .unresource:
+            let pinned = self == .resource
+            return { workspace.perform { try await $0.updateCard(id) { $0.isPinned = pinned } } }
+        case .copy: return { workspace.copy(Outgoing.text(of: card)) }
+        case .trash: return { workspace.attempt { try await workspace.trash(id) } }
+        case .select:
+            #if os(macOS)
+            return { workspace.presses.toggle(id) }
+            #else
+            return nil
+            #endif
+        case .indent: return structure?.indent
+        case .outdent: return structure?.outdent
+        case .move, .bindSession: return nil
+        }
+    }
+
+    /// 轻扫露出的这一项（也是同源的读屏动作）。
+    func rowAction(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> RowAction? {
+        run(on: card, in: workspace, structure: structure).map { RowAction(title, icon: icon, tone: tone, run: $0) }
+    }
+}
+
 extension RowSwipes {
     /// 一条灵感或任务的轻扫（`CardMenu.swipes`）；`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
     static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
         let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil, outdent: structure?.outdent != nil)
-        func action(_ item: CardMenu.Item) -> RowAction? {
-            let run: (() -> Void)? = switch item {
-            case .makeTask: { workspace.attempt { try await workspace.setTodo(card.id, true) } }
-            case .trash: { workspace.attempt { try await workspace.trash(card.id) } }
-            case .indent: structure?.indent
-            case .outdent: structure?.outdent
-            // 不在轻扫里（`CardMenu.swipes` 不给）
-            default: nil
-            }
-            return run.map { RowAction(item.title, icon: item.icon, tone: item.tone, run: $0) }
-        }
+        let action = { (item: CardMenu.Item) in item.rowAction(on: card, in: workspace, structure: structure) }
         return RowSwipes(leading: swipes.leading.compactMap(action), trailing: swipes.trailing.compactMap(action))
     }
 }

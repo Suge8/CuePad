@@ -52,8 +52,7 @@ struct TaskLine: View {
                 case nil: EmptyView()
                 }
                 #if os(macOS)
-                if let indent = structure?.indent { Button("缩进", action: indent) }
-                if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
+                RowActionButtons(actions: [CardMenu.Item.indent, .outdent].compactMap { $0.rowAction(on: task, in: workspace, structure: structure) })
                 #endif
             }
     }
