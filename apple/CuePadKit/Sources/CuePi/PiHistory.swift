@@ -285,7 +285,7 @@ public enum PiHistory {
     static func clip(_ text: String, _ limit: Int) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit - 1)) + "…"
+        return trimmed.clipped(limit)
     }
 
     /// 单行：空白与控制字符折成一个空格。

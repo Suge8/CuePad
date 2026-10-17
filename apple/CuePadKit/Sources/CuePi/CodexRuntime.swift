@@ -329,7 +329,7 @@ public final class CodexRuntime: AgentRuntime {
                     let modes = hosted[session.pid] == nil ? [] : Self.modeCommands
                     let commands = Self.builtinCommands + modes + entries.compactMap { entry -> PiSlashCommand? in
                         guard let name = entry["name"]?.string else { return nil }
-                        return PiSlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { ToolDetail.clip($0) }, source: .known(.skill))
+                        return PiSlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.skill))
                     }
                     bridge.update(id) { $0.commands = commands }
                 }
