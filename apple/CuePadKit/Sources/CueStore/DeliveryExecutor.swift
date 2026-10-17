@@ -126,6 +126,12 @@ extension CueStore {
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
 
+  /// Cue 写的、方式在 `modes` 里的请求（还在库里的，请求完成一会儿就清理）。
+  public func cueRequests(_ modes: Set<DeliveryMode>) throws -> [DeliveryRequest] {
+    let list = modes.map { "'\($0.rawValue)'" }.sorted().joined(separator: ", ")
+    return try select(DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND mode IN (\(list))", [], orderBy: "createdAt, rowid")
+  }
+
   /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
   /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
   public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {

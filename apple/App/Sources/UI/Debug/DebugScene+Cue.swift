@@ -160,7 +160,7 @@ extension DebugScene {
     }
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
-    /// （同 Cue 的 say 与 start 写下的样子，`CueRelay`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
+    /// （同 Cue 的 say 与 start 写下的样子，`CueFlight`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
     /// 给一件还没交出去的待办开新会话（带着那张卡，还没有会话 id，落在它的任务行）；`-CuePadRelayKind say|start` 只做其中一种。
     /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，会话与任务回到原样。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
     static func relayIfAsked(_ workspace: Workspace) async {
