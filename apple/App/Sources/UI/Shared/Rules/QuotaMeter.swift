@@ -82,8 +82,8 @@ nonisolated struct QuotaMeter: Equatable {
         return "\(minutes) 分钟"
     }
 
-    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `Text(.currentDate, format:)` 用：系统只在字会变的整分钟换字，
-    /// 不经 TimelineView 或定时器重算视图。过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
+    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `LiveText` 用：只在字会变的整分钟重画。
+    /// 过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 

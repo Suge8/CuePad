@@ -5,7 +5,7 @@ import SwiftUI
 /// 会话计时怎么读（Mac 与手机同一条）：工作中"运行了 4 分钟"从这段连续处理开始算（思考、工具、等子代理之间切换不重置），
 /// 等你确认"等了 4 分钟"从进入等待算，话还在路上（会话没在跑时）"4 分钟前发出"从发出算，空闲、出错、已结束是"多久前"（`DateLabel`）。哪一种由 `PiShown` 定。
 /// 怎么写只在这里：列表里（Agent 页、侧栏、项目"此刻"、书架）只到分钟、第一分钟写"刚开始 / 刚刚 / 刚发出"，不每秒换字；
-/// 只有会话页顶栏那一个计时到秒，会话行只写时长（`Style`）。界面里是系统时间文本（`live`）：系统只在文字会变的时刻更新它，不经 TimelineView 或定时器重算视图。
+/// 只有会话页顶栏那一个计时到秒，会话行只写时长（`Style`）。界面里经 `LiveText`（`live`）：只在文字会变的时刻重画。
 nonisolated enum PiClock: Hashable, Sendable, Codable {
     case running(since: Date)
     case waiting(since: Date)
@@ -64,7 +64,7 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         }
     }
 
-    /// 界面里的系统时间文本：`Text(.currentDate, format: clock.live(.list))`。
+    /// 界面里的计时文字：`LiveText(style: clock.live(.list))`。
     func live(_ style: Style) -> Live { Live(clock: self, style: style) }
 
     /// 计时的格式：文字就是 `text(now:style:)`，并告诉系统下一次在什么时刻会变——顶栏走字的第一分钟每秒，

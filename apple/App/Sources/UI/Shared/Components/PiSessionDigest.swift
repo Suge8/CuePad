@@ -312,11 +312,11 @@ struct PiElapsed: View {
     }
 }
 
-/// 一个计时的文字：系统时间文本，系统只在文字会变的时刻更新（`PiClock.Live`），不经 TimelineView 或定时器重算视图。
+/// 一个计时的文字：只在字会变的时刻重画（`LiveText`、`PiClock.Live`）。
 struct PiClockText: View {
     let clock: PiClock
     var style = PiClock.Style.list
 
-    var body: some View { Text(.currentDate, format: clock.live(style)) }
+    var body: some View { LiveText(style: clock.live(style)) }
 }
 
