@@ -16,7 +16,6 @@ struct SessionScreen: View {
     @State private var digest: SessionDigest?
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
-    @State private var askedForTranscript = false
     @State private var follow = ChatFollow()
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
@@ -85,32 +84,14 @@ struct SessionScreen: View {
         .renameSession($renaming)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
-                VStack(spacing: 8) {
-                    PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
-                    if let failure = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(.failed, text: "没能结束：\(failure.text(sync: services.syncStatus))", docked: true)
-                    }
-                    // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
-                    if digest != nil, digest?.session == nil {
-                        Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
-                    } else {
-                        // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
-                        PiReplyBar(
-                            session: session, config: digest?.config(at: services.speech), catalog: digest?.catalog, compact: !follow.atNewest,
-                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [], at: services.speech),
-                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
-                            sending: PiChat.sending(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
-                            queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? [], at: services.speech),
-                            recall: PiChat.lastSaid(digest?.messages ?? [])
-                        ) { follow.sent() }
-                    }
-                }
-                .padding(.horizontal, 12).padding(.bottom, Self.barGap)
-                .frame(maxWidth: Self.readingWidth)
-                .frame(maxWidth: .infinity)
-                .animation(Motion.quick, value: session.question)
-                // 浮在整片对话上、自己也写着字：玻璃里垫实底，背后的字透不过来（`GlassInk.solid`）
-                .environment(\.composerInk, .solid)
+                // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
+                SessionDock(session: session, digest: digest, compact: !follow.atNewest) { follow.sent() }
+                    .padding(.horizontal, 12).padding(.bottom, Self.barGap)
+                    .frame(maxWidth: Self.readingWidth)
+                    .frame(maxWidth: .infinity)
+                    .animation(Motion.quick, value: session.question)
+                    // 浮在整片对话上、自己也写着字：玻璃里垫实底，背后的字透不过来（`GlassInk.solid`）
+                    .environment(\.composerInk, .solid)
             }
         }
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
@@ -119,20 +100,11 @@ struct SessionScreen: View {
         }
         .onChange(of: digest, initial: true) { _, digest in
             if let session = digest?.session { lastSeen = session }
-            askForTranscriptIfNeeded()
         }
+        .requestsTranscript(digest)
         // 开着这页就算看过：进来、Pi 每次换状态、离开时都记一下（列表里的"有新回复"据此消失）
         .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
         .onDisappear { if let session { services.settings.markSeen(session) } }
-    }
-
-    /// 请会话所在的 Mac 结束它；进度与失败都从发给它的结束请求推出（`shownEnd`）。
-    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说；已有没被领取的补写请求时不写第二条，`CueStore.requestTranscript`）。
-    private func askForTranscriptIfNeeded() {
-        guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: digest.messages) else { return }
-        askedForTranscript = true
-        workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
 }
 

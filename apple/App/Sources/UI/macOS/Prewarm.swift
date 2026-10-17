@@ -10,6 +10,9 @@ struct Prewarm: View {
     @Environment(Workspace.self) private var workspace
     @State private var step = Step.idle
 
+    /// 读到资料库后等多久开始：首屏出来、用户还没动手。⌘K 面板同一时机常驻挂上（`keptPanel`）。
+    static let delay: Duration = .seconds(2)
+
     private enum Step: CaseIterable {
         case idle, conversation, replyBar, newSession, done
     }
@@ -47,8 +50,7 @@ struct Prewarm: View {
         .environment(\.pageActive, false)
         .task(id: workspace.isLibraryReady) {
             guard workspace.isLibraryReady else { return }
-            // 首屏出来、用户还没动手：等一会儿再开始
-            guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+            guard (try? await Task.sleep(for: Self.delay)) != nil else { return }
             workspace.pages.premount(.agent)
             await NextFrame.wait()
             await NextFrame.wait()
