@@ -15,9 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var sigterm: DispatchSourceSignal?
     /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
-    /// 主窗口与它的工作区（主菜单"显示"里的开关作用在它上面）。
+    /// 主窗口的工作区（主菜单"显示"里的开关作用在它上面；主窗口本身是 `services.windowShell`）。
     private var workspace: Workspace?
-    private weak var mainWindow: NSWindow?
     /// 系统通知：在启动完成前设为代理，冷启动时点开的通知才不会丢。
     private let alerts = AlertCenter()
 
@@ -60,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         followAlertTaps(workspace)
         self.services = services
         self.workspace = workspace
-        mainWindow = window
 
         let panel = MenuBarPanel()
         // 菜单栏面板点会话或 Cue：收起面板、把主窗口叫到前面，在它的内容区打开那一页（与侧栏同一处）
@@ -122,8 +120,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         case #selector(installUpdateNow(_:)): showsUpdateWait(item)
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
-        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === mainWindow
+        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
+        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }
     }
