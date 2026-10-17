@@ -93,7 +93,7 @@ struct Rig {
   @discardableResult
   func simulatePush() async throws -> [CKRecord] {
     guard let batch = await coordinator.nextBatch(first: [], limit: .max) else { return [] }
-    await coordinator.handle(.sent(SentRecords(saved: batch.saves, deleted: batch.deletes)))
+    _ = await coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
     return batch.saves
   }
 
@@ -142,7 +142,7 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
 
 
 
-/// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`fetched`），并回报发送成功。
+/// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`pulled`），并回报发送成功。
 struct Loopback {
   let a: Rig
   let b: Rig
@@ -159,15 +159,7 @@ struct Loopback {
       let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(id.recordName)'").first?[0]
       return type.map { (id, $0) }
     }
-    await from.coordinator.handle(.sent(SentRecords(saved: batch.saves, deleted: batch.deletes)))
-    await to.coordinator.handle(.fetched(modifications: batch.saves, deletions: deletions))
-  }
-}
-
-extension CloudEvent {
-  static func sent(
-    saved: [CKRecord], failedSaves: [(record: CKRecord, error: CKError)], deleted: [CKRecord.ID], failedDeletes: [(id: CKRecord.ID, error: CKError)]
-  ) -> CloudEvent {
-    .sent(SentRecords(saved: saved, failedSaves: failedSaves, deleted: deleted, failedDeletes: failedDeletes))
+    _ = await from.coordinator.sent(SentRecords(saved: batch.saves, deleted: batch.deletes))
+    try await to.coordinator.pulled(batch.saves, deletions)
   }
 }

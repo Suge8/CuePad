@@ -23,7 +23,7 @@ import Testing
       "modifiedAt": .int(1_000), "notify": .null, "folder": .null, "lastPrompt": .null, "lastReply": .null,
       "question": .null, "busySince": .null, "launchToken": .text("t-phone"),
     ])
-    await rig.coordinator.handle(.fetched(modifications: [state], deletions: []))
+    try await rig.coordinator.pulled([state], [])
 
     #expect(try await store.card(idea.id)?.piSessionID == "s-new")
   }

@@ -9,8 +9,8 @@ import Testing
   let rig = try! Rig()
   var store: CueStore { rig.store }
 
-  private func fetched(_ records: CKRecord...) async {
-    await rig.coordinator.handle(.fetched(modifications: records, deletions: []))
+  private func fetched(_ records: CKRecord...) async throws {
+    try await rig.coordinator.pulled(records, [])
   }
 
   /// 本机记录已推送过（服务器有），随后本机再改：返回该卡。
@@ -47,7 +47,7 @@ import Testing
 
     let project = remoteRecord(.projects, projectFields(name: "Remote", modifiedAt: 5_000))
     let card = remoteRecord(.cards, cardFields(project: nil, body: "from other device", modifiedAt: 5_000))
-    await fetched(project, card)
+    try await fetched(project, card)
 
     #expect(try await values.next() == ["from other device"])
     #expect(try await store.projects().map(\.name) == ["Remote"])
@@ -58,7 +58,7 @@ import Testing
 
   @Test func remoteDeletionRemovesTheRowItsMetadataAndIndexEntry() async throws {
     let card = try await pushedCard(body: "findme")
-    await rig.coordinator.handle(.fetched(modifications: [], deletions: [(rig.recordID(card.id), "cards")]))
+    try await rig.coordinator.pulled([], [(rig.recordID(card.id), "cards")])
 
     #expect(try await store.card(card.id) == nil)
     #expect(try await store.search("findme").cards.isEmpty)
@@ -69,7 +69,7 @@ import Testing
   @Test func remoteDeletionBeatsUnpushedLocalEdits() async throws {
     let card = try await pushedCard()
     _ = try await editCard(card, body: "unpushed")
-    await rig.coordinator.handle(.fetched(modifications: [], deletions: [(rig.recordID(card.id), "cards")]))
+    try await rig.coordinator.pulled([], [(rig.recordID(card.id), "cards")])
     #expect(try await store.card(card.id) == nil)
   }
 
@@ -77,7 +77,7 @@ import Testing
     let card = try await pushedCard()
     try await store.purgeCard(card.id)  // 服务器上还有，删除待推送
 
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "late", modifiedAt: 9_000_000_000_000)))
+    try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "late", modifiedAt: 9_000_000_000_000)))
 
     #expect(try await store.card(card.id) == nil)
     #expect(try await rig.reconcileDelta().deletes == [rig.id(card.id)])
@@ -90,7 +90,7 @@ import Testing
     try await rig.simulatePush()
     let local = try await editProject(project.id, name: "local edit")
 
-    await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote edit", modifiedAt: local - 1_000)))
+    try await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote edit", modifiedAt: local - 1_000)))
 
     #expect(try await store.project(project.id)?.name == "local edit")
     #expect(try await rig.reconcileDelta().saves == [rig.id(project.id)])  // 仍待推送
@@ -101,11 +101,11 @@ import Testing
     try await rig.simulatePush()
     let local = try await editProject(project.id, name: "local edit")
 
-    await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote newer", modifiedAt: local + 1_000)))
+    try await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote newer", modifiedAt: local + 1_000)))
     #expect(try await store.project(project.id)?.name == "remote newer")
 
     let again = try await editProject(project.id, name: "local again")
-    await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote tie", modifiedAt: again)))
+    try await fetched(remoteRecord(.projects, id: project.id, projectFields(name: "remote tie", modifiedAt: again)))
     #expect(try await store.project(project.id)?.name == "remote tie")
     #expect(try await rig.reconcileDelta().saves.isEmpty)
   }
@@ -114,7 +114,7 @@ import Testing
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local version")
 
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local + 1_000)))
+    try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local + 1_000)))
 
     let conflicts = try await store.conflicts()
     #expect(conflicts.count == 1)
@@ -129,7 +129,7 @@ import Testing
     let local = try await editCard(card, body: "local version")
 
     // 另一台设备在本机上次同步之后、本机编辑之前改的
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1)))
+    try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1)))
 
     let conflict = try #require(try await store.conflicts().first)
     #expect(conflict.original.body == "local version" && conflict.copy.body == "remote version")
@@ -140,7 +140,7 @@ import Testing
     let card = try await pushedCard(body: "same")
     let local = try await editCard(card, pinned: true)
 
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "same", modifiedAt: local + 1_000)))
+    try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "same", modifiedAt: local + 1_000)))
 
     #expect(try await store.conflicts().isEmpty)
     #expect(try await store.cards(in: nil).count == 1)
@@ -150,7 +150,7 @@ import Testing
     for keepCopy in [true, false] {
       let card = try await pushedCard(body: "base")
       let local = try await editCard(card, body: "local")
-      await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote", modifiedAt: local + 1_000)))
+      try await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote", modifiedAt: local + 1_000)))
       let conflict = try #require(try await store.conflicts().first { $0.original.id == card.id })
 
       try await store.resolveConflict(copy: conflict.copy.id, keep: keepCopy ? .copy : .original)
@@ -170,7 +170,7 @@ import Testing
     let server = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "base", modifiedAt: local + 1_000))
     let error = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server])
 
-    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, error)], deleted: [], failedDeletes: []))
+    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, error)], deleted: [], failedDeletes: []))
 
     #expect(try await store.card(card.id)?.isPinned == false)  // 服务器版本更新，覆盖本机
     #expect(try await rig.reconcileDelta().saves.isEmpty)
@@ -183,7 +183,7 @@ import Testing
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     let server = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "base", modifiedAt: local - 1_000))
 
-    await rig.coordinator.handle(.sent(
+    _ = await rig.coordinator.sent(SentRecords(
       saved: [], failedSaves: [(client, CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server]))],
       deleted: [], failedDeletes: []))
 
@@ -195,7 +195,7 @@ import Testing
     let card = try await pushedCard()
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
 
-    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.unknownItem))], deleted: [], failedDeletes: []))
+    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.unknownItem))], deleted: [], failedDeletes: []))
 
     #expect(try await rig.reconcileDelta().saves == [rig.id(card.id)])  // 忘掉系统字段，重新作为新记录上传
   }
@@ -207,7 +207,7 @@ import Testing
     try await store.purgeCard(one.id)
     try await store.purgeCard(two.id)
 
-    await rig.coordinator.handle(.sent(
+    _ = await rig.coordinator.sent(SentRecords(
       saved: [], failedSaves: [], deleted: [rig.recordID(one.id)],
       failedDeletes: [(rig.recordID(two.id), CKError(.unknownItem))]))
 
@@ -217,8 +217,8 @@ import Testing
   @Test func writeFailuresOtherThanKnownOnesAreReportedNotSwallowed() async throws {
     let card = try await pushedCard()
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
-    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
-    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
+    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
+    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
 
     guard case .failed = await rig.coordinator.status else {
       Issue.record("status should be .failed, got \(await rig.coordinator.status)")

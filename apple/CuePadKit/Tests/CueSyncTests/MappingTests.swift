@@ -84,7 +84,7 @@ import Testing
   @Test func unknownEnumValuesAreKeptVerbatimNotCoercedToKnownOnes() async throws {
     let send = remoteRecord(.sendRecords, sendFields(kind: "carrierPigeon", modifiedAt: 5_000))
 
-    await rig.coordinator.handle(.fetched(modifications: [send], deletions: []))
+    try await rig.coordinator.pulled([send], [])
 
     let records = try await store.sendRecords()
     #expect(records.map(\.targetKind) == [.unknown("carrierPigeon")])
@@ -100,7 +100,7 @@ import Testing
     let alien = CKRecord(recordType: "widgets", recordID: CKRecord.ID(recordName: UUID().uuidString.lowercased(), zoneID: testZone))
     alien["size"] = 3 as Int64
 
-    await rig.coordinator.handle(.fetched(modifications: [alien], deletions: [(alien.recordID, "widgets")]))
+    try await rig.coordinator.pulled([alien], [(alien.recordID, "widgets")])
 
     #expect(try RawDB(rig.fixture.url).count("syncRecords") == 0)
     let issues = await rig.coordinator.issues

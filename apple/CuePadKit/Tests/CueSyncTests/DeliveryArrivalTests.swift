@@ -52,8 +52,8 @@ import Testing
   }
 
   /// 一次拉取带回这些记录（`ZonePuller` 交给协调器的同一个入口）。
-  private func pulled(_ records: [CKRecord]) async {
-    await mac.coordinator.handle(.fetched(modifications: records, deletions: []))
+  private func pulled(_ records: [CKRecord]) async throws {
+    try await mac.coordinator.pulled(records, [])
   }
 
   /// 执行成功时执行器记下的完成时刻。
@@ -68,7 +68,7 @@ import Testing
     let (id, record) = try await sentByPhone("继续")
 
     let pulledAt = time.now
-    await pulled([record])
+    try await pulled([record])
 
     #expect(try await completion(of: id) == pulledAt)
     #expect(await handler.seen == [id])
@@ -80,10 +80,10 @@ import Testing
     let (first, firstRecord) = try await sentByPhone("第一条")
     let (second, secondRecord) = try await sentByPhone("第二条")
 
-    await pulled([firstRecord])
+    try await pulled([firstRecord])
     var running = started.makeAsyncIterator()
     #expect(await running.next() == first)  // 第一条在执行中，被挂住
-    await pulled([secondRecord])
+    try await pulled([secondRecord])
     _ = try await eventually(mac.store, { try $0.deliveryRequest(second)?.status }) { $0 == .known(.pending) }  // 第二条已到本机，排着
 
     let releasedAt = time.now
