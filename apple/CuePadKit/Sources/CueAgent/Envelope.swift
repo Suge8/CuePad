@@ -25,7 +25,7 @@ public enum CueWake: Equatable, Sendable {
 /// 接上的（新上下文第一次醒来才有）、醒来的原因。
 public enum CueEnvelope {
   /// 接上的对话至多这么多条、这么多字（从最近的往前取，一条也放不下时截短最近那条）。只为接上最近几轮来回（一轮一到三条），
-  /// 合起来约是换新线（`CueKeeper.renewAt`，6 万 token）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
+  /// 合起来约是换新线（`CueContext.renewAt`，6 万 token）的十分之一，新上下文一开始不至于离换新线太近；更早的事在记忆与交接里。
   public static let resumeMessages = 30
   public static let resumeCharacters = 6000
 
