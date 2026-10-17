@@ -231,7 +231,7 @@ struct TaskFlowTests {
         #expect(board.done.first?.task.id == shipped.id)  // 最近完成按完成时间排，不按项目分组
     }
 
-    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在 Agent 标签）。
+    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在侧栏的"会话"）。
     @Test func 书架正在推进按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)

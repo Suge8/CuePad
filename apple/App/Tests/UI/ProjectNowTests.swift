@@ -98,7 +98,7 @@ struct ProjectNowSeenTests {
 
 #if os(iOS)
 /// 侧栏的"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍；
-/// iPhone 书架不写会话（会话在 Agent 标签），同一个项目写介绍。
+/// iPhone 书架不写会话（会话在侧栏的"会话"），同一个项目写介绍。
 struct ProjectNowShelfTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
