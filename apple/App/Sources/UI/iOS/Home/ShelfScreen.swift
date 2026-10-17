@@ -71,8 +71,7 @@ struct ShelfScreen: View {
                             ShelfRow(entry: entry, now: now[entry.id])
                         }
                     }
-                    .clipShape(.rect(cornerRadius: 16, style: .continuous))
-                    .paper(radius: 16)
+                    .rowPaper(radius: 16)
                 }
             }
         }
@@ -109,8 +108,7 @@ struct ShelfScreen: View {
                 if unfiled > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
                 if unfiled > 0 { UnfiledReminder(count: unfiled) }
             }
-            .clipShape(.rect(cornerRadius: 16, style: .continuous))
-            .paper(radius: 16)
+            .rowPaper(radius: 16)
         }
     }
 
@@ -159,8 +157,8 @@ private struct ShelfLine: View {
             .padding(.horizontal, 16).frame(minHeight: 52)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
-        .background(palette.paper)
+        .buttonStyle(.row)
+        .background(palette.paper, in: .rect)
         .accessibilityElement(children: .combine)
     }
 }
@@ -339,8 +337,8 @@ private struct ShelfRow: View {
             .padding(.horizontal, Self.horizontalPadding).padding(.vertical, 11)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
-        .background(palette.paper)
+        .buttonStyle(.row)
+        .background(palette.paper, in: .rect)
         .projectActions(entry.project, radius: 16, pi: nil)
         .accessibilityElement(children: .combine)
     }
@@ -376,8 +374,7 @@ private struct ActiveTasks: View {
                 if more > 0 { moreRow }
             }
             .padding(.vertical, 6)
-            .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
-            .paper(radius: Self.radius)
+            .rowPaper(radius: Self.radius)
         }
     }
 
@@ -394,7 +391,7 @@ private struct ActiveTasks: View {
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
     }
 
     private var title: some View {
@@ -449,7 +446,7 @@ private struct ActiveTaskRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(.row)
         .contextMenu { CardActions(card: task) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(speech)

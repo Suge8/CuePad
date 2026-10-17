@@ -70,8 +70,8 @@ struct StyleBoard: View {
                 Text("一行").frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 16)
                     .contentShape(.rect)
             }
-            .buttonStyle(RowPressStyle())
-            .paper(radius: 14)
+            .buttonStyle(.row)
+            .rowPaper(radius: 14)
         }
         .foregroundStyle(palette.ink)
     }

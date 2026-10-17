@@ -157,17 +157,13 @@ private final class OutlineDrag {
     }
 }
 
-/// 停在这一行中部时的高亮（松手成为它的步骤）。
+/// 停在这一行中部时的高亮（松手成为它的步骤）：行的选中底（`RowStyle`）。单拆一个视图，拖动时只有它跟着落点重算。
 private struct DropHighlight: View {
     let drag: OutlineDrag
     let id: UUID
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        if drag.drop?.mark == .onto(id) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.selection).padding(.horizontal, -6)
-                .transition(.opacity)
-        }
+        Color.clear.row(selected: drag.drop?.mark == .onto(id)).allowsHitTesting(false)
     }
 }
 

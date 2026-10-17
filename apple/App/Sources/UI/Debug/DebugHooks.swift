@@ -34,7 +34,7 @@ enum DebugHooks {
         /// 整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`，`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
         #if os(macOS)
-        /// 正文以它开头的那张灵感卡或那条任务一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
+        /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
         #endif
@@ -54,7 +54,7 @@ enum DebugHooks {
     }
 
     #if os(macOS)
-    /// 正文是这样开头的卡、任务或记忆是否按 `Preset.hovered` 一出现就画成悬停的样子。
+    /// 正文是这样开头的卡、任务、记忆或这一行（回收站按名字）是否按 `Preset.hovered` 一出现就画成悬停的样子。
     static func hovers(_ text: String) -> Bool { preset.hovered.map(text.hasPrefix) ?? false }
     #endif
 
