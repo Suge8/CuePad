@@ -1,27 +1,18 @@
 #if os(iOS)
 import SwiftUI
 
-/// 宽屏上自带顶上一排的页（搜索页）的那一排：中间是这一页的主体（搜索框），右边是本页唯一的新建（没有就空着）。
-/// 不放搜索框以外的状态与"⋯"：顶栏的规则见 docs/ui.md。iPhone 上搜索框在导航栏中间（`SearchScreen`），Cue 页头在导航栏那一排里（`inNavigationBarRow`）。
-struct RootBar<Center: View, Trailing: View>: View {
-    @ViewBuilder let center: Center
-    @ViewBuilder let trailing: Trailing
+/// 宽屏上自带顶上一排的页（搜索页）的那一排：只有这一页的主体（搜索框）。
+/// 不放状态与"⋯"：顶栏的规则见 docs/ui.md。iPhone 上搜索框在导航栏中间（`SearchScreen`），Cue 页头在导航栏那一排里（`inNavigationBarRow`）。
+struct RootBar<Content: View>: View {
+    @ViewBuilder let content: Content
 
     var body: some View {
-        HStack(spacing: 8) {
-            if Center.self == EmptyView.self { Spacer(minLength: 0) } else { center.frame(maxWidth: .infinity) }
-            trailing
-        }
-        .buttonStyle(ControlButtonStyle(kind: .circular)).labelStyle(.iconOnly)
-        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
-        // iPad 窗口的关闭、缩小、排列钮在左上角：这一排是自绘的、不在导航栏里，系统不替它让位，按窗口给的角落整排让出来
-        // （连同页边距一起让，窗口钮就当是屏幕边。顶上的提示横幅按同一处让，见 `NoticeBanner`）
-        .containerCornerOffset(.horizontal, sizeToFit: true)
+        content.frame(maxWidth: .infinity)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
+            // iPad 窗口的关闭、缩小、排列钮在左上角：这一排是自绘的、不在导航栏里，系统不替它让位，按窗口给的角落整排让出来
+            // （连同页边距一起让，窗口钮就当是屏幕边。顶上的提示横幅按同一处让，见 `NoticeBanner`）
+            .containerCornerOffset(.horizontal, sizeToFit: true)
     }
-}
-
-extension RootBar where Trailing == EmptyView {
-    init(@ViewBuilder center: () -> Center) { self.init(center: center) { EmptyView() } }
 }
 
 extension View {

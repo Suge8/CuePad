@@ -2,7 +2,6 @@
 import CuePi
 import CueStore
 import CueText
-import Foundation
 import SwiftUI
 
 /// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上交给 Agent 的是任务的正文（"开始"，`Workspace.handOff`）。
@@ -47,8 +46,8 @@ final class SendState {
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async throws {
         var result: [String: UUID] = [:]
-        for session in services.pi.sessions {
-            if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
+        for slot in services.pi.slots {
+            if let project = try await services.store.project(containing: slot.cwd) { result[slot.id] = project.id }
         }
         projects = result
     }

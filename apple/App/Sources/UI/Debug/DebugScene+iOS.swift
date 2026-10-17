@@ -102,11 +102,8 @@ extension DebugScene {
             var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（头部引导选文件夹）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
-                let token = UUID().uuidString
-                if let request = try? await workspace.services.launch(
-                    PiLaunch(project: table, prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
-                    sheet.launched = .init(request: request.id, token: token)
-                }
+                sheet.launched = try? await workspace.services.launchSession(
+                    in: table, prompt: "看看 scheduler 的重连问题", title: "圆桌", on: "demo-mac", card: nil, agent: .pi)
             }
             navigation.startNewSession(sheet, hasProjects: workspace.catalog?.projects.isEmpty == false)
         case "folderpicker":

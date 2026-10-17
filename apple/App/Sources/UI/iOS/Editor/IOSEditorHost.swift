@@ -1,6 +1,5 @@
 #if os(iOS)
 import CueEditor
-import CueText
 import SwiftUI
 import UIKit
 
