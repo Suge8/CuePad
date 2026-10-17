@@ -46,7 +46,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         let waiting = try store.cueMessagesWaitingForYou()
         let mentioned = Set((messages + waiting).compactMap(\.taskID))
         // 提到的一次取完预览与步骤进度，不逐件读细节
-        let previews = try store.previews(ofTasks: Array(mentioned))
+        let previews = try store.deliverables(of: Array(mentioned))
         let progress = try store.subtaskProgress()
         var tasks: [UUID: CueTaskRef] = [:]
         for id in mentioned {

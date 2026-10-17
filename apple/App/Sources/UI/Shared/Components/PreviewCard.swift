@@ -103,7 +103,7 @@ struct PreviewCard: View {
     /// 音频只有通用图标，文稿、表格、文本在这么小的格子里是一张几乎空白的纸。音频、视频再读出时长。
     private func load(_ stored: URL?) async {
         // 系统认类型靠扩展名：附件目录里的文件以哈希为名，用按文件名放的那一份
-        guard let stored, let file = PreviewFile.url(hash: preview.hash, name: preview.systemFileName, original: stored) else { return }
+        guard stored != nil, let file = services.store.files.url(of: preview) else { return }
         if preview.kind == .audio || preview.kind == .video {
             duration = (try? await AVURLAsset(url: file).load(.duration)).flatMap { Self.clock($0.seconds) }
         }

@@ -43,7 +43,7 @@ public struct CueTools: Sendable {
           start{task,agent?,model?,effort?,fresh?} 开工：叶子（task 有步骤时是第一个没做完的步骤）还没会话时，同一任务的上一步有会话就接着用它（哪怕已结束，执行时恢复），否则在项目文件夹用 agent（pi/claude/codex/opencode，缺省 pi）开新会话，model 写 provider/id（claude、codex 只写 id）；已绑着会话就用 say；上下文太长或要换 Agent 时用 fresh:true 开新的（上一步的会话随之结束）；
           say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它。说话不改任务的状态；
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
-          peek{task?|session?} 只读：都不带看所有没做完的事、不归没做完的事的活会话（"在做"的归你管）与最近完成的几件（各带会话与它此刻的状态），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与预览，带 session 看那个会话；
+          peek{task?|session?} 只读：都不带看所有没做完的事、不归没做完的事的活会话（"在做"的归你管）与最近完成的几件（各带会话与它此刻的状态），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与发到手机的文件（带本机路径），带 session 看那个会话；
           stop{task|session} 停下这一轮；
           done{task,evidence?} 做完：你按证据确认做完了就完成，不请用户确认。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；结束的会话照样能 say，CuePad 先恢复它；
           顶层任务（步骤要都完成）要 evidence：1–\(evidenceCount) 条结论（如"\(evidenceExample)"）、每条宽不过 \(evidenceLimit)（约 20 个汉字），超了退回；完成时 CuePad 把标题与证据拼成结果告诉用户，不用再 tell。
@@ -161,9 +161,10 @@ public struct CueTools: Sendable {
     if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）已经完成了。", ["task": id(card.id)]) }
     let evidence = card.parentID == nil ? try Self.evidence(args) : []
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
+    let delivered = report == nil ? 0 : try await store.deliverables(of: [card.id])[card.id]?.count ?? 0
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + (ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束")
-        + (report.map { "；结果已告诉用户（\($0.id.shortID)）。" } ?? "。"),
+        + (report.map { "；结果已告诉用户（\($0.id.shortID)）" + (delivered > 0 ? "，下面挂着发到手机的 \(delivered) 份。" : "。") } ?? "。"),
       ["task": id(card.id), "requests": ends.map { id($0.id) }, "report": report.map { id($0.id) } ?? NSNull()])
   }
 
@@ -465,6 +466,8 @@ public struct CueTools: Sendable {
       if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
       if let session = leaf.session { lines += Self.conversation(session) }
     }
+    let deliverables = try await store.deliverables(of: [detail.task.id])[detail.task.id] ?? []
+    lines += deliveredLines(deliverables)
     return .ok(
       lines.joined(separator: "\n"),
       [
@@ -473,9 +476,9 @@ public struct CueTools: Sendable {
           [
             "id": id(leaf.leaf.id), "title": leaf.leaf.heading, "status": leaf.leaf.status?.rawValue ?? NSNull(),
             "session": leaf.session?.session.sessionID ?? NSNull(), "state": leaf.session?.session.state.rawValue ?? NSNull(),
-"previews": leaf.session?.previews.map(\.name) ?? [],
           ]
         },
+        "deliverables": deliverables.map(delivered),
       ])
   }
 
@@ -487,13 +490,32 @@ public struct CueTools: Sendable {
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
     lines += Self.conversation(detail)
+    lines += deliveredLines(detail.previews)
     return .ok(
       lines.joined(separator: "\n"),
       [
         "session": session.sessionID, "state": detail.session.state.rawValue, "tasks": bound.map { id($0.task.id) },
-        "previews": detail.previews.map(\.name),
+        "deliverables": detail.previews.map(delivered),
       ])
   }
+
+  /// 发到手机的文件，每份一行：标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
+  private func deliveredLines(_ previews: [PiPreview]) -> [String] {
+    guard !previews.isEmpty else { return [] }
+    return ["发到手机的（图片、PDF 用 read 打开）："] + previews.map { preview in
+      "  - 「\(preview.title)」\(preview.kind?.label ?? preview.name) · \(Self.clock(preview.createdAt)) · "
+        + (store.files.url(of: preview)?.path ?? "还没同步到这台 Mac")
+    }
+  }
+
+  private func delivered(_ preview: PiPreview) -> [String: Any] {
+    [
+      "title": preview.title, "name": preview.name, "kind": preview.kind?.rawValue ?? NSNull(), "at": iso(preview.createdAt),
+      "path": store.files.url(of: preview)?.path ?? NSNull(),
+    ]
+  }
+
+  private static func clock(_ date: Date) -> String { date.formatted(.dateTime.month(.twoDigits).day(.twoDigits).hour().minute()) }
 
   /// 会话那一段：哪家、名字、状态与多久、在等的提问。
   private static func sessionHead(_ session: PiSessionState, now: Date) -> String {
@@ -504,7 +526,7 @@ public struct CueTools: Sendable {
     return head
   }
 
-  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短）与预览，每行缩进两格。
+  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短），每行缩进两格。
   private static func conversation(_ detail: CueSessionDetail) -> [String] {
     var lines: [String] = []
     let latest = detail.recent.lastIndex { $0.role == .known(.pi) }
@@ -520,7 +542,6 @@ public struct CueTools: Sendable {
         ? String(text.prefix(latestReplyLimit)) + "\n（后面还有 \(text.count - latestReplyLimit) 字，截掉了）" : text
       lines.append("  \(agent)（最新的回答）：\n" + full.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n"))
     }
-    if !detail.previews.isEmpty { lines.append("  预览：" + detail.previews.map(\.name).joined(separator: "、")) }
     return lines
   }
 

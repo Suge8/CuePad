@@ -6,25 +6,6 @@ import QuickLook
 #endif
 import SwiftUI
 
-/// 附件目录里的文件在本机的可读位置：文件以哈希为名，没有扩展名，系统的快速查看与"存到文件"认不出类型，
-/// 所以按文件名放一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）。预览文件与对话里的图片共用。
-nonisolated enum PreviewFile {
-    static func url(hash: String, name: String, original: URL) -> URL? {
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
-        // 文件名来自同步的记录：不能带路径
-        let target = directory.appending(path: name.replacing("/", with: "_").replacing("..", with: "_"))
-        guard !FileManager.default.fileExists(atPath: target.path) else { return target }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: original, to: target)
-            return target
-        } catch {
-            return nil
-        }
-    }
-}
-
 /// 点开的那一个文件，和与它同一批（同一张卡）的几个：在全屏页里左右切换。
 struct PreviewOpening: Identifiable, Equatable {
     let preview: PiPreview
@@ -126,7 +107,7 @@ private struct PreviewPager: View {
     }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(hash: preview.hash, name: preview.systemFileName, original: $0) }
+        services.store.files.url(of: preview)
     }
 }
 
