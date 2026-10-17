@@ -17,7 +17,10 @@ extension DebugScene {
         switch scene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
-        case "tasks": workspace.showsTasks = true
+        case "tasks":
+            // 任务面板：配 -CuePadDemo 时写入 Mac 同步来的演示会话，进行中的任务与步骤带会话状态（同 iOS 的 tasks）
+            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            workspace.showsTasks = true
         case "agentsetup": workspace.showsAgentSetup = true
         case "connected":
             await connectAgents(workspace.services)

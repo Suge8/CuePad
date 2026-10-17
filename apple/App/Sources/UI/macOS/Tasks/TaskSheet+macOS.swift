@@ -285,9 +285,10 @@ nonisolated private struct SheetData: Sendable, Equatable {
     var goal: Card
     var project: Project?
     var steps: [Card]
+    /// 步骤完成了几个（`CueStore.subtaskProgress`）；没有步骤为 nil。
+    var progress: TaskProgress?
     /// 已不是一条看得见的任务（删了、归档了、改回了灵感）。
     var gone: Bool { goal.deletedAt != nil || goal.archivedAt != nil || !goal.isTask }
-    var progress: TaskProgress? { steps.isEmpty ? nil : TaskProgress(done: steps.filter { $0.status == .done }.count, total: steps.count) }
 
     /// 右边看的叶子：点过的步骤，否则第一个没完成的步骤，再否则第一个步骤；没有步骤时是任务自己。
     func selected(_ step: UUID?) -> Card {
@@ -297,7 +298,9 @@ nonisolated private struct SheetData: Sendable, Equatable {
     static func read(_ id: UUID, from store: isolated CueStore) throws -> SheetData {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         let steps = try store.children(of: id).filter(\.isTask)
-        return SheetData(goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps)
+        return SheetData(
+            goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: steps,
+            progress: try store.subtaskProgress(of: [id])[id])
     }
 }
 #endif

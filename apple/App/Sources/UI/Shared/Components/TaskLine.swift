@@ -8,7 +8,9 @@ import SwiftUI
 /// 跟着标题一起折行，不占旁注那一列（读屏念项目名，Mac 悬停写全名）。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
-/// 点圈完成（`TaskCheck`），点行的其余地方打开任务（手机推入任务页，Mac 弹出任务浮窗）；长按、右键是 `CardActions`。
+/// 点圈完成（`TaskCheck`），点行的其余地方打开任务（手机推入任务页，Mac 弹出任务浮窗）。Mac 右键是 `CardActions`；
+/// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
+/// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务页的"⋯"。
 /// Mac 上指针停在行上时铺一层淡底，"开始"与状态词这时才露出来（`TaskNextMark.lit`）。
 struct TaskLine: View {
     let task: Card
@@ -27,20 +29,15 @@ struct TaskLine: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
-    @State private var width: CGFloat = 0
     #else
     @Environment(\.taskStructure) private var structure
     @State private var hovering = false
     #endif
 
-    /// 长按提起的那块纸的圆角：与列表那张纸同一个圆角。
-    static let liftRadius: CGFloat = 16
-
     var body: some View {
         let next = workspace.next(for: task, in: agents, steps: subtasks)
         let done = check.done(task)
-        framed(line(next: next, done: done), next: next, done: done)
+        framed(line(next: next, done: done))
             // 读屏把一行当一个元素："任务内容，步骤 1/4，项目，下一步"，值是状态（文案见 TaskSpeech）；默认动作勾选（与圈同一个动作）
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([task.title, subtasks.map(TaskCopy.progress), project?.name, next?.speech].compactMap { $0 }.joined(separator: "，"))
@@ -62,8 +59,7 @@ struct TaskLine: View {
             }
     }
 
-    /// `lifted`：手机长按浮起的预览。圈画成静止的：预览里再放一颗完成圈，就多一份停留与写入，勾了没到写入就长按，两颗各写一次会把完成又切回去。
-    private func line(next: TaskNext?, done: Bool, lifted: Bool = false) -> some View {
+    private func line(next: TaskNext?, done: Bool) -> some View {
         let title = titled(done: done)
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
@@ -71,7 +67,7 @@ struct TaskLine: View {
         let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done) }.fixedSize()
         // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
         return HStack(alignment: .firstTextBaseline, spacing: TaskMetrics.columnGap) {
-            ring(next: next, lifted: lifted)
+            ring(next: next)
             if stacked {
                 // 辅助字号：旁注换到标题下面，不与标题抢一行
                 VStack(alignment: .leading, spacing: 2) { title; side }
@@ -99,18 +95,14 @@ struct TaskLine: View {
         return Text("\(title)  \(glyph)")
     }
 
-    @ViewBuilder private func ring(next: TaskNext?, lifted: Bool) -> some View {
+    private func ring(next: TaskNext?) -> some View {
         let size = step ? TaskMetrics.stepRing : TaskMetrics.ring
         let target = CGSize(width: TaskMetrics.ringColumn, height: Self.ringTarget)
-        if lifted {
-            TaskRingView(status: task.status, done: check.done(task), size: size).frame(width: target.width, height: target.height)
-        } else {
-            #if os(macOS)
-            TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check, rowTap: open)
-            #else
-            TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check)
-            #endif
-        }
+        #if os(macOS)
+        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check, rowTap: open)
+        #else
+        return TaskCheckButton(task: task, subtasks: subtasks, agentBusy: next?.agentBusy ?? false, size: size, target: target, check: $check)
+        #endif
     }
 
     /// 旁注：上级的步骤数与"下一步"；做完的不写。
@@ -148,19 +140,14 @@ struct TaskLine: View {
     private static let ringTarget: CGFloat = 44
     private static let projectGlyph = Font.caption.weight(.medium)
 
-    private func framed(_ content: some View, next: TaskNext?, done: Bool) -> some View {
+    /// 长按提起的那一行的外形：与列表那张纸同一个圆角。
+    private static let liftRadius: CGFloat = 16
+
+    private func framed(_ content: some View) -> some View {
         content
             .contentShape(.rect)
             .onTapGesture(perform: open)
-            // 长按提起的是一张纸：预览是同一行垫一块纸色圆角底、与原来的行同宽。不给行本身垫底——行放在纸上，
-            // 纸面上沿有一层提亮，同色的底在那里会显出一块块的方框
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            // 预览的外形也要说给系统：不说时它按自己的默认把预览裁成两端全圆
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
-            .contextMenu { CardActions(card: task) } lifting: {
-                line(next: next, done: done, lifted: true).padding(.trailing, 8).frame(width: width)
-                    .background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
-            }
+            .contentShape(.dragPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
     }
     #else
     private var inline: Bool { true }
@@ -171,7 +158,7 @@ struct TaskLine: View {
     private static let ringTarget: CGFloat = 15
     private static let projectGlyph = Font.system(size: 11, weight: .medium)
 
-    private func framed(_ content: some View, next: TaskNext?, done: Bool) -> some View {
+    private func framed(_ content: some View) -> some View {
         content
             .padding(.horizontal, TaskMetrics.rowInset)
             .background(hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))

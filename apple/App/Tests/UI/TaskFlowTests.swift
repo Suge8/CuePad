@@ -242,7 +242,7 @@ struct TaskFlowTests {
         let newest = try await store.createTask("最近开始", in: nil)
         try await store.setStatus(newest.id, .inProgress)
 
-        let active = try await TaskBoard.active(limit: 2, from: store)
+        let active = try await TaskBoard.active(limit: 2, started: store.startedTasks(), from: store)
 
         #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
         // 任务页的"进行中"与它同一批、同一个顺序

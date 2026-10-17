@@ -78,7 +78,7 @@ struct TasksPanel: View {
         if !board.inProgress.isEmpty {
             let projects = Dictionary(uniqueKeysWithValues: board.inProgress.map { ($0.id, $0.project) })
             group("进行中", count: board.counts.inProgress)
-            TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), ordered: false, lazyAfter: lazy ? 0 : nil) { row in
+            TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), gaps: false, lazyAfter: lazy ? 0 : nil) { row in
                 TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil)
             }
             .padding(.horizontal, 12)

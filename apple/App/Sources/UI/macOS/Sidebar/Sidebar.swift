@@ -48,7 +48,7 @@ struct Sidebar: View {
         // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
         .background(palette.sidebar)
         .observing(services.store, into: $data, onError: workspace.fail) { store in
-            SidebarData(trashCount: try store.trashCount(), leading: try TaskBoard.leading(from: store))
+            SidebarData(trashCount: try store.trashCount(), leading: TaskBoard.leading(try store.startedTasks()))
         }
     }
 

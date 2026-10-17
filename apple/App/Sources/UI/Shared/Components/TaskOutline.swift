@@ -19,7 +19,7 @@ extension EnvironmentValues {
 }
 
 /// 任务大纲（手机任务页与项目页、Mac 任务面板与项目页共用）：按 `TaskTree` 缩进排出全部行（只有两级，不折起）。
-/// 手势用系统拖放（长按抬起、与长按菜单共存；Mac 按住拖）：停在一行中部高亮、松手成为它的步骤；停在两行之间出插入线，
+/// 手势用系统拖放（手机长按抬起，行上不挂长按菜单，见 `TaskLine`；Mac 按住拖）：停在一行中部高亮、松手成为它的步骤；停在两行之间出插入线，
 /// 横向挪动改层级（插入线的起点跟着缩进）。手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与反缩进（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势与画。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
 struct TaskOutline<Line: View>: View {
@@ -32,17 +32,17 @@ struct TaskOutline<Line: View>: View {
     /// 前面那几行总在普通栈里：项目页折起时列出的行放这里，收起后大纲的高度当场是准的（懒加载栈对没建的行只报估算的高度，`TaskFoldAnchor`），
     /// 展开、收起也不重建它们。
     private let lazyAfter: Int?
-    /// 行的先后是同级的手动顺序：两行之间可以落（改顺序、换项目）。看板的进行中按开始时间排，为 false（规则见 `TaskTree.drop`）。
-    private let ordered: Bool
+    /// 两行之间能不能落（改顺序、换项目）：行的先后是同级的手动顺序时能。看板的进行中按开始时间排，为 false（规则见 `TaskTree.drop`）。
+    private let gaps: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drag = OutlineDrag()
     @State private var commits = 0
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
-    init(tree: TaskTree, roots: [UUID]? = nil, ordered: Bool = true, lazyAfter: Int? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+    init(tree: TaskTree, roots: [UUID]? = nil, gaps: Bool = true, lazyAfter: Int? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
         self.lazyAfter = lazyAfter
-        self.ordered = ordered
+        self.gaps = gaps
         whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
@@ -102,7 +102,7 @@ struct TaskOutline<Line: View>: View {
         let start = drag.startX ?? point.x
         drag.startX = start
         let shift = Int(((point.x - start) / Self.indentWidth).rounded())
-        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift, gaps: ordered))
+        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift, gaps: gaps))
     }
 
     /// 只落自己大纲里拖出来的那一条：拖进来的内容与它不符（比如别处拖来的文字）就不动。
