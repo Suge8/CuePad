@@ -17,21 +17,30 @@ const INSTANCE =
 // 指向 CuePad 本身：名字、bundle id 或 .app 包（不含路径里的 CuePad 检出目录名）
 const CUEPAD = /^(?:CuePad|com\.sugeh\.cuepad)$|(?:^|\/)CuePad\.app(?:\/|$)/i;
 
-/** 只留 shell 真正执行的结构：去掉 heredoc 正文，引号里的分隔符换成空格（引号里的 | ( ; 是参数，不是新命令）。 */
+/** 只留 shell 真正执行的结构：去掉 heredoc 正文；单引号里全是字面量，双引号里只有 $( 与反引号还会执行，其余分隔符都不切。 */
 function structure(command: string): string {
 	const lines = command.split("\n");
 	const kept: string[] = [];
 	for (let i = 0; i < lines.length; i++) {
 		kept.push(lines[i]);
-		const heredoc = lines[i].match(/<<-?\s*['"]?(\w+)['"]?/);
-		if (heredoc) while (i + 1 < lines.length && lines[i + 1].trim() !== heredoc[1]) i++;
+		const heredoc = lines[i].match(/(?:^|[^<])<<-?\s*(?!<)['"]?(\w+)['"]?/);
+		// 引号里的 << 不是 heredoc：前面的引号没配对就不算
+		const before = heredoc ? lines[i].slice(0, heredoc.index) : "";
+		if (heredoc && (before.split("'").length - 1) % 2 === 0 && (before.split('"').length - 1) % 2 === 0)
+			while (i + 1 < lines.length && lines[i + 1].trim() !== heredoc[1]) i++;
 	}
+	const text = kept.join("\n");
 	let out = "";
 	let quote = "";
-	for (const ch of kept.join("\n")) {
-		if (quote) {
-			if (ch === quote) quote = "";
+	for (let i = 0; i < text.length; i++) {
+		const ch = text[i];
+		if (quote === "'") {
+			if (ch === "'") quote = "";
 			out += /[|&;()`\n$]/.test(ch) ? " " : ch;
+		} else if (quote === '"') {
+			if (ch === '"') quote = "";
+			const substitution = ch === "`" || (ch === "$" && text[i + 1] === "(") || (ch === "(" && text[i - 1] === "$");
+			out += !substitution && /[|&;()\n]/.test(ch) ? " " : ch;
 		} else {
 			if (ch === "'" || ch === '"') quote = ch;
 			out += ch;
@@ -46,9 +55,9 @@ function blocked(command: string): string | undefined {
 	if (/\bkill\b/.test(text) && /\b(?:pgrep|pidof|lsappinfo)\b[^\n]*cuepad/i.test(text)) return `不按名字找 CuePad 的 PID 再结束。${INSTANCE}`;
 	for (const segment of text.split(/&&|\|\||[;|&\n()`]|\$\(/)) {
 		const words = segment.trim().split(/\s+/).map((word) => word.replace(/^["']|["']$/g, ""));
-		if (words.some((w) => /^CUEPAD_SIM=/.test(w))) return "CUEPAD_SIM 是 xc.sh 入口锁内部用的，手设就绕过了排队与模拟器分配。直接调 xc.sh。";
 		let i = 0;
 		while (i < words.length && (/^\w+=/.test(words[i]) || PREFIXES.has(words[i]) || /^-|^\d+$/.test(words[i]))) i++;
+		if (words.slice(0, i).some((w) => /^CUEPAD_SIM=/.test(w))) return "CUEPAD_SIM 是 xc.sh 入口锁内部用的，手设就绕过了排队与模拟器分配。直接调 xc.sh。";
 		const program = words[i]?.split("/").pop();
 		const sub = words[i + 1];
 		const args = words.slice(i + 1);
