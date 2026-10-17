@@ -66,14 +66,9 @@ final class CardEditing {
                 self?.text = next
                 self?.autosave?.changed(next)
             },
-            selectionActions: Self.selectionActions(card, workspace: workspace),
+            selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onSubmit: { [weak self] in self?.submit() },
             onError: workspace.fail)
-    }
-
-    /// 右键菜单里的选区动作：转为任务。
-    private static func selectionActions(_ card: Card, workspace: Workspace) -> [CueSelectionAction] {
-        [CueSelectionAction(title: "转为任务", icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }]
     }
 }
 
@@ -176,14 +171,8 @@ private struct VariablesForm: View {
         .formStyle(.grouped)
         .frame(width: 320)
         .onAppear { values = card.variableValues }
-        .onDisappear(perform: save)
+        .onDisappear { workspace.saveVariables(values, of: card) }
         .onSubmit(close) // ↩ 提交并关闭（关闭时保存），与 ⌘K 一致
-    }
-
-    private func save() {
-        let id = card.id, values = values
-        guard values != card.variableValues else { return }
-        workspace.perform { try await $0.updateCard(id) { $0.variableValues = values } }
     }
 }
 
