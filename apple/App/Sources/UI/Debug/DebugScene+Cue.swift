@@ -7,7 +7,8 @@ import SwiftUI
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 住在这台 Mac，"运行情况"才有。
-/// `-CuePadCuePresence <thinking|tool|sending|asleep|disabled>`：你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
+/// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"允许一次"（回到对话里、带着你的回答），
+/// 之后你又说了一句、Cue 连着回了两句（看问询回到对话里的样子、一串气泡）；你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
 /// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
@@ -90,7 +91,7 @@ extension DebugScene {
             try await you("README 的截图也交给你，换成 Swift 版的样子，参考这张\n" + shot)
             // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
             if let panel { _ = try await store.finishTask(panel.id, evidence: ["浅色深色各一张，都按你给的参考图", "README 里的旧截图都换掉了"]) }
-            _ = try await store.addCueMessage(
+            let asked = try await store.addCueMessage(
                 .cue, text: """
                     预发上验过了，截图在这里。重连用例都过了：
 
@@ -114,6 +115,11 @@ extension DebugScene {
             let context = CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)
             switch presence {
+            case "answered":
+                _ = try await store.endCueQuestion(asked.id, .answered("允许一次"))
+                try await you("顺便看看登录回调那个超时")
+                _ = try await store.addCueMessage(.cue, text: "好，我先让 auth 会话复现一下。")
+                _ = try await store.addCueMessage(.cue, text: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。")
             case "thinking":
                 try await you("顺便看看登录回调那个超时")
                 try await store.setCueState(.thinking, context: context)
