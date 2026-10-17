@@ -38,7 +38,7 @@ struct CueSettingsSection: View {
             title: settings.profile.name, icon: Image(systemName: "face.smiling"), tone: model.failure == nil ? .calm : .failure,
             busy: model.enabling != nil, status: model.failure.map { Dotted($0) } ?? settings.status(here: here)
         ) {
-            Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: live)) {
+            Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: { model.live(on: $0, services) })) {
                 Text("不启用").tag(String?.none)
                 Divider()
                 ForEach(settings.hosts(here: here)) { Text($0.name).tag(Optional($0.id)) }
@@ -66,10 +66,6 @@ struct CueSettingsSection: View {
                 }
             }
         }
-    }
-
-    private func live(_ host: String?) {
-        if let host { model.enable(on: host, services) } else { model.disable(services) }
     }
 }
 

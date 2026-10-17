@@ -242,7 +242,7 @@ public struct CueState: Equatable, Sendable {
   public var round: UUID?
   /// 在跑的这一轮是会话的动静叫醒的（`CueWake.sessionActivity`）；别的原因醒来、歇着时没有
   public var woke: CueWoke?
-  /// 它此刻的上下文（`CueContext`），值班的 Mac 在一轮做完时写；还没跑过一轮为 nil
+  /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
   public var modifiedAt: Date
 

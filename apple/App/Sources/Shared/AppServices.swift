@@ -180,10 +180,11 @@ final class AppServices {
         return request
     }
 
-    /// 改 Cue 的设置（同步的 `CueProfile`）：两端唯一的写入口——Mac 的设置与启用、停用（`CueService`），两端 Cue 页的模型与思考强度。
+    /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
     /// 写库后马上传这一条，别的设备马上看到；Cue 住的那台 Mac 的管理器读到就按新设置值班。
     func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
-        try await Self.updateCue(edit, store: store, sync: sync)
+        try await store.updateCueProfile(edit)
+        await sync?.upload(CueProfile.recordID)
     }
 
     /// 让 Cue 住在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
@@ -199,12 +200,6 @@ final class AppServices {
     /// 停用 Cue（住在哪台留着）。
     func disableCue() async throws {
         try await updateCue { $0.enabledAt = nil }
-    }
-
-    /// 同上，给拿着库与同步、没有 `AppServices` 的 `CueService`。
-    static func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void, store: CueStore, sync: (any SyncControlling)?) async throws {
-        try await store.updateCueProfile(edit)
-        await sync?.upload(CueProfile.recordID)
     }
 
     /// 马上传这一条（`SyncControlling.upload`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。没有同步时什么也不做。
