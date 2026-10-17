@@ -6,7 +6,7 @@ public enum CueLines {
     // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
 
     /// 这一行是不是卡片名字所在的那种行（有文字的行）。
-    public static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
+    static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
     /// 正文里全部有文字的行（去掉图片引用，空白折成单个空格），按出现顺序。
     static func contentLines(_ stored: String) -> [String] {

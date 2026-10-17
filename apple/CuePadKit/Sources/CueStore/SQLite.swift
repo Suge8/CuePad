@@ -36,6 +36,11 @@ extension Optional: SQLBindable where Wrapped: SQLBindable {
   var sqlValue: SQLValue { map(\.sqlValue) ?? .null }
 }
 
+/// SQL `IN (…)` 里的字面量列表：枚举的原始值（只来自代码里的枚举，不来自输入）。
+func sqlList<Value: RawRepresentable>(_ values: some Sequence<Value>) -> String where Value.RawValue == String {
+  values.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+}
+
 /// 提示里只给 SQLite 的原因；连同出错的语句记进日志（`SQLite.error`）。
 struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
