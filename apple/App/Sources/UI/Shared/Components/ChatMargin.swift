@@ -80,7 +80,7 @@ struct ChatMarker<Label: View>: View {
         let text = label
             .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(palette.selection.opacity(highlighted ? 1 : 0), in: .capsule)
+            .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
             .animation(Motion.quick, value: highlighted)
         if let action {
             Button(action: action) { text.contentShape(.capsule) }

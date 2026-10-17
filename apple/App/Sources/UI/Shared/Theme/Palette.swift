@@ -79,8 +79,9 @@ struct Palette {
     /// 气泡底：比桌面深一级的暖灰、字是墨——回答才是会话页的主角，你的话不该是一屏最重的一块；
     /// 深色是比纸略抬升的暖深色、字仍是墨。
     var bubble: Color { dark ? Color(hex: 0x3A352F) : Color(hex: 0xE3DED4) }
-    /// 气泡的描边：深色下气泡与纸、桌面明度接近，加一圈低对比的线把边界提出来；浅色不用。
-    var bubbleEdge: Color { dark ? Color.white.opacity(highContrast ? 0.22 : 0.08) : .clear }
+    /// 气泡的描边（你的、Cue 的同一种）：只在增强对比度时有。平时气泡与桌面靠明度分开（Cue 的纸亮一级、你的牛皮纸深一级），
+    /// 不描边：长对话滚动时每颗多一层，逐帧都要更新。
+    var bubbleEdge: Color? { highContrast ? (dark ? Color.white : .black).opacity(0.22) : nil }
 
     // MARK: 状态（只表达含义，不给文字大面积上色）
 

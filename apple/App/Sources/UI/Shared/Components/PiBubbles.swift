@@ -161,7 +161,8 @@ struct BubbleText: View {
         switch trip {
         case .inTransit: shape.strokeBorder(palette.ink2, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
-        case .arrived: shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1)
+        case .arrived:
+            if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
         }
     }
 }

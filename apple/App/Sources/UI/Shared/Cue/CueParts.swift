@@ -234,9 +234,18 @@ struct CueSays: View {
 }
 
 extension View {
-    /// Cue 的话的气泡：纸做的（卡片同一种纸，`paper`），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
-    func cueBubble(joined: Bool) -> some View {
-        padding(Bubble.padding).paper(in: Bubble.shape(.leading, joined: joined), sheenInset: Bubble.radius)
+    /// Cue 的话的气泡：纸色实底（`Palette.paper`，比桌面亮一级），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
+    /// 只铺一层底：不用卡片那套渐变、一线高光与描边（`paper()`）——气泡小，看不出差别，长对话滚动时每颗多出的层逐帧都要更新；
+    /// 增强对比度时才描边（`Palette.bubbleEdge`）。
+    func cueBubble(joined: Bool) -> some View { modifier(CueBubbleSurface(shape: Bubble.shape(.leading, joined: joined))) }
+}
+
+private struct CueBubbleSurface: ViewModifier {
+    let shape: UnevenRoundedRectangle
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.padding(Bubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
     }
 }
 
@@ -250,7 +259,7 @@ private struct AnswerChip: View {
             .font(Typography.secondary).foregroundStyle(palette.ink)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(palette.bubble, in: .capsule)
-            .overlay(Capsule().strokeBorder(palette.bubbleEdge))
+            .overlay { if let edge = palette.bubbleEdge { Capsule().strokeBorder(edge) } }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityLabel("你回答：\(answer)")
     }
