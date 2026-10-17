@@ -5,10 +5,9 @@ import CueStore
 import PDFKit
 import QuickLook
 import SwiftUI
-import WebKit
 
 // 全屏预览里每类页都由 CuePad 自己画（手机）。不嵌快速查看：它把内容放在另一个进程里画，触摸进不来这边，嵌着它的页左右滑翻不了页、
-// 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewDocument`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
+// 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewWeb`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
 
 /// 图片自己显示（不嵌快速查看，它把左右滑与下拉都吃掉）：没放大时左右滑翻页、下拉收起都给外面；双指或双击放大，放大了拖着看，双击回原样。
 struct PreviewImage: View {
@@ -145,71 +144,6 @@ struct PreviewPlayer: View {
                 }
             }
             .onDisappear { player?.pause() }
-    }
-}
-
-/// 文稿、表格、演示文稿（Office、iWork、RTF）：WebKit 按文件类型把它们转成页面，滚动区在这个进程里，下拉与翻页照常。
-/// 只读、不联网（同网页预览）：只能读这一个文件，除了它自己与转出来的页内资源（x-apple-ql-id:）什么都不载入，点链接不跳转。
-/// 必须按文件载入：交给 WebKit 一段字节它不转，只会把字节铺出来。规则没能装上时不打开，不退回到不设防。
-struct PreviewDocument: View {
-    let file: URL
-    @State private var rules: WKContentRuleList?
-    @State private var failure: String?
-
-    private static let onlyThisFile = """
-        [{"trigger":{"url-filter":".*"},"action":{"type":"block"}},
-         {"trigger":{"url-filter":"^file:","resource-type":["document"]},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^x-apple-ql-id"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^blob:"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}}]
-        """
-
-    var body: some View {
-        Group {
-            if let rules {
-                DocumentView(file: file, rules: rules)
-            } else if let failure {
-                EmptyState(mascot: .error, title: "没法安全地打开这个文稿", message: failure).padding(24).frame(maxHeight: .infinity)
-            } else {
-                Spinner(.regular)
-            }
-        }
-        .task {
-            do {
-                rules = try await WKContentRuleListStore.default().compileContentRuleList(
-                    forIdentifier: "cuepad.preview.document", encodedContentRuleList: Self.onlyThisFile)
-            } catch {
-                failure = error.localizedDescription
-            }
-        }
-    }
-
-    private struct DocumentView: UIViewRepresentable {
-        let file: URL
-        let rules: WKContentRuleList
-        func makeCoordinator() -> Coordinator { Coordinator() }
-
-        func makeUIView(context: Context) -> WKWebView {
-            let configuration = WKWebViewConfiguration()
-            configuration.websiteDataStore = .nonPersistent()
-            configuration.userContentController.add(rules)
-            let view = WKWebView(frame: .zero, configuration: configuration)
-            view.navigationDelegate = context.coordinator
-            view.isOpaque = false
-            view.backgroundColor = .clear
-            view.loadFileURL(file, allowingReadAccessTo: file)
-            return view
-        }
-
-        func updateUIView(_ view: WKWebView, context: Context) {}
-
-        /// 只放行我们自己装载的那一次；点链接一律不动。
-        final class Coordinator: NSObject, WKNavigationDelegate {
-            func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
-                action.navigationType == .other ? .allow : .cancel
-            }
-        }
     }
 }
 

@@ -205,7 +205,7 @@ private struct PreviewContent: View {
                 case .pdf: PreviewPDF(file: file)
                 case .video, .audio: PreviewPlayer(file: file, active: active)
                 case .text: PreviewText(file: file)
-                case .document, .spreadsheet, .presentation: PreviewDocument(file: file)
+                case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
                 case .model, nil: PreviewStill(preview: preview, file: file)
                 #else
                 default: QuickLookPage(file: file)

@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 演示库里 Cue 页的结果卡（`seedCue` 里调）：两件活各有会话发来的交付物——"修好登录页的键盘遮挡"做完了，挂着修复前与修复后两张截图；
+/// 演示库里 Cue 页的结果卡（`seedCue` 里调）：三件活各有会话发来的交付物——"落地页深浅两版"做完了，挂着两份网页（同一组两份网页左右翻）；
+/// "修好登录页的键盘遮挡"做完了，挂着修复前与修复后两张截图；
 /// "重做定价区"中途 Cue 核对过一批，挂着网页、PDF、横图与 Markdown 四份（三份起横向滑）。README 那件挂着一张（`seedCue`），
 /// "等你"里的推送挂着部署会话发来的截图与测试报告（迷你一排）。
 extension DebugScene {
@@ -14,6 +15,14 @@ extension DebugScene {
             try data.write(to: url)
             return url
         }
+
+        let landing = try await store.createTask("落地页深浅两版", in: nil)
+        try await store.linkCard(landing.id, toSession: "landing")
+        _ = try await store.addPreviews(filesAt: [
+            try file("浅色.html", Data(pricingPage.utf8)),
+            try file("深色.html", Data(pricingPage.replacing("</style>", with: darkPricing + "</style>").utf8)),
+        ], title: nil, sessionID: "landing")
+        _ = try await store.finishTask(landing.id, evidence: ["浅色深色各一版，按钮对比度都过了 4.5:1"])
 
         let keyboard = try await store.createTask("修好登录页的键盘遮挡", in: nil)
         try await store.linkCard(keyboard.id, toSession: "keyboard")
@@ -120,6 +129,8 @@ extension DebugScene {
         <div class="card"><b>团队</b><div class="price">¥198</div><button>联系我们</button></div>
         </div></body></html>
         """
+
+    private static let darkPricing = "body{background:#15151c;color:#eee}p{color:#9a9aa6}.card{background:#23232d;box-shadow:none}"
 
     private static let pricingNotes = """
         # 定价区改动说明
