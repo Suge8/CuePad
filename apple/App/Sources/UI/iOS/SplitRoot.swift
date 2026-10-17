@@ -172,8 +172,12 @@ private struct SplitSidebar: View {
                         ForEach(outline.recent) { row($0, catalog, now: now[$0.id]) }
                         if outline.unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, symbol: "tray", badge: outline.unfiled) }
                     }
-                    // 没有最近一组（项目全置顶、还没有项目）时也在：书架是新建项目与看全部的地方
-                    if SidebarOutline.showsAllProjects { SidebarRow(entry: .allProjects, badge: catalog.projects.count) }
+                    // 没有最近一组（项目全置顶、还没有项目）时也在：书架是新建项目与看全部的地方。
+                    // 上面一个项目分组都没有时，它自成一组，与去处隔开分组间距
+                    if SidebarOutline.showsAllProjects {
+                        SidebarRow(entry: .allProjects, badge: catalog.projects.count)
+                            .padding(.top, outline.projects.isEmpty && outline.unfiled == 0 ? Self.groupGap : 0)
+                    }
                 }
                 VStack(alignment: .leading, spacing: Self.rowGap) {
                     ForEach(SidebarOutline.footer, id: \.self) { SidebarRow(entry: $0, alert: $0 == .settings ? syncAlert : nil) }
