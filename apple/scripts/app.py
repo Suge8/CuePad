@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CuePad 的调试实例：起一份隔离实例，做一件事，一定退出。xc.sh 构建完调它，perf-mac.sh 用 exec。
-用法：app.py <shot|rec|cpu|run> <mac|ios|ipad> <CuePad.app> <库目录> [--device <UDID>] [--out <图|片|秒>] [-- 启动参数…]
-      app.py exec <CuePad.app> <库目录> [-- 启动参数…]   Mac 实例跑到自己退出（量完退出的 bench），标准输出原样转出
+用法：app.py <shot|rec|run> <mac|ios|ipad> <CuePad.app> <库目录> [--device <UDID>] [--out <图|片>] [-- 启动参数…]
+      app.py exec <CuePad.app> <库目录> [-- 启动参数…]   占住全机那一份后 exec 成 CuePad（量完自己退出的 bench 用，$! 就是 CuePad）
       app.py stop                                       结束本检出 run 起的 Mac 实例
       app.py preflight                                  Mac 截图、录屏前查台前调度
 规则：
@@ -10,22 +10,18 @@
 2. Mac 全机同一时间只有一份：看守进程（就是本进程）持 /tmp/cuepad-xc-<uid>/mac-app 的 flock，锁随看守进程释放，崩了也不留；
    本检出 run 起的旧实例直接换掉，别的检出的在用就排队（打印在等谁）。
 3. 一定退出：做完、出错、被打断（TERM、INT、HUP）、超时（截图类 HOLD 秒，run 是 RUN_TTL）都走 quit：先 TERM 走 App 的正常退出，
-   5 秒不退再 KILL，连同它起的子进程（Cue 的 pi、cuepad mcp）一起结束。
+   5 秒不退再 KILL，连同它起的子进程（Cue 的 pi、cuepad mcp）一起结束。exec 起的 bench 由调用方按 PID 结束，锁随 CuePad 进程释放。
 4. 不靠固定等待：Debug 构建摆好画面后写就绪文件（CUEPAD_SHOT_READY，DebugScene.signalReady），这里用 kqueue 等它出现或 App 退出。
    给了 CUEPAD_SHOT_READY 的 Mac 实例在后台跑、不进 Dock、不抢前台（DebugHooks.staysInBackground）。
 5. Mac 截图、录屏按窗口拍（wincap.swift，尺寸对不上就失败）；启动参数没给窗口尺寸时用 WINDOW。
-6. cpu（xc.sh 给 Release 构建）：画面就绪后静置 SETTLE 秒，量 N 秒内进程自己的 CPU 时间、指令数、唤醒与内存（proc_pid_rusage），
-   每次全新进程，跑 RUNS 次取中位。这几项不随机器忙闲变：前后对比就是两个检出各跑同一条命令。
 iOS、iPadOS：模拟器里本就隔离，同一台上再 launch 就换掉旧的；状态栏固定成 9:41、满格满电，做完 terminate，run 留着。
 """
-import ctypes
 import fcntl
 import json
 import os
 import re
 import select
 import signal
-import statistics
 import subprocess
 import sys
 import time
@@ -41,7 +37,6 @@ WINDOW = "1440x900"
 READY_TIMEOUT = 60
 HOLD = 300  # 截图类的看守上限（另加录屏、测量的秒数）：卡在哪一步都不留实例
 RUN_TTL = 15 * 60  # 够一轮 bcu 交互验收；忘了收的实例曾活过 14 小时
-SETTLE, RUNS, CPU_SECONDS = 2, 3, 10
 REC_SECONDS = float(os.environ.get("CUEPAD_REC_SECONDS", 12))
 
 
@@ -120,53 +115,6 @@ def wait_ready(path, pid, log):
         queue.close()
     with open(path) as f:
         return f.read().split()
-
-
-# ---------- 测量 ----------
-
-class Usage(ctypes.Structure):
-    _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(name, ctypes.c_uint64) for name in (
-        "user", "system", "idle_wakeups", "interrupt_wakeups", "pageins", "wired", "resident", "footprint",
-        "start", "exit", "child_user", "child_system", "child_idle_wakeups", "child_interrupt_wakeups", "child_pageins",
-        "child_elapsed", "disk_read", "disk_written", "qos_default", "qos_maintenance", "qos_background", "qos_utility",
-        "qos_legacy", "qos_user_initiated", "qos_user_interactive", "billed_system", "serviced_system", "logical_writes",
-        "lifetime_max_footprint", "instructions", "cycles")]
-
-
-class Timebase(ctypes.Structure):
-    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
-
-
-libc = ctypes.CDLL("/usr/lib/libSystem.dylib")
-timebase = Timebase()
-libc.mach_timebase_info(ctypes.byref(timebase))
-
-
-def usage(pid):
-    u = Usage()
-    if libc.proc_pid_rusage(pid, 4, ctypes.byref(u)) != 0:  # RUSAGE_INFO_V4
-        die(f"读不到 {pid} 的资源用量（进程退出了？）")
-    return u
-
-
-def measure(pid, seconds):
-    time.sleep(SETTLE)
-    a, start = usage(pid), time.monotonic()
-    time.sleep(seconds)  # 量的就是这一段
-    b, wall = usage(pid), time.monotonic() - start
-    cpu_ms = (b.user + b.system - a.user - a.system) * timebase.numer / timebase.denom / 1e6
-    return {"CPU %": cpu_ms / wall / 10, "CPU ms": cpu_ms, "指令 M": (b.instructions - a.instructions) / 1e6,
-            "唤醒/秒": (b.idle_wakeups + b.interrupt_wakeups - a.idle_wakeups - a.interrupt_wakeups) / wall,
-            "内存 MB": b.footprint / 2**20}
-
-
-def report(rows, seconds):
-    def line(label, row):
-        return f"{label}  " + "  ".join(f"{k} {v:.1f}" for k, v in row.items())
-    for i, row in enumerate(rows, 1):
-        print(line(f"第 {i} 次", row), flush=True)
-    median = {k: statistics.median(r[k] for r in rows) for k in rows[0]}
-    print(line(f"中位（{len(rows)} 次，每次就绪后 {SETTLE}+{seconds:g} 秒，负载 {os.getloadavg()[0]:.0f}）", median))
 
 
 # ---------- Mac ----------
@@ -256,15 +204,8 @@ def wincap():
 def mac(cmd, app, library, out, args):
     if cmd == "run":
         return run_mac(app, library, args)
-    signal.alarm(HOLD + int(float(out or 0) * RUNS if cmd == "cpu" else REC_SECONDS if cmd == "rec" else 0))
+    signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))
     with Mac(app, library, cmd) as m:
-        if cmd == "cpu":
-            rows = []
-            for _ in range(RUNS):
-                m.start(args)
-                rows.append(measure(m.proc.pid, float(out)))
-                m.quit()
-            return report(rows, float(out))
         size = m.start(args)
         if len(size) != 2:
             die("就绪文件里没有窗口尺寸：画面没有可拍的普通窗口")
@@ -298,9 +239,19 @@ def run_mac(app, library, args):
 
 
 def exec_mac(app, library, args):
-    with Mac(app, library, "exec", ready=False) as m:
-        m.start(args)
-        sys.exit(m.proc.wait())
+    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住全机那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
+    随它退出释放；PID 不变，调用方的 $! 就是 CuePad，结束它不会留下看守进程。run 才会被本检出换掉，bench 只排队等。"""
+    if not BUILD.fullmatch(app):
+        die(f"只起 apple/.derived* 里的构建，不起 {app}")
+    slot = take_slot()
+    slot.truncate(0)
+    slot.write(json.dumps({"holder": os.getpid(), "checkout": CHECKOUT, "what": "bench", "since": time.strftime("%H:%M:%S")},
+                          ensure_ascii=False))
+    slot.flush()
+    os.set_inheritable(slot.fileno(), True)
+    os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
+    exe = f"{app}/Contents/MacOS/CuePad"
+    os.execve(exe, [exe, *args], isolated_env(os.path.abspath(library)))
 
 
 def stop():
@@ -356,15 +307,8 @@ def sim(cmd, device, app, library, out, args):
     simctl("install", device, app)
     simctl("status_bar", device, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
            "--cellularMode", "active", "--cellularBars", "4", "--wifiBars", "3")
-    signal.alarm(HOLD + int(float(out or 0) * RUNS if cmd == "cpu" else REC_SECONDS if cmd == "rec" else 0))
+    signal.alarm(HOLD + int(REC_SECONDS if cmd == "rec" else 0))
     try:
-        if cmd == "cpu":
-            rows = []
-            for _ in range(RUNS):
-                pid = launch_sim(device, library, args, ready)
-                wait_ready(ready, pid, log)
-                rows.append(measure(pid, float(out)))
-            return report(rows, float(out))
         if cmd == "rec" and os.environ.get("CUEPAD_REC_LAUNCH"):
             rec = recorder(device, out)  # 冷启动：先开录再起 App，录满秒数、不等就绪
             launch_sim(device, library, args, ready)
@@ -397,13 +341,12 @@ def main(argv):
         return preflight()
     if cmd == "exec":
         return exec_mac(argv[1], argv[2], launch_args)
-    if cmd not in ("shot", "rec", "cpu", "run") or len(argv) < 4:
+    if cmd not in ("shot", "rec", "run") or len(argv) < 4:
         die(__doc__)
     platform, app, library = argv[1:4]
     options = dict(zip(argv[4::2], argv[5::2]))
     derived = re.sub(r"/Build/Products/.*", "", app)
-    out = options.get("--out") or {"shot": f"{derived}/shot-{platform}.png", "rec": f"{derived}/rec-{platform}.mov",
-                                   "cpu": str(CPU_SECONDS)}.get(cmd)
+    out = options.get("--out") or {"shot": f"{derived}/shot-{platform}.png", "rec": f"{derived}/rec-{platform}.mov"}.get(cmd)
     if platform == "mac":
         return mac(cmd, app, library, out, launch_args)
     sim(cmd, options["--device"], app, library, out, launch_args)

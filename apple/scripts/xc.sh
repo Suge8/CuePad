@@ -7,15 +7,15 @@
 #   xc.sh test kit [swift test 参数…]               CuePadKit 在 macOS 上的 swift test，如 --filter SuiteName
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…]  构建 → 起隔离实例 → 画面就绪后截窗口 → 退出
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
-#   xc.sh cpu  <mac|ios|ipad> [秒=10] [-- 启动参数…]   Release 构建，画面就绪后量 N 秒的 CPU、指令数、唤醒与内存，三次取中位
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 15 分钟后自己退出
 #   xc.sh stop                                      结束本检出 run 起的 Mac 实例
-#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互的性能测量（参数见 perf-mac.sh、perf-ios.sh），独占机器
+#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh），独占机器
+#   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh），独占机器
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、全机一份、一定退出见 app.py 头注释；排队与时限见 _lock.sh；模拟器池见 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
-# 产物目录是本检出的 apple/.derived（cpu、perf 的 Release 构建在 apple/.derived-perf，Kit 在 CuePadKit/.build）：每个检出一份增量。
+# 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（不联网、不要账号）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
 # 提交钩子：git config core.hooksPath apple/scripts/hooks（每个仓库一次）。
@@ -32,7 +32,7 @@ IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 正常的测试几秒内跑完，最慢的也不到一分钟；挂住的测试曾让测试宿主停了 34 分钟没人发现
 TEST_TIME_LIMIT=120
-USAGE="用法：$0 <check|build|test|shot|rec|cpu|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|build|test|shot|rec|run|stop|perf|release|device|provision> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -50,7 +50,7 @@ case "$cmd" in
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) xc_enter exclusive "$0" "$@" ;;
-  test|shot|rec|cpu|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
+  test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
   check|build) xc_enter plain "$0" "$@" ;;
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
@@ -58,10 +58,15 @@ if [ "$cmd" = test ] && [ "$platform" = kit ]; then
   cd "$APPLE_DIR/CuePadKit" && exec swift test "${@:3}"
 fi
 [ "$cmd" != check ] || platform=ios
-[ "$cmd" != perf ] || [ "$platform" != ipad ] || { echo "用法：$0 perf <mac|ios> [次数] [启动参数…]" >&2; exit 2; }
+perf_script=""
+if [ "$cmd" = perf ]; then
+  # perf idle <平台> …：平台跟着传给 perf-idle.sh
+  if [ "$platform" = idle ]; then perf_script=perf-idle.sh; platform="${3:-}"; else perf_script="perf-$platform.sh"; fi
+  case "$platform" in mac|ios) ;; *) echo "用法：$0 perf [idle] <mac|ios> [参数…]" >&2; exit 2 ;; esac
+fi
 
-# cpu 与 perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
-if [ "$cmd" = cpu ] || [ "$cmd" = perf ]; then
+# perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
+if [ "$cmd" = perf ]; then
   DERIVED="$APPLE_DIR/.derived-perf"; configuration=Release
   # 关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
@@ -129,14 +134,16 @@ case "$cmd" in
         | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
     fi
     exit $status ;;
-  shot|rec|cpu|run)
+  shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
-    if [ "$platform" = mac ] && [ "$cmd" != cpu ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
+    if [ "$platform" = mac ]; then python3 "$APPLE_DIR/scripts/app.py" preflight; fi
     xcb -quiet build
     rest=("${@:3}") target=()
     if [ "${#rest[@]}" -gt 0 ] && [ "${rest[0]}" != -- ]; then target=(--out "${rest[0]}"); rest=("${rest[@]:1}"); fi
     if [ "$platform" != mac ]; then sim_boot "$device"; target+=(--device "$device"); fi
     library="${CUEPAD_SHOT_LIBRARY:-$APPLE_DIR/.derived/library$([ "$platform" = mac ] || echo "-$platform")}"
     exec python3 "$APPLE_DIR/scripts/app.py" "$cmd" "$platform" "$app" "$library" ${target[@]+"${target[@]}"} ${rest[@]+"${rest[@]}"} ;;
-  perf) xcb -quiet build; exec "$APPLE_DIR/scripts/perf-$platform.sh" "$app" "${@:3}" ;;
+  perf)
+    xcb -quiet build >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
+    exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;
 esac
