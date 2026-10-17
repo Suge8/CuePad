@@ -30,8 +30,8 @@ struct SessionTaskTests {
 
         #expect(try await TaskBoard.read(from: store).order.isEmpty)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
-            wake: .idle, said: nil))
+            now: .now, contextUsed: nil, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
+            wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
 
         let cue = CueTools(store: store, wait: 0)
@@ -113,7 +113,7 @@ struct SessionTaskTests {
         let board = try await store.cueBoard()
         #expect(board.sessions.map(\.sessionID) == ["s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: [], board: board, waiting: [], wake: .idle, said: nil))
+            now: .now, contextUsed: nil, projects: [], changes: [], board: board, waiting: [], wake: .idle))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
         // 分步做完的事：会话在前一步上，最后一步是手点完成的、没绑会话，列的仍是它用过的会话
         let stepped = try await store.createTask("加语言参数", in: project.id)
@@ -228,8 +228,8 @@ struct SessionTaskTests {
             try await recorder.update(sessionID: "s1", state: .settled)
             let changes = try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }
             return CueEnvelope.render(CueEnvelope.Input(
-                now: .now, contextUsed: nil, renewAt: 60_000, projects: [], changes: changes, board: try await store.cueBoard(),
-                waiting: [], wake: .sessionActivity, said: nil))
+                now: .now, contextUsed: nil, projects: [], changes: changes, board: try await store.cueBoard(),
+                waiting: [], wake: .sessionActivity))
         }
         #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的] 修登录"))
 
