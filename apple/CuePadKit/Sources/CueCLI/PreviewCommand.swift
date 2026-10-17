@@ -2,8 +2,7 @@ import CueStore
 import Foundation
 
 extension Command {
-  /// 各家 Agent 给它执行的每条 shell 命令带着当前会话的 id（Pi、Claude Code、Codex、OpenCode）。
-  private static let sessionVariables = ["PI_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID"]
+  private static let sessionVariables = AgentKind.allCases.map(\.sessionVariable)
 
   static let show = Command(
     path: ["show"], summary: "把文件发到用户手机上的 CuePad：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…>",
