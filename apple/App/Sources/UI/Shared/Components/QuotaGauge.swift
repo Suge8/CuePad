@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
 /// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，系统只在整分钟换字；过了重置时间还没有新观测写"已重置"），
-/// 右边是还剩多少的大号等宽数字，下面一条剩余条（`QuotaBar`）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
+/// 右边是还剩多少的大号等宽数字，下面一条剩余条（`MarkedBar`，刻线是匀速线）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
 /// 主视图把要看的都写出来了，所以不再有点开的明细：总览不是按钮、没有按压。
 /// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
 ///
@@ -173,7 +173,8 @@ private struct QuotaWindowRow: View {
                 Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink)
                     .contentTransition(.numericText(value: window.left))
             }
-            QuotaBar(window)
+            // 剩余条：剩的少于匀速线就是用快了
+            MarkedBar(fill: window.left, mark: window.even, color: QuotaInk.fill(window.level, palette))
             if let runway = window.runway(from: .now) {
                 Text("照这速度\(runway)后用完").font(Typography.caption).foregroundStyle(critical ? palette.failure : palette.ink2)
                     .transition(.opacity)
@@ -190,47 +191,6 @@ private struct QuotaWindowRow: View {
 extension QuotaMeter.Window {
     /// 到重置还有多久，自己走字（`QuotaMeter.Countdown`）。
     var countdown: Text { Text(.currentDate, format: QuotaMeter.Countdown(end: resetsAt)).monospacedDigit() }
-}
-
-/// 剩余条：铺到还剩的比例，匀速线是一道竖线（两侧在条上压出缝，任何底色上都读得出）；剩的少于匀速线就是用快了。一块画布。
-/// 剩余与匀速线随动画插值（`animatableData`），档位的颜色直接换。
-private struct QuotaBar: View, Animatable {
-    private var values: AnimatablePair<Double, Double>
-    private let level: PiContextMeter.Level
-    @Environment(\.palette) private var palette
-
-    private static let thickness: CGFloat = 5
-    private static let height: CGFloat = 11
-
-    init(_ window: QuotaMeter.Window) {
-        values = AnimatablePair(window.left, window.even ?? -1)
-        level = window.level
-    }
-
-    var animatableData: AnimatablePair<Double, Double> {
-        get { values }
-        set { values = newValue }
-    }
-
-    var body: some View {
-        let (left, even) = (values.first, values.second)
-        let (track, fill, tick) = (palette.track, QuotaInk.fill(level, palette), palette.ink)
-        Canvas { context, size in
-            let bar = CGRect(x: 0, y: (size.height - Self.thickness) / 2, width: size.width, height: Self.thickness)
-            context.fill(Path(roundedRect: bar, cornerRadius: Self.thickness / 2), with: .color(track))
-            if left > 0 {
-                let width = max(size.width * min(left, 1), Self.thickness)
-                context.fill(Path(roundedRect: CGRect(x: 0, y: bar.minY, width: width, height: Self.thickness), cornerRadius: Self.thickness / 2), with: .color(fill))
-            }
-            guard even > 0 else { return }
-            let x = size.width * min(even, 1)
-            context.blendMode = .destinationOut
-            context.fill(Path(roundedRect: CGRect(x: x - 2, y: 0, width: 4, height: size.height), cornerRadius: 2), with: .color(.black))
-            context.blendMode = .normal
-            context.fill(Path(roundedRect: CGRect(x: x - 0.75, y: 0, width: 1.5, height: size.height), cornerRadius: 0.75), with: .color(tick))
-        }
-        .frame(height: Self.height)
-    }
 }
 
 /// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。
