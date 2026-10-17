@@ -143,7 +143,7 @@ private struct StepRow: View {
         }
         .animation(Motion.quick, value: done)
         .padding(.horizontal, TaskMetrics.rowInset).frame(minHeight: 32)
-        .background(selected ? palette.paperLit.opacity(0.8) : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
+        .background(selected ? palette.paperLit : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture(perform: select)
@@ -194,10 +194,9 @@ private struct LeafDetail: View {
     private func openSession(_ sessionID: String, primary: Bool) -> some View {
         Button { workspace.show(.session(sessionID)) } label: {
             Text("打开会话").font(Typography.secondary.weight(.semibold))
-                .foregroundStyle(primary ? palette.onSignature : palette.ink)
+                .foregroundStyle(primary ? palette.onFill : palette.ink)
                 .padding(.horizontal, 28).frame(height: 40)
                 .background(primary ? palette.signatureFill : palette.fill, in: .capsule)
-                .shadow(color: palette.signature.opacity(primary && !palette.dark ? 0.25 : 0), radius: 10, y: 4)
                 .contentShape(.capsule)
         }
         .buttonStyle(PressStyle())
@@ -209,6 +208,7 @@ private struct MascotFigure: View {
     let mascot: Mascot
     let floats: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     private static let side: CGFloat = 120
 
@@ -222,7 +222,7 @@ private struct MascotFigure: View {
         }
         .frame(width: Self.side, height: Self.side)
         .background(alignment: .bottom) {
-            Ellipse().fill(RadialGradient(colors: [.black.opacity(0.14), .clear], center: .center, startRadius: 0, endRadius: 50))
+            Ellipse().fill(RadialGradient(colors: [palette.shadow, .clear], center: .center, startRadius: 0, endRadius: 50))
                 .frame(width: 90, height: 12).offset(y: 10)
         }
         .accessibilityHidden(true)
@@ -248,7 +248,7 @@ private struct BriefComposer: View {
             .frame(height: 110)
             .overlay(alignment: .topLeading) {
                 if editing?.text.isEmpty ?? true {
-                    Text("要 Agent 做什么…").font(Typography.body).foregroundStyle(palette.placeholder)
+                    Text("要 Agent 做什么…").font(Typography.body).foregroundStyle(palette.ink3)
                         // 与编辑器第一行的字对齐（编辑器自己的内边距加上主题的 6）
                         .padding(.leading, 12).padding(.top, 8).allowsHitTesting(false)
                 }
@@ -261,7 +261,7 @@ private struct BriefComposer: View {
                 Spacer(minLength: 0)
                 Text("⌘↩").font(Typography.meta).foregroundStyle(palette.ink3)
                 Button { editing?.submit() } label: {
-                    Text("开始").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
+                    Text("开始").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
                         .padding(.horizontal, 18).frame(height: 32)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
                 }

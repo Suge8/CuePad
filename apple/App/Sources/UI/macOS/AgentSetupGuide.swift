@@ -8,6 +8,7 @@ import SwiftUI
 struct AgentSetupGuide: View {
     let kind: AgentKind
     let presence: AgentStatus.Presence
+    @Environment(\.palette) private var palette
     @State private var copied = false
 
     var body: some View {
@@ -17,9 +18,9 @@ struct AgentSetupGuide: View {
                 Text(kind == .opencode
                     ? "现在是 \(version)。CuePad 只支持 OpenCode 2（v1 的服务接口不同）；装好 v2 后它替换 v1。"
                     : "现在是 \(version)，需要 \(kind.minimumVersion.map(\.description) ?? "") 或更新。")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
             }
-            Text("在终端运行：").foregroundStyle(.secondary)
+            Text("在终端运行：").foregroundStyle(palette.ink2)
             HStack(spacing: 8) {
                 // 命令要看得全：放不下就折行，不截断
                 Text(command).font(Typography.meta.monospaced()).textSelection(.enabled)
@@ -32,8 +33,8 @@ struct AgentSetupGuide: View {
                 .controlSize(.small)
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
-            Text("装好后回到这里接入。").foregroundStyle(.secondary)
+            .background(palette.fill, in: .rect(cornerRadius: 8))
+            Text("装好后回到这里接入。").foregroundStyle(palette.ink2)
             Link("了解 \(kind.name)", destination: Self.site(kind))
         }
     }

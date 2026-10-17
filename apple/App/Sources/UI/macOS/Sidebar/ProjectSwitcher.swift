@@ -7,6 +7,7 @@ struct ProjectSwitcher: View {
     /// 侧栏收起时才写当前页：展开时标签是空的，切页不碰这个常驻的菜单（标签一变整份菜单跟着重建，一次切页约 7ms）。
     let collapsed: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     private static let numbered = 9
 
@@ -35,7 +36,7 @@ struct ProjectSwitcher: View {
             HStack(spacing: 6) {
                 if collapsed {
                     CurrentPage(projects: projects)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
+                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 }
             }
             .font(Typography.toolbarLabel.weight(.semibold))
@@ -59,7 +60,10 @@ struct ProjectSwitcher: View {
     }
 
     private static func makeMenuIcon(_ project: Project) -> NSImage {
-        let color = NSColor(Palette.projectTint(project.color))
+        // 菜单图标缓存成 NSImage、拿不到外观：用动态色，系统画菜单时按当时的外观取浅深两档
+        let color = NSColor(name: nil) { appearance in
+            NSColor(Palette(dark: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua).project(project.color))
+        }
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         let image = NSImage(systemSymbolName: ProjectGlyph.symbol(project.icon), accessibilityDescription: nil)?

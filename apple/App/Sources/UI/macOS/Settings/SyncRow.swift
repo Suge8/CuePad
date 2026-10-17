@@ -94,7 +94,7 @@ struct SyncRow: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // 会删东西的那颗字用胭脂，与确认框里同一颗一致
-            Button(action: action) { Text(title).foregroundStyle(destructive ? palette.failure : primary ? palette.onSignature : palette.ink) }
+            Button(action: action) { Text(title).foregroundStyle(destructive ? palette.failure : primary ? palette.onFill : palette.ink) }
                 .settingButton(primary: primary)
             Text(consequence).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
         }

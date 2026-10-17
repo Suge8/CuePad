@@ -285,7 +285,7 @@ struct Spinner: View {
         Group {
             if reduceMotion {
                 let width = size.side * 0.14
-                Circle().stroke(palette.ink2.opacity(0.22), lineWidth: width)
+                Circle().stroke(palette.track, lineWidth: width)
                     .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
                     .padding(width / 2)
             } else {

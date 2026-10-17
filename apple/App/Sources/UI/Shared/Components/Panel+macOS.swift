@@ -209,7 +209,7 @@ private struct PanelLayer: View {
     var body: some View {
         ZStack {
             if host.shown.contains(where: { !$0.modal }) {
-                Color.black.opacity(palette.dark ? 0.22 : 0.06).ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
+                palette.backdrop.ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
             }
             ForEach(host.shown) { shown in
                 if shown.modal { modal(shown) } else { side(shown) }
@@ -227,7 +227,7 @@ private struct PanelLayer: View {
             shown.content
                 .clipShape(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: PanelStyle.radius, style: .continuous).strokeBorder(palette.hair) }
-                .shadow(color: .black.opacity(palette.dark ? 0.45 : 0.18), radius: 28, y: 10)
+                .shadow(color: palette.panelShadow, radius: 28, y: 10)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
                 // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停

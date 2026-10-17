@@ -2,19 +2,19 @@ import CueStore
 import SwiftUI
 
 extension PiShown {
-    /// 状态色，四种各管一件事：等你确认赭黄、出错与没能送达胭脂、在跑（工作中、话在路上）晴蓝、有新回复石绿；
+    /// 状态色：等你确认赭黄、出错与没能送达胭脂、有新回复石绿三种各管一件事；在跑（工作中、话在路上）是正在发生，用签名色靛青；
     /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking: Waiting.tint(dark: palette.dark)
+        case .asking: palette.waiting
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking: palette.ink
         case .failed, .delivery(.failed): palette.failure
-        case .working, .delivery: palette.live
+        case .working, .delivery: palette.signature
         case .unread: palette.replied
         case .restart: palette.ink2
         case .idle, .resting, .fresh, .interrupted, .unknown: palette.ink3
-        case .ended: palette.ink3.opacity(0.6)
+        case .ended: palette.ink3
         }
     }
 
@@ -32,7 +32,7 @@ extension PiShown {
     }
 
     /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）铺一层很淡的状态色，其余是纸。
-    /// 在跑的不铺：会动的心电线与蓝字已经够醒目，整屏都上色颜色就不再表示"要你看"。
+    /// 在跑的不铺：会动的心电线与靛青字已经够醒目，整屏都上色颜色就不再表示"要你看"。
     func wash(_ palette: Palette) -> Color? { needsYou || isUnread ? tint(palette) : nil }
 
     /// 状态的静止图形（SF Symbols），与 `tint` 一起是全 App 状态图形的唯一出处：状态标（`PiStateDot`）、跟着字号的
@@ -67,7 +67,7 @@ extension PiShown {
 
 /// 会话状态标（全 App 只此一份：Agent 页卡片、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：
 /// 颜色 + 不带外框的整体图形（符号与颜色只取 `PiShown.symbol`、`tint`）——等你确认赭黄问号圆（外圈一圈波纹慢慢扩开）、出错胭脂圆叹号、没能送达胭脂折回箭头、
-/// 在跑晴蓝心电线（一截实色沿波形走）、话在路上晴蓝三层上箭头（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
+/// 在跑靛青心电线（一截实色沿波形走）、话在路上靛青三层上箭头（从下往上依次亮起）、有新回复石绿铃铛（变成它时摇一下）、
 /// 该你了灰色输入光标、新会话灰色星光、已结束更淡的带斜线圈；Cue 值班时，等 Cue 回答是墨色气泡问号、歇着是灰色省略号。`size` 是标的基准直径，外框是它的 1.8 倍，跟着旁边的字随辅助字号放大。
 /// 心电线、箭头、波纹是常驻循环动效，交给 Core Animation（`LoopLayer`），不在屏幕上时不画；换状态时旧图形缩小淡出、新图形放大淡入，
 /// 两个都是 SF Symbols 时由系统原地替换。减弱动态效果时循环动效换成同一状态的静止符号，没有波纹与摇铃。

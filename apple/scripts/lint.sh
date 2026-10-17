@@ -47,8 +47,15 @@ forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regula
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种构建的分叉收在 DebugHooks 一处（Release 里钩子什么都不做）；调试代码放 App/Sources/UI/Debug，演示数据在 Seed.swift" \
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift'
-forbid "赭黄只给等你，色值只在 Waiting.swift：表达等你用那里的 Waiting.tint 或现成的几件；要你处理的其他状态（同步、连接）用 palette.color(.notice)，出错用 .failure（StatusTone）" \
-  '(?i:A8740A|EDBD57)' 'App/AppGroup/Waiting.swift'
+forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
+  '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
+  'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+forbid "不用系统色与系统灰（.secondary、.gray、NSColor.labelColor…）：冷灰与系统蓝和纸墨并排是两套颜色；次要字用 palette.ink2、辅助字 ink3、浅底 fill" \
+  '(?<![\w.])(?:Color\.|\.)(?:white|gray|grey|red|green|blue|orange|yellow|purple|pink|mint|teal|cyan|indigo|brown|accentColor)\b(?!\s*:)|\b(?:UIColor|NSColor)\.(?!clear\b)[a-z]\w*|(?:foregroundStyle|AnyShapeStyle|\.background|\.fill|\.tint)\(\s*\.(?:primary|secondary|tertiary|quaternary|quinary)\b|\.(?:secondary|tertiary|quaternary|quinary)\.opacity' \
+  'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+forbid "不在界面里给颜色叠透明度：每处各写一个透明度就多出一档颜色。用色板里现成的档（ink2、ink3、hair、fill、track、selection、wash…），没有就进色板加一个；渐变的透明端写 .opacity(0)" \
+  '(?:palette\.\w+|Color\.\w+|\.black|\.white)(?:\([^()]*\))?\.opacity\((?!0\))' \
+  'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**'
 forbid "出错只有一个样子：胭脂圆叹号，符号只在 Failure.swift（Failure.symbol、FailureMark），会话状态经 PiShown 引用它；不另画三角或叉" \
   '"(exclamationmark\.(circle|triangle)(\.fill)?|xmark\.(octagon|icloud)(\.fill)?)"' '**/Theme/Failure.swift'
 forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \

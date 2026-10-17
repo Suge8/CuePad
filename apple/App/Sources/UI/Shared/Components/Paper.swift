@@ -122,13 +122,13 @@ struct Thumbnail: View {
                 if let image {
                     Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: fitWidth == nil ? .fill : .fit)
                         // 深色下截图多是亮底，原样放在暗纸上刺眼：压暗一层
-                        .overlay { if palette.dark { Color.black.opacity(0.14) } }
+                        .overlay { palette.mediaDim }
                 }
             }
             .frame(width: width, height: height)
             .frame(maxWidth: fitWidth == nil ? .infinity : nil)
             .clipShape(.rect(cornerRadius: radius))
-            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(palette.hair))
             .task(id: hash) {
                 guard let url = services.store.files.fileURL(for: hash) else { return }
                 let pixels = Int(height * 3 * scale)
@@ -150,8 +150,8 @@ enum VariableText {
         let utf16 = text.utf16
         for range in CueVariables.ranges(in: text, within: NSRange(location: 0, length: utf16.count)) {
             guard let swiftRange = Range(range, in: text), let attributed = Range(swiftRange, in: result) else { continue }
-            result[attributed].foregroundColor = palette.variable
-            result[attributed].backgroundColor = palette.variableBackground
+            result[attributed].foregroundColor = palette.ink
+            result[attributed].backgroundColor = palette.fill
         }
         return result
     }

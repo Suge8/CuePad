@@ -55,7 +55,7 @@ struct TaskPage: View {
         } else if case .start(let leaf) = workspace.next(for: card, in: agents, steps: nil) {
             Button { navigation.handToAgent(leaf) } label: {
                 Label("开始", systemImage: "play.fill")
-                    .font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.onSignature)
+                    .font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 22).frame(height: TaskMetrics.rowHeight)
                     .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
             }
@@ -154,7 +154,7 @@ private struct AgentStatusCard: View {
             .padding(TaskMetrics.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(palette.paperLit, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.paperEdge()))
+            .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.hair))
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(.wide))

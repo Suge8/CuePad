@@ -140,12 +140,12 @@ private struct VariablesChip: View {
     var body: some View {
         Button { editing.toggle() } label: {
             HStack(spacing: 6) {
-                Text("{{\(names[0])}}").foregroundStyle(palette.variable)
+                Text("{{\(names[0])}}").foregroundStyle(palette.ink)
                 Text(card.variableValues[names[0]].flatMap { $0.isEmpty ? nil : $0 } ?? "未填")
-                    .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? .primary : .secondary)
+                    .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? palette.ink : palette.ink2)
                     .lineLimit(1)
-                if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(.secondary) }
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
+                if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(palette.ink2) }
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
             }
             .font(Typography.secondary.weight(.medium))
             .padding(.horizontal, 14).frame(height: 44)

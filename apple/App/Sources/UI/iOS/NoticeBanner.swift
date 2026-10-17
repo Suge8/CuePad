@@ -68,7 +68,7 @@ private struct NoticeCapsule: View {
             // 提示里的动作：撤销刚才那一下，或完成任务后的归档
             if let action = notice.action {
                 Button(action.title) { workspace.run(action) }
-                .fontWeight(.semibold).foregroundStyle(palette.accent)
+                .fontWeight(.semibold).foregroundStyle(palette.ink)
                 .padding(.trailing, 16).padding(.leading, 8).frame(minHeight: 44)
                 .contentShape(.rect)
             }
@@ -77,7 +77,7 @@ private struct NoticeCapsule: View {
         .frame(maxWidth: .infinity, minHeight: FloatingHeaderLayout.height)
         // 盖住的名牌、搜索框与正文不能透出来叠字。
         .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, ink: .solid)
-        .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)
+        .shadow(color: palette.shadow, radius: 12, y: 4)
         .accessibilityHint(notice.link == nil ? "" : "去那里看看")
         .accessibilityAddTraits(.updatesFrequently)
     }

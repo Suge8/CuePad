@@ -33,7 +33,7 @@ struct SubmitGlyph: View {
 
     var body: some View {
         CircleGlyph(fill: enabled ? palette.signatureFill : palette.fill) {
-            Image(systemName: action.symbol).font(.body.weight(.semibold)).foregroundStyle(enabled ? palette.onSignature : palette.ink3)
+            Image(systemName: action.symbol).font(.body.weight(.semibold)).foregroundStyle(enabled ? palette.onFill : palette.ink3)
         }
         .animation(Motion.quick, value: enabled)
     }

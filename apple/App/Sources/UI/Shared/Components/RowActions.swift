@@ -3,9 +3,19 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 一行上的动作按钮按什么语义上色（`Palette.actionFill`）：删除胭脂、主动作靛青、其余墨灰；赭黄只给"等你确认"，不在这里。
+/// 一行上的动作按钮按什么语义上色（`fill(_:)`）：删除胭脂、主动作靛青、其余墨灰；赭黄只给"等你确认"，不在这里。
 enum ActionTone: Sendable {
     case primary, neutral, quiet, destructive
+
+    /// 按钮底色，上面是 `onFill` 的图标与字；深色下都压在中等明度，在暗纸上也不是亮斑。
+    func fill(_ palette: Palette) -> Color {
+        switch self {
+        case .primary: palette.signatureFill
+        case .destructive: palette.failureFill
+        case .neutral: palette.neutralFill
+        case .quiet: palette.quietFill
+        }
+    }
 }
 
 /// 一行轻扫露出的一个动作（也画成长按菜单里的同一项与读屏动作）：标题、图标、颜色语义与要做的事。
@@ -43,7 +53,7 @@ struct RowActionButtons: View {
         ForEach(actions.keyed, id: \.key) { item in
             let action = item.action
             Button(action.title, systemImage: action.symbol, role: action.tone == .destructive ? .destructive : nil, action: action.run)
-                .tint(tinted ? palette.actionFill(action.tone) : nil)
+                .tint(tinted ? action.tone.fill(palette) : nil)
                 .disabled(!action.enabled)
         }
     }
@@ -151,9 +161,9 @@ private struct SwipeRow: ViewModifier {
             VStack(spacing: 5) {
                 Image(systemName: action.symbol)
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(palette.onSignature)
+                    .foregroundStyle(palette.onFill)
                     .frame(width: stretched ? max(width - 16, Self.pill.width) : Self.pill.width, height: Self.pill.height)
-                    .background(palette.actionFill(action.tone), in: .capsule)
+                    .background(action.tone.fill(palette), in: .capsule)
                 if size.height >= Self.labelHeight {
                     Text(action.title).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
                 }

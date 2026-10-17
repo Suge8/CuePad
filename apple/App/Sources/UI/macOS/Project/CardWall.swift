@@ -121,15 +121,15 @@ private struct MakeTaskButton: View {
                 workspace.attempt { try await workspace.setTodo(id, true) }
             } label: {
                 HStack(spacing: 5) {
-                    Circle().strokeBorder(hovering ? palette.onSignature : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
+                    Circle().strokeBorder(hovering ? palette.onFill : palette.ink2, lineWidth: 1.3).frame(width: 11, height: 11)
                     Text("设为任务").fontWeight(.medium)
                 }
                 .font(Typography.meta)
-                .foregroundStyle(hovering ? palette.onSignature : palette.ink)
+                .foregroundStyle(hovering ? palette.onFill : palette.ink)
                 .padding(.horizontal, 9).frame(height: 24)
                 .background(hovering ? palette.signatureFill : palette.paperLit, in: .capsule)
                 .overlay(Capsule().strokeBorder(palette.hair).opacity(hovering ? 0 : 1))
-                .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.08), radius: 6, y: 2)
+                .shadow(color: palette.shadow, radius: 6, y: 2)
                 .contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
@@ -158,7 +158,7 @@ struct DeleteCardButton: View {
                 .frame(width: 24, height: 24)
                 .background(palette.paperLit, in: .circle)
                 .overlay(Circle().strokeBorder(palette.hair))
-                .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.08), radius: 6, y: 2)
+                .shadow(color: palette.shadow, radius: 6, y: 2)
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle())
@@ -179,7 +179,7 @@ private struct SelectedFrame: View {
         if selected {
             RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.signature, lineWidth: 2)
                 .overlay(alignment: .topTrailing) {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(palette.onSignature, palette.signature)
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(palette.onFill, palette.signature)
                         .padding(10)
                 }
                 .allowsHitTesting(false)

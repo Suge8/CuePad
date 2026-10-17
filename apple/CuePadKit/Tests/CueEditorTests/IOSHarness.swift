@@ -20,7 +20,7 @@ extension CueEditorTheme {
         headingFont: .systemFont(ofSize: 20, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 15, weight: .regular),
         markerColor: .gray, codeBackground: UIColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
         variableColor: .purple, variableBackground: UIColor.purple.withAlphaComponent(0.12),
-        linkColor: .blue, placeholderColor: .lightGray,
+        imagePlaceholderColor: .lightGray,
         horizontalInset: 16, verticalInset: 12, lineSpacing: 3, headingSpacing: 8, imageCornerRadius: 6)
 }
 

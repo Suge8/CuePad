@@ -39,12 +39,12 @@ private struct PaperSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(palette.paperFill, in: shape)
-            .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
+            .overlay(shape.strokeBorder(palette.hair))
             // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，
             // 卡片一变宽（侧栏开合、拉窗口）整面墙每张都要重画，大库里开合侧栏的第一帧因此卡上百毫秒
             .overlay(alignment: .top) { palette.sheen.frame(height: 1).padding(.horizontal, radius).padding(.top, 1) }
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
-            .shadow(color: .black.opacity(palette.dark || !lifted ? 0 : 0.08), radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
+            .shadow(color: palette.dark || !lifted ? .clear : palette.shadow, radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
     }
 }
 
@@ -53,9 +53,6 @@ extension Palette {
     var paperFill: LinearGradient {
         LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
     }
-
-    /// 纸面的描边色。
-    func paperEdge(lifted: Bool = false) -> Color { dark ? Color.white.opacity(lifted ? 0.14 : 0.07) : hair }
 }
 
 private struct GlassSurface<S: Shape>: ViewModifier {
@@ -71,7 +68,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
         } else if ink == .solid {
-            content.background(palette.desk.opacity(0.9), in: shape).glassEffect(glass, in: shape)
+            content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }
@@ -83,7 +80,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     private var glass: Glass {
         // 深色的暗色调让标题下那行次要字对背后糊开的字够 4.5:1，又不至于成一块黑斑
         guard ink != .clear else { return .regular.interactive(interactive) }
-        return .regular.tint(palette.dark ? .black.opacity(0.4) : palette.paper.opacity(0.45)).interactive(interactive)
+        return .regular.tint(palette.legibleGlass).interactive(interactive)
     }
 }
 
@@ -236,12 +233,12 @@ struct ControlSurface: ViewModifier {
         } else {
             content
                 .font((compact ? Typography.meta : Typography.secondary).weight(.medium))
-                .foregroundStyle(kind == .primary ? palette.onSignature : kind == .highlight ? palette.signature : palette.ink)
+                .foregroundStyle(kind == .primary ? palette.onFill : kind == .highlight ? palette.signature : palette.ink)
                 .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 6)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
                 .background(kind == .primary ? palette.signatureFill : kind == .highlight ? palette.selection : kind == .quiet ? .clear : palette.fill, in: .capsule)
-                .overlay { Capsule().strokeBorder(kind == .secondary ? palette.hair : kind == .highlight ? palette.signature.opacity(0.18) : .clear, lineWidth: ControlMetrics.stroke) }
+                .overlay { Capsule().strokeBorder(kind == .secondary ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
                 #if os(iOS)
                 .frame(minHeight: ControlMetrics.height)
                 #endif

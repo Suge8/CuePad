@@ -20,9 +20,9 @@ struct SelectionBar: View {
                 .keyboardShortcut(.cancelAction)
             Button(role: .destructive) { delete() } label: {
                 Label("删除", systemImage: "trash")
-                    .font(Typography.secondary.weight(.semibold)).foregroundStyle(.white)
+                    .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onFill)
                     .padding(.horizontal, 14).frame(height: 32)
-                    .background(palette.failure, in: .capsule)
+                    .background(palette.failureFill, in: .capsule)
                     .contentShape(.capsule)
             }
             .keyboardShortcut(.delete, modifiers: .command)
