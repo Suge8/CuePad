@@ -56,8 +56,14 @@ extension Table {
 protocol Record: Sendable {
   static var table: Table { get }
   static var columns: [String] { get }
+  /// 读出时 SELECT 的列：默认就是 `columns`；有推出来的字段的记录在后面加上。
+  static var selection: String { get }
   var bindings: [any SQLBindable] { get }
   init(row: Row)
+}
+
+extension Record {
+  static var selection: String { columns.joined(separator: ", ") }
 }
 
 public struct Project: Identifiable, Equatable, Sendable {
@@ -102,7 +108,10 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var parentID: UUID?
   /// "设为任务"的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
-  /// 开始做的时间（手动置为进行中、或发给 Agent 时）；回到待办时清空。
+  /// 自己记下的开始时间（手动置为进行中、或发给 Agent 时；列 `startedAt`）；回到待办时清空。
+  var ownStartedAt: Date?
+  /// 开始的时间：自己记下的，没有时是步骤里最早开始（没开始就做完的算做完那一刻）的时刻——有步骤的任务从步骤推出，
+  /// 不另存（读出时由 `Card.startedSQL` 算，计数、正在推进与排序同一条 SQL）。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
   /// 发给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
@@ -120,14 +129,15 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 空白：正文只有空白（没有文字也没有图片）。空白灵感离开编辑就不留下（`CueStore.dropIfBlank`），也不计数、不当摘要。
   public var isBlank: Bool { body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-  /// 任务的三态；灵感为 nil。
+  /// 任务的三态（`TaskStatus`）；灵感为 nil。
   public var status: TaskStatus? {
     guard isTask else { return nil }
     return completedAt != nil ? .done : startedAt != nil ? .inProgress : .todo
   }
 }
 
-/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则有开始时间是进行中，都没有是待办。
+/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则开始过（`Card.startedAt`：自己的，或任一步骤开始过、做完过）是进行中，
+/// 都没有是待办。有步骤的任务不用另记开始：步骤一开工它就是进行中。
 public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
@@ -492,10 +502,26 @@ extension Card: Record {
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
     "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs",
   ]
+  static var selection: String { selection(as: "cards") }
+
+  /// 读卡片的列：存着的列加上推出来的开始时间（`startedSQL`），`init(row:)` 按这个顺序读。
+  static func selection(as alias: String) -> String {
+    (columns.map { "\(alias).\($0)" } + [startedSQL(alias)]).joined(separator: ", ")
+  }
+
+  /// 表 `alias` 里任务的开始时间（`Card.startedAt`）：自己记下的，没有时取步骤（没删除的下级任务）里最早的开始或做完时刻；灵感为 NULL。
+  /// 开始过就是进行中只在这里定义：卡片读出、顶层计数、正在推进的筛选与排序都用它。
+  static func startedSQL(_ alias: String) -> String {
+    """
+    CASE WHEN \(alias).todoAt IS NOT NULL THEN COALESCE(\(alias).startedAt, (SELECT MIN(COALESCE(s.startedAt, s.completedAt)) FROM cards s
+      WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)) END
+    """
+  }
+
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
+      parentID, todoAt, ownStartedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs),
     ]
   }
   init(row: Row) {
@@ -503,8 +529,8 @@ extension Card: Record {
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2), isPinned: row.bool(3),
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
-      parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
+      parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), ownStartedAt: row.dateOrNil(12), startedAt: row.dateOrNil(17),
+      completedAt: row.dateOrNil(13), piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15),
       formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 

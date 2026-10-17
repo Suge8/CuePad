@@ -201,7 +201,7 @@ struct SearchPalette: View {
             // 任务用全 App 同一个任务圈打头，灵感是文档或图片
             Group {
                 if card.isTask {
-                    TaskRingView(status: card.status, ring: .plain, done: false, size: 14)
+                    TaskRingView(status: card.status, done: false, size: 14)
                 } else {
                     Image(systemName: text.images.isEmpty ? "doc.text" : "photo").foregroundStyle(.secondary)
                 }

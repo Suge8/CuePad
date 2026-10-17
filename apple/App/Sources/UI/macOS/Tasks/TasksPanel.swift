@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
-/// 步骤缩进跟在任务下（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的步骤、横向拖改层级），一行一件，
-/// 顶层在行尾画所在项目的图标（悬停写全名），标题后一格"下一步"（同项目页，`TaskRow`）。点任务弹出任务浮窗（面板留着）。
+/// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中（跨项目、最近开始的在前，标题后跟项目小图标，悬停写全名）、
+/// 待办（按项目分段，段头写项目）、最近完成（折起），步骤缩进跟在任务下（`TaskOutline`：按住拖动排序、拖到一条上成为它的步骤、
+/// 横向拖改层级、拖进待办别的段换项目，拖动不改状态；进行中按开始时间排，两行之间不能落），
+/// 行与项目页同一种（`TaskLine`）。点任务弹出任务浮窗（面板留着）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -18,7 +19,7 @@ struct TasksPanel: View {
 
     private func isLazy(_ board: TaskBoard?) -> Bool {
         guard let board else { return false }
-        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id)).count
+        let open = board.tree.ordered.count
         return open + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
     }
 
@@ -27,7 +28,7 @@ struct TasksPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("任务").font(Typography.sectionTitle)
-                if let board { Text("\(board.counts.inProgress + board.counts.todo)").font(Typography.sectionCount).foregroundStyle(.secondary) }
+                if let board, board.counts.open > 0 { Text("\(board.counts.open)").font(Typography.sectionCount).foregroundStyle(.secondary) }
                 Spacer()
                 Button("关闭", systemImage: "xmark") { close() }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
@@ -67,11 +68,24 @@ struct TasksPanel: View {
 
     @ViewBuilder private func listContent(_ board: TaskBoard, lazy: Bool) -> some View {
         if board.inProgress.isEmpty && board.todo.isEmpty {
-            Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(Typography.secondary).foregroundStyle(.secondary)
-                .padding(.horizontal, 20).padding(.vertical, 12)
+            EmptyState(
+                mascot: board.done.isEmpty ? .empty : .clean, title: board.done.isEmpty ? "还没有任务" : "全部完成了",
+                message: board.done.isEmpty ? "在上面写一条" : nil, compact: true
+            ) { EmptyView() }
+            .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        section("进行中", board.inProgress, count: board.counts.inProgress, in: board, lazy: lazy)
-        section("待办", board.todo, count: board.counts.todo, in: board, lazy: lazy)
+        if !board.inProgress.isEmpty {
+            let projects = Dictionary(uniqueKeysWithValues: board.inProgress.map { ($0.id, $0.project) })
+            group("进行中", count: board.counts.inProgress)
+            TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), ordered: false, lazyAfter: lazy ? 0 : nil) { row in
+                TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil)
+            }
+            .padding(.horizontal, 12)
+        }
+        if !board.todo.isEmpty {
+            group("待办", count: board.counts.todo)
+            ForEach(board.todo) { section($0, in: board, lazy: lazy) }
+        }
         if !board.done.isEmpty {
             HStack {
                 Button {
@@ -91,27 +105,23 @@ struct TasksPanel: View {
         }
     }
 
-    @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row], count: Int, in board: TaskBoard, lazy: Bool) -> some View {
-        if !items.isEmpty {
-            HStack(spacing: 6) {
-                Text(title)
-                Text("\(count)").foregroundStyle(.tertiary)
-            }
-            .font(Typography.label).foregroundStyle(.secondary)
-            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
-            .accessibilityAddTraits(.isHeader)
-            TaskOutline(tree: board.tree, roots: items.map(\.id), lazyAfter: lazy ? 0 : nil) { row in
-                TaskRow(
-                    task: row.task, project: row.depth == 0 ? board.rows[row.id]?.project : nil,
-                    subtasks: board.subtasks[row.id])
-            }
-            .padding(.horizontal, 12)
+    private func group(_ title: String, count: Int) -> some View {
+        TaskGroupHeader(title: title, count: count)
+            .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 2)
+    }
+
+    @ViewBuilder private func section(_ section: TaskBoard.Section, in board: TaskBoard, lazy: Bool) -> some View {
+        TaskSectionHeader(project: section.project, count: section.roots.count)
+            .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 2)
+        TaskOutline(tree: board.tree, roots: section.roots, lazyAfter: lazy ? 0 : nil) { row in
+            TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0)
         }
+        .padding(.horizontal, 12)
     }
 
     private func rows(_ items: [TaskBoard.Row]) -> some View {
         ForEach(items) { row in
-            TaskRow(task: row.task, project: row.project)
+            TaskLine(task: row.task, project: row.project)
                 .padding(.horizontal, 12)
         }
     }

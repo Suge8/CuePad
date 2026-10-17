@@ -109,7 +109,7 @@ struct CueTaskLine: View {
     var body: some View {
         CueTaskButton(task: ref.task.id) {
             HStack(spacing: 6) {
-                TaskRingView(status: ref.task.status, ring: TaskRing(ref.progress), done: ref.done, size: 13)
+                TaskRingView(status: ref.task.status, done: ref.done, size: 13)
                 Text(ref.task.title).lineLimit(1)
                 if let progress = ref.progress, !ref.done {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().foregroundStyle(palette.ink3)

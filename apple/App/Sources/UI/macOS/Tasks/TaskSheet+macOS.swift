@@ -129,9 +129,9 @@ private struct StepRow: View {
         let done = check.done(step)
         // 开始在右边，这里只看会话那一格
         let next = workspace.next(for: step, in: agents, steps: nil)
-        HStack(spacing: TaskRow.columnGap) {
+        HStack(spacing: TaskMetrics.columnGap) {
             TaskCheckButton(
-                task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskRow.ringColumn, height: 14), check: $check,
+                task: step, agentBusy: next?.agentBusy ?? false, size: 14, target: CGSize(width: TaskMetrics.ringColumn, height: 14), check: $check,
                 rowTap: select)
             if selected {
                 TaskHeading(task: step, font: Typography.body).id(step.id)
@@ -142,7 +142,7 @@ private struct StepRow: View {
             if case .agent(let shown, let session) = next { PiStateDot(shown: shown, size: 6).relaySpot(session: session.sessionID) }
         }
         .animation(Motion.quick, value: done)
-        .padding(.horizontal, TaskRow.inset).frame(minHeight: 32)
+        .padding(.horizontal, TaskMetrics.rowInset).frame(minHeight: 32)
         .background(selected ? palette.paperLit.opacity(0.8) : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }

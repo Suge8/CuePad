@@ -39,7 +39,7 @@ struct ArchiveList: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Group {
                     if card.isTask {
-                        TaskRingView(status: card.status, ring: .plain, done: card.status == .done, size: 17)
+                        TaskRingView(status: card.status, done: card.status == .done, size: 17)
                     } else {
                         Image(systemName: "lightbulb").foregroundStyle(palette.ink3)
                     }

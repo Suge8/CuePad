@@ -129,7 +129,7 @@ struct PageTitleSlot: View {
     private func ring(_ task: Card) -> some View {
         let done = task.status == .done
         return Button { workspace.completeTask(task.id) } label: {
-            TaskRingView(status: task.status, ring: .plain, done: done, size: 15)
+            TaskRingView(status: task.status, done: done, size: 15)
                 .frame(width: 30, height: Spacing.toolbarControl)
                 .contentShape(.rect)
         }
