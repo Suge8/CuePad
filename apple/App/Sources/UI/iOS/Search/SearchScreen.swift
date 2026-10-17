@@ -34,6 +34,7 @@ struct SearchScreen: View {
             case .sessions: SessionList(model: sessions, filter: nil)
             }
         }
+        .fadesUnderBars(throughTopRow: compact)
         .safeAreaBar(edge: .top, spacing: 0) {
             VStack(spacing: 8) {
                 if !compact { RootBar { field } }

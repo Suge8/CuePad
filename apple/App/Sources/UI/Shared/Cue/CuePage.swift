@@ -85,6 +85,7 @@ struct CuePage: View {
         chat
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollDismissesKeyboard(.interactively)
+            .fadesUnderBars(throughTopRow: inBar)
             .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
             .overlay(alignment: .top) { CueHeader(inBar: inBar) }
             .safeAreaBar(edge: .bottom, spacing: 0) {
