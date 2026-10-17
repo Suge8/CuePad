@@ -53,11 +53,20 @@ import Testing
     try await store.setStatus(top.id, .todo)
     #expect(try await card(second.id).status == .done)
 
-    // 步骤不再算做完，已完成的上级跟着不再算做完；给用户看的数字只按顶层任务计
+    // 步骤不再算做完，已完成的上级跟着不再算做完：它有做完过的步骤，算开始过、是进行中；给用户看的数字只按顶层任务计
     try await store.setStatus(top.id, .done)
     try await store.setStatus(second.id, .todo)
-    #expect(try await card(top.id).status == .todo)
-    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 0))
+    #expect(try await card(top.id).status == .inProgress)
+    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 1, todo: 0, done: 0))
+
+    // 有步骤的任务从步骤推出开始：步骤一开工，上级就进行中，进正在推进
+    let plan = try await store.createTask("交付流转", in: project.id)
+    let step = try await store.createTask("实现并验收", under: plan.id)
+    #expect(try await card(plan.id).status == .todo)
+    try await store.linkCard(step.id, toSession: "s1")
+    #expect(try await card(plan.id).status == .inProgress)
+    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 2, todo: 0, done: 0))
+    #expect(try await store.startedTasks(topLevelOnly: true).map(\.id) == [plan.id, top.id])
   }
 
   @Test func 移动_不能成环或任务超两级_换项目带着子树_取消要做与进回收站时下级上提() async throws {

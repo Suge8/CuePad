@@ -32,24 +32,26 @@ struct TaskOutline<Line: View>: View {
     /// 前面那几行总在普通栈里：项目页折起时列出的行放这里，收起后大纲的高度当场是准的（懒加载栈对没建的行只报估算的高度，`TaskFoldAnchor`），
     /// 展开、收起也不重建它们。
     private let lazyAfter: Int?
+    /// 行的先后是同级的手动顺序：两行之间可以落（改顺序、换项目）。看板的进行中按开始时间排，为 false（规则见 `TaskTree.drop`）。
+    private let ordered: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drag = OutlineDrag()
     @State private var commits = 0
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
-    init(tree: TaskTree, roots: [UUID]? = nil, lazyAfter: Int? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+    init(tree: TaskTree, roots: [UUID]? = nil, ordered: Bool = true, lazyAfter: Int? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
         self.lazyAfter = lazyAfter
+        self.ordered = ordered
         whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
     }
 
-    #if os(iOS)
-    static var indentWidth: CGFloat { 24 }
-    #else
-    static var indentWidth: CGFloat { 18 }
-    #endif
+    /// 一级缩进：步骤的圈（小一号）左缘对着上级标题的起点（`TaskLine`），层级靠对齐读出来。
+    static var indentWidth: CGFloat {
+        TaskMetrics.ringColumn + TaskMetrics.columnGap - (TaskMetrics.ringColumn - TaskMetrics.stepRing) / 2
+    }
 
     // 视图体不读落点（拖动时每移一下都变）：只有高亮与插入线两个小视图读它，拖动期间列表本身不重算
     var body: some View {
@@ -100,7 +102,7 @@ struct TaskOutline<Line: View>: View {
         let start = drag.startX ?? point.x
         drag.startX = start
         let shift = Int(((point.x - start) / Self.indentWidth).rounded())
-        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift))
+        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift, gaps: ordered))
     }
 
     /// 只落自己大纲里拖出来的那一条：拖进来的内容与它不符（比如别处拖来的文字）就不动。

@@ -242,7 +242,8 @@ extension CueStore {
       """, [time, now, Self.idList(roots)])
   }
 
-  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办清掉开始时间；
+  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办连同没完成的下级清掉开始时间
+  /// （做完过的步骤还在时它仍算开始过，见 `TaskStatus`）；
   /// 完成的改成别的先经 `reopen`（连同已完成的上级、取回归档）。
   /// 只往下连带：步骤全做完，上级任务也不自动完成，完成一件事由用户说了算（进度只算步骤，见 `subtaskProgress`）。
   /// 灵感没有状态，抛 `notATask`。
@@ -250,7 +251,7 @@ extension CueStore {
     try write { _ = try applyStatus(id, status) }
   }
 
-  /// 把任务改成 `status`（必须在写事务内）；返回改后的状态。已经是它时不动。
+  /// 把任务改成 `status`（必须在写事务内）；返回改后库里的状态。已经是它时不动。
   @discardableResult
   func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
     guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -259,7 +260,12 @@ extension CueStore {
     let now = Date.stamp
     if current == .done { try reopen([id]) }
     switch status {
-    case .todo: try db.run("UPDATE cards SET startedAt = NULL, modifiedAt = ? WHERE id = ? AND startedAt IS NOT NULL", [now, id])
+    case .todo:
+      try db.run(
+        """
+        UPDATE cards SET startedAt = NULL, modifiedAt = ?1
+        WHERE startedAt IS NOT NULL AND completedAt IS NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
+        """, [now, id])
     case .inProgress: try db.run("UPDATE cards SET startedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND startedAt IS NULL", [now, id])
     case .done:
       try db.run(
@@ -268,7 +274,7 @@ extension CueStore {
         WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
         """, [now, id])
     }
-    return status
+    return try find(Card.self, id)?.status ?? status
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、

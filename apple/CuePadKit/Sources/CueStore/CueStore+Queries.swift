@@ -188,7 +188,7 @@ extension CueStore {
     let doneOnly = wanted == [.done]
     let tasks = try db.query(
       """
-      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
+      SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
       WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID IS ?")
       ORDER BY \(Self.taskProjectOrder), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
@@ -243,24 +243,23 @@ extension CueStore {
     // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿 cards_projectID_modifiedAt 逐张翻全部卡片，而不走 cards_todoAt 只翻任务
     let rows = try db.query(
       """
-      SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
-        SUM(t.completedAt IS NOT NULL)
-      \(Self.taskWithParent)
-      WHERE \(visibleTask) AND \(Self.topLevel) \(scope)
+      SELECT t.projectID, SUM(t.completedAt IS NULL AND began), SUM(t.completedAt IS NULL AND NOT began), SUM(t.completedAt IS NOT NULL)
+      FROM (SELECT t.projectID, t.completedAt, \(Card.startedSQL("t")) IS NOT NULL AS began \(Self.taskWithParent)
+      WHERE \(visibleTask) AND \(Self.topLevel) \(scope)) t
       GROUP BY +t.projectID
       """, arguments
     ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 进行中的任务（已开始、没完成），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
+  /// 进行中的任务（开始过、没完成，`Card.startedAt`），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
   /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：步骤跟着上级，上级也没完成时不单列）。
   public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
     try db.query(
       """
-      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.startedAt IS NOT NULL AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "")
-      ORDER BY t.startedAt DESC, \(Self.taskProjectOrder), t.sortKey, t.id
+      SELECT \(Card.selection(as: "t")) AS began \(Self.taskWithParent)
+      WHERE \(visibleTask) AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "") AND began IS NOT NULL
+      ORDER BY began DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
     ) { Card(row: $0) }
   }

@@ -224,7 +224,7 @@ struct TaskFlowTests {
         let open = [release.id, closed.id, orphan.id]
         #expect(Set(page.tasks.roots) == Set(open))
         #expect(catalog.openTasks[project] == open.count && board.counts.open == open.count)
-        #expect(board.inProgress.count + board.todo.count == open.count)
+        #expect(Set(board.inProgress.map(\.id) + board.todo.flatMap(\.roots)) == Set(open))
         let done = [fix.id, shipped.id]
         #expect(Set(board.done.map(\.id)) == Set(done) && board.counts.done == done.count)
         #expect(page.taskCounts == board.counts)
@@ -245,6 +245,8 @@ struct TaskFlowTests {
         let active = try await TaskBoard.active(limit: 2, from: store)
 
         #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
+        // 任务页的"进行中"与它同一批、同一个顺序
+        #expect(try await TaskBoard.read(from: store).inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
         #expect(try await TaskBoard.counts(from: store).inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤
     }
 
@@ -287,7 +289,8 @@ struct TaskFlowTests {
     }
 
     /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
-    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回。
+    /// 点掉已完成步骤的圆圈：不再算做完只有一种——它与已完成的上级清掉完成，开始过的回进行中、没开始过的回待办，在归档里的整件取回；
+    /// 上级从步骤推出开始，步骤开始过它就跟着进行中。
     @Test func 点掉已完成步骤的圆圈_上级跟着不再算做完_整件取回归档() async throws {
         let task = try await store.createTask("发布", in: nil)
         let step = try await store.createTask("跑检查", under: task.id)
@@ -300,7 +303,7 @@ struct TaskFlowTests {
 
         try await workspace.toggle(step.id)
         #expect(try await store.card(step.id)?.status == .inProgress)
-        #expect(try await store.card(task.id)?.status == .todo)
+        #expect(try await store.card(task.id)?.status == .inProgress)
         #expect(try await store.archived().isEmpty)
     }
 
