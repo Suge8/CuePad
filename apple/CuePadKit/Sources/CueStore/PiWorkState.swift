@@ -49,6 +49,13 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
 }
 
+extension PiWorkState {
+  /// 还有事没做完的状态（`hasPendingWork`），SQL `IN (…)` 里的列表。
+  static let pendingWorkSQL = sqlList(allCases.filter(\.hasPendingWork))
+  /// 收尾了的状态（已结束、被打断），SQL `IN (…)` 里的列表。
+  static let closedSQL = sqlList([ended, interrupted])
+}
+
 extension Open<PiWorkState> {
   /// 不认识的状态不算在干活。
   public var isWorking: Bool { known?.isWorking == true }
