@@ -94,9 +94,7 @@ struct ProjectGlyph: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 旁边总有项目名：图标只是装饰，读屏不念它的系统名
         Image(Self.icon(project?.icon))
-            .accessibilityHidden(true)
             .font(.system(size: size, weight: .medium))
             // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
