@@ -210,9 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let window = WindowFactory.main(content: RootViews.mainWindow(services, workspace: workspace))
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
         if DebugHooks.placesOffscreen(window) { return window }
-        let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
-        if !keeper.restore() { window.center() }
-        mainFrameKeeper = keeper
+        mainFrameKeeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
         return window
     }
 }

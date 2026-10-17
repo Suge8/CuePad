@@ -55,7 +55,6 @@ struct IsolationTests {
         let before = realDomain()
         let window = NSWindow(contentRect: NSRect(x: 100, y: 120, width: 640, height: 480), styleMask: [.titled, .resizable], backing: .buffered, defer: true)
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: settings)
-        #expect(!keeper.restore(), "没有存过位置时不应恢复")
 
         window.setFrame(NSRect(x: 200, y: 220, width: 700, height: 500), display: false)
         await Task.yield()  // 让订阅的任务先到位，再发通知
@@ -64,8 +63,9 @@ struct IsolationTests {
 
         #expect(realDomain() == before)
         let other = NSWindow(contentRect: .zero, styleMask: [.titled, .resizable], backing: .buffered, defer: true)
-        #expect(WindowFrameKeeper(window: other, name: "main", settings: settings).restore())
+        _ = WindowFrameKeeper(window: other, name: "main", settings: settings)
         #expect(other.frame.size == CGSize(width: 700, height: 500))
+        withExtendedLifetime(keeper) {}
     }
 }
 #endif
