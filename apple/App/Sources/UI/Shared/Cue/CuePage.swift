@@ -124,13 +124,12 @@ struct CuePage: View {
                 if first > 0 { EarlierRow(count: min(first, Self.paging.step), action: showEarlier) }
                 let live = live
                 let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
+                // 时间与那一格直接排进对话这一列，不另包一层：长对话滚动时每格少一个要摆的容器
                 ForEach(rows[first...]) { item in
                     let joined = thread.joined.contains(item.id), stamp = thread.stamps[item.id]
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let stamp { ChatTimeMarker(date: stamp).padding(.top, 18) }
-                        row(item, tasks: thread.tasks, lastYou: lastYou, live: live, joined: joined)
-                            .padding(.top, stamp != nil ? 6 : Self.gap(before: item.speaker, joined: joined))
-                    }
+                    if let stamp { ChatTimeMarker(date: stamp).padding(.top, 18) }
+                    row(item, tasks: thread.tasks, lastYou: lastYou, live: live, joined: joined)
+                        .padding(.top, stamp != nil ? 6 : Self.gap(before: item.speaker, joined: joined))
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
