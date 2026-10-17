@@ -22,16 +22,10 @@ extension AppServices {
     }
 
     private func publish(_ snapshots: WidgetSnapshots) throws {
-        let directory = location.snapshotsDirectory
-        if snapshots.projects != publishedSnapshots?.projects { try Snapshots.write(snapshots.projects, to: directory) }
-        if snapshots.unfiled != publishedSnapshots?.unfiled {
-            try Snapshots.write(snapshots.unfiled, to: directory)
-            reloadWidgets()
-        }
-        if snapshots.cue != publishedSnapshots?.cue {
-            try Snapshots.write(snapshots.cue, to: directory)
-            reloadWidgets()
-        }
+        let old = publishedSnapshots
+        try write(snapshots.projects, over: old?.projects)
+        let shown = [try write(snapshots.unfiled, over: old?.unfiled), try write(snapshots.cue, over: old?.cue)]
+        if shown.contains(true) { reloadWidgets() }
         publishedSnapshots = snapshots
     }
 
@@ -39,6 +33,14 @@ extension AppServices {
         #if os(iOS)
         WidgetCenter.shared.reloadAllTimelines()
         #endif
+    }
+
+    /// 和上次写出的一样就不写；返回写了没有。
+    @discardableResult
+    private func write<S: SnapshotFile & Equatable>(_ snapshot: S, over old: S?) throws -> Bool {
+        guard snapshot != old else { return false }
+        try Snapshots.write(snapshot, to: location.snapshotsDirectory)
+        return true
     }
 }
 
