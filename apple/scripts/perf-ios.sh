@@ -15,23 +15,20 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_sim.sh"
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_lock.sh"
+# shellcheck source=_perf.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_perf.sh"
 xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
-DERIVED="$APPLE_DIR/.derived-perf-ios"
+DERIVED="$PERF_IOS_DERIVED"
 BUNDLE_ID=com.sugeh.cuepad
 
-mkdir -p "$DERIVED"
 udid="$(sim_udid "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
-# shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
-xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
-  -destination "platform=iOS Simulator,id=$udid" -derivedDataPath "$DERIVED" -quiet build \
-  DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- 'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' \
-  >"$DERIVED/build.log" 2>&1 || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
+perf_build ios "$udid"
 
 # 每次从刚开机的模拟器量：开着很久的模拟器上（尤其用过 axe 查界面、点按之后）同一交互的指令数能高出一倍。量完开着留给别的任务
 xcrun simctl shutdown "$udid" 2>/dev/null || true
 sim_boot "$udid"
-xcrun simctl install "$udid" "$DERIVED/Build/Products/Release-iphonesimulator/CuePad.app"
+xcrun simctl install "$udid" "$PERF_IOS_APP"
 
 running() { local list; list="$(xcrun simctl spawn "$udid" launchctl list 2>/dev/null)"; [[ "$list" == *"UIKitApplication:$BUNDLE_ID"* ]]; }
 rows="$DERIVED/interact.jsonl"

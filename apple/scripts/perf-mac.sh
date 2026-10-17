@@ -11,29 +11,16 @@ set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_lock.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_lock.sh"
+# shellcheck source=_perf.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_perf.sh"
 xc_enter exclusive "$0" "$@"
 runs="${1:-3}"
 extra=("${@:2}")
 
-DERIVED="$APPLE_DIR/.derived-perf-release"
-EXE="$DERIVED/Build/Products/Release/CuePad.app/Contents/MacOS/CuePad"
+DERIVED="$PERF_MAC_DERIVED"
 LIBRARY="$DERIVED/library-perf"
-
-mkdir -p "$DERIVED"
-# 本机 ad-hoc 签名；关掉 hardened runtime，否则 ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
-# shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
-xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
-  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED" -quiet build \
-  DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements \
-  'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' ENABLE_HARDENED_RUNTIME=NO \
-  >"$DERIVED/build.log" 2>&1 || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
-
-# exec：在后台调用时 $! 就是 CuePad 本身，结束它不会留下进程
-launch() {
-  local library="$1"; shift
-  CUEPAD_LIBRARY_DIR="$library" PI_CODING_AGENT_DIR="$DERIVED/pi-agent" CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-perf-$(id -u)" \
-    exec "$EXE" "$@"
-}
+perf_build mac
+launch() { perf_launch_mac "$@"; }
 
 # 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动
 if [ ! -f "$LIBRARY/cuepad.db" ]; then

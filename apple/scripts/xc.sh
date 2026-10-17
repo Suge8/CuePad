@@ -8,6 +8,7 @@
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh test kit [swift test 参数…]   CuePadKit 的 swift test（macOS），如 --filter SuiteName
 #       xc.sh perf <mac|ios> [参数…]   单次交互的性能测量（perf-mac.sh、perf-ios.sh，参数见各自头注释），独占机器
+#       xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   空闲与常驻开销：启动到就绪、唤醒、指令、CPU、能耗、内存（perf-idle.sh），独占机器
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # 产物目录固定是本检出的 apple/.derived（Kit 是 CuePadKit/.build）：每个检出一份增量。同一检出的任务排队、性能测量独占机器、
@@ -62,8 +63,8 @@ case "$cmd" in
   provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
   perf)
     case "$platform" in
-      mac|ios) exec "$APPLE_DIR/scripts/perf-$platform.sh" "${@:3}" ;;
-      *) echo "用法：$0 perf <mac|ios> [参数…]" >&2; exit 2 ;;
+      mac|ios|idle) exec "$APPLE_DIR/scripts/perf-$platform.sh" "${@:3}" ;;
+      *) echo "用法：$0 perf <mac|ios|idle> [参数…]" >&2; exit 2 ;;
     esac ;;
   test|shot|rec) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
   check|build|run) xc_enter plain "$0" "$@" ;;

@@ -60,7 +60,7 @@ bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
 
 ## 性能测量
 
-测量只有一个入口：单次交互（`-CuePadBench interact`）。`xc.sh perf mac`、`xc.sh perf ios`（独占机器；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。方法与坑：
+交互的测量入口是单次交互（`-CuePadBench interact`）：`xc.sh perf mac`、`xc.sh perf ios`（独占机器；口径与限制见 `perf-mac.sh`、`perf-ios.sh` 的头注释），场景与指标在 `App/Sources/UI/Debug/InteractionBench.swift`。空闲与常驻开销（启动到就绪、每秒唤醒、指令、CPU、能耗、内存）是 `xc.sh perf idle <mac|ios>`，从进程外读内核记账，可同时录 xctrace（见 `perf-idle.sh` 头注释）。方法与坑：
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
 - 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
