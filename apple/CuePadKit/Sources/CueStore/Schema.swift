@@ -75,12 +75,12 @@ enum Schema {
   /// 不碰带问答长文的会话记录本身（真实库四千多条，整表冷读约 75ms）。
   private static let folderIndex = """
     CREATE INDEX piSessionStates_folder ON piSessionStates(hostID, folder, stateSince, sessionID, projectID)
-      WHERE folder IS NOT NULL AND folder != '';
+      WHERE \(CueStore.hasFolder);
     """
   /// 清理过期对话（`CueStore.prunePiMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
   private static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
-  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式要与查询里的一字不差。
-  private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(COALESCE(agent, 'pi'));"
+  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
+  private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
 
