@@ -10,6 +10,8 @@ struct WaitingCount: View {
     var body: some View {
         if count > 0 {
             Text("等你 \(count)").fontWeight(.semibold).monospacedDigit().foregroundStyle(palette.waiting)
+                // 数变了数字滚过去（动画由外面给），不两个数叠着淡
+                .contentTransition(.numericText(value: Double(count)))
                 .fixedSize()
                 .transition(.opacity)
         }

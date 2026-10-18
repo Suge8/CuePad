@@ -292,8 +292,12 @@ struct CueWaitingDock: View {
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
     @State private var reading: UUID?
-    /// 不允许时另外说的话（换下一条时随视图身份清空）。
+    /// 不允许时另外说的话。
     @State private var otherwise = ""
+    /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
+    @State private var shown: CueMessage?
+    /// 露出的比例（`RiseBehind`），0 是全藏在输入框后面。
+    @State private var rise: CGFloat = 0
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
@@ -303,54 +307,66 @@ struct CueWaitingDock: View {
     private static let fieldHeight: CGFloat = 40
     #endif
 
-    /// 一条换下一条时新卡压在沉下的旧卡上原地交替（底边对齐叠放）：竖排的话两张同时占位，底栏一下高一倍、对话跟着跳。
+    /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
+    /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出。
     /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
-        ZStack(alignment: .bottom) { card }
+        ZStack(alignment: .bottom) {
+            if let message = shown {
+                card(waiting.first { $0.id == message.id } ?? message)
+                    .id(message.id)
+                    .transition(.entry)
+            }
+        }
+        .modifier(RiseBehind(shown: rise))
+        .onChange(of: waiting.first?.id, initial: true) { old, new in follow(animated: old != new) }
     }
 
     private static let below: CGFloat = 8
 
-    @ViewBuilder private var card: some View {
-        if let message = waiting.first {
-            let ref = message.taskID.flatMap { tasks[$0] }
-            let question = (message.ask ?? .rule).question(task: ref?.task.heading)
-            VStack(alignment: .leading, spacing: 12) {
-                CueQuestionLine(question: question)
-                if reading == message.id { original(message.text).transition(.opacity) }
-                if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
-                    let batch = Array(deliverables)
-                    DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 16) {
-                        open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
-                    }
-                }
-                CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
-                otherwiseField(message)
-                HStack(spacing: 10) {
-                    if let ref { CueTaskLine(ref: ref) }
-                    Spacer(minLength: 0)
-                    let others = waiting.count - 1
-                    if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
-                    originalToggle(message)
-                }
+    /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替。
+    private func follow(animated: Bool) {
+        let spatial = animated ? Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) : nil
+        guard let next = waiting.first else {
+            guard shown != nil else { return }
+            guard let spatial else {
+                shown = nil
+                return
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .paper(radius: ComposerMetrics.radius, lifted: true, wash: PiShown(status: .asking).wash(palette))
-            .animation(Motion.quick, value: reading)
-            .id(message.id)
-            .padding(.bottom, Self.below)
-            .transition(Self.arrival(reduceMotion: reduceMotion))
+            withAnimation(spatial) { rise = 0 } completion: { if waiting.isEmpty { shown = nil } }
+            return
         }
+        shown = next
+        withAnimation(spatial) { rise = 1 }
     }
 
-    /// 从输入框那边升起（淡入、从 96% 放大、上移一小段），答完沉到输入框后面淡出，与对话让出、收回的那段滑动同一条曲线
-    /// （`ChatScroll`）：原地淡出的话对话会从半透明的卡底下穿过去。减弱动态效果时只淡入淡出。
-    private static func arrival(reduceMotion: Bool) -> AnyTransition {
-        guard !reduceMotion else { return .entry }
-        let rise = AnyTransition.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)).combined(with: .offset(y: 12))
-        let sink = AnyTransition.opacity.combined(with: .move(edge: .bottom))
-        return .asymmetric(insertion: rise.animation(Motion.snappy), removal: sink.animation(Motion.snappy))
+    private func card(_ message: CueMessage) -> some View {
+        let ref = message.taskID.flatMap { tasks[$0] }
+        let question = (message.ask ?? .rule).question(task: ref?.task.heading)
+        return VStack(alignment: .leading, spacing: 12) {
+            CueQuestionLine(question: question)
+            if reading == message.id { original(message.text).transition(.opacity) }
+            if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
+                let batch = Array(deliverables)
+                DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 16) {
+                    open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
+                }
+            }
+            CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
+            otherwiseField(message)
+            HStack(spacing: 10) {
+                if let ref { CueTaskLine(ref: ref) }
+                Spacer(minLength: 0)
+                let others = waiting.count - 1
+                if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
+                originalToggle(message)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: ComposerMetrics.radius, lifted: true, wash: PiShown(status: .asking).wash(palette))
+        .animation(Motion.quick, value: reading)
+        .padding(.bottom, Self.below)
     }
 
     /// Cue 的原话：放得下就整段，放不下在 `originalHeight` 里滚。
@@ -411,5 +427,44 @@ struct CueWaitingDock: View {
             defer { ending = nil }
             try await workspace.answerCueQuestion(message, text)
         }
+    }
+}
+
+/// "等你"卡从输入框后面升起、沉回去：占的高随曲线从 0 长到整高（沉回去反过来），卡不透明、顶边跟着上来，没露出的下半截裁在输入框后面。
+/// 占的高本身在变，底栏、对话让出的地方（手机是安全区，Mac 是浮着的回复框）与卡每一帧都是同一个高：
+/// 只动卡（淡入、平移）的话底栏当帧就是整高，对话先一下被顶开、空着等卡补进来，沉下时对话又从半透明的卡底下穿过。
+/// 代价是这 0.25 秒里底栏每帧排一次，对话只跟着挪偏移。
+private struct RiseBehind: ViewModifier, Animatable {
+    /// 露出的比例，0 是全藏在输入框后面。
+    var shown: CGFloat
+
+    var animatableData: CGFloat {
+        get { shown }
+        set { shown = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        RiseLayout(shown: shown) { content }
+            // 只裁下沿（输入框那边）：两边与上面让出卡的影子
+            .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom) }
+    }
+
+    private static let shadowRoom: CGFloat = 24
+}
+
+/// 按露出的比例占高，孩子按整高顶对齐排：顶边随占的高上下，下半截在外面。
+private struct RiseLayout: Layout {
+    let shown: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: size.width, height: size.height * shown)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        child.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
 }

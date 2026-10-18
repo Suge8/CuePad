@@ -63,17 +63,21 @@ struct CueStatusLine: View {
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
             if syncing {
-                SyncingLabel().transition(.opacity)
+                SyncingLabel().transition(Self.handOff)
             } else if let shown {
-                PiShownLabel(shown: shown)
+                PiShownLabel(shown: shown).transition(Self.handOff)
             } else if let line = cue.presence.line(name: cue.name) ?? fallback {
-                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
+                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).transition(Self.handOff)
             }
         }
         .font(font)
         .transition(.opacity)
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
+
+    /// 换一种说法时旧的先淡掉、新的随后淡入：长短不同的两句在同一处交叉淡，中间几帧叠成读不出的一团。
+    private static let handOff = AnyTransition.asymmetric(
+        insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 
     private var shown: PiShown? {
         #if os(macOS)

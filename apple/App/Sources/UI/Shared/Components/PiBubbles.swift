@@ -252,8 +252,8 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: 2) {
             UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue, joined: joined) { menu(trip) }
-            // 与气泡显出实色同一拍换字（发送中 → 已送达）
-            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset).animation(Motion.quick, value: trip.bubble)
+            // 与气泡显出实色同一拍淡着换字（发送中 → 已送达，`entry`）
+            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .transition(Bubble.arrival(.trailing, reduceMotion: reduceMotion))
@@ -264,10 +264,12 @@ struct SpeechBubble<Menu: View>: View {
         case .sending:
             NoteLine { Spinner(.mini) } label: { Text(transit?.label ?? "发送中") }
                 .accessibilityElement(children: .combine)
+                .transition(.entry)
         case .delivered:
             if showsDelivered {
                 NoteLine(icon: .delivered) { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
                     .accessibilityElement(children: .combine)
+                    .transition(.entry)
             }
         case .failed(let failure):
             HStack(spacing: 10) {
