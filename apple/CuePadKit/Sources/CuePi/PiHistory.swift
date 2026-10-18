@@ -24,7 +24,7 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
     /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
-    var modified: Date?
+    public internal(set) var modified: Date?
     var fingerprint: UInt64 = 0
     var fingerprintLength = 0
     var sessionID: String?
@@ -82,8 +82,6 @@ public struct PiHistoryUpdate: Sendable {
     public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 会话文件的修改时间（列目录或读文件时取的）
-    public var modified: Date?
     /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
@@ -167,7 +165,7 @@ public enum PiHistory {
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
-            modified: modified, bytesRead: Int(consumed - start))
+            bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。

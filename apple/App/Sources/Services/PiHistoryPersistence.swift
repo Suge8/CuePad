@@ -87,7 +87,7 @@ actor PiHistoryPersistence {
                 path: update.file.path,
                 cwd: history.cwd ?? "",
                 title: history.displayName,
-                lastActivityAt: history.lastActivity ?? update.modified ?? .distantPast,
+                lastActivityAt: history.lastActivity ?? update.checkpoint.modified ?? .distantPast,
                 agent: update.agent)
             return PiSessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: update.transcript)
         }
