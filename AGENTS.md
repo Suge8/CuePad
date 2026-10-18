@@ -4,7 +4,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 
 ## 命令
 
-- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`；调试实例只用 `xc.sh shot|rec|run` 起、`xc.sh stop` 收：隔离，Mac 每个检出最多一份、一定退出；别的进程只按自己拿到的 PID 结束。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。`cuepad --help` 是命令行唯一文档。测试摘要里的 "Executed N tests" 只数 XCTest，Swift Testing 的用例不在内。
+- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），共用包是 `xc.sh test kit`；调试实例只用 `xc.sh shot|rec|run` 起（隔离、用完自己退出，`run` 起的用 `xc.sh stop` 收），别的进程只按自己拿到的 PID 结束。绕开它的构建命令和按名字或 bundle id 起停 CuePad（与正式版同一个 bundle id）会被 Pi 扩展拦下。`cuepad --help` 是命令行唯一文档。测试摘要里的 "Executed N tests" 只数 XCTest，Swift Testing 的用例不在内。
 - 提交前跑 `apple/scripts/xc.sh check`。
 - 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：旧的模块缓存，依赖它的模块还按旧内存布局读。删 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 再编，仍不行就删掉 `apple/.derived` 整编（系统 SDK 的预编译模块在 `~/Library/Caches/cuepad-xc`，各检出共用，不随它删）。
 
@@ -12,7 +12,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 
 - 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`。主检出只读：那里常有别人没提交的改动。
 - 发布只在干净检出运行 `xc.sh release`，对外发布只在用户明确要求时做（见 docs/release.md）。
-- 本机构建只开隔离库：`xc.sh` 起的实例把库、偏好、各家 Agent 的配置目录与命令行链接都放进隔离目录（`app.py` 的 `isolated_env`），终端里起的会话要连上它就 `export CUEPAD_PI_SOCKET_DIR=$(python3 apple/scripts/app.py sockets)`。不读写真实资料库（位置见 `LibraryLocation`）、偏好域 `com.sugeh.cuepad`、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
+- 本机构建只开隔离库（隔离哪些目录只在 `app.py` 的 `isolated_env`）；终端里起的会话要连上 `xc.sh` 起的实例就 `export CUEPAD_PI_SOCKET_DIR=$(python3 apple/scripts/app.py sockets)`。不读写真实资料库（位置见 `LibraryLocation`）、偏好域 `com.sugeh.cuepad`、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
 - 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（docs/verify.md）。
 - 跨会话、暂不做的待办在 GitHub Issues（`gh issue list`）；谁在做什么看 `git worktree list` 的分支名。

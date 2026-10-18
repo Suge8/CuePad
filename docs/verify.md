@@ -10,9 +10,8 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 ```
 
 - Debug 认的启动参数只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里。调试键不写进偏好域：预填的搜索词只认启动参数。
-- Mac 窗口默认 1440×900，别的尺寸给 `-CuePadWindowSize`。按窗口拍，挡着的窗口、阴影、录屏标记不进画面；图的像素是窗口在屏上的像素，这台 Mac 接的是 1x 屏，Mac 图就是 1 倍像素（输出里会注明）。
-- 调度中心、台前调度开着时系统把窗口缩小显示，拍到的尺寸不对，`xc.sh` 报错不出图：台前调度在构建前就查；调度中心要用户收起，Agent 不发系统按键。
-- 模拟器状态栏固定 9:41、满格满电。
+- Mac 窗口默认 1440×900，别的尺寸给 `-CuePadWindowSize`。按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏，Mac 图就是 1 倍像素。
+- 报窗口被缩小显示时，是调度中心或台前调度开着：请用户收起，Agent 不发系统按键。
 - 后台窗口里的网页截图不可信（过几秒就成了空白）：看网页预览用 `-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview`，载入完存成 PNG）。
 - Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（会到前台），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。
 - 录屏：会话状态切换配 `-CuePadCycle YES`；冷启动首屏给 `CUEPAD_REC_LAUNCH=1`（ios、ipad，从启动前开录），配 `-CuePadSync arrive` 看启动后拉到一批别处写下的话。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。
@@ -61,14 +60,13 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 ## 性能测量
 
-测量只有两个入口，都是 Release 构建（带 DEBUG 条件留下测量代码，产物在 `apple/.derived-perf`）、每次全新进程、多次取中位，前后对比就是两个检出各跑同一条命令：
+测量只有两个入口，都是 Release 构建（带 DEBUG 条件留下测量代码，产物在 `apple/.derived-perf`）、每次全新进程、多次取中位。前后对比是旧新两个检出交替各跑同一条命令，以指令数（`instructionsM`）与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
 
 - 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，构建完只在测量那段独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
-- 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] [启动参数…]`，从进程外读内核记账，不独占机器：前后对比看指令与唤醒，CPU 毫秒、能耗、启动到就绪受调度影响只作参考；`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh`、`rusage.py` 头注释）。
+- 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] [启动参数…]`，从进程外读内核记账，不独占机器；`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh`、`rusage.py` 头注释）。
 
 方法与坑：
 
-- 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。
 - 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
 - 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。

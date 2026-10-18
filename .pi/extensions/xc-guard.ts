@@ -24,10 +24,7 @@ function structure(command: string): string {
 	for (let i = 0; i < lines.length; i++) {
 		kept.push(lines[i]);
 		const heredoc = lines[i].match(/(?:^|[^<])<<-?\s*(?!<)['"]?(\w+)['"]?/);
-		// 引号里的 << 不是 heredoc：前面的引号没配对就不算
-		const before = heredoc ? lines[i].slice(0, heredoc.index) : "";
-		if (heredoc && (before.split("'").length - 1) % 2 === 0 && (before.split('"').length - 1) % 2 === 0)
-			while (i + 1 < lines.length && lines[i + 1].trim() !== heredoc[1]) i++;
+		if (heredoc) while (i + 1 < lines.length && lines[i + 1].trim() !== heredoc[1]) i++;
 	}
 	const text = kept.join("\n");
 	// 栈顶是当前所在：单引号、双引号，或双引号里的 $( 与括号（那里又是要执行的代码）
@@ -63,7 +60,6 @@ function blocked(command: string): string | undefined {
 		const words = segment.trim().split(/\s+/).map((word) => word.replace(/^["']|["']$/g, ""));
 		let i = 0;
 		while (i < words.length && (/^\w+=/.test(words[i]) || PREFIXES.has(words[i]) || /^-|^\d+$/.test(words[i]))) i++;
-		if (words.slice(0, i).some((w) => /^CUEPAD_SIM=/.test(w))) return "CUEPAD_SIM 是 xc.sh 入口锁内部用的，手设就绕过了排队与模拟器分配。直接调 xc.sh。";
 		const program = words[i]?.split("/").pop();
 		const sub = words[i + 1];
 		const args = words.slice(i + 1);

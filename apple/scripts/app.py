@@ -57,8 +57,8 @@ def isolated_env(library, sockets=SOCKETS):
     if library == REAL_LIBRARY or library.startswith(REAL_LIBRARY + "/"):
         die(f"{library} 是真实资料库：本机构建一打开就升级结构、改写并同步出去。用只读副本（docs/verify.md「真实数据复现」）")
     agents = f"{library}/agents"
-    # 锁与测量构建的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
-    inherited = {k: v for k, v in os.environ.items() if k not in ("CUEPAD_SIM", "CUEPAD_PERF_BUILD")}
+    # 锁的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
+    inherited = {k: v for k, v in os.environ.items() if k != "CUEPAD_SIM"}
     return dict(inherited, CUEPAD_LIBRARY_DIR=library, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_PI_SOCKET_DIR=sockets,
                 PI_CODING_AGENT_DIR=f"{agents}/pi", CLAUDE_CONFIG_DIR=f"{agents}/claude",
                 CODEX_HOME=f"{agents}/codex", OPENCODE_CONFIG_DIR=f"{agents}/opencode")
@@ -103,7 +103,7 @@ def quit_mac(proc):
             pass
 
 
-def wait_ready(path, pid, log):
+def wait_ready(path, pid, log=""):
     """等就绪文件出现；App 先退出（多半是崩了）或超时就失败。"""
     queue, folder = select.kqueue(), os.open(os.path.dirname(path), os.O_RDONLY)
     try:
@@ -117,10 +117,10 @@ def wait_ready(path, pid, log):
         deadline = time.monotonic() + READY_TIMEOUT
         while not os.path.exists(path):
             if exited:
-                die(f"App 在画面就绪前退出了：崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips，输出在 {log}")
+                die(f"App 在画面就绪前退出了：崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips{log and '，输出在 ' + log}")
             left = deadline - time.monotonic()
             if left <= 0:
-                die(f"{READY_TIMEOUT} 秒内画面没有就绪（没有写下 {path}），输出在 {log}")
+                die(f"{READY_TIMEOUT} 秒内画面没有就绪（没有写下 {path}）{log and '，输出在 ' + log}")
             exited = any(e.filter == select.KQ_FILTER_PROC for e in queue.control(None, 2, left))
     finally:
         os.close(folder)
@@ -316,7 +316,7 @@ def stop_recording(proc):
 
 
 def sim(cmd, device, app, library, out, args):
-    ready, log = f"{RUNTIME}/ready-{device}", "模拟器里（xcrun simctl spawn <UDID> log show）"
+    ready = f"{RUNTIME}/ready-{device}"
     simctl("install", device, app)
     simctl("status_bar", device, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
            "--cellularMode", "active", "--cellularBars", "4", "--wifiBars", "3")
@@ -329,7 +329,7 @@ def sim(cmd, device, app, library, out, args):
             stop_recording(rec)
         else:
             pid = launch_sim(device, library, args, ready)
-            wait_ready(ready, pid, log)
+            wait_ready(ready, pid)
             if cmd == "run":
                 print(pid, device)
                 return
