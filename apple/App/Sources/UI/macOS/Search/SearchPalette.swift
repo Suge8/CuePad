@@ -105,7 +105,7 @@ struct SearchPalette: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(.search).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
+            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
                 .onSubmit {

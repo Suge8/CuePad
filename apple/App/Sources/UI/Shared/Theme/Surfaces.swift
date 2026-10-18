@@ -72,7 +72,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
         } else if ink == .solid {
-            content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape)
+            // 实底垫在玻璃下面、不在玻璃里：顶栏里的玻璃由系统提到它那一层上画，垫在里面的实底不起作用，玻璃照样透着背后的图
+            content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }

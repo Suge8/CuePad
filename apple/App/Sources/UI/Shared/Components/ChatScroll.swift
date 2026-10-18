@@ -159,7 +159,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var deferred = false
     /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
     @State private var unheld = false
-    /// 排到下一帧的上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    /// 排到下一帧、直到滑完的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
     @State private var sliding: Task<Void, Never>?
 
     init(
@@ -339,9 +339,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         sliding = Task {
             await NextFrame.wait()
             guard !Task.isCancelled else { return }
-            sliding = nil
-            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) } completion: { settle() }
+            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return sliding = nil }
+            // 滑完之前一直记着在滑：补滚（`settle`）看到在滑就不动，不把滑到一半的截成一跳
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) } completion: {
+                sliding = nil
+                settle()
+            }
         }
     }
 

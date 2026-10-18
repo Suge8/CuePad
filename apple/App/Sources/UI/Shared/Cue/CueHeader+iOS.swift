@@ -39,7 +39,7 @@ struct CueHeader: View {
             glass
                 // 提示横幅暂时盖住导航栏那一排（`NoticeBanner`，iPhone 上页头就在那一排里）：页头让开，不与横幅叠成两层玻璃、露出半个头像
                 .opacity(inBar && workspace.notice != nil && !expanded ? 0 : 1)
-                .animation(Self.giveWay(workspace.notice), value: workspace.notice != nil)
+                .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
                 .inNavigationBarRow(inBar, height: Self.height, tap: toggle)
                 .padding(.horizontal, Self.edge).padding(.top, inBar ? 0 : Self.top)
         }
@@ -54,7 +54,7 @@ struct CueHeader: View {
             // 往上划收起只认页头那一条：面板里放不下时要往上划着滚
             Button(action: toggle) {
                 // 面板开着时横幅只盖住头那一排：这一排让开，面板照常
-                head.opacity(inBar && workspace.notice != nil ? 0 : 1).animation(Self.giveWay(workspace.notice), value: workspace.notice != nil)
+                head.opacity(inBar && workspace.notice != nil ? 0 : 1).animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
             }
                 .buttonStyle(.plain)
                 .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in
@@ -103,10 +103,6 @@ struct CueHeader: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// 给横幅让开立刻淡出；横幅收走后等它离场再淡回来，两块玻璃不叠着交叉淡。
-    private static func giveWay(_ notice: Workspace.Notice?) -> Animation {
-        notice == nil ? Motion.quick.delay(0.12) : Motion.quick
-    }
 
     private func toggle() {
         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { expanded.toggle() }

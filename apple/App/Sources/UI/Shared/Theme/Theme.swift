@@ -7,6 +7,13 @@ nonisolated enum StatusTone: Equatable {
     case calm, notice, failure
 }
 
+extension TextField where Label == Text {
+    /// 自己画底的一行输入（纸、玻璃上）：占位字用第三档墨色。系统的占位灰在纸与玻璃上不到 4.5:1，与输入框里的占位字也不同深（docs/ui.md）。
+    init(_ prompt: String, text: Binding<String>, palette: Palette, axis: Axis = .horizontal) {
+        self.init(text: text, prompt: Text(prompt).foregroundStyle(palette.ink3), axis: axis) { Text(prompt) }
+    }
+}
+
 extension Palette {
     /// 状态的颜色；`muted` 是写在名称下面的那行状态字，平静时比图标再淡一级。
     func color(_ tone: StatusTone, muted: Bool = false) -> Color {

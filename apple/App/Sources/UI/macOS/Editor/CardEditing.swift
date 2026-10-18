@@ -165,7 +165,7 @@ private struct VariablesForm: View {
     var body: some View {
         Form {
             ForEach(names, id: \.self) { name in
-                TextField("{{\(name)}}", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
+                TextField("{{\(name)}}", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }), palette: palette)
             }
         }
         .formStyle(.grouped)

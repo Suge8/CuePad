@@ -71,7 +71,7 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
                         }
                     }
                 }
-                // 玻璃自己画（实底，`GlassInk.solid`）：共用系统的玻璃底时项被画进系统那层玻璃里，垫的实底不起作用，深色下标题成了一块透着背后的灰
+                // 玻璃自己画（实底，`GlassInk.solid`），不再套一层系统的玻璃底（玻璃不叠玻璃）
                 .sharedBackgroundVisibility(.hidden)
                 if Trailing.self != EmptyView.self {
                     ToolbarItem(placement: .primaryAction) {
@@ -93,22 +93,32 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
 private struct HeaderTitle<Label: View>: View {
     let explanation: String?
     @ViewBuilder let label: Label
+    @Environment(Workspace.self) private var workspace
     @State private var explaining = false
 
     var body: some View {
-        Button { explaining = true } label: {
-            label
-            .frame(height: FloatingHeaderLayout.height)
-            .glass(in: .capsule)
-            .contentShape(.capsule)
+        Group {
+            if explanation != nil {
+                Button { explaining = true } label: { plate }.buttonStyle(.plain)
+            } else {
+                plate
+            }
         }
-        .buttonStyle(.plain)
-        .allowsHitTesting(explanation != nil)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(explanation == nil ? .isHeader : [.isHeader, .isButton])
         .accessibilityHint(explanation == nil ? "" : "看说明")
         .explanationPopover(explanation, isPresented: $explaining)
         .task(id: explanation) { if explanation != nil, DebugHooks.preset.explain { explaining = true } }
+    }
+
+    /// 提示横幅盖在这一格上时让开（它比名牌矮，露一截上沿就是玻璃叠玻璃）。
+    private var plate: some View {
+        label
+            .frame(height: FloatingHeaderLayout.height)
+            .glass(in: .capsule)
+            .contentShape(.capsule)
+            .opacity(workspace.notice == nil ? 1 : 0)
+            .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice == nil)
     }
 }
 

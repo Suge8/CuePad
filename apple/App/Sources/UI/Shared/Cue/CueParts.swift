@@ -425,7 +425,7 @@ struct CueWaitingDock: View {
     private func otherwiseField(_ message: CueMessage) -> some View {
         let empty = otherwise.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return HStack(spacing: 6) {
-            TextField(CueAsk.otherwise, text: $otherwise)
+            TextField(CueAsk.otherwise, text: $otherwise, palette: palette)
                 .textFieldStyle(.plain).font(Typography.secondary)
                 .submitLabel(.send)
                 .onSubmit { sayOtherwise(message) }

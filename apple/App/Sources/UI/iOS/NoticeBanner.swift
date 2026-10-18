@@ -16,6 +16,11 @@ struct NoticeBanner: View {
     /// iPad 上也保持胶囊，不铺满整个窗口。
     private static let maxWidth: CGFloat = 440
 
+    /// 被盖住的名牌、页头给横幅让开：立刻淡出；横幅收走后等它离场再淡回来，两块玻璃不叠着、不交叉淡。
+    static func giveWay(_ notice: Workspace.Notice?) -> Animation {
+        notice == nil ? Motion.quick.delay(0.12) : Motion.quick
+    }
+
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
@@ -72,7 +77,8 @@ private struct NoticeCapsule: View {
                 .padding(.leading, 16).padding(.trailing, notice.action == nil ? 16 : 8).padding(.vertical, 10)
             }
             .buttonStyle(.plain)
-            .disabled(notice.link == nil)
+            // 没有去处时只是不接点按，不停用：停用的按钮系统整块压淡，字只剩一半深
+            .allowsHitTesting(notice.link != nil)
             // 提示里的动作：撤销刚才那一下，或完成任务后的归档
             if let action = notice.action {
                 Button(action.title) { workspace.run(action) }
@@ -81,7 +87,8 @@ private struct NoticeCapsule: View {
                 .contentShape(.rect)
             }
         }
-        .font(.subheadline.weight(.medium)).lineLimit(1)
+        // 两行放得下要你做的那一步（"这是灵感，先「设为任务」再…"截在一行里正好截掉它）
+        .font(.subheadline.weight(.medium)).lineLimit(2)
         .frame(maxWidth: .infinity, minHeight: FloatingHeaderLayout.height)
         // 盖住的名牌、搜索框与正文不能透出来叠字。
         .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)

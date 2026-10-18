@@ -128,8 +128,9 @@ struct BubbleText: View {
                 .padding(Bubble.padding)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
-                // 在路上：整颗半透明，还没落进对话；送达那一刻显出实色（下面一行写着发送中，钮上是话在路上）
-                .opacity(trip == .inTransit ? 0.55 : 1)
+                // 在路上：整颗淡一些，还没落进对话；送达那一刻显出实色（下面一行写着发送中，钮上是话在路上）。
+                // 淡到字仍够 4.5:1（浅色 5.4、深色 6.0）：没网时它会停很久，要读得清
+                .opacity(trip == .inTransit ? 0.7 : 1)
         }
         .animation(Motion.quick, value: highlighted)
         .animation(Motion.quick, value: trip)

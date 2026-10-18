@@ -38,7 +38,7 @@ struct AgentPage: View {
             filterMenu
             HStack(spacing: 6) {
                 Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                TextField(searchPrompt, text: $model.query).textFieldStyle(.plain)
+                TextField(searchPrompt, text: $model.query, palette: palette).textFieldStyle(.plain)
                 if !model.query.isEmpty {
                     Button("清除", icon: .clear) { model.query = "" }
                         .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)

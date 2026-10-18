@@ -89,7 +89,8 @@ private struct MachineCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .disabled(note.detail.isEmpty)
+            // 没有全文可看时只是不接点按，不停用：停用的按钮 iOS 整块压淡
+            .allowsHitTesting(!note.detail.isEmpty)
             .accessibilityLabel("\(note.who)：\(note.line)")
             .accessibilityExpanded(note.detail.isEmpty ? nil : open)
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }

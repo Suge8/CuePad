@@ -33,7 +33,11 @@ struct AgentScreen: View {
                 chip(nil) { Text("全部") }
                 ForEach(projects) { project in
                     chip(project.id) {
-                        Label { Text(project.name) } icon: { ProjectGlyph(project: project, size: 14) }
+                        // 不用 Label：iOS 的 Label 给图标留一格固定宽，小图标与字之间空出二十多点
+                        HStack(spacing: 6) {
+                            ProjectGlyph(project: project, size: 14)
+                            Text(project.name)
+                        }
                     }
                 }
             }

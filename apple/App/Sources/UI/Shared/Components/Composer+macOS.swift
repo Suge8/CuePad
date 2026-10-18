@@ -15,7 +15,7 @@ extension ComposerSource {
 
 extension ComposerMetrics {
     /// 一直展开（`ComposerForm.open`）、只有一行字时输入框的高度：会话页在回复框晚到的两帧里按它留位，对话不被顶上去。
-    static let openOneLine = 2 * textTop + GrowingTextView().maxHeight + slot - inset
+    static let openOneLine = textTop + GrowingTextView().maxHeight + textBottomOpen + slot
 }
 
 /// "＋"里图片的来源：选图片文件，选好的追加到图片条。

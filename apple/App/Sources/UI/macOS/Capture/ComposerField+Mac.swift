@@ -25,6 +25,8 @@ struct ComposerField: NSViewRepresentable {
         let view = GrowingTextView(usingTextLayoutManager: false)
         view.delegate = context.coordinator
         view.font = GrowingTextView.bodyFont
+        view.defaultParagraphStyle = GrowingTextView.paragraph
+        view.typingAttributes = GrowingTextView.attributes
         view.drawsBackground = false
         view.isRichText = false
         view.allowsUndo = true
@@ -55,6 +57,7 @@ struct ComposerField: NSViewRepresentable {
         if text != context.coordinator.sent, !view.hasMarkedText() {
             context.coordinator.sent = text
             view.string = text
+            view.textStorage?.setAttributes(GrowingTextView.attributes, range: NSRange(location: 0, length: (text as NSString).length))
             view.textChanged()
             view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
             view.revealsEnd = true
@@ -129,6 +132,13 @@ final class ComposerScrollView: NSScrollView {
 final class GrowingTextView: NSTextView {
     /// 与气泡里的字同一号：写下的这句发出去就是对话里的那颗气泡
     static let bodyFont = NSFont.systemFont(ofSize: Typography.readingSize)
+    /// 行距也同气泡（`Typography.readingLineSpacing`）：多行时不比对话挤，发出去节奏不突变。量高度用同一份。
+    static let paragraph: NSParagraphStyle = {
+        let style = NSMutableParagraphStyle()
+        style.lineSpacing = Typography.readingLineSpacing
+        return style
+    }()
+    static let attributes: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
     var placeholder = ""
     var placeholderColor = NSColor.clear
     var maxLines = 1
@@ -159,7 +169,7 @@ final class GrowingTextView: NSTextView {
     func textChanged() { heights.textChanged() }
 
     private static func height(of string: String, width: CGFloat) -> CGFloat {
-        let storage = NSTextStorage(string: string, attributes: [.font: bodyFont])
+        let storage = NSTextStorage(string: string, attributes: attributes)
         let layout = NSLayoutManager()
         let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = 0

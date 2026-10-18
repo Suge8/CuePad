@@ -22,7 +22,7 @@ struct NewTaskField: View {
             // 入口不用系统占位灰：那样看起来像不能点
             Image(.add).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
                 .frame(width: TaskMetrics.ringColumn)
-            TextField(text: $text, prompt: Text(prompt).foregroundStyle(palette.ink2)) { Text(prompt) }.textFieldStyle(.plain).font(Typography.body)
+            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
                 .accessibilityLabel(prompt)
                 .focused($focused)
                 .onSubmit(add)
