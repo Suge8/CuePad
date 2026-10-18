@@ -102,6 +102,16 @@ enum DebugHooks {
         #endif
     }
 
+    /// 隔离库下 Cue 的大脑换成 `-CuePadCueBrain <可执行文件>`（按所选运行时的协议说话的替身，如量值班开销用的假 Pi）：隔离目录里没有登录的运行时，
+    /// 真的大脑起不来。nil：用检测挑中的。
+    static var cueBrain: URL? {
+        #if DEBUG
+        DebugScene.defaults.string(forKey: "CuePadCueBrain").map { URL(filePath: $0) }
+        #else
+        nil
+        #endif
+    }
+
     /// 不请求通知权限：演示与脚本截图、录屏（`-CuePadDemo` 或给了 `CUEPAD_SHOT_READY`）里系统弹窗会盖住画面，没人去点。
     static var asksNotificationPermission: Bool {
         #if DEBUG
