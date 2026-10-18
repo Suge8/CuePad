@@ -138,13 +138,13 @@ struct CuePage: View {
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: services.isCatchingUp(on: cue.hostID) || docking
         ) { window in
-            let first = max(0, rows.count - window.count) / Self.segment
+            let first = max(0, rows.count - window.count)
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             VStack(alignment: .leading, spacing: 0) {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
                 ChatSegments(
-                    items: rows, size: Self.segment, first: first, width: width, spare: Self.spare, pinned: { $0.contains { $0.id == highlight } }
+                    items: rows, size: Self.segment, from: first, width: width, spare: Self.spare, pinned: { $0.contains { $0.id == highlight } }
                 ) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
