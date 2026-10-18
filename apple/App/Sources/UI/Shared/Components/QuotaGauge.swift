@@ -4,7 +4,7 @@ import SwiftUI
 /// 订阅额度的总览（读数规则在 `QuotaMeter`）：手机 Cue 页头的面板、Mac Agent 页顶部与菜单栏面板，还没有额度记录时整条不出现。
 ///
 /// 每个账号一块（`QuotaAccount`），排法同旁边的列表行：头一行是 20 点宽的图标列里的产品标志加账号名（数据陈旧时接"x 分钟前"），
-/// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，系统只在整分钟换字；过了重置时间还没有新观测写"已重置"），
+/// 下面每个窗口一行，与账号名左对齐：窗口名与多久后重置（计时文字，只在整分钟换字，`LiveText`；过了重置时间还没有新观测写"已重置"），
 /// 右边是还剩多少的大号等宽数字，下面一条剩余条（`MarkedBar`，刻线是匀速线）。超了匀速线（照这速度重置前会用完）在条下多一行"照这速度约 X 后用完"。
 /// 主视图把要看的都写出来了，所以不再有点开的明细：总览不是按钮、没有按压。
 /// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
@@ -60,15 +60,10 @@ private struct QuotaColumns: Layout {
     }
 }
 
-/// 按额度读数画的内容：此刻画一次，之后只在下一个重置时刻再画一次（等到那一刻是业务语义：`task(id:)` 睡到那一刻，不周期刷新），
-/// 过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）；画完再等下一个。新观测到达时照常重画、重新算下一个时刻。
-/// 否决的方案：`TimelineView(.explicit(时刻))`——iOS 27 模拟器实测只在头一次画时调用内容（给的日期是时刻表里第一个时刻，
-/// 还没到就按已到画），到了那一刻并不重画。
+/// 按额度读数画的内容：此刻画一次，之后只在下一个重置时刻再画一次（`Moments`），过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）。
 struct QuotaMoments<Content: View>: View {
     let quotas: [AccountQuota]
     @ViewBuilder let content: (Date) -> Content
-    /// 睡到的那个重置时刻：读数不早于它（醒来与重画之间读 `.now` 不会还差一丝没到）
-    @State private var reached = Date.distantPast
 
     init(_ quotas: [AccountQuota], @ViewBuilder content: @escaping (Date) -> Content) {
         self.quotas = quotas
@@ -76,13 +71,7 @@ struct QuotaMoments<Content: View>: View {
     }
 
     var body: some View {
-        let now = max(Date.now, reached)
-        let next = quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min()
-        content(now)
-            .task(id: next) {
-                guard let next, (try? await Task.sleep(for: .seconds(next.timeIntervalSinceNow))) != nil else { return }
-                reached = next
-            }
+        Moments(next: { now in quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min() }, content: content)
     }
 }
 
@@ -126,8 +115,7 @@ private struct QuotaAccount: View {
                 PiProvider(id: meter.provider).mark?.image
                     .foregroundStyle(palette.ink2)
                     .frame(width: Self.iconColumn)
-                Text("\(Text(meter.account).foregroundStyle(palette.ink))\(stale)")
-                    .lineLimit(1)
+                title.lineLimit(1)
             }
             .font(Typography.secondary.weight(.medium))
             VStack(alignment: .leading, spacing: 10) {
@@ -140,12 +128,16 @@ private struct QuotaAccount: View {
         .accessibilityLabel(meter.spoken)
     }
 
-    /// 数据陈旧时接在账号名后面的"· x 分钟前"。
-    private var stale: Text {
-        meter.isStale
-            ? Text("\(Dotted.inline)\(Text(.currentDate, format: PiClock.ago(meter.updatedAt).live(.list)))")
-                .font(Typography.meta).foregroundStyle(palette.ink3)
-            : Text(verbatim: "")
+    /// 账号名，数据陈旧时接"· x 分钟前"。
+    @ViewBuilder private var title: some View {
+        let account = Text(meter.account).foregroundStyle(palette.ink)
+        if meter.isStale {
+            LiveText(style: PiClock.ago(meter.updatedAt).live(.list)) { ago in
+                Text("\(account)\(Text("\(Dotted.inline)\(ago)").font(Typography.meta).foregroundStyle(palette.ink3))")
+            }
+        } else {
+            account
+        }
     }
 }
 
@@ -167,7 +159,7 @@ private struct QuotaWindowRow: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(window.name).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
-                Text("\(Dotted.inline)\(reset)").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                reset.font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                 Spacer(minLength: 8)
                 Text("剩 ").font(Typography.meta).foregroundStyle(palette.ink3)
                 Text(window.percent).font(Self.number).foregroundStyle(critical ? palette.failure : palette.ink)
@@ -183,14 +175,13 @@ private struct QuotaWindowRow: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: window)
     }
 
-    private var reset: Text {
-        window.hasReset ? Text("已重置") : Text("\(window.countdown)后重置")
+    @ViewBuilder private var reset: some View {
+        if window.hasReset {
+            Text("\(Dotted.inline)已重置")
+        } else {
+            LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) { Text("\(Dotted.inline)\(Text($0).monospacedDigit())后重置") }
+        }
     }
-}
-
-extension QuotaMeter.Window {
-    /// 到重置还有多久，自己走字（`QuotaMeter.Countdown`）。
-    var countdown: Text { Text(.currentDate, format: QuotaMeter.Countdown(end: resetsAt)).monospacedDigit() }
 }
 
 /// 回复框模型胶囊上标志外的一圈细环：卡着的那个窗口还剩多少，从 12 点顺时针铺（`ModelBadge`）。

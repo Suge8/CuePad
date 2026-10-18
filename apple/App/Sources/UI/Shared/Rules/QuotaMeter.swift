@@ -76,18 +76,18 @@ nonisolated struct QuotaMeter: Equatable {
         return "\(minutes) 分钟"
     }
 
-    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `Text(.currentDate, format:)` 用：系统只在字会变的整分钟换字，
-    /// 不经 TimelineView 或定时器重算视图。过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
+    /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `LiveText` 用：只在字会变的整分钟重画。
+    /// 过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 
         func format(_ now: Date) -> String { QuotaMeter.span(Int(end.timeIntervalSince(now))) }
 
-        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后
+        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后（严格晚于 `now`，`Date.tick`）
         func discreteInput(after now: Date) -> Date? {
-            let left = end.timeIntervalSince(now)
-            guard left > 60 else { return nil }
-            return end.addingTimeInterval(-((left / 60).rounded(.down) * 60) + 0.001)
+            guard end.timeIntervalSince(now) > 60 else { return nil }
+            // 剩的分钟数在每个整分钟刚过时变：格子落在整分钟之后 1 毫秒
+            return end.addingTimeInterval(0.001).tick(every: 60, after: now)
         }
 
         func discreteInput(before now: Date) -> Date? {

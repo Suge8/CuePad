@@ -106,6 +106,12 @@ enum IOSInteractionBench {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
+        // 任务页（侧栏的"任务"，配 `-CuePadManyTasks` 量任务多时）：从列表点进去。这一页与 Cue 页的滚动区在进程内找不到可驱动的 UIScrollView，不量滚动
+        for _ in 0..<2 where wants("任务页") {
+            navigation.showList()
+            try? await Task.sleep(for: .seconds(1))
+            await step("任务页") { navigation.select(.tasks) }
+        }
         // Agent 整页（侧栏的"会话"）点会话（先读出这一页再推入）→ 返回
         navigation.select(.agent)
         try? await Task.sleep(for: .seconds(1))
