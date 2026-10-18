@@ -72,27 +72,24 @@ actor ZonePuller {
   }
 
   private func drainPages() async throws {
-    var stored = try await store.syncState(Self.tokenKey)
-    var token = stored
     // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪
+    var token = try await store.syncState(Self.tokenKey)
     if token == nil {
       await coordinator.setCatchingUp(true)
       token = try await catchUp()
+      try await store.setSyncState(Self.tokenKey, token)
     }
     var batch: ZoneChangeBatch
     repeat {
       batch = try await source.changes(since: token, keys: nil)
       if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
+      if batch.token != token { try await store.setSyncState(Self.tokenKey, batch.token) }  // 库里的就是 `token`：没有变化的一拉不写库
       token = batch.token
-      if batch.token != stored {  // 没有变化的一拉不写库
-        try await store.setSyncState(Self.tokenKey, batch.token)
-        stored = batch.token
-      }
     } while batch.moreComing
   }
 
-  /// 按版本对账（见类型注释），返回翻完时的令牌；令牌在补取、删除都应用完之后才由调用方存下。
+  /// 按版本对账（见类型注释），返回翻完时的令牌；补取、删除都应用完才返回，调用方随即存下。
   private func catchUp() async throws -> Data {
     let before = try await store.syncedRecords()
     var seen: [CKRecord.ID: Int64] = [:]

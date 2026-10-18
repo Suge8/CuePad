@@ -85,16 +85,12 @@ final class AppServices {
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
-    /// 在拉的那一拉与它开拉的时刻（`pull`）：立即同步、按节奏的拉取与收到推送共用。
-    @ObservationIgnored var pulling: (task: Task<Void, Never>, began: ContinuousClock.Instant)?
-    /// 最近一拉开拉的时刻（`pull`）。
-    @ObservationIgnored var lastPull: ContinuousClock.Instant?
-    /// 同步的启动（`startSync`），结果是启动完的时刻（没启动成为 nil）：拉取等它，冷启动时先到的推送不空拉。
-    @ObservationIgnored var syncStarting: Task<ContinuousClock.Instant?, Never>?
-    /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它，不另拉一遍。
-    var syncing: Task<Void, Never>?
+    /// 最近一拉（`pull`）：开拉的时刻与它的任务，拉完也留着（等它立即返回）。同步启动时先是那次启动（不是一拉，没有开拉时刻）。
+    @ObservationIgnored var latestPull: (began: ContinuousClock.Instant?, task: Task<Void, Never>)?
+    /// 还在等的立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）有几个。
+    var syncNowWaits = 0
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
-    var isSyncingNow: Bool { syncing != nil }
+    var isSyncingNow: Bool { syncNowWaits > 0 }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。

@@ -93,7 +93,7 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("开始启动") { app.sync.started == 1 }
-        let push = Task { await services.pullForPush() }
+        let push = Task { await services.pull() }
         app.sync.startGate.continuation.yield()
         await push.value
         try await eventually("启动完才拉") { services.isSyncingNow == false && app.sync.events.count >= 2 }
