@@ -6,13 +6,13 @@ extension CueStore {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
     switch query.scope {
-    case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
+    case .live: conditions.append(PiWorkState.outsideSQL([.ended]))
     case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
     case .all: break
     case .current:
       conditions.append(
         """
-        (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
+        (\(PiWorkState.outsideSQL([.ended])) OR sessionID IN (SELECT targetRef FROM deliveryRequests
           WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession)))))
         """)
     }

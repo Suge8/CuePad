@@ -60,8 +60,8 @@ enum Schema {
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
-    // 55：推导待推送的覆盖索引（`pendingIndexes`）
-    "DROP INDEX syncRecords_recordType; \(pendingIndexes)",
+    // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
+    "DROP INDEX syncRecords_recordType; \(pendingIndexes) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
   ]
 
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
@@ -71,6 +71,18 @@ enum Schema {
     CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
     \(Table.synced.map { "CREATE INDEX \($0.rawValue)_modified ON \($0.rawValue)(id, modifiedAt);" }.joined(separator: "\n"))
     """
+  /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，
+  /// 不碰带问答长文的会话记录本身（真实库四千多条，整表冷读约 75ms）。
+  private static let folderIndex = """
+    CREATE INDEX piSessionStates_folder ON piSessionStates(hostID, folder, stateSince, sessionID, projectID)
+      WHERE folder IS NOT NULL AND folder != '';
+    """
+  /// 清理过期对话（`CueStore.prunePiMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
+  private static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
+  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式要与查询里的一字不差。
+  private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(COALESCE(agent, 'pi'));"
+  /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
+  private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
@@ -162,6 +174,7 @@ enum Schema {
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
     -- 指向带模型的目录记录的只有在线会话，进程没了的只指向只有命令的那几份：回收没人用的目录时不必翻全部历史
     CREATE INDEX piSessionStates_catalogID ON piSessionStates(catalogID) WHERE catalogID IS NOT NULL;
+    \(folderIndex)
 
     -- 会话可换的模型与斜杠命令（AgentCatalog）；id 由主机与内容算出，写下不改。
     CREATE TABLE agentCatalogs (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, models TEXT, commands TEXT, modifiedAt INTEGER NOT NULL) STRICT;
@@ -185,6 +198,7 @@ enum Schema {
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
+    \(transcriptAgeIndex)
 
     -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
     CREATE TABLE directoryBindings (
@@ -206,6 +220,7 @@ enum Schema {
       lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
+    \(agentIndex)
 
     -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
@@ -231,6 +246,7 @@ enum Schema {
       notify TEXT, tools TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
+    \(openQuestionIndex)
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
