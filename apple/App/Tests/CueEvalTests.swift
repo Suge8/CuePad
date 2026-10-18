@@ -167,6 +167,30 @@ struct CueEvalTests {
         }
     }
 
+    @Test func h做完的事的会话答完() async throws {
+        try await CueEval.run("h-做完的事的会话答完", expect: "已完成的事的会话被 Cue 的一句恢复、答完歇下：再 done 那件事结束会话，不另开活、不打扰用户") { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.store.setStatus(work.task.id, .done)  // 早已做完，会话是被下面这句恢复的
+            let asked = "复查一遍：限流有没有绕过的办法？", delivery = UUID()
+            try await rig.store.recordSend(asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+            let question = PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: asked, at: .now, deliveryID: delivery)
+            let answer = PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: "复查过了：限流按邮箱哈希计数、存在服务端，换 IP 或改大小写都绕不过去。", at: .now)
+            try await eval.trigger {
+                work.session.setState(["kind": "idle"])
+                try await rig.answered(
+                    work.id, prompt: asked, reply: answer.text, messages: [work.prompt, rig.reply(work, Self.doneReply), question, answer])
+            }
+            let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) }
+            return [
+                Check("再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
+                Check("请会话结束", ended),
+                Check("没另开活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
+                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+            ]
+        }
+    }
+
     private static let doneReply = """
         忘记密码做好了。
 
