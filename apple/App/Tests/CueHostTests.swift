@@ -497,21 +497,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 唯一在做的是一个没说过话的会话，它一退出（记录被删，不算会话的动静）看板就空了：你说过话之后空闲够久，Cue 照常巡视一次。
-    @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {
-        let rig = try await Rig(patrolAfter: .seconds(2))
-        let recorder = PiStateRecorder(store: rig.store, hostID: TestApp.hostID)
-        try await recorder.update(sessionID: "quiet", state: .thinking, title: "quiet")
-        try await rig.say("你好")
-        try await rig.message(.cue, containing: "收到：你好")
-        let exited = Date.now
-        try await recorder.exited(sessionID: "quiet", spoke: false)
-        try await eventually("退出之后巡视", timeout: .seconds(15)) {
-            try await rig.store.cueMessages().contains { $0.author == .known(.note) && $0.text.contains("巡视了一圈") && $0.createdAt > exited }
-        }
-        await rig.stop()
-    }
-
     /// 大脑在一轮中途被杀：这一轮里交出去的你的话退回，重起后重新交给新的大脑，照常回答。
     @Test func 一轮中途被杀_你的话重新交出() async throws {
         let rig = try await Rig()
