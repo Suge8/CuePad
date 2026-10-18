@@ -39,7 +39,7 @@ forbid "Mac 上的确认框用 dialog、浮层用 panel、选文件用 FilePicke
   '\b(runModal|NSAlert)\b' 'App/Sources/macOS/AppDelegate.swift'
 forbid "常驻循环动效只用 LoopLayer（Core Animation）：SwiftUI 的 repeatForever 与符号动效每帧在 App 进程里重算，静止的 Agent 页也占约 9% CPU（随值触发一次的 .nonRepeating 不常驻，不算）" \
   '(\brepeatForever\b|(?<!\()\.symbolEffect\((?![^)]*\.nonRepeating\b))' '**/LoopLayer.swift'
-forbid "按时刻换字的文字用 LiveText（Moments.swift）：系统时间文本 Text(.currentDate, format:) 在 Mac 上窗口每画一帧都重新格式化、重画，挂着看不见的页也算，Cue 页滚动的指令数多出四倍多" \
+forbid "按时刻换字的文字用 LiveText（Moments.swift，不用系统时间文本的原因在它的注释里）" \
   '\.currentDate\b'
 forbid "不用 DispatchQueue.main.asyncAfter：它取消不了。等事件用通知序列或 NextFrame，真要定时用可取消的 Task.sleep" \
   'DispatchQueue\.main\.asyncAfter'

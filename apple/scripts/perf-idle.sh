@@ -6,7 +6,7 @@
 #   Mac 实例在后台（给了 CUEPAD_SHOT_READY，窗口排在最后，不抢前台）；iOS 在领到的模拟器上，每次先重开机（同 perf-ios.sh）。
 #   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
 #   CUEPAD_TRACE=<xctrace 模板>（如 'Time Profiler'、Allocations）：量的窗口里同时录 trace，存 /tmp/cuepad-perf/idle-<平台>-<第几次>.trace；
-#   iOS 录的是整机（模拟器里的进程 xctrace 认不出），按打印的 PID 筛。
+#   iOS 录的是整机（模拟器里的进程 xctrace 按 PID、按名字都认不出），按打印的 PID 筛。
 # xc.sh 构建好 Release（同 perf-mac.sh，产物在 apple/.derived-perf）后调这里，第一个参数是 CuePad.app。不独占机器：量的都是进程自己的内核记账。
 set -euo pipefail
 
@@ -49,7 +49,6 @@ for run in $(seq "$runs"); do
   if [ -n "${CUEPAD_TRACE:-}" ]; then
     trace="/tmp/cuepad-perf/idle-$platform-$run.trace"
     rm -rf "$trace"
-    # 模拟器里的进程 xctrace 按 PID 与名字都找不到（Cannot find process），只能录整机，读的时候按这里报的 PID 筛
     target="--attach $pid"; [ "$platform" = mac ] || target="--device $udid --all-processes"
     hooks+=(--during "xcrun xctrace record --template $(printf %q "$CUEPAD_TRACE") $target --time-limit ${seconds}s --output $(printf %q "$trace")")
     echo "trace：${trace}（CuePad PID ${pid}）" >&2

@@ -77,7 +77,7 @@ nonisolated struct QuotaMeter: Equatable {
     }
 
     /// 到 `end` 还有多久（`span` 的写法："2 小时 14 分钟"），给 `LiveText` 用：只在字会变的整分钟重画。
-    /// 过了 `end` 不再走（那一刻由 `QuotaMoments` 按已重置重画）。
+    /// 过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按已重置重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 
@@ -103,5 +103,12 @@ nonisolated struct QuotaMeter: Equatable {
         case let s where s % 86_400 == 0: "\(s / 86_400) 天"
         default: "\(Int((Double(seconds) / 3_600).rounded())) 小时"
         }
+    }
+}
+
+extension [AccountQuota] {
+    /// `now` 之后最近的一次窗口重置：额度读数只在新观测到达与这一刻变（`Moments` 睡到它重画）；都过了为 nil。
+    nonisolated func nextReset(after now: Date) -> Date? {
+        flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min()
     }
 }

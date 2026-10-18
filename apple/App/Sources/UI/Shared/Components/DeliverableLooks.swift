@@ -230,11 +230,10 @@ enum LookFiles {
         caches.appending(path: "CuePadLooks", directoryHint: .isDirectory).appending(path: "\(key).png")
     }
 
-    /// 存下的那张（已是要的大小，原样读出）；没有为 nil。
+    /// 存下的那张（已是要的大小，原样解出来）；没有为 nil。不经 `Thumbnails`：内存里那份由 `DeliverableLooks` 一处留着。
     @concurrent static func image(_ key: String, in caches: URL) async -> CGImage? {
-        let file = url(key, in: caches)
-        guard let size = Thumbnails.pixelSize(at: file) else { return nil }
-        return Thumbnails.image(at: file, maxPixel: Int(max(size.width, size.height)))
+        guard let source = CGImageSourceCreateWithURL(url(key, in: caches) as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 
     /// 存一张出好的画面；写不成就算了，下次再出。
