@@ -13,7 +13,7 @@
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
-# 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队与时限见 _lock.sh；模拟器池见 _sim.sh。
+# 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（不联网、不要账号）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
