@@ -3,7 +3,7 @@ import AppKit
 import CueText
 import SwiftUI
 
-extension PickedImage {
+nonisolated extension PickedImage {
     static func converted(_ data: Data) -> Data? {
         NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: quality])
     }
@@ -31,7 +31,7 @@ struct ImageSources: ViewModifier {
                 source = nil
                 Task {
                     do {
-                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
+                        for data in try await FilePicker.images() { images.append(await PickedImage.load(data)) }
                     } catch {
                         workspace.fail(error)
                     }

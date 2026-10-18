@@ -23,19 +23,22 @@ nonisolated struct LookBox: Hashable, Sendable {
     var height: Int
     var fills: Bool
 
-    /// 横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。
+    /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
     private static let longestFactor = 4
 
     /// 原图 `size` 要解到的最长边（像素，不放大由解码自己管）。
     func longestSide(of size: CGSize) -> Int {
         guard size.width > 0, size.height > 0 else { return max(width, height) }
+        let longest = max(size.width, size.height)
         let byHeight = CGFloat(height) / size.height
-        let byWidth = width > 0 ? CGFloat(width) / size.width : byHeight
+        guard width > 0 else { return Int((byHeight * longest).rounded(.up)) }
+        let byWidth = CGFloat(width) / size.width
         let scale = fills ? max(byWidth, byHeight) : min(byWidth, byHeight)
-        return min(Int((scale * max(size.width, size.height)).rounded(.up)), Self.longestFactor * max(width, height))
+        return min(Int((scale * longest).rounded(.up)), Self.longestFactor * max(width, height))
     }
 
-    /// 交给系统缩略图的框（它总是整张放进框里）：不限宽时按高的 4 倍。
+    /// 先交给系统缩略图的框（它总是整张放进框里）：不限宽时按高的 4 倍（视频、文稿没有更宽的）。
+    /// 铺满的框里比例与框不同的（竖版 PDF、竖拍视频）这样出得太小，见 `DeliverableLooks.systemThumbnail`。
     var fitting: CGSize { CGSize(width: width > 0 ? width : Self.longestFactor * height, height: height) }
 }
 
@@ -129,12 +132,22 @@ enum DeliverableLooks {
         CGPDFDocument(file as CFURL).map(\.numberOfPages)
     }
 
+    /// 系统缩略图只会整张放进框里：先按框要一张，铺满框还不够大（比例与框不同，如竖版 PDF 放进横的主图）就按它的比例算出要多大再要一张，
+    /// 不一上来就按最大可能要（Mac 主图那样要会渲出五千多像素见方的一页）。
     private static func systemThumbnail(_ file: URL, box: LookBox, scale: CGFloat) async -> CGImage? {
-        let size = box.fitting
+        guard var image = await systemThumbnail(file, fitting: box.fitting, scale: scale) else { return nil }
+        let needed = box.longestSide(of: CGSize(width: image.width, height: image.height))
+        if needed > max(image.width, image.height),
+           let larger = await systemThumbnail(file, fitting: CGSize(width: needed, height: needed), scale: scale) {
+            image = larger
+        }
+        return await shrunk(image, to: box)
+    }
+
+    private static func systemThumbnail(_ file: URL, fitting size: CGSize, scale: CGFloat) async -> CGImage? {
         let request = QLThumbnailGenerator.Request(
             fileAt: file, size: CGSize(width: size.width / scale, height: size.height / scale), scale: scale, representationTypes: .thumbnail)
-        guard let image = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage else { return nil }
-        return await shrunk(image, to: box)
+        return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
     }
 
     /// 系统缩略图不一定照要的尺寸给（视频常按原片给，真实库里一张约 11MB，画上屏时再拷一份）：超过框的重画到框的尺寸，原图随即放掉。

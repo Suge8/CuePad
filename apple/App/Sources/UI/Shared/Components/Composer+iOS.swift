@@ -3,7 +3,7 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-extension PickedImage {
+nonisolated extension PickedImage {
     static func converted(_ data: Data) -> Data? {
         UIImage(data: data)?.jpegData(compressionQuality: quality)
     }
@@ -28,7 +28,7 @@ struct ImageSources: ViewModifier {
         content
             .photosPicker(isPresented: $source.isOn(.photos), selection: $picked, maxSelectionCount: Self.photoLimit, matching: .images)
             .fullScreenCover(isPresented: $source.isOn(.camera)) {
-                CameraPicker { data in images.append(PickedImage(data: data)) }.ignoresSafeArea()
+                CameraPicker { data in Task { images.append(await PickedImage.load(data)) } }.ignoresSafeArea()
             }
             .onChange(of: picked) {
                 let items = picked
@@ -36,7 +36,7 @@ struct ImageSources: ViewModifier {
                 Task {
                     for item in items {
                         do {
-                            if let data = try await item.loadTransferable(type: Data.self) { images.append(PickedImage(data: data)) }
+                            if let data = try await item.loadTransferable(type: Data.self) { images.append(await PickedImage.load(data)) }
                         } catch {
                             workspace.fail(error)
                         }
