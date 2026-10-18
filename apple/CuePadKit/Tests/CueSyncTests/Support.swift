@@ -35,7 +35,7 @@ actor FakeUploader: RecordUploader {
   private(set) var batches: [(saves: [String], deletes: [String])] = []
   private var gate: CheckedContinuation<Void, Never>?
   private var holding: Bool
-  private var watchers: [(check: @Sendable ([(saves: [String], deletes: [String])]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
+  private var watchers: [(id: UUID, check: @Sendable ([(saves: [String], deletes: [String])]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
   init(holding: Bool = false) { self.holding = holding }
 
@@ -58,10 +58,23 @@ actor FakeUploader: RecordUploader {
     gate = nil
   }
 
-  /// 等到上传过的批次满足条件。
+  /// 等到上传过的批次满足条件；被取消（超出测试时限）时放手，测试照常结束、报出超时，不挂住整个测试进程。
   func waitUntil(_ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async {
     if check(batches) { return }
-    await withCheckedContinuation { watchers.append((check, $0)) }
+    let id = UUID()
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        if Task.isCancelled { return continuation.resume() }
+        watchers.append((id, check, continuation))
+      }
+    } onCancel: {
+      Task { await self.cancel(id) }
+    }
+  }
+
+  private func cancel(_ id: UUID) {
+    watchers.first { $0.id == id }?.continuation.resume()
+    watchers.removeAll { $0.id == id }
   }
 
   func uploaded(_ name: String) async { await waitUntil { $0.contains { $0.saves.contains(name) } } }

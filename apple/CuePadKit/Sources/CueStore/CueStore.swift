@@ -275,7 +275,7 @@ public actor CueStore {
     return result
   }
 
-  private func syncChanged() {
+  func syncChanged() {
     syncGeneration += 1
     for subscriber in syncSubscribers.values { subscriber.yield() }
   }

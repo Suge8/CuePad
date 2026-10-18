@@ -157,13 +157,16 @@ extension CueStore {
   /// 服务器已接受这条记录（上传结果里的那一版）：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
   /// 上传一次只有一批在路上，结果按发出的先后回来。
   package func markPushed(_ row: SyncRow, systemFields: Data) throws {
-    try write {
+    let deletedMeanwhile = try write {
       try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
       // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
       if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
         try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
       }
+      return try db.first("SELECT 1 FROM \(row.table.rawValue) WHERE id = ?", [row.id]) { _ in true } == nil
     }
+    // 上传途中本机删掉了它：删的那次提交时服务器还没收下、算不上待推送的删除，这次记下元数据才是，提交的却只是元数据表，增量里没有它
+    if deletedMeanwhile { syncChanged() }
   }
 
   /// 服务器上已没有这条记录（删除已确认、或本来就不存在）：忘掉它的元数据。
