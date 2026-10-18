@@ -127,8 +127,7 @@ enum DeliverableLooks {
     }
 
     @concurrent private static func decode(_ file: URL, box: LookBox) async -> CGImage? {
-        guard let size = Thumbnails.pixelSize(at: file) else { return nil }
-        return Thumbnails.image(at: file, maxPixel: box.longestSide(of: size))
+        Thumbnails.decoded(at: file, longestSide: box.longestSide(of:))
     }
 
     @concurrent private static func pageCount(_ file: URL) async -> Int? {
@@ -138,13 +137,11 @@ enum DeliverableLooks {
     /// 系统缩略图只会整张放进框里：先按框要一张，铺满框还不够大（比例与框不同，如竖版 PDF 放进横的主图）就按它的比例算出要多大再要一张，
     /// 不一上来就按最大可能要（Mac 主图那样要会渲出五千多像素见方的一页）。
     private static func systemThumbnail(_ file: URL, box: LookBox, scale: CGFloat) async -> CGImage? {
-        guard var image = await systemThumbnail(file, fitting: box.fitting, scale: scale) else { return nil }
-        let needed = box.longestSide(of: CGSize(width: image.width, height: image.height))
-        if needed > max(image.width, image.height),
-           let larger = await systemThumbnail(file, fitting: CGSize(width: needed, height: needed), scale: scale) {
-            image = larger
-        }
-        return await shrunk(image, to: box)
+        guard let first = await systemThumbnail(file, fitting: box.fitting, scale: scale) else { return nil }
+        let longest = box.longestSide(of: CGSize(width: first.width, height: first.height))
+        let image = longest > max(first.width, first.height)
+            ? await systemThumbnail(file, fitting: CGSize(width: longest, height: longest), scale: scale) ?? first : first
+        return await shrunk(image, to: longest)
     }
 
     private static func systemThumbnail(_ file: URL, fitting size: CGSize, scale: CGFloat) async -> CGImage? {
@@ -155,9 +152,8 @@ enum DeliverableLooks {
 
     /// 系统缩略图不一定照要的尺寸给（视频常按原片给，真实库里一张约 11MB，画上屏时再拷一份）：超过框的重画到框的尺寸，原图随即放掉。
     /// 不加这一步时真实库的 iPhone Cue 页常驻 243MB，其中系统缩略图与它在屏上的拷贝约 140MB。
-    @concurrent private static func shrunk(_ image: CGImage, to box: LookBox) async -> CGImage {
+    @concurrent private static func shrunk(_ image: CGImage, to longest: Int) async -> CGImage {
         let size = CGSize(width: image.width, height: image.height)
-        let longest = box.longestSide(of: size)
         guard max(image.width, image.height) > longest else { return image }
         let factor = CGFloat(longest) / max(size.width, size.height)
         let width = max(1, Int((size.width * factor).rounded())), height = max(1, Int((size.height * factor).rounded()))
@@ -232,9 +228,7 @@ enum LookFiles {
 
     /// 存下的那张（已是要的大小，原样读出）；没有为 nil。
     @concurrent static func image(_ key: String, in caches: URL) async -> CGImage? {
-        let file = url(key, in: caches)
-        guard let size = Thumbnails.pixelSize(at: file) else { return nil }
-        return Thumbnails.image(at: file, maxPixel: Int(max(size.width, size.height)))
+        Thumbnails.decoded(at: url(key, in: caches)) { Int(max($0.width, $0.height)) }
     }
 
     /// 存一张出好的画面；写不成就算了，下次再出。

@@ -1,6 +1,6 @@
 import CueStore
+import CueEditor
 import CueText
-import ImageIO
 import SwiftUI
 
 /// 带上的一张卡片或任务（输入框里的，或 iOS 发给 Agent 时浮起的那一份）。
@@ -135,18 +135,8 @@ struct PickedImage: Identifiable {
 
     /// 填满一格（裁成方块）时短边够 3 倍屏的像素：按长短边之比定长边上限，再大的不解码。
     private static func thumbnail(_ data: Data) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
-              let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
-              width > 0, height > 0
-        else { return nil }
-        let shortSide = Double(previewSide) * 3
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int((shortSide * max(width, height) / min(width, height)).rounded(.up)),
-        ] as CFDictionary)
+        Thumbnails.decoded(data) { size in
+            Int((previewSide * 3 * max(size.width, size.height) / min(size.width, size.height)).rounded(.up))
+        }
     }
 }
