@@ -113,6 +113,9 @@ struct ChatJump: Equatable {
 enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
     static let edge: CGFloat = 16
+
+    /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。滚动区（`ChatScroll`）与叠在对话区上的空态（`BlankChat`）共用。
+    static func margin(_ width: CGFloat, readingWidth: CGFloat, inset: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
 }
 
 extension EnvironmentValues {
@@ -173,8 +176,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         self.content = content()
     }
 
-    /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。
-    private func margin(_ width: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
+    private func margin(_ width: CGFloat) -> CGFloat { ChatLayout.margin(width, readingWidth: readingWidth, inset: inset) }
 
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
     /// 那句到了（内容真的长高）再收，对话从回复框让出的地方滑上去；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
