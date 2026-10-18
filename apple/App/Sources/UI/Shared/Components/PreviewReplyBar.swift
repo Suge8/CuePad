@@ -20,7 +20,7 @@ struct PreviewReplyBar: View {
             case .answer(let message, let question): choices(message, question: question)
             }
         }
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), ink: .solid)
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
     }
 
     private func field(_ prompt: String, to listener: Listener) -> some View {

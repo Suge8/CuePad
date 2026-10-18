@@ -50,7 +50,7 @@ struct AgentPage: View {
             NewSessionButton(showing: $starting)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 36, height: 36)
-                .glass(in: .circle, interactive: true)
+                .glass(in: .circle, interactive: true, ink: .clear)
         }
     }
 

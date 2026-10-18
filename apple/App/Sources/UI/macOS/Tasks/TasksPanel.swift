@@ -46,7 +46,7 @@ struct TasksPanel: View {
         .fixedSize(horizontal: false, vertical: !lazy)
         // 浮在项目页上、背后是卡片与任务纸，自己是一整页字（`GlassInk.solid`）
         .rowContainer(.rect(cornerRadius: 26))
-        .glass(in: .rect(cornerRadius: 26), ink: .solid)
+        .glass(in: .rect(cornerRadius: 26))
         // 面板挂在页面之外：读"交给了哪个会话"的行在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
         .observing(services.store, into: $board, onError: workspace.fail) {

@@ -330,7 +330,8 @@ struct CueWaitingDock: View {
     private static let below: CGFloat = 8
 
     /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替；减弱动态效果时来去都只淡。
-    /// 升沉用定长曲线（`Motion.move`）不用弹簧：弹簧最后那段一两点的尾巴要再画上百毫秒，沉到底前卡剩一道细线停在输入框上。
+    /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉，看着是冒一点、停一下、窜一大截。
+    /// 沉下用定长曲线（`Motion.move`）：弹簧最后那段一两点的尾巴要再画上百毫秒，沉到底前卡剩一道细线停在输入框上（升起的尾巴停在整高处，看不见）。
     /// 减弱动态效果时淡入稍慢、淡出要快：淡出时对话已在终位，卡叠在字上的那几帧越短越好。
     private func follow(animated: Bool) {
         guard let next = waiting.first else {
@@ -342,7 +343,12 @@ struct CueWaitingDock: View {
         let swapping = shown != nil
         withAnimation(swapping && animated ? Motion.quick : nil) { shown = next }
         guard animated, level < 1 else { return level = 1 }
-        move(to: 1, reduceMotion ? Motion.quick : Motion.move)
+        moving = true
+        Task {
+            await NextFrame.wait()
+            guard shown?.id == next.id else { return moving = false }
+            move(to: 1, reduceMotion ? Motion.quick : Motion.snappy)
+        }
     }
 
     /// 播一段卡的来去，播着的时候 `moving`；动画走完再收尾。沉到一半又来了一条时前一段被接走，它的收尾不算数（目标已经变了）。
@@ -471,12 +477,13 @@ private struct RiseBehind: ViewModifier, Animatable {
             RiseLayout(shown: shown, floats: true) { content }
         } else {
             RiseLayout(shown: shown, floats: false) { content }
-                // 两边与上面让出卡的影子；下沿往输入框里伸进一个圆角那么深：输入框（实底玻璃，排在卡上面）圆角外那一小块里
-                // 看得到卡沉到它后面，不被一条直线齐齐切断，停稳时影子也连着。让出的都随露出的比例收，藏到底时一点不留
+                // 两边与上面让出卡的影子（随露出的比例收，藏到底时一点不留）；下沿一直往输入框里伸进一个圆角那么深：输入框（实底玻璃，
+                // 排在卡上面）圆角外那一小块里看得到卡沉到它后面，不被一条直线齐齐切断，停稳时影子也连着。卡与输入框同一个圆角、
+                // 只窄一点，藏到底时卡的上沿整个在输入框的轮廓里
                 .mask {
                     Rectangle()
                         .padding([.horizontal, .top], -RiseBehind.shadowRoom * shown)
-                        .padding(.bottom, -ComposerMetrics.radius * shown)
+                        .padding(.bottom, -ComposerMetrics.radius)
                 }
         }
     }

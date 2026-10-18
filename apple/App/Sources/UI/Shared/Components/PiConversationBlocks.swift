@@ -2,9 +2,11 @@ import CueStore
 import SwiftUI
 
 /// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答；
-/// 还没说过话的会话是全 App 同一种空态（吉祥物加一句怎么开始），在对话区里居中。对话到了就被它替换。
+/// 还没说过话的会话是全 App 同一种空态（吉祥物加一句怎么开始），在对话区里居中；你已经发出了一句（送没送达都算，`sent`）就不再说"还没说过话"。
+/// 对话到了就被它替换。
 struct RecapPreview: View {
     let session: PiSessionState
+    let sent: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -13,7 +15,7 @@ struct RecapPreview: View {
                 Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
                 UserBubble(stored: prompt)
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
-            } else if !session.hasStarted, session.state != .known(.ended) {
+            } else if !session.hasStarted, !sent, session.state != .known(.ended) {
                 EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
                     // 占满对话区（扣掉上下留白），吉祥物落在可见区中间
                     .containerRelativeFrame(.vertical) { length, _ in max(0, length - 2 * ChatLayout.edge) }

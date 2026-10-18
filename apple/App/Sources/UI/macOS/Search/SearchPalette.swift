@@ -97,7 +97,7 @@ struct SearchPalette: View {
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
         .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous), ink: .solid)
+        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
     }

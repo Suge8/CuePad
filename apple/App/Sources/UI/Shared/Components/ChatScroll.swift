@@ -244,6 +244,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         slide()
                     } else if reading.end > last.end || reading.inset != last.inset || (reading.floating < last.floating && offset.read > reading.end) {
                         scroll(to: reading.end)
+                        settle()
                     }
                 }
                 .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
@@ -340,7 +341,17 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             guard !Task.isCancelled else { return }
             sliding = nil
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) } completion: { settle() }
+        }
+    }
+
+    /// 补滚到了没有：读数报的最新处比滚动区真用上的内容高早一步（回复框一帧里接连长高两次，第二次补滚按旧的内容高被截在半路；
+    /// 滑着的途中最新处又变了），下一帧还没到最新处就再补一次。只补一次，不轮询。
+    private func settle() {
+        Task {
+            await NextFrame.wait()
+            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
+            scroll(to: offset.end)
         }
     }
 
@@ -377,7 +388,7 @@ struct JumpToNewest: View {
         Button(action: action) {
             Image(.toLatest).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                 .frame(width: 40, height: 40)
-                .glass(in: .circle, interactive: true)
+                .glass(in: .circle, interactive: true, ink: .clear)
                 .overlay(alignment: .topTrailing) {
                     if unseen {
                         Circle().fill(palette.ink).frame(width: 10, height: 10)

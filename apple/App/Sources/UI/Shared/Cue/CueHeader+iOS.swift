@@ -71,7 +71,7 @@ struct CueHeader: View {
         // 面板的几行按长大后的位置排好、淡入：玻璃还在长的那几帧里不画到玻璃外面
         .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .rowContainer(.rect(cornerRadius: Self.radius, style: .continuous), gap: Self.rowGap)
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), ink: .solid)
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
     }
 
     private var head: some View {

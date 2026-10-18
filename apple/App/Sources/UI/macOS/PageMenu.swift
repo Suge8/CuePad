@@ -63,7 +63,7 @@ struct PageMenuSlot: View {
         .buttonStyle(.plain)
         .fixedSize()
         .disabled(content == .none)
-        .glass(in: .circle, interactive: true)
+        .glass(in: .circle, interactive: true, ink: .clear)
         .help(content.help)
         .accessibilityLabel("更多")
     }

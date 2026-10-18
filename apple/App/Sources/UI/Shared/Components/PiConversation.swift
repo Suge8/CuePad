@@ -42,7 +42,7 @@ struct PiConversation: View {
             if first > 0 {
                 EarlierRow(count: Self.segment, action: showEarlier)
             }
-            if all.isEmpty { RecapPreview(session: session) }
+            if all.isEmpty { RecapPreview(session: session, sent: !deliveries.isEmpty) }
             // 一段一段排，每段只按内容比较：上面再排开一段、下面来了新消息时，没变的段不重算也不重排，
             // 系统直接用上次量好的尺寸（整列一起排时，每排开一段都把已排开的全部重量一遍，长对话里一次几百毫秒）
             let last = Self.segments(all.count) - 1

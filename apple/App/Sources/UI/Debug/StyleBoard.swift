@@ -54,7 +54,7 @@ struct StyleBoard: View {
     private var presses: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Button {} label: { Image(.add).frame(width: 44, height: 44).glass(in: .circle) }
+                Button {} label: { Image(.add).frame(width: 44, height: 44).glass(in: .circle, ink: .clear) }
                     .buttonStyle(PressStyle(.button))
                 Button {} label: { Text("胶囊").padding(.horizontal, 16).frame(height: 36).background(palette.fill, in: .capsule) }
                     .buttonStyle(PressStyle())

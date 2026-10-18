@@ -71,6 +71,8 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
                         }
                     }
                 }
+                // 玻璃自己画（实底，`GlassInk.solid`）：共用系统的玻璃底时项被画进系统那层玻璃里，垫的实底不起作用，深色下标题成了一块透着背后的灰
+                .sharedBackgroundVisibility(.hidden)
                 if Trailing.self != EmptyView.self {
                     ToolbarItem(placement: .primaryAction) {
                         trailing
@@ -97,7 +99,7 @@ private struct HeaderTitle<Label: View>: View {
         Button { explaining = true } label: {
             label
             .frame(height: FloatingHeaderLayout.height)
-            .glass(in: .capsule, ink: .solid)
+            .glass(in: .capsule)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)

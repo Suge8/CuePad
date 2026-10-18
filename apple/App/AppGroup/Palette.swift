@@ -51,8 +51,8 @@ struct Palette {
     var ink: Color { dark ? Color(hex: 0xEEE9E1) : Color(hex: 0x1C1B19) }
     /// 次要文字、图标点睛平时的颜色。对比度 5.6，深色 5.8。
     var ink2: Color { ink.opacity(highContrast ? 0.85 : 0.7) }
-    /// 时间、计数、占位字、已结束、待办圈：只扫一眼的。对比度 3.6，深色 4.2。
-    var ink3: Color { ink.opacity(highContrast ? 0.7 : 0.55) }
+    /// 时间、计数、占位字、已结束、待办圈：只扫一眼的。也是要读的字，同样够 4.5:1（对比度 4.6，深色 5.2）：浮在玻璃上、写在牛皮纸气泡上都读得清。
+    var ink3: Color { ink.opacity(highContrast ? 0.75 : 0.64) }
     /// 分隔线、纸边、次按钮描边：装饰，不承载信息。
     var hair: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。

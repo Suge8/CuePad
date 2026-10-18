@@ -13,17 +13,17 @@ extension View {
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
-    /// `ink`：玻璃上写着要读的字时垫实底（`GlassInk`）。
-    func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .clear) -> some View {
+    /// `ink`：默认垫实底（写着字的玻璃）；只有图标的圆钮给 `.clear`（`GlassInk`）。
+    func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .solid) -> some View {
         modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
     }
 }
 
 /// 玻璃上的字要多好读。
 enum GlassInk {
-    /// 圆钮这类只有图标与短标签的玻璃。
+    /// 只有图标的圆钮。
     case clear
-    /// 写着要读的字（顶栏标题、输入框、提示横幅、任务面板）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
+    /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行、任务面板）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
     /// 垫了底才在任何背景上都够 4.5:1（docs/ui.md）。
     case solid
@@ -235,7 +235,7 @@ struct ControlSurface: ViewModifier {
                 .foregroundStyle(palette.ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
-                .glass(in: .circle, interactive: true)
+                .glass(in: .circle, interactive: true, ink: .clear)
         } else {
             content
                 .font((compact ? Typography.meta : Typography.secondary).weight(.medium))

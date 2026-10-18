@@ -97,9 +97,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     var body: some View {
         field
-        // 变形（长出几行、短胶囊 ↔ 全宽、工具排出现）是空间动画：无回弹弹簧，减弱动态效果时直接到终态
+        // 短胶囊 ↔ 全宽、聚焦时工具排出现是空间动画：无回弹弹簧，减弱动态效果时直接到终态。打字与清空（有没有草稿）时高度一帧到位：
+        // 文字区是平台的文本视图，折行长高本来就是一帧到位，收回时也一样，占位字不悬在上一行；浮着的输入框上面的对话也同一帧跟
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
             if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
@@ -165,7 +165,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
         .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
         .rowContainer(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded, ink: .solid)
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded)
         .frame(maxWidth: .infinity)
     }
 
