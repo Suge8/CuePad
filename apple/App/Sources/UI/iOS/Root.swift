@@ -67,13 +67,6 @@ struct IOSRoot: View {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
         .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
-        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话或 Agent 列表时不弹；后台走系统推送
-        .onChange(of: workspace.services.sessionAlert) { _, alert in
-            guard let alert, navigation.showsAlert(about: alert.session) else { return }
-            workspace.say(alert.text, status: alert.status, link: .session(alert.session), duration: .seconds(5))
-        }
-        // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
-        .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
         .debugScene(workspace, navigation)
     }
 
