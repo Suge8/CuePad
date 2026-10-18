@@ -141,6 +141,46 @@ struct SessionTaskTests {
         #expect(taken.isError && taken.text.contains("正在做「补注册页」"))
     }
 
+    /// 做完的事的会话被 say 恢复、答完后空着：Cue 对那件事再 done 一次，没人再用的会话照做完时的规则结束，"在做"里不再有它。
+    @Test func 做完的事的会话被说话恢复_再done就结束它() async throws {
+        try await enableCue()
+        let task = try await store.createTask("修登录", in: nil)
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        try await recorder.update(sessionID: "s1", state: .settled, title: "修登录", hosted: true, agent: .pi)
+        try await store.bindSession("s1", to: task.id)
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request in
+            if request.mode == .known(.end) { _ = try? await recorder.update(sessionID: "s1", state: .ended) }
+            return .succeeded
+        }
+        try await executor.start()
+        defer { Task { await executor.stop() } }
+        let cue = CueTools(store: store, wait: 5)
+        func state() async throws -> PiWorkState? { try await store.piSessions(sessionIDs: ["s1"])["s1"]?.state.state.known }
+        /// 最近那条结束请求执行完（执行器先把会话记成已结束再报成功）后会话的状态。
+        func ended() async throws -> Bool {
+            let end = try #require(try await store.deliveryRequests(toSession: "s1").last { $0.mode == .known(.end) })
+            #expect(try await store.outcome(of: end.id).status == .known(.succeeded))
+            return try await state() == .ended
+        }
+
+        let done = try #require(await cue.call("task", ["action": "done", "task": task.id.uuidString, "evidence": ["登录不再白屏"]]))
+        #expect(done.text.contains("已请 1 个会话结束"))
+        #expect(try await ended())
+
+        let said = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "白屏的根因是什么？"]))
+        #expect(!said.isError)
+        try await recorder.update(sessionID: "s1", state: .thinking)  // Mac 在后台恢复它、答这一句
+        try await recorder.update(sessionID: "s1", state: .settled)
+        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s1"])
+
+        let again = try #require(await cue.call("task", ["action": "done", "task": task.id.uuidString]))
+        print("再 done：\(again.text)")
+        #expect(!again.isError && again.text.contains("已请 1 个会话结束"))
+        #expect(try await ended())
+        #expect(try await store.cueBoard().sessions.isEmpty)
+        #expect(try await store.cueMessages().count(where: { $0.taskID == task.id }) == 1)  // 结果只告诉一次
+    }
+
     @Test func 只在会话文件里的历史会话_从头重读也不改写记录() async throws {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
