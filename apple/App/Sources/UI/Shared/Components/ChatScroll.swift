@@ -240,6 +240,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 只认它变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，按"越过了"补回的话对话先掉下去再滑上来
                     if grown > 0, reading.inset == last.inset {
                         slide()
+                    } else if reading.floating > last.floating, !holding {
+                        // 浮着的那块一下长高（打第一个字时输入框从一行变两层）：量到的已是终值、它自己还在按弹簧长，补滚走同一条曲线，
+                        // 不然对话先一下跳上去、与输入框之间空着一截。卡来去（`holding`）时它每帧都在变，逐帧直接跟
+                        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { scroll(to: reading.end) }
                     } else if reading.end > last.end || reading.inset != last.inset || (reading.floating < last.floating && offset.read > reading.end) {
                         scroll(to: reading.end)
                     }
