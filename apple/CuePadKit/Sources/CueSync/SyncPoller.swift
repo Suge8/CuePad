@@ -47,16 +47,20 @@ public struct SyncPoller: Sendable {
   public func run<Condition: AsyncSequence & Sendable>(
     while waiting: Condition, fetch: @escaping @Sendable () async -> Void
   ) async where Condition.Element == Cadence?, Condition.Failure == Never {
-    var loop: Task<Void, Never>?
-    var last: Cadence??
-    for await cadence in waiting {
-      let changed = last != nil && last != cadence
-      last = cadence
+    var cadences = waiting.makeAsyncIterator()
+    guard var current = await cadences.next(isolation: #isolation) else { return }
+    var loop = start(current, now: false, fetch)
+    while let next = await cadences.next(isolation: #isolation) {
       loop?.cancel()
-      loop = cadence.map { cadence in Task { await self.loop(cadence, now: changed, fetch) } }
+      loop = start(next, now: next != current, fetch)
+      current = next
     }
     loop?.cancel()
     await loop?.value
+  }
+
+  private func start(_ cadence: Cadence?, now: Bool, _ fetch: @escaping @Sendable () async -> Void) -> Task<Void, Never>? {
+    cadence.map { cadence in Task { await self.loop(cadence, now: now, fetch) } }
   }
 
   /// 按走到哪一档隔着拉（`now`：先拉一次），直到档位走完或被取消（新节奏到来、不再等）。间隔从上一次开拉算起（拉的耗时算在间隔里）：

@@ -76,7 +76,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 手机收到推送（前台的 Agent、Cue 通知，后台的静默推送）：说明服务器上有新东西，这就拉一次，不等切一次后台。
     func pushed() {
         guard let services else { return }
-        Task { await services.pullForPush() }
+        Task { await services.pull() }
     }
     #endif
 

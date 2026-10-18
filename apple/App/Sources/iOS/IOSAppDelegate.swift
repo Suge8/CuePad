@@ -45,7 +45,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     /// 同步区有变化的静默推送（后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统（冷启动时等同步启动完，见 `AppServices.pull`）。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard case .ready(let services) = launch else { return .noData }
-        await services.pullForPush()
+        await services.pull()
         return .newData
     }
 }
