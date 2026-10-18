@@ -51,6 +51,17 @@ public enum Thumbnails {
         return image
     }
 
+    /// 原图的像素尺寸（计入方向标记）：只读文件头，不解码。读不到为 nil。
+    public static func pixelSize(at url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let height = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue
+        else { return nil }
+        let orientation = (props[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        return (5...8).contains(orientation) ? CGSize(width: height, height: width) : CGSize(width: width, height: height)
+    }
+
     private static func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.path)@\(maxPixel)" as NSString }
 
     private static let cache: ImageCache = {

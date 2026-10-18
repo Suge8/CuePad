@@ -177,7 +177,7 @@ struct PreviewStill: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: file) { look = await DeliverableLooks.load(preview, file: file, pixels: Int(Self.side * scale), scale: scale) }
+        .task(id: file) { look = await DeliverableLooks.load(preview, file: file, box: LookBox(width: Int(Self.side * scale), height: Int(Self.side * scale), fills: false), scale: scale) }
         .quickLookPreview($inspecting)
     }
 }
