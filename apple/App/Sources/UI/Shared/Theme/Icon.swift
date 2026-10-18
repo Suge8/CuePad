@@ -6,14 +6,14 @@ import UIKit
 import AppKit
 #endif
 
-/// 全 App 的图标，按意思取名；图从哪来（自家的墨块符号 cue.*；只有项目图标还是系统符号）只在 `source` 一处写。
-/// 别处不写符号名、不调 `Image(systemName:)` 一类（lint 拦）：界面用 `Image(_:)`、`Label(_:icon:)`、`Button(_:icon:)`、`Menu(_:icon:)`，
-/// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标按项目存的系统符号名走 `project`。
+/// 全 App 的图标，按意思取名，全是自家的墨块符号（cue.*，由 design/tools/cue-symbols.py 生成）；哪个意思画成哪个符号只在 `source` 一处写。
+/// 别处不写符号名，全 App 不用系统符号（lint 拦）：界面用 `Image(_:)`、`Label(_:icon:)`、`Button(_:icon:)`、`Menu(_:icon:)`，
+/// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标走 `project`（闭合表 `ProjectIcon`）。
 ///
 /// 着色（墨块符号的第二层是点睛，只是小部件，主体都在主层，见 design/tools/cue-symbols.py）：
 /// - 平时点睛是这一处前景色的次一级（层级渲染：墨色前景时就是次墨），不用另上色；单色场合（系统菜单、工具栏）照系统。
 /// - 选中或正在发生时点睛靛青、状态图标的点按状态色（调色板渲染）：用 `IconImage(_:accent:)`，只在那个状态存在时给。
-/// - 系统符号（项目图标）照原样，不受这两条影响。
+/// - 反白符号（`filled`）不按层着色，调用方给两种颜色时按层上色。
 nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
@@ -40,15 +40,16 @@ nonisolated enum Icon: Hashable, Sendable {
     case profile, name, autoApprove, hotkey, talkToCue, appearance, testConnection, updates
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
-    /// 项目存的图标名（系统符号名，`ProjectGlyph` 定能认哪些）。
-    case project(String)
+    /// Mac 菜单栏里的 CuePad（单色模板图）。
+    case menuBar
+    /// 项目的图标（闭合表 `ProjectIcon`）。
+    case project(ProjectIcon)
 
     private enum Source {
         /// 自家的墨块符号（资源 Symbols/cue.<名>）。
         case ink(String)
         /// 自家的反白符号：记号在第一层、实心底在第二层（同系统的 *.circle.fill），不按层级渲染，调用方给两种颜色时按层上色。
         case filled(String)
-        case system(String)
     }
 
     private var source: Source {
@@ -192,11 +193,12 @@ nonisolated enum Icon: Hashable, Sendable {
         case .downloading: .ink("cloud.down")
         case .file: .ink("doc.blank")
         case .inspect3D: .ink("cube")
-        case .project(let name): .system(name)
+        case .menuBar: .ink("menubar")
+        case .project(let icon): .ink(icon.symbol)
         }
     }
 
-    /// 自家的墨块符号（有点睛层，按上面的着色规则画）。
+    /// 有点睛层、按上面的着色规则画的墨块符号（反白符号不是）。
     var isInk: Bool { if case .ink = source { true } else { false } }
 
     /// Cue 此刻的表情用哪个符号（标签图标；头像是位图，见 `CueAvatar`）：睡着闭眼、在做事看向一边、刚做完开心，其余醒着。
@@ -209,21 +211,11 @@ nonisolated enum Icon: Hashable, Sendable {
         }
     }
 
-    /// 项目图标认不认这个名字：系统里有这个符号。
-    static func projectSymbolExists(_ name: String) -> Bool {
-        #if os(iOS)
-        UIImage(systemName: name) != nil
-        #else
-        NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil
-        #endif
-    }
-
     #if os(iOS)
     /// UIKit 的菜单与工具条用。
     var platformImage: UIImage? {
         switch source {
         case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
-        case .system(let name): UIImage(systemName: name)
         }
     }
     #else
@@ -231,7 +223,6 @@ nonisolated enum Icon: Hashable, Sendable {
     var platformImage: NSImage? {
         switch source {
         case .ink(let name), .filled(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)
-        case .system(let name): NSImage(systemSymbolName: name, accessibilityDescription: nil)
         }
     }
     #endif
@@ -241,7 +232,6 @@ nonisolated enum Icon: Hashable, Sendable {
         // 层级渲染：点睛是前景色的次一级。写在 Image 上，外面再设渲染方式也不覆盖它（要点亮用 `IconImage`）
         case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
         case .filled(let name): Image(Self.ink(name))
-        case .system(let name): Image(systemName: name)
         }
     }
 
@@ -254,6 +244,30 @@ nonisolated enum Icon: Hashable, Sendable {
     private static func ink(_ name: String) -> String { "cue." + name }
 }
 
+nonisolated private extension ProjectIcon {
+    /// 闭合表里每一种画成哪个墨块符号。
+    var symbol: String {
+        switch self {
+        case .folder: "folder"
+        case .sparkles: "sparkle"
+        case .chat: "bubbles"
+        case .terminal: "terminal"
+        case .globe: "globe"
+        case .hammer: "hammer"
+        case .book: "books"
+        case .target: "target"
+        case .briefcase: "briefcase"
+        case .cart: "cart"
+        case .megaphone: "megaphone"
+        case .paintbrush: "brush"
+        case .lightbulb: "idea"
+        case .flag: "flag"
+        case .cube: "cube"
+        case .leaf: "leaf"
+        }
+    }
+}
+
 /// `Label` 等的泛型参数也叫 Icon，扩展里用这个名字指本类型。
 typealias AppIcon = Icon
 
@@ -262,7 +276,7 @@ extension Image {
 }
 
 /// 点睛上色的图标（着色规则只在这里）：平时同 `Image(_:)`，点睛是前景色的次一级；`lit`（选中、正在发生）点睛靛青；
-/// `state(色)` 是状态图标的点按状态色（等你赭黄…），只在那个状态存在时给。主体照外面的前景色。系统符号没有点睛，整个照前景色。
+/// `state(色)` 是状态图标的点按状态色（等你赭黄…），只在那个状态存在时给。主体照外面的前景色。反白符号不点亮，整个照前景色。
 struct IconImage: View {
     enum Accent: Equatable {
         case none, lit

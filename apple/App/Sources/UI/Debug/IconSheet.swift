@@ -2,16 +2,12 @@
 import SwiftUI
 
 /// 图标样张（`-CuePadScene icons`，iPad 竖屏，一屏 24 行，`-CuePadSheetPage` 翻页）：正在画的这一批墨块符号经 `Icon` 取图，每个四档字号（12、17、22、34pt）各画两遍——
-/// 左边是 App 里的样子（层级渲染，点睛是次一级），右边是单色（系统菜单、工具栏里的样子，所有层同色，靠刻缝分开）。
+/// 左边是 App 里的样子（层级渲染，点睛是次一级），中间是单色（系统菜单、工具栏里的样子，所有层同色，靠刻缝分开），
+/// 项目图标右边再按每种项目色各画一个（22pt）。
 struct IconSheet: View {
     @Environment(\.palette) private var palette
 
-    private static let icons: [(String, Icon)] = [
-        ("memory", .memory), ("wakeEnabled", .wakeEnabled), ("wakeMessage", .wakeMessage), ("wakeActivity", .wakeActivity), ("wakeIdle", .wakeIdle), ("wakeReminder", .wakeReminder),
-        ("wakeSettings", .wakeSettings), ("mail", .mail), ("profile", .profile), ("name", .name), ("autoApprove", .autoApprove), ("hotkey", .hotkey),
-        ("talkToCue", .talkToCue), ("appearance", .appearance), ("testConnection", .testConnection), ("updates", .updates), ("audio", .audio), ("document", .document),
-        ("downloading", .downloading), ("file", .file), ("inspect3D", .inspect3D), ("readFile", .readFile), ("sendAnswer", .sendAnswer),
-    ]
+    private static let icons: [(String, Icon)] = ProjectIcon.allCases.map { ($0.name, .project($0)) } + [("菜单栏", .menuBar)]
     private static let sizes: [CGFloat] = [12, 17, 22, 34]
     /// 一屏放 `perPage` 行；多出来的配 `-CuePadSheetPage 2` 起看后面的。
     private static let perPage = 24
@@ -39,6 +35,10 @@ struct IconSheet: View {
                         if let image = icon.platformImage?.applyingSymbolConfiguration(.init(pointSize: size)) {
                             Image(uiImage: image.withRenderingMode(.alwaysTemplate))
                         }
+                    }
+                    if case .project = icon {
+                        Color.clear.frame(width: 24, height: 1)
+                        ForEach(Palette.projectColors, id: \.stored) { Image(icon).font(.system(size: 22)).foregroundStyle(palette.project($0.stored)) }
                     }
                 }
             }
