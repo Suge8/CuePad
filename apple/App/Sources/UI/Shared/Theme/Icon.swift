@@ -38,8 +38,10 @@ nonisolated enum Icon: Hashable, Sendable {
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, wakeSettings, mail
     case profile, name, autoApprove, hotkey, talkToCue, appearance, testConnection, updates
-    // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
-    case audio, document, downloading, play, file, inspect3D
+    // 文件预览的类型
+    case web, markdown, video, audio, pdf, document, spreadsheet, presentation, model, plainText
+    /// 交付物：还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
+    case downloading, play, file, inspect3D
     /// 项目存的图标名（系统符号名，`ProjectGlyph` 定能认哪些）。
     case project(String)
 
@@ -187,8 +189,16 @@ nonisolated enum Icon: Hashable, Sendable {
         case .appearance: .ink("sun")
         case .testConnection: .ink("signal")
         case .updates: .ink("badge.down")
+        case .web: .ink("compass")
+        case .markdown: .ink("doc.md")
+        case .video: .ink("film")
         case .audio: .ink("wave")
+        case .pdf: .ink("doc.rich")
         case .document: .ink("doc")
+        case .spreadsheet: .ink("doc.grid")
+        case .presentation: .ink("doc.chart")
+        case .model: .ink("cube")
+        case .plainText: .ink("doc.text")
         case .downloading: .ink("cloud.down")
         case .file: .ink("doc.blank")
         case .inspect3D: .ink("cube")

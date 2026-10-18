@@ -9,7 +9,9 @@ struct IconSheet: View {
     private static let icons: [(String, Icon)] = [
         ("memory", .memory), ("wakeEnabled", .wakeEnabled), ("wakeMessage", .wakeMessage), ("wakeActivity", .wakeActivity), ("wakeIdle", .wakeIdle), ("wakeReminder", .wakeReminder),
         ("wakeSettings", .wakeSettings), ("mail", .mail), ("profile", .profile), ("name", .name), ("autoApprove", .autoApprove), ("hotkey", .hotkey),
-        ("talkToCue", .talkToCue), ("appearance", .appearance), ("testConnection", .testConnection), ("updates", .updates), ("audio", .audio), ("document", .document),
+        ("talkToCue", .talkToCue), ("appearance", .appearance), ("testConnection", .testConnection), ("updates", .updates),
+        ("web", .web), ("markdown", .markdown), ("video", .video), ("audio", .audio), ("pdf", .pdf), ("document", .document), ("spreadsheet", .spreadsheet),
+        ("presentation", .presentation), ("model", .model), ("plainText", .plainText),
         ("downloading", .downloading), ("file", .file), ("inspect3D", .inspect3D), ("readFile", .readFile), ("sendAnswer", .sendAnswer),
     ]
     private static let sizes: [CGFloat] = [12, 17, 22, 34]
