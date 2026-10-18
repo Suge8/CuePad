@@ -37,7 +37,8 @@ extension DebugScene {
 
     static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
         guard defaults.string(forKey: "CuePadSpeech") == "press", (scene == "session") == session else { return }
-        try? await Task.sleep(for: .seconds(defaults.object(forKey: "CuePadPressAfter") as? Double ?? 3))
+        // 等的这几秒里输入框可能重建（页面换了身份）：旧的那个任务被取消，不能再按、再量，否则一次按下记成两条
+        guard (try? await Task.sleep(for: .seconds(defaults.object(forKey: "CuePadPressAfter") as? Double ?? 3))) != nil else { return }
         guard let log = defaults.string(forKey: "CuePadFlightLog").map({ URL(fileURLWithPath: $0) }) else { return press() }
         await measureFlight("press", seconds: flightProbe, into: log, act: press)
     }
