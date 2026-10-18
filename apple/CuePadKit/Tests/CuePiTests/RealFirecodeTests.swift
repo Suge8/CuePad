@@ -58,5 +58,38 @@ struct RealFirecodeTests {
         #expect(bridge.sessions.count == 1)
         try await eventually("日志记下了") { log.changes.filter { if case .appeared = $0 { true } else { false } }.count == 1 }
     }
+
+    /// CuePad 后台托管的指挥官（`CUEPAD_HOSTED`）只在自己这一轮做完、子代理也都歇下时才算空闲：子代理的会话歇下或被移除都不算。
+    /// 移除一个在跑的子代理、另一个还在跑时，进程不能到点自己退出；全部做完照常到点退出。
+    @Test func aHostedMasterOutlivesAKilledSubagentWhileAnotherIsStillRunning() async throws {
+        let idleSeconds = 1
+        let pi = try await PiProcess(extraExtensions: [], firecode: true, env: ["CUEPAD_HOSTED": "\(idleSeconds)"])
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        try await eventually("桥发现指挥官会话") { !bridge.sessions.isEmpty }
+        let id = bridge.sessions[0].id
+        /// 指挥官这一轮做完（说的就是 `prompt`）、在等子代理
+        func delegating(after prompt: String) -> Bool {
+            let session = bridge.session(id: id)
+            return session?.state == .delegating && recap(of: session)?.lastPrompt == prompt
+        }
+
+        for name in ["a", "b"] {
+            try pi.prompt("[[subagent:\(name)]]")
+            try await eventually("子代理 \(name) 在跑（停在假模型里）") { delegating(after: "[[subagent:\(name)]]") }
+        }
+        try pi.requireSubagentsTool()
+        try pi.prompt("[[kill:a]]")
+        try await eventually("a 被移除，b 还在跑") { delegating(after: "[[kill:a]]") && bridge.session(id: id)?.subagents.map(\.name) == ["b"] }
+
+        // 等过几个空闲时限（回放时空闲的时长不占时间：之后的输出由放行的标记排先后）
+        if AgentTape.active.mode == .record { try await Task.sleep(for: .seconds(idleSeconds * 3)) }
+        try #require(bridge.session(id: id)?.state == .delegating, "b 还在跑，托管进程不该到点退出")
+
+        let releasing = pi.releaseEveryHold()  // b 做完，结果投回指挥官；回应里带着假模型的停住标记，同样放行
+        defer { releasing.cancel() }
+        try await eventually("全部做完后到点退出") { bridge.session(id: id) == nil }
+    }
 }
 #endif
