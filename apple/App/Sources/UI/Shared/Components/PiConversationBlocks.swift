@@ -20,6 +20,8 @@ struct RecapPreview: View {
                     // 占满对话区（扣掉上下留白），吉祥物落在可见区中间
                     .containerRelativeFrame(.vertical) { length, _ in max(0, length - 2 * ChatLayout.edge) }
                     .frame(maxWidth: .infinity)
+                    // 发出第一句时淡掉，与那句的气泡淡入同一种（不一帧硬切）
+                    .transition(.entry)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
