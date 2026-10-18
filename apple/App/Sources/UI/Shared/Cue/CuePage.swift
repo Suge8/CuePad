@@ -183,7 +183,7 @@ struct CuePage: View {
             }
             return max(count, 1)
         }
-        return ChatPaging(first: { rows(filling: $0, above: $1) }, step: { rows(filling: $0, above: $1) })
+        return ChatPaging(first: { rows(filling: 2 * $0, above: $1) }, step: { rows(filling: $0, above: $1) })
     }
 
     /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少有原文那么多行（`lines`），结果卡另有交付物的一排（`strip`，比最矮的那种还矮）
