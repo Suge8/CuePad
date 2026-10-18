@@ -580,7 +580,7 @@ final class AgentTape: @unchecked Sendable {
         return state.withLock { state in
             if let replay = state.replay { return !replay.events.isEmpty }
             guard let data = FileManager.default.contents(atPath: file.path) else {
-                state.problems.append("没有录制数据 \(file.path)：CUEPAD_AGENT_TESTS=\(state.agent?.rawValue ?? "?") apple/scripts/xc.sh test kit --filter … 录一遍")
+                state.problems.append("没有录制数据 \(file.path)：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(state.agent?.rawValue ?? "?") apple/scripts/xc.sh test kit -only-testing:CuePiTests 录一遍")
                 state.replay = Replay(events: [], matched: [])
                 return false
             }
@@ -642,7 +642,7 @@ final class AgentTape: @unchecked Sendable {
                 let expected = recorded(event).map { Self.expand($0, &state) }.joined(separator: "\u{1}")
                 let actual = data.replacing("\\/", with: "/")
                 if expected != actual, let problem = TapeCompare.compare(expected: expected, actual: actual, into: &replay) {
-                    state.problems.append("回放：\(event.c ?? "") 的输入与录制不符（\(problem)），CUEPAD_AGENT_TESTS=\(state.agent?.rawValue ?? "?") 重录")
+                    state.problems.append("回放：\(event.c ?? "") 的输入与录制不符（\(problem)），TEST_RUNNER_CUEPAD_AGENT_TESTS=\(state.agent?.rawValue ?? "?") 重录")
                 }
             }
             state.replay = replay

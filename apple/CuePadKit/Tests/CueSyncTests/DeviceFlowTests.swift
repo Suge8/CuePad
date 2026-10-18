@@ -24,7 +24,7 @@ import Testing
     let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试")
     let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", directory: "cuepad", question: question, times: times)
+      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", directory: "/Users/me/cuepad", question: question, times: times)
     let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
     try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: recap))
     try await cloud.exchange()

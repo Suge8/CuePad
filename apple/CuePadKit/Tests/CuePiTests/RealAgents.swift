@@ -13,7 +13,9 @@ import Testing
 ///
 /// 录制：列出要录的几家（`AgentKind` 的 rawValue），这几家连真 Agent 跑同样的断言，并重写它们的录像带：
 ///
-///     CUEPAD_AGENT_TESTS=pi,codex,claude apple/scripts/xc.sh test kit --filter 'Real|CodexHooks|ClaudeSettings'
+///     TEST_RUNNER_CUEPAD_AGENT_TESTS=pi,codex,claude apple/scripts/xc.sh test kit -only-testing:CuePiTests
+///
+/// 下面的变量同样加 `TEST_RUNNER_` 前缀给（xcodebuild 只把这样的变量交给测试进程）。
 ///
 /// - pi：`~/.local/bin/pi`，假模型（`Fixtures/fake-model.ts`），零网络；FireCode 用例另要本机的 FireCode 源码（`CUEPAD_FIRECODE_SOURCE` 可换）；
 /// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
@@ -55,7 +57,7 @@ enum RealAgents {
 
     /// 只连真 Agent 跑的套件（没有录像带）：列出这家且本机跑得起来时才跑。
     static func live(_ agent: AgentKind, _ why: String) -> ConditionTrait {
-        .enabled(if: recording.contains(agent) && installed(agent), "只连真 \(agent.rawValue) 跑（\(why)）：CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
+        .enabled(if: recording.contains(agent) && installed(agent), "只连真 \(agent.rawValue) 跑（\(why)）：TEST_RUNNER_CUEPAD_AGENT_TESTS=\(agent.rawValue) 开启")
     }
 
     /// 有录像带的套件的时限：回放一分钟（卡住的回放不空等到录制的时限），录制时给真 Agent 的 `recording`。
