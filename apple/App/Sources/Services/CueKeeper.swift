@@ -405,7 +405,11 @@ final class CueKeeper {
     }
 
     private func handle(_ event: CueBrainEvent) async {
-        if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
+        switch event {
+        // 逐字的正在说（每条带着到此为止的全文）与上下文用量，一轮几十上百条：不记
+        case .speaking, .context: break
+        default: Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)")
+        }
         switch event {
         case .turnStarted:
             speech.offer(nil)

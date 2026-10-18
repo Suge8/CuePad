@@ -364,7 +364,9 @@ struct HistoryIndexerTests {
         try makeSession("p1", "a.jsonl", prompt: "old", modified: now.addingTimeInterval(-300))
         let upToDate = try makeSession("p2", "b.jsonl", prompt: "known", modified: now.addingTimeInterval(-200))
         try makeSession("p2", "c.jsonl", prompt: "new", modified: now.addingTimeInterval(-100))
-        let known = try PiHistory.index(file: upToDate.url, from: nil).checkpoint
+        // 上次读完时记下的修改时间与文件现在的一样：回填认得出它没动过
+        let modified = try upToDate.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let known = try PiHistory.index(file: upToDate.url, agent: .pi, from: nil, modified: modified, files: scratchFiles).checkpoint
 
         let log = HistoryEventLog(PiHistoryIndexer(sessions: root) { url in url.lastPathComponent == "b.jsonl" ? PiHistoryStart(checkpoint: known, hasTranscript: true) : nil })
         try await eventually("回填完成") { log.finishedBackfill }
