@@ -13,7 +13,7 @@ enum DebugHooks {
         var searchText = ""
         /// 编辑器载入后选中的一段（`-CuePadSelect`）。
         var editorSelection: NSRange?
-        /// 每一轮的经过与 Cue 页折起的动态一开始就展开（`-CuePadToolsOpen`）。
+        /// 每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开（`-CuePadToolsOpen`）。
         var toolsOpen = false
         /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
         var explain = false

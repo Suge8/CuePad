@@ -213,11 +213,8 @@ final class Navigation {
     /// 此刻屏幕上右边那一栏最上面的页；iPhone 回到了列表时没有。
     private var top: Route? { column == .detail ? path.last ?? root : nil }
 
-    /// 这个会话的近况页此刻正在屏幕上。
-    func isViewing(session id: UUID) -> Bool { top == .session(id) }
-
-    /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 整页（那一行已经在变）时不弹。
-    func showsAlert(about session: UUID) -> Bool { top != .agent && !isViewing(session: session) }
+    /// 会话的前台提示（等你确认、做完了）弹不弹：屏幕上最上面那一页盖住了这个会话（`Route.covers`）时不弹。
+    func showsAlert(about session: UUID) -> Bool { top?.covers(session: session) != true }
 
     /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话或 Agent 列表就当场撤下
     /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。

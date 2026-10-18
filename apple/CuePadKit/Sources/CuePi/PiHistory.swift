@@ -99,7 +99,7 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件（文件头还没写好的不算）：不在其中的旧索引（文件已删除、按文件名记下的等）可以丢掉
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉
     case backfillFinished(sessionFiles: [URL])
 }
 
