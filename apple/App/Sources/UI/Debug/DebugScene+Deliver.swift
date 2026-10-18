@@ -47,7 +47,7 @@ extension DebugScene {
     }
 
     /// `-CuePadAllKinds YES|<n>`：空着的 scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
-    /// 标题"模型"，配 `-CuePadOpenPreview 模型` 打开模型的预览页），之后每种能发的类型各一份。给数字只发前 n 批：
+    /// 标题"模型"），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
     /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
     /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
     static func seedAllKinds(_ store: CueStore, upTo count: Int?) async {

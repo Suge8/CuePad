@@ -17,7 +17,7 @@ enum DebugHooks {
         var toolsOpen = false
         /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
         var explain = false
-        /// 会话页直接打开这张预览（`-CuePadOpenPreview <标题>`）。
+        /// 会话页直接打开这张预览（`-CuePadOpenPreview <批的标题或文件名>`）。
         var openPreview: String?
         /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
