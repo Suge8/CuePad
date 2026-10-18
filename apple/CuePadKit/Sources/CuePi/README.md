@@ -44,7 +44,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 
 端到端测试 `RealBrainTests` 录的是真实运行时用用户自己的账号跑出来的输出；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着。Cue 用各家开工（带名字、模型、强度开会话，说两句、各自歇下，核对会话文件里实际用的模型）由 `RealCueStartTests` 守着，各家用自己的隔离测试台，登录只用这家自己已有的、不刷新（Codex 复制的登录，见 `copyCodexAuth`；Claude Code 钥匙串里的那条，见 `ClaudeLogin`）。
 
-真 Agent 的用例（真 Pi、各家托管、Codex 钩子、大脑、开工）默认回放录好的 Agent 输出，不起真 Agent；`CUEPAD_AGENT_TESTS=<家,…> apple/scripts/xc.sh test kit --filter 'Real|CodexHooks|ClaudeSettings'` 连真 Agent 跑并重录这几家。录在哪些边界、哪些用例只连真 Agent 跑，只在 `Tests/CuePiTests/RealAgents.swift` 的头注释里。
+真 Agent 的用例（真 Pi、各家托管、Codex 钩子、大脑、开工）默认回放录好的 Agent 输出，不起真 Agent；`TEST_RUNNER_CUEPAD_AGENT_TESTS=<家,…> apple/scripts/xc.sh test kit -only-testing:CuePiTests` 连真 Agent 跑并重录这几家。录在哪些边界、哪些用例只连真 Agent 跑，只在 `Tests/CuePiTests/RealAgents.swift` 的头注释里。
 
 
 ## 协议（v14）

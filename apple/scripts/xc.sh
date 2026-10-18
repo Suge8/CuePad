@@ -4,7 +4,7 @@
 #   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
-#   xc.sh test kit [swift test 参数…]               CuePadKit 在 macOS 上的 swift test，如 --filter SuiteName
+#   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…]  构建 → 起隔离实例 → 画面就绪后截窗口 → 退出
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…]  同上，录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（ios、ipad）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；Mac 实例 5 分钟后自己退出
@@ -15,9 +15,11 @@
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 DebugScene.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
-# 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 在 CuePadKit/.build）：每个检出一份增量。
+# 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（不联网、不要账号）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
+# Kit 的测试因此也走 xcodebuild：swift test（Swift 6.4）没有测试时限的参数，Swift Testing 的 .timeLimit 只取消测试任务、要等它自己结束，
+# 不响应取消的等待会让整个测试进程挂到任务时限。xcodebuild 只把 TEST_RUNNER_ 开头的环境变量交给测试进程（去掉前缀），测试进程的工作目录是 /private/tmp。
 # 提交钩子：git config core.hooksPath apple/scripts/hooks（每个仓库一次）。
 set -euo pipefail
 
@@ -54,9 +56,6 @@ case "$cmd" in
   check|build|build-perf) xc_enter plain "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
-if [ "$cmd" = test ] && [ "$platform" = kit ]; then
-  cd "$APPLE_DIR/CuePadKit" && exec swift test "${@:3}"
-fi
 [ "$cmd" != check ] || platform=ios
 perf_script=""
 if [ "$cmd" = perf ]; then
@@ -77,6 +76,7 @@ fi
 mkdir -p "$DERIVED"
 case "$platform" in
   mac) destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/$configuration/CuePad.app" ;;
+  kit) [ "$cmd" = test ] || { echo "$USAGE" >&2; exit 2; }; destination='platform=macOS,arch=arm64' ;;
   ios|ipad)
     if [ "$platform" = ios ]; then model="$IOS_DEVICE"; else model="$IPAD_DEVICE"; fi
     device="$(sim_udid "$model")"
@@ -138,14 +138,16 @@ case "$cmd" in
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
     # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台
     if [ -n "${device:-}" ]; then sim_boot "$device"; fi
+    kit_test() {
+      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" "$@" 2>&1) \
+        | { grep -v 'failed with exit code 0 but produced no further output' || true; }
+    }
+    if [ "$platform" = kit ]; then kit_test "${@:3}"; exit; fi
     # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
     # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
     status=0
     xcb test "${limits[@]}" "${@:3}" || status=$?
-    if [ "$platform" != mac ] && [ "$#" -le 2 ]; then
-      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" "${limits[@]}" 2>&1) \
-        | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
-    fi
+    if [ "$platform" != mac ] && [ "$#" -le 2 ]; then kit_test || status=$?; fi
     exit $status ;;
   shot|rec|run)
     # 截图前先查台前调度：开着就拍不对，不白等一次构建
