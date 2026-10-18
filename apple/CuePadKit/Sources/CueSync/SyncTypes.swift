@@ -7,6 +7,7 @@ public enum SyncStatus: Equatable, Sendable {
   case starting
   /// 空闲（已同步，或尚无可同步的内容）。
   case idle
+  /// 空闲之上的显示态：一轮上传或拉积压正在进行（`SyncState.catchingUp`）。只出现在快照里，由协调器在发布时推出，不单独记。
   case syncing
   /// 连不上 iCloud（没有网络、服务暂不可用）：最近一次拉取或上传因网络失败。本机改动留在库里待推送，发送者按退避重试；
   /// 下一次拉取或上传成功时回到空闲。
