@@ -87,6 +87,20 @@ struct SyncWiringTests {
         #expect(app.sync.syncNows == 1)
     }
 
+    /// 静默推送把 App 冷启动到后台：推送先于同步启动完到达，等启动完再拉，不空手交还系统；启动后的立即同步就是这一拉，不拉两遍。
+    @Test func 冷启动时先到的推送_等同步启动完再拉_只拉一次() async throws {
+        app.sync.holdsStart.withLock { $0 = true }
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("开始启动") { app.sync.started == 1 }
+        let push = Task { await services.pullForPush() }
+        app.sync.startGate.continuation.yield()
+        await push.value
+        try await eventually("启动完才拉") { services.isSyncingNow == false && app.sync.events.count >= 2 }
+        let events = app.sync.events
+        #expect(events == ["started", "pull"])
+    }
+
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }

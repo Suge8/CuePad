@@ -11,7 +11,6 @@ struct SceneRoot: View {
     init(services: AppServices, alerts: AlertCenter) {
         self.services = services
         self.alerts = alerts
-        alerts.services = services
     }
 
     var body: some View {

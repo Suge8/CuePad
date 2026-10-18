@@ -51,13 +51,18 @@ extension AppServices {
         follow {
             for await state in sync.stateUpdates { self.setSyncState(state) }
         }
-        follow {
+        let starting = Task { () -> ContinuousClock.Instant? in
             do {
                 try await sync.start()
+                return .now
             } catch {
-                return self.syncFailedToStart(error)
+                self.syncFailedToStart(error)
+                return nil
             }
-            await self.syncNow()
+        }
+        syncStarting = starting
+        follow {
+            if let started = await starting.value { await self.syncNow(since: started) }
         }
         follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
             for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
@@ -81,26 +86,34 @@ extension AppServices {
         let waiting = pollingCondition()
         let poller = SyncPoller(timing: timing)
         polling = Task {
-            await poller.run(while: waiting) { [weak self] in await self?.pull() }
+            await poller.run(while: waiting) { [weak self] in await self?.pull(since: .now) }
         }
     }
 
-    /// 拉一次：立即同步与按节奏的拉取只经这里。同一时刻只有一拉，期间要拉的就是这一拉：回到前台、同步恢复时
-    /// 立即同步与重开的按节奏拉取同时要拉，只拉一次。收到推送不经这里（`pullForPush`：推送说的是之后才到的变化，要排在在拉的那一拉后面）。
+    /// 拉一次：立即同步、按节奏的拉取与收到推送只经这里，同一时刻只有一拉。`since` 是要的变化在服务器上出现的时刻（推送到达、
+    /// 要立即同步、同步启动完）：开拉不早于它的一拉（在拉的或刚拉完的）就带着它，不另拉；在拉的那一拉开拉早于它，等它拉完再拉。
+    /// 同步还在启动（冷启动，含静默推送把 App 叫到后台）就等它启动完：之前拉不了，启动后的立即同步就是要的那一拉。
     /// 失败（多半是离线）只记日志：下一次触发会再拉，状态变化会经 `syncStatus` 反映。
-    func pull() async {
+    func pull(since asked: ContinuousClock.Instant) async {
         guard let sync else { return }
-        if let pulling { return await pulling.value }
+        if let syncStarting, await syncStarting.value == nil { return }
+        while let pulling {
+            if pulling.began >= asked { return await pulling.task.value }
+            await pulling.task.value
+        }
+        if let lastPull, lastPull >= asked { return }
         let task = Task {
             do {
                 try await sync.syncNow()
             } catch {
                 Self.log.notice("拉取失败：\(String(describing: error), privacy: .public)")
             }
+            pulling = nil  // 在等它的醒来时已经不在拉：新的一拉只在没有在拉时开始，这里清的一定是自己
         }
-        pulling = task
+        let began = ContinuousClock.now
+        pulling = (task, began)
+        lastPull = began
         await task.value
-        pulling = nil
     }
 
     /// 此刻该按什么节奏拉（nil：不拉）。"是否在等"只在这里定义，节奏见 `SyncPoller.Cadence.mac`、`.phone`：
@@ -152,19 +165,19 @@ extension AppServices {
     /// 立即同步：立即拉一次（`pull`，与按节奏的拉取同一拉；待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
     /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`，再要立即同步的
     /// （启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
-    func syncNow() async {
+    func syncNow(since asked: ContinuousClock.Instant = .now) async {
         guard sync != nil else { return }
         if let syncing { return await syncing.value }
-        let waiting = Task { await self.pullAtMost() }
+        let waiting = Task { await self.pullAtMost(since: asked) }
         syncing = waiting
         await waiting.value
         syncing = nil
     }
 
-    private func pullAtMost() async {
+    private func pullAtMost(since asked: ContinuousClock.Instant) async {
         let (settled, settle) = AsyncStream<Void>.makeStream()
         Task {
-            await pull()
+            await pull(since: asked)
             settle.finish()
         }
         let deadline = Task {
@@ -207,13 +220,9 @@ extension AppServices {
         return true
     }
 
-    /// 收到推送（手机前台的通知、后台的静默推送）：拉一次，不碰立即同步的忙碌状态。
+    /// 收到推送（手机前台的通知、后台的静默推送）：拉到推送说的变化，不碰立即同步的忙碌状态。
     func pullForPush() async {
-        do {
-            try await sync?.syncNow()
-        } catch {
-            Self.log.notice("收到推送后拉取失败：\(String(describing: error), privacy: .public)")
-        }
+        await pull(since: .now)
     }
 
     /// 处理 `syncStatus == .needsDecision`：用户选择后同步重新开始。
