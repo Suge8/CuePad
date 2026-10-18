@@ -37,9 +37,12 @@ nonisolated struct LookBox: Hashable, Sendable {
         return min(Int((scale * longest).rounded(.up)), Self.longestFactor * max(width, height))
     }
 
-    /// 先交给系统缩略图的框（它总是整张放进框里）：不限宽时按高的 4 倍（视频、文稿没有更宽的）。
+    /// 先交给系统缩略图的框（它总是整张放进框里）：不限宽时是边长为高 4 倍的方框（视频、文稿没有更宽的），出来的再缩回框——
+    /// 系统按最长边缓存缩略图，要 4h×h 的扁框会把竖版的一张小图记在这个尺寸下，全屏页随后要同边长的方框时拿到的就是它，糊。
     /// 铺满的框里比例与框不同的（竖版 PDF、竖拍视频）这样出得太小，见 `DeliverableLooks.systemThumbnail`。
-    var fitting: CGSize { CGSize(width: width > 0 ? width : Self.longestFactor * height, height: height) }
+    var fitting: CGSize {
+        width > 0 ? CGSize(width: width, height: height) : CGSize(width: Self.longestFactor * height, height: Self.longestFactor * height)
+    }
 }
 
 /// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；

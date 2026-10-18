@@ -21,7 +21,7 @@ extension ComposerMetrics {
 /// "＋"里图片的来源：选图片文件，选好的追加到图片条。
 struct ImageSources: ViewModifier {
     @Binding var source: ComposerSource?
-    @Binding var images: [PickedImage]
+    @Binding var draft: ComposerDraft
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
@@ -31,7 +31,9 @@ struct ImageSources: ViewModifier {
                 source = nil
                 Task {
                     do {
-                        for data in try await FilePicker.images() { images.append(await PickedImage.load(data)) }
+                        let picked = try await FilePicker.images()
+                        let slots = picked.map { _ in draft.startImage() }
+                        for (slot, data) in zip(slots, picked) { draft.finishImage(slot, await PickedImage.load(data)) }
                     } catch {
                         workspace.fail(error)
                     }

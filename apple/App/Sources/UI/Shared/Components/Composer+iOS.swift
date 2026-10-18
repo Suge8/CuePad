@@ -18,7 +18,7 @@ extension ComposerSource {
 /// "＋"里图片的来源：相册与相机，选好的追加到图片条。
 struct ImageSources: ViewModifier {
     @Binding var source: ComposerSource?
-    @Binding var images: [PickedImage]
+    @Binding var draft: ComposerDraft
     @Environment(Workspace.self) private var workspace
     @State private var picked: [PhotosPickerItem] = []
 
@@ -28,16 +28,27 @@ struct ImageSources: ViewModifier {
         content
             .photosPicker(isPresented: $source.isOn(.photos), selection: $picked, maxSelectionCount: Self.photoLimit, matching: .images)
             .fullScreenCover(isPresented: $source.isOn(.camera)) {
-                CameraPicker { data in Task { images.append(await PickedImage.load(data)) } }.ignoresSafeArea()
+                CameraPicker { data in
+                    let slot = draft.startImage()
+                    Task { draft.finishImage(slot, await PickedImage.load(data)) }
+                }
+                .ignoresSafeArea()
             }
             .onChange(of: picked) {
                 let items = picked
                 picked = []
+                // 从 iCloud 取原图也算在出图里：选完就占位，取到、出好前发不出去
+                let slots = items.map { _ in draft.startImage() }
                 Task {
-                    for item in items {
+                    for (slot, item) in zip(slots, items) {
                         do {
-                            if let data = try await item.loadTransferable(type: Data.self) { images.append(await PickedImage.load(data)) }
+                            if let data = try await item.loadTransferable(type: Data.self) {
+                                draft.finishImage(slot, await PickedImage.load(data))
+                            } else {
+                                draft.finishImage(slot, nil)
+                            }
                         } catch {
+                            draft.finishImage(slot, nil)
                             workspace.fail(error)
                         }
                     }
