@@ -76,7 +76,7 @@ struct DeliverableStrip: View {
     /// 一份在缩略图下与全屏页顶上的写法：几份同一个标题（一次发的几个共用 `--title`）时写各自的文件名，否则写标题。
     static func label(of preview: PiPreview, in previews: [PiPreview]) -> String {
         guard previews.contains(where: { $0.id != preview.id && $0.title == preview.title }) else { return preview.title }
-        return URL(filePath: preview.name).deletingPathExtension().lastPathComponent
+        return ((preview.name as NSString).lastPathComponent as NSString).deletingPathExtension
     }
 
     /// 几份共用的标题（会话页那张卡写在最上面）；一份或各有各的标题时为 nil。
@@ -121,8 +121,22 @@ private struct DeliverableTile: View {
     /// 文件随同步到本机的那一刻就绪（附件表变化时重读）
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
+    @State private var located = Located()
 
-    private var file: URL? { arrived == false ? nil : services.store.files.url(of: preview) }
+    /// 本机的那份文件（`AttachmentFiles.url(of:)` 要查几次文件系统，第一次还要拷一份）：同一次"到没到"只找一次，
+    /// 视图体里用到它的几处不再各找一遍。
+    private var file: URL? {
+        if located.arrived != .some(arrived) {
+            located.arrived = arrived
+            located.url = arrived == false ? nil : services.store.files.url(of: preview)
+        }
+        return located.url
+    }
+
+    private final class Located {
+        var arrived: Bool??
+        var url: URL?
+    }
 
     var body: some View {
         Button { open(preview) } label: {

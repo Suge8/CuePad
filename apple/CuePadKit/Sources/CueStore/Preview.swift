@@ -41,7 +41,7 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
   }
 
   public init?(fileName: String) {
-    guard let type = Self.type(ofExtension: URL(filePath: fileName).pathExtension),
+    guard let type = Self.type(ofExtension: Self.pathExtension(fileName)),
       let kind = Self.allCases.first(where: { $0.types.contains { type.conforms(to: $0) } })
     else { return nil }
     self = kind
@@ -56,8 +56,11 @@ public enum PiPreviewKind: String, Sendable, CaseIterable {
 
   /// 交给系统（快速查看、缩略图）时的文件名：系统按扩展名认类型，改认过的（`reassigned`）要再接一个 .txt，否则快速查看照样当视频打开。
   static func systemFileName(_ name: String) -> String {
-    reassigned[URL(filePath: name).pathExtension.lowercased()] == nil ? name : name + ".txt"
+    reassigned[pathExtension(name)] == nil ? name : name + ".txt"
   }
+
+  /// 文件名的扩展名（小写）。不经 `URL(filePath:)`：相对的文件名要先取一次当前目录（getcwd 系统调用），缩略图每画一次问好几遍。
+  private static func pathExtension(_ name: String) -> String { (name as NSString).pathExtension.lowercased() }
 
   private static func type(ofExtension pathExtension: String) -> UTType? {
     let pathExtension = pathExtension.lowercased()
