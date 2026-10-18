@@ -81,19 +81,6 @@ extension CueStore {
     }
   }
 
-  /// 本机会话索引里的会话各按工作目录重算文件夹名（`folderName(ofWorkingDirectory:)`）：旧版本写下的临时目录的文件夹名在这里清掉，
-  /// 规则变了也跟着变；只改变了的。必须在写事务内调用。
-  private func refreshSessionFolders() throws {
-    let now = Date.stamp
-    let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
-    for cwd in directories {
-      let folder = Self.folderName(ofWorkingDirectory: cwd)
-      try db.run(
-        "UPDATE piSessionStates SET folder = ?, modifiedAt = ? WHERE sessionID IN (SELECT id FROM piSessions WHERE cwd = ?) AND folder IS NOT ?",
-        [folder, now, cwd, folder])
-    }
-  }
-
   /// 本机会话索引里的会话各按它的工作目录重新归项目（同一目录只算一次）。必须在写事务内调用。
   private func reassignSessions() throws {
     let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
@@ -692,30 +679,25 @@ extension CueStore {
 
   /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除，返回删掉的条数。
   /// 同时让已结束（与终端里被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，
-  /// 如 `--no-session` 或没发过消息的——这也是已经留下的这类历史记录的清理，每次启动一次），补写有会话文件却没有记录的。在线的不动；
+  /// 如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动；
   /// 歇着的托管会话同样要有会话文件，由 `PiStateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。
-  /// 一个会话文件只算一个会话：同一个文件还按文件名记过一条的（旧版本在文件头写好之前读到它，见 `PiHistoryUpdate.isSession`），
-  /// 删掉按文件名的那条，它的已结束记录随之删掉。
   /// 每个 Agent 的索引各自对账自己的会话（`agent`），别家的不动。
   @discardableResult
   public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
       let indexed = try db.query("SELECT id, path FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
-      let shared = Dictionary(grouping: indexed, by: \.1).filter { $0.value.count > 1 }
-      let orphans = shared.flatMap { path, rows in rows.filter { $0.0 == URL(filePath: path).deletingPathExtension().lastPathComponent } }
-      let stale = indexed.filter { !paths.contains($0.1) } + orphans
+      let stale = indexed.filter { !paths.contains($0.1) }
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
         """
           DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)
           """,
         [host, PiWorkState.ended.rawValue, PiWorkState.interrupted.rawValue, agent.rawValue])
-      // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
+      // 反过来，有会话文件却没有记录的补写：换 iCloud 账号丢掉同步数据（`eraseSyncedData`，本机索引留着）、记录在别处被删之后
       let unrecorded = try select(
         IndexedSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       let bound = try boundDirectories()
       for session in unrecorded { try writePiHistory(session, host: host, bound: bound) }
-      try refreshSessionFolders()
       return stale.count
     }
   }
