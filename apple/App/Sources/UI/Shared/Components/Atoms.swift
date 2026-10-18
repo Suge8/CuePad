@@ -116,17 +116,16 @@ struct ProjectGlyph: View {
     static func icon(_ project: Project?) -> Icon { project.map { .project(ProjectIcon(stored: $0.icon)) } ?? .unfiled }
 }
 
-/// 项目图标的闭合表：项目表单只给这 22 种（Mac 表单一行 8 个），写库写 `rawValue`；图在 `Icon.project`。
-/// 库里存的值不迁移：表外的名字认不出，是文件夹（含没存图标的）；只有 rocket 例外，见 `init(stored:)`。
+/// 项目图标的闭合表：项目表单只给这 24 种（Mac 表单一行 8 个，三行排满），写库写 `rawValue`；图在 `Icon.project`。
+/// 库里存的值不迁移：表外的名字认不出，是文件夹（含没存图标的）。
 nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
-    // rawValue 沿用早先表单存的系统符号名：已有项目存的就是这些，不用再认一遍
+    // rawValue 就是库里已存的名字（早先表单存的系统符号名，更早版本存的 lucide 名 rocket）：已有项目直接认得，不用映射
     case folder, sparkles, chat = "bubble.left.and.bubble.right", terminal, globe, hammer, book, target
     case briefcase, cart, megaphone, paintbrush, lightbulb, flag, cube, leaf
-    case layers, camera, house, heart, star, music = "music.note"
+    case layers, camera, house, heart, star, music = "music.note", rocket, bolt
 
     init(stored: String?) {
-        // 真实库里表外的名字只剩更早版本存的 lucide 名 rocket（发射、上线，回收站里的一个项目）：认成旗帜，同是"立个目标冲过去"
-        self = stored.flatMap(Self.init(rawValue:)) ?? (stored == "rocket" ? .flag : .folder)
+        self = stored.flatMap(Self.init(rawValue:)) ?? .folder
     }
 
     /// 读屏与提示用的中文含义。
@@ -154,6 +153,8 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         case .heart: "心"
         case .star: "星"
         case .music: "音符"
+        case .rocket: "火箭"
+        case .bolt: "闪电"
         }
     }
 }

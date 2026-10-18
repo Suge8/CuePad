@@ -1747,6 +1747,21 @@ def music(m):
     return [Layer("music", [disc(h, r) for h in heads] + stems + [beam])]
 
 
+def rocket(m):
+    """火箭：机身斜指右上，尖头圆肩，开一扇圆舷窗；尾部两侧各一片贴着机身的尾翼、尾后一簇火焰，都离机身一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g
+    hw, top, bottom = 4.6, -13.2, 4.4
+    def place(p): return add(rot(p, 45), (-1.2, 1.2))
+    body = grown([place(p) for p in [(0, top), (hw, top + 7.6), (hw, bottom), (-hw, bottom), (-hw, top + 7.6)]], [1.2, 4.6, 1.2, 1.2, 4.6], g)
+    x0 = hw + cut
+    fins = [grown([place((k * x, y)) for x, y in [(x0, -2.0), (9.4, 3.8), (9.4, 9.2), (x0, 6.8)][::k]], [0.4, 1.0, 0.8, 0.4], g) for k in (1, -1)]
+    y0 = bottom + cut
+    flame = grown([place(p) for p in [(-3.0, y0), (3.0, y0), (0, y0 + 6.0)]], [0.6, 0.6, 1.2], g)
+    window = disc(place((0, -4.0)), 2.2 - 0.5 * g, hole=True)
+    return [Layer("rocket", [body, window] + fins + [flame])]
+
+
 def menubar(m):
     """菜单栏里的 CuePad（同 logo）：一圈往右开口的粗 C，开口里嵌一张折角的小纸。只在菜单栏用，单色模板图。"""
     g, c = GROW[m], CARVE[m]
@@ -1913,6 +1928,7 @@ SYMBOLS = {
     "heart": heart,
     "star": star5,
     "music": music,
+    "rocket": rocket,
     "menubar": menubar,
 }
 

@@ -269,6 +269,8 @@ nonisolated private extension ProjectIcon {
         case .heart: "heart"
         case .star: "star"
         case .music: "music"
+        case .rocket: "rocket"
+        case .bolt: "bolt"
         }
     }
 }

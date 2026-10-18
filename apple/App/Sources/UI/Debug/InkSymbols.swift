@@ -142,6 +142,7 @@ enum InkSymbols {
         "cue.heart",
         "cue.star",
         "cue.music",
+        "cue.rocket",
         "cue.menubar",
     ]
 }
