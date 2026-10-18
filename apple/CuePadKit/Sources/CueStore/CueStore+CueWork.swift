@@ -40,6 +40,12 @@ public struct CueProject: Identifiable, Equatable, Sendable {
 }
 
 /// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
+/// `CueStore.cardsVersion`。
+public struct CardsVersion: Equatable, Sendable {
+  public var count: Int
+  public var modifiedAt: Date?
+}
+
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
   /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
@@ -581,6 +587,13 @@ extension CueStore {
 
   /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
   /// 在做的（`CueBoard.isActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
+  /// 卡片表的版本（条数与最近的修改时间）：卡片怎么改（含删掉、改关联）都会变。Cue 管理器拿它与写入序号（`lastWrite`）一起决定要不要对账——
+  /// 看板的其余输入（会话状态、投送请求的状态）都盖写入序号，不必每次会话状态变化都把整块看板读一遍。
+  public func cardsVersion() throws -> CardsVersion {
+    try db.first("SELECT count(*), MAX(modifiedAt) FROM cards") { CardsVersion(count: Int($0.int(0)), modifiedAt: $0.dateOrNil(1)) }
+      ?? CardsVersion(count: 0, modifiedAt: nil)
+  }
+
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),

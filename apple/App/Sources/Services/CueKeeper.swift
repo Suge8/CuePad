@@ -197,13 +197,15 @@ final class CueKeeper {
     }
 
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：记一条、忘掉、合并都可能改变待合并的块。
+    /// 看板（对账只看它在不在做事）由卡片的版本与写入序号一起覆盖：它的其余输入（会话状态、投送请求的状态）都盖写入序号；
+    /// 不读整块看板——会话每变一次状态都要读一遍，曾占值班时会话忙常驻开销的一成多。
     private nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]
-        var board: CueBoard
+        var cards: CardsVersion
         var memory: CueMemoryVersion
         var profile: CueProfile?
-        /// 本机最近一次写入的序号（`CueStore.lastWrite`）：变化不一定改动看板（说话、作答没能送达，你在会话里说话），
-        /// 晚到的变化事件时刻也可能更早，只有写入序号一定跟着变
+        /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态、问答，卡片的完成与层级，投送请求的状态，对话里的新消息一变它就变
+        /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）怎么变都不叫醒对账
         var written: Int
     }
 
@@ -281,7 +283,7 @@ final class CueKeeper {
                 do {
                     for try await _ in store.observe({ store in
                         Signal(
-                            messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion(),
+                            messages: try store.cueMessages(limit: 50), cards: try store.cardsVersion(), memory: try store.cueMemoryVersion(),
                             profile: try store.cueProfile(), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
