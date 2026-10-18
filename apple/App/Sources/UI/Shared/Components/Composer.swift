@@ -2,16 +2,12 @@ import CueStore
 import CueText
 import SwiftUI
 
-extension EnvironmentValues {
-    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（新会话、发给 Agent）
-    /// 压在整页列表上、整块都是要读的字，由 `FloatingInput` 给 `solid`，工具那一排背后也不透出列表的字块。
-    @Entry var composerInk: GlassInk = .legible
-}
-
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
 /// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
-/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮。几时一行、几时两层只看 `form`（`ComposerForm`）：
-/// 一行时提交钮不占位，展开成两层时 ＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
+/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
+/// 一直展开（`ComposerForm.open`，不变形）又有工具的，文字铺满整宽在上，底下一排是＋、工具与提交钮；其余的文字区一直在两颗圆钮中间、往上长，
+/// 工具排（有就）在文字下面、两颗圆钮之间：变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西——文字区是平台的文本视图，
+/// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -31,6 +27,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var showsSendEmpty = false
     /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
+    /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
+    /// 会收起的在聚焦时文字下面多一排。
+    var tooled = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     var commands: [PiSlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
@@ -42,7 +41,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @ViewBuilder let send: () -> Send
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.composerInk) private var composerInk
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
@@ -51,8 +49,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
     @State private var highlighted = 0
     @State private var dismissedPalette: String?
-    /// "＋"与提交钮在一行与两层之间挪位时各是同一颗（连续移动）。
-    @Namespace private var layout
 
 
     private var expanded: Bool { !shrunk && (form == .open || (focused && form.opensOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
@@ -105,9 +101,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     var body: some View {
         field
-        // 变形（一行 ↔ 两层、短胶囊 ↔ 全宽、工具排的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时直接到终态
+        // 短胶囊 ↔ 全宽、聚焦时工具排出现是空间动画：无回弹弹簧，减弱动态效果时直接到终态。打字与清空（有没有草稿）时高度一帧到位：
+        // 文字区是平台的文本视图，折行长高本来就是一帧到位，收回时也一样，占位字不悬在上一行；浮着的输入框上面的对话也同一帧跟
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
             if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
@@ -140,39 +136,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.images), !draft.images.isEmpty {
                 imageStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
-            // 文字区一直是这一个（换形态时不重建，焦点与输入法组合都不断）；一行时"＋"在它左边
-            HStack(alignment: .bottom, spacing: 0) {
-                if !expanded, !accepts.isEmpty { plus }
-                ComposerField(
-                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
-                    shortcut: shortcut)
-                    .focused(focus)
-                    // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
-                    .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
-                    .overlay(alignment: .leading) {
-                        if let shrunkDraft {
-                            Text("草稿：\(shrunkDraft)").font(Typography.reading).foregroundStyle(palette.ink2).lineLimit(1)
-                                .allowsHitTesting(false)
-                                .transition(.identity)
-                        }
-                    }
-                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, expanded || shrunk ? 18 : 2)
-                    .padding(.top, ComposerMetrics.textTop).padding(.bottom, expanded ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
-                    .frame(minHeight: expanded ? nil : ComposerMetrics.slot)
-                if !expanded, !shrunk { slotSpace }
-            }
-            if expanded {
-                HStack(spacing: 0) {
-                    if !accepts.isEmpty { plus }
-                    if showsTools { tools().transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
-                    Spacer(minLength: 0)
-                    slotSpace
-                }
-                .transition(.opacity)
-            }
+            if form == .open, tooled { layered } else { row }
         }
-        // 提交钮只有一颗，两种形态都在右下角：浮在留出的位置上，不随一行 ↔ 两层的那一排进出（放在排里的话收起时
-        // 旧排里那颗停在发出前的样子淡出，与新位置的钮叠成两颗）
+        // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
         .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
@@ -189,8 +155,58 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
         .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
         .rowContainer(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded, ink: composerInk)
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 一直展开、有工具：文字铺满整宽在上，底下一排＋、工具与提交钮的位置。
+    private var layered: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            text.padding(.horizontal, 18).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
+            HStack(spacing: 0) {
+                if !accepts.isEmpty { plus }
+                tools()
+                Spacer(minLength: 0)
+                slotSpace
+            }
+        }
+    }
+
+    /// 其余：文字区（换形态时不重建，焦点与输入法组合都不断）一直在＋与提交钮之间，两颗圆钮底对齐、钉在角上。
+    private var row: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            if !accepts.isEmpty { plus }
+            VStack(alignment: .leading, spacing: 0) {
+                text
+                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, shrunk ? 18 : 2)
+                    .padding(.vertical, ComposerMetrics.textTop)
+                    .frame(minHeight: ComposerMetrics.slot)
+                // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
+                if tooled, expanded, showsTools {
+                    tools()
+                        .frame(height: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
+                        .padding(.bottom, ComposerMetrics.inset)
+                        .transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity))
+                }
+            }
+            if !shrunk { slotSpace }
+        }
+    }
+
+    private var text: some View {
+        ComposerField(
+            text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
+            shortcut: shortcut)
+            .focused(focus)
+            // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
+            .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
+            .overlay(alignment: .leading) {
+                if let shrunkDraft {
+                    Text("草稿：\(shrunkDraft)").font(Typography.reading).foregroundStyle(palette.ink2).lineLimit(1)
+                        .allowsHitTesting(false)
+                        .transition(.identity)
+                }
+            }
     }
 
     /// 提交钮的位置一直留着（收成短胶囊时除外）：有内容才放进来，输入框的宽度不随它变，文字不会因此重排——
@@ -214,7 +230,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         return MenuButton(sections: [ChoiceMenu.Section(choices: cards + images)], press: .button, accessibilityLabel: "添加") {
             CircleGlyph(fill: palette.fill) { Image(.add).font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
                 .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
-                .matchedGeometryEffect(id: "plus", in: layout)
         }
         .fixedSize()
     }
@@ -290,7 +305,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 }
 
 /// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
-/// 离边 `inset`，与外框同心；两层时文字区下面只留 `textBottomOpen`，再下面是一格高的工具排。
+/// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
+/// 高是圆钮的圆（`slot - 2 * inset`），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
     static let radius: CGFloat = 28
     static let inset: CGFloat = 8

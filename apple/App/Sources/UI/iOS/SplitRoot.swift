@@ -12,6 +12,7 @@ struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.statusBarBottom) private var statusBar
     @State private var width: CGFloat = 0
     /// 侧栏选中的项目（宽屏恢复窗口时选回它；选的不是项目时为空）。只存这一个：当前项目由路径推出（`Navigation.currentProject`）
     @SceneStorage("splitProject") private var storedProject = ""
@@ -37,7 +38,9 @@ struct SplitRoot: View {
                 // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
                 // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
                 HStack(spacing: 0) {
-                    stack
+                    // 宽屏的提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮。竖直按状态栏下沿排，与窄屏同一排：
+                    // 这一栏的上安全区还含着分栏的工具栏那一排，按它排就掉到页头上了
+                    stack.overlay(alignment: .top) { NoticeBanner().padding(.top, statusBar).ignoresSafeArea(edges: .top) }
                     if navigation.agentPanel {
                         Divider().ignoresSafeArea()
                         AgentPanel()

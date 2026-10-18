@@ -298,12 +298,8 @@ struct CueWaitingDock: View {
     @State private var otherwise = ""
     /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueMessage?
-    /// 露出的比例（`RiseBehind`），0 是全藏在输入框后面。
-    @State private var rise: CGFloat = 0
-    /// 减弱动态效果时来去只淡入淡出（卡浮着，占的高一下到位，对话只挪一次）。
-    @State private var faded = true
-    /// 正在换下一条：新旧两张原地交叉淡；头一张升起时不淡（卡不透明，下半截藏在输入框后面）。
-    @State private var swapping = false
+    /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时是不透明度。
+    @State private var level: CGFloat = 0
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
@@ -315,57 +311,51 @@ struct CueWaitingDock: View {
 
     /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
     /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出：
-    /// 答完那一刻卡就不再占高、浮着淡掉，对话只定位一次。占的高由对话让出（卡在浮着的回复框里，`FloatingReply`）。
+    /// 占的高跟着有没有在等的一下到位、卡浮着淡，对话只定位一次。占的高由对话让出（卡在浮着的回复框里，`FloatingReply`）。
     /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
         ZStack(alignment: .bottom) {
             if let message = shown {
+                // 只有换下一条时带动画（交叉淡）；头一张出现与沉完拿掉都不带，过渡不播
                 card(waiting.first { $0.id == message.id } ?? message)
                     .id(message.id)
-                    .transition(swapping ? .entry : .identity)
+                    .transition(.opacity)
             }
         }
-        .opacity(faded ? 0 : 1)
-        .modifier(RiseBehind(shown: rise, floats: reduceMotion))
+        .opacity(reduceMotion ? level : 1)
+        .modifier(RiseBehind(shown: reduceMotion ? (waiting.isEmpty ? 0 : 1) : level, floats: reduceMotion))
         .onChange(of: waiting.first?.id, initial: true) { old, new in follow(animated: old != new) }
     }
 
     private static let below: CGFloat = 8
 
     /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替；减弱动态效果时来去都只淡。
+    /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉，看着是冒一点、停一下、窜一大截。
+    /// 沉下用定长曲线（`Motion.move`）：弹簧最后那段一两点的尾巴要再画上百毫秒，沉到底前卡剩一道细线停在输入框上（升起的尾巴停在整高处，看不见）。
+    /// 减弱动态效果时淡入稍慢、淡出要快：淡出时对话已在终位，卡叠在字上的那几帧越短越好。
     private func follow(animated: Bool) {
         guard let next = waiting.first else {
             guard shown != nil else { return }
             guard animated else { return leave() }
-            if reduceMotion {
-                rise = 0
-                move(Motion.quick, { faded = true }) { if waiting.isEmpty { leave() } }
-            } else {
-                move(Motion.snappy, { rise = 0 }) { if waiting.isEmpty { leave() } }
-            }
+            move(to: 0, reduceMotion ? .easeOut(duration: Motion.handOff) : Motion.move) { if waiting.isEmpty { leave() } }
             return
         }
-        swapping = shown != nil
-        shown = next
-        guard animated, !(reduceMotion && swapping) else {
-            rise = 1
-            faded = false
-            return
-        }
-        if reduceMotion {
-            rise = 1
-            move(Motion.quick, { faded = false })
-        } else {
-            // 换下一条时多半已在整高（沉到一半又来了一条就升回去）
-            faded = false
-            move(Motion.snappy, { rise = 1 })
+        let swapping = shown != nil
+        withAnimation(swapping && animated ? Motion.quick : nil) { shown = next }
+        guard animated, level < 1 else { return level = 1 }
+        moving = true
+        Task {
+            await NextFrame.wait()
+            guard shown?.id == next.id else { return moving = false }
+            move(to: 1, reduceMotion ? Motion.quick : Motion.snappy)
         }
     }
 
-    /// 播一段卡的来去，播着的时候 `moving`；等动画整个走完（弹簧的尾巴也算）再收尾，不然最后几点的残条一下没了。
-    private func move(_ animation: Animation, _ change: () -> Void, then done: @escaping () -> Void = {}) {
+    /// 播一段卡的来去，播着的时候 `moving`；动画走完再收尾。沉到一半又来了一条时前一段被接走，它的收尾不算数（目标已经变了）。
+    private func move(to target: CGFloat, _ animation: Animation, then done: @escaping () -> Void = {}) {
         moving = true
-        withAnimation(animation, completionCriteria: .removed, change) {
+        withAnimation(animation, completionCriteria: .removed) { level = target } completion: {
+            guard level == target else { return }
             moving = false
             done()
         }
@@ -373,10 +363,8 @@ struct CueWaitingDock: View {
 
     /// 拿掉：沉到底或淡没了，这时已看不见，不再播过渡。
     private func leave() {
-        swapping = false
         shown = nil
-        rise = 0
-        faded = true
+        level = 0
     }
 
     private func card(_ message: CueMessage) -> some View {
@@ -437,7 +425,7 @@ struct CueWaitingDock: View {
     private func otherwiseField(_ message: CueMessage) -> some View {
         let empty = otherwise.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return HStack(spacing: 6) {
-            TextField(CueAsk.otherwise, text: $otherwise)
+            TextField(CueAsk.otherwise, text: $otherwise, palette: palette)
                 .textFieldStyle(.plain).font(Typography.secondary)
                 .submitLabel(.send)
                 .onSubmit { sayOtherwise(message) }
@@ -489,12 +477,13 @@ private struct RiseBehind: ViewModifier, Animatable {
             RiseLayout(shown: shown, floats: true) { content }
         } else {
             RiseLayout(shown: shown, floats: false) { content }
-                // 升沉途中只裁下沿（输入框那边，卡的下半截在那后面）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留；
-                // 停稳了下沿也让出，影子不在输入框顶边齐齐切断
+                // 两边与上面让出卡的影子（随露出的比例收，藏到底时一点不留）；下沿一直往输入框里伸进一个圆角那么深：输入框（实底玻璃，
+                // 排在卡上面）圆角外那一小块里看得到卡沉到它后面，不被一条直线齐齐切断，停稳时影子也连着。卡与输入框同一个圆角、
+                // 只窄一点，藏到底时卡的上沿整个在输入框的轮廓里
                 .mask {
                     Rectangle()
                         .padding([.horizontal, .top], -RiseBehind.shadowRoom * shown)
-                        .padding(.bottom, shown < 1 ? 0 : -RiseBehind.shadowRoom)
+                        .padding(.bottom, -ComposerMetrics.radius)
                 }
         }
     }

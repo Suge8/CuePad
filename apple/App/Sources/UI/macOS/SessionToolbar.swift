@@ -76,7 +76,7 @@ struct PageTitleSlot: View {
         } else if workspace.page == .cue {
             CueTitle()
                 .frame(height: Spacing.toolbarControl)
-                .glass(in: .capsule, ink: .legible)
+                .glass(in: .capsule)
                 .frame(maxWidth: .infinity)
                 .frame(minWidth: Self.minWidth, idealWidth: Self.width, maxWidth: Self.width)
         }
@@ -102,7 +102,7 @@ struct PageTitleSlot: View {
         }
         .padding(.leading, task == nil ? 12 : 4).padding(.trailing, task == nil ? 12 : 14)
         .frame(height: Spacing.toolbarControl)
-        .glass(in: .capsule, ink: .legible)
+        .glass(in: .capsule)
         .accessibilityElement(children: .contain)
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
         .contentShape(.capsule)

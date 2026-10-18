@@ -56,10 +56,16 @@ struct HandOffInput: View {
     private var catalog: AgentCatalog? { chosen.flatMap { digests?[$0.state.id]?.catalog } }
     private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
+    /// 选中的会话能换模型时，工具排上的那几样。
+    private var tools: (session: PiSessionState, models: [PiModelOption], config: PiConfigShown)? {
+        guard let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty else { return nil }
+        return (session, models, config)
+    }
+
     var body: some View {
         Composer(
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
-            accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card,
+            accepts: chosen?.state.composerKinds ?? [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
             commands: commands,
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
@@ -73,9 +79,7 @@ struct HandOffInput: View {
                 }
             },
             tools: {
-                if let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty {
-                    SessionConfigControls(session: session, models: models, shown: config)
-                }
+                if let tools { SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config) }
             },
             send: {
                 Button(action: send) { SendGlyph(canSend ? .ready : .idle) }

@@ -10,6 +10,7 @@ struct PreviewReplyBar: View {
     let about: String
     let done: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var draft = ComposerDraft()
 
     var body: some View {
@@ -20,14 +21,14 @@ struct PreviewReplyBar: View {
             case .answer(let message, let question): choices(message, question: question)
             }
         }
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), ink: .solid)
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
     }
 
     private func field(_ prompt: String, to listener: Listener) -> some View {
         let empty = text.isEmpty
         return HStack(spacing: 8) {
             // 一行：回车就发（多行的输入框回车是换行），长话照样横着滚
-            TextField(prompt, text: $draft.text)
+            TextField(prompt, text: $draft.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.body)
                 .submitLabel(.send)
                 .onSubmit { send(to: listener) }

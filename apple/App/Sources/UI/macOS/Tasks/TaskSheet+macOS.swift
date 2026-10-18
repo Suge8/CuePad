@@ -272,7 +272,7 @@ private struct BriefComposer: View {
         }
         .padding(14)
         .frame(width: Self.width)
-        .glass(in: .rect(cornerRadius: 22), ink: .solid)
+        .glass(in: .rect(cornerRadius: 22))
         .task {
             editing = CardEditing(leaf, part: .rest, workspace: workspace)
             await NextFrame.wait()

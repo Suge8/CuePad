@@ -5,7 +5,7 @@ import CuePi
 #endif
 
 /// 会话页的对话区（iOS 会话页、Mac 会话页共用）：对话区的排开、跳转与刻度见 `ChatColumn`（与 Cue 页同一个），这里只接会话的数据——
-/// 对话（`PiConversation`，按段排），正在请 Mac 补写对话时最上面一行说明。会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
+/// 对话（`PiConversation`，按段排），正在请 Mac 补写对话时最上面一行说明，还没说过话时叠一层空态（`BlankChat`）。会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
 struct SessionChat: View {
     let session: PiSessionState
     let digest: SessionDigest
@@ -36,6 +36,10 @@ struct SessionChat: View {
                 }
                 conversation(window: window.count, showEarlier: window.showEarlier)
             }
+        }
+        .overlay {
+            BlankChat(shown: items.isEmpty && digest.deliveries.isEmpty && !session.hasStarted && session.state != .known(.ended)
+                && session.pendingPrompt == nil && session.lastPrompt == nil, readingWidth: readingWidth, inset: inset)
         }
     }
 

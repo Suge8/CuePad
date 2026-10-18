@@ -40,8 +40,8 @@ struct Palette {
 
     // MARK: 玻璃上的字（`GlassInk`）
 
-    /// 写着要读的字的玻璃的着色：深色压一层暗色调，背后的亮字糊开后不再和上面的次要字同亮；浅色垫一层淡纸色。
-    var legibleGlass: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
+    /// 写着字的玻璃（`GlassInk.solid`）的着色：深色压一层暗色调，浅色垫一层淡纸色，与垫的底色一起定玻璃的明暗。
+    var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
     /// 浮在一整片字上的玻璃里垫的九成实的页面底色：背后的字透不过来。
     var solidGlass: Color { desk.opacity(0.9) }
 
@@ -49,10 +49,10 @@ struct Palette {
 
     /// 正文、标题、图标、系统控件的 tint、链接（加下划线）。对比度 13.3，深色 10。
     var ink: Color { dark ? Color(hex: 0xEEE9E1) : Color(hex: 0x1C1B19) }
-    /// 次要文字、图标点睛平时的颜色。对比度 5.6，深色 5.8。
-    var ink2: Color { ink.opacity(highContrast ? 0.85 : 0.7) }
-    /// 时间、计数、占位字、已结束、待办圈：只扫一眼的。对比度 3.6，深色 4.2。
-    var ink3: Color { ink.opacity(highContrast ? 0.7 : 0.55) }
+    /// 次要文字、图标点睛平时的颜色。对比度 7.0，深色 6.8；与 `ink3` 拉开一档（两者之间约 1.55:1），扫一眼分得出哪句要读。
+    var ink2: Color { ink.opacity(highContrast ? 0.9 : 0.78) }
+    /// 时间、计数、占位字、已结束、待办圈：只扫一眼的。也是要读的字，同样够 4.5:1（对比度 4.6，深色 4.7）：浮在玻璃上、写在牛皮纸气泡上都读得清。
+    var ink3: Color { ink.opacity(highContrast ? 0.75 : (dark ? 0.6 : 0.64)) }
     /// 分隔线、纸边、次按钮描边：装饰，不承载信息。
     var hair: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。
@@ -129,7 +129,7 @@ struct Palette {
     // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
     // 卡上的字（状态词、次要墨色）照纸上的对比度核过，下面写的是状态词的对比度；与纸、桌面靠色相分开。
 
-    /// 等你确认：暖黄（浅色像蜂蜜纸，深色是暗琥珀）。赭黄字 5.1，深色 6.8；淡墨 3.7，深色 4.1。
+    /// 等你确认：暖黄（浅色像蜂蜜纸，深色是暗琥珀）。赭黄字 5.1，深色 6.8；第三档墨色 4.8，深色 4.6。
     var waitingWash: Color { dark ? Color(hex: 0x433618) : Color(hex: 0xF9EBC0) }
     /// 出错与没能送达：淡胭脂，比等你的暖黄再淡一档——出错常一屏好几张，不能压过要你拍板的等你。胭脂字 5.6，深色 5.1。
     var failureWash: Color { dark ? Color(hex: 0x382A2E) : Color(hex: 0xFBEDF0) }

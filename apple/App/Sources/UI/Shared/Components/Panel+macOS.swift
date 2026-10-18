@@ -288,7 +288,7 @@ struct PanelSearchField: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            TextField(prompt, text: $text).textFieldStyle(.plain).focused($focused)
+            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).focused($focused)
         }
         .font(Typography.body)
         .padding(.horizontal, 12).frame(height: 34)

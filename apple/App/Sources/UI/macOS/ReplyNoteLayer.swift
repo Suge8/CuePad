@@ -55,7 +55,7 @@ private struct ReplyNoteLayer: ViewModifier {
                     .contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
-            .glass(in: .capsule, interactive: true, ink: .legible)
+            .glass(in: .capsule, interactive: true)
             .help("批注这段，随下一句发出")
         case .editing(let note, _, let fresh):
             NoteEditor(note: note) { text in
@@ -154,7 +154,7 @@ private struct NoteEditor: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(.said).font(Typography.secondary).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField("写批注，↩ 挂到下一句", text: $text, axis: .vertical)
+            TextField("写批注，↩ 挂到下一句", text: $text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Typography.secondary).foregroundStyle(palette.ink)
                 .lineLimit(1...5)
@@ -163,7 +163,7 @@ private struct NoteEditor: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(width: Self.width, alignment: .leading)
-        .glass(in: Self.shape, ink: .solid)
+        .glass(in: Self.shape)
         .onExitCommand { settle(note.note.isEmpty ? nil : note.note) }
         .onAppear { focused = true }
         .onChange(of: focused) { if !focused { commit() } }

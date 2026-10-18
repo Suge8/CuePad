@@ -1,26 +1,42 @@
 import CueStore
 import SwiftUI
 
-/// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答；
-/// 还没说过话的会话是全 App 同一种空态（吉祥物加一句怎么开始），在对话区里居中。对话到了就被它替换。
+/// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答。对话到了就被它替换。
 struct RecapPreview: View {
     let session: PiSessionState
+    let prompt: String
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if let prompt = session.pendingPrompt ?? session.lastPrompt {
-                Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
-                UserBubble(stored: prompt)
-                if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
-            } else if !session.hasStarted, session.state != .known(.ended) {
-                EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
-                    // 占满对话区（扣掉上下留白），吉祥物落在可见区中间
-                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - 2 * ChatLayout.edge) }
-                    .frame(maxWidth: .infinity)
-            }
+            Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
+            UserBubble(stored: prompt)
+            if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 还没说过话的会话：全 App 同一种空态（吉祥物加一句怎么开始），叠在对话区上、在回复框以上的可见区居中，不占对话的高。
+/// 你发出第一句（送没送达都算）就淡掉：叠层只改透明度，不靠滚动内容里的移除过渡（滚动区里的移除不播淡出，一帧切掉），也不把新气泡顶在下面。
+/// 与对话同一栏（`ChatLayout.margin`）。
+struct BlankChat: View {
+    let shown: Bool
+    let readingWidth: CGFloat
+    let inset: CGFloat
+    @Environment(\.chatBottomInset) private var bottomInset
+
+    var body: some View {
+        GeometryReader { proxy in
+            EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, ChatLayout.margin(proxy.size.width, readingWidth: readingWidth, inset: inset))
+        }
+            .padding(.bottom, bottomInset)
+            .opacity(shown ? 1 : 0)
+            .animation(Motion.quick, value: shown)
+            .allowsHitTesting(false)
+            .accessibilityHidden(!shown)
     }
 }
 
@@ -87,7 +103,8 @@ private struct MachineCard: View {
                 }
             }
             .buttonStyle(.plain)
-            .disabled(note.detail.isEmpty)
+            // 没有全文可看时只是不接点按，不停用：停用的按钮 iOS 整块压淡
+            .allowsHitTesting(!note.detail.isEmpty)
             .accessibilityLabel("\(note.who)：\(note.line)")
             .accessibilityExpanded(note.detail.isEmpty ? nil : open)
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }

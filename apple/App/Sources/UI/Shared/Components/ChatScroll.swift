@@ -113,6 +113,9 @@ struct ChatJump: Equatable {
 enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
     static let edge: CGFloat = 16
+
+    /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。滚动区（`ChatScroll`）与叠在对话区上的空态（`BlankChat`）共用。
+    static func margin(_ width: CGFloat, readingWidth: CGFloat, inset: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
 }
 
 extension EnvironmentValues {
@@ -159,6 +162,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var deferred = false
     /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
     @State private var unheld = false
+    /// 排到下一帧的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    @State private var sliding: Task<Void, Never>?
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, @ViewBuilder content: () -> Content
@@ -171,8 +176,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         self.content = content()
     }
 
-    /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。
-    private func margin(_ width: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
+    private func margin(_ width: CGFloat) -> CGFloat { ChatLayout.margin(width, readingWidth: readingWidth, inset: inset) }
 
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
     /// 那句到了（内容真的长高）再收，对话从回复框让出的地方滑上去；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
@@ -240,18 +244,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 只认它变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，按"越过了"补回的话对话先掉下去再滑上来
                     if grown > 0, reading.inset == last.inset {
                         slide()
-                    } else if reading.floating > last.floating, !holding {
-                        // 浮着的那块一下长高（打第一个字时输入框从一行变两层）：量到的已是终值、它自己还在按弹簧长，补滚走同一条曲线，
-                        // 不然对话先一下跳上去、与输入框之间空着一截。卡来去（`holding`）时它每帧都在变，逐帧直接跟
-                        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { scroll(to: reading.end) }
                     } else if reading.end > last.end || reading.inset != last.inset || (reading.floating < last.floating && offset.read > reading.end) {
                         scroll(to: reading.end)
+                        settle()
                     }
                 }
                 .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
-                .onChange(of: holding, initial: true) {
-                    offset.holding = holding
+                .onChange(of: holding) {
                     unheld = false
+                    if holding, let sliding {
+                        sliding.cancel()
+                        self.sliding = nil
+                        deferred = true
+                    }
                     guard !holding, deferred else { return }
                     deferred = false
                     slide()
@@ -286,8 +291,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             var delivered: Reading?
             /// 补滚换着用的两种写法（`scroll(to:)`）：这一次用不用"滚到那一点"。
             var byPoint = false
-            /// 此刻的 `holding`：排到下一帧的上滑执行前再看一次（排它的那次读数可能早于页面开始 hold 的那次更新）。
-            var holding = false
         }
 
         private let values = Mutex(Values())
@@ -301,10 +304,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
-        var holding: Bool {
-            get { values.withLock { $0.holding } }
-            set { values.withLock { $0.holding = newValue } }
-        }
 
         /// 换上这次交给 action 的读数，返回上一次交过去的。
         func deliver(_ reading: Reading) -> Reading? {
@@ -338,13 +337,23 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 等长出来的这一帧提交了再滑：这一帧要排出新的一条，排版重；动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
     /// 滑到的是那时的最新处（留白收起之后）；等的这一帧里用户开始滚了就不滑了。
     private func slide() {
+        sliding?.cancel()
+        sliding = Task {
+            await NextFrame.wait()
+            guard !Task.isCancelled else { return }
+            sliding = nil
+            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
+        }
+    }
+
+    /// 补滚到了没有：读数报的最新处比滚动区真用上的内容高早一步（回复框一帧里接连长高两次，第二次补滚按旧的内容高被截在半路），
+    /// 下一帧还没到最新处就再补一次。只补一次，不轮询。带上滑同一条曲线：正赶上整段在往上滑时（这时也还没到最新处）是顺着它
+    /// 改个终点，不把滑到一半的截成一跳（滚动位置的动画没有可靠的"滑完了"回调，分不出这两种）。
+    private func settle() {
         Task {
             await NextFrame.wait()
-            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
-            if offset.holding, !unheld {
-                deferred = true
-                return
-            }
+            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
             withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
     }
@@ -382,7 +391,7 @@ struct JumpToNewest: View {
         Button(action: action) {
             Image(.toLatest).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                 .frame(width: 40, height: 40)
-                .glass(in: .circle, interactive: true)
+                .glass(in: .circle, interactive: true, ink: .clear)
                 .overlay(alignment: .topTrailing) {
                     if unseen {
                         Circle().fill(palette.ink).frame(width: 10, height: 10)

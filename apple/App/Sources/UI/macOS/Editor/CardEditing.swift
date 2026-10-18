@@ -160,12 +160,13 @@ private struct VariablesForm: View {
     let names: [String]
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var values: [String: String] = [:]
 
     var body: some View {
         Form {
             ForEach(names, id: \.self) { name in
-                TextField("{{\(name)}}", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }))
+                TextField("{{\(name)}}", text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }), palette: palette)
             }
         }
         .formStyle(.grouped)

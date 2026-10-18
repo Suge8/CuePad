@@ -34,7 +34,7 @@ struct SelectionBar: View {
         .foregroundStyle(palette.ink2)
         .padding(.leading, 20).padding(.trailing, 8)
         .frame(width: 460, height: 48)
-        .glass(in: .capsule, interactive: true, ink: .solid)
+        .glass(in: .capsule, interactive: true)
     }
 
     private func delete() {

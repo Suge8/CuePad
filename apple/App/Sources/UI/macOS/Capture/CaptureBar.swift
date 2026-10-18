@@ -10,8 +10,6 @@ struct CaptureBar: View {
 
     var body: some View {
         CaptureComposer(state: $capture, defaultProject: project, pinnedOpen: false)
-            // 浮在卡片墙上：背后的字不透到输入框里
-            .environment(\.composerInk, .solid)
             .frame(maxWidth: Self.width)
             .padding(.horizontal, 24)
     }

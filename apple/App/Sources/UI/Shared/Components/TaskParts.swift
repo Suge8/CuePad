@@ -34,7 +34,7 @@ struct TaskHeading: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField("这件事是…", text: $title, axis: .vertical)
+        TextField("这件事是…", text: $title, palette: palette, axis: .vertical)
             .font(font).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
             .lineLimit(1...3).focused($focused)
             .onChange(of: title) { _, next in

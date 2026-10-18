@@ -97,7 +97,7 @@ struct SearchPalette: View {
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
         .rowContainer(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous), ink: .solid)
+        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
     }
@@ -105,7 +105,7 @@ struct SearchPalette: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(.search).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
+            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text, palette: palette)
                 .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
                 .onSubmit {
