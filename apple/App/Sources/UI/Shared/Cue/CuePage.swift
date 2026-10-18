@@ -33,9 +33,8 @@ struct CuePage: View {
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
 
-    /// 最初排开最近估计够这么高的几格，往上翻快到头时再排开这么高（排开、跳转与刻度同会话页，见 `ChatColumn`）。
-    /// 估的是下限，排开的实际更高：打开时一定铺满一屏，常见的窗口里也铺满两屏、不会接着再排开一段。
-    private static let span: CGFloat = 3000
+    /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
+    private static let paging = ChatPaging(first: 40, step: 40)
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
@@ -115,15 +114,15 @@ struct CuePage: View {
     }
 
     private func conversation(_ thread: CueThread) -> some View {
-        let rows = thread.rows, paging = ChatPaging.height(thread.extents, span: Self.span)
+        let rows = thread.rows
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
-            marks: thread.marks, ids: rows.map(\.id), paging: paging,
+            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
             holding: services.isCatchingUp(on: cue.hostID)
         ) { window, showEarlier in
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: 0) {
-                if first > 0 { EarlierRow(count: first - paging.earlier(first), action: showEarlier) }
+                if first > 0 { EarlierRow(count: min(first, Self.paging.step), action: showEarlier) }
                 let live = live
                 let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
                 // 时间与那一格直接排进对话这一列，不另包一层：长对话滚动时每格少一个要摆的容器

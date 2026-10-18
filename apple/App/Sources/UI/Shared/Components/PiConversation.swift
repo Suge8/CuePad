@@ -113,7 +113,7 @@ struct PiConversation: View {
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
     static let firstWindow = 4, segment = 5
-    static let paging = ChatPaging.count(first: firstWindow, step: segment)
+    static let paging = ChatPaging(first: firstWindow, step: segment)
 
     static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
 
