@@ -7,7 +7,10 @@ import SwiftUI
 struct IconSheet: View {
     @Environment(\.palette) private var palette
 
-    private static let icons: [(String, Icon)] = ProjectIcon.allCases.map { ($0.name, .project($0)) } + [("菜单栏", .menuBar)]
+    private static let icons: [(String, Icon)] = [
+        ("send", .send), ("handOff", .handOff), ("delivered", .delivered), ("sendAnswer", .sendAnswer),
+        ("above", .above), ("toLatest", .toLatest), ("compact", .compact), ("updates", .updates), ("wakeSettings", .wakeSettings),
+    ]
     private static let sizes: [CGFloat] = [12, 17, 22, 34]
     /// 一屏放 `perPage` 行；多出来的配 `-CuePadSheetPage 2` 起看后面的。
     private static let perPage = 24
