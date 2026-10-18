@@ -2,10 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 手机上 Cue 的设置（从 Cue 面板的"设置"推入）：名字；住在哪台 Mac——Cue 能住的几台直接列成一组单选（每台下面写能当大脑的几家，
-/// 或为什么一家都不能用），选一台就是住过去并启用，"不启用"是停用；允许清单（每类要先问的事一个"所有项目都不用问"的开关，
-/// 只管一个项目的那几项各一行、可撤销）。顶栏是它的名字与现状（住在哪、用哪家；没写成时是原因）。
-/// 读写都经两端同一份 `CueSettingsModel`（Mac 上是设置窗口里的 `CueSettingsSection`）；大脑在 Cue 面板第一行选。
+/// 手机上 Cue 的设置（从 Cue 面板的"设置"推入）：名字；在哪台 Mac 上运行——能运行的几台直接列成一组单选（每台下面写能当大脑的几家，
+/// 或为什么一家都不能用），选一台就是换到那台并启用，"不启用"是停用；选了哪台后是用哪个 Agent、模型与思考强度（`CueConfigControls`，
+/// 与新会话同一排，Cue 面板第一行也是它）；不用先问的事（允许清单：每类要先问的事一个"所有项目都不用问"的开关，只管一个项目的那几项各一行、可撤销）。
+/// 顶栏是它的名字与现状（在哪台上运行、用哪家；没写成时是原因）。读写都经两端同一份 `CueSettingsModel`（Mac 上是设置窗口里的 `CueSettingsSection`）。
 struct CueSettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -29,7 +29,10 @@ struct CueSettingsScreen: View {
                 } header: {
                     Text("名字")
                 }
-                home(settings)
+                host(settings)
+                if settings.profile.hostID != nil {
+                    Section("用哪个 Agent 与模型") { CueConfigControls(fail: model.fail) }
+                }
                 allows(settings)
             }
             .listRowBackground(palette.paper)
@@ -46,13 +49,13 @@ struct CueSettingsScreen: View {
         .cueSettings(model)
     }
 
-    @ViewBuilder private func home(_ settings: CueSettings) -> some View {
+    @ViewBuilder private func host(_ settings: CueSettings) -> some View {
         let hosts = settings.hosts(here: nil)
         Section {
             if hosts.isEmpty {
                 Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac).foregroundStyle(palette.ink3)
             } else {
-                Picker("住在哪台 Mac", selection: Binding(get: { settings.profile.activeHost }, set: { model.live(on: $0, services) })) {
+                Picker(Self.hostTitle, selection: Binding(get: { settings.profile.activeHost }, set: { model.run(on: $0, services) })) {
                     Text("不启用").tag(String?.none)
                     ForEach(hosts) { host in
                         VStack(alignment: .leading, spacing: 2) {
@@ -67,7 +70,7 @@ struct CueSettingsScreen: View {
             }
         } header: {
             HStack(spacing: 6) {
-                Text("住在哪台 Mac")
+                Text(Self.hostTitle)
                 if model.enabling != nil { Spinner(.mini) }
             }
         } footer: {
@@ -75,13 +78,15 @@ struct CueSettingsScreen: View {
         }
     }
 
+    private static let hostTitle = "在哪台 Mac 上运行"
+
     private func allows(_ settings: CueSettings) -> some View {
-        Section("\(settings.profile.name) 不用先问") {
+        Section {
             ForEach(settings.allowGroups) { group in
                 Toggle(isOn: Binding(get: { group.all }, set: { model.allow(group.everywhere, $0, services) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.ask.name)
-                        Text(group.all ? "所有项目都不用问" : "先问你").font(.footnote).foregroundStyle(palette.ink3)
+                        Text(group.all ? CueSettings.allowedEverywhere : CueSettings.asksFirst).font(.footnote).foregroundStyle(palette.ink3)
                     }
                 }
                 ForEach(group.projects, id: \.allow) { item in
@@ -92,6 +97,10 @@ struct CueSettingsScreen: View {
                     }
                 }
             }
+        } header: {
+            Text(CueSettings.allowsTitle)
+        } footer: {
+            Text(CueSettings.allowsNote(settings.profile.name))
         }
     }
 }

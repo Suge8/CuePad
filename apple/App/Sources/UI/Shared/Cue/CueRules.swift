@@ -65,7 +65,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     func line(name: String) -> String? {
         switch self {
         case .disabled: "\(name) 还没启用"
-        case .asleep: "\(name) 在睡觉：它住的那台 Mac 好像没开"
+        case .asleep: "\(name) 在睡觉：它运行的那台 Mac 好像没开"
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
@@ -94,7 +94,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
     var enabled: Bool
-    /// 它住（或停用前住）的那台 Mac 与它的名字（那台自报的，`MacAgents.name`；更旧版本的 Mac 没写）。
+    /// 它运行（或停用前运行）的那台 Mac 与它的名字（`MacAgents.shownName`）。
     var hostID: String?
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
@@ -104,7 +104,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
-    /// 它住的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
+    /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
     /// 你最近一句：写下与交给它的时刻（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
     var lastYou: LastYou?
@@ -129,7 +129,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             name: profile?.name ?? CueProfile.defaultName,
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
-            hostName: try profile?.hostID.flatMap { try store.macAgents(on: $0).name },
+            hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.flatMap { $0.ask?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,

@@ -215,14 +215,16 @@ final class DebugWindow: MainShellWindow {
     }
 }
 
-/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。
+/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。配 `-CuePadDemo YES` 时读演示 Mac（demo-mac）的 Agent：
+/// 隔离实例里这台一家都不能用，看不到选 Agent 与模型的那一排。
 struct DebugNewSessionForm: View {
     @Environment(Workspace.self) private var workspace
     @State private var agents: MacAgents?
 
     var body: some View {
+        let host = DebugScene.defaults.bool(forKey: "CuePadDemo") ? "demo-mac" : workspace.services.hostID
         NewSessionForm(agents: agents) { _ in }
-            .observing(workspace.services.store, into: $agents) { [host = workspace.services.hostID] in try $0.macAgents(on: host) }
+            .observing(workspace.services.store, into: $agents) { try $0.macAgents(on: host) }
     }
 }
 

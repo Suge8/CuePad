@@ -3,15 +3,15 @@ import Observation
 import SwiftUI
 
 /// Cue 的设置，两端同一份：Mac 设置里的 Cue 一节（`CueSettingsSection`）、手机 Cue 面板推入的设置页（`CueSettingsScreen`）与两端的启用卡
-/// （`CueEnableCard`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能住的
-/// 就是这几台）与项目名（允许清单里写）；动作是改名、住到哪台并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
+/// （`CueEnableCard`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
+/// 哪台上运行就是这几台）与项目名（允许清单里写）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
 /// 允许清单的一项（`CueStore.setCueAllow`），写完都立即上传。没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
 @Observable
 final class CueSettingsModel {
     /// 读到的（`cueSettings(_:)` 挂上的订阅写入；第一帧当场读好）。
     var settings: CueSettings?
     private(set) var failure: String?
-    /// 正在住过去并启用的那台。
+    /// 正在换过去并启用的那台。
     private(set) var enabling: String?
 
     func enable(on host: String, _ services: AppServices) {
@@ -22,8 +22,8 @@ final class CueSettingsModel {
         }
     }
 
-    /// 住到哪台：选一台就是住过去并启用，nil（"不启用"）是停用。
-    func live(on host: String?, _ services: AppServices) {
+    /// 在哪台运行：选一台就是换到那台并启用，nil（"不启用"）是停用。
+    func run(on host: String?, _ services: AppServices) {
         guard let host else { return run { try await services.disableCue() } }
         enable(on: host, services)
     }
@@ -80,7 +80,7 @@ nonisolated struct CueSettings: Equatable, Sendable {
             projects: Dictionary(try store.projects().map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first }))
     }
 
-    /// 能住的一台：名字（那台自报的；`here` 是这台时写"这台 Mac"）、能当大脑的几家与一家都不能用时为什么。
+    /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；`here` 是这台时写"这台 Mac"）、能当大脑的几家与一家都不能用时为什么。
     struct Host: Identifiable, Equatable {
         let id: String
         let name: String
@@ -92,10 +92,10 @@ nonisolated struct CueSettings: Equatable, Sendable {
         var note: String { usable ? brains.map(\.name).joined(separator: "、") : whyNone }
     }
 
-    /// Cue 能住的几台，`here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
+    /// Cue 能在哪几台上运行，`here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
     func hosts(here: String?) -> [Host] {
         var hosts = macs.map { mac in
-            Host(id: mac.hostID, name: mac.hostID == here ? Self.here : mac.name ?? Self.unnamed,
+            Host(id: mac.hostID, name: mac.hostID == here ? Self.here : mac.shownName,
                  brains: CueProfile.runtimes.filter(mac.kinds.contains), whyNone: mac.whyNone)
         }
         if let here {
@@ -105,16 +105,17 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts
     }
 
-    func name(of host: String, here: String?) -> String {
-        host == here ? Self.here : macs.first { $0.hostID == host }?.name ?? Self.unnamed
+    /// 说在哪台上运行时的那台："这台 Mac"，或别的那台的名字加书名号（"在「Mac Studio」上运行"）。
+    private func place(_ host: String, here: String?) -> String {
+        host == here ? Self.here : "「\(macs.first { $0.hostID == host }?.shownName ?? MacAgents.unnamed)」"
     }
 
-    /// 启用那一项的现状：住在哪、用哪家；没启用时写之前住在哪。
+    /// 启用那一项的现状：在哪台上运行、用哪家；没启用时写上次在哪台。
     func status(here: String?) -> Dotted {
         guard let active = profile.activeHost else {
-            return Dotted("没启用", profile.hostID.map { "之前住在\(name(of: $0, here: here))" })
+            return Dotted("没启用", profile.hostID.map { "上次在\(place($0, here: here))上运行" })
         }
-        return Dotted("住在\(name(of: active, here: here))", profile.runtime.known?.name)
+        return Dotted("在\(place(active, here: here))上运行", profile.runtime.known?.name)
     }
 
     /// 允许清单的一类：所有项目都不用问（`all`），与只管一个项目的几项（名字是「项目名」，删了的写"已删的项目"）。规矩那一类没有。
@@ -125,6 +126,14 @@ nonisolated struct CueSettings: Equatable, Sendable {
 
         var id: CueAsk { ask }
         var everywhere: CueAllow { CueAllow(ask, project: nil) }
+    }
+
+    /// 允许清单那一节的写法（两端同一份）。
+    static let allowsTitle = "不用先问的事"
+    static let asksFirst = "先问你"
+    static let allowedEverywhere = "所有项目都不用问"
+    static func allowsNote(_ name: String) -> String {
+        "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类以后直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
     }
 
     var allowGroups: [AllowGroup] {
@@ -138,5 +147,4 @@ nonisolated struct CueSettings: Equatable, Sendable {
     }
 
     private static let here = "这台 Mac"
-    private static let unnamed = "另一台 Mac"
 }

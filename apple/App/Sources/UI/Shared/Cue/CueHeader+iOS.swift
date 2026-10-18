@@ -9,7 +9,7 @@ import SwiftUI
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
-/// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueBrainMenu`，当场读）；其余都是已经在订阅的。
+/// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueConfigControls.read`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
     /// 页头在导航栏那一排里、左边让着系统的返回（iPhone，`inNavigationBarRow`）。
     let inBar: Bool
@@ -110,8 +110,8 @@ struct CueHeader: View {
 }
 
 /// 页头展开后的面板，手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）：
-/// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选住哪台时没有），右边是它住在哪与齿轮，点它推入设置
-/// （`CueSettingsScreen`：名字、住在哪台 Mac、允许清单；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
+/// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
+/// （`CueSettingsScreen`：名字、在哪台 Mac 上运行、Agent 与模型、不用先问的事；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
 /// 同 Mac 侧栏的 Agent 区；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
 /// 放不下时面板里面滚。
@@ -138,9 +138,9 @@ private struct CueNowPanel: View {
     private var content: some View {
         let cue = workspace.cue
         return VStack(alignment: .leading, spacing: 16) {
-            // 胶囊先排（模型、强度不被挤成省略号），右端拿剩下的宽：放得下写住在哪，放不下只留齿轮
+            // 胶囊先排（Agent、模型、强度不被挤成省略号；窄处思考强度只写档名），右端拿剩下的宽：放得下写在哪台运行，放不下只留齿轮
             HStack(spacing: 8) {
-                if cue.hostID != nil { CueConfigControls().fixedSize(horizontal: true, vertical: false) }
+                if cue.hostID != nil { CueConfigControls(fail: workspace.fail).layoutPriority(1) }
                 settings(cue).frame(maxWidth: .infinity, alignment: .trailing)
             }
             if cue.canHear { CueContextCard(context: cue.context) }
@@ -155,7 +155,7 @@ private struct CueNowPanel: View {
         .padding(.horizontal, 16).padding(.top, 2).padding(.bottom, 16)
     }
 
-    /// 大脑那一行的右端：它住在哪与齿轮，窄屏放不下名字时只留齿轮（名字在设置页的顶栏里看得到），点它推入设置。
+    /// 大脑那一行的右端：它在哪台运行与齿轮，窄屏放不下名字时只留齿轮（名字在设置页的顶栏里看得到），点它推入设置。
     private func settings(_ cue: CueWatch) -> some View {
         let home = cue.canHear ? cue.hostName : "没启用"
         return Button {
