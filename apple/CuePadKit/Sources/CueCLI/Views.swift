@@ -4,7 +4,7 @@ import Foundation
 
 typealias JSONObject = [String: any Sendable]
 
-// MARK: 字段约定（改动须同步 Help.swift 的「JSON 结构」，测试会比对）
+// MARK: 字段约定（改动须同步 `Schema` 的字段说明，测试会比对）
 
 private func nullable<T: Sendable>(_ value: T?) -> any Sendable {
   guard let value else { return NSNull() }

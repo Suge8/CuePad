@@ -1,10 +1,14 @@
 #if DEBUG
 import CueStore
 import CueText
+import OSLog
 import SwiftUI
 
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {
+    /// 演示脚本自己出的错（读写演示库失败）：演示画面因此停在半路，记下来，不当作没事。
+    static let demoLog = Logger(subsystem: AppServices.bundleID, category: "demo")
+
     /// 会话里的一轮：你的话、Pi 的回答（还没答完是 nil）与这一轮的工具活动，问与答的时刻。
     struct ChatTurn {
         var you: String
@@ -264,12 +268,16 @@ extension DebugScene {
             for await offline in Observations({ services.syncStatus == .offline }) where !offline { return }
         }
         Task {
-            // 每次变化都重读此刻还没交出去的：攒下的旧变化不再各等一遍
-            for try await waiting in store.observe({ try toDemoCue($0) }) where !waiting.isEmpty {
-                guard try await !toDemoCue(store).isEmpty else { continue }
-                await reachable()
-                try await Task.sleep(for: .seconds(1.5))
-                try await store.markCueMessagesDelivered(toDemoCue(store))
+            do {
+                // 每次变化都重读此刻还没交出去的：攒下的旧变化不再各等一遍
+                for try await waiting in store.observe({ try toDemoCue($0) }) where !waiting.isEmpty {
+                    guard try await !toDemoCue(store).isEmpty else { continue }
+                    await reachable()
+                    try await Task.sleep(for: .seconds(1.5))
+                    try await store.markCueMessagesDelivered(toDemoCue(store))
+                }
+            } catch {
+                demoLog.error("演示 Mac 交给 Cue 停了：\(error)")
             }
         }
         do {
@@ -294,7 +302,10 @@ extension DebugScene {
                 // 各自演一轮，不挡住下一批话的接手
                 for id in pending { Task { await playRound(for: id, store: store, host: host) } }
             }
-        } catch {}
+        } catch is CancellationError {
+        } catch {
+            demoLog.error("演示 Mac 接手停了：\(error)")
+        }
     }
 
     /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。

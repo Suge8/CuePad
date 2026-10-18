@@ -448,7 +448,7 @@ struct PiReloadFold: View {
         }
         .buttonStyle(.plain)
         .animation(Motion.quick, value: expanded)
-        .accessibilityValue(expanded ? "已展开" : "已收起")
+        .accessibilityExpanded(expanded)
         .accessibilityHint("旧版扩展的会话，在终端里对它们执行 /reload")
     }
 }

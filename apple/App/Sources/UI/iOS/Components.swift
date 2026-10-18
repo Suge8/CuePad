@@ -7,9 +7,6 @@ extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// 主按钮与空态、引导共用控件外形和按压。
-    func prominentButton() -> some View { buttonStyle(ControlButtonStyle(kind: .primary)) }
-
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
     /// （说清旁边那个点是什么意思）。nil（未分类）没有菜单。
     func projectActions(_ project: Project?, radius: CGFloat, pi: PiShown?) -> some View {

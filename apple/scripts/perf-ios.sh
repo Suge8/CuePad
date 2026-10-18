@@ -6,29 +6,24 @@
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
 #   长按菜单在进程内没有入口：App 写 `AWAIT 名 x y`，这里用 axe（https://github.com/cameroncooke/AXe）在模拟器上真按（长按菜单按住 0.8 秒；收起在 App 里做）。
 #   某一次没写完（App 写了 FAIL、中途退出或超时）整次失败、以 1 退出，不出部分结果的表。
-# 用 Release（带 DEBUG 条件，只为留下测量代码）；产物在 apple/.derived-perf-ios。独占机器（_lock.sh），设备是 0 号模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
+# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；产物在 apple/.derived-perf）、独占机器后调这里，第一个参数是 CuePad.app；
+# 设备是 0 号模拟器（机型 CUEPAD_IOS_DEVICE，默认 iPhone 17；见 _sim.sh）。
 set -euo pipefail
 command -v axe >/dev/null || { echo "需要 axe（brew install cameroncooke/axe/axe）" >&2; exit 1; }
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_sim.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_sim.sh"
-# shellcheck source=_lock.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_lock.sh"
-# shellcheck source=_perf.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_perf.sh"
-xc_enter exclusive "$0" "$@"
-runs="${1:-3}"
-DERIVED="$PERF_IOS_DERIVED"
+APP="$1"
+runs="${2:-3}"
+DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
 BUNDLE_ID=com.sugeh.cuepad
-
 udid="$(sim_udid "${CUEPAD_IOS_DEVICE:-iPhone 17}")"
-perf_build ios "$udid"
 
 # 每次从刚开机的模拟器量：开着很久的模拟器上（尤其用过 axe 查界面、点按之后）同一交互的指令数能高出一倍。量完开着留给别的任务
 xcrun simctl shutdown "$udid" 2>/dev/null || true
 sim_boot "$udid"
-xcrun simctl install "$udid" "$PERF_IOS_APP"
+xcrun simctl install "$udid" "$APP"
 
 running() { local list; list="$(xcrun simctl spawn "$udid" launchctl list 2>/dev/null)"; [[ "$list" == *"UIKitApplication:$BUNDLE_ID"* ]]; }
 rows="$DERIVED/interact.jsonl"
@@ -39,7 +34,7 @@ for run in $(seq "$runs"); do
   library_args=(-CuePadDemo YES)
   if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); fi
   out="$library/interact.jsonl"
-  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:2}" >/dev/null
+  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} -CuePadBench interact "${@:3}" >/dev/null
   sleep 2
   # 量完自己退出；最多等 5 分钟。其间按 App 要的点真按
   pressed=0 finished=0 deadline=$(( $(date +%s) + 300 )) tick=0

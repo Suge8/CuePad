@@ -14,5 +14,6 @@ public struct Timing: Sendable {
 }
 
 extension Duration {
-  var seconds: Double { Double(components.seconds) + Double(components.attoseconds) / 1e18 }
+  /// 秒数（含小数），App 与 Kit 共用这一处换算。
+  public var seconds: Double { Double(components.seconds) + Double(components.attoseconds) / 1e18 }
 }

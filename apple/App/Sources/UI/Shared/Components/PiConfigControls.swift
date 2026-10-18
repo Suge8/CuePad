@@ -66,14 +66,16 @@ struct PiConfigControls<Trailing: View>: View {
     /// 思考强度可选的档；空时不放思考强度。
     let levels: [PiThinkingLevel]
     let chooseThinking: (PiThinkingLevel) -> Void
-    /// 键盘请弹出的菜单（Mac）：弹出后清掉。
+    /// 键盘请弹出的菜单（只有 Mac 有这个入口）：弹出后清掉。
     let opening: Binding<PiConfigPick?>
     let trailing: Trailing
     @Environment(AppServices.self) var services
     /// 这一排拿到的宽度：模型胶囊最宽是它的一半（`PiModelLabel.capsuleWidth`）。
     @State private var available: CGFloat = 0
-    /// 键盘弹出的菜单贴着哪枚胶囊（Mac）。
+    #if os(macOS)
+    /// 键盘弹出的菜单贴着哪枚胶囊。
     @State var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
+    #endif
 
     init(
         groups: [PiModelGroup], shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
@@ -97,12 +99,12 @@ struct PiConfigControls<Trailing: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
+        #if os(macOS)
         .onChange(of: opening.wrappedValue) { _, pick in
             guard let pick else { return }
             opening.wrappedValue = nil
             open(pick)
         }
-        #if os(macOS)
         .task {
             guard DebugHooks.preset.modelMenu, (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
             open(.model)
@@ -115,7 +117,9 @@ struct PiConfigControls<Trailing: View>: View {
             modelCapsule
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
+                    #if os(macOS)
                     .popUpAnchor(anchors[.thinking])
+                    #endif
             }
             trailing
         }

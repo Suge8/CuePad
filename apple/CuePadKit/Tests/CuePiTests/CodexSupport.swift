@@ -8,7 +8,7 @@ import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（录制时用）；凭据复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉。绝不碰真实的 ~/.codex。
+/// 本机装的 Codex（录制时用）；它自己的登录复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉，真实的 ~/.codex 只读这一个文件。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
 let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 /// 账号里最便宜的模型

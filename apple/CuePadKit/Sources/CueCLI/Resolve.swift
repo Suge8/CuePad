@@ -97,10 +97,3 @@ extension Call {
     return piped
   }
 }
-
-extension Optional {
-  func asyncMap<T>(_ transform: (Wrapped) async throws -> T) async rethrows -> T? {
-    guard let self else { return nil }
-    return try await transform(self)
-  }
-}

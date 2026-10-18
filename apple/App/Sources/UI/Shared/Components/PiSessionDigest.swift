@@ -290,7 +290,7 @@ private struct AnswerButton: View {
             .contentShape(shape)
             .modifier(PressFeedback(pressed: configuration.isPressed))
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
-            .opacity(enabled ? 1 : 0.45)
+            .opacity(enabled ? 1 : ControlMetrics.disabledOpacity)
     }
 }
 

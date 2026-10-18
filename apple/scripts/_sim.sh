@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# 被 xc.sh 与 perf-ios.sh source：每种机型固定一小池模拟器（SIM_POOL 台，名为"CuePad <机型> #<号>"），
+# 被 xc.sh 与 perf 脚本 source：每种机型固定一小池模拟器（SIM_POOL 台，名为"CuePad <机型> #<号>"），
 # 任务从 _lock.sh 领到号（CUEPAD_SIM）；只编译不运行的用 0 号做目标（不开机、不占）。
 # 第一次用时新建，开机后一直开着给后来的任务复用（脚本不关）：冷启动一次要 15–30 秒。
 # 开机时停用系统的 PosterBoard（管壁纸与锁屏海报）：iOS 27.0 模拟器里它的海报库会坏（新设备第一次开机、反复开关机时），

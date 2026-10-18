@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueStore
 import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中（跨项目、最近开始的在前，标题后跟项目小图标，悬停写全名）、

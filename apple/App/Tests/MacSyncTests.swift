@@ -64,7 +64,7 @@ struct MacSyncTests {
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
         rig.sync.stopHangs.withLock { $0 = true }
 
-        let late = await services.stop(within: .milliseconds(200))
+        let late = await services.beginShutdown(within: .milliseconds(200))()
 
         #expect(late == "同步")
         #expect(rig.sync.stopped == 1)
@@ -90,7 +90,7 @@ struct MacSyncTests {
         #expect(await uploads.next() == record)
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
 
-        #expect(await services.stop(within: .milliseconds(300)) == "Cue")
+        #expect(await services.beginShutdown(within: .milliseconds(300))() == "Cue")
 
         #expect(await uploads.next() == record)
         #expect(try await !services.store.macOnline(host))
@@ -101,7 +101,7 @@ struct MacSyncTests {
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
 
-        await services.stop()
+        _ = await services.beginShutdown()()
 
         #expect(rig.sync.stopped == 1)
         let request = try await services.store.requestDelivery(
@@ -516,8 +516,8 @@ struct MacSyncTests {
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
         let name = request.id.uuidString.lowercased()
 
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
+        #expect(await uploads.next() == name)
+        #expect(await uploads.next() == name)
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 

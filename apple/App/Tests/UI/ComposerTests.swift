@@ -15,7 +15,7 @@ struct ComposerTests {
         return try #require(try await store.allPiSessionStates().first)
     }
 
-    @Test func 回复带图片和卡片_正文依次是卡片_文字_图片_原图入库并关联卡片() async throws {
+    @Test func 回复带图片和卡片_正文依次是卡片_文字_图片_原图入库() async throws {
         let target = try await session()
         let photo = pngData(shade: 0.3)
         let hash = try store.files.store(pngData(shade: 0.8))
@@ -29,12 +29,11 @@ struct ComposerTests {
         let photoHash = try #require(CueFormat.imageHashes(in: request.content).last)
         #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://img/\(photoHash))")
         #expect(app.services.store.files.fileURL(for: photoHash) != nil)
-        #expect(request.cardID == card.id)
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
     }
 
     /// 发给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（任务的正文在前、资料在后），
-    /// 卡片本身不动——仍在原项目的资料组里；请求关联的仍是那件任务。选卡片的面板里本项目资料排在最前。
+    /// 卡片本身不动——仍在原项目的资料组里。选卡片的面板里本项目资料排在最前。
     @Test func 交给Agent时带上资料作附件_正文含它_资料原地不动_面板里资料在最前() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let target = try await session(project: project.id)
@@ -53,7 +52,6 @@ struct ComposerTests {
         let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
 
         #expect(request.content == "修乱序\n先复现\n\n接口约定\n队列按首次加入时间排")
-        #expect(request.cardID == task.id)
         let after = try #require(try await store.card(reference.id))
         #expect(after.isPinned && after.projectID == project.id && after.parentID == nil)
         #expect(try await store.cards(in: project.id).filter(\.isPinned).map(\.id) == [reference.id])

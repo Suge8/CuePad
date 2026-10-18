@@ -2,15 +2,13 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的数据：读取时一并算好上墙用的卡片事实与每张卡的摘要（在 Store 的执行体上，不占主线程）。
+/// 项目页的数据：读取时一并算好每张卡的摘要（在 Store 的执行体上，不占主线程）；上墙用的卡片事实在 `ProjectPageData.stamps`。
 nonisolated private struct ProjectPage: Sendable, Equatable {
     var data: ProjectPageData
-    var stamps: [CardStamp]
     var entries: [UUID: CardEntry]
 
     init(_ data: ProjectPageData) {
         self.data = data
-        stamps = data.stamps()
         entries = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, CardEntry($0)) })
     }
 }
@@ -51,7 +49,7 @@ struct ProjectScreen: View {
         .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), limit: 0, moment: services.speech), into: $pi, onError: workspace.fail) {
             [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, historyLimit: 0, at: moment, from: store)
         }
-        .onChange(of: page?.stamps) { rearrange() }
+        .onChange(of: page?.data.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
         // 打开时就不在了（iPad 恢复窗口时选回的项目已进回收站）也算：退回书架
         .onChange(of: project == nil, initial: true) { _, gone in if gone { navigation.pop(projectID) } }

@@ -134,7 +134,11 @@ extension DebugScene {
         guard markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL) else { return }
         // 与有同步时一样跟着库走（`AppServices.startSync`）：选好保留哪份，这一行就消失
         Task {
-            for try await conflicts in store.observe({ try $0.conflicts() }) { services.setConflicts(conflicts) }
+            do {
+                for try await conflicts in store.observe({ try $0.conflicts() }) { services.setConflicts(conflicts) }
+            } catch {
+                demoLog.error("演示冲突的订阅停了：\(error)")
+            }
         }
     }
 

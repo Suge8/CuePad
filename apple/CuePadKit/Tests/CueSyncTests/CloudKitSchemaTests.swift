@@ -42,8 +42,6 @@ import Testing
     try await CloudKitSchema.generate().write(to: Self.schemaFile, atomically: true, encoding: .utf8)
   }
 
-  /// 同步表各一个记录类型，外加生产环境里删不掉的已下线类型；本机表（piSessions 等）不进 CloudKit。
-
   @Test func onlyThePrivateDatabaseGrantsAreDeclared() async throws {
     let schema = try await CloudKitSchema.generate()
     #expect(!schema.contains("_world"))
