@@ -29,14 +29,15 @@ struct CueHostTests {
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮先用 tell 问你一句，再写最后的回复。
-        /// `claude`：大脑换成真的 Claude Code（`CueEvalTests`），假模型的剧本不再用上。
+        /// `claude`：大脑换成真的 Claude Code（`CueEvalTests`），假模型的剧本不再用上。`patrolAfter`：空闲多久巡视一次。
         init(
-            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, claude: ClaudeCue? = nil
+            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, claude: ClaudeCue? = nil,
+            patrolAfter: Duration = .seconds(3600)
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
             let port = try await model.start()
             let timing = CueTiming(
-                patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
+                patrolAfter: patrolAfter, mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let claudeLaunch = try claude.map { try $0.launch(in: TestLibraries.makeDirectory()) }
@@ -790,6 +791,7 @@ nonisolated final class FakeModel: Sendable {
             if text.contains("先出两次错"), once("error", times: 2) { return fail() }
             return say("登录页那边歇下了")
         }
+        if text.contains("醒来：空闲，例行看一眼") { return say("巡视了一圈") }
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
