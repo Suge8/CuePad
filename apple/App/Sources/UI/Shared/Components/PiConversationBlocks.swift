@@ -19,13 +19,18 @@ struct RecapPreview: View {
 
 /// 还没说过话的会话：全 App 同一种空态（吉祥物加一句怎么开始），叠在对话区上、在回复框以上的可见区居中，不占对话的高。
 /// 你发出第一句（送没送达都算）就淡掉：叠层只改透明度，不靠滚动内容里的移除过渡（滚动区里的移除不播淡出，一帧切掉），也不把新气泡顶在下面。
+/// 与对话同一栏：最宽 `readingWidth`（含左右 `inset`），居中（同 `ChatScroll` 的阅读栏）。
 struct BlankChat: View {
     let shown: Bool
+    let readingWidth: CGFloat
+    let inset: CGFloat
     @Environment(\.chatBottomInset) private var bottomInset
 
     var body: some View {
         EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: readingWidth - 2 * inset)
+            .padding(.horizontal, inset)
             .padding(.bottom, bottomInset)
             .opacity(shown ? 1 : 0)
             .animation(Motion.quick, value: shown)

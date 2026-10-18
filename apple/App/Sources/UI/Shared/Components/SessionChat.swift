@@ -39,7 +39,7 @@ struct SessionChat: View {
         }
         .overlay {
             BlankChat(shown: items.isEmpty && digest.deliveries.isEmpty && !session.hasStarted && session.state != .known(.ended)
-                && session.pendingPrompt == nil && session.lastPrompt == nil)
+                && session.pendingPrompt == nil && session.lastPrompt == nil, readingWidth: readingWidth, inset: inset)
         }
     }
 
