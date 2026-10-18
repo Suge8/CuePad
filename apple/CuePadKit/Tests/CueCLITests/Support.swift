@@ -13,7 +13,7 @@ final class Sandbox: @unchecked Sendable {
   let store: CueStore
 
   init() throws {
-    store = try CueStore(url: directory.appending(path: "cuepad.db"))
+    store = try CueStore(location: .isolated(directory))
   }
 
   /// 默认在沙盒目录里运行：它不绑定任何项目。`cwd` 模拟从某个目录调用。

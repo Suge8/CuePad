@@ -156,7 +156,7 @@ private struct DeliverableTile: View {
         .observingArrival(of: preview.hash, in: services.store, into: $arrived)
         .task(id: file) {
             guard let file else { return }
-            look = await DeliverableLooks.load(preview, file: file, pixels: pixels, scale: scale)
+            look = await DeliverableLooks.load(preview, file: file, pixels: pixels, scale: scale, caches: services.store.files.caches)
         }
     }
 

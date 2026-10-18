@@ -33,7 +33,8 @@ public actor CueStore {
   private let changeListener: ChangeListener?
   private var lastDataVersion: Int64
 
-  public init(url: URL, timing: Timing = .system) throws {
+  public init(location: LibraryLocation, timing: Timing = .system) throws {
+    let url = location.databaseURL
     try FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let connection = try SQLite(path: url.path)
@@ -58,10 +59,10 @@ public actor CueStore {
     let listener = ChangeListener(name: ChangeNotification.name(forDatabase: url))
     self.queue = queue
     executor = queue.asUnownedSerialExecutor()
-    reader = try CueStore(reading: url, timing: timing)
+    reader = try CueStore(reading: location, timing: timing)
     db = connection
     self.timing = timing
-    files = Self.files(of: url)
+    files = Self.files(of: location)
     notificationName = ChangeNotification.name(forDatabase: url)
     changeListener = listener
     lastDataVersion = try connection.first("PRAGMA data_version") { $0.int(0) } ?? 0
@@ -71,7 +72,8 @@ public actor CueStore {
   }
 
   /// 主线程当场读用的连接：只读、跑在主线程上，不收跨进程通知（订阅都在本体上）。
-  private init(reading url: URL, timing: Timing) throws {
+  private init(reading location: LibraryLocation, timing: Timing) throws {
+    let url = location.databaseURL
     let connection = try SQLite(path: url.path)
     try connection.exec("PRAGMA query_only = ON")
     queue = nil
@@ -79,14 +81,14 @@ public actor CueStore {
     reader = nil
     db = connection
     self.timing = timing
-    files = Self.files(of: url)
+    files = Self.files(of: location)
     notificationName = ChangeNotification.name(forDatabase: url)
     changeListener = nil
     lastDataVersion = 0
   }
 
-  private static func files(of url: URL) -> AttachmentFiles {
-    AttachmentFiles(directory: url.deletingLastPathComponent().appending(path: "Attachments", directoryHint: .isDirectory))
+  private static func files(of location: LibraryLocation) -> AttachmentFiles {
+    AttachmentFiles(directory: location.directory.appending(path: "Attachments", directoryHint: .isDirectory), caches: location.caches)
   }
 
   /// 这个版本能打开的库结构版本范围（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的""库是更早版本建的"与别的失败。
