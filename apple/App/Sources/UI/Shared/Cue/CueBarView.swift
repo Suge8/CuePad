@@ -32,7 +32,7 @@ struct CueStatusRow<Trailing: View>: View {
     var body: some View {
         let cue = workspace.cue
         HStack(spacing: 10) {
-            CueAvatar(mood: cue.mood(), presence: cue.presence, size: .row).relaySpot(cue: .entry)
+            CueAvatar(mood: cue.expression, presence: cue.presence, size: .row).relaySpot(cue: .entry)
             VStack(alignment: .leading, spacing: 1) {
                 Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
                 CueStatusLine(fallback: cue.lastSaid).lineLimit(1)

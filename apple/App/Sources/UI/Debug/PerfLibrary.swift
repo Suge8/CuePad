@@ -39,7 +39,7 @@ enum PerfLibrary {
                 cards: (0..<count).map { _ in card(&random, images: &imagePool, imageShare: index == 0 ? 0.12 : 0.05) }))
         }
         groups.append(DemoLibrary.DemoProject(
-            name: "", icon: "", color: "", pinned: false, directory: nil,
+            name: "", icon: .folder, color: "", pinned: false, directory: nil,
             cards: (0..<unfiledCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
         // 用剩的图分给大项目最近的卡，保证 300 张都用上
         var big = groups[0]
@@ -206,7 +206,7 @@ enum PerfLibrary {
     }
 
     private static let projectWords = ["发布", "增长", "研究", "运营", "客户端", "后端", "设计系统", "数据", "招聘", "文档"]
-    private static let icons = ["folder", "sparkles", "globe", "hammer", "book", "target", "briefcase", "lightbulb"]
+    private static let icons: [ProjectIcon] = [.folder, .sparkles, .globe, .hammer, .book, .target, .briefcase, .lightbulb]
     private static let colors = ["#A260C4", "#D9774B", "#3AA088", "#3F8FB8", "#C9A227", "#5E9E5A", "#C25A6E", "#8A8A84"]
     private static let chineseWords = [
         "投送", "队列", "重试", "边界", "编辑器", "变量", "模板", "同步", "冲突", "附件", "搜索", "索引", "性能", "内存", "首屏",

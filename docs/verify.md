@@ -13,7 +13,12 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 - Mac 窗口默认 1440×900，别的尺寸给 `-CuePadWindowSize`。按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏，Mac 图就是 1 倍像素。
 - 报窗口被缩小显示时，是调度中心或台前调度开着：请用户收起，Agent 不发系统按键。
 - 后台窗口里的网页截图不可信（过几秒就成了空白）：看网页预览用 `-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview`，载入完存成 PNG）。
-- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（会到前台），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。
+- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（会到前台），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 上的菜单没有从代码打开的公开接口，截菜单用 `xc.sh run` 起实例后 axe 点开。
+- 图标：`-CuePadScene icons`（iPad）一屏看全部墨块符号（层级与单色各一个）和 全部项目图标 × 8 色，改了生成器先看它。
+- 交付物与预览：`-CuePadAllKinds`（配 scratch 会话）发每种文件类型各一份，`-CuePadOpenPreview <标题或文件名>` 直接打开那张预览。
+- 展开的样子：`-CuePadToolsOpen YES` 让每轮经过、子代理名册与 Cue 的动态一出现就展开，截全清单用。
+- 发送：`-CuePadSpeech press` 在输入框出现后（`-CuePadPressAfter` 秒，默认 3）真按一次发送钮，录发送动效；配 `-CuePadFlightLog <路径>` 量这一下的 CPU 与掉帧（改前改后交替跑，口径见 `measureFlight`）；`-CuePadReduceMotion YES` 看减弱动态效果。
+- 小组件与分享扩展：`-CuePadScene widgets`、`share`（iOS）用它们自己的视图画在桌面色上，模拟器桌面上加小组件脚本不做。
 - 录屏：会话状态切换配 `-CuePadCycle YES`；冷启动首屏给 `CUEPAD_REC_LAUNCH=1`（ios、ipad，从启动前开录），配 `-CuePadSync arrive` 看启动后拉到一批别处写下的话。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。
 - 裁图、缩放用 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。

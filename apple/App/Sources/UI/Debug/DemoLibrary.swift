@@ -11,7 +11,7 @@ import Foundation
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
     struct DemoProject {
-        var name: String, icon: String, color: String, pinned: Bool, directory: String?, intro: String? = nil
+        var name: String, icon: ProjectIcon, color: String, pinned: Bool, directory: String?, intro: String? = nil
         var cards: [(days: Double, text: String, favorite: Bool)]
     }
 
@@ -32,7 +32,7 @@ enum DemoLibrary {
                 try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: project.name.lowercased()), card: card.id)
             }
         }
-        let retired = try await store.createProject(name: "旧落地页", color: "#8A8A84", icon: "globe")
+        let retired = try await store.createProject(name: "旧落地页", color: "#8A8A84", icon: ProjectIcon.globe.rawValue)
         _ = try await store.createCard(in: retired.id, body: "旧落地页文案\n\n首屏标题与三段卖点。")
         try await store.trashProject(retired.id)
         for project in try await store.projects() {
@@ -72,7 +72,7 @@ enum DemoLibrary {
         let home = demoHome
         let pic = CueFormat.imageMarkup(id: image)
         return [
-            DemoProject(name: "CuePad", icon: "sparkles", color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: "投送队列本月可上线", cards: [
+            DemoProject(name: "CuePad", icon: .sparkles, color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: "投送队列本月可上线", cards: [
                 (0.2, "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", false),
                 (0.6, "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---\n约束：离线并发编辑保留两个版本，不静默覆盖。", false),
                 (1.2, "变量模板文档\n\n\(pic)\n更新变量模板的开发文档，删掉过时的说明。", false),
@@ -99,31 +99,31 @@ enum DemoLibrary {
                 (170.0, "原型：三个视觉方向\n\n桌面、看板、流。", false),
                 (200.0, "常用提示：代码评审\n\n只报告会导致错误行为的问题，按严重程度排序。", true),
             ]),
-            DemoProject(name: "圆桌", icon: "messages-square", color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", intro: "多 Agent 调度本月可上线", cards: [
+            DemoProject(name: "圆桌", icon: .chat, color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", intro: "多 Agent 调度本月可上线", cards: [
                 (1.0, "产品决策\n\n先列出现状和约束，再给出下一步。", false),
                 (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", true),
                 (40.0, "主持人提示词\n\n\(pic)\n提示词写好，一键投送。", false),
             ]),
-            DemoProject(name: "Flow", icon: "layers", color: "#3AA088", pinned: true, directory: nil, cards: [
+            DemoProject(name: "Flow", icon: .layers, color: "#3AA088", pinned: true, directory: nil, cards: [
                 (1.0, "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。", false),
                 (15.0, "画布缩放\n\n双指缩放锚点跟随指针。", false),
             ]),
-            DemoProject(name: "闲鱼", icon: "shopping-bag", color: "#3F8FB8", pinned: false, directory: nil, intro: "二手相机这周挂出去", cards: [
+            DemoProject(name: "闲鱼", icon: .cart, color: "#3F8FB8", pinned: false, directory: nil, intro: "二手相机这周挂出去", cards: [
                 (3.0, "定价补测试\n\n在接缝上给定价补验收测试。", false),
             ]),
-            DemoProject(name: "个人网站", icon: "globe", color: "#C9A227", pinned: false, directory: "\(home)Project/homepage", cards: [
+            DemoProject(name: "个人网站", icon: .globe, color: "#C9A227", pinned: false, directory: "\(home)Project/homepage", cards: [
                 (8.0, "首页改版\n\n给首页改版出三个方案，比较代价。", false),
             ]),
-            DemoProject(name: "Career", icon: "briefcase", color: "#5E9E5A", pinned: false, directory: nil, cards: [
+            DemoProject(name: "Career", icon: .briefcase, color: "#5E9E5A", pinned: false, directory: nil, cards: [
                 (20.0, "求职信\n\n按岗位描述改写第一段。", false),
             ]),
-            DemoProject(name: "读书", icon: "book", color: "#D0607D", pinned: false, directory: nil, intro: "每周读完一章", cards: [
+            DemoProject(name: "读书", icon: .book, color: "#D0607D", pinned: false, directory: nil, intro: "每周读完一章", cards: [
                 (30.0, "《设计心理学》第二章\n\n示能与意符的区别。", false),
             ]),
-            DemoProject(name: "旅行", icon: "globe", color: "#3F8FB8", pinned: false, directory: nil, cards: [
+            DemoProject(name: "旅行", icon: .globe, color: "#3F8FB8", pinned: false, directory: nil, cards: [
                 (12.0, "京都行程\n\n第二天去岚山，避开周末。", false),
             ]),
-            DemoProject(name: "装修", icon: "hammer", color: "#8A8A84", pinned: false, directory: nil, cards: [
+            DemoProject(name: "装修", icon: .hammer, color: "#8A8A84", pinned: false, directory: nil, cards: [
                 (6.0, "比价\n\n三家报价，水电分开算。", false),
             ]),
         ]
@@ -183,7 +183,7 @@ enum DemoLibrary {
             }
         } + tasks.map { SeedCard(project: index(of: $0.project), body: $0.text, modifiedAt: now, kind: $0.done ? .doneTask : .task) }
         try await store.seed(
-            projects: named.map { SeedProject(name: $0.name, icon: $0.icon, color: $0.color, pinned: $0.pinned) }, cards: cards)
+            projects: named.map { SeedProject(name: $0.name, icon: $0.icon.rawValue, color: $0.color, pinned: $0.pinned) }, cards: cards)
     }
 
     /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。

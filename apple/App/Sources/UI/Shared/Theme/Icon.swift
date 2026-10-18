@@ -18,9 +18,9 @@ nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
     case idea, task, session, search, settings, unfiled, archive, trash, sidebar
-    case agent, allSessions, allProjects, all, filter, extensionNote
+    case agent, allProjects, all, filter, extensionNote
     // 状态
-    case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, resting, fresh, ended, interrupted, unknown
+    case waiting, cueAsking, failure, undelivered, needsReload, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -70,7 +70,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .add: .ink("plus")
         case .close, .remove: .ink("close")
         case .clear: .ink("clear")
-        case .more, .resting, .pondering: .ink("more")
+        case .more, .pondering: .ink("more")
         case .forward: .ink("chevron.right")
         case .back: .ink("chevron.left")
         case .expand: .ink("chevron.down")
@@ -127,7 +127,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .rename, .editFile: .ink("pencil")
         case .choose: .ink("choose")
         case .all: .ink("deck")
-        case .allSessions: .ink("stack")
         case .allProjects: .ink("grid")
         case .filter: .ink("filter")
         case .extensionNote: .ink("puzzle")
@@ -270,6 +269,8 @@ nonisolated private extension ProjectIcon {
         case .heart: "heart"
         case .star: "star"
         case .music: "music"
+        case .rocket: "rocket"
+        case .bolt: "bolt"
         }
     }
 }

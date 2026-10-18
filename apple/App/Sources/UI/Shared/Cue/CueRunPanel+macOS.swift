@@ -17,7 +17,7 @@ struct CueRunPanel: View {
     static let width: CGFloat = 360
 
     var body: some View {
-        let rounds = DebugHooks.preset.runRounds + keeper.rounds
+        let rounds = keeper.rounds
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("运行情况").font(Typography.sectionTitle).foregroundStyle(palette.ink)

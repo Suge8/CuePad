@@ -38,7 +38,6 @@ enum ScrollAnchor {
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`PiSubagentList`、`CueNotes`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
-/// - `-CuePadRunRounds YES`（仅 Mac，配 cuerun）："运行情况"里垫上每种醒来原因各一轮（`runRounds`）；
 /// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡、那条任务、那条记忆或那一行（"更早"、任务浮窗的步骤；回收站按名字）一出现就画成指针停着的样子（"设为任务"、亮起的"开始"、记忆行尾的钉住与忘掉、行的淡底）；
@@ -169,7 +168,6 @@ enum DebugScene {
         preset.editorSelection = editorSelection
         preset.toolsOpen = defaults.bool(forKey: "CuePadToolsOpen")
         preset.explain = defaults.bool(forKey: "CuePadExplain")
-        preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
         preset.alwaysReachable = preset.demoMac && defaults.string(forKey: "CuePadSync") == nil
@@ -179,7 +177,6 @@ enum DebugScene {
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")
-        if defaults.bool(forKey: "CuePadRunRounds") { preset.runRounds = runRounds }
         #endif
         #if os(iOS)
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
@@ -192,19 +189,6 @@ enum DebugScene {
         #endif
         return preset
     }
-
-    #if os(macOS)
-    /// 每种醒来的原因各一轮，新的在后；交给大脑的话都有一段，最新那轮默认展开（看"交给 Cue 的话"那一行）。
-    private static var runRounds: [CueRound] {
-        let wakes: [CueWake] = [.enabled, .message, .sessionActivity, .idle, .reminder([]), .renewed, .settingsChanged]
-        return wakes.enumerated().map { index, wake in
-            let started = Date.now.addingTimeInterval(Double(index - wakes.count) * 600)
-            var round = CueRound(id: -wakes.count + index, wake: wake, startedAt: started, sent: ["（演示）醒来时的信封"])
-            round.finishedAt = started.addingTimeInterval(42)
-            return round
-        }
-    }
-    #endif
 
     // MARK: 截图的首帧就绪
 

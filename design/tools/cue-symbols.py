@@ -1,5 +1,6 @@
 """CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
-整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）。
+整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）
+与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
 用法：python3 design/tools/cue-symbols.py（只用标准库）。
 
 墨块的规则（每个图标都守）：
@@ -24,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
 CLIMB_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/ClimbBlocks.swift"
+NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 PREFIX = "cue"
 
 G = 35.6 / 12  # 一格的模板单位（系统 circle 在 S 号 100pt 下中线半径 35.6）
@@ -1010,19 +1012,6 @@ def deck(m):
     return [Layer("deck", out)]
 
 
-def stack(m):
-    """全部会话：前面一张横长的圆角块，后面两条越来越窄的边露在上面，各隔一条刻缝。"""
-    g, c = GROW[m], CARVE[m]
-    hw, top, bottom = 11.0, -3.0, 9.0
-    out = [grown([(-hw, top), (hw, top), (hw, bottom), (-hw, bottom)], [2.4] * 4, g)]
-    y = top - c - 2 * g
-    for inset in (1.8, 3.6):
-        h = 2.4 + 0.5 * g
-        out.append(grown([(-hw + inset, y - h), (hw - inset, y - h), (hw - inset, y), (-hw + inset, y)], [1.2, 1.2, 0, 0], g * 0.5))
-        y -= h + c + g
-    return [Layer("stack", out)]
-
-
 def grid(m):
     """全部项目：田字四块圆角方，块间一道宽于刻缝的缝。"""
     g = GROW[m]
@@ -1758,6 +1747,21 @@ def music(m):
     return [Layer("music", [disc(h, r) for h in heads] + stems + [beam])]
 
 
+def rocket(m):
+    """火箭：机身斜指右上，尖头圆肩，开一扇圆舷窗；尾部两侧各一片贴着机身的尾翼、尾后一簇火焰，都离机身一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g
+    hw, top, bottom = 4.6, -13.2, 4.4
+    def place(p): return add(rot(p, 45), (-1.2, 1.2))
+    body = grown([place(p) for p in [(0, top), (hw, top + 7.6), (hw, bottom), (-hw, bottom), (-hw, top + 7.6)]], [1.2, 4.6, 1.2, 1.2, 4.6], g)
+    x0 = hw + cut
+    fins = [grown([place((k * x, y)) for x, y in [(x0, -2.0), (9.4, 3.8), (9.4, 9.2), (x0, 6.8)][::k]], [0.4, 1.0, 0.8, 0.4], g) for k in (1, -1)]
+    y0 = bottom + cut
+    flame = grown([place(p) for p in [(-3.0, y0), (3.0, y0), (0, y0 + 6.0)]], [0.6, 0.6, 1.2], g)
+    window = disc(place((0, -4.0)), 2.2 - 0.5 * g, hole=True)
+    return [Layer("rocket", [body, window] + fins + [flame])]
+
+
 def menubar(m):
     """菜单栏里的 CuePad（同 logo）：一圈往右开口的粗 C，开口里嵌一张折角的小纸。只在菜单栏用，单色模板图。"""
     g, c = GROW[m], CARVE[m]
@@ -1853,7 +1857,6 @@ SYMBOLS = {
     "copy": sheets(True),
     "conflict": sheets(False),
     "deck": deck,
-    "stack": stack,
     "grid": grid,
     "share": tray_arrow(True),
     "save": tray_arrow(False),
@@ -1925,6 +1928,7 @@ SYMBOLS = {
     "heart": heart,
     "star": star5,
     "music": music,
+    "rocket": rocket,
     "menubar": menubar,
 }
 
@@ -2041,6 +2045,19 @@ def write_climb():
         "}\n")
 
 
+def write_names():
+    names = "\n".join(f'        "{PREFIX}.{name}",' for name in SYMBOLS)
+    NAMES_SWIFT.write_text(
+        "#if DEBUG\n"
+        "// 由 design/tools/cue-symbols.py 生成。\n\n"
+        "/// 全部墨块符号的资源名，按生成器里的顺序：只给图标总览（`IconSheet`）列全；产品代码按意思经 `Icon` 取图。\n"
+        "enum InkSymbols {\n"
+        f"    static let names = [\n{names}\n    ]\n"
+        "}\n"
+        "#endif\n")
+
+
 if __name__ == "__main__":
     write_symbols()
     write_climb()
+    write_names()

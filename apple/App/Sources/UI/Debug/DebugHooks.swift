@@ -17,8 +17,6 @@ enum DebugHooks {
         var toolsOpen = false
         /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
         var explain = false
-        /// 会话页直接打开这张预览（`-CuePadOpenPreview <批的标题或文件名>`）。
-        var openPreview: String?
         /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
@@ -37,8 +35,6 @@ enum DebugHooks {
         /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
-        /// "运行情况"里垫在前面的几轮（`-CuePadRunRounds`）：每种醒来的原因各一轮；真的几轮只在值班的管理器内存里，隔离实例里没有大脑跑不出来。
-        var runRounds: [CueRound] = []
         #endif
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
@@ -285,6 +281,19 @@ extension View {
         #endif
     }
 
+    /// 会话页直接打开 `-CuePadOpenPreview <批的标题或文件名>` 那张预览（对话里的交付物到了再找）。
+    func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>) -> some View {
+        #if DEBUG
+        task(id: items.count) {
+            guard let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") else { return }
+            opened.wrappedValue = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session)) } }
+                .first { $0.preview.title == title || $0.preview.name == title }
+        }
+        #else
+        self
+        #endif
+    }
+
     /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
     func debugSettling(_ busy: Bool) -> some View {
         #if DEBUG
@@ -338,16 +347,11 @@ extension View {
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }
-                if let kind = DebugScene.defaults.string(forKey: "CuePadRowMenu") {
-                    // 盖在根上，在注入环境的那层外面：菜单项要的工作区自己带上
-                    DebugRowMenu(kind: kind).environment(workspace).environment(workspace.services).environment(navigation)
-                }
             }
             .withPalette()
         }
             .task {
                 await DebugScene.prepare(workspace, navigation)
-                await DebugScene.openMenuIfAsked()
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
