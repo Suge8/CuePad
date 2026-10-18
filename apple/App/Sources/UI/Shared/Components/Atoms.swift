@@ -157,10 +157,12 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         }
     }
 
-    /// 更早的版本存的 lucide 名（与表里同名的不列）。
+    /// 更早的版本存的 lucide 名（与表里同名的不列）：那张表的 26 个名字，同名的 14 个直接认，其余 12 个全在这里。
+    /// rocket（发射、上线）认成旗帜，同是"立个目标冲过去"；zap（闪电）认成闪光，同是一下子来的劲；coffee（咖啡）认成家，都是日常生活里的事。
     private static let aliases: [String: ProjectIcon] = [
         "code": .terminal, "message-circle": .chat, "messages-square": .chat, "shopping-bag": .cart,
         "box": .cube, "pen-tool": .paintbrush, "palette": .paintbrush, "home": .house, "music": .music,
+        "rocket": .flag, "zap": .sparkles, "coffee": .house,
     ]
 }
 

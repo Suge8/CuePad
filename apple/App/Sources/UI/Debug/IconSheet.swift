@@ -25,7 +25,7 @@ struct IconSheet: View {
     }
 
     private func column(_ icons: ArraySlice<(String, Icon)>) -> some View {
-        Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 2) {
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
             ForEach(icons, id: \.0) { name, icon in
                 GridRow(alignment: .center) {
                     Text(name).font(.caption2.monospaced()).foregroundStyle(palette.ink2).lineLimit(1).fixedSize()
