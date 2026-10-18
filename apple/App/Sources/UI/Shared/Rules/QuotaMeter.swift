@@ -3,7 +3,7 @@ import Foundation
 
 /// 一个订阅账号的额度怎么读（Cue 页头面板、Agent 页顶部与菜单栏面板的总览，回复框的模型胶囊，模型菜单的分组标题共用一份）。
 /// 口径是还剩多少（剩余，不是已用）：用户要回答的是"还够不够用"，满格是满额、往下掉是在用，同电量一样不用换算。
-/// 读数在 `now` 那一刻算定：过了重置时间的窗口按已重置算（满额），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
+/// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口按已重置算（满额），不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
 /// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`PiContextMeter.level(of:)`）。
 nonisolated struct QuotaMeter: Equatable {
     /// 一个窗口此刻的读数。
@@ -15,14 +15,17 @@ nonisolated struct QuotaMeter: Equatable {
         /// 匀速线：按窗口已过的时间，匀速用的话此刻该还剩多少（0 到 1）；已重置为 nil
         let even: Double?
         let resetsAt: Date
-        /// 照这速度什么时候用完；剩的不比匀速线少（重置前用不完）为 nil
-        let exhaustion: Date?
+        /// 照这速度还能用多久的短语："约 2 小时 10 分钟"（与"5 小时"同一种写法，取两个单位）；剩的不比匀速线少（重置前用不完）为 nil
+        let runway: String?
         let level: PiContextMeter.Level
         /// 过了重置时间、还没有新的观测：下一次什么时候重置不知道，只写"已重置"
         let hasReset: Bool
         let id: QuotaWindow.ID
+        /// 读屏："5 小时剩 32%，2 小时 14 分钟后重置，照这速度约 1 小时后用完"。
+        let spoken: String
 
-        var percent: String { "\(Int((left * 100).rounded()))%" }
+        var percent: String { Self.percent(left) }
+        private static func percent(_ left: Double) -> String { "\(Int((left * 100).rounded()))%" }
         /// 只算某个模型的（按模型的周额度）
         var isScoped: Bool { id.model != nil }
 
@@ -32,21 +35,12 @@ nonisolated struct QuotaMeter: Equatable {
             left = 1 - used
             even = pace > 0 ? 1 - pace : nil
             resetsAt = window.resetsAt
-            exhaustion = window.exhaustion(at: now)
+            runway = window.exhaustion(at: now).map { "约 " + QuotaMeter.span(Int($0.timeIntervalSince(now))) }
             level = PiContextMeter.level(of: used)
             hasReset = now >= window.resetsAt
             id = window.id
-        }
-
-        /// 照这速度还能用多久的短语："约 2 小时 10 分钟"（读数时刻定下，不跟着走；与"5 小时"同一种写法，取两个单位）。
-        func runway(from now: Date) -> String? {
-            exhaustion.map { "约 " + QuotaMeter.span(Int($0.timeIntervalSince(now))) }
-        }
-
-        /// 读屏："5 小时剩 32%，2 小时 14 分钟后重置，照这速度约 1 小时后用完"。
-        var spoken: String {
-            let reset = hasReset ? "已重置" : "\(QuotaMeter.span(Int(resetsAt.timeIntervalSinceNow)))后重置"
-            return Dotted("\(name)剩 \(percent)", reset, runway(from: .now).map { "照这速度\($0)后用完" }).spoken
+            let reset = hasReset ? "已重置" : "\(QuotaMeter.span(Int(window.resetsAt.timeIntervalSince(now))))后重置"
+            spoken = Dotted("\(name)剩 \(Self.percent(left))", reset, runway.map { "照这速度\($0)后用完" }).spoken
         }
     }
 

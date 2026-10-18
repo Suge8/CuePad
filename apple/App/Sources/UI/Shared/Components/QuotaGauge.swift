@@ -175,7 +175,7 @@ private struct QuotaWindowRow: View {
             }
             // 剩余条：剩的少于匀速线就是用快了
             MarkedBar(fill: window.left, mark: window.even, level: window.level)
-            if let runway = window.runway(from: .now) {
+            if let runway = window.runway {
                 Text("照这速度\(runway)后用完").font(Typography.caption).foregroundStyle(critical ? palette.failure : palette.ink2)
                     .transition(.opacity)
             }
