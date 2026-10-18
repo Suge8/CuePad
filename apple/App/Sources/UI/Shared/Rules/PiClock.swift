@@ -80,14 +80,14 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
 
         func discreteInput(before now: Date) -> Date? { segment(around: now).start.addingTimeInterval(-0.001) }
 
-        /// `now` 所在那一段文字的起点与下一段的起点。
+        /// `now` 所在那一段文字的起点与下一段的起点（严格晚于 `now`，`Date.tick`）。
         private func segment(around now: Date) -> (start: Date, next: Date) {
             let since = clock.since
             let elapsed = max(now.timeIntervalSince(since), 0)
             if style == .span {
                 let step: TimeInterval = elapsed < 3600 ? 60 : elapsed < 86_400 ? 3600 : 86_400
-                let start = since.addingTimeInterval((elapsed / step).rounded(.down) * step)
-                return (start, start.addingTimeInterval(step))
+                let next = since.tick(every: step, after: now)
+                return (next.addingTimeInterval(-step), next)
             }
             if !clock.isRunningClock, elapsed >= 86_400 {
                 let calendar = Calendar.current
@@ -95,8 +95,18 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
                 return (midnight, calendar.date(byAdding: .day, value: 1, to: midnight) ?? now.addingTimeInterval(86_400))
             }
             let step: TimeInterval = elapsed < 60 && style == .header && clock.isRunningClock ? 1 : elapsed < 3600 ? 60 : 3600
-            let start = since.addingTimeInterval((elapsed / step).rounded(.down) * step)
-            return (start, start.addingTimeInterval(step))
+            let next = since.tick(every: step, after: now)
+            return (next.addingTimeInterval(-step), next)
         }
+    }
+}
+
+nonisolated extension Date {
+    /// 从这一刻起每隔 `step` 一格（往前往后都排），严格晚于 `now` 的第一格。按倍数算出来的那格因浮点误差不晚于 `now` 时取下一格：
+    /// 按时刻重画的文字（`LiveText`）睡到这一刻，给出的时刻不晚于此刻就再也醒不过来。
+    func tick(every step: TimeInterval, after now: Date) -> Date {
+        var count = (now.timeIntervalSince(self) / step).rounded(.down) + 1
+        while addingTimeInterval(count * step) <= now { count += 1 }
+        return addingTimeInterval(count * step)
     }
 }

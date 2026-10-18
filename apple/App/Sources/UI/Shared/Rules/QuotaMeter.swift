@@ -83,11 +83,11 @@ nonisolated struct QuotaMeter: Equatable {
 
         func format(_ now: Date) -> String { QuotaMeter.span(Int(end.timeIntervalSince(now))) }
 
-        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后
+        /// 剩余的整分钟数变的那一刻：剩 k 分多时，在剩恰好 k 分钟之后（严格晚于 `now`，`Date.tick`）
         func discreteInput(after now: Date) -> Date? {
-            let left = end.timeIntervalSince(now)
-            guard left > 60 else { return nil }
-            return end.addingTimeInterval(-((left / 60).rounded(.down) * 60) + 0.001)
+            guard end.timeIntervalSince(now) > 60 else { return nil }
+            // 剩的分钟数在每个整分钟刚过时变：格子落在整分钟之后 1 毫秒
+            return end.addingTimeInterval(0.001).tick(every: 60, after: now)
         }
 
         func discreteInput(before now: Date) -> Date? {
