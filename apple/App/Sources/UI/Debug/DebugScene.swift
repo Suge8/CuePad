@@ -28,6 +28,8 @@ enum ScrollAnchor {
 /// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；
 ///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
 ///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；
+/// - `-CuePadCueFlow YES`（配 cue 画面与 `-CuePadDemo YES`）：画面就绪后按固定节奏走一遍完整的一轮（发送、在想、用工具、回复、结果卡、等你、切页），录 Cue 页的流转；
+///   `-CuePadCueFlowLog <路径>` 另量静止与发送各一段（`cueFlowIfAsked`，见 `DebugScene+CueFlow.swift`）；
 /// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
@@ -166,7 +168,9 @@ enum DebugScene {
         preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
-        preset.alwaysReachable = preset.demoMac && defaults.string(forKey: "CuePadSync") == nil
+        // 流程演示与 Cue 的 sending 自己摆送达，不要演示 Mac 来接手，但话在路上要算同步通着（隔离库没有同步，不然是"没有在同步"）
+        let inTransit = cueFlows || defaults.string(forKey: "CuePadCuePresence") == "sending"
+        preset.alwaysReachable = (preset.demoMac || inTransit) && defaults.string(forKey: "CuePadSync") == nil
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")

@@ -36,6 +36,7 @@ extension DebugScene {
     }
 
     static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
+        if !session, cueFlows { return await pressForCueFlow(press) }
         guard defaults.string(forKey: "CuePadSpeech") == "press", (scene == "session") == session else { return }
         try? await Task.sleep(for: .seconds(defaults.object(forKey: "CuePadPressAfter") as? Double ?? 3))
         guard let log = defaults.string(forKey: "CuePadFlightLog").map({ URL(fileURLWithPath: $0) }) else { return press() }

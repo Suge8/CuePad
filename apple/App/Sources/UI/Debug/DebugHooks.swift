@@ -23,7 +23,7 @@ enum DebugHooks {
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
         var demoMac = false
-        /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、又没装同步替身时（替身自己报通断，`-CuePadSync`）。
+        /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、走 Cue 流程演示（`-CuePadCueFlow`）或摆 Cue 的话在路上（`-CuePadCuePresence sending`），又没装同步替身时（替身自己报通断，`-CuePadSync`）。
         var alwaysReachable = false
         /// 回复框的模型菜单一出现就弹出（`-CuePadModelMenu`，Mac；菜单是独立窗口，截图另拍它）。
         var modelMenu = false
@@ -288,6 +288,7 @@ extension View {
             Task { await DebugScene.relayIfAsked(workspace) }
             Task { await DebugScene.closeIfAsked(workspace) }
             Task { await DebugScene.openMenuIfAsked() }
+            Task { await DebugScene.cueFlowIfAsked(workspace) }
             await DebugScene.cycleIfAsked(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
@@ -324,8 +325,9 @@ extension View {
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
+                async let flow: Void = DebugScene.cueFlowIfAsked(workspace, navigation)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, relays)
+                _ = await (wakes, relays, flow)
             }
         #else
         self
