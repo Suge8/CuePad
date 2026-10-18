@@ -37,7 +37,8 @@ struct SplitRoot: View {
                 // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
                 // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
                 HStack(spacing: 0) {
-                    stack
+                    // 宽屏的提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮
+                    stack.overlay(alignment: .top) { NoticeBanner() }
                     if navigation.agentPanel {
                         Divider().ignoresSafeArea()
                         AgentPanel()

@@ -1,8 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖住顶栏中间的名牌或搜索框，
-/// 两侧操作仍可用；不在 Cue 对话上另占一排，iPad 面板也共用窗口的提示。
+/// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖在顶栏中间的名牌或搜索框的位置（名牌让开），
+/// 两侧操作仍可用；不在 Cue 对话上另占一排，iPad 面板也共用窗口的提示。窄屏盖在整个窗口上，宽屏在右边那一栏里居中（不盖侧栏顶上的圆钮）。
 /// 提示与会话前台提示的变化只在这里读：根视图读了的话，每弹一条、消一条整个窗口（分栏的每一栏）都要重算一遍。
 struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
