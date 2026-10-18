@@ -213,6 +213,22 @@ enum DebugHooks {
         #endif
     }
 
+    /// 本机构建活不过起它的进程（xc.sh 的看守、perf 脚本、会话自己写的测量脚本）：起它的进程退出或被杀，实例经 `terminate` 正常退出，
+    /// 不留下没人收的实例。父进程是 launchd（经 LaunchServices 起：Xcode、访达、测试宿主）时不跟。
+    static func exitsWithParent(_ terminate: @escaping @Sendable () -> Void) -> (any DispatchSourceProtocol)? {
+        #if DEBUG
+        let parent = getppid()
+        guard parent != 1 else { return nil }
+        let source = DispatchSource.makeProcessSource(identifier: parent, eventMask: .exit, queue: .global())
+        source.setEventHandler(handler: terminate)
+        source.resume()
+        if getppid() != parent { terminate() }  // 装上之前它就退了
+        return source
+        #else
+        nil
+        #endif
+    }
+
     /// 显示主窗口或设置窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
     static func present(_ window: NSWindow) {
         if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }

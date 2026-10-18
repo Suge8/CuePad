@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var cueBar: CueBar?
     private var settingsWindow: SettingsWindowController?
     private var mainFrameKeeper: WindowFrameKeeper?
-    private var sigterm: DispatchSourceSignal?
+    private var terminationSources: [any DispatchSourceProtocol] = []
     /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
     /// 主窗口的工作区（主菜单"显示"里的开关作用在它上面；主窗口本身是 `services.windowShell`）。
@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UNUserNotificationCenter.current().delegate = alerts
-        sigterm = TerminationSignal.install()
+        terminationSources = TerminationSignal.install()
         MainMenu.install()
         FirstClick.install()
         launch()
@@ -213,15 +213,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 }
 
-/// SIGTERM 走正常退出流程，使快捷键与菜单栏图标被释放。
+/// SIGTERM（与本机构建的父进程退出，`DebugHooks.exitsWithParent`）走正常退出流程，使快捷键与菜单栏图标被释放。
 /// 信号在后台队列接收、再投到主线程 run loop 的 common modes：主队列在应用级模态面板运行时不被处理。
 enum TerminationSignal {
-    static func install() -> DispatchSourceSignal {
+    static func install() -> [any DispatchSourceProtocol] {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
         source.setEventHandler(handler: terminateOnMainRunLoop)
         source.resume()
-        return source
+        return [source] + [DebugHooks.exitsWithParent(terminateOnMainRunLoop)].compactMap(\.self)
     }
 
     private static let terminateOnMainRunLoop: @Sendable () -> Void = {
