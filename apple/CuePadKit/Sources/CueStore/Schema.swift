@@ -60,10 +60,17 @@ enum Schema {
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
-    // 55：启动与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（见 `create` 里各自的注释）
-    "\(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
+    // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
+    "DROP INDEX syncRecords_recordType; \(pendingIndexes) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
   ]
 
+  /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
+  /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
+  private static let pendingIndexes = """
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
+    \(Table.synced.map { "CREATE INDEX \($0.rawValue)_modified ON \($0.rawValue)(id, modifiedAt);" }.joined(separator: "\n"))
+    """
   /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，
   /// 不碰带问答长文的会话记录本身（真实库四千多条，整表冷读约 75ms）。
   private static let folderIndex = """
@@ -229,7 +236,6 @@ enum Schema {
       recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
       pushedModifiedAt INTEGER, sentModifiedAt INTEGER
     ) STRICT;
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
@@ -267,6 +273,7 @@ enum Schema {
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
     \(searchTriggers(table: "projects", column: "name", kind: "project"))
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
+    \(pendingIndexes)
     """
 
   /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。
