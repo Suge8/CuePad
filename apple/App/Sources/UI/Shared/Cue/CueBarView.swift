@@ -85,7 +85,7 @@ struct CueStatusLine: View {
 }
 
 #if os(macOS)
-/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行。输入框里有没说出去的话时头像露"在听"。
+/// Mac Cue 页的页头（窗口工具栏居中，玻璃由工具栏给）：头像，名字接此刻在做什么，一行（"等你 N"在侧栏的 Cue 行，等你的卡就在输入框上方，这里不写第三遍）。输入框里有没说出去的话时头像露"在听"。
 /// 手机与 iPad 的页头是 `CueHeader`。
 struct CueTitle: View {
     @Environment(Workspace.self) private var workspace

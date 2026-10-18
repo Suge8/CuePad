@@ -31,7 +31,7 @@ struct DeliverableStrip: View {
             }
         default:
             ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: size == .mini ? 6 : Self.gap) {
+                HStack(alignment: .top, spacing: Self.gap) {
                     ForEach(previews) { tile($0, .strip(height: stripHeight)) }
                 }
             }
@@ -54,11 +54,12 @@ struct DeliverableStrip: View {
 
     private var stripHeight: CGFloat {
         switch size {
-        case .mini: 56
         #if os(macOS)
+        case .mini: 88
         case .result: 200
         case .chat: 176
         #else
+        case .mini: 72
         case .result: 150
         case .chat: 132
         #endif
@@ -157,9 +158,27 @@ private struct DeliverableTile: View {
     private var shown: DeliverableLook? { look ?? DeliverableLooks.cached(preview, pixels: pixels) }
 
     private var aspect: CGFloat {
-        let raw = shown?.aspect ?? 4 / 3
+        // 读到之前按类型猜：PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳
+        let raw = shown?.aspect ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3)
         guard case .hero = shape else { return raw }
         return min(max(raw, 4 / 3), 16 / 9)
+    }
+
+    private var kindIcon: Icon {
+        switch preview.kind {
+        case .web: .web
+        case .markdown: .markdown
+        case .image: .photo
+        case .video: .video
+        case .audio: .audio
+        case .pdf: .pdf
+        case .document: .document
+        case .spreadsheet: .spreadsheet
+        case .presentation: .presentation
+        case .model: .model
+        case .text: .plainText
+        case nil: .file
+        }
     }
 
     private var radius: CGFloat {
@@ -196,12 +215,14 @@ private struct DeliverableTile: View {
                     }
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if preview.kind == .audio {
+                } else {
+                    // 画面还在出（或这种文件没有画面）：写它是什么，不留一块空白
                     VStack(spacing: 4) {
-                        Image(.audio).font(.title2)
-                        if let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
+                        Image(kindIcon).font(radius < 12 ? .callout : .title2)
+                        if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
                     }
                     .foregroundStyle(palette.ink3)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .overlay(alignment: .bottomLeading) {

@@ -13,11 +13,15 @@ extension AnyTransition {
 /// 对话气泡（你的话、Cue 的话）共用的样子。说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
 /// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
 enum Bubble {
-    static let radius: CGFloat = 20
+    static let radius: CGFloat = 22
     static let corner: CGFloat = 6
-    static let padding = EdgeInsets(top: 11, leading: 16, bottom: 11, trailing: 16)
+    #if os(macOS)
+    static let padding = EdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
+    #else
+    static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+    #endif
     /// 同一边连着说的两颗之间。
-    static let joinedGap: CGFloat = 3
+    static let joinedGap: CGFloat = 4
     /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
     static let noteInset: CGFloat = padding.leading
     /// 最宽占所在一栏的比例：你的话短，窄一些；Cue 的回答常带列表与代码，宽一些（手机上窄，再宽一点）。
@@ -120,8 +124,8 @@ struct BubbleText: View {
                 .padding(Bubble.padding)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
-                // 在路上：半透明加虚线边，浅色深色一样看得出还没到
-                .opacity(trip == .inTransit ? 0.6 : 1)
+                // 在路上：整颗半透明，还没落进对话；送达那一刻显出实色（下面一行写着发送中，钮上是话在路上）
+                .opacity(trip == .inTransit ? 0.55 : 1)
         }
         .animation(Motion.quick, value: highlighted)
         .animation(Motion.quick, value: trip)
@@ -159,9 +163,8 @@ struct BubbleText: View {
 
     @ViewBuilder private func edge(_ shape: UnevenRoundedRectangle) -> some View {
         switch trip {
-        case .inTransit: shape.strokeBorder(palette.ink2, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
-        case .arrived:
+        case .arrived, .inTransit:
             if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
         }
     }

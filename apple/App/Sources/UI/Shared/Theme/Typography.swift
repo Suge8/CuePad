@@ -5,9 +5,8 @@ import SwiftUI
 /// 比系统样式高一档，层级之间至少差 1pt、靠字重与墨色深浅再拉开。
 enum Typography {
     #if os(macOS)
-    /// 正文：卡片摘要、列表的主文字、输入框（AppKit 的输入框按 `bodySize` 取同一号）。
-    static let bodySize: CGFloat = 14
-    static let body = Font.system(size: bodySize)
+    /// 正文：卡片摘要、列表的主文字（输入框与气泡同一号，是阅读的 `readingSize`）。
+    static let body = Font.system(size: 14)
     /// 强调的正文：卡片标题、列表行的名字。
     static let bodyStrong = Font.system(size: 15, weight: .semibold)
     /// 次要：说明、一行里跟在标题后的摘要、空态的说明。
@@ -19,19 +18,19 @@ enum Typography {
     /// 最小的字：折起的计数、对话里的旁注（`NoteLine`）这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
     static let caption = Font.system(size: 12)
     static let caption2 = Font.system(size: 11)
-    /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大一号；标题与代码同属这一列。
-    static let readingSize: CGFloat = 15
+    /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大两号：对话是 Cue 页与会话页的主角；标题与代码同属这一列。
+    static let readingSize: CGFloat = 16
     static let reading = Font.system(size: readingSize)
-    static let readingHeading = Font.system(size: 18, weight: .semibold)
-    static let code = Font.system(size: 13).monospaced()
+    static let readingHeading = Font.system(size: 19, weight: .semibold)
+    static let code = Font.system(size: 14).monospaced()
     /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。
     static let codeNote = Font.system(size: 12).monospaced()
     /// 回答正文里的行内代码：约是阅读正文的 0.9 倍（等宽字同字号下比中文显得大）。
-    static let inlineCode = Font.system(size: 13.5).monospaced()
+    static let inlineCode = Font.system(size: 14.5).monospaced()
     /// 阅读列的行距：长回答是会话页的主角，行高放到约 1.6 倍。
-    static let readingLineSpacing: CGFloat = 6
+    static let readingLineSpacing: CGFloat = 7
     /// 醒目的一句（等你确认的问题）。
-    static let title = Font.system(size: 17, weight: .medium)
+    static let title = Font.system(size: 18, weight: .semibold)
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
@@ -72,8 +71,8 @@ enum Typography {
     static let code = Font.footnote.monospaced()
     static let codeNote = Font.caption.monospaced()
     static let inlineCode = Font.callout.monospaced()
-    static let readingLineSpacing: CGFloat = 3
-    static let title = Font.title3.weight(.medium)
+    static let readingLineSpacing: CGFloat = 4
+    static let title = Font.title3.weight(.semibold)
     static let heading = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     #endif

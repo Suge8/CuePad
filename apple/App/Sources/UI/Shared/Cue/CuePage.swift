@@ -107,9 +107,19 @@ struct CuePage: View {
     // MARK: 对话
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
+    /// 还没说过话时是空态（`EmptyState`）：它自我介绍，下一步就是下面的输入框（没启用时是启用卡）。
     @ViewBuilder private var chat: some View {
         Group {
-            if let thread { conversation(thread) } else { Color.clear }
+            if let thread, !thread.rows.isEmpty {
+                conversation(thread)
+            } else if thread != nil {
+                EmptyState(mascot: .hello, title: "我是 \(cue.name)", message: cue.canHear ? "要做什么，直接在下面跟我说" : nil, waitsForSync: true)
+                    .padding(.horizontal, Self.inset)
+                    .frame(maxWidth: Self.readingWidth, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Color.clear
+            }
         }
     }
 
@@ -128,9 +138,9 @@ struct CuePage: View {
                 // 时间与那一格直接排进对话这一列，不另包一层：长对话滚动时每格少一个要摆的容器
                 ForEach(rows[first...]) { item in
                     let joined = thread.joined.contains(item.id), stamp = thread.stamps[item.id]
-                    if let stamp { ChatTimeMarker(date: stamp).padding(.top, 18) }
+                    if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
                     row(item, tasks: thread.tasks, lastYou: lastYou, live: live, joined: joined)
-                        .padding(.top, stamp != nil ? 6 : Self.gap(before: item.speaker, joined: joined))
+                        .padding(.top, stamp != nil ? 10 : Self.gap(before: item.speaker, joined: joined))
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
@@ -155,7 +165,7 @@ struct CuePage: View {
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
         if joined { return Bubble.joinedGap }
-        return speaker == .trailing ? 22 : 12
+        return speaker == .trailing ? 32 : 16
     }
 
     /// `lastYou`：你最后一句，只在它下面写"已送达"。`live` 只交给它所在的那一格，别的格子输入不变、不随 Cue 的状态重算。
@@ -207,12 +217,12 @@ struct CuePage: View {
     // MARK: 底部
 
     private var bottom: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             if let thread {
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks) { opened = $0 }
             }
             if !cue.canHear {
-                CueEnableCard().transition(.opacity)
+                CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
             CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests) { follow.sent() }

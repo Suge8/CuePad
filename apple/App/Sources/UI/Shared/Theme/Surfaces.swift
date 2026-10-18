@@ -2,8 +2,9 @@ import SwiftUI
 
 extension View {
     /// 纸面：从上沿极轻地亮到纸色的实底 + 上沿一线高光 + 1px 半透明描边；抬起的纸浅色下多一层柔影（深色只留描边）。
-    func paper(radius: CGFloat = 14, lifted: Bool = false) -> some View {
-        modifier(PaperSurface(radius: radius, lifted: lifted))
+    /// `wash`：要你看的那张纸铺这种状态的淡底（`PiShown.wash`），代替纸色。
+    func paper(radius: CGFloat = 14, lifted: Bool = false, wash: Color? = nil) -> some View {
+        modifier(PaperSurface(radius: radius, lifted: lifted, wash: wash))
     }
 
     /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
@@ -33,18 +34,23 @@ enum GlassInk {
 private struct PaperSurface: ViewModifier {
     let radius: CGFloat
     let lifted: Bool
+    let wash: Color?
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
-            .background(palette.paperFill, in: shape)
+            // 影子只挂在底那块形状上：挂在整块内容上时，里面的字、图与按钮要先离屏合成一遍再糊影子，转场与按压的每帧都重算。
+            // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
+            .background {
+                Group { if let wash { shape.fill(wash) } else { shape.fill(palette.paperFill) } }
+                    .shadow(color: palette.dark || !lifted ? .clear : palette.shadow, radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
+            }
             .overlay(shape.strokeBorder(palette.hair))
             // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，
             // 卡片一变宽（侧栏开合、拉窗口）整面墙每张都要重画，大库里开合侧栏的第一帧因此卡上百毫秒
-            .overlay(alignment: .top) { palette.sheen.frame(height: 1).padding(.horizontal, radius).padding(.top, 1) }
-            // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
-            .shadow(color: palette.dark || !lifted ? .clear : palette.shadow, radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
+            // 淡底上不画：白的一线在暖黄上像一道裂缝
+            .overlay(alignment: .top) { if wash == nil { palette.sheen.frame(height: 1).padding(.horizontal, radius).padding(.top, 1) } }
     }
 }
 
@@ -202,7 +208,8 @@ enum ControlMetrics {
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, highlight, secondary, quiet, circular }
+    /// `paper`：纸色实底加发丝边的次按钮，铺在淡底的纸上（"等你"卡）用：墨色浅底叠在淡底上发灰。
+    enum Kind { case primary, highlight, secondary, paper, quiet, circular }
     var kind = Kind.secondary
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
@@ -235,12 +242,22 @@ struct ControlSurface: ViewModifier {
                 .padding(.horizontal, compact ? 10 : 16)
                 .padding(.vertical, 6)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
-                .background(kind == .primary ? palette.signatureFill : kind == .highlight ? palette.selection : kind == .quiet ? .clear : palette.fill, in: .capsule)
-                .overlay { Capsule().strokeBorder(kind == .secondary ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
+                .background(background, in: .capsule)
+                .overlay { Capsule().strokeBorder(kind == .secondary || kind == .paper ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
                 #if os(iOS)
                 .frame(minHeight: ControlMetrics.height)
                 #endif
                 .contentShape(.capsule)
+        }
+    }
+
+    private var background: Color {
+        switch kind {
+        case .primary: palette.signatureFill
+        case .highlight: palette.selection
+        case .paper: palette.paper
+        case .quiet: .clear
+        case .secondary, .circular: palette.fill
         }
     }
 }

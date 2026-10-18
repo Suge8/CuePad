@@ -152,7 +152,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
                     .overlay(alignment: .leading) {
                         if let shrunkDraft {
-                            Text("草稿：\(shrunkDraft)").font(Typography.body).foregroundStyle(palette.ink2).lineLimit(1)
+                            Text("草稿：\(shrunkDraft)").font(Typography.reading).foregroundStyle(palette.ink2).lineLimit(1)
                                 .allowsHitTesting(false)
                                 .transition(.identity)
                         }
@@ -288,13 +288,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 }
 
-/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`），圆角取一半成胶囊；圆钮一格 `slot`（36 的圆 + 四周的点按区与边距）、
+/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
 /// 离边 `inset`，与外框同心；两层时文字区下面只留 `textBottomOpen`，再下面是一格高的工具排。
 enum ComposerMetrics {
-    static let radius: CGFloat = 25
+    static let radius: CGFloat = 28
     static let inset: CGFloat = 8
-    static let slot: CGFloat = 50
-    static let textTop: CGFloat = 14
+    static let slot: CGFloat = 56
+    static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
 }
 

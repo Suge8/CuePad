@@ -2,7 +2,7 @@ import QuartzCore
 import SwiftUI
 
 /// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的三块实心 V（`climb`）、等你确认的外扩波纹（`ripple`）、
-/// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
+/// 等待的转圈（`orbit`，经 `Spinner`）、Cue 在做事时头像外绕着的彗星（`comet`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
 /// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动、Cue 在做事时头像里的它上下跳（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
@@ -11,6 +11,9 @@ struct LoopLayer {
     enum Kind: Equatable {
         /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽默认是直径的 14%，给了就用给的（Cue 头像外的状态环，粗细随头像尺寸另定）。
         case orbit(lineWidth: CGFloat? = nil)
+        /// Cue 在做事时头像外的状态环：淡轨道上一颗带光的头拖着由浓到淡的尾巴（约六成圈）绕着走，1.6s 一圈。
+        /// 尾巴是锥形渐变裁成环（渲染服务每帧只转一层），头是一颗带光晕的圆点（光晕按给定形状画，不从内容另算）。
+        case comet(lineWidth: CGFloat)
         /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
         case heartbeat
         /// 三块实心的 V 从下往上依次亮起再暗下去（节奏见 `Climb`）；形状只在 `ClimbBlocks`（与符号 cue.climb 同出 design/tools/cue-symbols.py）。
@@ -45,6 +48,7 @@ struct LoopLayer {
         }
 
         private var root: CALayer { layer }
+        private var displayScale: CGFloat { traitCollection.displayScale }
         #else
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -59,6 +63,7 @@ struct LoopLayer {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
         private var root: CALayer { layer! }
+        private var displayScale: CGFloat { window?.backingScaleFactor ?? 2 }
         #endif
 
         required init?(coder: NSCoder) { fatalError() }
@@ -104,6 +109,8 @@ struct LoopLayer {
                     // 心电线的第一层是垫底的淡波形
                     shape.strokeColor = kind == .heartbeat && index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
                 }
+            case .comet(let width):
+                layoutComet(loop, in: bounds, width: width)
             case .pulse:
                 loop.frame = bounds
                 loop.backgroundColor = color
@@ -122,8 +129,58 @@ struct LoopLayer {
             CATransaction.commit()
         }
 
+        /// 彗星的几层：轨道、裁成环的锥形渐变（尾巴）、头。头在渐变终点（角度 0，正右方），与尾巴一起随外层转。
+        private func layoutComet(_ loop: CALayer, in bounds: CGRect, width: CGFloat) {
+            loop.frame = bounds
+            guard let color, let layers = loop.sublayers, layers.count == 3,
+                  let track = layers[0] as? CAShapeLayer, let tail = layers[1] as? CAGradientLayer, let head = layers[2] as? CAShapeLayer
+            else { return }
+            let ring = CGPath(ellipseIn: bounds.insetBy(dx: width / 2, dy: width / 2), transform: nil)
+            track.frame = bounds
+            track.path = ring
+            track.lineWidth = width
+            track.strokeColor = color.copy(alpha: color.alpha * 0.18)
+            tail.frame = bounds
+            tail.colors = [color.copy(alpha: 0), color.copy(alpha: 0), color].compactMap { $0 }
+            let mask = (tail.mask as? CAShapeLayer) ?? CAShapeLayer()
+            mask.frame = bounds
+            mask.path = ring
+            mask.lineWidth = width
+            mask.fillColor = nil
+            mask.strokeColor = CGColor(gray: 0, alpha: 1)
+            tail.mask = mask
+            // 尾巴缓存成位图：外层转的只是这张图，渲染服务不再每帧按遮罩离屏重画渐变
+            tail.shouldRasterize = true
+            tail.rasterizationScale = displayScale
+            let dot = CGRect(x: bounds.maxX - width, y: bounds.midY - width / 2, width: width, height: width)
+            head.frame = bounds
+            head.path = CGPath(ellipseIn: dot, transform: nil)
+            head.fillColor = color
+            head.shadowColor = color
+            head.shadowPath = CGPath(ellipseIn: dot.insetBy(dx: -width * 0.4, dy: -width * 0.4), transform: nil)
+        }
+
         private static func make(_ kind: Kind) -> CALayer {
             switch kind {
+            case .comet:
+                let layer = CALayer()
+                let track = CAShapeLayer()
+                track.fillColor = nil
+                let tail = CAGradientLayer()
+                tail.type = .conic
+                tail.startPoint = CGPoint(x: 0.5, y: 0.5)
+                tail.endPoint = CGPoint(x: 1, y: 0.5)
+                tail.locations = [0, 0.4, 1]
+                let head = CAShapeLayer()
+                head.shadowOpacity = 0.9
+                head.shadowRadius = 3
+                head.shadowOffset = .zero
+                for sublayer in [track, tail, head] { layer.addSublayer(sublayer) }
+                // 头在渐变终点上，顺着角度增大的方向转：头在前、尾巴跟着（层坐标里渐变与旋转同向，两端一样）
+                let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+                spin.byValue = Double.pi * 2
+                spin.duration = 1.6
+                return loop(spin, on: layer)
             case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()

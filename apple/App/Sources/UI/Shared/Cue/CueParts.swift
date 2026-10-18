@@ -244,7 +244,7 @@ struct CueQuestionLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PiStateGlyph(status: .asking)
             Text(question)
-                .font(Typography.bodyStrong).foregroundStyle(palette.ink)
+                .font(Typography.title).foregroundStyle(palette.ink)
                 .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -254,6 +254,8 @@ struct CueQuestionLine: View {
 /// "等你"的选项：推荐的答案（第一个）作主按钮、其余次按钮，一行放不下就竖排。"等你"卡与全屏预览的底栏共用。
 struct CueChoices: View {
     let options: [String]
+    /// 其余选项的样子：铺在淡底的纸上（"等你"卡）用纸底，免得墨色的浅底叠在暖黄上发灰。
+    var secondary = ControlButtonStyle.Kind.secondary
     var disabled = false
     let pick: (String) -> Void
 
@@ -267,7 +269,7 @@ struct CueChoices: View {
     @ViewBuilder private var buttons: some View {
         ForEach(Array(options.enumerated()), id: \.offset) { index, option in
             Button(option) { pick(option) }
-                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : .secondary, compact: true))
+                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : secondary))
                 .lineLimit(2)
                 .disabled(disabled)
         }
@@ -285,6 +287,7 @@ struct CueWaitingDock: View {
     let open: (PreviewOpening) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 正在结束的那条（写成后它从 `waiting` 里消失，写不成就清掉）。
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
@@ -294,24 +297,34 @@ struct CueWaitingDock: View {
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
+    private static let fieldHeight: CGFloat = 36
     #else
     private static let originalHeight: CGFloat = 160
+    private static let fieldHeight: CGFloat = 40
     #endif
 
+    /// 一条换下一条时新卡压在沉下的旧卡上原地交替（底边对齐叠放）：竖排的话两张同时占位，底栏一下高一倍、对话跟着跳。
+    /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
+        ZStack(alignment: .bottom) { card }
+    }
+
+    private static let below: CGFloat = 8
+
+    @ViewBuilder private var card: some View {
         if let message = waiting.first {
             let ref = message.taskID.flatMap { tasks[$0] }
             let question = (message.ask ?? .rule).question(task: ref?.task.heading)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 CueQuestionLine(question: question)
                 if reading == message.id { original(message.text).transition(.opacity) }
                 if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
                     let batch = Array(deliverables)
-                    DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 12) {
+                    DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 16) {
                         open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
                     }
                 }
-                CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
+                CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
                 otherwiseField(message)
                 HStack(spacing: 10) {
                     if let ref { CueTaskLine(ref: ref) }
@@ -321,13 +334,22 @@ struct CueWaitingDock: View {
                     originalToggle(message)
                 }
             }
-            .padding(12)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous))
+            .paper(radius: ComposerMetrics.radius, lifted: true, wash: PiShown(status: .asking).wash(palette))
             .animation(Motion.quick, value: reading)
             .id(message.id)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .padding(.bottom, Self.below)
+            .transition(Self.arrival(reduceMotion: reduceMotion))
         }
+    }
+
+    /// 从输入框那边升起（淡入、从 96% 放大、上移一小段），答完沉回去淡出；减弱动态效果时只淡入淡出。
+    private static func arrival(reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion else { return .entry }
+        let rise = AnyTransition.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)).combined(with: .offset(y: 12))
+        let sink = AnyTransition.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom))
+        return .asymmetric(insertion: rise.animation(Motion.snappy), removal: sink.animation(Motion.quick))
     }
 
     /// Cue 的原话：放得下就整段，放不下在 `originalHeight` 里滚。
@@ -369,8 +391,10 @@ struct CueWaitingDock: View {
                     .buttonStyle(PressStyle(.button))
             }
         }
-        .padding(.horizontal, 10).frame(minHeight: 32)
-        .background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 12).frame(minHeight: Self.fieldHeight)
+        // 与卡的圆角同心（卡的内边距 16）
+        .background(palette.paper, in: .rect(cornerRadius: ComposerMetrics.radius - 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: ComposerMetrics.radius - 16, style: .continuous).strokeBorder(palette.hair) }
         .disabled(ending == message.id)
     }
 

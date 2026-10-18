@@ -127,7 +127,8 @@ final class ComposerScrollView: NSScrollView {
 }
 
 final class GrowingTextView: NSTextView {
-    static let bodyFont = NSFont.systemFont(ofSize: Typography.bodySize)
+    /// 与气泡里的字同一号：写下的这句发出去就是对话里的那颗气泡
+    static let bodyFont = NSFont.systemFont(ofSize: Typography.readingSize)
     var placeholder = ""
     var placeholderColor = NSColor.clear
     var maxLines = 1

@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// 输入框里的圆钮（看得见的 36，点得到的 44）：＋ 与主按钮（`SendGlyph`）同一个。
+/// 输入框里的圆钮（看得见的 40，点得到的 44）：＋ 与主按钮（`SendGlyph`）同一个。
 struct CircleGlyph<Content: View>: View {
     let fill: Color
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         content()
-            .frame(width: 36, height: 36)
+            .frame(width: 40, height: 40)
             .background(fill, in: .circle)
             .frame(width: 44, height: 44)
             .contentShape(.circle)
@@ -79,7 +79,7 @@ struct SendGlyph: View {
     }
 
     /// 发送的箭与发送中的三块 V 一样大：发出时箭原地换成往上爬的 V。
-    private static let sendSide: CGFloat = 20
+    private static let sendSide: CGFloat = 22
 
     /// 发送中 = 话在路上，与会话状态标同一个：循环交给 `LoopLayer.climb`；减弱动态效果时是状态标同一个静止符号。
     @ViewBuilder private var onTheWay: some View {
