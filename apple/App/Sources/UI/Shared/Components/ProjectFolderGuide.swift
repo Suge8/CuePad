@@ -134,9 +134,9 @@ nonisolated struct FolderGuide: Sendable, Equatable {
     static func read(host: String?, from store: isolated CueStore) throws -> FolderGuide {
         let projects = try store.projects(), bindings = try store.directoryBindings()
         let unbound = projects.filter { !ProjectFolders.isBound($0.id, bindings: bindings, host: host) }
-        // 建议只有与没绑的项目同名的文件夹（`suggestions`）：先只留这些再逐个项目配；项目都绑了就不读会话（会话状态一变不必重读）
+        // 建议只有与没绑的项目同名的文件夹（`suggestions`）：只读这些文件夹，订阅也只依赖它们里的会话，别的会话状态一变不重读
         let names = Set(unbound.map { $0.name.lowercased() })
-        let folders = names.isEmpty ? [] : try store.sessionFolders().filter { names.contains($0.folder.lowercased()) }
+        let folders = names.isEmpty ? [] : try store.sessionFolders(named: names)
         var suggestions: [UUID: [ProjectFolders.Candidate]] = [:]
         for project in unbound {
             let candidates = ProjectFolders.candidates(folders: folders, bindings: bindings, projects: projects, excluding: project.id)

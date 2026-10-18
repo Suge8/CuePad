@@ -134,12 +134,24 @@ extension CueStore {
 
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
-  public func sessionFolders() throws -> [SessionFolder] {
+  public func sessionFolders() throws -> [SessionFolder] { try folders(where: Self.hasFolder, []) }
+
+  /// 同上，只要名字（小写）在 `names` 里的文件夹（不分大小写，同 `ProjectFolders.suggestions`）。订阅只依赖这些文件夹里的会话（`narrow`）：
+  /// 别的会话状态变化不叫醒它——项目引导曾在每次会话状态变化时把全部会话按文件夹重新聚合一遍。
+  public func sessionFolders(named names: Set<String>) throws -> [SessionFolder] {
+    try narrow(.piSessionStates, column: "folder", candidates: Self.hasFolder, to: { names.contains($0.lowercased()) }) { rows in
+      rows.isEmpty ? [] : try folders(where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
+    }
+  }
+
+  private static let hasFolder = "folder IS NOT NULL AND folder != ''"
+
+  private func folders(where condition: String, _ arguments: [any SQLBindable]) throws -> [SessionFolder] {
     try db.query(
       """
       SELECT hostID, folder, sessionID, projectID, count(*), max(stateSince) FROM piSessionStates
-      WHERE folder IS NOT NULL AND folder != '' GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
-      """
+      WHERE \(condition) GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
+      """, arguments
     ) { SessionFolder(hostID: $0.text(0), folder: $0.text(1), sessionID: $0.text(2), projectID: $0.uuidOrNil(3), count: Int($0.int(4))) }
   }
 }
