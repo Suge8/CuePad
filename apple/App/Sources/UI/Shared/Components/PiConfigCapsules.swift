@@ -4,7 +4,7 @@ import SwiftUI
 /// 模型胶囊：模型的标志（`BrandMark.model`）+ 模型短名（没有当前模型时写 `unnamed`）。iOS 点开是系统菜单（`MenuButton`）；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
 /// SwiftUI 在 Mac 上把菜单项里的图片丢掉）：分组标题带这一组的标志（提供方或 Agent 的产品标志），每个模型带它自己的标志。
 /// 有订阅额度的提供方：标志外一圈细环是卡着的那个窗口还剩多少（`ModelBadge`），没给组名的分组标题写各窗口还剩多少
-/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`QuotaMoments`）。
+/// （`PiModelLabel.title`，Mac 的 AppKit 菜单同一份，见 `PiConfigControls.open`）；到了重置时刻随即按已重置画（`Moments`）。
 struct PiModelCapsule: View {
     let groups: [PiModelGroup]
     let current: PiModelOption?
@@ -19,7 +19,7 @@ struct PiModelCapsule: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        QuotaMoments(quotas) { now in capsule(at: now) }
+        Moments(next: quotas.nextReset(after:)) { now in capsule(at: now) }
     }
 
     @ViewBuilder private func capsule(at now: Date) -> some View {

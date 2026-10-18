@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 只在给定的时刻重画的内容：此刻画一次，睡到 `next` 给的下一个时刻（等到那一刻是业务语义：`task(id:)` 睡到那一刻，不周期刷新）再画，
-/// 画完再等下一个；输入变了照常重画、重新算下一个时刻。额度的重置（`QuotaMoments`）与计时文字（`LiveText`）都经它。
+/// 画完再等下一个；输入变了照常重画、重新算下一个时刻。额度的重置（`nextReset(after:)`）与计时文字（`LiveText`）都经它。
 /// 否决的方案：`TimelineView(.explicit(时刻))`——iOS 27 模拟器实测只在头一次画时调用内容（给的日期是时刻表里第一个时刻，
 /// 还没到就按已到画），到了那一刻并不重画。
 struct Moments<Content: View>: View {
