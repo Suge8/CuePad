@@ -98,7 +98,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 
 做不到、不列的内置命令：`/settings`、`/scoped-models`、`/login`、`/logout`、`/resume`、`/tree`、`/fork`、`/trust`、`/llama`、`/bug`（终端里的选择器或弹窗，没有对应接口）；`/session`、`/hotkeys`、`/changelog`、`/copy`（只往终端打印或写 Mac 剪贴板，手机看不到）；`/export`、`/share`、`/import`（没有扩展接口，且涉及 Mac 上的文件与外发）；`/quit`（已有"结束会话"；RPC 模式空闲时不检查退出请求，托管进程靠它退不掉）。
 
-子代理：FireCode 的子代理是同进程里的 `print` 模式子会话，不开 socket，不会作为独立会话出现。父会话的 `info.subagents` 原样转述 FireCode 发布在 `firecode:subagents` 频道的名册（发布方是 FireCode 的 `master/roster.ts`，装在 `~/.pi/agent/extensions/firecode/source/`；整份、内容变了才发，停用发空名册；扩展不读它的档案、会话文件或 `subagents/` 目录，没装带名册的 FireCode 就没有子代理）：`[{name, role, state, action, startedAt, settledAt, model}]`，按启动序。`state` 是 FireCode 活动列表的分组原文——`running`、`review`（审查中）、`done`（已交回结果）、`failed`、`interrupted`（被中断）、`idle`（空闲）；`action` 是在做什么的一句话（FireCode 的界面语言，≤120 字符：当前工具、审查进度，落定后是结果首句或失败原因，空闲为空串）；`startedAt` 是本次运行的开始、`settledAt` 是落定时刻（毫秒，可空），界面自己算时长；`model` 是实际用的模型原子 `provider/model`（可空）。`PiSession.subagents` 给界面，同步记录里是结构化的子代理列表（`PiSubagentState`，状态读成可扩展的 `Open<PiSubagentPhase>`）；动作文字随每次工具调用变，记录器把它和会话状态的细节一起合并写入，名册的人员、角色或状态变了才立即写。
+子代理：FireCode 的子代理是同进程里的 `print` 模式子会话。扩展只服务终端与 RPC 会话（会话开始时建、关闭时整体拆掉），子会话里什么都不做：不开 socket、不作为独立会话出现，也不碰托管进程的空闲自退——子会话歇下或被移除都不算进程空闲。父会话的 `info.subagents` 原样转述 FireCode 发布在 `firecode:subagents` 频道的名册（发布方是 FireCode 的 `master/roster.ts`，装在 `~/.pi/agent/extensions/firecode/source/`；整份、内容变了才发，停用发空名册；扩展不读它的档案、会话文件或 `subagents/` 目录，没装带名册的 FireCode 就没有子代理）：`[{name, role, state, action, startedAt, settledAt, model}]`，按启动序。`state` 是 FireCode 活动列表的分组原文——`running`、`review`（审查中）、`done`（已交回结果）、`failed`、`interrupted`（被中断）、`idle`（空闲）；`action` 是在做什么的一句话（FireCode 的界面语言，≤120 字符：当前工具、审查进度，落定后是结果首句或失败原因，空闲为空串）；`startedAt` 是本次运行的开始、`settledAt` 是落定时刻（毫秒，可空），界面自己算时长；`model` 是实际用的模型原子 `provider/model`（可空）。`PiSession.subagents` 给界面，同步记录里是结构化的子代理列表（`PiSubagentState`，状态读成可扩展的 `Open<PiSubagentPhase>`）；动作文字随每次工具调用变，记录器把它和会话状态的细节一起合并写入，名册的人员、角色或状态变了才立即写。
 
 `detail`（可空）：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。
 
@@ -123,7 +123,7 @@ CuePad → 扩展（都带 `id`）：
 
 会话结束 = 连接断开（无心跳、无轮询）。有 `bye` 是正常退出；没有就是进程被强杀，此时 socket 文件会残留，由进程退出通知（kqueue）触发删除，启动扫描遇到 `ECONNREFUSED` 且文件名里的 pid 已不存在也会删。pid 还活着不删、也不重试：扩展先 listen 再把 socket 收紧成 0600（客户端只连 0600 的），收紧产生的目录事件会再触发一次扫描。
 
-托管：CuePad 启动后台 Pi 时带环境变量 `CUEPAD_HOSTED`，值是正整数，表示空闲多少秒后自己退出（`PiRuntime` 默认 1800，测试给几秒）；没有这个变量或值不是正数就不是托管。扩展读出后存在进程内（/reload 重新载入扩展后仍认得）并从环境里删掉，所以 Agent 起的子进程（命令、里面再起的 pi）看不到它、不会也自认托管；扩展据此在 hello 里报 `hosted: true`，并在空闲（不在工作、没有等你回答的弹窗、子代理也都歇下）满这么久时给自己发 SIGTERM；期间状态一变就重新计时。托管进程的标准输入是它自己握着两端的管道，永远读不到 EOF；它不随 CuePad 退出，只因空闲满时限、SIGTERM（结束、让出、不兼容）或自身崩溃而退出。读不懂这个约定的扩展（协议号不同，或把值当别的格式）起出的进程既不自退、也不被认作托管，所以 `PiRuntime` 启动后核对连上的会话报了 `hosted` 且协议号相同，不然让它退出并抛 `PiHostError.extensionMismatch`。
+托管：CuePad 启动后台 Pi 时带环境变量 `CUEPAD_HOSTED`，值是正整数，表示空闲多少秒后自己退出（`PiRuntime` 默认 1800，测试给几秒）；没有这个变量或值不是正数就不是托管。扩展读出后存在进程内（/reload 重新载入扩展后仍认得）并从环境里删掉，所以 Agent 起的子进程（命令、里面再起的 pi）看不到它、不会也自认托管；扩展据此在 hello 里报 `hosted: true`，并在它服务的会话空闲（不在工作、没有等你回答的弹窗、子代理也都歇下）满这么久时给自己发 SIGTERM；期间状态一变就重新计时。托管进程的标准输入是它自己握着两端的管道，永远读不到 EOF；它不随 CuePad 退出，只因空闲满时限、SIGTERM（结束、让出、不兼容）或自身崩溃而退出。读不懂这个约定的扩展（协议号不同，或把值当别的格式）起出的进程既不自退、也不被认作托管，所以 `PiRuntime` 启动后核对连上的会话报了 `hosted` 且协议号相同，不然让它退出并抛 `PiHostError.extensionMismatch`。
 
 ## 多客户端
 
