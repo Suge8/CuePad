@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 菜单栏图标。图标是模板图，随菜单栏明暗自动着色。
+/// 菜单栏图标（`Icon.menuBar`，同 logo 的墨块符号）。图标是模板图，随菜单栏明暗自动着色；没有状态，一直是这一个形。
 /// 左键弹出面板；右键（或 Control 点击）弹出菜单。
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -13,7 +13,10 @@ final class StatusItemController: NSObject {
         self.togglePanel = togglePanel
         self.toggleWindow = toggleWindow
         super.init()
-        guard let image = NSImage(named: "MenuBarIcon") else { preconditionFailure("缺少 MenuBarIcon 资源") }
+        // 20pt 的符号实高约 16pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色
+        guard let image = Icon.menuBar.platformImage?.withSymbolConfiguration(.init(pointSize: 20, weight: .regular)) else {
+            preconditionFailure("缺少菜单栏符号 cue.menubar")
+        }
         image.isTemplate = true
         guard let button = item.button else { preconditionFailure("菜单栏图标没有按钮") }
         button.image = image

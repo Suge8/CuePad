@@ -66,7 +66,7 @@ struct ProjectSwitcher: View {
         }
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
-        let image = ProjectGlyph.icon(project.icon).platformImage?
+        let image = ProjectGlyph.icon(project).platformImage?
             .withSymbolConfiguration(configuration) ?? NSImage()
         image.isTemplate = false
         return image
