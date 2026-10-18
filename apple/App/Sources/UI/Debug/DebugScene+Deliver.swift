@@ -46,8 +46,38 @@ extension DebugScene {
         _ = try await store.addPreviews(filesAt: [try file("测试报告.pdf", reportPDF())], title: "重连测试报告", sessionID: "deploy")
     }
 
+    /// `-CuePadAllKinds YES|<n>`：空着的 scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
+    /// 标题"模型"），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
+    /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
+    /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
+    static func seedAllKinds(_ store: CueStore, upTo count: Int?) async {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-kinds", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func file(_ name: String, _ data: Data) -> URL? {
+            let url = directory.appending(path: name)
+            return (try? data.write(to: url)).map { url }
+        }
+        let filler = Data("placeholder".utf8)
+        // 字节与别处的截图不同：附件按内容存一份，同样的字节会被别的演示数据重新写回来
+        let away = phonePNG(covered: true) + Data("away".utf8)
+        let batches: [(String, [URL?])] = [
+            ("模型", [file("模型.usdz", filler), file("还在路上.png", away)]),
+            ("录音与录屏", [file("录音.m4a", filler), file("录屏.mov", filler)]),
+            ("文稿与表格", [file("需求.docx", filler), file("数据.xlsx", filler)]),
+            ("汇报与报告", [file("汇报.pptx", filler), file("报告.pdf", reportPDF())]),
+            ("日志与说明", [file("日志.txt", Data("12:00 ok\n12:01 retry\n".utf8)), file("改动说明.md", Data(pricingNotes.utf8))]),
+            ("网页与截图", [file("定价页.html", Data(pricingPage.utf8)), file("预发.png", phonePNG(covered: false))]),
+        ]
+        for (title, files) in batches.prefix(count ?? batches.count) {
+            guard let added = try? await store.addPreviews(filesAt: files.compactMap { $0 }, title: title, sessionID: "scratch") else { continue }
+            for entry in added where entry.preview.name == "还在路上.png" {
+                if let stored = store.files.fileURL(for: entry.preview.hash) { try? FileManager.default.removeItem(at: stored) }
+            }
+        }
+    }
+
     /// 手机登录页的截图：`covered` 时键盘挡住了登录钮。
-    private static func phonePNG(covered: Bool) -> Data {
+    static func phonePNG(covered: Bool) -> Data {
         let view = ZStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("登录").font(.system(size: 30, weight: .bold)).padding(.top, 70)
@@ -91,7 +121,7 @@ extension DebugScene {
     }
 
     /// 两页的 PDF：表格样子的对比。
-    private static func reportPDF() -> Data {
+    static func reportPDF() -> Data {
         let page = VStack(alignment: .leading, spacing: 12) {
             Text("定价对比").font(.system(size: 28, weight: .bold))
             ForEach(["基础 · ¥0 · 3 个项目", "专业 · ¥68 · 不限项目", "团队 · ¥198 · 10 人协作"], id: \.self) { line in

@@ -6,14 +6,14 @@ import UIKit
 import AppKit
 #endif
 
-/// 全 App 的图标，按意思取名；图从哪来（自家的墨块符号 cue.*，或还没画到的系统符号）只在 `source` 一处写，往后每批只改这里的映射。
+/// 全 App 的图标，按意思取名；图从哪来（自家的墨块符号 cue.*；只有项目图标还是系统符号）只在 `source` 一处写。
 /// 别处不写符号名、不调 `Image(systemName:)` 一类（lint 拦）：界面用 `Image(_:)`、`Label(_:icon:)`、`Button(_:icon:)`、`Menu(_:icon:)`，
-/// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标暂按项目存的名字走 `project`（第 5 批收成自家图标表）。
+/// UIKit、AppKit 的菜单与工具条用 `platformImage`。品牌标志（`BrandMark`）不在这里；项目图标按项目存的系统符号名走 `project`。
 ///
 /// 着色（墨块符号的第二层是点睛，只是小部件，主体都在主层，见 design/tools/cue-symbols.py）：
 /// - 平时点睛是这一处前景色的次一级（层级渲染：墨色前景时就是次墨），不用另上色；单色场合（系统菜单、工具栏）照系统。
 /// - 选中或正在发生时点睛靛青、状态图标的点按状态色（调色板渲染）：用 `IconImage(_:accent:)`，只在那个状态存在时给。
-/// - 系统符号照原样，不受这两条影响。
+/// - 系统符号（项目图标）照原样，不受这两条影响。
 nonisolated enum Icon: Hashable, Sendable {
     // 导航与页面入口
     case cue, cueAsleep, cueLooking, cueHappy
@@ -38,10 +38,8 @@ nonisolated enum Icon: Hashable, Sendable {
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, wakeSettings, mail
     case profile, name, autoApprove, hotkey, talkToCue, appearance, testConnection, updates
-    // 文件预览的类型
-    case web, markdown, video, audio, pdf, document, spreadsheet, presentation, model, plainText
-    /// 交付物：还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
-    case downloading, play, file, inspect3D
+    // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
+    case audio, document, downloading, play, file, inspect3D
     /// 项目存的图标名（系统符号名，`ProjectGlyph` 定能认哪些）。
     case project(String)
 
@@ -133,71 +131,67 @@ nonisolated enum Icon: Hashable, Sendable {
         case .filter: .ink("filter")
         case .extensionNote: .ink("puzzle")
 
-        case .save, .checked: .system("checkmark")
-        case .endSession: .system("stop.circle")
-        case .handOff: .system("paperplane")
-        case .delivered: .system("paperplane.fill")
-        case .steer, .wakeActivity: .system("bolt")
-        case .queued: .system("clock")
-        case .retry: .system("arrow.clockwise")
-        case .toLatest: .system("arrow.down")
-        case .fetching, .updates: .system("arrow.down.circle")
-        case .compact: .system("arrow.down.right.and.arrow.up.left")
-        case .declined: .system("hand.raised")
-        case .cannotSend: .system("nosign")
-        case .mac: .system("desktopcomputer")
-        case .yourAnswer: .system("arrowshape.turn.up.left.fill")
-        case .sendAnswer: .system("arrow.up.circle.fill")
-        case .above, .floated, .earlier: .system("arrow.up")
-        case .photo: .system("photo")
-        case .photoLibrary: .system("photo.on.rectangle")
-        case .camera: .system("camera")
-        case .pickCards, .presentation: .system("rectangle.on.rectangle")
-        case .expandEdit: .system("text.cursor")
-        case .selectText: .system("selection.pin.in.out")
-        case .dismissKeyboard: .system("keyboard.chevron.compact.down")
-        case .variables: .system("curlybraces")
-        case .terminal: .system("terminal")
-        case .terminalWindow: .system("macwindow")
-        case .readFile, .document: .system("doc.text")
-        case .tool: .system("wrench.and.screwdriver")
-        case .said: .system("text.bubble")
-        case .started: .system("play.circle")
-        case .added: .system("plus.circle")
-        case .branch: .system("arrow.triangle.branch")
-        case .markUnread: .system("circle.fill")
-        case .fireCode: .system("flame")
-        case .thinking: .system("ellipsis.bubble")
-        case .researcher: .system("magnifyingglass")
-        case .engineer: .system("hammer.fill")
-        case .batchWorker: .system("square.stack.3d.up.fill")
-        case .designer: .system("paintbrush.pointed.fill")
-        case .sentinel: .system("binoculars.fill")
-        case .subagent: .system("person.fill")
-        case .memory: .system("brain")
-        case .wakeEnabled: .system("power")
-        case .wakeMessage, .talkToCue: .system("bubble.left")
-        case .wakeIdle: .system("eye")
-        case .wakeReminder: .system("alarm")
-        case .wakeSettings: .system("arrow.left.arrow.right")
-        case .mail: .system("envelope")
-        case .profile: .system("face.smiling")
-        case .name: .system("tag")
-        case .autoApprove: .system("checkmark.shield")
-        case .hotkey: .system("keyboard")
-        case .appearance: .system("sun.max")
-        case .testConnection: .system("antenna.radiowaves.left.and.right")
-        case .web: .system("safari")
-        case .markdown: .system("text.document")
-        case .video: .system("film")
-        case .audio: .system("waveform")
-        case .pdf: .system("doc.richtext")
-        case .spreadsheet: .system("tablecells")
-        case .model: .system("cube")
-        case .plainText: .system("doc.plaintext")
-        case .downloading: .system("icloud.and.arrow.down")
-        case .file: .system("doc")
-        case .inspect3D: .system("rotate.3d")
+        case .save, .checked: .ink("tick")
+        case .endSession: .ink("ring.stop")
+        case .handOff: .ink("plane")
+        case .delivered: .ink("plane.done")
+        case .steer: .ink("bolt")
+        case .queued: .ink("clock")
+        case .retry: .ink("reload")
+        case .toLatest: .ink("arrow.down")
+        case .fetching: .ink("ring.down")
+        case .compact: .ink("compact")
+        case .declined: .ink("hand")
+        case .cannotSend: .ink("ended")
+        case .mac: .ink("mac")
+        case .yourAnswer: .ink("restore")
+        case .sendAnswer: .ink("badge.up")
+        case .above, .floated, .earlier: .ink("send")
+        case .photo: .ink("photo")
+        case .photoLibrary: .ink("photos")
+        case .camera: .ink("camera")
+        case .pickCards: .ink("conflict")
+        case .expandEdit: .ink("cursor")
+        case .selectText: .ink("select")
+        case .dismissKeyboard: .ink("keyboard.down")
+        case .variables: .ink("braces")
+        case .terminal: .ink("terminal")
+        case .terminalWindow: .ink("window")
+        case .readFile: .ink("doc")
+        case .tool: .ink("wrench")
+        case .said: .ink("bubble.text")
+        case .started: .ink("ring.play")
+        case .added: .ink("ring.plus")
+        case .branch: .ink("branch")
+        case .markUnread: .ink("dot")
+        case .fireCode: .ink("flame")
+        case .thinking: .ink("bubble.dots")
+        case .researcher: .ink("search")
+        case .engineer: .ink("hammer")
+        case .batchWorker: .ink("layers")
+        case .designer: .ink("brush")
+        case .sentinel: .ink("eye")
+        case .subagent: .ink("person")
+        case .memory: .ink("bookmark")
+        case .wakeEnabled: .ink("power")
+        case .wakeActivity: .ink("bolt")
+        case .wakeMessage, .talkToCue: .ink("bubble")
+        case .wakeIdle: .ink("eye")
+        case .wakeReminder: .ink("alarm")
+        case .wakeSettings: .ink("swap")
+        case .mail: .ink("mail")
+        case .profile: .ink("face")
+        case .name: .ink("tag")
+        case .autoApprove: .ink("shield.tick")
+        case .hotkey: .ink("keyboard")
+        case .appearance: .ink("sun")
+        case .testConnection: .ink("signal")
+        case .updates: .ink("badge.down")
+        case .audio: .ink("wave")
+        case .document: .ink("doc")
+        case .downloading: .ink("cloud.down")
+        case .file: .ink("doc.blank")
+        case .inspect3D: .ink("cube")
         case .project(let name): .system(name)
         }
     }

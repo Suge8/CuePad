@@ -44,7 +44,7 @@ public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
   /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
-  /// 在做的事：有在做的任务，或有不归没做完的事的活会话。
+  /// 在做的事：有在做的任务，或有不归没做完的事的活会话（不读整块看板的是 `CueStore.cueBoardActive`）。
   public var isActive: Bool { !sessions.isEmpty || tasks.contains(where: \.isActive) }
 }
 
@@ -579,6 +579,13 @@ extension CueStore {
     return try projects().map { CueProject(id: $0.id, name: $0.name, hasFolder: bound.contains($0.id)) }
   }
 
+  /// 看板在不在做事（`CueBoard.isActive`），不读整块看板：有不归没做完的事的活会话就是，否则才看各件事。
+  /// 值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
+  public func cueBoardActive() throws -> Bool {
+    try db.first("SELECT 1 FROM piSessionStates WHERE \(Self.isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
+      || boardItems(try topTasks(where: Self.onBoard)).contains(where: \.isActive)
+  }
+
   /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
   /// 在做的（`CueBoard.isActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
   public func cueBoard() throws -> CueBoard {
@@ -600,7 +607,7 @@ extension CueStore {
   static func isLoose(_ alias: String) -> String {
     let open = "c.deletedAt IS NULL AND c.completedAt IS NULL AND c.archivedAt IS NULL"
     return """
-      \(alias).state <> '\(PiWorkState.ended.rawValue)'
+      \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
         AND NOT EXISTS (
           SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(open) AND c.todoAt IS NOT NULL)
         AND NOT EXISTS (

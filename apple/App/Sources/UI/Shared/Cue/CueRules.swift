@@ -190,9 +190,6 @@ nonisolated extension CueSnapshot {
 /// Cue 是总控，一处说清"有几件在等你"；会话那一份不在 Agent 入口上另挂一个数，免得同一件事报两遍。
 nonisolated enum CueWaiting {
     static func count(in store: isolated CueStore) throws -> Int {
-        let asked = try store.cueMessagesWaitingForYou().count
-        let onDuty = try store.cueOnDuty()
-        let sessions = try store.piSessionPage(.live).items.count { $0.state.asksYou(cueOnDuty: onDuty) }
-        return asked + sessions
+        try store.cueMessagesWaitingForYou().count + store.sessionsAskingYou()
     }
 }

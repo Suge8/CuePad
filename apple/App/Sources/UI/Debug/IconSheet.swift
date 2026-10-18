@@ -1,22 +1,27 @@
 #if os(iOS) && DEBUG
 import SwiftUI
 
-/// 图标样张（`-CuePadScene icons`，iPad 竖屏一屏放得下）：正在画的这一批墨块符号经 `Icon` 取图，每个四档字号（12、17、22、34pt）各画两遍——
+/// 图标样张（`-CuePadScene icons`，iPad 竖屏，一屏 24 行，`-CuePadSheetPage` 翻页）：正在画的这一批墨块符号经 `Icon` 取图，每个四档字号（12、17、22、34pt）各画两遍——
 /// 左边是 App 里的样子（层级渲染，点睛是次一级），右边是单色（系统菜单、工具栏里的样子，所有层同色，靠刻缝分开）。
 struct IconSheet: View {
     @Environment(\.palette) private var palette
 
     private static let icons: [(String, Icon)] = [
-        ("complete", .complete), ("reopen", .reopen), ("restore", .restore), ("start", .start), ("indent", .indent), ("outdent", .outdent),
-        ("link", .link), ("unlink", .unlink), ("folder", .folder), ("newProject", .newProject), ("unbindFolder", .unbindFolder),
-        ("folderMissing", .folderMissing), ("resource", .resource), ("pin", .pin), ("unpin", .unpin), ("copy", .copy), ("conflict", .conflict),
-        ("share", .share), ("saveAsIdea", .saveAsIdea), ("write", .write), ("rename", .rename), ("choose", .choose),
-        ("all", .all), ("allSessions", .allSessions), ("allProjects", .allProjects), ("filter", .filter), ("extensionNote", .extensionNote),
+        ("memory", .memory), ("wakeEnabled", .wakeEnabled), ("wakeMessage", .wakeMessage), ("wakeActivity", .wakeActivity), ("wakeIdle", .wakeIdle), ("wakeReminder", .wakeReminder),
+        ("wakeSettings", .wakeSettings), ("mail", .mail), ("profile", .profile), ("name", .name), ("autoApprove", .autoApprove), ("hotkey", .hotkey),
+        ("talkToCue", .talkToCue), ("appearance", .appearance), ("testConnection", .testConnection), ("updates", .updates), ("audio", .audio), ("document", .document),
+        ("downloading", .downloading), ("file", .file), ("inspect3D", .inspect3D), ("readFile", .readFile), ("sendAnswer", .sendAnswer),
     ]
     private static let sizes: [CGFloat] = [12, 17, 22, 34]
+    /// 一屏放 `perPage` 行；多出来的配 `-CuePadSheetPage 2` 起看后面的。
+    private static let perPage = 24
+    private static var page: ArraySlice<(String, Icon)> {
+        let start = (max(DebugScene.defaults.integer(forKey: "CuePadSheetPage"), 1) - 1) * perPage
+        return icons[min(start, icons.count)..<min(start + perPage, icons.count)]
+    }
 
     var body: some View {
-        column(Self.icons[...])
+        column(Self.page)
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(palette.desk)

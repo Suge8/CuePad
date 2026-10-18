@@ -46,7 +46,7 @@ enum CloudKitSchema {
   static func generate() async throws -> String {
     let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-schema-\(UUID().uuidString)", directoryHint: .isDirectory)
     defer { try? FileManager.default.removeItem(at: directory) }
-    let store = try CueStore(url: directory.appending(path: "cuepad.db"))
+    let store = try CueStore(location: .isolated(directory))
 
     var types: [String] = []
     for table in Table.synced {

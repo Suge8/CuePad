@@ -85,6 +85,12 @@ final class AppServices {
     /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
+    /// 在拉的那一拉与它开拉的时刻（`pull`）：立即同步、按节奏的拉取与收到推送共用。
+    @ObservationIgnored var pulling: (task: Task<Void, Never>, began: ContinuousClock.Instant)?
+    /// 最近一拉开拉的时刻（`pull`）。
+    @ObservationIgnored var lastPull: ContinuousClock.Instant?
+    /// 同步的启动（`startSync`），结果是启动完的时刻（没启动成为 nil）：拉取等它，冷启动时先到的推送不空拉。
+    @ObservationIgnored var syncStarting: Task<ContinuousClock.Instant?, Never>?
     /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它，不另拉一遍。
     var syncing: Task<Void, Never>?
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
@@ -324,7 +330,7 @@ final class AppServices {
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let store = try CueStore(url: location.databaseURL, timing: mac.timing)
+        let store = try CueStore(location: location, timing: mac.timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -358,7 +364,7 @@ final class AppServices {
     init(
         location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general, timing: Timing = .system
     ) throws {
-        let store = try CueStore(url: location.databaseURL, timing: timing)
+        let store = try CueStore(location: location, timing: timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location

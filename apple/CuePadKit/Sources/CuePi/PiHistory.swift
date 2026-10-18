@@ -23,6 +23,8 @@ public struct PiSessionHistory: Sendable, Equatable {
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
+    /// 读到 `offset` 那次文件的修改时间（列目录或读之前取的）
+    var modified: Date?
     var fingerprint: UInt64 = 0
     var fingerprintLength = 0
     var sessionID: String?
@@ -39,6 +41,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var recap = PiRecap()
     /// 解码时认出这个文件不是会话列表里的会话（如 Codex 子代理自己的会话文件，与主会话同层）：索引器不发出它
     var excluded = false
+
+    /// 文件从上次读完就没动过：大小正好读到头、修改时间与那次相同。回填时据此不打开文件——启动时绝大多数会话文件都这样，
+    /// 逐个打开、核对开头与偏移曾占回填的八成。被改写或替换的文件修改时间会变，照常走读时的核对（`isResumable`）。
+    func isCurrent(size: UInt64, modified: Date) -> Bool { offset == size && self.modified == modified }
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
@@ -78,9 +84,6 @@ public struct PiHistoryUpdate: Sendable {
     public var includesTranscript: Bool
     /// 会话文件的修改时间（列目录或读文件时取的）
     public var modified: Date?
-    /// 算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
-    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。文件名就是会话 id 的（Claude Code）总算（`SessionFileFormat`）。
-    public var isSession: Bool
     /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
@@ -93,7 +96,7 @@ public struct PiHistoryUpdate: Sendable {
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
     /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
-    /// `sessionFiles` 是此刻全部会话文件（文件头还没写好的不算）：不在其中的旧索引（文件已删除、按文件名记下的等）可以丢掉
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉
     case backfillFinished(sessionFiles: [URL])
 }
 
@@ -111,6 +114,10 @@ struct SessionFileFormat: Sendable {
     let keepsFilesOpen: Bool
     /// 文件名就是会话 id（Claude Code）：文件头还没读到也算会话
     let nameIsSessionID: Bool
+
+    /// 读到 `checkpoint` 为止算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
+    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。文件名就是会话 id 的（Claude Code）总算。
+    func isSession(_ checkpoint: PiHistoryCheckpoint) -> Bool { checkpoint.sessionID != nil || nameIsSessionID }
 
     static func of(_ agent: AgentKind) -> SessionFileFormat? {
         switch agent {
@@ -154,12 +161,13 @@ public enum PiHistory {
         let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
         if !wanted { transcript.messages = [] }
         state.offset = consumed
+        state.modified = modified
         try refreshFingerprint(&state, handle: handle)
         let history = PiSessionHistory(
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
-            modified: modified, isSession: history.sessionID != nil || format.nameIsSessionID, bytesRead: Int(consumed - start))
+            modified: modified, bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。

@@ -33,7 +33,7 @@ struct IOSTests {
         let image = try #require(app.pasteboard.data(forPasteboardType: "public.png", inItemSet: IndexSet(integer: 1))?.first ?? nil)
         #expect(UIImage(data: image)?.size == CGSize(width: 4, height: 4))
         #expect(items[2]["public.utf8-plain-text"] as? String == "\n后")
-        #expect(try await app.services.store.sendRecords().isEmpty)
+        #expect(try RawDB(app.services.location.databaseURL).count("sendRecords") == 0)
     }
 }
 #endif

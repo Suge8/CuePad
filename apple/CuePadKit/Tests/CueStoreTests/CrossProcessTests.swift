@@ -12,7 +12,7 @@ import Testing
     let link = FileManager.default.temporaryDirectory.appending(path: "cuepad-link-\(UUID().uuidString)")
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.directory)
     defer { try? FileManager.default.removeItem(at: link) }
-    let viaLink = try CueStore(url: link.appending(path: "cuepad.db"))
+    let viaLink = try CueStore(location: .isolated(link))
     var values = fixture.store.observe { try $0.cards(in: nil).count }.makeAsyncIterator()
     #expect(try await values.next() == 0)
 

@@ -80,7 +80,7 @@ import Testing
 
     try await rig.coordinator.pulled([send], [])
 
-    #expect(try await store.sendRecords().map(\.targetKind) == [.unknown("carrierPigeon")])
+    #expect(try RawDB(rig.fixture.url).rows("SELECT targetKind FROM sendRecords") == [["carrierPigeon"]])
     let pushedSend = try #require(await rig.coordinator.record(for: send.recordID))  // 原样推回
     #expect(pushedSend["targetKind"] as? String == "carrierPigeon")
   }

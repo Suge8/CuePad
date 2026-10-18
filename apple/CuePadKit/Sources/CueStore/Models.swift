@@ -12,6 +12,8 @@ public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
   case cueMessages, cueLines, cueProfile, cueState, cueSummaries, macPresence, macAgents
+  /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
+  case writeCounter
 }
 
 extension Table {
@@ -48,6 +50,7 @@ extension Table {
     case .macPresence: MacPresence.columns
     case .macAgents: MacAgents.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
+    case .writeCounter: ["seq"]
     }
   }
 }

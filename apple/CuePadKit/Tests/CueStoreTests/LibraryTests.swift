@@ -106,17 +106,14 @@ import Testing
     try await store.updateCard(card.id) { $0.body = "prompt v2" }
     try await store.purgeCard(card.id)
 
-    let records = try await store.sendRecords()
-    #expect(records.map(\.content) == ["prompt v1"])
-    #expect(records.first?.cardID == nil)
-    #expect(records.first?.targetName == "fix bug")
+    #expect(try RawDB(fixture.url).rows("SELECT content, cardID, targetName FROM sendRecords") == [["prompt v1", "NULL", "fix bug"]])
   }
 
   // MARK: 结构版本
 
   @Test func reopeningTheFileKeepsData() async throws {
     let card = try await store.createCard(in: nil, body: "persisted")
-    let reopened = try CueStore(url: fixture.url)
+    let reopened = try CueStore(location: .isolated(fixture.directory))
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
@@ -129,11 +126,19 @@ import Testing
     _ = try await store.trashCard(trashed.id)
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
-    // 退回 50：撤掉 52、54 加的列（53 重建触发器，留着新的照样能升）
+    // 退回 50：撤掉 52、54 加的列与 55 加的索引（53 重建触发器、55 重建的类型索引，留着新的照样能升）
+    let added = try RawDB(fixture.url).rows(
+      """
+      SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
+        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open')
+      """)
     try RawDB(fixture.url).exec(
-      "ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name; PRAGMA user_version = 50;")
+      """
+      ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
+      \(added.map { "DROP INDEX \($0[0]);" }.joined()) PRAGMA user_version = 50;
+      """)
 
-    let upgraded = try CueStore(url: fixture.url)
+    let upgraded = try CueStore(location: .isolated(fixture.directory))
     let converted = try #require(try await upgraded.card(card.id))
     #expect(converted.body == "上\n---\n中 ---split--- 夹着\n---\n下" && converted.modifiedAt > before)
     #expect(try await upgraded.card(plain.id)?.modifiedAt == untouched)
@@ -149,6 +154,6 @@ import Testing
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = \(version);")
-    #expect(throws: error) { try CueStore(url: url) }
+    #expect(throws: error) { try CueStore(location: .isolated(url.deletingLastPathComponent())) }
   }
 }

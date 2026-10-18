@@ -38,8 +38,9 @@ struct TasksScreen: View {
         }
     }
 
+    /// 行按需建（懒加载栈，组里的行也是，`TaskOutline.lazyAfter`）：普通栈在进页那一圈把所有行都建出来量一遍，150 条待办进页约 380ms。
     private func content(_ board: TaskBoard) -> some View {
-        VStack(alignment: .leading, spacing: 24) {
+        LazyVStack(alignment: .leading, spacing: 24) {
             NewTaskLine(project: navigation.currentProject, projects: workspace.catalog?.projects)
                 .padding(.horizontal, 6)
                 .background(palette.paper, in: .rect(cornerRadius: Self.radius, style: .continuous))
@@ -51,7 +52,7 @@ struct TasksScreen: View {
             }
             if !board.inProgress.isEmpty { inProgress(board) }
             if !board.todo.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 12) {
                     TaskGroupHeader(title: "待办", count: board.counts.todo).padding(.horizontal, 4)
                     ForEach(board.todo) { section($0, in: board) }
                 }
@@ -69,7 +70,7 @@ struct TasksScreen: View {
         return VStack(alignment: .leading, spacing: 8) {
             TaskGroupHeader(title: "进行中", count: board.counts.inProgress).padding(.horizontal, 4)
             paper {
-                TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), gaps: false) { row in
+                TaskOutline(tree: board.tree, roots: board.inProgress.map(\.id), gaps: false, lazyAfter: 0) { row in
                     TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0, project: projects[row.id] ?? nil)
                 }
             }
@@ -81,7 +82,7 @@ struct TasksScreen: View {
         VStack(alignment: .leading, spacing: 6) {
             TaskSectionHeader(project: section.project, count: section.roots.count).padding(.horizontal, 4)
             paper {
-                TaskOutline(tree: board.tree, roots: section.roots) { row in
+                TaskOutline(tree: board.tree, roots: section.roots, lazyAfter: 0) { row in
                     TaskLine(task: row.task, subtasks: board.subtasks[row.id], step: row.depth > 0)
                 }
             }
@@ -121,7 +122,7 @@ struct TasksScreen: View {
             }
             if showsCompleted {
                 paper {
-                    VStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(rows) { TaskLine(task: $0.task, project: $0.project).id($0.id) }
                     }
                 }

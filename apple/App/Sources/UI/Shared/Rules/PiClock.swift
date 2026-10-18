@@ -5,7 +5,7 @@ import SwiftUI
 /// 会话计时怎么读（Mac 与手机同一条）：工作中"运行了 4 分钟"从这段连续处理开始算（思考、工具、等子代理之间切换不重置），
 /// 等你确认"等了 4 分钟"从进入等待算，话还在路上（会话没在跑时）"4 分钟前发出"从发出算，空闲、出错、已结束是"多久前"（`DateLabel`）。哪一种由 `PiShown` 定。
 /// 怎么写只在这里：列表里（Agent 页、侧栏、项目"此刻"、书架）只到分钟、第一分钟写"刚开始 / 刚刚 / 刚发出"，不每秒换字；
-/// 只有会话页顶栏那一个计时到秒，会话行只写时长（`Style`）。界面里是系统时间文本（`live`）：系统只在文字会变的时刻更新它，不经 TimelineView 或定时器重算视图。
+/// 只有会话页顶栏那一个计时到秒，会话行只写时长（`Style`）。界面里经 `LiveText`（`live`）：只在文字会变的时刻重画。
 nonisolated enum PiClock: Hashable, Sendable, Codable {
     case running(since: Date)
     case waiting(since: Date)
@@ -64,7 +64,7 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         }
     }
 
-    /// 界面里的系统时间文本：`Text(.currentDate, format: clock.live(.list))`。
+    /// 界面里的计时文字：`LiveText(style: clock.live(.list))`。
     func live(_ style: Style) -> Live { Live(clock: self, style: style) }
 
     /// 计时的格式：文字就是 `text(now:style:)`，并告诉系统下一次在什么时刻会变——顶栏走字的第一分钟每秒，
@@ -80,14 +80,14 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
 
         func discreteInput(before now: Date) -> Date? { segment(around: now).start.addingTimeInterval(-0.001) }
 
-        /// `now` 所在那一段文字的起点与下一段的起点。
+        /// `now` 所在那一段文字的起点与下一段的起点（严格晚于 `now`，`Date.tick`）。
         private func segment(around now: Date) -> (start: Date, next: Date) {
             let since = clock.since
             let elapsed = max(now.timeIntervalSince(since), 0)
             if style == .span {
                 let step: TimeInterval = elapsed < 3600 ? 60 : elapsed < 86_400 ? 3600 : 86_400
-                let start = since.addingTimeInterval((elapsed / step).rounded(.down) * step)
-                return (start, start.addingTimeInterval(step))
+                let next = since.tick(every: step, after: now)
+                return (next.addingTimeInterval(-step), next)
             }
             if !clock.isRunningClock, elapsed >= 86_400 {
                 let calendar = Calendar.current
@@ -95,8 +95,18 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
                 return (midnight, calendar.date(byAdding: .day, value: 1, to: midnight) ?? now.addingTimeInterval(86_400))
             }
             let step: TimeInterval = elapsed < 60 && style == .header && clock.isRunningClock ? 1 : elapsed < 3600 ? 60 : 3600
-            let start = since.addingTimeInterval((elapsed / step).rounded(.down) * step)
-            return (start, start.addingTimeInterval(step))
+            let next = since.tick(every: step, after: now)
+            return (next.addingTimeInterval(-step), next)
         }
+    }
+}
+
+nonisolated extension Date {
+    /// 从这一刻起每隔 `step` 一格（往前往后都排），严格晚于 `now` 的第一格。按倍数算出来的那格因浮点误差不晚于 `now` 时取下一格：
+    /// 按时刻重画的文字（`LiveText`）睡到这一刻，给出的时刻不晚于此刻就再也醒不过来。
+    func tick(every step: TimeInterval, after now: Date) -> Date {
+        var count = (now.timeIntervalSince(self) / step).rounded(.down) + 1
+        while addingTimeInterval(count * step) <= now { count += 1 }
+        return addingTimeInterval(count * step)
     }
 }
