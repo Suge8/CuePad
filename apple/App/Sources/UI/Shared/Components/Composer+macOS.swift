@@ -4,9 +4,8 @@ import CueText
 import SwiftUI
 
 extension PickedImage {
-    init(data: Data) {
-        let jpeg = Self.keeps(data) ? nil : NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: Self.quality])
-        self.init(data: jpeg ?? data, preview: NSImage(data: data).map(Image.init(nsImage:)) ?? Image(.photo))
+    static func converted(_ data: Data) -> Data? {
+        NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: quality])
     }
 }
 

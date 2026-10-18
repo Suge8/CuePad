@@ -10,7 +10,7 @@ import SwiftUI
 /// 宽处（Mac Agent 页）账号并排成等宽的几栏，窄处（手机、菜单栏面板）一个一块往下排（`QuotaColumns`）。
 ///
 /// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）；胭脂时数字一起变色。
-/// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`QuotaMoments`：等到重置是业务语义，不是周期刷新）：
+/// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`Moments` 睡到 `nextReset(after:)`：等到重置是业务语义，不是周期刷新）：
 /// 条与匀速线用无回弹弹簧过去、数字滚动换字，减弱动态效果时直接到终态；没有常驻动画与周期定时器。
 struct QuotaStrip: View {
     @Environment(AppServices.self) private var services
@@ -18,7 +18,7 @@ struct QuotaStrip: View {
     var body: some View {
         let quotas = services.accountQuotas.items
         if !quotas.isEmpty {
-            QuotaMoments(quotas) { now in
+            Moments(next: quotas.nextReset(after:)) { now in
                 QuotaColumns {
                     ForEach(quotas.map { QuotaMeter($0, at: now) }.filter { !$0.windows.isEmpty }, id: \.provider) { QuotaAccount(meter: $0) }
                 }
@@ -57,21 +57,6 @@ private struct QuotaColumns: Layout {
         guard count > 1 else { return nil }
         let column = (width - Self.gap * CGFloat(count - 1)) / CGFloat(count)
         return column >= Self.column ? column : nil
-    }
-}
-
-/// 按额度读数画的内容：此刻画一次，之后只在下一个重置时刻再画一次（`Moments`），过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）。
-struct QuotaMoments<Content: View>: View {
-    let quotas: [AccountQuota]
-    @ViewBuilder let content: (Date) -> Content
-
-    init(_ quotas: [AccountQuota], @ViewBuilder content: @escaping (Date) -> Content) {
-        self.quotas = quotas
-        self.content = content
-    }
-
-    var body: some View {
-        Moments(next: { now in quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }.min() }, content: content)
     }
 }
 

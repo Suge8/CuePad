@@ -10,7 +10,7 @@ import SwiftUI
 /// - 交给（Cue → 会话：Cue 对会话说话、答它的问题、开新会话）：飞的是一个空心的小环（Cue 头像的那圈环）。
 ///   头像的环先亮一下、外扩到 1.25 倍淡去（0.6s），0.12s 后环离开头像，同一条弧、同一条曲线飞到会话的状态标，落下时那里一圈细环外扩、垫一层淡光。
 ///   方向一眼分得出：起点先亮的是谁、飞的是点还是环。
-/// - 发出（你 → Cue："对 Cue 说"的发送钮）：同叫醒那一程，只是起点没有外扩的环——光就是钮上的箭镞，当场起飞（`RelayLaunch`）。
+/// - 发出（你 → Cue："对 Cue 说"的发送钮）：同叫醒那一程，只是起点没有外扩的环——光就是钮上纸飞机的机头，当场起飞（`RelayLaunch`）。
 /// 光后面拖一截由亮到暗的尾巴（同一条弧上的描边，起点追着终点走、落下时被收进去），比单独一个点更看得出从哪来、到哪去。
 /// 弧向窗口竖中线那边鼓（从侧栏、屏边起飞时弧在屏内）；来回两个方向走同一条弧。整个过程约 1.3～1.4s：
 /// 这是全 App 唯一超过 300ms 的动效（docs/ui.md），它讲的是一件低频的事从哪到哪，短了看不清起点。
@@ -103,14 +103,14 @@ struct CueRelayStage: ViewModifier {
     }
 }
 
-/// 发出（"对 Cue 说"的发送钮 → Cue 的头像）：钮上挂一个锚（`relayLaunch`），发出的那一刻量出箭镞与头像在窗口里的位置，
-/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正淡出的箭镞）。头像几处都在屏上时取等级高的（`CueSpot`）。
+/// 发出（"对 Cue 说"的发送钮 → Cue 的头像）：钮上挂一个锚（`relayLaunch`），发出的那一刻量出机头与头像在窗口里的位置，
+/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正飞走的机头）。头像几处都在屏上时取等级高的（`CueSpot`）。
 final class RelayLaunch {
     fileprivate weak var pad: RelayAnchorView?
     fileprivate var color: CGColor?
 
-    /// 箭镞的中心在钮心上方多远（钮高的比例）：对着录屏逐帧对准，光的第一帧正落在正淡出的箭镞上。
-    private static let arrowheadRise: CGFloat = 0.15
+    /// 机头在钮心右上方多远（钮宽、钮高的比例）：对着录屏逐帧对准，光的第一帧正落在正飞走的机头上。
+    private static let nose = CGSize(width: 0.2, height: 0.2)
 
     func fly(reduceMotion: Bool) {
         guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
@@ -120,7 +120,7 @@ final class RelayLaunch {
             return (spot, frame)
         }.max { $0.spot.rawValue < $1.spot.rawValue }?.frame
         let up: CGFloat = RelayFlight.up(in: root)
-        let head = CGPoint(x: from.midX, y: from.midY + up * from.height * Self.arrowheadRise)
+        let head = CGPoint(x: from.midX + from.width * Self.nose.width, y: from.midY + up * from.height * Self.nose.height)
         RelayFlight(color: color, reduceMotion: reduceMotion).launch(from: head, to: cue, in: root)
     }
 }
@@ -344,8 +344,8 @@ struct RelayFlight {
         }
     }
 
-    /// 发出（输入框的发送钮 → Cue 的头像）：钮上的箭镞就是那点光，从箭镞处（`head`，根层坐标）当场起飞——满大、不透明，
-    /// 不在钮上外扩起飞环、也不从半大淡入：钮在这一刻换成发送中，起飞环与淡入的光叠在正淡出的箭上，录屏里是一团糊。
+    /// 发出（输入框的发送钮 → Cue 的头像）：钮上纸飞机的机头就是那点光，从机头处（`head`，根层坐标）当场起飞——满大、不透明，
+    /// 不在钮上外扩起飞环、也不从半大淡入：钮在这一刻换成发送中，起飞环与淡入的光叠在正飞走的飞机上，录屏里是一团糊。
     /// 落进头像同叫醒；头像不在屏上时往上飘一小段淡去。减弱动态效果：只有头像的环淡亮一下（起点的钮自己已换成发送中，不再压一层光）。
     func launch(from head: CGPoint, to cue: CGRect?, in root: CALayer) {
         stage(in: root) { scene in
@@ -464,7 +464,7 @@ struct RelayFlight {
 
         /// 一道光加它的尾巴：尾巴是同一条弧上的描边，终点跟着光走、起点晚一点出发、到终点时追上——尾巴越飞越短，落下时被收进去。
         /// 三层叠出由亮到暗的尾巴：短而亮的芯、长而淡的身子、宽而很淡的光晕（描边上不能铺沿着弧走的渐变）。
-        /// `launches`：光是从钮上的箭镞变来的，第一帧就满大、不透明（不从半大淡入）。
+        /// `launches`：光是从钮上的机头变来的，第一帧就满大、不透明（不从半大淡入）。
         private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false, launches: Bool = false) {
             for (width, alpha, lag) in [(CGFloat(8), 0.12, 0.14), (2.5, 0.3, 0.3), (2, 0.9, 0.12)] {
                 let trail = CAShapeLayer()

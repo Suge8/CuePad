@@ -6,6 +6,7 @@
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
 //   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
 //   [[subagent:NAME]] 先调用 FireCode 的 subagents 工具开一个子代理（任务"[[slow]] 子任务"），收到工具结果后回复 TOOL_DONE
+//   [[kill:NAME]] 先调用 FireCode 的 subagents 工具移除这个子代理（在跑的也移除），收到工具结果后回复 TOOL_DONE
 //   [[overflow]]  上下文里还没有压缩摘要时以"上下文溢出"的错误结束（Pi 随即压缩再重试），有了摘要照常回复
 // 压缩摘要的请求（Pi 把要压缩的对话写成 <conversation> 或 # Conversation 开头的一条消息）里，对话带着：
 //   [[slow-compact]] 给摘要前停住，直到测试放行（制造"正在压缩"的窗口，期间被中止以 aborted 结束）
@@ -101,9 +102,12 @@ export default function (pi: any) {
 				const bash = /\[\[tool:(.+?)\]\]/.exec(text);
 				const write = /\[\[write:(.+?)\]\]/.exec(text);
 				const sub = /\[\[subagent:(.+?)\]\]/.exec(text);
-				const tool = bash ?? write ?? sub;
+				const kill = /\[\[kill:(.+?)\]\]/.exec(text);
+				const tool = bash ?? write ?? sub ?? kill;
 				if (tool && lastMessage.role !== "toolResult") {
-					const call = sub
+					const call = kill
+						? { type: "toolCall", id: "call_1", name: "subagents", arguments: { action: "kill", worker: kill[1] } }
+						: sub
 						? { type: "toolCall", id: "call_1", name: "subagents", arguments: { action: "start", worker: sub[1], role: "工程师", prompt: "[[slow]] 子任务" } }
 						: bash
 						? { type: "toolCall", id: "call_1", name: "bash", arguments: { command: bash[1].replaceAll("\\n", "\n") } }

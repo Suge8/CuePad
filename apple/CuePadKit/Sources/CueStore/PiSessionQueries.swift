@@ -36,7 +36,7 @@ extension CueStore {
     }
     let condition = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
     let states = try select(
-      PiSessionState.self, where: condition, arguments, orderBy: "state = 'ended', stateSince DESC, id",
+      PiSessionState.self, where: condition, arguments, orderBy: "state = '\(PiWorkState.ended.rawValue)', stateSince DESC, id",
       limit: query.limit, offset: query.offset)
     let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
     return PiSessionPage(items: try listItems(states), total: total)
@@ -148,7 +148,8 @@ extension CueStore {
     }
   }
 
-  private static let hasFolder = "folder IS NOT NULL AND folder != ''"
+  /// 记着文件夹的会话：也是文件夹索引（`Schema` 第 55 步）的部分条件，不一样就用不上。
+  static let hasFolder = "folder IS NOT NULL AND folder != ''"
 
   private func folders(where condition: String, _ arguments: [any SQLBindable]) throws -> [SessionFolder] {
     try db.query(

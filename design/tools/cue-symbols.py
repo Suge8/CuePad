@@ -1,5 +1,6 @@
 """CuePad 自家的图标（墨块）：从几何直接生成自定义 SF Symbol（模板 7.0，Ultralight / Regular / Black 三个母版插值），
-整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）。
+整个重写 App 资源目录的 Symbols 下（两端共用，资源名 cue.<名>），并生成 LoopLayer 取用的"话在路上"三块 V 的路径（`ClimbBlocks.swift`）
+与图标总览（`IconSheet`）列的全部符号名（`InkSymbols.swift`，只在 Debug 构建里）。
 用法：python3 design/tools/cue-symbols.py（只用标准库）。
 
 墨块的规则（每个图标都守）：
@@ -24,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "apple/App/Sources/Assets.xcassets/Symbols"
 CLIMB_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/ClimbBlocks.swift"
+NAMES_SWIFT = ROOT / "apple/App/Sources/UI/Debug/InkSymbols.swift"
 PREFIX = "cue"
 
 G = 35.6 / 12  # 一格的模板单位（系统 circle 在 S 号 100pt 下中线半径 35.6）
@@ -527,23 +529,16 @@ def chevron(deg):
     return build
 
 
-def send_parts(g, c, s=1.0):
-    """燕尾箭镞与箭杆（格，朝上）：s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝。"""
+def dart_parts(g, c, s=1.0):
+    """燕尾箭（格，朝上）：一枚高而尖的箭镞，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
+    s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝（两块各外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝）。
+    只表示方向的一族（在上面、拿回来的、更早的、回到最新、压缩上下文、自动检查更新）都是这一支（`dart`）；"发出"是纸飞机（`plane`）。"""
     k, notch, bx = 0.75, -1.6 * s, 7.6 * s  # V 的斜率、谷底、两翼半宽
     cut = (c + 2 * g) / math.cos(math.atan(k))
     head = grown([(0, -12.0 * s), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
     w, top = 2.4 * s, notch + cut
     shaft = grown([(0, top), (w, top + w * k), (w, 11.4 * s), (-w, 11.4 * s), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
     return shaft, head
-
-
-def send(m):
-    """发送：一枚燕尾箭镞——高而尖，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
-    两块都在主层（箭镞比箭杆还大，不是小部件），分两层只为按层动效（箭杆、箭镞依次一跳）。
-    先按 Regular 画，两块各自外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝。
-    箭头一族（在上面、拿回来的、更早的就用它；回到最新、压缩上下文按方向转）都是这一支。"""
-    shaft, head = send_parts(GROW[m], CARVE[m])
-    return [Layer("shaft", [shaft]), Layer("head", [head])]
 
 
 def stop(m):
@@ -1017,19 +1012,6 @@ def deck(m):
     return [Layer("deck", out)]
 
 
-def stack(m):
-    """全部会话：前面一张横长的圆角块，后面两条越来越窄的边露在上面，各隔一条刻缝。"""
-    g, c = GROW[m], CARVE[m]
-    hw, top, bottom = 11.0, -3.0, 9.0
-    out = [grown([(-hw, top), (hw, top), (hw, bottom), (-hw, bottom)], [2.4] * 4, g)]
-    y = top - c - 2 * g
-    for inset in (1.8, 3.6):
-        h = 2.4 + 0.5 * g
-        out.append(grown([(-hw + inset, y - h), (hw - inset, y - h), (hw - inset, y), (-hw + inset, y)], [1.2, 1.2, 0, 0], g * 0.5))
-        y -= h + c + g
-    return [Layer("stack", out)]
-
-
 def grid(m):
     """全部项目：田字四块圆角方，块间一道宽于刻缝的缝。"""
     g = GROW[m]
@@ -1110,19 +1092,29 @@ def puzzle(m):
 
 # ---------- 输入、发送与会话：纸飞机、箭头、圆环记号、气泡、窗口、相片、角色几族 ----------
 
-PLANE = sc(K, [(11.0, -10.4), (-11.0, -0.6), (-2.6, 2.8), (0.6, 11.0)])  # 机头、左翼尖、折痕底、下翼尖（格）；三角的墨比方块少，同气泡一样放大 K
+# 机头、左翼尖、折痕底、下翼尖（格）；三角的墨比方块少，同气泡一样放大 K。
+# 按面积重心摆在正中（不按外框）：机身的墨全在右上，按外框摆看着偏右上。
+_PLANE = [(11.0, -10.4), (-11.0, -0.6), (-2.6, 2.8), (0.6, 11.0)]
+_PLANE_MASS = (1.05, -0.82)
+PLANE = sc(K, [sub(p, _PLANE_MASS) for p in _PLANE])
 
 
-def plane(m):
-    """交给（转交给 Cue、会话里转给别人的那一步）：一架纸飞机，机头朝右上；一道折痕从机头斜下来，把机身切成上翼与下翼两块。"""
-    g, c = GROW[m] * 0.6, CARVE[m]
-    nose, wing, fold, tail = PLANE
+def plane_parts(g, c, s=1.0, at=(0.0, 0.0)):
+    """纸飞机（格）：机头朝右上，一道直刀口的折痕从机头斜下来，把机身切成上翼与下翼两块；s 缩放、挪到 at，刀口不随着缩。"""
+    nose, wing, fold, tail = [add(mul(p, s), at) for p in PLANE]
     k = c + 2 * g  # 两翼各外扩 g 之后正好一条刻缝
     n = left(norm(sub(fold, nose)))
     n = n if (tail[0] - nose[0]) * n[0] + (tail[1] - nose[1]) * n[1] > 0 else mul(n, -1)
     a, b = add(nose, mul(n, k)), add(fold, mul(n, k))
-    upper = grown([fold, wing, nose], [0.9, 1.0, 0.9], g)
-    lower = grown([tail, meet(a, b, fold, tail), meet(a, b, nose, tail)], [1.0, 0.9, 0.9], g)
+    upper = grown([fold, wing, nose], [0.9 * s, 1.0 * s, 0.9 * s], g)
+    lower = grown([tail, meet(a, b, fold, tail), meet(a, b, nose, tail)], [1.0 * s, 0.9 * s, 0.9 * s], g)
+    return upper, lower
+
+
+def plane(m):
+    """发出（发送钮、发送回答）与交给（转交给 Cue、会话里转给别人的那一步）：一架纸飞机。"发出"一族都是这一份几何。
+    两块都在主层，分两层只为按层动效（上翼、下翼依次一跳）。"""
+    upper, lower = plane_parts(GROW[m] * 0.6, CARVE[m])
     return [Layer("upper", [upper]), Layer("lower", [lower])]
 
 
@@ -1136,7 +1128,7 @@ def meet(p1, p2, q1, q2):
 def plane_done(m):
     """已送达：纸飞机（同交给），右下的空角里嵌一个小勾（点睛），离飞机一条刻缝。"""
     g = GROW[m]
-    tick = bar([(7.0, 9.6), (9.2, 11.8), (13.6, 7.2)], 2.4 + 1.0 * g)
+    tick = bar([(8.0, 10.4), (10.2, 12.6), (14.6, 8.0)], 2.4 + 1.0 * g)
     return plane(m) + [Layer("tick", [tick], "secondary")]
 
 
@@ -1156,20 +1148,22 @@ def tick(m):
 
 
 def dart(deg, s=1.0, at=(0.0, 0.0)):
-    """发送那一支箭（`send_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
+    """燕尾箭（`dart_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
     def build(g, c):
-        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(send_parts(g, c, s)), deg)]
+        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(dart_parts(g, c, s)), deg)]
     return build
 
 
-def arrow_down(m):
-    """回到最新：发送那一支箭朝下。"""
-    shaft, head = dart(180)(GROW[m], CARVE[m])
-    return [Layer("shaft", [shaft]), Layer("head", [head])]
+def pointing(deg):
+    """只表示方向的箭：燕尾箭朝上（在上面、拿回来的、更早的）或朝下（回到最新）。两块都在主层，分两层只为按层动效。"""
+    def build(m):
+        shaft, head = dart(deg)(GROW[m], CARVE[m])
+        return [Layer("shaft", [shaft]), Layer("head", [head])]
+    return build
 
 
 def compact(m):
-    """压缩上下文：两支发送的箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
+    """压缩上下文：两支燕尾箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
     g, c = GROW[m], CARVE[m]
     s, tip = 0.72, 1.0  # 箭尖离中心多少格（沿对角线的分量）
     d = tip + 12.0 * s * 0.7071
@@ -1455,12 +1449,16 @@ def person(m):
 
 # ---------- Cue 与设置、文件预览的类型 ----------
 
-def badge_dart(deg):
-    """实心圆里刻出发送钮那一支燕尾箭（同一份几何，缩小）：朝上是发送回答，朝下是自动检查更新。"""
-    def build(m):
-        g, c = GROW[m], CARVE[m]
-        return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(deg, 0.62, (0, 0.6 if deg == 0 else -0.6))(0.0, c)))]
-    return build
+def badge_dart(m):
+    """自动检查更新：实心圆里刻一支朝下的燕尾箭（同一份几何，缩小）。"""
+    g, c = GROW[m], CARVE[m]
+    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(180, 0.62, (0, -0.6))(0.0, c)))]
+
+
+def badge_plane(m):
+    """发送回答：实心圆里刻出发送钮那架纸飞机（同一份几何，缩小）。"""
+    g, c = GROW[m], CARVE[m]
+    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(list(plane_parts(0.0, c, 0.6))))]
 
 
 def bookmark(m):
@@ -1499,7 +1497,7 @@ def alarm(m):
 
 
 def swap(m):
-    """换班次前写交接：两支发送的箭（缩小）一上一下、一左一右反着走。"""
+    """换班次前写交接：两支燕尾箭（缩小）一上一下、一左一右反着走。"""
     g, c = GROW[m], CARVE[m]
     s = 0.62
     return [Layer("a", dart(90, s, (0, -5.2))(g, c)), Layer("b", dart(-90, s, (0, 5.2))(g, c))]
@@ -1589,7 +1587,193 @@ def cube(m):
     return [Layer("cube", [top, left_, right_])]
 
 
-# "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同发送的箭镞），竖厚 THICK，两端竖切；从下往上排。
+# ---- 项目图标（项目表单里能挑的那张闭合表，见 App 的 `ProjectIcon`）：其余几种借现成的（文件夹、闪光、终端、锤子、书、画笔、灯泡、方块、层、相机）----
+def bubbles(m):
+    """对话：两只气泡，后面一只在左上（被前面那只挡掉一角，挡处让一条刻缝），前面一只在右下、尾巴朝右下。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g  # 两块各外扩 g 后之间正好一条刻缝
+    fx0, fy0 = -3.0, -2.6  # 前面那只的左上角
+    back = grown([(-11.0, -10.4), (5.0, -10.4), (5.0, fy0 - cut), (fx0 - cut, fy0 - cut), (fx0 - cut, 2.6), (-6.0, 2.6), (-9.0, 5.6), (-8.6, 2.6), (-11.0, 2.6)],
+                 [3.2, 3.2, 1.0, 1.2, 1.0, 0.4, 0.4, 0.4, 3.2], g)
+    front = grown([(fx0, fy0), (11.0, fy0), (11.0, 7.4), (8.8, 7.4), (9.4, 10.8), (5.6, 7.4), (fx0, 7.4)], [3.2, 3.2, 3.2, 0.4, 0.4, 0.4, 3.2], g)
+    return [Layer("bubbles", [back, front])]
+
+
+def globe(m):
+    """地球：实心圆被一条赤道、两条弯的经线刻开成六块（左右两牙、中间一枚分上下）。"""
+    g, c = GROW[m], CARVE[m]
+    R, A, h = 10.8 + g, 4.6, c / 2
+    def mer(y): return A * math.sqrt(max(0.0, 1 - (y / R) ** 2))
+    def ends(outer):  # 两牙在哪一高度与圆合上（刻缝宽 = 圆与经线的水平距），中间一枚在哪一高度收成尖
+        return -R * math.sqrt(1 - (h / (R - A)) ** 2) if outer else -R * math.sqrt(1 - (h / A) ** 2)
+    n = 8
+    def P(x, y): return (x * G, y * G)
+    def crescent(sx, sy):
+        y1 = ends(True)
+        ys = [-h + (y1 + h) * i / n for i in range(n + 1)]
+        outer = [P(sx * math.sqrt(R * R - y * y), sy * y) for y in ys]
+        inner = [P(sx * (mer(y) + h), sy * y) for y in reversed(ys)]
+        segs = catmull(outer) + catmull(inner) + [Line(inner[-1], outer[0])]
+        return segs if area(segs) > 0 else rev(segs)
+    def lens(sy):
+        y1 = ends(False)
+        ys = [-h + (y1 + h) * i / n for i in range(n + 1)]
+        right = [P(mer(y) - h, sy * y) for y in ys]
+        left_ = [P(-(mer(y) - h), sy * y) for y in reversed(ys)]
+        segs = catmull(right) + catmull(left_) + [Line(left_[-1], right[0])]
+        return segs if area(segs) > 0 else rev(segs)
+    return [Layer("globe", [crescent(sx, sy) for sx in (-1, 1) for sy in (1, -1)] + [lens(sy) for sy in (1, -1)])]
+
+
+def target(m):
+    """靶心：一圈粗环，正中一颗靶心（点睛），之间留一圈空。"""
+    g = GROW[m]
+    R, T = 11.0 + g * 0.5, 3.0 + 1.3 * g
+    return [Layer("ring", [disc((0, 0), R), disc((0, 0), R - T, hole=True)]), Layer("bull", [disc((0, 0), 3.6 + 0.7 * g)], "secondary")]
+
+
+def briefcase(m):
+    """公文包：上面一道提手，包身被一条横的刻缝分成盖与身两块。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g
+    y0, ys, y1 = -4.6, 0.2, 10.0
+    lid = grown([(-11.0, y0), (11.0, y0), (11.0, ys), (-11.0, ys)], [2.4, 2.4, 0.4, 0.4], g)
+    body = grown([(-11.0, ys + cut), (11.0, ys + cut), (11.0, y1), (-11.0, y1)], [0.4, 0.4, 2.4, 2.4], g)
+    w = 2.2 + 0.8 * g
+    foot = y0 - g - c - w / 2
+    handle = bar([(-4.6, foot), (-4.6, -11.0 + w / 2), (4.6, -11.0 + w / 2), (4.6, foot)], w, 1.6)
+    return [Layer("case", [lid, body, handle])]
+
+
+def cart(m):
+    """购物车：左上一段把手连着往右撑开的筐，筐下两只轮子，离筐一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    w = 2.4 + 1.0 * g
+    basket = grown([(-7.4, -6.4), (11.0, -6.4), (8.6, 3.0), (-5.2, 3.0)], [0.6, 1.2, 1.2, 0.6], g)
+    handle = bar([(-11.0, -10.0), (-8.4, -10.0), (-6.4, -4.0)], w, 2.2)
+    r = 2.2 + 0.5 * g
+    y = 3.0 + g + c + r
+    return [Layer("cart", [basket, handle, disc((-3.6, y), r), disc((7.0, y), r)])]
+
+
+def megaphone(m):
+    """喇叭：往右张开的喇叭筒，左边一截握把，之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g
+    x = -4.4
+    horn = grown([(x, -3.8), (10.6, -10.4), (10.6, 10.4), (x, 3.8)], [0.6, 1.6, 1.6, 0.6], g)
+    grip = grown([(-11.0, -3.8), (x - cut, -3.8), (x - cut, 3.8), (-11.0, 3.8)], [1.4, 0.4, 0.4, 1.4], g)
+    return [Layer("megaphone", [horn, grip])]
+
+
+def flag(m):
+    """旗帜：一根旗杆，右边一面燕尾旗，离杆一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    w = 2.6 + 1.1 * g
+    x = -8.2
+    pole = bar([(x, -10.6), (x, 11.0 - w / 2)], w)
+    x0 = x + w / 2 + c + g
+    cloth = grown([(x0, -10.6), (10.8, -10.6), (6.2, -4.2), (10.8, 2.2), (x0, 2.2)], [0.4, 0.6, 0.6, 0.6, 0.4], g)
+    return [Layer("flag", [pole, cloth])]
+
+
+def leaf(m):
+    """叶子：两道弧合成的叶片斜放，刻出一道叶脉，左下伸出一截叶柄。"""
+    g = GROW[m]
+    a, b = (-5.6, 5.6), (10.6, -10.6)
+    L = dist(a, b)
+    bulge = 7.4 + g  # 叶片最宽处的半宽
+    r = (L * L / 4 + bulge * bulge) / (2 * bulge)
+    mid, u = mul(add(a, b), 0.5), norm(sub(b, a))
+    n_ = left(u)
+    a_, b_ = sub(a, mul(u, g)), add(b, mul(u, g))
+    def side(sgn):
+        c_ = add(mid, mul(n_, -sgn * (r - bulge)))
+        a0, a1 = ang(sub(a_, c_)), ang(sub(b_, c_))
+        sw = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        return Arc(mul(c_, G), r * G, a0, sw, 2)
+    s1, s2 = side(1), side(-1)
+    blade = [s1, reverse(s2)]
+    blade = blade if area(blade) > 0 else rev(blade)
+    w = MARK_W(m, 2.2)
+    vein = bar([add(a, mul(u, 4.0)), add(b, mul(u, -4.4))], w)
+    stem = bar([add(a, mul(u, 2.0)), add(a, mul(u, -4.6))], 2.4 + 1.0 * g)
+    return [Layer("leaf", [blade] + holed([vein]) + [stem])]
+
+
+def house(m):
+    """家：一座实心的小屋（尖顶、方身），屋底正中开一扇门（门的宽高不随字重变）。"""
+    g = GROW[m]
+    d, top = 2.3 + g, 3.4 + g
+    body = grown([(0, -11.0), (11.0, -1.4), (8.4, -1.4), (8.4, 10.6), (d, 10.6), (d, top), (-d, top), (-d, 10.6), (-8.4, 10.6), (-8.4, -1.4), (-11.0, -1.4)],
+                 [1.4, 0.8, 0, 1.6, 0.4, 1.0, 1.0, 0.4, 1.6, 0, 0.8], g)
+    return [Layer("house", [body])]
+
+
+def heart(m):
+    """心：一颗实心的心，顶上一道凹、底下一个尖。"""
+    g = GROW[m]
+    k = (11.4 + g) / 16
+    def P(t): return (16 * math.sin(t) ** 3 * k, -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) * k + 1.4)
+    n = 10
+    right = [mul(P(math.pi * i / n), G) for i in range(n + 1)]
+    left_ = [(-x, y) for x, y in reversed(right)]
+    segs = catmull(right) + catmull(left_)
+    return [Layer("heart", [segs if area(segs) > 0 else rev(segs)])]
+
+
+def star5(m):
+    """星：一颗五角星，尖是小圆角（同闪光的四角星一家，角数不同不撞形）。"""
+    g = GROW[m]
+    R, q = 11.6 + g, 5.2 + g * 0.9
+    pts = []
+    for k in range(5):
+        a = math.radians(k * 72 - 90)
+        pts.append((R * math.cos(a), R * math.sin(a) + 0.8))
+        b = a + math.radians(36)
+        pts.append((q * math.cos(b), q * math.sin(b) + 0.8))
+    return [Layer("star", [rpoly(pts, [0.9 + 0.4 * g, 0.4] * 5)])]
+
+
+def music(m):
+    """音符：两个符头连着两根符干，顶上一道斜的符梁。"""
+    g = GROW[m]
+    w = 2.4 + 1.0 * g
+    r = 3.4 + 0.6 * g
+    heads = [(-6.2, 7.0), (6.6, 4.6)]
+    stems = [bar([(x + r - w / 2, y), (x + r - w / 2, top)], w) for (x, y), top in zip(heads, (-6.6, -9.0))]
+    x0, x1 = heads[0][0] + r - w, heads[1][0] + r
+    beam = grown([(x0, -6.6 - 1.2), (x1, -9.0 - 1.2 - 0.6), (x1, -9.0 + 2.6), (x0, -6.6 + 3.2)], [0.4, 0.4, 0, 0], g)
+    return [Layer("music", [disc(h, r) for h in heads] + stems + [beam])]
+
+
+def rocket(m):
+    """火箭：机身斜指右上，尖头圆肩，开一扇圆舷窗；尾部两侧各一片贴着机身的尾翼、尾后一簇火焰，都离机身一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    cut = c + 2 * g
+    hw, top, bottom = 4.6, -13.2, 4.4
+    def place(p): return add(rot(p, 45), (-1.2, 1.2))
+    body = grown([place(p) for p in [(0, top), (hw, top + 7.6), (hw, bottom), (-hw, bottom), (-hw, top + 7.6)]], [1.2, 4.6, 1.2, 1.2, 4.6], g)
+    x0 = hw + cut
+    fins = [grown([place((k * x, y)) for x, y in [(x0, -2.0), (9.4, 3.8), (9.4, 9.2), (x0, 6.8)][::k]], [0.4, 1.0, 0.8, 0.4], g) for k in (1, -1)]
+    y0 = bottom + cut
+    flame = grown([place(p) for p in [(-3.0, y0), (3.0, y0), (0, y0 + 6.0)]], [0.6, 0.6, 1.2], g)
+    window = disc(place((0, -4.0)), 2.2 - 0.5 * g, hole=True)
+    return [Layer("rocket", [body, window] + fins + [flame])]
+
+
+def menubar(m):
+    """菜单栏里的 CuePad（同 logo）：一圈往右开口的粗 C，开口里嵌一张折角的小纸。只在菜单栏用，单色模板图。"""
+    g, c = GROW[m], CARVE[m]
+    T = 4.2 + 1.4 * g
+    ring = bow((-3.2, 0), 8.0 - T / 2, 45, 270, T)
+    x0, y0, x1, y1 = 5.2, -3.6, 11.2, 4.6
+    e = 2.8
+    paper_ = grown([(x0, y0), (x1 - e, y0), (x1, y0 + e), (x1, y1), (x0, y1)], [1.0, 0.2, 0.2, 1.0, 1.0], g)
+    return [Layer("mark", [ring, paper_])]
+
+
+# "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同燕尾箭的箭镞），竖厚 THICK，两端竖切；从下往上排。
 # 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
 CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
 
@@ -1627,7 +1811,6 @@ SYMBOLS = {
     "chevron.right": chevron(90),
     "chevron.down": chevron(180),
     "chevron.left": chevron(270),
-    "send": send,
     "stop": stop,
     "done": done(),
     "done.pre": done("pre"),
@@ -1674,7 +1857,6 @@ SYMBOLS = {
     "copy": sheets(True),
     "conflict": sheets(False),
     "deck": deck,
-    "stack": stack,
     "grid": grid,
     "share": tray_arrow(True),
     "save": tray_arrow(False),
@@ -1688,13 +1870,14 @@ SYMBOLS = {
     "plane.done": plane_done,
     "bolt": bolt,
     "clock": ring_mark(mark_hands),
-    "arrow.down": arrow_down,
+    "arrow.up": pointing(0),
+    "arrow.down": pointing(180),
     "ring.down": ring_mark(lambda c, s, w: mark_arrow(c, s, w, down=True)),
     "ring.stop": ring_mark(mark_square),
     "ring.play": ring_mark(mark_play),
     "ring.plus": ring_mark(mark_plus),
-    "badge.up": badge_dart(0),
-    "badge.down": badge_dart(180),
+    "badge.send": badge_plane,
+    "badge.down": badge_dart,
     "compact": compact,
     "hand": hand,
     "mac": mac,
@@ -1733,6 +1916,20 @@ SYMBOLS = {
     "signal": signal,
     "wave": wave,
     "cube": cube,
+    "bubbles": bubbles,
+    "globe": globe,
+    "target": target,
+    "briefcase": briefcase,
+    "cart": cart,
+    "megaphone": megaphone,
+    "flag": flag,
+    "leaf": leaf,
+    "house": house,
+    "heart": heart,
+    "star": star5,
+    "music": music,
+    "rocket": rocket,
+    "menubar": menubar,
 }
 
 
@@ -1848,6 +2045,19 @@ def write_climb():
         "}\n")
 
 
+def write_names():
+    names = "\n".join(f'        "{PREFIX}.{name}",' for name in SYMBOLS)
+    NAMES_SWIFT.write_text(
+        "#if DEBUG\n"
+        "// 由 design/tools/cue-symbols.py 生成。\n\n"
+        "/// 全部墨块符号的资源名，按生成器里的顺序：只给图标总览（`IconSheet`）列全；产品代码按意思经 `Icon` 取图。\n"
+        "enum InkSymbols {\n"
+        f"    static let names = [\n{names}\n    ]\n"
+        "}\n"
+        "#endif\n")
+
+
 if __name__ == "__main__":
     write_symbols()
     write_climb()
+    write_names()

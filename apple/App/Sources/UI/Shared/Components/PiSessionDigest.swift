@@ -304,19 +304,11 @@ struct PiElapsed: View {
 
     var body: some View {
         if let clock = shown.clock {
-            PiClockText(clock: clock, style: style)
+            LiveText(style: clock.live(style))
                 .font(font.monospacedDigit())
                 // 状态标与状态词已带色，计时保持中性，一行里只有一处彩色
                 .foregroundStyle(palette.ink3)
         }
     }
-}
-
-/// 一个计时的文字：只在字会变的时刻重画（`LiveText`、`PiClock.Live`）。
-struct PiClockText: View {
-    let clock: PiClock
-    var style = PiClock.Style.list
-
-    var body: some View { LiveText(style: clock.live(style)) }
 }
 

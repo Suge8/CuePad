@@ -128,22 +128,16 @@ actor RecordSender {
     blockedUntil = nil
     notBefore = nil
 
-    var shown = false
-    let end = await batches { [coordinator] in
-      guard !shown else { return }
-      shown = true
-      await coordinator.setSending(true)
-    }
-    if shown { await coordinator.setSending(false) }
+    let end = await batches()
+    await coordinator.setSending(false)
     finish(end)
   }
 
-  /// `sending`：有一批要发时调（一轮里可能多次）；没有要传的一轮不算在同步中，界面不跟着每次拉取闪。
-  private func batches(sending: () async -> Void) async -> End {
+  private func batches() async -> End {
     var zoneCreated = false
     for _ in 0..<Self.batchesPerRound {
       guard let batch = await coordinator.nextBatch(first: first, limit: limit) else { return .done }
-      await sending()
+      await coordinator.setSending(true)  // 有一批要发才算同步中：没有要传的一轮（每次拉取顺带的）界面不跟着闪
       let names = Set(batch.saves.map(\.recordID.recordName) + batch.deletes.map(\.recordName))
       first.subtract(names)
       do {

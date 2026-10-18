@@ -80,7 +80,7 @@ struct PiSubagentList: View {
         var body: some View {
             Group {
                 switch clock {
-                case .running(let running): PiClockText(clock: running)
+                case .running(let running): LiveText(style: running.live(.list))
                 case .took: Text(clock.text(now: .now))
                 }
             }

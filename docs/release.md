@@ -48,7 +48,7 @@ enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：如�
 
 ## App 图标
 
-`App/Sources/AppIcon.icon` 是 Icon Composer 的分层图标（浅色/深色/着色三种外观），由 `scripts/make-icon.py` 从 `design/final/logo-final.png` 矢量化生成（依赖 Pillow 与 potrace）；换 logo 后重跑脚本即可。菜单栏模板图是 `Assets.xcassets/MenuBarIcon`。
+`App/Sources/AppIcon.icon` 是 Icon Composer 的分层图标（浅色/深色/着色三种外观），由 `scripts/make-icon.py` 从 `design/final/logo-final.png` 矢量化生成（依赖 Pillow 与 potrace）；换 logo 后重跑脚本即可。菜单栏图标是墨块符号 `cue.menubar`（`Icon.menuBar`，生成器里画，换 logo 时一起改）。
 
 ## CloudKit 数据结构
 

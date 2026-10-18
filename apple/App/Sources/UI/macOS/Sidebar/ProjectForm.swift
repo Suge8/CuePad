@@ -35,7 +35,7 @@ struct ProjectForm: View {
     @Environment(\.palette) private var palette
     @State private var name = ""
     @State private var intro = ""
-    @State private var icon = "folder"
+    @State private var icon = ProjectIcon.folder
     @State private var color = Palette.projectColors[0].stored
     /// 新建时选的文件夹（完整路径）；编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: String?
@@ -63,7 +63,7 @@ struct ProjectForm: View {
             guard let project else { return }
             name = project.name
             intro = project.intro ?? ""
-            icon = ProjectGlyph.symbol(project.icon)
+            icon = ProjectIcon(stored: project.icon)
             color = project.color
         }
     }

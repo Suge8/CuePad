@@ -4,11 +4,8 @@ import PhotosUI
 import SwiftUI
 
 extension PickedImage {
-    init(data: Data) {
-        let image = UIImage(data: data)
-        self.init(
-            data: Self.keeps(data) ? data : image?.jpegData(compressionQuality: Self.quality) ?? data,
-            preview: image.map(Image.init(uiImage:)) ?? Image(.photo))
+    static func converted(_ data: Data) -> Data? {
+        UIImage(data: data)?.jpegData(compressionQuality: quality)
     }
 }
 

@@ -1,4 +1,5 @@
 import CueStore
+import CueEditor
 import CueText
 import SwiftUI
 
@@ -109,14 +110,33 @@ extension Binding where Value == ComposerSource? {
     }
 }
 
-/// 选来的一张图：相册里的 HEIC 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留（`init(data:)` 在各平台的文件里）。
+/// 选来的一张图：相册里的 HEIC 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留（`converted` 在各平台的文件里）。
+/// 图片条里的小图按条里的尺寸降采样解码（`thumbnail`），不拿原图去画：一张 4032 见方的照片原样解码是 65MB，
+/// 图片条里放九张时会话页常驻 556MB、峰值 786MB（降采样后 143MB、358MB，不带图是 131MB、346MB）。
 struct PickedImage: Identifiable {
     let id = UUID()
     let data: Data
     let preview: Image
 
     static let quality = 0.85
+    /// 图片条里一格的边长（点）。
+    static let previewSide: CGFloat = 64
 
-    /// PNG 与 JPEG 不转。
-    static func keeps(_ data: Data) -> Bool { data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF]) }
+    init(data: Data) {
+        self.data = Self.outgoing(data)
+        preview = Self.thumbnail(data).map { Image(decorative: $0, scale: 1) } ?? Image(.photo)
+    }
+
+    /// 发出去的那份：PNG 与 JPEG 原样，其余（HEIC 等）转 JPEG。只要它的（插进卡片正文）不必解图片条的小图。
+    static func outgoing(_ data: Data) -> Data {
+        let keeps = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
+        return keeps ? data : converted(data) ?? data
+    }
+
+    /// 填满一格（裁成方块）时短边够 3 倍屏的像素：按长短边之比定长边上限，再大的不解码。
+    private static func thumbnail(_ data: Data) -> CGImage? {
+        Thumbnails.decoded(data) { size in
+            Int((previewSide * 3 * max(size.width, size.height) / min(size.width, size.height)).rounded(.up))
+        }
+    }
 }

@@ -25,7 +25,7 @@ struct CueComposer: View {
     /// 不先缩没再长出来。读到了这一句（`lastYouSaid` 变了，此时在不在路上都已算进 `sending`）就交还给它。
     /// 只看这两项不看整个现状：在想、用工具时每一步都变，读它的话整个输入框跟着重算。
     @State private var launched = false
-    /// 光从发送钮的箭镞起飞、落进 Cue 的头像。
+    /// 光从发送钮的机头起飞、落进 Cue 的头像。
     @State private var launch = RelayLaunch()
     #if os(macOS)
     /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单。

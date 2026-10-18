@@ -685,12 +685,12 @@ extension CueStore {
   @discardableResult
   public func retainPiSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
-      let indexed = try db.query("SELECT id, path FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
+      let indexed = try db.query("SELECT id, path FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) { ($0.text(0), $0.text(1)) }
       let stale = indexed.filter { !paths.contains($0.1) }
       for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
       try db.run(
         """
-          DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND COALESCE(agent, 'pi') = ? AND sessionID NOT IN (SELECT id FROM piSessions)
+          DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND \(Self.agentOf) = ? AND sessionID NOT IN (SELECT id FROM piSessions)
           """,
         [host, PiWorkState.ended.rawValue, PiWorkState.interrupted.rawValue, agent.rawValue])
       // 反过来，有会话文件却没有记录的补写：换 iCloud 账号丢掉同步数据（`eraseSyncedData`，本机索引留着）、记录在别处被删之后
@@ -702,9 +702,12 @@ extension CueStore {
     }
   }
 
+  /// 一行是哪家 Agent 的（会话索引与会话记录都是）：早于多家接入的行没写，是 Pi。也是 Agent 索引（`Schema` 第 55 步）的表达式。
+  static let agentOf = "COALESCE(agent, '\(AgentKind.pi.rawValue)')"
+
   /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。
   public func deletePiSessions(of agent: AgentKind) throws {
-    try write { try db.run("DELETE FROM piSessions WHERE COALESCE(agent, 'pi') = ?", [agent.rawValue]) }
+    try write { try db.run("DELETE FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) }
   }
 
   /// 全部目录绑定（各台 Mac 的），按项目、Mac 名排。

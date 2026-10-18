@@ -119,11 +119,14 @@ extension CueStore {
   /// 删掉这台 Mac 上这家 Agent 歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
   func deleteUnindexedHostedStates(host: String, agent: AgentKind, except live: Set<String>) throws {
     let refs = live.isEmpty ? "" : "AND sessionID NOT IN (\(Array(repeating: "?", count: live.count).joined(separator: ", ")))"
-    var arguments: [any SQLBindable] = [host, agent.rawValue, PiWorkState.ended.rawValue]
-    arguments += live.sorted().map { $0 as any SQLBindable }
+    let arguments: [any SQLBindable] = [host, agent.rawValue] + live.sorted().map { $0 as any SQLBindable }
     try write {
+      // `+hostID`：同 `reconcilePiStates`，改走 state 索引只读没结束的那几条
       try db.run(
-        "DELETE FROM piSessionStates WHERE hostID = ? AND COALESCE(agent, 'pi') = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
+        """
+        DELETE FROM piSessionStates WHERE +hostID = ? AND \(Self.agentOf) = ? AND hosted = 1 AND \(PiWorkState.outsideSQL([.ended]))
+          AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)
+        """,
         arguments)
       try dropUnusedCatalogs(host: host)
     }
