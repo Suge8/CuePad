@@ -29,9 +29,7 @@ struct PiConversation: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @State private var opened: PreviewOpening?
-    /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
-    @State private var sizes: [Int: CGSize] = [:]
-    @State private var onScreen: Set<Int> = []
+    /// 整列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -43,14 +41,9 @@ struct PiConversation: View {
                 EarlierRow(count: Self.segment, action: showEarlier)
             }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            // 一段一段排，每段只按内容比较：上面再排开一段、下面来了新消息时，没变的段不重算也不重排，
-            // 系统直接用上次量好的尺寸（整列一起排时，每排开一段都把已排开的全部重量一遍，长对话里一次几百毫秒）
-            let last = Self.segments(all.count) - 1
-            ForEach(first..<(last + 1), id: \.self) { index in
-                segment(index, of: all, last: last, notes: notes)
-                    .onScrollVisibilityChange(threshold: 0.01) { visible in
-                        if visible { onScreen.insert(index) } else { onScreen.remove(index) }
-                    }
+            ChatSegments(items: all, size: Self.segment, first: first, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
+                ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
+                    .equatable()
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
             ending
@@ -83,35 +76,10 @@ struct PiConversation: View {
         }
     }
 
-    /// 一段：在屏上或离屏上不到 `spare` 段的、最新一段（还会长）、描圈的那条所在的段（刻度滑条正要跳过去）、还没量过的段排真的；
-    /// 其余换成量好的那么高的空白。挂着的视图数就不随翻过的深度变多（整列都挂着时，翻到 300 轮前排开一段要 200ms 以上），
-    /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
-    /// 宽度变了（拖窗口、转屏），量过的高按宽度反比估（字一行排得越宽越矮），排成真的时再换成实测：
-    /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
-    @ViewBuilder private func segment(_ index: Int, of all: [PiChatEntry], last: Int, notes: [ReplyNote]) -> some View {
-        let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
-        if let size = sizes[index], width > 0, index != last, !onScreen.contains(where: { abs($0 - index) <= Self.spare }),
-            !items.contains(where: { $0.id == highlight })
-        {
-            Color.clear.frame(height: (size.height * size.width / width).rounded())
-        } else {
-            ChatSegment(items: items, session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
-                .equatable()
-                .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
-                    sizes[index] = $0
-                }
-        }
-    }
-
-    /// 屏上那几段上下各再排几段真的：快甩时滑进来的先是排好的，不露空白。
-    static let spare = 1
-
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
     static let firstWindow = 4, segment = 5
     static let paging = ChatPaging.fixed(first: firstWindow, step: segment)
-
-    static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
 
     /// 排开最近 `window` 条要从第几段起。
     static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }

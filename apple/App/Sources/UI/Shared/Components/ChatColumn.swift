@@ -53,7 +53,14 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
             }
             .onChange(of: ids, initial: true) { if oldest.flatMap(ids.firstIndex(of:)) == nil { show(from: ids.count - self.window(size)) } }
-            .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier(size) } }
+            // 下一帧再排开：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排一屏
+            .onChange(of: follow.nearOldest, initial: true) { _, near in
+                guard near else { return }
+                Task {
+                    await NextFrame.wait()
+                    if follow.nearOldest, !follow.prepending { showEarlier(size) }
+                }
+            }
             .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id, size: size) } }
         }
         .environment(\.chatHighlight, highlight.id)

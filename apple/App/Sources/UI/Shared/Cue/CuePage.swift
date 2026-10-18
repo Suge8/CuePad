@@ -33,6 +33,9 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
+    /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
+    @State private var width: CGFloat = 0
+    @Environment(\.chatHighlight) private var highlight
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
 
@@ -124,9 +127,10 @@ struct CuePage: View {
         }
     }
 
-    /// 只排开铺满可见区要的那几格（`paging`）：打开时铺两屏（离最早那头不到一屏就要再排开，铺一屏的话打开就接着排开一段），往上翻每次再铺一屏。
-    /// 一格多高要排出来才知道，这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白，也不在打开时再补排。
-    /// 不估每格的真实高：估高了就排少了，打开时接着一段段地补（长回答收起后很矮，按字数估的高在真实库上排少了、更慢）。
+    /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
+    /// 每 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
+    /// 这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白（不估真实的高：估高了就排少了，
+    /// 打开时接着一段段地补，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
         return ChatColumn(
@@ -134,16 +138,17 @@ struct CuePage: View {
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: services.isCatchingUp(on: cue.hostID) || docking
         ) { window in
-            let first = max(0, rows.count - window.count)
+            let first = max(0, rows.count - window.count) / Self.segment
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             VStack(alignment: .leading, spacing: 0) {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                ForEach(rows[first...]) { item in
-                    CueRow(
-                        row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
-                        delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil }, opened: $opened
-                    )
+                ChatSegments(items: rows, size: Self.segment, first: first, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
+                    CueSegment(rows: items.map { item in
+                        CueRow(
+                            row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
+                            delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil }, opened: $opened)
+                    })
                     .equatable()
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
@@ -154,6 +159,7 @@ struct CuePage: View {
             #endif
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
             .scrollTargetLayout()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
             .animation(Motion.quick, value: cue.presence.progress)
             // 发出一句时"已送达"从上一句挪到这一句：上一句收起那行字的高与对话上滑走同一条曲线（`ChatScroll.slide`），
             // 不然下面各格一下顶上去，可见的整段先跳一截再滑
@@ -168,6 +174,9 @@ struct CuePage: View {
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
+    /// 一段几格（`ChatSegments`）。
+    static let segment = 6
+
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
@@ -175,20 +184,20 @@ struct CuePage: View {
         return speaker == .trailing ? 32 : 16
     }
 
-    /// 打开铺两屏、往上翻每次铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
+    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
     private static func paging(_ thread: CueThread) -> ChatPaging {
         let rows = thread.rows
-        func count(filling size: CGSize, screens: CGFloat, above: Int) -> Int {
+        func count(filling size: CGSize, above: Int) -> Int {
             // 字排开的宽不超过可见区与阅读栏：按这么宽折行，折出的行只会比真的少
             let width = min(size.width, readingWidth)
             var sum: CGFloat = 0, count = 0
-            for row in rows[..<above].reversed() where sum < screens * size.height {
+            for row in rows[..<above].reversed() where sum < size.height {
                 sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, width: width)
                 count += 1
             }
             return max(count, 1)
         }
-        return ChatPaging(first: { count(filling: $0, screens: 2, above: $1) }, step: { count(filling: $0, screens: 1, above: $1) })
+        return ChatPaging(first: { count(filling: $0, above: $1) }, step: { count(filling: $0, above: $1) })
     }
 
     /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少排几行（`lines`，一行至少 `MinimumText.line`），结果卡另有交付物的一排
@@ -277,6 +286,19 @@ struct CuePage: View {
     }
 }
 
+/// 对话里的一段（`CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
+private struct CueSegment: View, Equatable {
+    let rows: [CueRow]
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(rows, id: \.row.id) { $0.equatable() }
+        }
+    }
+}
+
 /// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
 /// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。要的那件活、在跑的那一轮、"已送达"都只交给用得着的那一格。
 private struct CueRow: View, Equatable {
@@ -291,9 +313,14 @@ private struct CueRow: View, Equatable {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
-    nonisolated static func == (a: Self, b: Self) -> Bool {
-        a.row == b.row && a.ref == b.ref && a.joined == b.joined && a.stamp == b.stamp && a.delivered == b.delivered && a.live == b.live
+    /// 这一格排出来什么样只看这几样。
+    nonisolated struct Key: Equatable {
+        let row: CueThread.Row, ref: CueTaskRef?, joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?
     }
+
+    nonisolated var key: Key { Key(row: row, ref: ref, joined: joined, stamp: stamp, delivered: delivered, live: live) }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 
     var body: some View {
         if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
