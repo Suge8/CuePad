@@ -77,7 +77,7 @@ extension CueStore {
   package func pendingSync() throws -> PendingSync {
     var pending = PendingSync(saves: [], deletes: [])
     for table in Table.synced {
-      pending.saves += try pendingSaves(table, where: "1")
+      pending.saves += try pendingSaves(table, where: "1", scanning: true)
       pending.deletes += try pendingDeletes(table)
     }
     return pending
@@ -96,10 +96,14 @@ extension CueStore {
   }
 
   /// "待推送"的唯一定义（全量、增量与单条判定都从这里来）：服务器从没收下过，或收下后又改过。
-  private func pendingSaves(_ table: Table, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [SyncKey] {
+  /// `scanning`：翻整张表（全量推导）时走只有 id 与修改时间的覆盖索引（`Schema.pendingIndexes`），不读表本身；按行查的照常走主键。
+  private func pendingSaves(
+    _ table: Table, where condition: String, _ arguments: [any SQLBindable] = [], scanning: Bool = false
+  ) throws -> [SyncKey] {
     try db.query(
       """
-      SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
+      SELECT t.id FROM \(table.rawValue) t \(scanning ? "INDEXED BY \(table.rawValue)_modified" : "")
+      LEFT JOIN syncRecords s INDEXED BY syncRecords_pushed ON s.recordName = t.id
       WHERE (\(condition)) AND (s.pushedModifiedAt IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
       """, arguments
     ) { SyncKey(table: table, id: $0.text(0)) }

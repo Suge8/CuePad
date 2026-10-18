@@ -35,6 +35,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         var started = 0
         var stopped = 0
         var syncNows = 0
+        var events: [String] = []
     }
 
     private let state = Mutex(State())
@@ -52,9 +53,17 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
 
     func emit(_ state: SyncState) { continuation.yield(state) }
 
+    /// 为 true 时 `start()` 等到 `startGate` 放行才返回（冷启动时同步还没启动完）。
+    let holdsStart = Mutex(false)
+    let startGate = AsyncStream<Void>.makeStream()
+    /// 启动完成与拉取的先后（"started"、"pull"）。
+    var events: [String] { state.withLock { $0.events } }
+
     func start() async throws {
         state.withLock { $0.started += 1 }
+        if holdsStart.withLock({ $0 }) { for await _ in startGate.stream { break } }
         if let error = startError.withLock({ $0 }) { throw error }
+        state.withLock { $0.events.append("started") }
     }
 
     /// 为 true 时 `stop()` 永不返回（模拟卡住的同步）。
@@ -68,7 +77,10 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     let syncNowHangs = Mutex(false)
 
     func syncNow() async throws {
-        state.withLock { $0.syncNows += 1 }
+        state.withLock {
+            $0.syncNows += 1
+            $0.events.append("pull")
+        }
         if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     /// 马上传过的记录名，按调用顺序。

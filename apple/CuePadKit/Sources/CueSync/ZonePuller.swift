@@ -72,7 +72,8 @@ actor ZonePuller {
   }
 
   private func drainPages() async throws {
-    var token = try await store.syncState(Self.tokenKey)
+    var stored = try await store.syncState(Self.tokenKey)
+    var token = stored
     // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪
     if token == nil {
       await coordinator.setCatchingUp(true)
@@ -84,7 +85,10 @@ actor ZonePuller {
       if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
       token = batch.token
-      try await store.setSyncState(Self.tokenKey, batch.token)
+      if batch.token != stored {  // 没有变化的一拉不写库
+        try await store.setSyncState(Self.tokenKey, batch.token)
+        stored = batch.token
+      }
     } while batch.moreComing
   }
 
