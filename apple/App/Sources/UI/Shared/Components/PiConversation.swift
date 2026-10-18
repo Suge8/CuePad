@@ -65,11 +65,7 @@ struct PiConversation: View {
         .environment(\.inlineTextSelection, false)
         #endif
         .previewPresenter($opened)
-        .task(id: items.count) {
-            guard let title = DebugHooks.preset.openPreview else { return }
-            opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session)) } }
-                .first { $0.preview.title == title || $0.preview.name == title }
-        }
+        .debugOpensPreview(in: items, session: session, $opened)
     }
 
     /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。

@@ -20,13 +20,12 @@ final class CueWatch {
     private(set) var sending = false
     /// 你最近一句写下的时刻（`CueDigest.lastYou`）：刚发出的那句读到了没有只看它。
     private(set) var lastYouSaid: Date?
-    /// 在路上或在做事（`CuePresence.shown` 有值）与此刻的表情（不算你正在写）：标签图标只看这两项。
+    /// 在路上或在做事（`CuePresence.shown` 有值）与此刻的表情（不算你正在写，`mood(composing:)`）：标签图标只看这两项。
     private(set) var busy = false
     private(set) var expression = CueMood.sleeping
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
     private(set) var lastSaid: String?
-    private(set) var lastSaidDone = false
     /// 它住的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
@@ -78,8 +77,9 @@ final class CueWatch {
         if let reading = start?.value { apply(reading, at: moment) }
     }
 
-    func mood(composing: Bool = false) -> CueMood {
-        CueMood.of(presence, waiting: waiting, composing: composing, justDone: lastSaidDone)
+    /// 你正在写时：闲着没人等的 Cue 在听（"刚做完"让给它）；不在写就是此刻的表情。
+    func mood(composing: Bool) -> CueMood {
+        composing ? CueMood.of(presence, waiting: waiting, composing: true) : expression
     }
 
     /// `session` 在最近一次接力里：它的状态标挂锚（`relaySpot`）。
@@ -107,7 +107,6 @@ final class CueWatch {
         set(\.expression, CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone))
         set(\.waiting, digest.waiting)
         set(\.lastSaid, digest.lastSaid)
-        set(\.lastSaidDone, digest.lastSaidDone)
         set(\.hostID, digest.hostID)
         set(\.hostName, digest.hostName)
         set(\.round, digest.state?.round)

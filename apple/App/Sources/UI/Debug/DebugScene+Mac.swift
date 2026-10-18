@@ -152,7 +152,7 @@ extension DebugScene {
         guard let path = defaults.string(forKey: "CuePadFolder") else { return }
         let name = URL(filePath: path).lastPathComponent
         guard (try? await store.projects())?.contains(where: { $0.name == name }) != true,
-            let project = try? await store.createProject(name: name, color: "#2F4A9E", icon: "globe")
+            let project = try? await store.createProject(name: name, color: "#2F4A9E", icon: ProjectIcon.globe.rawValue)
         else { return }
         try? await store.setDirectory(path, for: project.id)
     }
