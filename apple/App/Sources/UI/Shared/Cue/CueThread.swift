@@ -10,7 +10,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 在等你的（Kit 的 `cueMessagesWaitingForYou` 是唯一的规则）。
     let waiting: [CueMessage]
     let rows: [Row]
-    /// 紧挨着上面同一边一颗气泡的气泡（你的话接你的话、Cue 的话接 Cue 的话，中间没隔着时间）：收紧成一串（`Bubble`）。
+    /// 紧挨着上面同一边一颗气泡的气泡（你的话接你的话、Cue 的话接 Cue 的话，中间没隔着时间）：收紧成一串（`CueBubble`）。
     let joined: Set<UUID>
     /// 上面另起一段写时间的格子（`ChatTimeMarker`）：读到的第一格，与离上一格隔了 `ChatTime.gap` 以上或跨了天的。
     /// 换新的分隔自己写着时间，不另写。
@@ -21,11 +21,12 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    init(messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage]) {
+    /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）。
+    init(messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
-        rows = Self.rows(messages, tasks: tasks, waiting: waiting)
+        rows = Self.rows(messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
         let stamps = Self.stamps(rows)
         self.stamps = stamps
         joined = Set(zip(rows, rows.dropFirst()).compactMap { above, row in
@@ -41,7 +42,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         })
     }
 
-    static func read(from store: isolated CueStore) throws -> CueThread {
+    static func read(from store: isolated CueStore, showsSteps: Bool) throws -> CueThread {
         let messages = try store.cueMessages(limit: limit)
         let waiting = try store.cueMessagesWaitingForYou()
         let mentioned = Set((messages + waiting).compactMap(\.taskID))
@@ -53,13 +54,14 @@ nonisolated struct CueThread: Equatable, Sendable {
             guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { continue }
             tasks[id] = CueTaskRef(task: card, progress: progress[id], deliverables: deliverables[id] ?? [])
         }
-        return CueThread(messages: messages, tasks: tasks, waiting: waiting)
+        return CueThread(messages: messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 下面挂着交付物的是结果卡，见 `rows`），
     /// 连着的几条动态（含 Cue 自己醒来的那几轮的经过）收成一格，换新的地方一条分隔（点开是交接备忘）。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置（选了的带着你选的那一项）。
+    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留它说的话；它在做的事只在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         case cue(CueMessage, task: UUID?)
@@ -131,7 +133,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     /// 交付物挂在哪句话下面（只此一处）：一件活的 Cue 的话（还在"等你"里的除外）挂上这件活从上一次挂出之后、到这句话为止新发来的交付物
     /// （按发来的时刻切），挂了的就是结果卡——Cue 做完时写下的"「X」做完了"自然是一张。还在"等你"里的不消耗：答完它回到对话里时才挂。
-    private static func rows(_ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage]) -> [Row] {
+    private static func rows(_ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool) -> [Row] {
         let waiting = Set(waiting.map(\.id))
         var shown = Set<UUID>()
         /// 每件活上一次挂到的时刻
@@ -154,9 +156,11 @@ nonisolated struct CueThread: Equatable, Sendable {
                 let task = message.taskID.flatMap { tasks[$0] != nil && shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
+                // 有经过的那条就是它自己醒来那一轮的经过（正文是空的）
+                if !showsSteps, message.tools != nil { continue }
                 if case .notes(let group) = rows.last { rows[rows.count - 1] = .notes(group + [message]) } else { rows.append(.notes([message])) }
             case .handoff: rows.append(.renewed(message))
-            case .round: rows.append(.process(message))
+            case .round: if showsSteps { rows.append(.process(message)) }
             case nil: break
             }
         }

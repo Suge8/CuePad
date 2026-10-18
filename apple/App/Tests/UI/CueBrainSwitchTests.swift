@@ -22,7 +22,7 @@ struct CueBrainSwitchTests {
 
     /// 对话里"换了新上下文"的分隔（交接备忘）。
     private func boundaries(_ rig: CueHostTests.Rig) async throws -> [CueMessage] {
-        try await CueThread.read(from: rig.store).rows.compactMap { if case .renewed(let handoff) = $0 { handoff } else { nil } }
+        try await CueThread.read(from: rig.store, showsSteps: true).rows.compactMap { if case .renewed(let handoff) = $0 { handoff } else { nil } }
     }
 
     @Test func 选别的模型和思考强度_Cue下一轮就用新的_前面说的话还记得_没有换新分隔() async throws {
@@ -52,7 +52,7 @@ struct CueBrainSwitchTests {
         }
 
         try await eventually("出现换新分隔") { try await !self.boundaries(rig).isEmpty }
-        let rows = try await CueThread.read(from: rig.store).rows
+        let rows = try await CueThread.read(from: rig.store, showsSteps: true).rows
         let said = try #require(rows.firstIndex { if case .you(let message) = $0 { message.text == "暗号是 PAPAYA" } else { false } })
         let boundary = try #require(rows.firstIndex { if case .renewed = $0 { true } else { false } })
         #expect(boundary > said)
