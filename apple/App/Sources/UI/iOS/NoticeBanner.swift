@@ -3,8 +3,10 @@ import SwiftUI
 
 /// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖住顶栏中间的名牌或搜索框，
 /// 两侧操作仍可用；不在 Cue 对话上另占一排，iPad 面板也共用窗口的提示。
+/// 提示与会话前台提示的变化只在这里读：根视图读了的话，每弹一条、消一条整个窗口（分栏的每一栏）都要重算一遍。
 struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
@@ -36,6 +38,13 @@ struct NoticeBanner: View {
         .onChange(of: workspace.notice) { _, notice in
             if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
         }
+        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话或 Agent 列表时不弹；后台走系统推送
+        .onChange(of: workspace.services.sessionAlert) { _, alert in
+            guard let alert, navigation.showsAlert(about: alert.session) else { return }
+            workspace.say(alert.text, status: alert.status, link: .session(alert.session), duration: .seconds(5))
+        }
+        // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
+        .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
     }
 }
 
