@@ -106,6 +106,7 @@ extension DebugScene {
         for (files, title) in [([page], "登录页 v2：可点的完整页面"), ([shot, report], "截图与评审结论")] {
             if let added = try? await store.addPreviews(filesAt: files, title: title, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
+        if defaults.bool(forKey: "CuePadAllKinds") { created += await seedAllKinds(store, in: directory) }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
         let messages = [
@@ -118,8 +119,7 @@ extension DebugScene {
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
-            recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
-    }
+            recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))    }
 
     /// 演示用的工具活动：一周会议记录那一轮读了资料、改了笔记、跑了脚本。
     private static let notesWeek = PiChatMessage.Tools(
