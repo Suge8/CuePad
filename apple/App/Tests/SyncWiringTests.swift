@@ -87,6 +87,19 @@ struct SyncWiringTests {
         #expect(app.sync.syncNows == 1)
     }
 
+    /// 立即同步还没返回时再要立即同步（启动与回到前台常叠在一起、连点"立即同步"）：等同一拉，不另拉。
+    @Test func 立即同步叠在一起时_是同一拉() async throws {
+        app.sync.holdsPull.withLock { $0 = true }
+        let first = Task { await services.syncNow() }
+        try await eventually("第一拉在途") { app.sync.syncNows == 1 }
+        let second = Task { await services.syncNow() }
+        await quietPeriod(.milliseconds(100))  // 第二次立即同步已经进来、在等
+        app.sync.pullGate.continuation.yield()
+        await first.value
+        await second.value
+        #expect(app.sync.syncNows == 1)
+    }
+
     /// 静默推送把 App 冷启动到后台：推送先于同步启动完到达，等启动完再拉，不空手交还系统；启动后的立即同步就是这一拉，不拉两遍。
     @Test func 冷启动时先到的推送_等同步启动完再拉_只拉一次() async throws {
         app.sync.holdsStart.withLock { $0 = true }

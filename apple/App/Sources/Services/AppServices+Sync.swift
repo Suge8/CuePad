@@ -131,12 +131,14 @@ extension AppServices {
 
     /// 立即同步：立即拉一次（`pull`，与按节奏的拉取同一拉；待推送顺带发出去，不等），最多等 `syncWaitLimit` 就返回：下拉刷新的圈、"立即同步"按钮跟着它停，
     /// 不跟着网络一直转。没做完的在后台接着做，拉到的照常经资料库出现在界面上。期间 `isSyncingNow`，再要立即同步的
-    /// （启动时与回到前台的那一次常常叠在一起）是同一拉（`pull`），不另拉一遍。
+    /// （启动时与回到前台的那一次常常叠在一起）等这一次，不另拉一遍。
     func syncNow() async {
         guard sync != nil else { return }
-        syncNowWaits += 1
-        defer { syncNowWaits -= 1 }
-        await pullAtMost()
+        if let syncing { return await syncing.value }
+        let waiting = Task { await pullAtMost() }
+        syncing = waiting
+        await waiting.value
+        syncing = nil
     }
 
     private func pullAtMost() async {

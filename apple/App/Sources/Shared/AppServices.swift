@@ -87,10 +87,11 @@ final class AppServices {
     var cueViewers = 0
     /// 最近一拉（`pull`）：开拉的时刻与它的任务，拉完也留着（等它立即返回）。同步启动时先是那次启动（不是一拉，没有开拉时刻）。
     @ObservationIgnored var latestPull: (began: ContinuousClock.Instant?, task: Task<Void, Never>)?
-    /// 还在等的立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）有几个。
-    var syncNowWaits = 0
+    /// 还没返回的那一次立即同步（`syncNow`：启动、回到前台、下拉刷新、"立即同步"按钮）：期间再要立即同步的等它。
+    /// 拉取入口（`pull`）只合并开拉不早于要的那一刻的一拉，立即同步要的是"这一次还没返回的"，所以另记。
+    var syncing: Task<Void, Never>?
     /// 立即同步还没返回：按钮的忙碌与禁用读 `canSyncNow`，"本机是不是最新"读 `isCatchingUp`。
-    var isSyncingNow: Bool { syncNowWaits > 0 }
+    var isSyncingNow: Bool { syncing != nil }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
