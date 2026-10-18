@@ -330,7 +330,7 @@ final class AppServices {
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let store = try CueStore(url: location.databaseURL, timing: mac.timing)
+        let store = try CueStore(location: location, timing: mac.timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -364,7 +364,7 @@ final class AppServices {
     init(
         location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general, timing: Timing = .system
     ) throws {
-        let store = try CueStore(url: location.databaseURL, timing: timing)
+        let store = try CueStore(location: location, timing: timing)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location

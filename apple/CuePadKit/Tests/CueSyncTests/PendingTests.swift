@@ -28,7 +28,7 @@ import Testing
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let cli = try CueStore(url: rig.fixture.url)  // 另一个进程
+    let cli = try CueStore(location: .isolated(rig.fixture.directory))  // 另一个进程
     let card = try await cli.createCard(in: nil, body: "written by cli")
     await server.uploaded(rig.id(card.id))
 

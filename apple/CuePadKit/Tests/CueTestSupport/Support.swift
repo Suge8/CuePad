@@ -15,7 +15,7 @@ public final class Fixture: @unchecked Sendable {
   public let store: CueStore
 
   public init() throws {
-    store = try CueStore(url: directory.appending(path: "cuepad.db"))
+    store = try CueStore(location: .isolated(directory))
   }
 }
 
