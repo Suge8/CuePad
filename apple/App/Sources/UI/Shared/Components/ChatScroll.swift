@@ -144,14 +144,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     private let readingWidth: CGFloat
     private let inset: CGFloat
-    private let external: Binding<ChatFollow>?
+    /// 贴底与否、请求跳到哪：由放它的页面持有（页面据它收起顶栏、输入框）。
+    private let follow: Binding<ChatFollow>
     private let holding: Bool
     private let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatBottomInset) private var bottomInset
     /// 不从"贴着底边"起：那样内容一变高滚动区自己就一下跳到新的底（打开时停在最新处由 `initialOffset` 的底锚管）。
     @State private var position = ScrollPosition()
-    @State private var own = ChatFollow()
     @State private var offset = ScrollOffset()
     /// 发出那一刻浮着的回复框的高（`toNewest`、`bottomPadding`），发出的话到了（内容在下面长高）就放掉。
     @State private var held: CGFloat?
@@ -160,22 +160,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
     @State private var unheld = false
 
-    /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
     init(
-        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>? = nil, holding: Bool = false, @ViewBuilder content: () -> Content
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
-        external = follow
+        self.follow = follow
         self.content = content()
     }
 
     /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。
     private func margin(_ width: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
-
-    private var follow: Binding<ChatFollow> { external ?? $own }
 
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
     /// 那句到了（内容真的长高）再收，对话从回复框让出的地方滑上去；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
