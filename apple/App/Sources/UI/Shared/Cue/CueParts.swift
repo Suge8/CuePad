@@ -285,6 +285,8 @@ struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
     let open: (PreviewOpening) -> Void
+    /// 卡正在升起、沉下或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
+    @Binding var moving: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -298,7 +300,7 @@ struct CueWaitingDock: View {
     @State private var shown: CueMessage?
     /// 露出的比例（`RiseBehind`），0 是全藏在输入框后面。
     @State private var rise: CGFloat = 0
-    /// 减弱动态效果时来去只淡入淡出：整张卡淡没了再拿掉（拿掉时栏一下变矮）。
+    /// 减弱动态效果时来去只淡入淡出（卡浮着，占的高一下到位，对话只挪一次）。
     @State private var faded = true
     /// 正在换下一条：新旧两张原地交叉淡；头一张升起时不淡（卡不透明，下半截藏在输入框后面）。
     @State private var swapping = false
@@ -312,7 +314,8 @@ struct CueWaitingDock: View {
     #endif
 
     /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
-    /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出。
+    /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出：
+    /// 答完那一刻卡就不再占高、浮着淡掉，对话只定位一次。占的高由对话让出（手机经 `chatBottomInset`，Mac 是浮着的回复框）。
     /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -323,7 +326,7 @@ struct CueWaitingDock: View {
             }
         }
         .opacity(faded ? 0 : 1)
-        .modifier(RiseBehind(shown: rise))
+        .modifier(RiseBehind(shown: rise, floats: reduceMotion))
         .onChange(of: waiting.first?.id, initial: true) { old, new in follow(animated: old != new) }
     }
 
@@ -335,26 +338,36 @@ struct CueWaitingDock: View {
             guard shown != nil else { return }
             guard animated else { return leave() }
             if reduceMotion {
-                withAnimation(Motion.crossfade) { faded = true } completion: { if waiting.isEmpty { leave() } }
+                rise = 0
+                move(Motion.quick, { faded = true }) { if waiting.isEmpty { leave() } }
             } else {
-                withAnimation(Motion.snappy) { rise = 0 } completion: { if waiting.isEmpty { leave() } }
+                move(Motion.snappy, { rise = 0 }) { if waiting.isEmpty { leave() } }
             }
             return
         }
         swapping = shown != nil
         shown = next
-        guard animated else {
+        guard animated, !(reduceMotion && swapping) else {
             rise = 1
             faded = false
             return
         }
         if reduceMotion {
             rise = 1
-            withAnimation(swapping ? nil : Motion.crossfade) { faded = false }
+            move(Motion.quick, { faded = false })
         } else {
             // 换下一条时多半已在整高（沉到一半又来了一条就升回去）
             faded = false
-            withAnimation(Motion.snappy) { rise = 1 }
+            move(Motion.snappy, { rise = 1 })
+        }
+    }
+
+    /// 播一段卡的来去，播着的时候 `moving`；等动画整个走完（弹簧的尾巴也算）再收尾，不然最后几点的残条一下没了。
+    private func move(_ animation: Animation, _ change: () -> Void, then done: @escaping () -> Void = {}) {
+        moving = true
+        withAnimation(animation, completionCriteria: .removed, change) {
+            moving = false
+            done()
         }
     }
 
@@ -463,6 +476,8 @@ struct CueWaitingDock: View {
 private struct RiseBehind: ViewModifier, Animatable {
     /// 露出的比例，0 是全藏在输入框后面。
     var shown: CGFloat
+    /// 浮着（减弱动态效果）：不裁，占的高为 0 时卡往上浮在对话上（淡入淡出时用）。
+    let floats: Bool
 
     var animatableData: CGFloat {
         get { shown }
@@ -470,17 +485,22 @@ private struct RiseBehind: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        RiseLayout(shown: shown) { content }
-            // 只裁下沿（输入框那边）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留
-            .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom * shown) }
+        if floats {
+            RiseLayout(shown: shown, floats: true) { content }
+        } else {
+            RiseLayout(shown: shown, floats: false) { content }
+                // 只裁下沿（输入框那边）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留
+                .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom * shown) }
+        }
     }
 
     private static let shadowRoom: CGFloat = 24
 }
 
-/// 按露出的比例占高，孩子按整高顶对齐排：顶边随占的高上下，下半截在外面。
+/// 按露出的比例占高，孩子按整高顶对齐排：顶边随占的高上下，下半截在外面；浮着时底对齐，多出的往上浮。
 private struct RiseLayout: Layout {
     let shown: CGFloat
+    let floats: Bool
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
@@ -492,6 +512,7 @@ private struct RiseLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
         let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-        child.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
+        let origin = floats ? CGPoint(x: bounds.minX, y: bounds.maxY - size.height) : bounds.origin
+        child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
 }

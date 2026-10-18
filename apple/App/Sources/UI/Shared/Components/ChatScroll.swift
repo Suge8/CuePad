@@ -206,7 +206,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
                     let screen = geometry.containerSize.height.rounded()
                     let end = (geometry.contentSize.height - geometry.containerSize.height).rounded()
-                    offset.set(read: max(0, read.rounded()), end: end, container: screen)
+                    offset.set(read: max(0, read.rounded()), end: end)
                     return Reading(
                         nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
                         height: (geometry.contentSize.height - padding).rounded(), end: end, inset: geometry.contentInsets.top.rounded())
@@ -236,10 +236,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
                     // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                     // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
-                    // 最新处变近了滚动区自己会退回来
+                    // 最新处变近了（底下让出的那块变矮："等你"卡沉下去）而偏移已越过它时也补回去：iOS 的滚动区不一定自己退回来，底下空着一截
                     if grown > 0, reading.inset == last.inset {
                         slide()
-                    } else if reading.end > last.end || reading.inset != last.inset {
+                    } else if reading.end > last.end || reading.inset != last.inset || offset.read > reading.end {
                         scroll(to: reading.end)
                     }
                 }
@@ -280,23 +280,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             var delivered: Reading?
             /// 补滚换着用的两种写法（`scroll(to:)`）：这一次用不用"滚到那一点"。
             var byPoint = false
-            /// 可见区的高（扣掉上下边距）：底下的栏在长或缩时每帧都变（`slide`）。
-            var container: CGFloat = 0
         }
 
         private let values = Mutex(Values())
 
-        func set(read: CGFloat, end: CGFloat, container: CGFloat) {
+        func set(read: CGFloat, end: CGFloat) {
             values.withLock {
                 $0.read = read
                 $0.end = end
-                $0.container = container
             }
         }
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
-        var container: CGFloat { values.withLock { $0.container } }
 
         /// 换上这次交给 action 的读数，返回上一次交过去的。
         func deliver(_ reading: Reading) -> Reading? {
@@ -327,17 +323,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 要再画两百多毫秒，正好压在发出的话送达、状态变了的那几次更新上，那几帧本来不用画，一画就掉帧。
     /// 等长出来的这一帧提交了再滑：这一帧要排出新的一条，排版重；动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
     /// 滑到的是那时的最新处（留白收起之后）；等的这一帧里用户开始滚了就不滑了。
-    /// 底下的栏正在长高或变矮（"等你"卡升起、沉下，键盘）时等它停了再滑：这期间可见区每帧都变，滚动区自己按它夹住偏移，
-    /// 半路按当时的最新处滑的话，栏再变矮时又被夹回来，对话先上后下地抖（答完"等你"时问题与回答回到对话里、卡同时沉下去）。
     private func slide() {
         Task {
-            var container = offset.container
-            while true {
-                await NextFrame.wait()
-                let now = offset.container
-                if now == container { break }
-                container = now
-            }
+            await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
             withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
