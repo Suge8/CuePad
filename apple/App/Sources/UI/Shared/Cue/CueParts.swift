@@ -489,8 +489,13 @@ private struct RiseBehind: ViewModifier, Animatable {
             RiseLayout(shown: shown, floats: true) { content }
         } else {
             RiseLayout(shown: shown, floats: false) { content }
-                // 只裁下沿（输入框那边）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留
-                .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom * shown) }
+                // 升沉途中只裁下沿（输入框那边，卡的下半截在那后面）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留；
+                // 停稳了下沿也让出，影子不在输入框顶边齐齐切断
+                .mask {
+                    Rectangle()
+                        .padding([.horizontal, .top], -RiseBehind.shadowRoom * shown)
+                        .padding(.bottom, shown < 1 ? 0 : -RiseBehind.shadowRoom)
+                }
         }
     }
 

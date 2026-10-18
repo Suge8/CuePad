@@ -34,10 +34,6 @@ struct CuePage: View {
     @State private var opened: PreviewOpening?
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
-    #if os(iOS)
-    /// "等你"卡此刻占的高：对话在底下让出这么高（`chatBottomInset`，排进对话里，同 Mac 的浮着的回复框），卡长一点让一点、同一帧。
-    @State private var dockHeight: CGFloat = 0
-    #endif
 
     /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
     private static let paging = ChatPaging(first: 40, step: 40)
@@ -87,21 +83,18 @@ struct CuePage: View {
     #else
     /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。iPhone 上页头在导航栏那一排里，左边是系统的返回
     /// （自带顶上一排的页的规则，同搜索页）；宽屏与右侧面板里列表就在旁边，没有返回。
-    /// "等你"卡浮在对话底上、贴着输入框（叠在内容上，跟着键盘与输入框走），对话按它此刻的高让出地方（`dockHeight`）：放进底下那一栏的话，
-    /// 栏一变高系统当帧挪对话、滚动区下一帧才跟上，卡升起时压住最后一行。
+    /// "等你"卡浮在对话底上、贴着输入框（`FloatingReply`，跟着键盘与输入框走）。
     private var page: some View {
-        chat
-            .environment(\.chatBottomInset, dockHeight)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        FloatingReply(backed: false) {
+            chat
+        } reply: {
+            dock
+                .padding(.horizontal, 12)
+                .frame(maxWidth: Self.readingWidth)
+        }
             .scrollDismissesKeyboard(.interactively)
             .fadesUnderBars(throughTopRow: inBar)
             .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
-            .overlay(alignment: .bottom) {
-                dock
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: Self.readingWidth)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { dockHeight = $0 }
-            }
             .overlay(alignment: .top) { CueHeader(inBar: inBar) }
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 bottom

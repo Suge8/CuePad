@@ -120,7 +120,7 @@ extension EnvironmentValues {
     @Entry var chatHighlight: UUID?
     /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
     @Entry var chatJump: ChatJump?
-    /// 浮在对话底上的回复框占的高（Mac，`FloatingReply`）：对话在底下让出这么高，最新一行停在它上方。
+    /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框、手机的"等你"卡）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
 }
 
@@ -244,7 +244,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     }
                 }
                 .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
-                .onChange(of: holding) {
+                .onChange(of: holding, initial: true) {
+                    offset.holding = holding
                     unheld = false
                     guard !holding, deferred else { return }
                     deferred = false
@@ -280,6 +281,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             var delivered: Reading?
             /// 补滚换着用的两种写法（`scroll(to:)`）：这一次用不用"滚到那一点"。
             var byPoint = false
+            /// 此刻的 `holding`：排到下一帧的上滑执行前再看一次（排它的那次读数可能早于页面开始 hold 的那次更新）。
+            var holding = false
         }
 
         private let values = Mutex(Values())
@@ -293,6 +296,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
+        var holding: Bool {
+            get { values.withLock { $0.holding } }
+            set { values.withLock { $0.holding = newValue } }
+        }
 
         /// 换上这次交给 action 的读数，返回上一次交过去的。
         func deliver(_ reading: Reading) -> Reading? {
@@ -327,6 +334,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         Task {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
+            if offset.holding, !unheld {
+                deferred = true
+                return
+            }
             withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
     }

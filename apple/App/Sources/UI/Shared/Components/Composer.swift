@@ -112,7 +112,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
             if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
         }
-        .animation(Motion.quick, value: sendVisible)
         .animation(Motion.quick, value: paletteCommands.isEmpty)
         .onChange(of: draft.text) { highlighted = 0 }
         .animation(Motion.quick, value: draft.attachments.map(\.id))
@@ -203,6 +202,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
         .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+        // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
+        .animation(Motion.quick, value: sendVisible)
     }
 
     private var plus: some View {
