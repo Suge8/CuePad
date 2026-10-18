@@ -11,6 +11,8 @@ import UniformTypeIdentifiers
 /// 所以没被引用的图片不上传，被引用的本机图片一定有记录。
 public struct AttachmentFiles: Sendable {
   let directory: URL
+  /// 这个库的缓存目录（`LibraryLocation.caches`）：按文件名放的那份在这里，界面的缩略图与快照也放这里。
+  public let caches: URL
   private static let chunkSize = 1 << 20
 
   /// 存入图片数据，返回内容哈希（写进正文的 `cuepad://img/<哈希>`）。同哈希文件已在则不重写、不再解析；不是图片抛 `notAnImage`。
@@ -54,8 +56,7 @@ public struct AttachmentFiles: Sendable {
   /// 系统的快速查看、"存到文件"与 Agent 的读文件工具都按扩展名认类型。文件不在本机返回 nil。
   public func named(_ hash: String, as name: String) -> URL? {
     guard let original = fileURL(for: hash) else { return nil }
-    let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
+    let directory = caches.appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
     // 文件名来自同步的记录：不能带路径
     let target = directory.appending(path: name.replacing("/", with: "_").replacing("..", with: "_"))
     guard !FileManager.default.fileExists(atPath: target.path) else { return target }

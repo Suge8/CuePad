@@ -113,7 +113,7 @@ import Testing
 
   @Test func reopeningTheFileKeepsData() async throws {
     let card = try await store.createCard(in: nil, body: "persisted")
-    let reopened = try CueStore(url: fixture.url)
+    let reopened = try CueStore(location: .isolated(fixture.directory))
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
@@ -138,7 +138,7 @@ import Testing
       \(added.map { "DROP INDEX \($0[0]);" }.joined()) PRAGMA user_version = 50;
       """)
 
-    let upgraded = try CueStore(url: fixture.url)
+    let upgraded = try CueStore(location: .isolated(fixture.directory))
     let converted = try #require(try await upgraded.card(card.id))
     #expect(converted.body == "上\n---\n中 ---split--- 夹着\n---\n下" && converted.modifiedAt > before)
     #expect(try await upgraded.card(plain.id)?.modifiedAt == untouched)
@@ -154,6 +154,6 @@ import Testing
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = \(version);")
-    #expect(throws: error) { try CueStore(url: url) }
+    #expect(throws: error) { try CueStore(location: .isolated(url.deletingLastPathComponent())) }
   }
 }

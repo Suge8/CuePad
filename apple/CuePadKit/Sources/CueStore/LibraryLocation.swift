@@ -51,13 +51,21 @@ public struct LibraryLocation: Equatable, Sendable {
 
   public var databaseURL: URL { directory.appending(path: "cuepad.db") }
 
+  /// 可随时重建的缓存（交付物按文件名放的一份、缩略图与网页快照）：真实库在系统的缓存目录（系统可清、不进备份），
+  /// 隔离库在隔离目录的 `Caches/` 里——本机构建、测量与测试不往正式版的缓存里写。
+  public var caches: URL { isIsolated ? directory.appending(path: "Caches", directoryHint: .isDirectory) : URL.cachesDirectory }
+
+  /// 指向一个隔离目录（同 `CUEPAD_LIBRARY_DIR`）：测试、临时库用。
+  public static func isolated(_ directory: URL) -> LibraryLocation {
+    LibraryLocation(directory: directory, isIsolated: true)
+  }
+
   public static func resolve(
     environment: [String: String] = ProcessInfo.processInfo.environment, base: Base = .platform
   ) throws -> LibraryLocation {
     if let override = environment[environmentKey], !override.isEmpty {
       guard override.hasPrefix("/") else { throw LibraryLocationError.relativePath(override) }
-      return LibraryLocation(
-        directory: URL(filePath: override, directoryHint: .isDirectory), isIsolated: true)
+      return .isolated(URL(filePath: override, directoryHint: .isDirectory))
     }
     switch base {
     case .appGroup(let container):
