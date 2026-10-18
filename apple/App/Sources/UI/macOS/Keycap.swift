@@ -1,7 +1,4 @@
 #if os(macOS)
-import AppKit
-import CuePi
-import CueStore
 import SwiftUI
 
 /// 键帽：快捷键在界面上只有这一种写法（设置里显示或隐藏 CuePad 的快捷键、⌘K 面板的 esc）。
@@ -17,5 +14,4 @@ struct Keycap: View {
             .background(palette.fill, in: .rect(cornerRadius: 4))
     }
 }
-
 #endif

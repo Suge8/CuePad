@@ -249,7 +249,7 @@ extension Workspace {
         var box = draft
         let files = services.store.files
         let binding = Binding(get: { box }, set: { box = $0 })
-        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        await speak(to: .session(session, mode: mode, card: card), from: binding) { try $0.stored(in: files) }?.value
         return try #require(try await services.store.deliveryRequests().first)
     }
 }

@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。

@@ -157,7 +157,7 @@ private struct SplitSidebar: View {
             VStack(alignment: .leading, spacing: Self.rowGap) {
                 SidebarSearchField().padding(.bottom, 10)
                 CueSidebarItem().padding(.bottom, 6)
-                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, badge: badge($0)) }
+                ForEach(SidebarOutline.places, id: \.self) { SidebarRow(entry: $0, badge: $0.count(in: workspace)) }
                 if let catalog = workspace.catalog {
                     let outline = SidebarOutline(catalog)
                     // 各项目的"此刻"在数据变化时算一次，行只拿结果
@@ -196,14 +196,6 @@ private struct SplitSidebar: View {
         Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink3)
             .padding(.top, Self.groupGap).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-    }
-
-    private func badge(_ entry: SidebarOutline.Entry) -> Int {
-        switch entry {
-        case .tasks: workspace.catalog?.allTasks.open ?? 0
-        case .sessions: services.liveSessions.total
-        default: 0
-        }
     }
 
     /// 同步到不了 Mac 时设置那一行带的点（提示赭黄、真出错胭脂），点进设置看 iCloud 那一节；平时没有。
@@ -318,20 +310,6 @@ private struct SidebarRow: View {
 private extension SidebarRow {
     init(entry: SidebarOutline.Entry, badge: Int = 0, alert: Alert? = nil) {
         self.init(route: entry.route, title: entry.title, icon: entry.icon, badge: badge, alert: alert)
-    }
-}
-
-private extension SidebarOutline.Entry {
-    /// 点这一行去的页。
-    var route: Route {
-        switch self {
-        case .tasks: .tasks
-        case .sessions: .agent
-        case .allProjects: .shelf
-        case .archive: .archive
-        case .trash: .trash
-        case .settings: .settings
-        }
     }
 }
 

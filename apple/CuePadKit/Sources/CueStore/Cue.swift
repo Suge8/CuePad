@@ -272,7 +272,7 @@ public enum CueEnableError: LocalizedError, Equatable {
 }
 
 /// Cue 此刻的上下文（一个班次一份）：用了多少 token、模型的窗口（大脑没报为 nil）、这个班次几点起。用到 `renewAt` 后，
-/// 下一次醒来先写交接备忘再换新（`CueKeeper`）。随 `CueState` 同步，各端的上下文用量只读它。
+/// 下一次醒来的信封要它先写交接备忘再换新（`CueEnvelope`）。随 `CueState` 同步，各端的上下文用量只读它。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
   public var window: Int?
@@ -281,7 +281,7 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   /// 换新线：6 万 token。
   public static let renewAt = 60_000
 
-  /// token 数的写法（交给大脑的信封与各端的上下文用量同一种）：不到一千写原数，往上写 5.3k、128k。
+  /// token 数的写法（各端的上下文用量与 Mac 的运行情况同一种）：不到一千写原数，往上写 5.3k、128k。
   public static func tokens(_ count: Int) -> String {
     count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
   }
@@ -331,7 +331,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .delete: "删除"
     case .outside: "动项目以外的东西"
     case .budget: "超出预算"
-    case .rule: "违反或改动用户的规矩，或他的规矩要你先问的事"
+    case .rule: "违反或改动他的规矩，或他的规矩要你先问的事"
     }
   }
 

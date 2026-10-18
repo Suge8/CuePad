@@ -1,8 +1,6 @@
 #if os(iOS)
 import CueStore
 import CueSync
-import Foundation
-import Observation
 import SwiftUI
 
 /// iOS 的导航状态，三种宽度同一个状态机：侧栏选中的页（`root`）与其上推入的页（`path`），iPhone 上分栏折叠后此刻在列表还是在页里（`column`），
@@ -18,16 +16,12 @@ final class Navigation {
         var created: ((UUID) -> Void)?
     }
 
-    /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
+    /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的）。
     struct NewSession: Identifiable {
-        struct Launched: Equatable, Sendable {
-            var request: UUID
-            var token: String
-        }
-
         let id = UUID()
         var project: UUID?
-        var launched: Launched?
+        /// 已经发出的那一次：输入框打开时接着看它的进度（界面上的入口都不带，只有截图用的调试画面摆出发出后的样子）。
+        var launched: SessionLaunch?
         /// 从"发给 Agent"选了新会话：任务的正文与补的话带过来作开场。
         var draft: ComposerDraft?
         /// 为哪件任务开的（发给 Agent 时定下）：开好后关联它。
@@ -46,16 +40,13 @@ final class Navigation {
         }
 
         /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent` 开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
-        /// （没有就是带上的第一张）。返回这一次的请求与认领标识。
+        /// （没有就是带上的第一张）。
         func launch(
             in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, services: AppServices
-        ) async throws -> Launched {
-            let token = UUID().uuidString
-            let opening = try draft.stored(in: services.store.files).nonEmpty
-            let request = try await services.launch(
-                PiLaunch(project: project.id, prompt: opening, token: token, agent: agent), title: name ?? project.name, on: binding.hostID,
-                card: card ?? draft.attachments.first?.card)
-            return Launched(request: request.id, token: token)
+        ) async throws -> SessionLaunch {
+            try await services.launchSession(
+                in: project.id, prompt: try draft.stored(in: services.store.files).nonEmpty, title: name ?? project.name, on: binding.hostID,
+                card: card ?? draft.attachments.first?.card, agent: agent)
         }
     }
 
@@ -83,8 +74,7 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 宽屏：右侧的 Cue 面板是否展开。
     var agentPanel = false
-    /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
-    /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
+    /// 各会话回复框的草稿在这里（`AppSettings.replyDraft`）："发到 Mac"带来的卡片或任务写进那个会话的草稿（`openSession`）。
     @ObservationIgnored private let settings: AppSettings
 
     init(settings: AppSettings) {

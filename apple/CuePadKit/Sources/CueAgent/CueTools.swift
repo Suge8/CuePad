@@ -35,17 +35,15 @@ public struct CueTools: Sendable {
       [
         "name": "task",
         "description": """
-          任务与会话（你不写代码，活交给会话做）。task 写任务的 id 前缀或标题；session 写会话 id 前缀或会话名（信封与 peek 里有）。标题与步骤名宽不过 \(CueName.limit)（汉字算 2，约 12 个汉字），超了整件退回。body、text 里原样写的 ![](cuepad://img/<hash>) 会作为图片交给会话。
-          任务与每个步骤各有正文：标题下面要交代给 Agent 的话，开工时连同标题作为第一句发出（步骤开新会话时先带上顶层任务的标题与正文作背景，接着用上一步会话的只发这一步的），发出后留在任务上；
-          add{title,project?,steps?,body?,session?} 建任务，body 是它的正文（各步骤自己要交代的用 edit 写在步骤上）；带 session 把会话绑到新建的任务上：没绑任务的会话（你要为它的结果负责时），或已完成的事用过的会话（在它上面做别的事，旧任务照旧完成）；不写 body，话用 say 说；project 缺省是会话所在的项目；
-          edit{task,title?,body?,steps?,project?,reopen?} 改标题、换掉正文、追加步骤或挪到项目；追加步骤与 reopen:true 都让已完成的任务不再算做完（同用户点掉圆圈），只在确认它其实没做完时用；
-          start{task,agent?,model?,effort?,fresh?} 开工：叶子（task 有步骤时是第一个没做完的步骤）还没会话时，同一任务的上一步有会话就接着用它（哪怕已结束，执行时恢复），否则在项目文件夹用 agent（pi/claude/codex/opencode，缺省是那台 Mac 的默认）开新会话，model 写 provider/id（claude、codex 只写 id）；已绑着会话就用 say；上下文太长或要换 Agent 时用 fresh:true 开新的（上一步的会话随之结束）；
-          say{task|session,text,when:now|after,model?,effort?} 对会话说话：给 task 是它在做的叶子的会话。会话在等能代答的提问时，text 就是答案（选项原文、序号、是/否，选择题也收自己写的回答）；否则 now 马上说、after 等它做完（他发起的那一轮还没完时 now 也等它做完）。带 model、effort 先给会话换上再说。会话已结束也能说：CuePad 先恢复它。说话不改任务的状态；
-          say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒再返回：已送达、没送到（出错，带原因）或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
-          peek{task?|session?} 只读：都不带看所有没做完的事、不归没做完的事的活会话（"在做"的归你管）与最近完成的几件（各带会话与它此刻的状态），带 task 看叶子、近况、最近几轮问答（"他"是用户说的，"你"是你发的）与发到手机的文件（带本机路径），带 session 看那个会话；
-          stop{task|session} 停下这一轮；
-          done{task,evidence?} 做完：你按证据确认做完了就完成，不请用户确认。下一步会接着用它的会话就留着，否则（没有下一步、下一步换了会话）结束；结束的会话照样能 say，CuePad 先恢复它；
-          顶层任务（步骤要都完成）要 evidence：1–\(evidenceCount) 条结论（如"\(evidenceExample)"）、每条宽不过 \(evidenceLimit)（约 20 个汉字），超了退回；完成时 CuePad 把标题与证据拼成结果告诉用户，不用再 tell。
+          任务与会话。task 写任务的 id 前缀或标题，session 写会话的 id 前缀或会话名（信封与 peek 里有）。body、text 里原样写的 ![](cuepad://img/<hash>) 作为图片交给会话。
+          add{title,project?,steps?,body?,session?}：建任务。body 是正文，开工时连同标题作为会话的第一句（步骤开新会话时先带上顶层任务的标题与正文）；步骤自己的话用 edit 写在步骤上。同一项目里已有同名没做完的任务时不另建，返回那件。带 session 把那个会话绑到新任务上：不写 body（话用 say 说），project 缺省是会话所在的项目；
+          edit{task,title?,body?,steps?,project?,reopen?}：改标题、换掉正文、追加步骤、连同步骤挪到项目；追加步骤与 reopen:true 都让已完成的任务回到没做完；
+          start{task,agent?,model?,effort?,fresh?}：开工叶子（task 有步骤时是第一个没做完的步骤）。同一任务的上一步有会话就接着用它（已结束的先恢复），否则在项目文件夹开新会话：agent 缺省是那台 Mac 的默认，model 写 provider/id（claude、codex 只写 id）。叶子已有会话用 say；fresh:true 开新会话（上一步的会话随之结束）；
+          say{task|session,text,when?,model?,effort?}：对会话说话（给 task 是它在做的叶子的会话；结束了的先恢复）。会话在等回答时 text 就是答案（选项原文、从 1 起的序号或 是/否；允许自己写的题才收别的话）；否则 when 缺省 now 马上说，after 等它做完再说。带 model、effort 先给会话换上；
+          say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
+          peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
+          stop{task|session}：停下会话这一轮；
+          done{task,evidence?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）。
           """,
         "inputSchema": schema(
           [
@@ -62,10 +60,8 @@ public struct CueTools: Sendable {
       [
         "name": "tell",
         "description": """
-          对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他允许时才 tell 带 ask。
-          ask 是请他允许、等他回答（"等你"），只有这几类：\(CuePrompt.asks)。选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），不允许时他写一句别的话给你；
-          text 写清要做什么、为什么、不做会怎样；允许清单里有的（关联任务所在的项目或所有项目），ask 会被拒，直接做。urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务（按它的项目查允许清单）。
-          withdraw 写"等你"里你问的那条的 id：你已拿了主意或情况变了，撤回它（从"等你"里消失）；可同时带 text 说为什么，或换个问法再问。
+          对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)；选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），不允许时他另外写一句给你。带 ask 时 text 写清要做什么、为什么、不做会怎样；允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里你问的那条的 id，撤回它，可同时带 text 说明或换个问法。
           """,
         "inputSchema": schema(
           [
@@ -78,10 +74,10 @@ public struct CueTools: Sendable {
       [
         "name": "memory",
         "description": """
-          你的长期记忆，一行一条（≤280 字节），序号就是身份。note{text,pin?} 记一条；recall{query} 只读：全文找记忆、对话与任务；
-          forget{line} 忘掉一条；pin{line,pinned} 一直记着或取消；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；
-          merge{lo,hi,text} 把待合并的块写成一行摘要；renew{handoff} 上下文快满时写交接备忘，换新上下文接着做；
-          allow{ask,project?,allowed?} 改允许清单：他说某类要先问的事以后不用问时记上（只对一个项目带 project，不带是所有项目），他说又要先问了带 allowed:false 去掉；ask 只能是 \(Self.allowable)。
+          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话与任务；
+          forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
+          renew{handoff} 写交接备忘，然后换新上下文：只写你在管的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
+          allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
           """,
         "inputSchema": schema(
           [
@@ -104,7 +100,9 @@ public struct CueTools: Sendable {
   /// done 的证据：至多这么多条，每条宽不过 `evidenceLimit`（`CueName.width`）。结果消息由 Store 拼（`CueReport.text`）。
   static let evidenceCount = 3
   static let evidenceLimit = 40
-  /// 证据的示例（系统提示、工具说明与证据超长的报错共用）：一句行为上的结论。
+  /// 交接备忘至多这么多字：新上下文每次接上都带着它，在做的事信封里本来就有。
+  static let handoffLimit = 600
+  /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。
   static let evidenceExample = "登录后进到首页"
 
 
@@ -197,6 +195,13 @@ public struct CueTools: Sendable {
     }
     var project = try await args.string("project").asyncMap(project)
     if project == nil, let home = session?.projectID { project = try await store.projects().first { $0.id == home } }
+    // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
+    if session == nil, let same = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: {
+      $0.parentID == nil && $0.projectID == project?.id && $0.heading.caseInsensitiveCompare(heading) == .orderedSame
+    }) {
+      let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与步骤也没写（要改用 edit）" : ""
+      return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)：同一件事接着用它。")
+    }
     let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: project?.id)
     var steps: [UUID] = []
     for step in names { steps.append(try await store.createTask(step, under: top.id).id) }
@@ -550,7 +555,11 @@ public struct CueTools: Sendable {
       try await store.setCueSummary(lo: lo, hi: hi, text: try args.required("text"))
       return .ok("#\(lo)-\(hi - 1) 合成了一行。")
     case "renew":
-      let message = try await store.addCueMessage(.handoff, text: try args.required("handoff"))
+      let handoff = try args.required("handoff")
+      guard handoff.count <= Self.handoffLimit else {
+        throw Failure("交接 \(handoff.count) 字，上限 \(Self.handoffLimit)，没写：只写你在管的事各自做到哪、下一步，和他之间没了结的事，每件一两句")
+      }
+      let message = try await store.addCueMessage(.handoff, text: handoff)
       return .ok("交接备忘写好了，接下来换新上下文。（\(message.id.shortID)）")
     case "allow": return try await allow(args)
     case let other: throw Failure("memory 没有 \(other)：可用 note / recall / forget / pin / remind / merge / renew / allow")
