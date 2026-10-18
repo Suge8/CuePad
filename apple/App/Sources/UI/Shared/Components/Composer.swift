@@ -75,12 +75,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         return PiSlash.matches(draft.text, in: commands) ?? []
     }
 
-    /// 选的图还在出时不能提交（发出后草稿清空，后到的图会落空）。
-    private var canSubmit: Bool { (hasContent || submitsEmpty) && draft.loadingImages.isEmpty }
-
-    /// 此刻能用的快捷键：发送的两种要能提交。
+    /// 此刻能用的快捷键：发送的两种要有内容。
     private func shortcut(_ key: ReplyShortcut) -> (() -> Void)? {
-        [.send, .sendHeld].contains(key) && !canSubmit ? nil : shortcuts[key]
+        [.send, .sendHeld].contains(key) && !hasContent && !submitsEmpty ? nil : shortcuts[key]
     }
 
     /// 文字区交来的按键：面板打开时归面板；空着时 ↑ 调回 `recall`。返回是否已处理（没处理的照常输入）。
@@ -120,7 +117,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .onChange(of: draft.text) { highlighted = 0 }
         .animation(Motion.quick, value: draft.attachments.map(\.id))
         .animation(Motion.quick, value: draft.images.map(\.id))
-        .modifier(ImageSources(source: $source, draft: $draft))
+        .modifier(ImageSources(source: $source, images: $draft.images))
         .modifier(CardPanels(on: accepts.contains(.cards), picking: $source.isOn(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
         } preview: { outbox in
@@ -141,7 +138,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.cards) {
                 ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity) }
             }
-            if accepts.contains(.images), !draft.images.isEmpty || !draft.loadingImages.isEmpty {
+            if accepts.contains(.images), !draft.images.isEmpty {
                 imageStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
             // 文字区一直是这一个（换形态时不重建，焦点与输入法组合都不断）；一行时"＋"在它左边
@@ -203,7 +200,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var sendSlot: some View {
         ZStack {
-            if sendVisible { send().disabled(!draft.loadingImages.isEmpty).transition(.scale(scale: 0.6).combined(with: .opacity)) }
+            if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
         .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
     }
@@ -275,12 +272,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                         .accessibilityLabel("移除这张图片")
                     }
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
-                }
-                ForEach(draft.loadingImages, id: \.self) { _ in
-                    Spinner(.small)
-                        .frame(width: PickedImage.previewSide, height: PickedImage.previewSide)
-                        .background(palette.fill, in: .rect(cornerRadius: 12, style: .continuous))
-                        .accessibilityLabel("图片载入中")
                 }
             }
         }

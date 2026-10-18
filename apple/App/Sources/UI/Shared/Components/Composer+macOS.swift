@@ -3,7 +3,7 @@ import AppKit
 import CueText
 import SwiftUI
 
-nonisolated extension PickedImage {
+extension PickedImage {
     static func converted(_ data: Data) -> Data? {
         NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: quality])
     }
@@ -21,7 +21,7 @@ extension ComposerMetrics {
 /// "＋"里图片的来源：选图片文件，选好的追加到图片条。
 struct ImageSources: ViewModifier {
     @Binding var source: ComposerSource?
-    @Binding var draft: ComposerDraft
+    @Binding var images: [PickedImage]
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
@@ -31,9 +31,7 @@ struct ImageSources: ViewModifier {
                 source = nil
                 Task {
                     do {
-                        let picked = try await FilePicker.images()
-                        let slots = picked.map { _ in draft.startImage() }
-                        for (slot, data) in zip(slots, picked) { draft.finishImage(slot, await PickedImage.load(data)) }
+                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
                     } catch {
                         workspace.fail(error)
                     }

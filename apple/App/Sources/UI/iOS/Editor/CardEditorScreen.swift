@@ -129,7 +129,7 @@ struct CardEditorScreen: View {
         Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                handle.insertImage(await PickedImage.outgoing(data))
+                handle.insertImage(PickedImage.outgoing(data))
             } catch {
                 workspace.fail(error)
             }

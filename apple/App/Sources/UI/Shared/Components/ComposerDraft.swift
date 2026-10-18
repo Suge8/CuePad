@@ -18,9 +18,6 @@ struct Outbox: Identifiable {
 struct ComposerDraft {
     var text = ""
     var images: [PickedImage] = []
-    /// 选好、还在后台出的图（`PickedImage.load`）：算作带了图片，出好前不能发（`Composer` 的提交钮与快捷键）；
-    /// 草稿被换掉或清空时一起作废，出好也不再落进别的草稿。
-    var loadingImages: [UUID] = []
     var attachments: [Outbox] = []
     var notes: [ReplyNote] = []
 
@@ -37,13 +34,13 @@ struct ComposerDraft {
         let parts = [
             notes.isEmpty ? nil : "\(notes.count) 条批注",
             attachments.isEmpty ? nil : "\(attachments.count) 条灵感",
-            images.isEmpty && loadingImages.isEmpty ? nil : "\(images.count + loadingImages.count) 张图片",
+            images.isEmpty ? nil : "\(images.count) 张图片",
         ].compactMap { $0 }
         return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
     }
 
     /// 带的内容里有没有图片：自己选的，或带上的卡片里的。
-    var hasImages: Bool { !images.isEmpty || !loadingImages.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
+    var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
 
     /// "＋ 选灵感"带上一张（作为这次消息的附件，卡片本身不动）；已带着的不重复。
     mutating func attach(_ card: Card) {
@@ -67,23 +64,9 @@ struct ComposerDraft {
         }
     }
 
-    /// 选好一张图、开始在后台出：先占一个位，返回它的号。
-    mutating func startImage() -> UUID {
-        let id = UUID()
-        loadingImages.append(id)
-        return id
-    }
-
-    /// 那张图出好了（读不出为 nil）：占位还在才落进图片条。
-    mutating func finishImage(_ id: UUID, _ image: PickedImage?) {
-        guard let index = loadingImages.firstIndex(of: id) else { return }
-        loadingImages.remove(at: index)
-        if let image { images.append(image) }
-    }
-
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
-        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || (images.isEmpty && loadingImages.isEmpty)) && (!kinds.contains(.cards) || attachments.isEmpty)
+        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
             && (!kinds.contains(.notes) || notes.isEmpty)
     }
 
@@ -93,7 +76,6 @@ struct ComposerDraft {
         guard !kinds.contains(.images) else { return self }
         var draft = self
         draft.images = []
-        draft.loadingImages = []
         draft.attachments = attachments.map { outbox in
             var outbox = outbox
             outbox.content = CueFormat.plainText(outbox.content)
@@ -131,32 +113,22 @@ extension Binding where Value == ComposerSource? {
 /// 选来的一张图：相册里的 HEIC 等格式转成 JPEG（Pi 与大多数应用不认 HEIC），PNG 与 JPEG 原样保留（`converted` 在各平台的文件里）。
 /// 图片条里的小图按条里的尺寸降采样解码（`thumbnail`），不拿原图去画：一张 4032 见方的照片原样解码是 65MB，
 /// 图片条里放九张时会话页常驻 556MB、峰值 786MB（降采样后 143MB、358MB，不带图是 131MB、346MB）。
-nonisolated struct PickedImage: Identifiable {
+struct PickedImage: Identifiable {
     let id = UUID()
     let data: Data
-    private let thumbnail: CGImage?
+    let preview: Image
 
     static let quality = 0.85
     /// 图片条里一格的边长（点）。
     static let previewSide: CGFloat = 64
 
-    /// 发过的图（已是 PNG、JPEG，只解一张小图）直接放回；新选的图走 `load`。
     init(data: Data) {
-        self.data = Self.sendable(data)
-        thumbnail = Self.thumbnail(data)
+        self.data = Self.outgoing(data)
+        preview = Self.thumbnail(data).map { Image(decorative: $0, scale: 1) } ?? Image(.photo)
     }
 
-    /// 图片条里那一格；解不出的画个图片图标。
-    @MainActor var preview: Image { thumbnail.map { Image(decorative: $0, scale: 1) } ?? Image(.photo) }
-
-    /// 新选的图：转码与解小图都在后台，一次选几张主线程不卡。
-    @concurrent static func load(_ data: Data) async -> PickedImage { PickedImage(data: data) }
-
-    /// 只要发出去的那份（插进卡片正文），不解图片条的小图。
-    @concurrent static func outgoing(_ data: Data) async -> Data { sendable(data) }
-
-    /// PNG 与 JPEG 原样，其余（HEIC 等）转 JPEG。
-    private static func sendable(_ data: Data) -> Data {
+    /// 发出去的那份：PNG 与 JPEG 原样，其余（HEIC 等）转 JPEG。只要它的（插进卡片正文）不必解图片条的小图。
+    static func outgoing(_ data: Data) -> Data {
         let keeps = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
         return keeps ? data : converted(data) ?? data
     }
