@@ -32,8 +32,7 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
-    /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
-    @State private var docking = false
+    @State private var docking: CueDockMotion?
 
     /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
     private static let paging = ChatPaging(first: 40, step: 40)
@@ -136,7 +135,7 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
-            holding: services.isCatchingUp(on: cue.hostID) || docking
+            holding: services.isCatchingUp(on: cue.hostID) || docking != nil
         ) { window, showEarlier in
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: 0) {
@@ -160,6 +159,7 @@ struct CuePage: View {
             .scrollTargetLayout()
             .animation(Motion.quick, value: cue.presence.progress)
         }
+        .environment(\.chatPinsBottom, docking == .rising)
     }
 
     /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。

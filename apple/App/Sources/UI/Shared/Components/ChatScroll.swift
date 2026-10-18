@@ -122,6 +122,8 @@ extension EnvironmentValues {
     @Entry var chatJump: ChatJump?
     /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框、手机的"等你"卡）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
+    /// 浮着的那一块正在长高（"等你"卡升起，`CueDockMotion`）：这期间对话由系统贴住底（同一次排版里跟上），不靠读数补滚。
+    @Entry var chatPinsBottom = false
 }
 
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
@@ -150,6 +152,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatBottomInset) private var bottomInset
+    @Environment(\.chatPinsBottom) private var pinsBottom
     /// 不从"贴着底边"起：那样内容一变高滚动区自己就一下跳到新的底（打开时停在最新处由 `initialOffset` 的底锚管）。
     @State private var position = ScrollPosition()
     @State private var offset = ScrollOffset()
@@ -190,6 +193,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 // 只管打开时停在最新处、不满一屏时贴底。内容变高时不靠底锚：它一下跳到新的底，新来的那条没法滑上来（贴着最新由读数补滚）
                 .defaultScrollAnchor(.bottom, for: .initialOffset)
                 .defaultScrollAnchor(.bottom, for: .alignment)
+                .defaultScrollAnchor(pinsBottom ? .bottom : nil, for: .sizeChanges)
                 // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
                 .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
                 .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
@@ -209,7 +213,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     offset.set(read: max(0, read.rounded()), end: end)
                     return Reading(
                         nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
-                        height: (geometry.contentSize.height - padding).rounded(), end: end, inset: geometry.contentInsets.top.rounded())
+                        height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded())
                 } action: { previous, reading in
                     let last = offset.deliver(reading) ?? previous
                     let grown = reading.height - last.height
@@ -228,7 +232,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
                         byUser: next.scrolling)
                     if next != follow.wrappedValue { follow.wrappedValue = next }
-                    guard following else { return }
+                    guard following, !pinsBottom else { return }
                     if holding, !unheld, grown > 0, reading.inset == last.inset {
                         deferred = true
                         return
@@ -236,10 +240,11 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
                     // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                     // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
-                    // 最新处变近了（底下让出的那块变矮："等你"卡沉下去）而偏移已越过它时也补回去：iOS 的滚动区不一定自己退回来，底下空着一截
+                    // 浮着的那块变矮（"等你"卡沉下去）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，底下空着一截。
+                    // 只认它变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，按"越过了"补回的话对话先掉下去再滑上来
                     if grown > 0, reading.inset == last.inset {
                         slide()
-                    } else if reading.end > last.end || reading.inset != last.inset || offset.read > reading.end {
+                    } else if reading.end > last.end || reading.inset != last.inset || (reading.floating < last.floating && offset.read > reading.end) {
                         scroll(to: reading.end)
                     }
                 }
@@ -320,6 +325,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         var nearOldest: Bool
         /// 内容的高，不含让出回复框的那段（它变高变矮是回复框的事，不滑）。
         var height: CGFloat
+        /// 让出浮着的那一块的那段（`bottomPadding`）。
+        var floating: CGFloat
         /// 滚到最新处时可见区顶边在内容里的位置（`scrollTo(y:)` 的 y，不含内容边距）。
         var end: CGFloat
         /// 顶部的内容边距：它一变系统就把偏移放回顶上，读数要跟着变，才会再补滚一次。
