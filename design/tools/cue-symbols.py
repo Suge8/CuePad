@@ -1589,7 +1589,7 @@ def cube(m):
     return [Layer("cube", [top, left_, right_])]
 
 
-# ---- 项目图标（项目表单里能挑的那张闭合表，见 App 的 `ProjectIcon`）：其余几种借现成的（文件夹、闪光、终端、锤子、书、画笔、灯泡、方块）----
+# ---- 项目图标（项目表单里能挑的那张闭合表，见 App 的 `ProjectIcon`）：其余几种借现成的（文件夹、闪光、终端、锤子、书、画笔、灯泡、方块、层、相机）----
 def bubbles(m):
     """对话：两只气泡，后面一只在左上（被前面那只挡掉一角，挡处让一条刻缝），前面一只在右下、尾巴朝右下。"""
     g, c = GROW[m], CARVE[m]
@@ -1701,6 +1701,52 @@ def leaf(m):
     vein = bar([add(a, mul(u, 4.0)), add(b, mul(u, -4.4))], w)
     stem = bar([add(a, mul(u, 2.0)), add(a, mul(u, -4.6))], 2.4 + 1.0 * g)
     return [Layer("leaf", [blade] + holed([vein]) + [stem])]
+
+
+def house(m):
+    """家：一座实心的小屋（尖顶、方身），屋底正中开一扇门（门的宽高不随字重变）。"""
+    g = GROW[m]
+    d, top = 2.3 + g, 3.4 + g
+    body = grown([(0, -11.0), (11.0, -1.4), (8.4, -1.4), (8.4, 10.6), (d, 10.6), (d, top), (-d, top), (-d, 10.6), (-8.4, 10.6), (-8.4, -1.4), (-11.0, -1.4)],
+                 [1.4, 0.8, 0, 1.6, 0.4, 1.0, 1.0, 0.4, 1.6, 0, 0.8], g)
+    return [Layer("house", [body])]
+
+
+def heart(m):
+    """心：一颗实心的心，顶上一道凹、底下一个尖。"""
+    g = GROW[m]
+    k = (11.4 + g) / 16
+    def P(t): return (16 * math.sin(t) ** 3 * k, -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) * k + 1.4)
+    n = 10
+    right = [mul(P(math.pi * i / n), G) for i in range(n + 1)]
+    left_ = [(-x, y) for x, y in reversed(right)]
+    segs = catmull(right) + catmull(left_)
+    return [Layer("heart", [segs if area(segs) > 0 else rev(segs)])]
+
+
+def star5(m):
+    """星：一颗五角星，尖是小圆角（同闪光的四角星一家，角数不同不撞形）。"""
+    g = GROW[m]
+    R, q = 11.6 + g, 5.2 + g * 0.9
+    pts = []
+    for k in range(5):
+        a = math.radians(k * 72 - 90)
+        pts.append((R * math.cos(a), R * math.sin(a) + 0.8))
+        b = a + math.radians(36)
+        pts.append((q * math.cos(b), q * math.sin(b) + 0.8))
+    return [Layer("star", [rpoly(pts, [0.9 + 0.4 * g, 0.4] * 5)])]
+
+
+def music(m):
+    """音符：两个符头连着两根符干，顶上一道斜的符梁。"""
+    g = GROW[m]
+    w = 2.4 + 1.0 * g
+    r = 3.4 + 0.6 * g
+    heads = [(-6.2, 7.0), (6.6, 4.6)]
+    stems = [bar([(x + r - w / 2, y), (x + r - w / 2, top)], w) for (x, y), top in zip(heads, (-6.6, -9.0))]
+    x0, x1 = heads[0][0] + r - w, heads[1][0] + r
+    beam = grown([(x0, -6.6 - 1.2), (x1, -9.0 - 1.2 - 0.6), (x1, -9.0 + 2.6), (x0, -6.6 + 3.2)], [0.4, 0.4, 0, 0], g)
+    return [Layer("music", [disc(h, r) for h in heads] + stems + [beam])]
 
 
 def menubar(m):
@@ -1866,6 +1912,10 @@ SYMBOLS = {
     "megaphone": megaphone,
     "flag": flag,
     "leaf": leaf,
+    "house": house,
+    "heart": heart,
+    "star": star5,
+    "music": music,
     "menubar": menubar,
 }
 

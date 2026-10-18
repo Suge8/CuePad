@@ -116,12 +116,14 @@ struct ProjectGlyph: View {
     static func icon(_ project: Project?) -> Icon { project.map { .project(ProjectIcon(stored: $0.icon)) } ?? .unfiled }
 }
 
-/// 项目图标的闭合表：项目表单只给这 16 种（Mac 表单一行 8 个，两行排满），写库写 `rawValue`；图在 `Icon.project`。
+/// 项目图标的闭合表：项目表单只给这 24 种（Mac 表单一行 8 个，三行排满），写库写 `rawValue`；图在 `Icon.project`。
 /// 库里存的值不迁移：早先存的系统符号名、lucide 名按 `aliases` 认成表里的一种，认不出的（含没存图标的）是文件夹。
 nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
     // rawValue 沿用早先表单存的系统符号名：已有项目存的就是这些，不用再认一遍
     case folder, sparkles, chat = "bubble.left.and.bubble.right", terminal, globe, hammer, book, target
     case briefcase, cart, megaphone, paintbrush, lightbulb, flag, cube, leaf
+    // layers、camera、heart、star 与更早的版本存的 lucide 名同名
+    case layers, camera, house, heart, star, music = "music.note"
 
     init(stored: String?) {
         self = stored.flatMap { Self(rawValue: $0) ?? Self.aliases[$0] } ?? .folder
@@ -146,13 +148,19 @@ nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
         case .flag: "旗帜"
         case .cube: "方块"
         case .leaf: "叶子"
+        case .layers: "层"
+        case .camera: "相机"
+        case .house: "家"
+        case .heart: "心"
+        case .star: "星"
+        case .music: "音符"
         }
     }
 
     /// 更早的版本存的 lucide 名（与表里同名的不列）。
     private static let aliases: [String: ProjectIcon] = [
         "code": .terminal, "message-circle": .chat, "messages-square": .chat, "shopping-bag": .cart,
-        "box": .cube, "pen-tool": .paintbrush, "palette": .paintbrush,
+        "box": .cube, "pen-tool": .paintbrush, "palette": .paintbrush, "home": .house, "music": .music,
     ]
 }
 

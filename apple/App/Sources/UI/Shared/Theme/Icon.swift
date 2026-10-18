@@ -264,6 +264,12 @@ nonisolated private extension ProjectIcon {
         case .flag: "flag"
         case .cube: "cube"
         case .leaf: "leaf"
+        case .layers: "layers"
+        case .camera: "camera"
+        case .house: "house"
+        case .heart: "heart"
+        case .star: "star"
+        case .music: "music"
         }
     }
 }
