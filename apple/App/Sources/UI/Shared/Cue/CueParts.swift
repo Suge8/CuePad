@@ -344,12 +344,13 @@ struct CueWaitingDock: View {
         }
     }
 
-    /// 从输入框那边升起（淡入、从 96% 放大、上移一小段），答完沉回去淡出；减弱动态效果时只淡入淡出。
+    /// 从输入框那边升起（淡入、从 96% 放大、上移一小段），答完沉到输入框后面淡出，与对话让出、收回的那段滑动同一条曲线
+    /// （`ChatScroll`）：原地淡出的话对话会从半透明的卡底下穿过去。减弱动态效果时只淡入淡出。
     private static func arrival(reduceMotion: Bool) -> AnyTransition {
         guard !reduceMotion else { return .entry }
         let rise = AnyTransition.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)).combined(with: .offset(y: 12))
-        let sink = AnyTransition.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom))
-        return .asymmetric(insertion: rise.animation(Motion.snappy), removal: sink.animation(Motion.quick))
+        let sink = AnyTransition.opacity.combined(with: .move(edge: .bottom))
+        return .asymmetric(insertion: rise.animation(Motion.snappy), removal: sink.animation(Motion.snappy))
     }
 
     /// Cue 的原话：放得下就整段，放不下在 `originalHeight` 里滚。

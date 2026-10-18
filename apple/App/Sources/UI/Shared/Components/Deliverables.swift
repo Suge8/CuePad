@@ -18,6 +18,9 @@ struct DeliverableStrip: View {
     /// 横向滑的一排越过所在纸面的内边距、滑到纸边（纸的内边距）
     var bleed: CGFloat = 0
     let open: (PiPreview) -> Void
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     var body: some View {
         switch previews.count {
@@ -59,7 +62,8 @@ struct DeliverableStrip: View {
         case .result: 200
         case .chat: 176
         #else
-        case .mini: 72
+        // 宽屏（iPad）的卡宽得多，与 Mac 同高
+        case .mini: sizeClass == .regular ? 88 : 72
         case .result: 150
         case .chat: 132
         #endif

@@ -25,6 +25,7 @@ struct CuePage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -230,7 +231,8 @@ struct CuePage: View {
             CueComposer(style: .page) { follow.sent() }
             #endif
         }
-        .animation(Motion.quick, value: thread?.waiting.map(\.id))
+        // 底栏随"等你"卡升起、沉下同一条曲线变高变矮（手机上对话跟着安全区滑）
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.canHear)
     }
 }

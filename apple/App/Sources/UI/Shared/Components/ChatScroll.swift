@@ -183,6 +183,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// iPhone 的回复框是安全区、平时为 0：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     private var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
+    /// 最新处一下远了这么多以上才滑过去（底下长出一整块），一行字以内的直接补。
+    private static var glideOver: CGFloat { 48 }
 
     var body: some View {
         // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
@@ -243,10 +245,14 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     if grown > 0, reading.inset == last.inset {
                         slide()
                     } else if reading.end > last.end || reading.inset != last.inset {
-                        scroll(to: reading.end)
+                        // 底下长出一整块（"等你"卡升起、键盘弹出）：对话跟着它同一条曲线滑上去，不先一下顶出一块空白再等它补进来；
+                        // 长一行字这类小幅的直接补到位
+                        let rises = reading.inset == last.inset && reading.end - last.end > Self.glideOver
+                        withAnimation(rises ? Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) : nil) { scroll(to: reading.end) }
                     }
                 }
                 .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
+                .onChange(of: bottomInset) { old, new in settle(from: old, to: new) }
                 .onChange(of: holding) {
                     unheld = false
                     guard !holding, deferred else { return }
@@ -331,6 +337,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
             withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
+        }
+    }
+
+    /// 浮着的回复框矮下去（Mac："等你"卡答完沉下去）：留白先按原来的高留住这一帧，下一帧随卡同一条曲线收起——一下收掉的话滚动区当帧夹回底，
+    /// 整段对话一跳。发出时留着的（`held` 已有）照旧等那句到了再收。
+    private func settle(from old: CGFloat, to new: CGFloat) {
+        guard new < old, held == nil, !reduceMotion else { return }
+        held = old
+        Task {
+            await NextFrame.wait()
+            // 这一帧里又发出了一句（`toNewest` 换了留白）就交给它
+            guard held == old else { return }
+            withAnimation(Motion.snappy) { held = nil }
         }
     }
 

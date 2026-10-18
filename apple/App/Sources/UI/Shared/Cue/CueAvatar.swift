@@ -43,7 +43,8 @@ struct CueAvatar: View {
     var body: some View {
         ZStack {
             ring
-            Jelly(value: mood, move: JellyMove.cue) { mood, _ in face(mood) }.frame(width: size.face, height: size.face)
+            // 脸当场换（会动的换成静止的、换表情都在 `Jelly` 里压扁时换）：交叉淡的话两张姿势不同的脸会叠出重影
+            Jelly(value: mood, move: JellyMove.cue) { mood, _ in face(mood).transition(.identity) }.frame(width: size.face, height: size.face)
         }
         .frame(width: size.box, height: size.box)
         .opacity(dimmed ? 0.5 : 1)

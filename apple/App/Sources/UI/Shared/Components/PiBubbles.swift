@@ -252,7 +252,8 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: 2) {
             UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue, joined: joined) { menu(trip) }
-            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset)
+            // 与气泡显出实色同一拍换字（发送中 → 已送达）
+            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset).animation(Motion.quick, value: trip.bubble)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .transition(Bubble.arrival(.trailing, reduceMotion: reduceMotion))
