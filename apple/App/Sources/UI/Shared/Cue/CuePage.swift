@@ -24,6 +24,7 @@ struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
@@ -136,10 +137,10 @@ struct CuePage: View {
             holding: services.isCatchingUp(on: cue.hostID) || docking
         ) { window in
             let first = max(0, rows.count - window.count)
+            let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             VStack(alignment: .leading, spacing: 0) {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
                 ForEach(rows[first...]) { item in
                     CueRow(
                         row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
@@ -156,6 +157,9 @@ struct CuePage: View {
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
             .scrollTargetLayout()
             .animation(Motion.quick, value: cue.presence.progress)
+            // 发出一句时"已送达"从上一句挪到这一句：上一句收起那行字的高与对话上滑走同一条曲线（`ChatScroll.slide`），
+            // 不然下面各格一下顶上去，可见的整段先跳一截再滑
+            .animation(Motion.spatial(Motion.move, reduceMotion: reduceMotion), value: lastYou)
         }
     }
 
