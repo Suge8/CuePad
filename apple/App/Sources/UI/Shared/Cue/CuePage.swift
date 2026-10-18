@@ -130,10 +130,9 @@ struct CuePage: View {
     /// 不估每格的真实高：估高了就排少了，打开时接着一段段地补（长回答收起后很矮，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
-        let floors = rows.map { Self.floor($0, joined: thread.joined.contains($0.id), stamped: thread.stamps[$0.id] != nil) }
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
-            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(floors),
+            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: services.isCatchingUp(on: cue.hostID) || docking
         ) { window in
             let first = max(0, rows.count - window.count)
@@ -177,40 +176,70 @@ struct CuePage: View {
         return speaker == .trailing ? 32 : 16
     }
 
-    /// 打开铺两屏、往上翻每次铺一屏（`conversation`），按 `floors` 从下往上数。
-    private static func paging(_ floors: [CGFloat]) -> ChatPaging {
-        func rows(filling height: CGFloat, above: Int) -> Int {
+    /// 打开铺两屏、往上翻每次铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
+    private static func paging(_ thread: CueThread) -> ChatPaging {
+        let rows = thread.rows
+        func count(filling size: CGSize, screens: CGFloat, above: Int) -> Int {
+            // 字排开的宽不超过可见区与阅读栏：按这么宽折行，折出的行只会比真的少
+            let width = min(size.width, readingWidth)
             var sum: CGFloat = 0, count = 0
-            for floor in floors[..<above].reversed() where sum < height {
-                sum += floor
+            for row in rows[..<above].reversed() where sum < screens * size.height {
+                sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, width: width)
                 count += 1
             }
             return max(count, 1)
         }
-        return ChatPaging(first: { rows(filling: 2 * $0, above: $1) }, step: { rows(filling: $0, above: $1) })
+        return ChatPaging(first: { count(filling: $0, screens: 2, above: $1) }, step: { count(filling: $0, screens: 1, above: $1) })
     }
 
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少有原文那么多行（`lines`），结果卡另有交付物的一排（`strip`，比最矮的那种还矮）
-    /// 与下面那件活一行，旁注、经过与分隔至少一行小字。一行按 `line` 算，比各处最小的字还矮：只能数多、不能数少（数少了第一帧铺不满）。
-    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool) -> CGFloat {
-        let line: CGFloat = 12, strip: CGFloat = 60
-        let above = stamped ? 28 + line + 10 : gap(before: row.speaker, joined: joined)
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少排几行（`lines`，一行至少 `MinimumText.line`），结果卡另有交付物的一排
+    /// （`strip`，比最矮的那种还矮）与下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）。
+    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, width: CGFloat) -> CGFloat {
+        let note: CGFloat = 12, strip: CGFloat = 60
+        let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
         let bubble = Bubble.padding.top + Bubble.padding.bottom
+        func text(_ message: CueMessage) -> CGFloat { MinimumText.line * CGFloat(lines(message.text, width: width)) }
         let body: CGFloat = switch row {
-        case .you(let message), .cue(let message, _): bubble + line * CGFloat(lines(message.text))
-        case .result(let message, _, _): bubble + line * CGFloat(lines(message.text) + 1) + strip
-        case .notes, .process, .renewed: line
+        case .you(let message), .cue(let message, _): bubble + text(message)
+        case .result(let message, _, _): bubble + text(message) + note + strip
+        case .notes, .process, .renewed: note
         }
         return above + body
     }
 
-    /// 原文排出来至少几行：每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`）；代码块的围栏与表格的对齐行不排出来，不算。
-    private static func lines(_ text: String) -> Int {
-        let shown = text.split(whereSeparator: \.isNewline).filter { line in
+    /// 气泡里最小的字（代码块；iOS 按动态字体最小的一档）：一行至少多高、一个全角字至少多宽。
+    private enum MinimumText {
+        #if os(macOS)
+        static let line: CGFloat = 18, wide: CGFloat = 13
+        #else
+        static let line: CGFloat = 14, wide: CGFloat = 11
+        #endif
+    }
+
+    /// 原文在 `width` 宽里至少排几行。每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`；代码块的围栏与表格的对齐行不排出来，不算）；
+    /// 长的行折成几行只按全角字算（每个至少 `MinimumText.wide` 宽）：半角的不算（链接地址、行内记号不显示，窄的字母也窄），
+    /// 表格行（横着滚、不折）与图片行只算一行。
+    private static func lines(_ text: String, width: CGFloat) -> Int {
+        var count = 0
+        for line in text.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !trimmed.isEmpty && !trimmed.hasPrefix("```") && MarkdownTable.alignments(String(trimmed)) == nil
+            if trimmed.isEmpty || trimmed.hasPrefix("```") { continue }
+            if trimmed.hasPrefix("|") || trimmed.contains("![") {
+                if MarkdownTable.alignments(trimmed) == nil { count += 1 }
+                continue
+            }
+            let wide = trimmed.unicodeScalars.reduce(0) { $0 + (isWide($1) ? 1 : 0) }
+            count += max(1, Int((CGFloat(wide) * MinimumText.wide / width).rounded(.up)))
         }
-        return max(shown.count, 1)
+        return max(count, 1)
+    }
+
+    /// 全角：汉字与假名、谚文、全角标点（排出来至少一个字宽）。
+    private static func isWide(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3000...0x30FF, 0x3400...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFF01...0xFF60: true
+        default: false
+        }
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。

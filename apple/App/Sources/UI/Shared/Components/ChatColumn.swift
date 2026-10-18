@@ -39,22 +39,22 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.content = content
     }
 
-    /// 排着几条：从记下的那一条到最新；还没记下，或它已不在读的范围里时，打开时的那么多（`paging.first`，按可见区的高 `height`）。
-    private func window(_ height: CGFloat) -> Int {
-        guard let oldest, let index = ids.firstIndex(of: oldest) else { return min(ids.count, paging.first(height, ids.count)) }
+    /// 排着几条：从记下的那一条到最新；还没记下，或它已不在读的范围里时，打开时的那么多（`paging.first`，按可见区的尺寸 `size`）。
+    private func window(_ size: CGSize) -> Int {
+        guard let oldest, let index = ids.firstIndex(of: oldest) else { return min(ids.count, paging.first(size, ids.count)) }
         return ids.count - index
     }
 
-    /// 可见区的高在同一次排版里拿到（GeometryReader 先拿到自己的尺寸再排里面）：打开的第一帧就按它排开，不先排一帧再补。
+    /// 可见区的尺寸在同一次排版里拿到（GeometryReader 先拿到自己的尺寸再排里面）：打开的第一帧就按它排开，不先排一帧再补。
     var body: some View {
         GeometryReader { proxy in
-            let height = proxy.size.height, window = self.window(height), first = ids.count - window
+            let size = proxy.size, window = self.window(size), first = ids.count - window
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
-                content(ChatWindow(count: window, earlier: first > 0 ? paging.step(height, first) : 0) { showEarlier(height) })
+                content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
             }
-            .onChange(of: ids, initial: true) { if oldest.flatMap(ids.firstIndex(of:)) == nil { show(from: ids.count - self.window(height)) } }
-            .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier(height) } }
-            .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id, height: height) } }
+            .onChange(of: ids, initial: true) { if oldest.flatMap(ids.firstIndex(of:)) == nil { show(from: ids.count - self.window(size)) } }
+            .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier(size) } }
+            .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id, size: size) } }
         }
         .environment(\.chatHighlight, highlight.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
@@ -79,17 +79,17 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     #endif
 
     /// 先描圈、排开到那一条（离屏远的地方排的是空白，描圈的那条所在的段排成真的），排好了再跳。
-    private func seek(_ id: UUID, height: CGFloat) {
+    private func seek(_ id: UUID, size: CGSize) {
         highlight.flash(id)
-        if let index = ids.firstIndex(of: id) { show(from: min(index, ids.count - window(height))) }
+        if let index = ids.firstIndex(of: id) { show(from: min(index, ids.count - window(size))) }
         pendingJump = id
     }
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
-    private func showEarlier(_ height: CGFloat) {
-        let first = ids.count - window(height)
+    private func showEarlier(_ size: CGSize) {
+        let first = ids.count - window(size)
         guard first > 0 else { return }
-        let from = max(0, first - paging.step(height, first))
+        let from = max(0, first - paging.step(size, first))
         DebugHooks.chatShowsEarlier(from: from, of: ids.count)
         follow.willPrepend()
         show(from: from)
@@ -101,11 +101,11 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     }
 }
 
-/// 对话排开多少：打开时排开最近几条（`first`），每次往上再排开几条（`step`）。都给出可见区的高与排到的那一条之前有几条
+/// 对话排开多少：打开时排开最近几条（`first`），每次往上再排开几条（`step`）。都给出可见区的尺寸与排到的那一条之前有几条
 /// （打开时是全部条数，往上翻时是最早排着的那条的下标），返回从那里往上数的条数。
 nonisolated struct ChatPaging {
-    let first: (_ height: CGFloat, _ above: Int) -> Int
-    let step: (_ height: CGFloat, _ above: Int) -> Int
+    let first: (_ size: CGSize, _ above: Int) -> Int
+    let step: (_ size: CGSize, _ above: Int) -> Int
 
     /// 固定条数（会话页：段的大小定的）。
     static func fixed(first: Int, step: Int) -> ChatPaging { ChatPaging(first: { _, _ in first }, step: { _, _ in step }) }
