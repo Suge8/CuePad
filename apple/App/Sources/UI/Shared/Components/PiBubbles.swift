@@ -7,6 +7,10 @@ extension AnyTransition {
     /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：其余各行的位移若也跟着动画，
     /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.quick)
+
+    /// 同一处先后换两句字（状态的一句、发送中与已送达）：旧的先淡掉、新的随后淡入——长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。
+    static let handOff = AnyTransition.asymmetric(
+        insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 }
 
 
@@ -252,7 +256,7 @@ struct SpeechBubble<Menu: View>: View {
         let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: 2) {
             UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue, joined: joined) { menu(trip) }
-            // 与气泡显出实色同一拍淡着换字（发送中 → 已送达，`entry`）
+            // 与气泡显出实色同一拍换字（发送中 → 已送达，`handOff`）
             status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -264,12 +268,12 @@ struct SpeechBubble<Menu: View>: View {
         case .sending:
             NoteLine { Spinner(.mini) } label: { Text(transit?.label ?? "发送中") }
                 .accessibilityElement(children: .combine)
-                .transition(.entry)
+                .transition(.handOff)
         case .delivered:
             if showsDelivered {
                 NoteLine(icon: .delivered) { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
                     .accessibilityElement(children: .combine)
-                    .transition(.entry)
+                    .transition(.handOff)
             }
         case .failed(let failure):
             HStack(spacing: 10) {

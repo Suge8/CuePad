@@ -62,22 +62,19 @@ struct CueStatusLine: View {
         let cue = workspace.cue
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
+            // 换一句就是换一个视图（按说的字认）：同一种说法里换字也先淡掉再淡入（`handOff`）
             if syncing {
-                SyncingLabel().transition(Self.handOff)
+                SyncingLabel().transition(.handOff)
             } else if let shown {
-                PiShownLabel(shown: shown).transition(Self.handOff)
+                PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
             } else if let line = cue.presence.line(name: cue.name) ?? fallback {
-                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).transition(Self.handOff)
+                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).id(line).transition(.handOff)
             }
         }
         .font(font)
         .transition(.opacity)
         .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
-
-    /// 换一种说法时旧的先淡掉、新的随后淡入：长短不同的两句在同一处交叉淡，中间几帧叠成读不出的一团。
-    private static let handOff = AnyTransition.asymmetric(
-        insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 
     private var shown: PiShown? {
         #if os(macOS)

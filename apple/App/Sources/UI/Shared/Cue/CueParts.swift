@@ -298,6 +298,10 @@ struct CueWaitingDock: View {
     @State private var shown: CueMessage?
     /// 露出的比例（`RiseBehind`），0 是全藏在输入框后面。
     @State private var rise: CGFloat = 0
+    /// 减弱动态效果时来去只淡入淡出：整张卡淡没了再拿掉（拿掉时栏一下变矮）。
+    @State private var faded = true
+    /// 正在换下一条：新旧两张原地交叉淡；头一张升起时不淡（卡不透明，下半截藏在输入框后面）。
+    @State private var swapping = false
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
@@ -315,29 +319,51 @@ struct CueWaitingDock: View {
             if let message = shown {
                 card(waiting.first { $0.id == message.id } ?? message)
                     .id(message.id)
-                    .transition(.entry)
+                    .transition(swapping ? .entry : .identity)
             }
         }
+        .opacity(faded ? 0 : 1)
         .modifier(RiseBehind(shown: rise))
         .onChange(of: waiting.first?.id, initial: true) { old, new in follow(animated: old != new) }
     }
 
     private static let below: CGFloat = 8
 
-    /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替。
+    /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替；减弱动态效果时来去都只淡。
     private func follow(animated: Bool) {
-        let spatial = animated ? Motion.spatial(Motion.snappy, reduceMotion: reduceMotion) : nil
         guard let next = waiting.first else {
             guard shown != nil else { return }
-            guard let spatial else {
-                shown = nil
-                return
+            guard animated else { return leave() }
+            if reduceMotion {
+                withAnimation(Motion.crossfade) { faded = true } completion: { if waiting.isEmpty { leave() } }
+            } else {
+                withAnimation(Motion.snappy) { rise = 0 } completion: { if waiting.isEmpty { leave() } }
             }
-            withAnimation(spatial) { rise = 0 } completion: { if waiting.isEmpty { shown = nil } }
             return
         }
+        swapping = shown != nil
         shown = next
-        withAnimation(spatial) { rise = 1 }
+        guard animated else {
+            rise = 1
+            faded = false
+            return
+        }
+        if reduceMotion {
+            rise = 1
+            withAnimation(swapping ? nil : Motion.crossfade) { faded = false }
+        } else {
+            // 换下一条时多半已在整高（沉到一半又来了一条就升回去）
+            faded = false
+            withAnimation(Motion.snappy) { rise = 1 }
+        }
+    }
+
+    /// 拿掉：沉到底或淡没了，这时已看不见，不再播过渡。
+    private func leave() {
+        swapping = false
+        shown = nil
+        rise = 0
+        faded = true
     }
 
     private func card(_ message: CueMessage) -> some View {
@@ -445,8 +471,8 @@ private struct RiseBehind: ViewModifier, Animatable {
 
     func body(content: Content) -> some View {
         RiseLayout(shown: shown) { content }
-            // 只裁下沿（输入框那边）：两边与上面让出卡的影子
-            .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom) }
+            // 只裁下沿（输入框那边）：两边与上面让出卡的影子，让出的随露出的比例收，藏到底时一点不留
+            .mask { Rectangle().padding([.horizontal, .top], -RiseBehind.shadowRoom * shown) }
     }
 
     private static let shadowRoom: CGFloat = 24
@@ -459,7 +485,8 @@ private struct RiseLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
         let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        return CGSize(width: size.width, height: size.height * shown)
+        // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
+        return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

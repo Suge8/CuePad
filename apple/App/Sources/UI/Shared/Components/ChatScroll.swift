@@ -206,7 +206,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
                     let screen = geometry.containerSize.height.rounded()
                     let end = (geometry.contentSize.height - geometry.containerSize.height).rounded()
-                    offset.set(read: max(0, read.rounded()), end: end)
+                    offset.set(read: max(0, read.rounded()), end: end, container: screen)
                     return Reading(
                         nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
                         height: (geometry.contentSize.height - padding).rounded(), end: end, inset: geometry.contentInsets.top.rounded())
@@ -280,19 +280,23 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             var delivered: Reading?
             /// 补滚换着用的两种写法（`scroll(to:)`）：这一次用不用"滚到那一点"。
             var byPoint = false
+            /// 可见区的高（扣掉上下边距）：底下的栏在长或缩时每帧都变（`slide`）。
+            var container: CGFloat = 0
         }
 
         private let values = Mutex(Values())
 
-        func set(read: CGFloat, end: CGFloat) {
+        func set(read: CGFloat, end: CGFloat, container: CGFloat) {
             values.withLock {
                 $0.read = read
                 $0.end = end
+                $0.container = container
             }
         }
 
         var read: CGFloat { values.withLock { $0.read } }
         var end: CGFloat { values.withLock { $0.end } }
+        var container: CGFloat { values.withLock { $0.container } }
 
         /// 换上这次交给 action 的读数，返回上一次交过去的。
         func deliver(_ reading: Reading) -> Reading? {
@@ -323,9 +327,17 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 要再画两百多毫秒，正好压在发出的话送达、状态变了的那几次更新上，那几帧本来不用画，一画就掉帧。
     /// 等长出来的这一帧提交了再滑：这一帧要排出新的一条，排版重；动画从这一帧起算的话，第一帧画出来时已经走了一大截，看着是一跳。
     /// 滑到的是那时的最新处（留白收起之后）；等的这一帧里用户开始滚了就不滑了。
+    /// 底下的栏正在长高或变矮（"等你"卡升起、沉下，键盘）时等它停了再滑：这期间可见区每帧都变，滚动区自己按它夹住偏移，
+    /// 半路按当时的最新处滑的话，栏再变矮时又被夹回来，对话先上后下地抖（答完"等你"时问题与回答回到对话里、卡同时沉下去）。
     private func slide() {
         Task {
-            await NextFrame.wait()
+            var container = offset.container
+            while true {
+                await NextFrame.wait()
+                let now = offset.container
+                if now == container { break }
+                container = now
+            }
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
             withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
