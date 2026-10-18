@@ -132,9 +132,13 @@ nonisolated struct FolderGuide: Sendable, Equatable {
 
     /// `host` 是 Mac 上本机的标识：Mac 上只建议本机的文件夹；手机传 nil，看全部 Mac 的。
     static func read(host: String?, from store: isolated CueStore) throws -> FolderGuide {
-        let projects = try store.projects(), bindings = try store.directoryBindings(), folders = try store.sessionFolders()
+        let projects = try store.projects(), bindings = try store.directoryBindings()
+        let unbound = projects.filter { !ProjectFolders.isBound($0.id, bindings: bindings, host: host) }
+        // 建议只有与没绑的项目同名的文件夹（`suggestions`）：先只留这些再逐个项目配；项目都绑了就不读会话（会话状态一变不必重读）
+        let names = Set(unbound.map { $0.name.lowercased() })
+        let folders = names.isEmpty ? [] : try store.sessionFolders().filter { names.contains($0.folder.lowercased()) }
         var suggestions: [UUID: [ProjectFolders.Candidate]] = [:]
-        for project in projects where !ProjectFolders.isBound(project.id, bindings: bindings, host: host) {
+        for project in unbound {
             let candidates = ProjectFolders.candidates(folders: folders, bindings: bindings, projects: projects, excluding: project.id)
             let named = ProjectFolders.suggestions(for: project, in: candidates.filter { host == nil || $0.hostID == host })
             if !named.isEmpty { suggestions[project.id] = named }
