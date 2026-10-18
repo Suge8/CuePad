@@ -53,7 +53,7 @@ def started_ns(pid):
 def main():
     pid, ready, settle, seconds = int(sys.argv[1]), sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
     hooks = dict(zip(sys.argv[5::2], sys.argv[6::2]))
-    wait_ready(ready, pid, "（量空闲开销的实例）")
+    wait_ready(ready, pid)
     # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
     ready_ms = (time.monotonic_ns() - started_ns(pid)) / 1e6
     if "--on-ready" in hooks:

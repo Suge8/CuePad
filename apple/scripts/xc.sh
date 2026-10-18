@@ -51,7 +51,7 @@ case "$cmd" in
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
   perf) ;;  # 先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run) case "$platform" in ios|ipad) xc_enter sim "$0" "$@" ;; *) xc_enter plain "$0" "$@" ;; esac ;;
-  check|build) xc_enter plain "$0" "$@" ;;
+  check|build|build-perf) xc_enter plain "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 if [ "$cmd" = test ] && [ "$platform" = kit ]; then
@@ -66,7 +66,7 @@ if [ "$cmd" = perf ]; then
 fi
 
 # perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
-if [ "$cmd" = perf ] || [ -n "${CUEPAD_PERF_BUILD:-}" ]; then
+if [ "$cmd" = perf ] || [ "$cmd" = build-perf ]; then
   DERIVED="$APPLE_DIR/.derived-perf"; configuration=Release
   # 关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
@@ -129,6 +129,7 @@ case "$cmd" in
     wait "$kit" || status=$?
     exit $status ;;
   build) xcb -quiet build; sign_development ;;
+  build-perf) xcb -quiet build ;;
   test)
     limits=(-test-timeouts-enabled YES -maximum-test-execution-time-allowance "$TEST_TIME_LIMIT")
     # 先开好领到的模拟器（停用 PosterBoard，见 _sim.sh），xcodebuild 就用开着的这台
@@ -154,7 +155,7 @@ case "$cmd" in
   perf)
     # 构建照普通任务排队；独占机器只给交互测量那一段（帧与主线程时间怕别的进程抢），其间别的检出的构建、截图才等它。
     # 静置开销读的是进程自己的内核记账（指令、CPU 时间、唤醒），不随机器忙闲变，不独占
-    CUEPAD_PERF_BUILD=1 "$0" build "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
+    "$0" build-perf "$platform" >"$DERIVED/build.log" || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
     mode=exclusive
     if [ "$perf_script" = perf-idle.sh ]; then if [ "$platform" = ios ]; then mode=sim; else mode=plain; fi; fi
     xc_enter "$mode" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
