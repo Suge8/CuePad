@@ -527,23 +527,16 @@ def chevron(deg):
     return build
 
 
-def send_parts(g, c, s=1.0):
-    """燕尾箭镞与箭杆（格，朝上）：s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝。"""
+def dart_parts(g, c, s=1.0):
+    """燕尾箭（格，朝上）：一枚高而尖的箭镞，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
+    s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝（两块各外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝）。
+    只表示方向的一族（在上面、拿回来的、更早的、回到最新、压缩上下文、自动检查更新）都是这一支（`dart`）；"发出"是纸飞机（`plane`）。"""
     k, notch, bx = 0.75, -1.6 * s, 7.6 * s  # V 的斜率、谷底、两翼半宽
     cut = (c + 2 * g) / math.cos(math.atan(k))
     head = grown([(0, -12.0 * s), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
     w, top = 2.4 * s, notch + cut
     shaft = grown([(0, top), (w, top + w * k), (w, 11.4 * s), (-w, 11.4 * s), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
     return shaft, head
-
-
-def send(m):
-    """发送：一枚燕尾箭镞——高而尖，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
-    两块都在主层（箭镞比箭杆还大，不是小部件），分两层只为按层动效（箭杆、箭镞依次一跳）。
-    先按 Regular 画，两块各自外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝。
-    箭头一族（在上面、拿回来的、更早的就用它；回到最新、压缩上下文按方向转）都是这一支。"""
-    shaft, head = send_parts(GROW[m], CARVE[m])
-    return [Layer("shaft", [shaft]), Layer("head", [head])]
 
 
 def stop(m):
@@ -1110,19 +1103,29 @@ def puzzle(m):
 
 # ---------- 输入、发送与会话：纸飞机、箭头、圆环记号、气泡、窗口、相片、角色几族 ----------
 
-PLANE = sc(K, [(11.0, -10.4), (-11.0, -0.6), (-2.6, 2.8), (0.6, 11.0)])  # 机头、左翼尖、折痕底、下翼尖（格）；三角的墨比方块少，同气泡一样放大 K
+# 机头、左翼尖、折痕底、下翼尖（格）；三角的墨比方块少，同气泡一样放大 K。
+# 按面积重心摆在正中（不按外框）：机身的墨全在右上，按外框摆看着偏右上。
+_PLANE = [(11.0, -10.4), (-11.0, -0.6), (-2.6, 2.8), (0.6, 11.0)]
+_PLANE_MASS = (1.05, -0.82)
+PLANE = sc(K, [sub(p, _PLANE_MASS) for p in _PLANE])
 
 
-def plane(m):
-    """交给（转交给 Cue、会话里转给别人的那一步）：一架纸飞机，机头朝右上；一道折痕从机头斜下来，把机身切成上翼与下翼两块。"""
-    g, c = GROW[m] * 0.6, CARVE[m]
-    nose, wing, fold, tail = PLANE
+def plane_parts(g, c, s=1.0, at=(0.0, 0.0)):
+    """纸飞机（格）：机头朝右上，一道直刀口的折痕从机头斜下来，把机身切成上翼与下翼两块；s 缩放、挪到 at，刀口不随着缩。"""
+    nose, wing, fold, tail = [add(mul(p, s), at) for p in PLANE]
     k = c + 2 * g  # 两翼各外扩 g 之后正好一条刻缝
     n = left(norm(sub(fold, nose)))
     n = n if (tail[0] - nose[0]) * n[0] + (tail[1] - nose[1]) * n[1] > 0 else mul(n, -1)
     a, b = add(nose, mul(n, k)), add(fold, mul(n, k))
-    upper = grown([fold, wing, nose], [0.9, 1.0, 0.9], g)
-    lower = grown([tail, meet(a, b, fold, tail), meet(a, b, nose, tail)], [1.0, 0.9, 0.9], g)
+    upper = grown([fold, wing, nose], [0.9 * s, 1.0 * s, 0.9 * s], g)
+    lower = grown([tail, meet(a, b, fold, tail), meet(a, b, nose, tail)], [1.0 * s, 0.9 * s, 0.9 * s], g)
+    return upper, lower
+
+
+def plane(m):
+    """发出（发送钮、发送回答）与交给（转交给 Cue、会话里转给别人的那一步）：一架纸飞机。"发出"一族都是这一份几何。
+    两块都在主层，分两层只为按层动效（上翼、下翼依次一跳）。"""
+    upper, lower = plane_parts(GROW[m] * 0.6, CARVE[m])
     return [Layer("upper", [upper]), Layer("lower", [lower])]
 
 
@@ -1136,7 +1139,7 @@ def meet(p1, p2, q1, q2):
 def plane_done(m):
     """已送达：纸飞机（同交给），右下的空角里嵌一个小勾（点睛），离飞机一条刻缝。"""
     g = GROW[m]
-    tick = bar([(7.0, 9.6), (9.2, 11.8), (13.6, 7.2)], 2.4 + 1.0 * g)
+    tick = bar([(8.0, 10.4), (10.2, 12.6), (14.6, 8.0)], 2.4 + 1.0 * g)
     return plane(m) + [Layer("tick", [tick], "secondary")]
 
 
@@ -1156,20 +1159,22 @@ def tick(m):
 
 
 def dart(deg, s=1.0, at=(0.0, 0.0)):
-    """发送那一支箭（`send_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
+    """燕尾箭（`dart_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
     def build(g, c):
-        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(send_parts(g, c, s)), deg)]
+        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(dart_parts(g, c, s)), deg)]
     return build
 
 
-def arrow_down(m):
-    """回到最新：发送那一支箭朝下。"""
-    shaft, head = dart(180)(GROW[m], CARVE[m])
-    return [Layer("shaft", [shaft]), Layer("head", [head])]
+def pointing(deg):
+    """只表示方向的箭：燕尾箭朝上（在上面、拿回来的、更早的）或朝下（回到最新）。两块都在主层，分两层只为按层动效。"""
+    def build(m):
+        shaft, head = dart(deg)(GROW[m], CARVE[m])
+        return [Layer("shaft", [shaft]), Layer("head", [head])]
+    return build
 
 
 def compact(m):
-    """压缩上下文：两支发送的箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
+    """压缩上下文：两支燕尾箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
     g, c = GROW[m], CARVE[m]
     s, tip = 0.72, 1.0  # 箭尖离中心多少格（沿对角线的分量）
     d = tip + 12.0 * s * 0.7071
@@ -1455,12 +1460,16 @@ def person(m):
 
 # ---------- Cue 与设置、文件预览的类型 ----------
 
-def badge_dart(deg):
-    """实心圆里刻出发送钮那一支燕尾箭（同一份几何，缩小）：朝上是发送回答，朝下是自动检查更新。"""
-    def build(m):
-        g, c = GROW[m], CARVE[m]
-        return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(deg, 0.62, (0, 0.6 if deg == 0 else -0.6))(0.0, c)))]
-    return build
+def badge_dart(m):
+    """自动检查更新：实心圆里刻一支朝下的燕尾箭（同一份几何，缩小）。"""
+    g, c = GROW[m], CARVE[m]
+    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(180, 0.62, (0, -0.6))(0.0, c)))]
+
+
+def badge_plane(m):
+    """发送回答：实心圆里刻出发送钮那架纸飞机（同一份几何，缩小）。"""
+    g, c = GROW[m], CARVE[m]
+    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(list(plane_parts(0.0, c, 0.6))))]
 
 
 def bookmark(m):
@@ -1499,7 +1508,7 @@ def alarm(m):
 
 
 def swap(m):
-    """换班次前写交接：两支发送的箭（缩小）一上一下、一左一右反着走。"""
+    """换班次前写交接：两支燕尾箭（缩小）一上一下、一左一右反着走。"""
     g, c = GROW[m], CARVE[m]
     s = 0.62
     return [Layer("a", dart(90, s, (0, -5.2))(g, c)), Layer("b", dart(-90, s, (0, 5.2))(g, c))]
@@ -1760,7 +1769,7 @@ def menubar(m):
     return [Layer("mark", [ring, paper_])]
 
 
-# "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同发送的箭镞），竖厚 THICK，两端竖切；从下往上排。
+# "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同燕尾箭的箭镞），竖厚 THICK，两端竖切；从下往上排。
 # 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
 CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
 
@@ -1798,7 +1807,6 @@ SYMBOLS = {
     "chevron.right": chevron(90),
     "chevron.down": chevron(180),
     "chevron.left": chevron(270),
-    "send": send,
     "stop": stop,
     "done": done(),
     "done.pre": done("pre"),
@@ -1859,13 +1867,14 @@ SYMBOLS = {
     "plane.done": plane_done,
     "bolt": bolt,
     "clock": ring_mark(mark_hands),
-    "arrow.down": arrow_down,
+    "arrow.up": pointing(0),
+    "arrow.down": pointing(180),
     "ring.down": ring_mark(lambda c, s, w: mark_arrow(c, s, w, down=True)),
     "ring.stop": ring_mark(mark_square),
     "ring.play": ring_mark(mark_play),
     "ring.plus": ring_mark(mark_plus),
-    "badge.up": badge_dart(0),
-    "badge.down": badge_dart(180),
+    "badge.send": badge_plane,
+    "badge.down": badge_dart,
     "compact": compact,
     "hand": hand,
     "mac": mac,
