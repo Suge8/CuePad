@@ -39,10 +39,12 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.content = content
     }
 
-    /// 排着几条：从记下的那一条到最新；还没记下，或它已不在读的范围里时，打开时的那么多（`paging.first`，按可见区的尺寸 `size`）。
+    /// 排着几条：从记下的那一条到最新，至少是按可见区此刻的尺寸 `size` 铺满一屏的那么多（`paging.first`）。记下时的可见区可能还不是最终的
+    /// （iPhone 冷启动时第一次排版的窗口只有图标那么大），按那时记的条数排，可见区长大的那一帧上面就空着。
     private func window(_ size: CGSize) -> Int {
-        guard let oldest, let index = ids.firstIndex(of: oldest) else { return min(ids.count, paging.first(size, ids.count)) }
-        return ids.count - index
+        let screen = min(ids.count, paging.first(size, ids.count))
+        guard let oldest, let index = ids.firstIndex(of: oldest) else { return screen }
+        return max(ids.count - index, screen)
     }
 
     /// 可见区的尺寸在同一次排版里拿到（GeometryReader 先拿到自己的尺寸再排里面）：打开的第一帧就按它排开，不先排一帧再补。
