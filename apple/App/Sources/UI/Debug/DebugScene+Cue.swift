@@ -140,6 +140,8 @@ extension DebugScene {
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)
+            // 流程演示里"等你"只有它自己出的那一条：演示的这条先答掉，看得到那张卡出现与消失（`DebugScene+CueFlow.swift`）
+            if cueFlows { _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once)) }
             switch presence {
             case "answered":
                 _ = try await store.endCueQuestion(asked.id, .answered("允许一次"))
@@ -347,7 +349,7 @@ extension DebugScene {
     }
 
     /// 会话发来一张截图：卡片与"等你"上的证据。
-    private static func seedEvidence(_ store: CueStore, session: String, title: String) async {
+    static func seedEvidence(_ store: CueStore, session: String, title: String) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try? swatchPNG().write(to: file)
         _ = try? await store.addPreviews(filesAt: [file], title: title, sessionID: session)
