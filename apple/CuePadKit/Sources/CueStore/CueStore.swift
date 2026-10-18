@@ -26,6 +26,9 @@ public actor CueStore {
   /// 这次读的结果到什么时候会随时间变（`expire(at:)`）：订阅到点重读。
   private var readExpiry: Date?
   private var syncSubscribers: [UUID: AsyncStream<Void>.Continuation] = [:]
+  /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交）：没变就说明上次推导出的待推送仍然成立，
+  /// 发送者不必为确认"没有要传的"再全量推导一遍（`SyncCoordinator.nextBatch`）。
+  package private(set) var syncGeneration = 0
   private let notificationName: String
   private let changeListener: ChangeListener?
   private var lastDataVersion: Int64
@@ -101,7 +104,7 @@ public actor CueStore {
     lastDataVersion = version
     commits.add(1, ordering: .releasing)
     for subscriber in subscribers.values { subscriber.signal.yield() }
-    for subscriber in syncSubscribers.values { subscriber.yield() }
+    syncChanged()
   }
 
   // MARK: 观察
@@ -220,14 +223,17 @@ public actor CueStore {
     for (_, subscriber) in subscribers where !subscriber.tables.isDisjoint(with: tables) {
       subscriber.signal.yield()
     }
-    if !syncSubscribers.isEmpty, !tables.isDisjoint(with: Table.synced) {
-      // 只有让记录变成待推送的提交才叫醒（记账、应用远端版本这类不会）；算不出增量时照叫
+    if !tables.isDisjoint(with: Table.synced) {
+      // 只有让记录变成待推送的提交才算（记账、应用远端版本这类不会）；算不出增量时照算
       let delta = try? pendingSync(in: changes)
-      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true {
-        for subscriber in syncSubscribers.values { subscriber.yield() }
-      }
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged() }
     }
     return result
+  }
+
+  private func syncChanged() {
+    syncGeneration += 1
+    for subscriber in syncSubscribers.values { subscriber.yield() }
   }
 
   /// 同步订阅：本连接的提交让记录变成待推送，或别的进程提交过（范围未知），就给一个信号；待推送是什么读 `pendingSync()`。

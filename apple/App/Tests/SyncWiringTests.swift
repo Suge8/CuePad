@@ -76,9 +76,29 @@ struct SyncWiringTests {
         #expect(worstDelay < AppServices.syncWaitLimit / 5)
     }
 
-    @Test func 应用激活时立即同步() async {
-        await services.handleActivation()
+    /// 回到前台时正有在等的东西（手机停在 Agent 页、Cue 页，或有话在等回执）：按节奏的拉取随之开始，与立即同步是同一拉，不连拉两次。
+    @Test func 应用激活时立即同步_正在等也只拉一次() async {
+        let time = ManualTiming()
+        let app = TestApp(timing: time.timing)
+        app.services.hasOpenDeliveries = true
+        await app.services.handleActivation()
+        defer { app.services.stopPolling() }
+        await time.waitForSleeper()  // 按节奏的拉取已开始、睡在第一个间隔里
         #expect(app.sync.syncNows == 1)
+    }
+
+    /// 静默推送把 App 冷启动到后台：推送先于同步启动完到达，等启动完再拉，不空手交还系统；启动后的立即同步就是这一拉，不拉两遍。
+    @Test func 冷启动时先到的推送_等同步启动完再拉_只拉一次() async throws {
+        app.sync.holdsStart.withLock { $0 = true }
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("开始启动") { app.sync.started == 1 }
+        let push = Task { await services.pullForPush() }
+        app.sync.startGate.continuation.yield()
+        await push.value
+        try await eventually("启动完才拉") { services.isSyncingNow == false && app.sync.events.count >= 2 }
+        let events = app.sync.events
+        #expect(events == ["started", "pull"])
     }
 
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {

@@ -60,7 +60,17 @@ enum Schema {
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
+    // 55：推导待推送的覆盖索引（`pendingIndexes`）
+    "DROP INDEX syncRecords_recordType; \(pendingIndexes)",
   ]
+
+  /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
+  /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
+  private static let pendingIndexes = """
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
+    CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
+    \(Table.synced.map { "CREATE INDEX \($0.rawValue)_modified ON \($0.rawValue)(id, modifiedAt);" }.joined(separator: "\n"))
+    """
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
   /// 构成 Cue 的变化的那几列真的变了（不只是被写了一遍）时，计数器加一、那一行记下它；本机写入与同步落库走的都是 INSERT / UPDATE，一处覆盖两条路。
@@ -211,7 +221,6 @@ enum Schema {
       recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB,
       pushedModifiedAt INTEGER, sentModifiedAt INTEGER
     ) STRICT;
-    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
@@ -248,6 +257,7 @@ enum Schema {
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
     \(searchTriggers(table: "projects", column: "name", kind: "project"))
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
+    \(pendingIndexes)
     """
 
   /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。

@@ -73,12 +73,15 @@ struct CueMessageArrivalTests {
     }
   }
 
-  /// Cue 在这台值班时的拉取（会话都关着，也没有在路上的请求），节奏走可控的时钟。
+  /// Cue 在这台值班时的拉取（会话都关着，也没有在路上的请求），节奏走可控的时钟：同 App 启动，先立即同步一次，再按节奏拉。
   private func poll(_ zone: ServerZone) -> Task<Void, Never> {
     let puller = ZonePuller(source: zone, coordinator: mac.coordinator)
     let waiting = AsyncStream<SyncPoller.Cadence?> { $0.yield(.mac(waiting: true)) }
     let poller = SyncPoller(timing: time.timing)
-    return Task { await poller.run(while: waiting) { try? await puller.pull() } }
+    return Task {
+      try? await puller.pull()
+      await poller.run(while: waiting) { try? await puller.pull() }
+    }
   }
 
   /// 拉取在等下一次：这一次已经拉完、落进库了。
@@ -101,7 +104,7 @@ struct CueMessageArrivalTests {
     defer { busy.cancel() }
     let polling = poll(zone)
     defer { polling.cancel() }
-    await pulled()  // 开始在等就拉第一次（取令牌）
+    await pulled()  // 启动时立即同步的那一拉（取令牌）
 
     for round in 0..<5 {
       let (id, record) = try await said("第 \(round) 句")
