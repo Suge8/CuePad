@@ -20,7 +20,7 @@ struct RoundProcess: View {
     @Environment(\.chatJump) private var jump
     @State private var expanded = DebugHooks.preset.toolsOpen
 
-    enum Ending: Equatable {
+    nonisolated enum Ending: Equatable {
         /// 做完了：用时（`PiChat.took`；Cue 的一轮不记，为 nil）
         case took(String?)
         /// 在跑：状态标按 `shown`；`doing` 是此刻在做的。有 `step`（那一步的图标）时它是正在跑的那一步、单列一行；

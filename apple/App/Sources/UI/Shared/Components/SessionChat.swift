@@ -29,12 +29,12 @@ struct SessionChat: View {
             readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, ids: items.map(\.id),
             paging: PiConversation.paging,
             holding: services.isCatchingUp(on: session.hostID)
-        ) { window, showEarlier in
+        ) { window in
             VStack(spacing: 14) {
                 if digest.fetchingTranscript(at: services.speech) {
                     Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3)
                 }
-                conversation(window: window, showEarlier: showEarlier)
+                conversation(window: window.count, showEarlier: window.showEarlier)
             }
         }
         .overlay {

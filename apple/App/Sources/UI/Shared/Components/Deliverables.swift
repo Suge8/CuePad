@@ -33,8 +33,10 @@ struct DeliverableStrip: View {
                 ForEach(previews) { tile($0, .pair(maxHeight: heroMaxHeight)) }
             }
         default:
+            // 懒加载：一件活常常挂着几十上百份（真实库里一张结果卡 278 份），整排都建的话第一次打开 Cue 页光这一张就占 300ms 主线程。
+            // 从最前面滑起、同高，只建看得见与附近的几张，位置不靠估
             ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: Self.gap) {
+                LazyHStack(alignment: .top, spacing: Self.gap) {
                     ForEach(previews) { tile($0, .strip(height: stripHeight)) }
                 }
             }

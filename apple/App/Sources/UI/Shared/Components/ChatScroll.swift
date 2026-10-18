@@ -219,7 +219,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     let grown = reading.height - last.height
                     if follow.wrappedValue.prepending, grown > 0 {
                         follow.wrappedValue.prepended()
-                        position.scrollTo(y: offset.read + grown)
+                        // 贴着最新时正在读的就是最新处：停回新的最新处。按偏移补的话，打开时顶栏边距刚生效、系统把偏移放回了顶上，
+                        // 补出来的是顶上那一截
+                        if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { scroll(to: reading.end) } else { position.scrollTo(y: offset.read + grown) }
                         return
                     }
                     // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环

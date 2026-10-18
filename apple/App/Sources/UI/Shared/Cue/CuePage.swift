@@ -24,6 +24,7 @@ struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
@@ -32,11 +33,12 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
+    /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
+    @State private var width: CGFloat = 0
+    @Environment(\.chatHighlight) private var highlight
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
 
-    /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
-    private static let paging = ChatPaging(first: 40, step: 40)
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
@@ -125,24 +127,31 @@ struct CuePage: View {
         }
     }
 
+    /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
+    /// 每 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
+    /// 这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白（不估真实的高：估高了就排少了，
+    /// 打开时接着一段段地补，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
-            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
+            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: services.isCatchingUp(on: cue.hostID) || docking
-        ) { window, showEarlier in
-            let first = max(0, rows.count - window)
+        ) { window in
+            let first = max(0, rows.count - window.count)
+            let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             VStack(alignment: .leading, spacing: 0) {
-                if first > 0 { EarlierRow(count: min(first, Self.paging.step), action: showEarlier) }
+                if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
-                // 时间与那一格直接排进对话这一列，不另包一层：长对话滚动时每格少一个要摆的容器
-                ForEach(rows[first...]) { item in
-                    let joined = thread.joined.contains(item.id), stamp = thread.stamps[item.id]
-                    if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
-                    row(item, tasks: thread.tasks, lastYou: lastYou, live: live, joined: joined)
-                        .padding(.top, stamp != nil ? 10 : Self.gap(before: item.speaker, joined: joined))
+                ChatSegments(
+                    items: rows, size: Self.segment, from: first, width: width, spare: Self.spare, pinned: { $0.contains { $0.id == highlight } }
+                ) { items in
+                    CueSegment(rows: items.map { item in
+                        CueRow(
+                            row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
+                            delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil }, opened: $opened)
+                    })
+                    .equatable()
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
@@ -152,7 +161,11 @@ struct CuePage: View {
             #endif
             // 刻度滑条按 id 跳到某一格（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
             .scrollTargetLayout()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
             .animation(Motion.quick, value: cue.presence.progress)
+            // 发出一句时"已送达"从上一句挪到这一句：上一句收起那行字的高与对话上滑走同一条曲线（`ChatScroll.slide`），
+            // 不然下面各格一下顶上去，可见的整段先跳一截再滑
+            .animation(Motion.spatial(Motion.move, reduceMotion: reduceMotion), value: lastYou)
         }
     }
 
@@ -163,6 +176,10 @@ struct CuePage: View {
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
+    /// 一段几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
+    /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
+    static let segment = 6, spare = 8
+
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
@@ -170,35 +187,80 @@ struct CuePage: View {
         return speaker == .trailing ? 32 : 16
     }
 
-    /// `lastYou`：你最后一句，只在它下面写"已送达"。`live` 只交给它所在的那一格，别的格子输入不变、不随 Cue 的状态重算。
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?, live: CueLiveRound?, joined: Bool) -> some View {
-        switch row {
-        case .you(let message):
-            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou, joined: joined) { _ in
-                MessageActions(text: message.text, kind: .cue)
+    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
+    private static func paging(_ thread: CueThread) -> ChatPaging {
+        let rows = thread.rows
+        func count(filling size: CGSize, above: Int) -> Int {
+            // 阅读栏（可见区里去掉两边的边距，`ChatLayout.margin`）
+            let column = min(size.width, readingWidth) - 2 * inset
+            var sum: CGFloat = 0, count = 0
+            for row in rows[..<above].reversed() where sum < size.height {
+                sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, column: column)
+                count += 1
             }
-        case .cue(let message, let task):
-            CueSays(message: message, task: task.flatMap { tasks[$0] }, joined: joined, arrives: !swapsInPlace)
-        case .result(let message, let task, let deliverables):
-            if let ref = tasks[task] { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
-        case .notes(let notes):
-            CueNotes(notes: notes, live: live.flatMap { live in notes.contains { $0.id == live.round } ? live : nil })
-                .padding(.leading, Bubble.noteInset)
-        case .process(let message):
-            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live))
-                .padding(.leading, Bubble.noteInset)
-        case .renewed(let handoff):
-            CueRenewal(handoff: handoff, name: cue.name)
+            return max(count, 1)
         }
+        return ChatPaging(first: { count(filling: $0, above: $1) }, step: { count(filling: $0, above: $1) })
     }
 
-    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
-    private var swapsInPlace: Bool {
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`text`），结果卡另有交付物的一排（有的话；`strip`，比最矮的那种还矮）与下面那件活一行，
+    /// 旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）；数得越贴，打开时多排的越少。
+    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
+        let note: CGFloat = 12, strip: CGFloat = 60
+        let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
+        let bubble = Bubble.padding.top + Bubble.padding.bottom
+        // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
+        func width(_ fraction: CGFloat) -> CGFloat { column * fraction - Bubble.padding.leading - Bubble.padding.trailing }
+        let body: CGFloat = switch row {
+        case .you(let message):
+            bubble + text(message.text, width: width(Bubble.youWidth), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
+        case .cue(let message, _):
+            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
+        case .result(let message, _, let deliverables):
+            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
+        case .notes, .process, .renewed: note
+        }
+        return above + body
+    }
+
+    /// 气泡里的字至少多大（iOS 按动态字体最小的一档）：一行至少多高、一个全角字至少多宽。正文是 `Typography.reading`；
+    /// 代码块的字更小，按代码的算。全角字留一点余量：连着的全角标点会挤紧。
+    private enum MinimumText {
         #if os(macOS)
-        services.cue.keeper != nil
+        static let prose = (line: CGFloat(19), wide: CGFloat(15)), code = (line: CGFloat(18), wide: CGFloat(13))
         #else
-        false
+        static let prose = (line: CGFloat(16), wide: CGFloat(13)), code = (line: CGFloat(14), wide: CGFloat(11))
         #endif
+    }
+
+    /// 原文在 `width` 宽里至少排多高：每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`；段与段之间的空行、代码块的围栏与
+    /// 表格的对齐行不算）；长的行折成几行只按全角字算：半角的不算（链接地址、行内记号不显示，窄的字母也窄），表格行（横着滚、不折）与图片行只算一行。
+    /// 正文的行与行之间另隔 `spacing`（`Paragraphs` 的行距；代码行按不带行距的算），最多排 `limit` 行（折起的气泡）。
+    private static func text(_ text: String, width: CGFloat, spacing: CGFloat, limit: Int?) -> CGFloat {
+        var lines: [CGFloat] = [], fenced = false
+        for line in text.split(whereSeparator: \.isNewline) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") { fenced.toggle(); continue }
+            if trimmed.isEmpty { continue }
+            if trimmed.hasPrefix("|") || trimmed.contains("![") {
+                if MarkdownTable.alignments(trimmed) == nil { lines.append(MinimumText.code.line) }
+                continue
+            }
+            let font = fenced ? MinimumText.code : MinimumText.prose, height = fenced ? font.line : font.line + spacing
+            let wide = trimmed.unicodeScalars.reduce(0) { $0 + (isWide($1) ? 1 : 0) }
+            lines += repeatElement(height, count: max(1, Int((CGFloat(wide) * font.wide / width).rounded(.up))))
+        }
+        if lines.isEmpty { lines = [MinimumText.code.line] }
+        // 最后一行下面没有行距
+        return lines.prefix(limit ?? lines.count).reduce(0, +) - spacing
+    }
+
+    /// 全角：汉字与假名、谚文、全角标点（排出来至少一个字宽）。
+    private static func isWide(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3000...0x30FF, 0x3400...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFF01...0xFF60: true
+        default: false
+        }
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -237,9 +299,80 @@ struct CuePage: View {
     }
 }
 
+/// 对话里的一段（`CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
+private struct CueSegment: View, Equatable {
+    let rows: [CueRow]
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.rows.map(\.key) == b.rows.map(\.key) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(rows, id: \.row.id) { $0.equatable() }
+        }
+    }
+}
+
+/// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
+/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。要的那件活、在跑的那一轮、"已送达"都只交给用得着的那一格。
+private struct CueRow: View, Equatable {
+    let row: CueThread.Row
+    let ref: CueTaskRef?
+    let joined: Bool
+    let stamp: Date?
+    /// 你最后一句：下面写"已送达"。
+    let delivered: Bool
+    let live: CueLiveRound?
+    @Binding var opened: PreviewOpening?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    /// 这一格排出来什么样只看这几样。
+    nonisolated struct Key: Equatable {
+        let row: CueThread.Row, ref: CueTaskRef?, joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?
+    }
+
+    nonisolated var key: Key { Key(row: row, ref: ref, joined: joined, stamp: stamp, delivered: delivered, live: live) }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
+
+    var body: some View {
+        if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
+        content.padding(.top, stamp != nil ? 10 : CuePage.gap(before: row.speaker, joined: joined))
+    }
+
+    @ViewBuilder private var content: some View {
+        let cue = workspace.cue
+        switch row {
+        case .you(let message):
+            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, joined: joined) { _ in
+                MessageActions(text: message.text, kind: .cue)
+            }
+        case .cue(let message, _):
+            CueSays(message: message, task: ref, joined: joined, arrives: !swapsInPlace)
+        case .result(let message, _, let deliverables):
+            if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
+        case .notes(let notes):
+            CueNotes(notes: notes, live: live).padding(.leading, Bubble.noteInset)
+        case .process(let message):
+            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, Bubble.noteInset)
+        case .renewed(let handoff):
+            CueRenewal(handoff: handoff, name: cue.name)
+        }
+    }
+
+    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        services.cue.keeper != nil
+        #else
+        false
+        #endif
+    }
+}
+
 /// Cue 在跑的那一轮：经过那一行（`round`）此刻的结尾，其余经过不记用时。
 /// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
-struct CueLiveRound: Equatable {
+nonisolated struct CueLiveRound: Equatable {
     let round: UUID
     let ending: RoundProcess.Ending
 

@@ -19,12 +19,14 @@ enum InteractionBench {
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
     /// 会话页单独给 90ms（人对 100ms 内的回应感知为即时）：它的第一帧必须带标题与最新的对话，晚一帧出内容的空白闪动比慢一点更差，
     /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 `SessionPage`）。
+    /// Cue 页首访给 120ms：第一帧同样要带页头与铺满一屏的最新对话，另有"等你"卡与输入框；第一次进页的成本（真实的字第一次画、视图第一次建）
+    /// 只能挪到启动后先挂上整页或少画首帧才躲得开，两样都不做（启动后先挂上是把活挪走，不是去掉）。
     private static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
         "Agent 页首访": (28, 2),
         "会话页": (90, 2),
-        "Cue 页首访": (90, 2),
+        "Cue 页首访": (120, 2),
         "开编辑页": (28, 2),
         "收编辑页": (14, 2),
         "任务面板开": (28, 2),
@@ -44,6 +46,11 @@ enum InteractionBench {
     static func run(_ workspace: Workspace) async {
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
         if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
+        // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
+        // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里
+        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        let measuresCue = only.map { $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") } ?? true
+        if measuresCue { await DebugScene.seedCue(workspace.services) }
         try? await Task.sleep(for: .seconds(3))
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
               let view = window.contentView
@@ -57,8 +64,6 @@ enum InteractionBench {
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
-        // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
             let row = await measure(name, in: view, action)
@@ -89,8 +94,7 @@ enum InteractionBench {
                 await step("发送·会话页") { sendShortcut(in: window, field: "回复") }
             }
         }
-        if only.map({ $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") }) ?? true {
-            await DebugScene.seedCue(workspace.services)
+        if measuresCue {
             await step("Cue 页首访") { workspace.show(.cue) }
             workspace.show(.cue)
             for _ in 0..<2 {

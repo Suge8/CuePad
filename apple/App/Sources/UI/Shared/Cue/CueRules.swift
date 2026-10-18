@@ -100,6 +100,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
     /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsk.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
@@ -122,7 +123,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
         let recent = try store.cueMessages(limit: recentWindow)
-        let said = recent.last { $0.author == .known(.cue) }
+        let said = recent.last { $0.author == .known(.cue) && ($0.choices == nil || $0.answeredAt == nil) }
         let saidTask = try said?.taskID.flatMap { try store.card($0) }
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
