@@ -35,8 +35,6 @@ struct CuePage: View {
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
 
-    /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
-    private static let paging = ChatPaging(first: 40, step: 40)
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
@@ -126,24 +124,28 @@ struct CuePage: View {
         }
     }
 
+    /// 只排开铺满可见区要的那几格（`paging`）：打开时铺两屏（离最早那头不到一屏就要再排开，铺一屏的话打开就接着排开一段），往上翻每次再铺一屏。
+    /// 一格多高要排出来才知道，这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白，也不在打开时再补排。
+    /// 不估每格的真实高：估高了就排少了，打开时接着一段段地补（长回答收起后很矮，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
+        let floors = rows.map { Self.floor($0, joined: thread.joined.contains($0.id), stamped: thread.stamps[$0.id] != nil) }
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
-            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
+            marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(floors),
             holding: services.isCatchingUp(on: cue.hostID) || docking
-        ) { window, showEarlier in
-            let first = max(0, rows.count - window)
+        ) { window in
+            let first = max(0, rows.count - window.count)
             VStack(alignment: .leading, spacing: 0) {
-                if first > 0 { EarlierRow(count: min(first, Self.paging.step), action: showEarlier) }
+                if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
                 let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
-                // 时间与那一格直接排进对话这一列，不另包一层：长对话滚动时每格少一个要摆的容器
                 ForEach(rows[first...]) { item in
-                    let joined = thread.joined.contains(item.id), stamp = thread.stamps[item.id]
-                    if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
-                    row(item, tasks: thread.tasks, lastYou: lastYou, live: live, joined: joined)
-                        .padding(.top, stamp != nil ? 10 : Self.gap(before: item.speaker, joined: joined))
+                    CueRow(
+                        row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
+                        delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil }, opened: $opened
+                    )
+                    .equatable()
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
@@ -171,35 +173,40 @@ struct CuePage: View {
         return speaker == .trailing ? 32 : 16
     }
 
-    /// `lastYou`：你最后一句，只在它下面写"已送达"。`live` 只交给它所在的那一格，别的格子输入不变、不随 Cue 的状态重算。
-    @ViewBuilder private func row(_ row: CueThread.Row, tasks: [UUID: CueTaskRef], lastYou: UUID?, live: CueLiveRound?, joined: Bool) -> some View {
-        switch row {
-        case .you(let message):
-            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: message.id == lastYou, joined: joined) { _ in
-                MessageActions(text: message.text, kind: .cue)
+    /// 打开铺两屏、往上翻每次铺一屏（`conversation`），按 `floors` 从下往上数。
+    private static func paging(_ floors: [CGFloat]) -> ChatPaging {
+        func rows(filling height: CGFloat, above: Int) -> Int {
+            var sum: CGFloat = 0, count = 0
+            for floor in floors[..<above].reversed() where sum < height {
+                sum += floor
+                count += 1
             }
-        case .cue(let message, let task):
-            CueSays(message: message, task: task.flatMap { tasks[$0] }, joined: joined, arrives: !swapsInPlace)
-        case .result(let message, let task, let deliverables):
-            if let ref = tasks[task] { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
-        case .notes(let notes):
-            CueNotes(notes: notes, live: live.flatMap { live in notes.contains { $0.id == live.round } ? live : nil })
-                .padding(.leading, Bubble.noteInset)
-        case .process(let message):
-            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live))
-                .padding(.leading, Bubble.noteInset)
-        case .renewed(let handoff):
-            CueRenewal(handoff: handoff, name: cue.name)
+            return max(count, 1)
         }
+        return ChatPaging(first: { rows(filling: $0, above: $1) }, step: { rows(filling: $0, above: $1) })
     }
 
-    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
-    private var swapsInPlace: Bool {
-        #if os(macOS)
-        services.cue.keeper != nil
-        #else
-        false
-        #endif
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少有原文那么多行（`lines`），结果卡另有交付物的一排（`strip`，比最矮的那种还矮）
+    /// 与下面那件活一行，旁注、经过与分隔至少一行小字。一行按 `line` 算，比各处最小的字还矮：只能数多、不能数少（数少了第一帧铺不满）。
+    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool) -> CGFloat {
+        let line: CGFloat = 12, strip: CGFloat = 60
+        let above = stamped ? 28 + line + 10 : gap(before: row.speaker, joined: joined)
+        let bubble = Bubble.padding.top + Bubble.padding.bottom
+        let body: CGFloat = switch row {
+        case .you(let message), .cue(let message, _): bubble + line * CGFloat(lines(message.text))
+        case .result(let message, _, _): bubble + line * CGFloat(lines(message.text) + 1) + strip
+        case .notes, .process, .renewed: line
+        }
+        return above + body
+    }
+
+    /// 原文排出来至少几行：每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`）；代码块的围栏与表格的对齐行不排出来，不算。
+    private static func lines(_ text: String) -> Int {
+        let shown = text.split(whereSeparator: \.isNewline).filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.isEmpty && !trimmed.hasPrefix("```") && MarkdownTable.alignments(String(trimmed)) == nil
+        }
+        return max(shown.count, 1)
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -239,9 +246,62 @@ struct CuePage: View {
     }
 }
 
+/// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
+/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。要的那件活、在跑的那一轮、"已送达"都只交给用得着的那一格。
+private struct CueRow: View, Equatable {
+    let row: CueThread.Row
+    let ref: CueTaskRef?
+    let joined: Bool
+    let stamp: Date?
+    /// 你最后一句：下面写"已送达"。
+    let delivered: Bool
+    let live: CueLiveRound?
+    @Binding var opened: PreviewOpening?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.row == b.row && a.ref == b.ref && a.joined == b.joined && a.stamp == b.stamp && a.delivered == b.delivered && a.live == b.live
+    }
+
+    var body: some View {
+        if let stamp { ChatTimeMarker(date: stamp).padding(.top, 28) }
+        content.padding(.top, stamp != nil ? 10 : CuePage.gap(before: row.speaker, joined: joined))
+    }
+
+    @ViewBuilder private var content: some View {
+        let cue = workspace.cue
+        switch row {
+        case .you(let message):
+            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, joined: joined) { _ in
+                MessageActions(text: message.text, kind: .cue)
+            }
+        case .cue(let message, _):
+            CueSays(message: message, task: ref, joined: joined, arrives: !swapsInPlace)
+        case .result(let message, _, let deliverables):
+            if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
+        case .notes(let notes):
+            CueNotes(notes: notes, live: live).padding(.leading, Bubble.noteInset)
+        case .process(let message):
+            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, Bubble.noteInset)
+        case .renewed(let handoff):
+            CueRenewal(handoff: handoff, name: cue.name)
+        }
+    }
+
+    /// Cue 的话原位换下正在说的话（Cue 在这台 Mac 值班时），不淡入。
+    private var swapsInPlace: Bool {
+        #if os(macOS)
+        services.cue.keeper != nil
+        #else
+        false
+        #endif
+    }
+}
+
 /// Cue 在跑的那一轮：经过那一行（`round`）此刻的结尾，其余经过不记用时。
 /// 交给对话里各格的是这个值而不是闭包：闭包每次都不相等，Cue 的状态一变（被叫醒、在想→用工具）对话里每一格都要重算。
-struct CueLiveRound: Equatable {
+nonisolated struct CueLiveRound: Equatable {
     let round: UUID
     let ending: RoundProcess.Ending
 
