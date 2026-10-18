@@ -41,12 +41,12 @@ for run in $(seq "$runs"); do
   library_args=(-CuePadDemo YES)
   if [ -n "${CUEPAD_PERF_SEED:-}" ]; then cp -cR "$CUEPAD_PERF_SEED" "$library"; library_args=(); else mkdir -p "$library"; fi
   if [ "$platform" = mac ]; then
-    CUEPAD_SHOT_READY="$ready" perf_launch_mac "$library" "${library_args[@]}" ${args[@]+"${args[@]}"} >/dev/null 2>&1 &
+    CUEPAD_SHOT_READY="$ready" perf_launch_mac "$library" ${library_args[@]+"${library_args[@]}"} ${args[@]+"${args[@]}"} >/dev/null 2>&1 &
     pid=$!
     stop() { kill -TERM "$pid"; wait "$pid" || true; }
   else
     pid="$(SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" SIMCTL_CHILD_CUEPAD_SHOT_READY="$ready" \
-      xcrun simctl launch "$udid" "$BUNDLE_ID" "${library_args[@]}" ${args[@]+"${args[@]}"} | sed 's/.*: //')"
+      xcrun simctl launch "$udid" "$BUNDLE_ID" ${library_args[@]+"${library_args[@]}"} ${args[@]+"${args[@]}"} | sed 's/.*: //')"
     stop() { xcrun simctl terminate "$udid" "$BUNDLE_ID" || true; }
     if [ -n "${CUEPAD_IDLE_BACKGROUND:-}" ]; then
       ( while [ ! -f "$ready" ]; do sleep 0.1; done; xcrun simctl launch "$udid" com.apple.Preferences >/dev/null ) &
