@@ -70,11 +70,15 @@ extension CueStore {
     }
   }
 
-  /// 在问你的会话数："等你"里会话那一半（规则在 `PiSessionState.asksYou`）。只读在等回答的那几条：
-  /// Dock 角标与"等你 N"随每次会话状态变化重读，读整页在线会话（连项目与投送请求）曾占会话忙时常驻开销的一成多。
+  /// 在问你的会话数："等你"里会话那一半（规则在 `PiSessionState.asksYou`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
+  /// Dock 角标与"等你 N"（Cue 的摘要）别的会话变状态时不重读。
   public func sessionsAskingYou() throws -> Int {
     let onDuty = try cueOnDuty()
-    return try select(PiSessionState.self, where: "state = ?", [PiWorkState.waitingForUser.rawValue]).count { $0.asksYou(cueOnDuty: onDuty) }
+    let waiting = PiWorkState.waitingForUser.rawValue
+    return try narrow(.piSessionStates, column: "state", candidates: "state = '\(waiting)'", to: { $0 == waiting }) { rows in
+      rows.isEmpty ? 0 : try select(PiSessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
+        .count { $0.asksYou(cueOnDuty: onDuty) }
+    }
   }
 
   /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。

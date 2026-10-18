@@ -197,13 +197,14 @@ final class CueKeeper {
     }
 
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。记忆的版本在内：记一条、忘掉、合并都可能改变待合并的块。
+    /// 看板只取对账用到的那一点：在不在做事（变了才可能该排巡视）；其余变化（会话歇下、事做完）都在写入序号里。
     private nonisolated struct Signal: Equatable, Sendable {
         var messages: [CueMessage]
-        var board: CueBoard
+        var active: Bool
         var memory: CueMemoryVersion
         var profile: CueProfile?
-        /// 本机最近一次写入的序号（`CueStore.lastWrite`）：变化不一定改动看板（说话、作答没能送达，你在会话里说话），
-        /// 晚到的变化事件时刻也可能更早，只有写入序号一定跟着变
+        /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态、问答，卡片的完成与层级，投送请求的状态，对话里的新消息一变它就变
+        /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）怎么变都不叫醒对账
         var written: Int
     }
 
@@ -281,7 +282,7 @@ final class CueKeeper {
                 do {
                     for try await _ in store.observe({ store in
                         Signal(
-                            messages: try store.cueMessages(limit: 50), board: try store.cueBoard(), memory: try store.cueMemoryVersion(),
+                            messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
                             profile: try store.cueProfile(), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
@@ -613,7 +614,7 @@ final class CueKeeper {
 
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
-            if try await !store.cueBoard().isActive, let due = patrolDue(idleSince: idleSince, now: now) {
+            if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, now: now) {
                 if due <= now {
                     let today = Self.day(now)
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1

@@ -88,7 +88,7 @@ struct TaskLine: View {
     private func titled(done: Bool) -> Text {
         let title = Text(task.title.textGlyphs).strikethrough(done, color: palette.ink3).foregroundStyle(done ? palette.ink3 : palette.ink)
         guard let project else { return title }
-        let glyph = Text(Image(ProjectGlyph.icon(project.icon))).font(Self.projectGlyph)
+        let glyph = Text(Image(ProjectGlyph.icon(project))).font(Self.projectGlyph)
             .foregroundStyle(done ? palette.ink3 : palette.project(project.color))
         return Text("\(title)  \(glyph)")
     }

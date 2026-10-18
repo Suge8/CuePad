@@ -68,7 +68,7 @@ struct PiConversation: View {
         .task(id: items.count) {
             guard let title = DebugHooks.preset.openPreview else { return }
             opened = items.lazy.flatMap { entry in entry.previews.map { PreviewOpening(preview: $0, batch: entry.previews, group: entry.id.uuidString, reply: .session(session)) } }
-                .first { $0.preview.title == title }
+                .first { $0.preview.title == title || $0.preview.name == title }
         }
     }
 

@@ -1,5 +1,5 @@
 // CuePad 的编译、测试、截图、测量与模拟器开关只经 apple/scripts/xc.sh，调试实例只经它起停（见 xc.sh、app.py 的头注释）。
-// 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"每个检出一份"管、忘了退就堆在 Dock 里；
+// 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"每个检出一份"管；
 // 按名字或 bundle id 起停会碰到用户正在用的正式版（它与调试构建同一个 bundle id）。这里拦下 Agent 直接这样做的命令。
 // 只看每段命令的第一个词（跳过变量赋值与 env、xcrun 这类前缀），grep、日志里出现这些词不算。
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

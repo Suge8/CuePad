@@ -104,7 +104,7 @@ struct ProjectGlyph: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(Self.icon(project?.icon))
+        Image(Self.icon(project))
             .font(.system(size: size, weight: .medium))
             // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
@@ -112,32 +112,57 @@ struct ProjectGlyph: View {
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
 
-    /// 项目的图标：没有项目（未分类）与没存图标的都是未分类的托盘。
-    static func icon(_ name: String?) -> Icon { name.map { .project(symbol($0)) } ?? .unfiled }
+    /// 项目的图标；没有项目（未分类）是未分类的托盘。
+    static func icon(_ project: Project?) -> Icon { project.map { .project(ProjectIcon(stored: $0.icon)) } ?? .unfiled }
+}
 
-    /// 项目图标存的名字认成系统符号：系统符号名照用，lucide 名映射过去；认不出的用文件夹。表单里没存图标的从 "tray" 起选。
-    static func symbol(_ name: String?) -> String {
-        guard let name else { return "tray" }
-        if Icon.projectSymbolExists(name) { return name }
-        return lucide[name] ?? "folder"
+/// 项目图标的闭合表：项目表单只给这 24 种（Mac 表单一行 8 个，三行排满），写库写 `rawValue`；图在 `Icon.project`。
+/// 库里存的值不迁移：早先存的系统符号名、lucide 名按 `aliases` 认成表里的一种，认不出的（含没存图标的）是文件夹。
+nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
+    // rawValue 沿用早先表单存的系统符号名：已有项目存的就是这些，不用再认一遍
+    case folder, sparkles, chat = "bubble.left.and.bubble.right", terminal, globe, hammer, book, target
+    case briefcase, cart, megaphone, paintbrush, lightbulb, flag, cube, leaf
+    // layers、camera、heart、star 与更早的版本存的 lucide 名同名
+    case layers, camera, house, heart, star, music = "music.note"
+
+    init(stored: String?) {
+        self = stored.flatMap { Self(rawValue: $0) ?? Self.aliases[$0] } ?? .folder
     }
 
-    /// 新建项目时可选的图标：SF Symbol 名 → 读屏与提示用的中文含义。
-    static let choices: [(symbol: String, name: String)] = [
-        ("folder", "文件夹"), ("sparkles", "闪光"), ("bubble.left.and.bubble.right", "对话"), ("terminal", "终端"),
-        ("globe", "地球"), ("hammer", "锤子"), ("book", "书"), ("target", "靶心"),
-        ("briefcase", "公文包"), ("cart", "购物车"), ("megaphone", "喇叭"), ("paintbrush", "画笔"),
-        ("lightbulb", "灯泡"), ("flag", "旗帜"), ("cube", "方块"), ("leaf", "叶子"),
-    ]
+    /// 读屏与提示用的中文含义。
+    var name: String {
+        switch self {
+        case .folder: "文件夹"
+        case .sparkles: "闪光"
+        case .chat: "对话"
+        case .terminal: "终端"
+        case .globe: "地球"
+        case .hammer: "锤子"
+        case .book: "书"
+        case .target: "靶心"
+        case .briefcase: "公文包"
+        case .cart: "购物车"
+        case .megaphone: "喇叭"
+        case .paintbrush: "画笔"
+        case .lightbulb: "灯泡"
+        case .flag: "旗帜"
+        case .cube: "方块"
+        case .leaf: "叶子"
+        case .layers: "层"
+        case .camera: "相机"
+        case .house: "家"
+        case .heart: "心"
+        case .star: "星"
+        case .music: "音符"
+        }
+    }
 
-    private static let lucide: [String: String] = [
-        "target": "target", "book": "book", "folder": "folder", "star": "star", "heart": "heart",
-        "code": "chevron.left.forwardslash.chevron.right", "terminal": "terminal", "globe": "globe",
-        "briefcase": "briefcase", "lightbulb": "lightbulb", "rocket": "paperplane", "flag": "flag",
-        "zap": "bolt", "coffee": "cup.and.saucer", "music": "music.note", "camera": "camera",
-        "message-circle": "bubble.left", "messages-square": "bubble.left.and.bubble.right",
-        "shopping-bag": "bag", "megaphone": "megaphone", "box": "shippingbox", "layers": "square.stack.3d.up",
-        "sparkles": "sparkles", "pen-tool": "pencil.tip", "palette": "paintpalette", "home": "house",
+    /// 更早的版本存的 lucide 名（与表里同名的不列）：那张表的 26 个名字，同名的 14 个直接认，其余 12 个全在这里。
+    /// rocket（发射、上线）认成旗帜，同是"立个目标冲过去"；zap（闪电）认成闪光，同是一下子来的劲；coffee（咖啡）认成家，都是日常生活里的事。
+    private static let aliases: [String: ProjectIcon] = [
+        "code": .terminal, "message-circle": .chat, "messages-square": .chat, "shopping-bag": .cart,
+        "box": .cube, "pen-tool": .paintbrush, "palette": .paintbrush, "home": .house, "music": .music,
+        "rocket": .flag, "zap": .sparkles, "coffee": .house,
     ]
 }
 

@@ -66,8 +66,9 @@ struct MacDependencies {
             ] },
             pasteboard: .general,
             cue: CueDependencies(
-                launch: { runtime, store in
-                    try await CueLaunch.local(executable: await agents.executable(runtime), store: store, host: hostID)
+                launch: { [brain = DebugHooks.cueBrain] runtime, store in
+                    let executable = if let brain { brain } else { await agents.executable(runtime) }
+                    return try await CueLaunch.local(executable: executable, store: store, host: hostID)
                 },
                 helper: commandLineTool.helper,
                 notifier: alerts))

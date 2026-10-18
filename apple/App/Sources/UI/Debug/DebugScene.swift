@@ -1,3 +1,6 @@
+#if DEBUG && os(macOS)
+import CueAgent
+#endif
 import CueStore
 import SwiftUI
 
@@ -29,11 +32,14 @@ enum ScrollAnchor {
 ///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
 ///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；
 /// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
+/// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（`DebugHooks.cueBrain`），隔离库里 Cue 住在这台时它才值得班；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`PiSubagentList`、`CueNotes`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
+/// - `-CuePadRunRounds YES`（仅 Mac，配 cuerun）："运行情况"里垫上每种醒来原因各一轮（`runRounds`）；
+/// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡、那条任务、那条记忆或那一行（"更早"、任务浮窗的步骤；回收站按名字）一出现就画成指针停着的样子（"设为任务"、亮起的"开始"、记忆行尾的钉住与忘掉、行的淡底）；
 /// - `-CuePadShowsDone YES`（仅 iOS）：任务页的"最近完成"默认展开并滚到底；
@@ -173,6 +179,7 @@ enum DebugScene {
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         #if os(macOS)
         preset.hovered = defaults.string(forKey: "CuePadHover")
+        if defaults.bool(forKey: "CuePadRunRounds") { preset.runRounds = runRounds }
         #endif
         #if os(iOS)
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
@@ -185,6 +192,19 @@ enum DebugScene {
         #endif
         return preset
     }
+
+    #if os(macOS)
+    /// 每种醒来的原因各一轮，新的在后；交给大脑的话都有一段，最新那轮默认展开（看"交给 Cue 的话"那一行）。
+    private static var runRounds: [CueRound] {
+        let wakes: [CueWake] = [.enabled, .message, .sessionActivity, .idle, .reminder([]), .renewed, .settingsChanged]
+        return wakes.enumerated().map { index, wake in
+            let started = Date.now.addingTimeInterval(Double(index - wakes.count) * 600)
+            var round = CueRound(id: -wakes.count + index, wake: wake, startedAt: started, sent: ["（演示）醒来时的信封"])
+            round.finishedAt = started.addingTimeInterval(42)
+            return round
+        }
+    }
+    #endif
 
     // MARK: 截图的首帧就绪
 

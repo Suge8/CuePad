@@ -4,7 +4,7 @@ import SwiftUI
 /// 项目图标与颜色的选择（Mac 与 iOS 的项目表单共用）。`cell` 是每个格子的边长：Mac 30，触屏 44。
 /// 两组都按拿到的宽度换行排：列数取放得下的最多，列宽均分整行、格子在列里居中，任何宽度下两侧对称。
 struct ProjectStylePicker: View {
-    @Binding var icon: String
+    @Binding var icon: ProjectIcon
     @Binding var color: String
     var cell: CGFloat
     @Environment(\.palette) private var palette
@@ -18,11 +18,11 @@ struct ProjectStylePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: columns, spacing: Self.spacing) {
-                ForEach(ProjectGlyph.choices, id: \.symbol) { choice in
-                    let symbol = choice.symbol, selected = icon == symbol
+                ForEach(ProjectIcon.allCases, id: \.self) { choice in
+                    let selected = icon == choice
                     let shape = RoundedRectangle(cornerRadius: cell / 4, style: .continuous)
-                    Button { icon = symbol } label: {
-                        Image(.project(symbol)).frame(width: cell, height: cell)
+                    Button { icon = choice } label: {
+                        Image(.project(choice)).frame(width: cell, height: cell)
                             // 选中：墨色描边加浅底，深浅色下都清楚，不靠图标本身的颜色
                             .background(selected ? palette.selection : .clear, in: shape)
                             .overlay { if selected { shape.strokeBorder(palette.ink, lineWidth: 2) } }
@@ -57,10 +57,10 @@ struct ProjectStylePicker: View {
 extension Workspace {
     /// 新建（`project` 为 nil）或更新项目的名称、图标与颜色；返回项目 id。
     /// `intro` 是项目的一句话介绍，空白即没有。
-    func saveProject(_ project: Project?, name: String, intro: String, icon: String, color: String) async throws -> UUID {
+    func saveProject(_ project: Project?, name: String, intro: String, icon: ProjectIcon, color: String) async throws -> UUID {
         let store = services.store, intro = intro.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-        let id = if let existing = project?.id { existing } else { try await store.createProject(name: name, color: color, icon: icon).id }
-        try await store.updateProject(id) { $0.name = name; $0.intro = intro; $0.icon = icon; $0.color = color }
+        let id = if let existing = project?.id { existing } else { try await store.createProject(name: name, color: color, icon: icon.rawValue).id }
+        try await store.updateProject(id) { $0.name = name; $0.intro = intro; $0.icon = icon.rawValue; $0.color = color }
         return id
     }
 }
