@@ -160,6 +160,7 @@ private struct VariablesForm: View {
     let names: [String]
     let close: () -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var values: [String: String] = [:]
 
     var body: some View {
