@@ -5,7 +5,7 @@ import CuePi
 #endif
 
 
-/// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（一直展开），
+/// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧一颗四角同圆的气泡（`BubbleLook.session`；对话气泡只在 Cue 页），Pi 的回答左侧全宽 Markdown（一直展开），
 /// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到也不在排队的话接在末尾，气泡下写送达情况，失败的可重发
 /// （排队的在回复框上方，`PiQueueStack`）；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
 /// 有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
@@ -66,7 +66,7 @@ struct PiConversation: View {
         let session = session, said = Said.request(request)
         return SpeechBubble(
             said: said, box: services.settings.replyDraftBinding(for: session.id),
-            transit: .of(request, session: session), fromCue: request.isFromCue
+            transit: .of(request, session: session), fromCue: request.isFromCue, look: .session
         ) { trip in
             let failed = if case .failed = trip { true } else { false }
             MessageActions(
@@ -182,7 +182,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
+            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
                 MessageActions(text: entry.text, kind: .mine, session: session)
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截

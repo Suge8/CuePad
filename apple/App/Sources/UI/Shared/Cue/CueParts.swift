@@ -167,13 +167,54 @@ struct CueNotes: View {
     }
 }
 
+/// Cue 页的对话气泡（你的话、Cue 的话）：只有 Cue 页是两边对说，会话页你的话是另一种（`BubbleLook.session`）。
+/// 说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
+/// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
+enum CueBubble {
+    static let radius: CGFloat = 22
+    static let corner: CGFloat = 6
+    #if os(macOS)
+    static let padding = EdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
+    #else
+    static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+    #endif
+    /// 同一边连着说的两颗之间。
+    static let joinedGap: CGFloat = 4
+    /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
+    static let noteInset: CGFloat = padding.leading
+    /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
+    #if os(macOS)
+    static let cueWidth: CGFloat = 0.86
+    #else
+    static let cueWidth: CGFloat = 0.9
+    #endif
+
+    /// `joined`：上面紧挨着同一边的一颗。
+    static func shape(_ edge: HorizontalEdge, joined: Bool = false) -> UnevenRoundedRectangle {
+        let top = joined ? corner : radius
+        return switch edge {
+        case .trailing: UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: corner, topTrailingRadius: top, style: .continuous)
+        case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: corner, bottomTrailingRadius: radius, topTrailingRadius: radius, style: .continuous)
+        }
+    }
+
+    /// 新说出的一颗从说话那一边的下角长出来（淡入并从 92% 放大到位）：你发出的从输入框那一角冒出，与对话上滑是同一段；只动变换，不改排版。
+    /// 消失只淡出。减弱动态效果时只淡入淡出。
+    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion else { return .entry }
+        let grow = AnyTransition.opacity.combined(with: .scale(scale: 0.92, anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
+        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
+    }
+}
+
+
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
 /// 问过你、你回答了的，下面靠右一颗你的小气泡写你的回答（`AnswerChip`；还在等的不在对话里，见 `CueThread.rows`；撤回的只剩这句话）。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
     var task: CueTaskRef?
-    /// 上面紧挨着 Cue 的另一句（`Bubble.shape`）。
+    /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
     /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
     var arrives = true
@@ -181,9 +222,9 @@ struct CueSays: View {
     @State private var selecting = false
 
     var body: some View {
-        let shape = Bubble.shape(.leading, joined: joined)
+        let shape = CueBubble.shape(.leading, joined: joined)
         VStack(alignment: .leading, spacing: 4) {
-            BubbleWidth(fraction: Bubble.cueWidth, edge: .leading) {
+            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                 VStack(alignment: .leading, spacing: 8) {
                     MarkdownText(source: message.text).equatable()
                     if let task { CueTaskLine(ref: task) }
@@ -199,7 +240,7 @@ struct CueSays: View {
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
-        .transition(arrives ? Bubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
+        .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
     }
 }
 
@@ -207,7 +248,7 @@ extension View {
     /// Cue 的话的气泡：纸色实底（`Palette.paper`，比桌面亮一级），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
     /// 只铺一层底：不用卡片那套渐变、一线高光与描边（`paper()`）——气泡小，看不出差别，长对话滚动时每颗多出的层逐帧都要更新；
     /// 增强对比度时才描边（`Palette.bubbleEdge`）。
-    func cueBubble(joined: Bool) -> some View { modifier(CueBubbleSurface(shape: Bubble.shape(.leading, joined: joined))) }
+    func cueBubble(joined: Bool) -> some View { modifier(CueBubbleSurface(shape: CueBubble.shape(.leading, joined: joined))) }
 }
 
 private struct CueBubbleSurface: ViewModifier {
@@ -215,7 +256,7 @@ private struct CueBubbleSurface: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.padding(Bubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
+        content.padding(CueBubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
     }
 }
 

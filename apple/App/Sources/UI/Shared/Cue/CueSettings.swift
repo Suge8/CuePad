@@ -51,6 +51,12 @@ final class CueSettingsModel {
     }
 }
 
+/// Cue 页对话里显示不显示工具步骤（`AppSettings.showsCueSteps`，存本机、不同步：只管这台设备上怎么看），两端设置里同一句话。
+enum CueStepsSetting {
+    static let title = "显示工具步骤"
+    static let note = "对话里每一轮“跑了几步、建了几件任务”那一行；关了只在它做事时于末尾写一行在做什么"
+}
+
 extension View {
     /// 读 Cue 的设置进 `model`（随设置、各台 Mac 的记录与项目变化重读）。
     func cueSettings(_ model: CueSettingsModel) -> some View { modifier(CueSettingsReader(model: model)) }

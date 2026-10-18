@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 设置里的"Cue"一节，每项一行 `SettingRow`（同其他各节）：第一行选它住在哪台 Mac（这台排第一，"不启用"是停用），状态写住在哪、用哪个 Agent，
-/// 没能写成的原因也写在这里；下面是名字。下一节是允许清单（`CueProfile.allows`）：每类要先问的事一个"所有项目都不用问"的开关，
+/// 没能写成的原因也写在这里；下面是名字与对话里显示不显示工具步骤（`CueStepsSetting`，存本机）。下一节是允许清单（`CueProfile.allows`）：每类要先问的事一个"所有项目都不用问"的开关，
 /// 只管一个项目的那几项各一行、可撤销。读写都经两端同一份 `CueSettingsModel`（手机上是 `CueSettingsScreen`）；
 /// 用哪个 Agent、模型与思考强度在 Cue 页的输入框里选（`CueConfigControls`）。
 struct CueSettingsSection: View {
@@ -50,6 +50,9 @@ struct CueSettingsSection: View {
                 .frame(width: Self.fieldWidth)
                 .focused($editing)
                 .onSubmit { model.rename(name, services) }
+        }
+        SettingRow(title: CueStepsSetting.title, icon: Image(.tool), status: Dotted(CueStepsSetting.note)) {
+            Toggle(CueStepsSetting.title, isOn: Bindable(services.settings).showsCueSteps).labelsHidden().toggleStyle(.switch)
         }
     }
 
