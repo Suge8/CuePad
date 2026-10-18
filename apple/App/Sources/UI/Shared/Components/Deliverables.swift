@@ -180,20 +180,14 @@ private struct DeliverableTile: View {
         return min(max(raw, 4 / 3), 16 / 9)
     }
 
+    /// 画面出来之前写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
     private var kindIcon: Icon {
         switch preview.kind {
-        case .web: .web
-        case .markdown: .markdown
-        case .image: .photo
-        case .video: .video
         case .audio: .audio
-        case .pdf: .pdf
-        case .document: .document
-        case .spreadsheet: .spreadsheet
-        case .presentation: .presentation
-        case .model: .model
-        case .text: .plainText
-        case nil: .file
+        case .video: .play
+        case .model: .inspect3D
+        case .image, nil: .file
+        case .web, .markdown, .pdf, .document, .spreadsheet, .presentation, .text: .document
         }
     }
 
