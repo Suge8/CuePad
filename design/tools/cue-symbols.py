@@ -1248,8 +1248,7 @@ def terminal(m):
 
 
 def paper(mark=None):
-    """文档一族：一张纸，右上折角（点睛，同拷贝），刻在纸上的记号换意思——三行字（读文件、文稿）、图加一行字（PDF）、M（Markdown）、T（纯文本）、
-    格子（表格）、柱（演示文稿），什么都不刻（认不出类型的文件）。"""
+    """文档一族：一张纸，右上折角（点睛，同拷贝），刻在纸上的记号换意思——三行字（读文件、文稿），什么都不刻（认不出类型的文件）。"""
     def build(m):
         g, c = GROW[m], CARVE[m]
         x0, y0, x1, y1 = -8.6, -11.0, 8.6, 11.0
@@ -1262,35 +1261,6 @@ def paper(mark=None):
 
 def paper_lines(w):
     return [bar([(-4.4, y), (4.4, y)], w) for y in (0.6, 5.2)] + [bar([(-4.4, -4.0), (-1.0, -4.0)], w)]
-
-
-def paper_rich(w):
-    """PDF：上面一块图，下面一行字。"""
-    return [rpoly([(-4.6, -3.0), (4.6, -3.0), (4.6, 2.8), (-4.6, 2.8)], [0.8] * 4), bar([(-4.4, 6.6), (4.4, 6.6)], w)]
-
-
-def paper_m(w):
-    """Markdown：一笔写成的 M。"""
-    return [bar([(-4.4, 7.0), (-4.4, -1.6), (0, 3.2), (4.4, -1.6), (4.4, 7.0)], w)]
-
-
-def paper_t(w):
-    """纯文本：一个 T（一整块，不叠两笔）。"""
-    h = v = w / 2
-    y0, y1, x = -3.0, 7.2, 4.6
-    pts = [(-x, y0), (x, y0), (x, y0 + w), (v, y0 + w), (v, y1), (-v, y1), (-v, y0 + w), (-x, y0 + w)]
-    return [rpoly(pts, [h * 0.9, h * 0.9, h * 0.9, 0, h * 0.9, h * 0.9, 0, h * 0.9])]
-
-
-def paper_grid(w):
-    """表格：两列三行的格子。"""
-    return [rpoly([(x0, y0), (x0 + 3.9, y0), (x0 + 3.9, y0 + 2.6), (x0, y0 + 2.6)], [0.5] * 4)
-            for x0 in (-4.6, 0.7) for y0 in (-3.0, 0.8, 4.6)]
-
-
-def paper_chart(w):
-    """演示文稿：三根从低到高的柱。"""
-    return [bar([(x, 7.0), (x, y)], w) for x, y in ((-3.6, 3.6), (0, 1.0), (3.6, -1.6))]
 
 
 def wrench(m):
@@ -1619,26 +1589,6 @@ def cube(m):
     return [Layer("cube", [top, left_, right_])]
 
 
-def compass(m):
-    """网页（同 Safari）：一只实心的罗盘，刻出斜放的菱形指针槽，朝右上的那半根针嵌在槽里（点睛）。"""
-    g, c = GROW[m], CARVE[m]
-    L, h = 8.6, 4.4 - 0.3 * g
-    tip, side, tail = rot((0, -L), 45), rot((h, 0), 45), rot((0, L), 45)
-    slot = rpoly([tip, side, tail, mul(side, -1)], [0.6, 0.4, 0.6, 0.4])
-    half = [tip, side, mul(side, -1)]
-    needle = grown(half if area(poly(half, closed=True)) > 0 else half[::-1], [0, 0, 0], -c)  # 针沿槽边各让一条刻缝
-    return [Layer("compass", [disc((0, 0), 10.8 + g), rev(slot)]), Layer("needle", [needle], "secondary")]
-
-
-def film(m):
-    """视频：一块圆角实心的屏，刻出播放的三角。"""
-    g = GROW[m]
-    screen = grown([(-11.0, -8.4), (11.0, -8.4), (11.0, 8.4), (-11.0, 8.4)], [2.8] * 4, g)
-    k = 1.0 - 0.12 * g
-    tri = rpoly([(-3.2 * k, -4.6 * k), (4.8 * k, 0), (-3.2 * k, 4.6 * k)], [1.0, 1.0, 1.0])
-    return [Layer("screen", [screen] + holed([tri]))]
-
-
 # "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同发送的箭镞），竖厚 THICK，两端竖切；从下往上排。
 # 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
 CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
@@ -1757,13 +1707,6 @@ SYMBOLS = {
     "terminal": terminal,
     "window": window,
     "doc": paper(paper_lines),
-    "doc.rich": paper(paper_rich),
-    "doc.md": paper(paper_m),
-    "doc.text": paper(paper_t),
-    "doc.grid": paper(paper_grid),
-    "doc.chart": paper(paper_chart),
-    "compass": compass,
-    "film": film,
     "doc.blank": paper(),
     "wrench": wrench,
     "bubble.text": bubble("text"),
