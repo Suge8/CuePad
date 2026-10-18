@@ -127,7 +127,11 @@ import Testing
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
     // 退回 50：撤掉 52、54 加的列与 55 加的索引（53 重建触发器、55 重建的类型索引，留着新的照样能升）
-    let added = try RawDB(fixture.url).rows("SELECT name FROM sqlite_master WHERE name = 'syncRecords_pushed' OR name GLOB '*_modified'")
+    let added = try RawDB(fixture.url).rows(
+      """
+      SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
+        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open')
+      """)
     try RawDB(fixture.url).exec(
       """
       ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;

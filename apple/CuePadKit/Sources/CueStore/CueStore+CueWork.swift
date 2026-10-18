@@ -600,7 +600,7 @@ extension CueStore {
   static func isLoose(_ alias: String) -> String {
     let open = "c.deletedAt IS NULL AND c.completedAt IS NULL AND c.archivedAt IS NULL"
     return """
-      \(alias).state <> '\(PiWorkState.ended.rawValue)'
+      \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
         AND NOT EXISTS (
           SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(open) AND c.todoAt IS NOT NULL)
         AND NOT EXISTS (
