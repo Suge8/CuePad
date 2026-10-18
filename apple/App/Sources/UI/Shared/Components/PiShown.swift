@@ -29,9 +29,6 @@ nonisolated extension PiSessionState {
             .map(\.session)
     }
 
-    /// 在处理中（思考、运行工具、子代理、压缩）。
-    var isWorking: Bool { state.isWorking }
-
     /// 说过话：对话里有过一轮（做完的或进行中的）。终端里刚开、还没说过话的会话没有，它停在空闲不是"该你了"。
     var hasStarted: Bool { lastPrompt != nil || lastReply != nil || pendingPrompt != nil }
 }
@@ -78,11 +75,11 @@ nonisolated enum PiDelivery: Hashable, Sendable {
         switch Speech.trip(request, at: moment) {
         case .sending:
             // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还在排队）
-            if session.isWorking && session.stateSince > request.createdAt { return nil }
+            if session.state.isWorking && session.stateSince > request.createdAt { return nil }
             return .inTransit(.of(request, session: session))
         case .delivered:
             // 等会话状态跟上（进入处理中，或在送达之后变过）就让位
-            let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
+            let caughtUp = session.state.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
             return caughtUp ? nil : .delivered
         case .failed(let failure):
             return (seen ?? .distantPast) > (Speech.failedAt(request, at: moment) ?? moment.now) ? nil : .failed(failure)
@@ -170,7 +167,7 @@ nonisolated extension PiShown {
     ) {
         let onDuty = cue != nil
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
-        let busy = session.isWorking || session.state == .known(.waitingForUser)
+        let busy = session.state.isWorking || session.state == .known(.waitingForUser)
         let reported = Self.status(of: session.state)
         let asked = session.waitsForCue(cueOnDuty: onDuty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {

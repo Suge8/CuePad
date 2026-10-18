@@ -8,17 +8,8 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
     /// 项目写带进来的卡片数，卡片写摘要。
     let detail: String
     let deletedAt: Date?
-    /// 项目行才有（Mac 的行画项目图标）。
+    /// 项目行才有（Mac 的行画项目图标）；有它就是项目行，恢复与永久删除按它分项目与卡片。
     let project: Project?
-    let restore: @Sendable (CueStore) async throws -> Void
-    let purge: @Sendable (CueStore) async throws -> Void
-    /// 恢复后落在哪个项目（nil 是未分类）：卡片所在的项目还在回收站时回到未分类，所以要在恢复之后读。
-    let landing: @Sendable (CueStore) async throws -> Project?
-
-    /// 三个动作只由 id 与种类决定，比较看显示的内容。
-    static func == (lhs: TrashItem, rhs: TrashItem) -> Bool {
-        (lhs.id, lhs.title, lhs.detail, lhs.deletedAt, lhs.project) == (rhs.id, rhs.title, rhs.detail, rhs.deletedAt, rhs.project)
-    }
 
     init(_ project: Project, cards: Int) {
         id = project.id
@@ -26,9 +17,6 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
         detail = CountCopy.text((cards, "条"))?.visible ?? ""
         deletedAt = project.deletedAt
         self.project = project
-        restore = { try await $0.restoreProject(project.id) }
-        purge = { try await $0.purgeProject(project.id) }
-        landing = { _ in project }
     }
 
     init(_ card: Card) {
@@ -38,12 +26,21 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
         detail = text.preview
         deletedAt = card.deletedAt
         project = nil
-        restore = { try await $0.restoreCard(card.id) }
-        purge = { try await $0.purgeCard(card.id) }
-        landing = { store in
-            guard let id = try await store.card(card.id)?.projectID else { return nil }
-            return try await store.project(id)
-        }
+    }
+
+    func restore(_ store: CueStore) async throws {
+        if project != nil { try await store.restoreProject(id) } else { try await store.restoreCard(id) }
+    }
+
+    func purge(_ store: CueStore) async throws {
+        if project != nil { try await store.purgeProject(id) } else { try await store.purgeCard(id) }
+    }
+
+    /// 恢复后落在哪个项目（nil 是未分类）：卡片所在的项目还在回收站时回到未分类，所以要在恢复之后读。
+    func landing(_ store: CueStore) async throws -> Project? {
+        if let project { return project }
+        guard let id = try await store.card(id)?.projectID else { return nil }
+        return try await store.project(id)
     }
 }
 
@@ -73,5 +70,5 @@ extension Workspace {
             self.say(Dotted("已恢复到 \(CaptureCopy.destination(project))"), link: .place(project?.id))
         }
     }
-    func purge(_ item: TrashItem) { perform(item.purge) }
+    func purge(_ item: TrashItem) { perform { try await item.purge($0) } }
 }

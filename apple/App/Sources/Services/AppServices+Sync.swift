@@ -5,43 +5,21 @@ import Foundation
 /// iCloud 同步的 App 层接入：启动同步、把状态与冲突交给界面、激活时立即同步。
 extension AppServices {
     /// 同步与它启动前的状态。没有同步时状态是写明原因的 `.unavailable`，界面不会显示成已同步。
-    static func makeSync(
-        _ source: SyncSource, store: CueStore, location: LibraryLocation
-    ) -> (engine: (any SyncControlling)?, status: SyncStatus) {
-        let engine: Result<any SyncControlling, NoSync>
-        switch source {
-        case .iCloud: engine = makeSync(store: store, location: location)
-        case .custom(let sync): engine = .success(sync)
-        }
-        switch engine {
-        case .success(let sync): return (sync, .starting)
-        case .failure(let reason):
-            log.notice("同步未启用：\(reason.description, privacy: .public)")
-            return (nil, .unavailable(reason.description))
-        }
-    }
-
-    /// 不创建同步的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
+    /// `.iCloud` 不创建同步的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据；
     /// 例外只有同步测量：Debug 构建、开发环境签名、给了 `-CuePadCloudKit YES`，见 `DebugHooks.syncsIsolatedLibrary`）；
     /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
     static func makeSync(
-        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit,
-        syncsIsolated: Bool = DebugHooks.syncsIsolatedLibrary
-    ) -> Result<any SyncControlling, NoSync> {
-        guard !location.isIsolated || syncsIsolated else { return .failure(.isolated) }
-        guard hasCloudKitEntitlement else { return .failure(.noEntitlement) }
-        return .success(CloudSync(store: store))
-    }
-
-    nonisolated enum NoSync: Error, CustomStringConvertible {
-        case isolated, noEntitlement
-
-        var description: String {
-            switch self {
-            case .isolated: "开发用的隔离资料库，不连 iCloud"
-            case .noEntitlement: "这个构建没有 iCloud 权限（本机开发构建），不会同步"
-            }
+        _ source: SyncSource, store: CueStore, location: LibraryLocation
+    ) -> (engine: (any SyncControlling)?, status: SyncStatus) {
+        let reason: String
+        switch source {
+        case .custom(let sync): return (sync, .starting)
+        case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = "开发用的隔离资料库，不连 iCloud"
+        case .iCloud where !Entitlements.hasCloudKit: reason = "这个构建没有 iCloud 权限（本机开发构建），不会同步"
+        case .iCloud: return (CloudSync(store: store), .starting)
         }
+        log.notice("同步未启用：\(reason, privacy: .public)")
+        return (nil, .unavailable(reason))
     }
 
     /// 启动同步，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有同步（隔离模式）什么都不做。

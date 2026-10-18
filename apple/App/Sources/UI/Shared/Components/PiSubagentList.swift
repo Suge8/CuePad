@@ -47,7 +47,7 @@ struct PiSubagentList: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
-        .accessibilityValue(expanded ? "已展开" : "已收起")
+        .accessibilityExpanded(expanded)
     }
 
     private func row(_ agent: PiSubagentState) -> some View {

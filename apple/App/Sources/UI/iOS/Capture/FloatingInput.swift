@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 浮在键盘上方的输入框（新会话、发给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。

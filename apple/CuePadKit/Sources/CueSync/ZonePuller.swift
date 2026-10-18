@@ -21,7 +21,6 @@ actor ZonePuller {
   private let coordinator: SyncCoordinator
   private var running: (id: UUID, task: Task<Void, any Error>)?
   private var queued: (id: UUID, task: Task<Void, any Error>)?
-  private var busy = false
 
   init(source: any ZoneChangeSource, coordinator: SyncCoordinator) {
     self.source = source
@@ -55,7 +54,7 @@ actor ZonePuller {
       try await store.setSyncState(Self.tokenKey, nil)
       try await drain()
     } catch let error as CKError where [.zoneNotFound, .userDeletedZone].contains(error.code) {
-      await coordinator.handle(.zoneMissing(deletedByUser: error.code == .userDeletedZone))
+      await coordinator.zoneMissing(deletedByUser: error.code == .userDeletedZone)
     }
   }
 
@@ -64,32 +63,26 @@ actor ZonePuller {
     do {
       try await drainPages()
     } catch {
-      await showBusy(false)
+      await coordinator.setCatchingUp(false)
       await coordinator.reached(error)  // 网络类失败：连不上 iCloud
       throw error
     }
-    await showBusy(false)
+    await coordinator.setCatchingUp(false)
     await coordinator.reached(nil)
-  }
-
-  /// 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪。
-  private func showBusy(_ on: Bool) async {
-    guard busy != on else { return }
-    busy = on
-    await coordinator.handle(.catchingUp(on))
   }
 
   private func drainPages() async throws {
     var stored = try await store.syncState(Self.tokenKey)
     var token = stored
+    // 对账与积压了不止一页（离线久了、别处一下写了很多）算在同步中；一页就拉完的（按节奏每两三秒一次）不算，状态不跟着闪
     if token == nil {
-      await showBusy(true)
+      await coordinator.setCatchingUp(true)
       token = try await catchUp()
     }
     var batch: ZoneChangeBatch
     repeat {
       batch = try await source.changes(since: token, keys: nil)
-      if batch.moreComing { await showBusy(true) }
+      if batch.moreComing { await coordinator.setCatchingUp(true) }
       try await coordinator.pulled(batch.modifications, batch.deletions)
       token = batch.token
       if batch.token != stored {  // 没有变化的一拉不写库

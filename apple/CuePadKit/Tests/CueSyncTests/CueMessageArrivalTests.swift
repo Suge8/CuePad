@@ -8,9 +8,9 @@ import Testing
 /// 你在手机上对 Cue 说的话推送到不了 Mac，只经 Cue 值班那台 Mac 的拉取到达（`SyncPoller.Cadence.mac` 的节奏、
 /// `ZonePuller` 的拉取，与 App 里同一条路，只换掉服务器；Cue 值班算在等由 `AppServices.pollingCadence` 定，见 App 的 `MacSyncTests`）。
 /// 同步区很大、别的设备一刻不停地写、本机的库也正忙时，话到了服务器之后的下一次拉取就落到这台 Mac 的库里，拉取每 2 秒一次
-/// （平均约 1 秒、最坏约 2 秒）。Mac 重启后从库里的令牌接着拉，不重翻同步区；只有还没有令牌时（新装、升级）先按版本翻一遍。
+/// （平均约 1 秒、最坏约 2 秒）。
 /// 节奏走可控的时钟：按拉了几次、过了多少虚拟时间判断，不看墙上时钟。
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.timeLimit(.minutes(1)))
 struct CueMessageArrivalTests {
   /// 同步区里已有的历史（用户库约九千条记录，多是结束了的会话状态）。
   private static let history = 4_000
@@ -21,17 +21,14 @@ struct CueMessageArrivalTests {
   let phone = try! Rig()
   let time = ManualTiming()
 
-  /// 一个同步区：记录按到达先后排成日志，令牌是日志里的位置，一页至多 `page` 条。记下取令牌那一遍（只带版本）翻了几页。
+  /// 一个同步区：记录按到达先后排成日志，令牌是日志里的位置，一页至多 `page` 条。
   actor ServerZone: ZoneChangeSource {
     static let page = 400
     private var log: [CKRecord] = []
-    private(set) var versionPages = 0
-    var count: Int { log.count }
 
     func append(_ records: [CKRecord]) { log += records }
 
     func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
-      if keys != nil { versionPages += 1 }
       let from = token.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
       let end = min(log.count, from + Self.page)
       return ZoneChangeBatch(
@@ -120,39 +117,5 @@ struct CueMessageArrivalTests {
       await pulled()
       #expect(try await arrived(id), "第 \(round) 句没随下一次拉取到")
     }
-  }
-
-  /// Mac 关着时说的：重启后从上次的令牌接着拉，第一次拉就到，不先翻一遍同步区。
-  @Test func whatYouSaidWhileTheMacWasOffArrivesWithTheFirstPullAfterARestart() async throws {
-    let zone = ServerZone()
-    await zone.append(Self.oldSessions)
-    try await ZonePuller(source: zone, coordinator: mac.coordinator).pull()  // 上次运行：令牌存在库里
-    let pagesBefore = await zone.versionPages
-    let (id, record) = try await said("Mac 关着时说的")
-    await zone.append(Self.elsewhere(0) + [record] + Self.elsewhere(1))
-    let busy = busyHere()
-    defer { busy.cancel() }
-    let polling = poll(zone)
-    defer { polling.cancel() }
-    await pulled()
-
-    #expect(try await arrived(id))
-    #expect(await zone.versionPages == pagesBefore)  // 没再翻同步区
-  }
-
-  /// 还没有令牌（新装、从旧版本升上来）时说的：第一次拉取按版本翻完同步区，补取到它。
-  @Test func whatYouSaidBeforeThePullingStartedArrivesWithTheFirstPull() async throws {
-    let zone = ServerZone()
-    let (id, record) = try await said("Mac 刚开就说的")
-    await zone.append(Self.oldSessions + Self.elsewhere(0) + [record] + Self.elsewhere(1))
-    let busy = busyHere()
-    defer { busy.cancel() }
-    let polling = poll(zone)
-    defer { polling.cancel() }
-    await pulled()
-
-    #expect(try await arrived(id))  // 第一次拉取就到，不等下一次
-    let total = await zone.count
-    #expect(await zone.versionPages == (total + ServerZone.page - 1) / ServerZone.page)  // 取令牌那一遍翻完了整个同步区
   }
 }

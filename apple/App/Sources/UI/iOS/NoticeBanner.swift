@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 每个窗口只显示一条短提示，沿用 `Workspace` 的消退计时。暂时盖住顶栏中间的名牌或搜索框，

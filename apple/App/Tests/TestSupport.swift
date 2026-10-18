@@ -10,7 +10,6 @@ import Testing
 #if os(macOS)
 import AppKit
 @testable import CuePi
-import Testing
 #else
 import UIKit
 #endif
@@ -37,7 +36,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         var stopped = 0
         var syncNows = 0
         var events: [String] = []
-        var resolutions: [String] = []
     }
 
     private let state = Mutex(State())
@@ -50,7 +48,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     var started: Int { state.withLock { $0.started } }
     var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
-    var resolutions: [String] { state.withLock { $0.resolutions } }
 
     var stateUpdates: AsyncStream<SyncState> { updates }
 
@@ -94,12 +91,10 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     }
     func push() async {}
 
-    func resolve(_ resolution: SyncResolution) async throws {
-        state.withLock { $0.resolutions.append("\(resolution)") }
-    }
+    func resolve(_ resolution: SyncResolution) async throws {}
 }
 
-/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键、窗口；iOS 的私有命名剪贴板，
+/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键；iOS 的私有命名剪贴板，
 /// 模拟器的通用剪贴板会与 Mac 同步）。`relaunch()` 用同一批目录与偏好再起一个实例。
 final class TestApp {
     let directory = TestLibraries.makeDirectory()
@@ -115,9 +110,6 @@ final class TestApp {
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
-    /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
-    nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
-    let window = RecordingWindow()
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -252,9 +244,7 @@ final class TestApp {
             runtimes: { [host] _ in [.pi: host] },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
-        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
-        services.windowShell = WindowShell(window: window)
-        return services
+        return try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
     }
     #else
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
@@ -271,7 +261,7 @@ extension Workspace {
         var box = draft
         let files = services.store.files
         let binding = Binding(get: { box }, set: { box = $0 })
-        await speak(to: .session(session, mode: mode, card: card ?? draft.attachments.first?.card), from: binding) { try $0.stored(in: files) }?.value
+        await speak(to: .session(session, mode: mode, card: card), from: binding) { try $0.stored(in: files) }?.value
         return try #require(try await services.store.deliveryRequests().first)
     }
 }

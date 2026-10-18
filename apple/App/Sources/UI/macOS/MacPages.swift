@@ -1,6 +1,4 @@
 #if os(macOS)
-import Foundation
-import Observation
 import SwiftUI
 
 /// 主窗口内容区挂着哪些页、侧栏开合（Mac）。当前页本身在 `Workspace.page`，这里只管"去过的页留着"。

@@ -19,7 +19,6 @@ nonisolated enum SendError: Error, Equatable {
     case piSessionNotOnThisMac
     /// 要取目录的项目（开新会话，或手机请这台 Mac 绑成另一个项目的目录）还没有绑定文件夹。
     case noCodeDirectory(String)
-    /// 这台 Mac 上没有找到 Pi。
     /// 要在里面启动 Pi 的目录不在了（被删或改名），附目录末段名。
     case directoryMissing(String)
     /// 终端没能打开（附终端给的原因）。

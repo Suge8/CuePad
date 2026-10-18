@@ -9,9 +9,8 @@ nonisolated struct DiagnosticArchive: Sendable {
     /// 存一份 `MXDiagnosticPayload.jsonRepresentation()`；没有任何诊断内容的包不存。文件名取包的结束时间，
     /// 同一份重复送达（`didReceive` 与 `pastDiagnosticPayloads`）只存一份。
     func store(_ json: Data, receivedAt: Date = .now) throws {
-        guard let kind = CrashReport.Kind(payload: json) else { return }
-        let end = (try? JSONSerialization.jsonObject(with: json) as? [String: Any])?["timeStampEnd"] as? String
-        let date = end.flatMap(Self.parse) ?? receivedAt
+        guard let root = CrashReport.root(of: json), let kind = CrashReport.Kind(root: root) else { return }
+        let date = (root["timeStampEnd"] as? String).flatMap(Self.parse) ?? receivedAt
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try json.write(to: directory.appending(path: "\(Self.stamp(date))-\(kind.rawValue).json"), options: .atomic)
         for name in names().dropFirst(Self.keep) { try? FileManager.default.removeItem(at: directory.appending(path: name)) }
@@ -42,18 +41,23 @@ nonisolated struct DiagnosticArchive: Sendable {
 
 /// 一份诊断的摘要（崩溃类型、崩溃线程顶部的帧）与可导出的文本。
 nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
-    enum Kind: String, Sendable {
+    /// 一个包同时带多种时按声明的顺序（崩溃、卡死、CPU、磁盘）取第一种，文件名与设置页那一行都按它。
+    enum Kind: String, CaseIterable, Sendable {
         case crash, hang, cpu, disk
 
-        /// 包里的诊断数组键；一个包同时带多种时按这里的顺序（崩溃、卡死、CPU、磁盘）取第一种，文件名与设置页那一行都按它。
-        fileprivate static let keys: [(Kind, String)] = [
-            (.crash, "crashDiagnostics"), (.hang, "hangDiagnostics"), (.cpu, "cpuExceptionDiagnostics"), (.disk, "diskWriteExceptionDiagnostics"),
-        ]
+        /// 包里的诊断数组键。
+        fileprivate var key: String {
+            switch self {
+            case .crash: "crashDiagnostics"
+            case .hang: "hangDiagnostics"
+            case .cpu: "cpuExceptionDiagnostics"
+            case .disk: "diskWriteExceptionDiagnostics"
+            }
+        }
 
-        init?(payload: Data) {
-            let root = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any]
-            guard let match = Self.keys.first(where: { !((root?[$0.1] as? [Any]) ?? []).isEmpty }) else { return nil }
-            self = match.0
+        fileprivate init?(root: [String: Any]) {
+            guard let kind = Self.allCases.first(where: { !((root[$0.key] as? [Any]) ?? []).isEmpty }) else { return nil }
+            self = kind
         }
 
         var name: String {
@@ -86,8 +90,8 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     private static let topFrames = 6
 
     init?(id: String, json data: Data) {
-        guard let kind = Kind(payload: data), let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let diagnostic = ((root[Self.key(of: kind)] as? [[String: Any]]) ?? []).first
+        guard let root = Self.root(of: data), let kind = Kind(root: root),
+              let diagnostic = (root[kind.key] as? [[String: Any]])?.first
         else { return nil }
         let meta = diagnostic["diagnosticMetaData"] as? [String: Any] ?? [:]
         self.id = id
@@ -111,7 +115,9 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         return lines.joined(separator: "\n") + "\n\n原始 JSON：\n\(json)"
     }
 
-    private static func key(of kind: Kind) -> String { Kind.keys.first { $0.0 == kind }!.1 }
+    fileprivate static func root(of json: Data) -> [String: Any]? {
+        (try? JSONSerialization.jsonObject(with: json)) as? [String: Any]
+    }
 
     private static func app(_ meta: [String: Any]) -> Dotted? {
         Dotted(

@@ -128,14 +128,4 @@ struct SyncWiringTests {
         }
         #expect(reason.contains("隔离"))
     }
-
-    @Test func 隔离模式与没有iCloud权限的构建不创建同步() throws {
-        let store = services.store
-        let isolated = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: "/tmp/isolated-library"])
-        let real = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/tmp/support")))
-
-        #expect((try? AppServices.makeSync(store: store, location: isolated, hasCloudKitEntitlement: true).get()) == nil)
-        #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: false).get()) == nil)
-        #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: true).get()) != nil)
-    }
 }

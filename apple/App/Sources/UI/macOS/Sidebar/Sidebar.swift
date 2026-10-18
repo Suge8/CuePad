@@ -1,5 +1,4 @@
 #if os(macOS)
-import CuePi
 import CueStore
 import SwiftUI
 
@@ -88,8 +87,8 @@ struct Sidebar: View {
             StartupIssues()
             HStack(spacing: 2) {
                 if showsBins {
-                    FooterPage(entry: .archive, page: .archive, select: select)
-                    FooterPage(entry: .trash, page: .trash, count: trashCount, select: select)
+                    FooterPage(entry: .archive, select: select)
+                    FooterPage(entry: .trash, count: trashCount, select: select)
                 }
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
@@ -231,7 +230,6 @@ private struct SidebarPages {
 private struct PlaceRows: View {
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -239,19 +237,19 @@ private struct PlaceRows: View {
             ForEach(SidebarOutline.places, id: \.self) { entry in
                 switch entry {
                 case .tasks:
-                    row(entry, count: workspace.catalog?.allTasks.open ?? 0, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
+                    row(entry, selected: workspace.showsTasks) { workspace.showsTasks.toggle() }
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:
-                    row(entry, count: services.liveSessions.total, selected: workspace.page == .agent) { select(.agent) }
+                    row(entry, selected: workspace.page == entry.route) { select(entry.route) }
                         .help("按项目查看、搜索全部会话")
                 }
             }
         }
     }
 
-    private func row(_ entry: SidebarOutline.Entry, count: Int, selected: Bool, action: @escaping () -> Void) -> some View {
-        PageRow(count: count, selected: selected, action: action) {
+    private func row(_ entry: SidebarOutline.Entry, selected: Bool, action: @escaping () -> Void) -> some View {
+        PageRow(count: entry.count(in: workspace), selected: selected, action: action) {
             Image(entry.icon).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
         } title: {
             Text(entry.title)
@@ -352,7 +350,6 @@ private struct ProjectRow: View, Equatable {
 /// 底栏里通向一页的图标钮（归档、回收站，有东西时读屏念出条数）：当前页垫选中底色。
 private struct FooterPage: View {
     let entry: SidebarOutline.Entry
-    let page: Route
     var count = 0
     let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
@@ -361,8 +358,8 @@ private struct FooterPage: View {
     private var title: String { count > 0 ? "\(entry.title)，\(count) 项" : entry.title }
 
     var body: some View {
-        let selected = workspace.page == page
-        Button { select(page) } label: {
+        let selected = workspace.page == entry.route
+        Button { select(entry.route) } label: {
             IconImage(entry.icon, accent: selected ? .lit : .none).font(.system(size: 15))
                 .foregroundStyle(selected ? palette.ink : palette.ink2)
                 .frame(width: 32, height: 32)
@@ -392,7 +389,6 @@ private struct PiSection: View {
         let agents = services.agents
         let detected = AgentKind.allCases.contains { agents.status($0) != nil }
         let connected = AgentKind.allCases.contains { agents.status($0)?.isConnected == true }
-        let live = services.pi.sessions
         let work = workspace.liveWork, rows = work.rows
         let total = services.liveSessions.total
         if detected || total > 0 {
@@ -404,7 +400,7 @@ private struct PiSection: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isHeader)
                 // 没接入：本机的会话看不到，在这一区里接入，别的 Mac 上在线的照样列在下面
-                if detected, !connected, live.isEmpty {
+                if detected, !connected, services.pi.slots.isEmpty {
                     AgentConnectCard().padding(.horizontal, SidebarMetrics.edge)
                 } else if rows.isEmpty {
                     // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
@@ -418,7 +414,7 @@ private struct PiSection: View {
                 if !rows.isEmpty {
                     SidebarScroll {
                         LiveSessionList(sessions: rows, spacing: SidebarMetrics.rowGap) {
-                            sessionRow($0, live: live)
+                            sessionRow($0)
                         } fold: { count, expanded in
                             PiReloadFold(count: count, expanded: expanded, style: SidebarMetrics.session)
                                 .padding(.leading, SidebarMetrics.dotInset)
@@ -432,8 +428,8 @@ private struct PiSection: View {
         }
     }
 
-    private func sessionRow(_ session: PiSessionState, live: [CuePi.PiSession]) -> some View {
-        let bridge = live.first { $0.sessionID == session.sessionID }, sessions = services.liveSessions
+    private func sessionRow(_ session: PiSessionState) -> some View {
+        let sessions = services.liveSessions
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: sessions.deliveries[session.sessionID],
             rename: sessions.renames[session.sessionID], undelivered: sessions.undelivered[session.sessionID] ?? 0, style: SidebarMetrics.session)
@@ -441,11 +437,25 @@ private struct PiSection: View {
             .padding(.leading, SidebarMetrics.dotInset)
             .frame(height: Spacing.sidebarProjectRow)
             .sessionLink(session.sessionID)
+            .modifier(SessionRowMenu(session: session) { renaming = session })
+    }
+}
+
+/// 侧栏会话行的悬停原文与右键菜单。桥上的那个会话只在这里读（`pi.session(sessionID:)`）：整个 Agent 区读全部会话的话，任一会话一变整区重算。
+private struct SessionRowMenu: ViewModifier {
+    let session: PiSessionState
+    let rename: () -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    func body(content: Content) -> some View {
+        let bridge = services.pi.session(sessionID: session.sessionID)
+        content
             .help(bridge?.errorMessage ?? "")
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", icon: .rename) { renaming = session }
+                    Button("重命名…", icon: .rename, action: rename)
                 }
                 if let bridge, bridge.canJump {
                     Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }

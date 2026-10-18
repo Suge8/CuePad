@@ -7,6 +7,7 @@ public enum SyncStatus: Equatable, Sendable {
   case starting
   /// 空闲（已同步，或尚无可同步的内容）。
   case idle
+  /// 空闲之上的显示态：一轮上传或拉积压正在进行（`SyncState.catchingUp`）。只出现在快照里，由协调器在发布时推出，不单独记。
   case syncing
   /// 连不上 iCloud（没有网络、服务暂不可用）：最近一次拉取或上传因网络失败。本机改动留在库里待推送，发送者按退避重试；
   /// 下一次拉取或上传成功时回到空闲。
@@ -106,21 +107,6 @@ public struct SyncState: Equatable, Sendable {
     self.alerts = alerts
     self.catchingUp = catchingUp
   }
-}
-
-/// 拉取器、发送者与账号检查交给协调器的事件（测试直接构造）。
-enum CloudEvent: Sendable {
-  case accountStatus(CKAccountStatus)
-  /// 此刻登录的账号（用户记录名）
-  case account(String)
-  /// 拉取时同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）
-  case zoneMissing(deletedByUser: Bool)
-  /// 发送者开始、结束一轮上传
-  case sending(Bool)
-  /// 拉取器开始、结束按版本对账（没有令牌时那一遍）
-  case catchingUp(Bool)
-  case fetched(modifications: [CKRecord], deletions: [(id: CKRecord.ID, recordType: String)])
-  case sent(SentRecords)
 }
 
 /// 一批上传之后发送者怎么接着做。

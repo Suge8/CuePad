@@ -132,9 +132,9 @@ actor RecordSender {
     let end = await batches { [coordinator] in
       guard !shown else { return }
       shown = true
-      await coordinator.handle(.sending(true))
+      await coordinator.setSending(true)
     }
-    if shown { await coordinator.handle(.sending(false)) }
+    if shown { await coordinator.setSending(false) }
     finish(end)
   }
 
@@ -177,7 +177,7 @@ actor RecordSender {
         resolve(names, received: [])
         Self.log.notice("上传整批失败：\(error.brief, privacy: .public)")
         if let error = error as? CKError, error.code == .userDeletedZone {
-          await coordinator.handle(.zoneMissing(deletedByUser: true))
+          await coordinator.zoneMissing(deletedByUser: true)
           return .halted
         }
         await coordinator.reached(error)  // 网络类失败：连不上 iCloud

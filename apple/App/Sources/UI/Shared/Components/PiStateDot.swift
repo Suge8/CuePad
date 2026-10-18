@@ -13,8 +13,7 @@ extension PiShown {
         case .working, .delivery: palette.signature
         case .unread: palette.replied
         case .restart: palette.ink2
-        case .idle, .resting, .fresh, .interrupted, .unknown: palette.ink3
-        case .ended: palette.ink3
+        case .idle, .resting, .fresh, .interrupted, .unknown, .ended: palette.ink3
         }
     }
 
