@@ -32,7 +32,8 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
-    @State private var docking: CueDockMotion?
+    /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
+    @State private var docking = false
 
     /// 最初排开最近几格，往上翻快到头时再排开这么多格（排开、跳转与刻度同会话页，见 `ChatColumn`）。
     private static let paging = ChatPaging(first: 40, step: 40)
@@ -82,26 +83,21 @@ struct CuePage: View {
     #else
     /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。iPhone 上页头在导航栏那一排里，左边是系统的返回
     /// （自带顶上一排的页的规则，同搜索页）；宽屏与右侧面板里列表就在旁边，没有返回。
-    /// "等你"卡浮在对话底上、贴着输入框（`FloatingReply`，跟着键盘与输入框走）。
+    /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同 Mac；在键盘之上）：不做成底下那一栏（安全区）——栏一变矮（发出时输入框收回一行、
+    /// 卡沉下去）可见区当帧变高、系统把对话一下拉下去，发出的话一两帧后才到、再滑上来；栏一变高（卡升起）系统当帧挪、滚动区下一帧才跟上。
     private var page: some View {
         FloatingReply(backed: false) {
             chat
         } reply: {
-            dock
-                .padding(.horizontal, 12)
+            bottom
+                .padding(.horizontal, 12).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
+                .environment(\.composerInk, .solid)
         }
             .scrollDismissesKeyboard(.interactively)
             .fadesUnderBars(throughTopRow: inBar)
             .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
             .overlay(alignment: .top) { CueHeader(inBar: inBar) }
-            .safeAreaBar(edge: .bottom, spacing: 0) {
-                bottom
-                    .padding(.horizontal, 12).padding(.bottom, 8)
-                    .frame(maxWidth: Self.readingWidth)
-                    .frame(maxWidth: .infinity)
-                    .environment(\.composerInk, .solid)
-            }
             .navigationTitle(cue.name)
             // 标题只给读屏与系统；iPhone 上标题那一格让给页头的点按区（`inNavigationBarRow`）
             .toolbar(removing: inBar ? nil : .title)
@@ -135,7 +131,7 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging,
-            holding: services.isCatchingUp(on: cue.hostID) || docking != nil
+            holding: services.isCatchingUp(on: cue.hostID) || docking
         ) { window, showEarlier in
             let first = max(0, rows.count - window)
             VStack(alignment: .leading, spacing: 0) {
@@ -159,7 +155,6 @@ struct CuePage: View {
             .scrollTargetLayout()
             .animation(Motion.quick, value: cue.presence.progress)
         }
-        .environment(\.chatPinsBottom, docking == .rising)
     }
 
     /// 在跑的那一轮（Cue 此刻的状态记着是哪一行）此刻的结尾；不在跑为 nil。
@@ -224,18 +219,12 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    @ViewBuilder private var dock: some View {
-        if let thread {
-            CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, open: { opened = $0 }, moving: $docking)
-        }
-    }
-
-    /// 输入框与它上面的启用卡；Mac 上"等你"卡也在这一块里（浮着的回复框整块让出）。
+    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。
     private var bottom: some View {
         VStack(spacing: 0) {
-            #if os(macOS)
-            dock
-            #endif
+            if let thread {
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, open: { opened = $0 }, moving: $docking)
+            }
             if !cue.canHear {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }

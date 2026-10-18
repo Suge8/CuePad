@@ -120,10 +120,8 @@ extension EnvironmentValues {
     @Entry var chatHighlight: UUID?
     /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
     @Entry var chatJump: ChatJump?
-    /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框、手机的"等你"卡）：对话在底下让出这么高，最新一行停在它上方。
+    /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的"等你"卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
-    /// 浮着的那一块正在长高（"等你"卡升起，`CueDockMotion`）：这期间对话由系统贴住底（同一次排版里跟上），不靠读数补滚。
-    @Entry var chatPinsBottom = false
 }
 
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
@@ -152,7 +150,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatBottomInset) private var bottomInset
-    @Environment(\.chatPinsBottom) private var pinsBottom
     /// 不从"贴着底边"起：那样内容一变高滚动区自己就一下跳到新的底（打开时停在最新处由 `initialOffset` 的底锚管）。
     @State private var position = ScrollPosition()
     @State private var offset = ScrollOffset()
@@ -181,7 +178,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 那句到了（内容真的长高）再收，对话从回复框让出的地方滑上去；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
-    /// iPhone 的回复框是安全区、平时为 0：发出时键盘随即收起，对话跟着键盘的动画走，不留。
+    /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     private var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
     var body: some View {
@@ -193,7 +190,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 // 只管打开时停在最新处、不满一屏时贴底。内容变高时不靠底锚：它一下跳到新的底，新来的那条没法滑上来（贴着最新由读数补滚）
                 .defaultScrollAnchor(.bottom, for: .initialOffset)
                 .defaultScrollAnchor(.bottom, for: .alignment)
-                .defaultScrollAnchor(pinsBottom ? .bottom : nil, for: .sizeChanges)
                 // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
                 .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
                 .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
@@ -232,7 +228,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
                         byUser: next.scrolling)
                     if next != follow.wrappedValue { follow.wrappedValue = next }
-                    guard following, !pinsBottom else { return }
+                    guard following else { return }
                     if holding, !unheld, grown > 0, reading.inset == last.inset {
                         deferred = true
                         return

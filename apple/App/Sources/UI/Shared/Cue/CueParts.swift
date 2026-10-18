@@ -281,18 +281,12 @@ struct CueChoices: View {
 /// （迷你一排，新的在前；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
 /// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
-/// "等你"卡正在来去：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次；
-/// 升起时对话贴住底（`chatPinsBottom`，系统在同一次排版里跟上，读数补滚偶尔晚一帧）。沉下时不贴：问题与回答同时回到对话里，贴底的话对话先被顶上去。
-enum CueDockMotion {
-    case rising, leaving
-}
-
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
     let open: (PreviewOpening) -> Void
-    /// 卡正在来或去（`CueDockMotion`）。
-    @Binding var moving: CueDockMotion?
+    /// 卡正在升起、沉下或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
+    @Binding var moving: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -321,7 +315,7 @@ struct CueWaitingDock: View {
 
     /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
     /// 一条换下一条时新卡在原地与旧卡交叉淡（底边对齐叠放，竖排的话两张同时占位、底栏一下高一倍）。减弱动态效果时只淡入淡出：
-    /// 答完那一刻卡就不再占高、浮着淡掉，对话只定位一次。占的高由对话让出（手机经 `chatBottomInset`，Mac 是浮着的回复框）。
+    /// 答完那一刻卡就不再占高、浮着淡掉，对话只定位一次。占的高由对话让出（卡在浮着的回复框里，`FloatingReply`）。
     /// 卡与下面输入框的间距在卡里（`below`）：没有在等的时候这一层不占位，也不留出间距。
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -345,9 +339,9 @@ struct CueWaitingDock: View {
             guard animated else { return leave() }
             if reduceMotion {
                 rise = 0
-                move(.leaving, Motion.quick, { faded = true }) { if waiting.isEmpty { leave() } }
+                move(Motion.quick, { faded = true }) { if waiting.isEmpty { leave() } }
             } else {
-                move(.leaving, Motion.snappy, { rise = 0 }) { if waiting.isEmpty { leave() } }
+                move(Motion.snappy, { rise = 0 }) { if waiting.isEmpty { leave() } }
             }
             return
         }
@@ -360,19 +354,19 @@ struct CueWaitingDock: View {
         }
         if reduceMotion {
             rise = 1
-            move(.rising, Motion.quick, { faded = false })
+            move(Motion.quick, { faded = false })
         } else {
             // 换下一条时多半已在整高（沉到一半又来了一条就升回去）
             faded = false
-            move(.rising, Motion.snappy, { rise = 1 })
+            move(Motion.snappy, { rise = 1 })
         }
     }
 
     /// 播一段卡的来去，播着的时候 `moving`；等动画整个走完（弹簧的尾巴也算）再收尾，不然最后几点的残条一下没了。
-    private func move(_ motion: CueDockMotion, _ animation: Animation, _ change: () -> Void, then done: @escaping () -> Void = {}) {
-        moving = motion
+    private func move(_ animation: Animation, _ change: () -> Void, then done: @escaping () -> Void = {}) {
+        moving = true
         withAnimation(animation, completionCriteria: .removed, change) {
-            moving = nil
+            moving = false
             done()
         }
     }
