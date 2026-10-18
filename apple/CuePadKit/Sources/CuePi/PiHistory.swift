@@ -84,9 +84,6 @@ public struct PiHistoryUpdate: Sendable {
     public var includesTranscript: Bool
     /// 会话文件的修改时间（列目录或读文件时取的）
     public var modified: Date?
-    /// 算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
-    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。文件名就是会话 id 的（Claude Code）总算（`SessionFileFormat`）。
-    public var isSession: Bool
     /// 会话 id：会话文件头里的；还没读到文件头时是文件名（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
     public var recap: PiRecap { checkpoint.projectedRecap }
@@ -117,6 +114,10 @@ struct SessionFileFormat: Sendable {
     let keepsFilesOpen: Bool
     /// 文件名就是会话 id（Claude Code）：文件头还没读到也算会话
     let nameIsSessionID: Bool
+
+    /// 读到 `checkpoint` 为止算不算一个会话：Pi、Codex 的会话文件先建出来、文件头随后才写，读到文件头之前它还不是会话（文件名不是会话 id），
+    /// 索引器不发出它——按文件名记下会多出一条没名字的孤儿会话。文件名就是会话 id 的（Claude Code）总算。
+    func isSession(_ checkpoint: PiHistoryCheckpoint) -> Bool { checkpoint.sessionID != nil || nameIsSessionID }
 
     static func of(_ agent: AgentKind) -> SessionFileFormat? {
         switch agent {
@@ -166,7 +167,7 @@ public enum PiHistory {
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
-            modified: modified, isSession: history.sessionID != nil || format.nameIsSessionID, bytesRead: Int(consumed - start))
+            modified: modified, bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。

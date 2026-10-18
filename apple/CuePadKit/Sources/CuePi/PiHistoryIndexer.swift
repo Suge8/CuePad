@@ -84,7 +84,7 @@ public struct PiHistoryIndexer: Sendable {
                 if let dropped = change.dropped { watcher.unfollow(dropped) }
                 if change.follows { watcher.follow(file.path) }
             }
-            guard checkpoint.sessionID != nil || format.nameIsSessionID else { return }
+            guard format.isSession(checkpoint) else { return }
             // 没读到新内容也要写的：第一次索引，与修改时间变了（记下它，下次启动才认得出没动过）
             guard let update, update.bytesRead > 0 || base?.checkpoint.map({ $0.modified != checkpoint.modified }) ?? true else { return }
             continuation.yield(.updated(update))
