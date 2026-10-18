@@ -5,14 +5,17 @@ extension CueStore {
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
     var conditions: [String] = []
     var arguments: [any SQLBindable] = []
+    // "没结束"写成两段范围：`state != 'ended'` 用不上状态索引，几千条历史会话时每读一次都整表扫两遍（行与总数）；
+    // 在线会话每变一次状态就读一次，两段范围走索引快十倍
+    let live = "(state < '\(PiWorkState.ended.rawValue)' OR state > '\(PiWorkState.ended.rawValue)')"
     switch query.scope {
-    case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
+    case .live: conditions.append(live)
     case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
     case .all: break
     case .current:
       conditions.append(
         """
-        (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
+        (\(live) OR sessionID IN (SELECT targetRef FROM deliveryRequests
           WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.toSession)))))
         """)
     }
