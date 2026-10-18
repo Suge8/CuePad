@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 首次使用才付的一次性成本（视图类型、玻璃材质、文本平台控件、菜单与弹出框的桥接）在启动后空闲时先付掉：
 /// 把这些视图在窗口里隐形地挂两帧再卸下（不聚焦、不订阅，`pageActive` 为 false），每样一段，不挤在一个回合里。
-/// Agent 页与 Cue 页不是付一次就够的：成本是现建整页与上面的会话、对话本身，所以不挂替身，直接把真的那一页挂进内容区留着（`Workspace.premount`）。
+/// Agent 页不是付一次就够的：它的成本是现建整页与十几行会话本身，所以不挂替身，直接把真的那一页挂进内容区留着（`Workspace.premount`）。
 /// 用户第一次点会话、点新会话时，付的就是"第二次"的价钱（右键菜单的第一次另议：建一个不弹出的菜单没有收益；⌘K 面板不在这里，启动后空闲时直接常驻挂上，见 `keptPanel`）。
 struct Prewarm: View {
     @Environment(Workspace.self) private var workspace
@@ -54,9 +54,6 @@ struct Prewarm: View {
             guard workspace.isLibraryReady else { return }
             guard (try? await Task.sleep(for: Self.delay)) != nil else { return }
             workspace.pages.premount(.agent)
-            await NextFrame.wait()
-            await NextFrame.wait()
-            workspace.pages.premount(.cue)
             await NextFrame.wait()
             await NextFrame.wait()
             for next in Step.allCases.dropFirst() {
