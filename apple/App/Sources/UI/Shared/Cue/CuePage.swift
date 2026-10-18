@@ -143,7 +143,9 @@ struct CuePage: View {
             VStack(alignment: .leading, spacing: 0) {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
-                ChatSegments(items: rows, size: Self.segment, first: first, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
+                ChatSegments(
+                    items: rows, size: Self.segment, first: first, width: width, spare: Self.spare, pinned: { $0.contains { $0.id == highlight } }
+                ) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
@@ -174,8 +176,9 @@ struct CuePage: View {
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
-    /// 一段几格（`ChatSegments`）。
-    static let segment = 6
+    /// 一段几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
+    /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
+    static let segment = 6, spare = 8
 
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。

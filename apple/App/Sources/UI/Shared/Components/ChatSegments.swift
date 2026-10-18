@@ -13,13 +13,12 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View {
     let size: Int
     let first: Int
     let width: CGFloat
+    /// 屏上那几段上下各再留几段真的：快甩时滑进来的先是排好的，不露空白；来回翻时离开不远的段不拆了又建。
+    var spare = 1
     var pinned: (ArraySlice<Item>) -> Bool = { _ in false }
     @ViewBuilder let segment: (ArraySlice<Item>) -> Segment
     @State private var sizes: [Int: CGSize] = [:]
     @State private var onScreen: Set<Int> = []
-
-    /// 屏上那几段上下各再排几段真的：快甩时滑进来的先是排好的，不露空白。
-    static var spare: Int { 1 }
 
     /// `count` 条切成几段。
     static func count(_ count: Int, size: Int) -> Int { (count + size - 1) / size }
@@ -36,7 +35,7 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View {
 
     @ViewBuilder private func cell(_ index: Int, last: Int) -> some View {
         let slice = items[(index * size)..<min((index + 1) * size, items.count)]
-        if let measured = sizes[index], width > 0, index != last, !onScreen.contains(where: { abs($0 - index) <= Self.spare }), !pinned(slice) {
+        if let measured = sizes[index], width > 0, index != last, !onScreen.contains(where: { abs($0 - index) <= spare }), !pinned(slice) {
             Color.clear.frame(height: (measured.height * measured.width / width).rounded())
         } else {
             segment(slice)
