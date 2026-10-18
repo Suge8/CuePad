@@ -97,7 +97,7 @@ private struct HeaderTitle<Label: View>: View {
         Button { explaining = true } label: {
             label
             .frame(height: FloatingHeaderLayout.height)
-            .glass(in: .capsule, ink: .legible)
+            .glass(in: .capsule, ink: .solid)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)

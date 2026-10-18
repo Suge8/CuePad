@@ -34,7 +34,7 @@ extension DebugScene {
         static let back = 1.5
     }
 
-    private static let flowSaid = "顺便看看登录回调那个超时"
+    private static let flowSaid = "顺便看看登录回调那个超时，是不是和重试间隔有关"
     private static let flowSession = "cueflow"
 
     #if os(iOS)

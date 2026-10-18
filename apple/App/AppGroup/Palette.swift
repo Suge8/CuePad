@@ -40,8 +40,8 @@ struct Palette {
 
     // MARK: 玻璃上的字（`GlassInk`）
 
-    /// 写着要读的字的玻璃的着色：深色压一层暗色调，背后的亮字糊开后不再和上面的次要字同亮；浅色垫一层淡纸色。
-    var legibleGlass: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
+    /// 写着字的玻璃（`GlassInk.solid`）的着色：深色压一层暗色调，浅色垫一层淡纸色，与垫的底色一起定玻璃的明暗。
+    var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
     /// 浮在一整片字上的玻璃里垫的九成实的页面底色：背后的字透不过来。
     var solidGlass: Color { desk.opacity(0.9) }
 

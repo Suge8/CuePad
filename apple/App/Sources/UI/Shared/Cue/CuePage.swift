@@ -92,7 +92,6 @@ struct CuePage: View {
             bottom
                 .padding(.horizontal, 12).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
-                .environment(\.composerInk, .solid)
         }
             .scrollDismissesKeyboard(.interactively)
             .fadesUnderBars(throughTopRow: inBar)
@@ -234,7 +233,6 @@ struct CuePage: View {
             CueComposer(style: .page) { follow.sent() }
             #endif
         }
-        .animation(Motion.quick, value: thread?.waiting.map(\.id))
         .animation(Motion.quick, value: cue.canHear)
     }
 }

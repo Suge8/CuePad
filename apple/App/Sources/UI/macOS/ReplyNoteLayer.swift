@@ -55,7 +55,7 @@ private struct ReplyNoteLayer: ViewModifier {
                     .contentShape(.capsule)
             }
             .buttonStyle(PressStyle())
-            .glass(in: .capsule, interactive: true, ink: .legible)
+            .glass(in: .capsule, interactive: true, ink: .solid)
             .help("批注这段，随下一句发出")
         case .editing(let note, _, let fresh):
             NoteEditor(note: note) { text in

@@ -90,8 +90,6 @@ struct SessionScreen: View {
                     .frame(maxWidth: Self.readingWidth)
                     .frame(maxWidth: .infinity)
                     .animation(Motion.quick, value: session.question)
-                    // 浮在整片对话上、自己也写着字：玻璃里垫实底，背后的字透不过来（`GlassInk.solid`）
-                    .environment(\.composerInk, .solid)
             }
         }
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),

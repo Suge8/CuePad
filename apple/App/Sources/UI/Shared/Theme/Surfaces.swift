@@ -13,21 +13,19 @@ extension View {
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
-    /// `ink`：玻璃上写着要读的字时着色调高几档（`GlassInk`）。
+    /// `ink`：玻璃上写着要读的字时垫实底（`GlassInk`）。
     func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .clear) -> some View {
         modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
     }
 }
 
-/// 玻璃上的字要多好读：玻璃仍是唯一的遮挡，只是着色调高，不在玻璃外面垫任何东西。
+/// 玻璃上的字要多好读。
 enum GlassInk {
     /// 圆钮这类只有图标与短标签的玻璃。
     case clear
-    /// 写着要读的字（顶栏标题、输入框）：深色下压一层暗色调，背后的亮字糊开后不再和上面的次要字同亮；浅色下垫一层淡纸色，
-    /// 背后的行糊成的灰块不再像污渍落在字周围。外沿照样通透。
-    case legible
-    /// 浮在一整片字上、自己也写着一行或一页字（提示横幅、Mac 底部输入栏、任务面板）：玻璃里再垫九成实的页面底色，
-    /// 背后的字透不过来，边缘仍是玻璃的光。
+    /// 写着要读的字（顶栏标题、输入框、提示横幅、任务面板）：玻璃里垫九成实的页面底色，边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
+    /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
+    /// 垫了底才在任何背景上都够 4.5:1（docs/ui.md）。
     case solid
 }
 
@@ -84,9 +82,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     /// 否决了 `.clear`（加淡色 tint 也一样）：我们玻璃后面是文字，它几乎不糊开背后的字，栏上的标题、标签与问题卡和背后的字叠在一起读不出
     /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
     private var glass: Glass {
-        // 深色的暗色调让标题下那行次要字对背后糊开的字够 4.5:1，又不至于成一块黑斑
-        guard ink != .clear else { return .regular.interactive(interactive) }
-        return .regular.tint(palette.legibleGlass).interactive(interactive)
+        guard ink == .solid else { return .regular.interactive(interactive) }
+        return .regular.tint(palette.glassTint).interactive(interactive)
     }
 }
 
