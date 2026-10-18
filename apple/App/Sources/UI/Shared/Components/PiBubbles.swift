@@ -59,7 +59,7 @@ enum Bubble {
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
-    private static var foldedLines: Int { 6 }
+    static var foldedLines: Int { 6 }
 
     let stored: String
     var trip = BubbleTrip.arrived

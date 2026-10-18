@@ -191,11 +191,11 @@ struct CuePage: View {
     private static func paging(_ thread: CueThread) -> ChatPaging {
         let rows = thread.rows
         func count(filling size: CGSize, above: Int) -> Int {
-            // 字排开的宽不超过可见区与阅读栏：按这么宽折行，折出的行只会比真的少
-            let width = min(size.width, readingWidth)
+            // 阅读栏（可见区里去掉两边的边距，`ChatLayout.margin`）
+            let column = min(size.width, readingWidth) - 2 * inset
             var sum: CGFloat = 0, count = 0
             for row in rows[..<above].reversed() where sum < size.height {
-                sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, width: width)
+                sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, column: column)
                 count += 1
             }
             return max(count, 1)
@@ -203,46 +203,56 @@ struct CuePage: View {
         return ChatPaging(first: { count(filling: $0, above: $1) }, step: { count(filling: $0, above: $1) })
     }
 
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少排几行（`lines`，一行至少 `MinimumText.line`），结果卡另有交付物的一排
-    /// （`strip`，比最矮的那种还矮）与下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）。
-    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, width: CGFloat) -> CGFloat {
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`text`），结果卡另有交付物的一排（有的话；`strip`，比最矮的那种还矮）与下面那件活一行，
+    /// 旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）；数得越贴，打开时多排的越少。
+    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12, strip: CGFloat = 60
         let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
         let bubble = Bubble.padding.top + Bubble.padding.bottom
-        func text(_ message: CueMessage) -> CGFloat { MinimumText.line * CGFloat(lines(message.text, width: width)) }
+        // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
+        func width(_ fraction: CGFloat) -> CGFloat { column * fraction - Bubble.padding.leading - Bubble.padding.trailing }
         let body: CGFloat = switch row {
-        case .you(let message), .cue(let message, _): bubble + text(message)
-        case .result(let message, _, _): bubble + text(message) + note + strip
+        case .you(let message):
+            bubble + text(message.text, width: width(Bubble.youWidth), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
+        case .cue(let message, _):
+            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
+        case .result(let message, _, let deliverables):
+            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
         case .notes, .process, .renewed: note
         }
         return above + body
     }
 
-    /// 气泡里最小的字（代码块；iOS 按动态字体最小的一档）：一行至少多高、一个全角字至少多宽。
+    /// 气泡里的字至少多大（iOS 按动态字体最小的一档）：一行至少多高、一个全角字至少多宽。正文是 `Typography.reading`；
+    /// 代码块的字更小，按代码的算。全角字留一点余量：连着的全角标点会挤紧。
     private enum MinimumText {
         #if os(macOS)
-        static let line: CGFloat = 18, wide: CGFloat = 13
+        static let prose = (line: CGFloat(19), wide: CGFloat(15)), code = (line: CGFloat(18), wide: CGFloat(13))
         #else
-        static let line: CGFloat = 14, wide: CGFloat = 11
+        static let prose = (line: CGFloat(16), wide: CGFloat(13)), code = (line: CGFloat(14), wide: CGFloat(11))
         #endif
     }
 
-    /// 原文在 `width` 宽里至少排几行。每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`；代码块的围栏与表格的对齐行不排出来，不算）；
-    /// 长的行折成几行只按全角字算（每个至少 `MinimumText.wide` 宽）：半角的不算（链接地址、行内记号不显示，窄的字母也窄），
-    /// 表格行（横着滚、不折）与图片行只算一行。
-    private static func lines(_ text: String, width: CGFloat) -> Int {
-        var count = 0
+    /// 原文在 `width` 宽里至少排多高：每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`；段与段之间的空行、代码块的围栏与
+    /// 表格的对齐行不算）；长的行折成几行只按全角字算：半角的不算（链接地址、行内记号不显示，窄的字母也窄），表格行（横着滚、不折）与图片行只算一行。
+    /// 正文的行与行之间另隔 `spacing`（`Paragraphs` 的行距；代码行按不带行距的算），最多排 `limit` 行（折起的气泡）。
+    private static func text(_ text: String, width: CGFloat, spacing: CGFloat, limit: Int?) -> CGFloat {
+        var lines: [CGFloat] = [], fenced = false
         for line in text.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("```") { continue }
+            if trimmed.hasPrefix("```") { fenced.toggle(); continue }
+            if trimmed.isEmpty { continue }
             if trimmed.hasPrefix("|") || trimmed.contains("![") {
-                if MarkdownTable.alignments(trimmed) == nil { count += 1 }
+                if MarkdownTable.alignments(trimmed) == nil { lines.append(MinimumText.code.line) }
                 continue
             }
+            let font = fenced ? MinimumText.code : MinimumText.prose, height = fenced ? font.line : font.line + spacing
             let wide = trimmed.unicodeScalars.reduce(0) { $0 + (isWide($1) ? 1 : 0) }
-            count += max(1, Int((CGFloat(wide) * MinimumText.wide / width).rounded(.up)))
+            lines += repeatElement(height, count: max(1, Int((CGFloat(wide) * font.wide / width).rounded(.up))))
         }
-        return max(count, 1)
+        if lines.isEmpty { lines = [MinimumText.code.line] }
+        // 最后一行下面没有行距
+        return lines.prefix(limit ?? lines.count).reduce(0, +) - spacing
     }
 
     /// 全角：汉字与假名、谚文、全角标点（排出来至少一个字宽）。

@@ -45,7 +45,7 @@ enum InteractionBench {
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
         if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
         // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
-        // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里，空闲时先挂上的那一页（`Prewarm`）也已读到它
+        // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         let measuresCue = only.map { $0.contains("Cue 页首访") || $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
