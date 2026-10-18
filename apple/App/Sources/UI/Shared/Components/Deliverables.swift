@@ -156,7 +156,7 @@ private struct DeliverableTile: View {
         .observingArrival(of: preview.hash, in: services.store, into: $arrived)
         .task(id: file) {
             guard let file else { return }
-            look = await DeliverableLooks.load(preview, file: file, pixels: pixels, scale: scale, caches: services.store.files.caches)
+            look = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
         }
     }
 
@@ -166,7 +166,7 @@ private struct DeliverableTile: View {
     }
 
     /// 读到之前先从内存里拿（同一份别处读过、滚回来的），第一帧就是该有的比例。
-    private var shown: DeliverableLook? { look ?? DeliverableLooks.cached(preview, pixels: pixels) }
+    private var shown: DeliverableLook? { look ?? DeliverableLooks.cached(preview, box: box) }
 
     private var aspect: CGFloat {
         let raw = shown?.aspect ?? 4 / 3
@@ -239,15 +239,15 @@ private struct DeliverableTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 画面最长边的像素：主图按阅读栏宽，并排的按半栏。
-    private var pixels: Int {
-        let points: CGFloat = switch shape {
-        case .hero: 760
-        case .pair: 380
-        // 排里按真实比例定宽：最长边给到高的 4 倍，宽图也清楚（比例要读到画面才知道，像素数得先定）
-        case .strip(let height): height * 4
+    /// 画面的框（像素，见 `framed`）：主图的比例夹在 4:3～16:9、不高过上限，所以宽不过上限的 16/9，夹过的多出来的裁掉；
+    /// 并排的按真实比例整张放进半栏（阅读栏约 760 点）、不高过上限；横向滑的一排同高、宽随比例。
+    private var box: LookBox {
+        let pixels = { (points: CGFloat) in Int(points * scale) }
+        return switch shape {
+        case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
+        case .pair(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
+        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
         }
-        return Int(points * scale)
     }
 }
 

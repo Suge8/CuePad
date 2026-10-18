@@ -15,10 +15,40 @@ nonisolated struct DeliverableLook: Sendable {
     var detail: String?
 }
 
-/// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按像素降采样；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
+/// 画面画在多大的框里（像素）：`fills` 是铺满框、多出来的裁掉（按短的那一边够），否则是整张放进框里（按长的那一边够）；
+/// `width` 为 0 是不限宽（横向滑的一排：同高、宽随比例）。解码与生成按框定尺寸，不按猜的最长边：同高 150 点的一排里一张 16:9 截图
+/// 只要 800×450 像素，按"最长边是高的 4 倍"解成 1800 像素宽是它的五倍多。
+nonisolated struct LookBox: Hashable, Sendable {
+    var width: Int
+    var height: Int
+    var fills: Bool
+
+    /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
+    private static let longestFactor = 4
+
+    /// 原图 `size` 要解到的最长边（像素，不放大由解码自己管）。
+    func longestSide(of size: CGSize) -> Int {
+        guard size.width > 0, size.height > 0 else { return max(width, height) }
+        let longest = max(size.width, size.height)
+        let byHeight = CGFloat(height) / size.height
+        guard width > 0 else { return Int((byHeight * longest).rounded(.up)) }
+        let byWidth = CGFloat(width) / size.width
+        let scale = fills ? max(byWidth, byHeight) : min(byWidth, byHeight)
+        return min(Int((scale * longest).rounded(.up)), Self.longestFactor * max(width, height))
+    }
+
+    /// 先交给系统缩略图的框（它总是整张放进框里）：不限宽时是边长为高 4 倍的方框（视频、文稿没有更宽的），出来的再缩回框——
+    /// 系统按最长边缓存缩略图，要 4h×h 的扁框会把竖版的一张小图记在这个尺寸下，全屏页随后要同边长的方框时拿到的就是它，糊。
+    /// 铺满的框里比例与框不同的（竖版 PDF、竖拍视频）这样出得太小，见 `DeliverableLooks.systemThumbnail`。
+    var fitting: CGSize {
+        width > 0 ? CGSize(width: width, height: height) : CGSize(width: Self.longestFactor * height, height: Self.longestFactor * height)
+    }
+}
+
+/// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
 /// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
 /// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与生成都不在主线程。
-/// 出好的画面按"哈希 + 像素"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
+/// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
 /// （真实库上一次约 650ms 的后台 CPU，与主线程抢核），同一份在别处再出现、滚走再滚回来都不重读，第一帧就是它该有的比例。
 enum DeliverableLooks {
     private final class Entry {
@@ -28,19 +58,19 @@ enum DeliverableLooks {
 
     private static let memory = NSCache<NSString, Entry>()
 
-    static func cached(_ preview: PiPreview, pixels: Int) -> DeliverableLook? {
-        memory.object(forKey: key(preview, pixels) as NSString)?.look
+    static func cached(_ preview: PiPreview, box: LookBox) -> DeliverableLook? {
+        memory.object(forKey: key(preview, box) as NSString)?.look
     }
 
-    /// `file` 是按原文件名放的那份（系统认类型靠扩展名）；`pixels` 是画面最长边的像素；`caches` 是库的缓存目录（`AttachmentFiles.caches`）。
-    static func load(_ preview: PiPreview, file: URL, pixels: Int, scale: CGFloat, caches: URL) async -> DeliverableLook {
-        if let cached = cached(preview, pixels: pixels) { return cached }
-        let key = key(preview, pixels)
+    /// `file` 是按原文件名放的那份（系统认类型靠扩展名）；`box` 是画面画在多大的框里；`caches` 是库的缓存目录（`AttachmentFiles.caches`）。
+    static func load(_ preview: PiPreview, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> DeliverableLook {
+        if let cached = cached(preview, box: box) { return cached }
+        let key = key(preview, box)
         async let detail = detail(preview, file: file)
         var look = DeliverableLook()
-        if let stored = await LookFiles.image(key, in: caches, pixels: pixels) {
+        if let stored = await LookFiles.image(key, in: caches) {
             look.image = stored
-        } else if let made = await image(preview, file: file, pixels: pixels, scale: scale, caches: caches) {
+        } else if let made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
             look.image = made
             await LookFiles.store(made, as: key, in: caches)
         }
@@ -51,13 +81,13 @@ enum DeliverableLooks {
     }
 
     /// 从原文件出一张画面；音频与出不来的为 nil。
-    private static func image(_ preview: PiPreview, file: URL, pixels: Int, scale: CGFloat, caches: URL) async -> CGImage? {
+    private static func image(_ preview: PiPreview, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> CGImage? {
         switch preview.kind {
-        case .image: await decode(file, pixels: pixels)
-        case .web: if let snapshot = await PageSnapshots.png(for: preview, file: file, caches: caches) { await decode(snapshot, pixels: pixels) } else { nil }
-        case .markdown: await markdown(file, pixels: pixels)
+        case .image: await decode(file, box: box)
+        case .web: if let snapshot = await PageSnapshots.png(for: preview, file: file, caches: caches) { await decode(snapshot, box: box) } else { nil }
+        case .markdown: await markdown(file, box: box)
         case .audio: nil
-        default: await systemThumbnail(file, pixels: pixels, scale: scale)
+        default: await systemThumbnail(file, box: box, scale: scale)
         }
     }
 
@@ -70,11 +100,13 @@ enum DeliverableLooks {
         }
     }
 
-    private static func key(_ preview: PiPreview, _ pixels: Int) -> String { "\(preview.hash)@\(pixels)" }
+    private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
+        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")"
+    }
 
     /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；
     /// 按浅色画，深色下由缩略图统一压暗（同网页快照）。
-    private static func markdown(_ file: URL, pixels: Int) async -> CGImage? {
+    private static func markdown(_ file: URL, box: LookBox) async -> CGImage? {
         guard let source = await head(of: file) else { return nil }
         let palette = Palette(dark: false)
         let page = MarkdownText(source: source)
@@ -83,7 +115,7 @@ enum DeliverableLooks {
             .background(palette.paper)
             .environment(\.palette, palette)
         let renderer = ImageRenderer(content: page)
-        renderer.scale = CGFloat(pixels) / markdownPage.width
+        renderer.scale = CGFloat(box.longestSide(of: markdownPage)) / markdownPage.width
         return renderer.cgImage
     }
 
@@ -94,18 +126,49 @@ enum DeliverableLooks {
         (try? String(contentsOf: file, encoding: .utf8)).map { String($0.prefix(3000)) }
     }
 
-    @concurrent private static func decode(_ file: URL, pixels: Int) async -> CGImage? {
-        Thumbnails.image(at: file, maxPixel: pixels)
+    @concurrent private static func decode(_ file: URL, box: LookBox) async -> CGImage? {
+        guard let size = Thumbnails.pixelSize(at: file) else { return nil }
+        return Thumbnails.image(at: file, maxPixel: box.longestSide(of: size))
     }
 
     @concurrent private static func pageCount(_ file: URL) async -> Int? {
         CGPDFDocument(file as CFURL).map(\.numberOfPages)
     }
 
-    private static func systemThumbnail(_ file: URL, pixels: Int, scale: CGFloat) async -> CGImage? {
-        let side = CGFloat(pixels) / scale
-        let request = QLThumbnailGenerator.Request(fileAt: file, size: CGSize(width: side, height: side), scale: scale, representationTypes: .thumbnail)
+    /// 系统缩略图只会整张放进框里：先按框要一张，铺满框还不够大（比例与框不同，如竖版 PDF 放进横的主图）就按它的比例算出要多大再要一张，
+    /// 不一上来就按最大可能要（Mac 主图那样要会渲出五千多像素见方的一页）。
+    private static func systemThumbnail(_ file: URL, box: LookBox, scale: CGFloat) async -> CGImage? {
+        guard var image = await systemThumbnail(file, fitting: box.fitting, scale: scale) else { return nil }
+        let needed = box.longestSide(of: CGSize(width: image.width, height: image.height))
+        if needed > max(image.width, image.height),
+           let larger = await systemThumbnail(file, fitting: CGSize(width: needed, height: needed), scale: scale) {
+            image = larger
+        }
+        return await shrunk(image, to: box)
+    }
+
+    private static func systemThumbnail(_ file: URL, fitting size: CGSize, scale: CGFloat) async -> CGImage? {
+        let request = QLThumbnailGenerator.Request(
+            fileAt: file, size: CGSize(width: size.width / scale, height: size.height / scale), scale: scale, representationTypes: .thumbnail)
         return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
+    }
+
+    /// 系统缩略图不一定照要的尺寸给（视频常按原片给，真实库里一张约 11MB，画上屏时再拷一份）：超过框的重画到框的尺寸，原图随即放掉。
+    /// 不加这一步时真实库的 iPhone Cue 页常驻 243MB，其中系统缩略图与它在屏上的拷贝约 140MB。
+    @concurrent private static func shrunk(_ image: CGImage, to box: LookBox) async -> CGImage {
+        let size = CGSize(width: image.width, height: image.height)
+        let longest = box.longestSide(of: size)
+        guard max(image.width, image.height) > longest else { return image }
+        let factor = CGFloat(longest) / max(size.width, size.height)
+        let width = max(1, Int((size.width * factor).rounded())), height = max(1, Int((size.height * factor).rounded()))
+        let space = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return image }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage() ?? image
     }
 
     private static func duration(_ file: URL) async -> String? {
@@ -161,17 +224,17 @@ enum PageSnapshots {
 }
 
 /// 交付物画面的磁盘缓存（缩略图与网页快照只此一套）：库的缓存目录（`LibraryLocation.caches`）下的 `CuePadLooks/`，一张一个 PNG，
-/// 按键名认（缩略图"哈希@像素"、快照"哈希.page"）；系统可随时清，清了下次再出。内容按哈希定，存下就不会过时。
+/// 按键名认（缩略图"哈希@框"、快照"哈希.page"）；系统可随时清，清了下次再出。内容按哈希定，存下就不会过时。
 enum LookFiles {
     nonisolated static func url(_ key: String, in caches: URL) -> URL {
         caches.appending(path: "CuePadLooks", directoryHint: .isDirectory).appending(path: "\(key).png")
     }
 
-    /// 存下的那张（已是要的大小，读出来不再缩）；没有为 nil。
-    @concurrent static func image(_ key: String, in caches: URL, pixels: Int) async -> CGImage? {
+    /// 存下的那张（已是要的大小，原样读出）；没有为 nil。
+    @concurrent static func image(_ key: String, in caches: URL) async -> CGImage? {
         let file = url(key, in: caches)
-        guard FileManager.default.fileExists(atPath: file.path) else { return nil }
-        return Thumbnails.image(at: file, maxPixel: pixels)
+        guard let size = Thumbnails.pixelSize(at: file) else { return nil }
+        return Thumbnails.image(at: file, maxPixel: Int(max(size.width, size.height)))
     }
 
     /// 存一张出好的画面；写不成就算了，下次再出。

@@ -260,7 +260,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 ForEach(draft.images) { image in
                     ZStack(alignment: .topTrailing) {
                         image.preview.resizable().scaledToFill()
-                            .frame(width: 64, height: 64)
+                            .frame(width: PickedImage.previewSide, height: PickedImage.previewSide)
                             .clipShape(.rect(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair))
                         Button { draft.images.removeAll { $0.id == image.id } } label: {
