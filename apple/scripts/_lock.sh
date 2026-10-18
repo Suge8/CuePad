@@ -8,8 +8,9 @@
 #    先领模拟器再进 machine：排队等模拟器的任务不占着机器（曾经占着，测量就跟着整条模拟器队列一起等）。
 # 锁都是 flock，只由这里的入口进程持有（Python 打开的文件不传给子进程），它退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<模拟器号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着。
-# 谁拿着锁记在 /tmp/cuepad-xc-<uid>/holders/<PID>.json（PID、检出、命令、起始时刻、持有与在等的锁），入口退出时删掉；
-# 被 KILL 留下的、PID 已不是那个进程的，读的人当场清掉。排队时开头与每 LOCK_REPORT 秒列一次持有者（停住的进程标出来：它不受时限管），
+# 谁拿着锁记在 /tmp/cuepad-xc-<uid>/holders/<PID>.json（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；
+# 被 KILL 留下的、PID 已不是那个进程的，读的人当场清掉。排队时开头与每 LOCK_REPORT 秒列一次持有者：每把锁持有了多久（不含排队），命令截成一行，
+# 停住的进程标出来（它不受时限管）；
 # 等满 LOCK_WAIT 秒还没轮到就列出持有者、以 75 退出，不静默挂着。
 # 用法：xc_enter <plain|sim|exclusive> <命令…>，在锁里 exec 这条命令（通常是 "$0" "$@"）；exclusive 是交互的性能测量（用 0 号模拟器）。
 
@@ -26,7 +27,7 @@ xc_enter() {
   # 不用 "$(cat <<'PY' …)"：macOS 自带的 bash 3.2 解析命令替换里的这段时会把它重复成两个参数
   local script
   IFS= read -r -d '' script <<'PY' || true
-import fcntl, json, os, re, signal, subprocess, sys, threading, time
+import fcntl, json, os, re, shlex, signal, subprocess, sys, threading, time
 
 hold, wait_limit, report, pool, root, own, mode, *cmd = sys.argv[1:]
 hold, wait_limit, report, pool = int(hold), int(wait_limit), int(report), int(pool)
@@ -44,7 +45,7 @@ def processes(pids):
 
 
 me = {"pid": os.getpid(), "start": processes([os.getpid()])[os.getpid()][1], "checkout": os.path.dirname(os.path.dirname(os.path.dirname(own))),
-      "cmd": " ".join([os.path.basename(cmd[0]), *cmd[1:4]]), "since": begun, "held": [], "waiting": None}
+      "cmd": shlex.join(cmd), "held": [], "waiting": None}
 record = f"{holders}/{me['pid']}.json"
 
 
@@ -75,7 +76,20 @@ def others():
                 pass
             continue
         live.append((h, alive[h["pid"]][0]))
-    return sorted(live, key=lambda item: item[0]["since"])
+    return sorted(live, key=lambda item: min((t for _, t in item[0]["held"]), default=time.time()))
+
+
+def clock(seconds):
+    seconds = int(seconds)
+    return f"{seconds // 60} 分 {seconds % 60:02d} 秒"
+
+
+def line(text):
+    """显示时截成一行：命令行可以很长（测量的启动参数），排队的报告每个持有者一行命令。"""
+    return text if len(text) <= COMMAND_WIDTH else text[:COMMAND_WIDTH - 1] + "…"
+
+
+COMMAND_WIDTH = 150
 
 
 def listing(files):
@@ -87,19 +101,19 @@ def listing(files):
         command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
         # 旧版入口的命令行末尾是"…<检出>/apple/.derived/xc.lock <模式> <命令…>"
         task = re.search(r"(\S+)/apple/\.derived/xc\.lock (\S+) (.*)$", command)
-        what = f"{task[1]}  {task[2]}  {task[3][:120]}" if task else command[:160]
+        what = f"{task[1]}  {task[2]}\n    命令：{line(task[3])}" if task else line(command)
         lines.append(f"  pid {pid}  （没登记：旧版入口，持有或在等）  {what}")
     for h, stat in live:
         if not h["held"]:
             continue
-        took = int(now - h["since"])
-        line = (f"  pid {h['pid']}  {h['checkout']}  {h['cmd']}  {time.strftime('%H:%M:%S', time.localtime(h['since']))} 起，"
-                f"已 {took // 60} 分 {took % 60:02d} 秒  持有 {'、'.join(h['held'])}")
+        # 各把锁从真正拿到的那一刻算，不含排队等它的时间
+        held = "、".join(f"{name}（{time.strftime('%H:%M:%S', time.localtime(since))} 拿到，已持有 {clock(now - since)}）" for name, since in h["held"])
+        entry = f"  pid {h['pid']}  {h['checkout']}  持有 {held}"
         if h["waiting"]:
-            line += f"，在等 {h['waiting']}"
+            entry += f"，在等 {h['waiting']}"
         if stat.startswith("T"):
-            line += "  （进程停住了：不受时限管，要有人 kill -CONT 或结束它）"
-        lines.append(line)
+            entry += "  （进程停住了：不受时限管，要有人 kill -CONT 或结束它）"
+        lines.append(f"{entry}\n    命令：{line(h['cmd'])}")
     return "\n".join(lines) or "  （此刻没有持有者：锁马上就会空出）"
 
 
@@ -141,13 +155,13 @@ def acquire(options, kind, why):
         while not won.wait(max(0, min(report, deadline - time.time()))):
             waited = int(time.time() - begun)
             if time.time() >= deadline:
-                say(f"等了 {waited // 60} 分 {waited % 60:02d} 秒还没轮到（上限 LOCK_WAIT）：{why}\n{listing(files)}")
+                say(f"等了 {clock(waited)}还没轮到（上限 LOCK_WAIT）：{why}\n{listing(files)}")
                 os.remove(record)
                 os._exit(75)
-            say(f"还在等（{waited // 60} 分 {waited % 60:02d} 秒）：{why}\n{listing(files)}")
+            say(f"还在等（{clock(waited)}）：{why}\n{listing(files)}")
         free = result[0]
         me["waiting"] = None
-    me["held"].append(options[free][1])
+    me["held"].append([options[free][1], time.time()])
     publish()
     return free
 
@@ -168,7 +182,7 @@ try:
         acquire([(gate, "闸门")], fcntl.LOCK_SH, "性能测量在跑，它独占机器")
         fcntl.flock(machine, fcntl.LOCK_SH)  # 测量拿到 machine 前先占着 gate，过了 gate 这里就不会等
         fcntl.flock(gate, fcntl.LOCK_UN)
-        me["held"] = [h for h in me["held"] if h != "闸门"] + ["机器（共享）"]
+        me["held"] = [h for h in me["held"] if h[0] != "闸门"] + [["机器（共享）", time.time()]]
         publish()
 
     child = subprocess.Popen(cmd, env=dict(os.environ, CUEPAD_SIM=sim))
