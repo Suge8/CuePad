@@ -114,7 +114,8 @@ struct ReceiptTests {
         try await store.recordMacPresence(host: "mac-cue") { true }  // Cue 那台醒着（断网时没同步来，本机不说它在睡觉）
         try await setSync(.idle)
         try await eventually("恢复") { services.speech.reachableSince != nil }
-        try await eventually("恢复时立即同步，拉取重新开始") { app.sync.syncNows >= syncs + 2 }  // 钟没动：第二次是新窗口的第一拉
+        // 钟没动：恢复时立即同步的那一拉也是新窗口的开头，之后按节奏的拉取睡在新窗口的第一个间隔里，不另拉
+        try await eventually("恢复时立即同步，拉取重新开始") { app.sync.syncNows == syncs + 1 && clock.sleeperCount > 0 }
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行回到发送中") { row("atlas")?.status == .delivery(.inTransit(.sending)) }
         #expect(services.liveSessions.undelivered["atlas"] == nil)

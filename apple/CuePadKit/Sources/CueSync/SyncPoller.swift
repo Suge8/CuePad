@@ -4,8 +4,9 @@ import Foundation
 /// 有理由等就拉：Mac 不收推送，别的设备写来的东西只靠拉；手机的推送不保证送达与时效。手里有正在等的东西时，
 /// 按条件给出的节奏拉（等什么只在 `AppServices.pollingCadence` 定义）。
 ///
-/// 条件流给出此刻的节奏（nil：不在等）：每收到一个节奏就从头开始——立即拉一次（最新状态不等第一个间隔），之后按它的档位隔着拉；
-/// 收到 nil 即停，条件流结束或任务取消时返回。
+/// 条件流给出此刻的节奏（nil：不在等）：每收到一个节奏就从头开始按它的档位隔着拉；节奏变了（多了或换了在等的东西）先立即拉一次，
+/// 最新状态不等第一个间隔。条件流的第一个值与重给的同一个节奏不立即拉：开始拉取（启动、回到前台）与同步恢复时 App 本来就立即同步，
+/// 那一拉就是这一拉。收到 nil 即停，条件流结束或任务取消时返回。
 public struct SyncPoller: Sendable {
   /// 怎么拉：几档，每档隔多久拉一次、持续多久（`lasting` 为 nil 是一直），按顺序走；最后一档有期限的，走完就不再拉。
   /// 例：`Cadence(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10)))` 是先 2 秒一次拉两分钟，之后 10 秒一次一直拉。
@@ -47,23 +48,30 @@ public struct SyncPoller: Sendable {
     while waiting: Condition, fetch: @escaping @Sendable () async -> Void
   ) async where Condition.Element == Cadence?, Condition.Failure == Never {
     var loop: Task<Void, Never>?
+    var last: Cadence??
     for await cadence in waiting {
+      let changed = last != nil && last != cadence
+      last = cadence
       loop?.cancel()
-      loop = cadence.map { cadence in Task { await self.loop(cadence, fetch) } }
+      loop = cadence.map { cadence in Task { await self.loop(cadence, now: changed, fetch) } }
     }
     loop?.cancel()
     await loop?.value
   }
 
-  /// 先拉一次，再按走到哪一档隔着拉，直到档位走完或被取消（新节奏到来、不再等）。间隔从上一次开拉算起（拉的耗时算在间隔里）：
+  /// 按走到哪一档隔着拉（`now`：先拉一次），直到档位走完或被取消（新节奏到来、不再等）。间隔从上一次开拉算起（拉的耗时算在间隔里）：
   /// 服务器上新到的东西最多等一个间隔加一次拉取就到。
-  private func loop(_ cadence: Cadence, _ fetch: @escaping @Sendable () async -> Void) async {
+  private func loop(_ cadence: Cadence, now: Bool, _ fetch: @escaping @Sendable () async -> Void) async {
     let start = timing.now()
+    var began = now ? nil : start
     while !Task.isCancelled, let interval = cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) {
-      let began = timing.now()
+      if let began {
+        let spent = Duration.seconds(timing.now().timeIntervalSince(began))
+        if spent < interval { try? await timing.sleep(interval - spent) }
+        guard !Task.isCancelled, cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) != nil else { return }
+      }
+      began = timing.now()
       await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）。取消屏蔽 withTaskCancellationShield 要 macOS 27，部署目标是 26
-      let spent = Duration.seconds(timing.now().timeIntervalSince(began))
-      if spent < interval { try? await timing.sleep(interval - spent) }
     }
   }
 }

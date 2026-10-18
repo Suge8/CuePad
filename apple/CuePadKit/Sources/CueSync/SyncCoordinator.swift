@@ -14,6 +14,11 @@ actor SyncCoordinator {
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
   /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
   private var unsendable: [String: Int64] = [:]
+  /// 库里确定没有可传的待推送时的同步变更代数（`CueStore.syncGeneration`）：代数没变就不再全量推导（每次推导要翻一遍
+  /// 同步元数据，真实库约 3 亿条指令），按节奏的拉取每次顺带的那一轮因此不碰库。
+  private var settled: Int?
+  /// 在路上的这一批带走了推导出的全部待推送：推导前的代数与这批的条数。整批收下时库里就没有可传的了（`processSent`）。
+  private var clearing: (generation: Int, count: Int)?
 
   /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
   private struct Facts {
@@ -82,14 +87,20 @@ actor SyncCoordinator {
     case .eraseLocal: try await store.eraseSyncedData()
     }
     unsendable = [:]
+    settled = nil
     facts.status = .idle
   }
 
   // MARK: 上传批次
 
   /// 下一批要上传的：`first` 里待推送的排在前面，至多 `limit` 条；没有可传的（或此刻不能同步）为 nil。
+  /// 上次确定没有可传的之后没有让记录变成待推送的提交（`settled`），直接为 nil，不再推导。
   func nextBatch(first: Set<String>, limit: Int) async -> (saves: [CKRecord], deletes: [CKRecord.ID])? {
+    clearing = nil
     guard canSync else { return nil }
+    let generation = await store.syncGeneration
+    if settled == generation { return nil }
+    settled = nil
     let pending: PendingSync
     do { pending = try await store.pendingSync() } catch {
       report(error, recordName: nil)
@@ -103,7 +114,14 @@ actor SyncCoordinator {
       if let record = await record(for: recordID(name)) { saves.append(record) }
     }
     let batch = (saves: saves, deletes: Array(deletes.prefix(limit - saves.count)).map(recordID))
-    guard !batch.saves.isEmpty || !batch.deletes.isEmpty else { return nil }
+    guard !batch.saves.isEmpty || !batch.deletes.isEmpty else {
+      settled = generation
+      return nil
+    }
+    // 构造不出来的（附件文件不在本机）记进了 `unsendable`，同不可传的一样不算剩下
+    if ordered.count == saves.count + ordered.count(where: { unsendable[$0] != nil }), batch.deletes.count == deletes.count {
+      clearing = (generation, saves.count + batch.deletes.count)
+    }
     do {
       try await store.noteSent(saves.compactMap { record in
         guard let table = RecordMapper.table(named: record.recordType), let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
@@ -275,6 +293,8 @@ actor SyncCoordinator {
   // MARK: 发送结果
 
   private func processSent(_ sent: SentRecords) async throws -> SendOutcome {
+    if let clearing, sent.saved.count + sent.deleted.count == clearing.count { settled = clearing.generation }
+    clearing = nil
     var outcome = SendOutcome(progressed: !sent.saved.isEmpty || !sent.deleted.isEmpty, blocked: false, zoneMissing: false)
     for record in sent.saved {
       guard let row = RecordMapper.row(from: record) else { continue }
