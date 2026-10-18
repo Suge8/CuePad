@@ -9,6 +9,8 @@ import SwiftUI
 struct Prewarm: View {
     @Environment(Workspace.self) private var workspace
     @State private var step = Step.idle
+    /// 预热的对话区的贴底状态（没人读，只是滚动区要一份）。
+    @State private var follow = ChatFollow()
 
     /// 读到资料库后等多久开始：首屏出来、用户还没动手。⌘K 面板同一时机常驻挂上（`keptPanel`）。
     static let delay: Duration = .seconds(2)
@@ -34,7 +36,7 @@ struct Prewarm: View {
         ZStack {
             switch step {
             case .conversation:
-                ChatScroll(followKey: 0, readingWidth: 760, inset: 24) {
+                ChatScroll(followKey: 0, readingWidth: 760, inset: 24, follow: $follow) {
                     PiConversation(
                         session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: PiConversation.firstWindow)
                 }

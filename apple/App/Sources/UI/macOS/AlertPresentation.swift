@@ -5,13 +5,13 @@ import CueSync
 
 /// Mac 主窗口与提示：你在不在看、点开去哪（`AlertCenter` 发通知、系统交来前台呈现、点开的通知都问这里）。
 extension Workspace {
-    /// 只有这一处定：在看是 CuePad 在前台、主窗口在屏幕上，且正看着那个会话或 Agent 页（会话的提示；Agent 页上那一行已经在变），
+    /// 只有这一处定：在看是 CuePad 在前台、主窗口在屏幕上，且当前页盖住了那个会话（`Route.covers`），
     /// 或 Cue 页（Cue 的，`AppServices.cueViewers`）。在看时什么都不发；其余一律是系统通知。
     func isWatching(_ route: AlertRoute) -> Bool {
         guard NSApp.isActive, services.windowShell?.isVisible == true else { return false }
         return switch route {
         case .cue: services.cueViewers > 0
-        case .session(let tap): page == .agent || page == .session(tap.sessionState)
+        case .session(let tap): page.covers(session: tap.sessionState)
         }
     }
 

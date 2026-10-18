@@ -110,7 +110,7 @@ struct PiTranscriptTests {
         }
 
         #expect(try await store.piMessages(of: "old").map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
-        #expect(try await store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 会话所在的 Mac 没回应：补写请求在页面上超时；再打开会话不写第二条，那台 Mac 醒来领取那一条就够。

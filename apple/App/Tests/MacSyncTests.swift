@@ -336,7 +336,7 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         let sent = try #require(ext.commands.last?.json)
         #expect(ext.received == ["command"] && sent["text"] as? String == "/greet world" && sent["deliverAs"] as? String == "followUp")
-        #expect(try await services.store.sendRecords().isEmpty)  // 发送记录只记内容的投送，命令不记
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)  // 发送记录只记内容的投送，命令不记
     }
 
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
@@ -352,7 +352,7 @@ struct MacSyncTests {
 
         let linked = try #require(try await services.store.card(task.id))
         #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 斜杠命令里带图片按失败写回() async throws {
@@ -383,7 +383,7 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         let sent = try #require(ext.commands.last?.json)
         #expect(ext.received == ["answer"] && sent["promptId"] as? String == "p-1" && sent["value"] as? String == "覆盖")
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 手机的配置请求交给桥改模型与思考强度_不写发送记录() async throws {
@@ -399,7 +399,7 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         let sent = try #require(ext.commands.last?.json)
         #expect(ext.received == ["config"] && sent["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"] && sent["thinking"] as? String == "high")
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 手机的结束请求让会话收尾_不写发送记录() async throws {
@@ -412,7 +412,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(ext.received == ["end"] && rig.host.calls.isEmpty)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 已经结束的会话（不在这台 Mac 的桥上）没有可结束的会话、也没有这一轮可停：目标达成，按成功写回，不恢复它、不碰桥。
@@ -441,7 +441,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(ext.received == ["abort"])
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 手机上停止、结束、改配置：请求都发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
@@ -502,7 +502,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded) && done.mode == .known(.ping))
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
@@ -640,7 +640,7 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
         #expect(rig.host.extensions["s1"]?.commands.last?.json["name"] as? String == "登录重试")
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 新会话_后台开在项目目录_开场的话送入() async throws {
@@ -759,7 +759,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(try await services.store.directory(of: project.id) == app.path)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 绑定_取另一个项目已绑的目录_换绑覆盖旧的_没有文件夹就是解除() async throws {
@@ -946,7 +946,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {

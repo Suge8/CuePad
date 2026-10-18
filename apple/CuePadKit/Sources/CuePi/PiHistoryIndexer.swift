@@ -52,8 +52,6 @@ public struct PiHistoryIndexer: Sendable {
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
         var excluded: Set<URL> = []
-        /// 文件头还没写好、还不算会话的文件（`PiHistoryUpdate.isSession`）：回填完成时不列进会话文件，旧版本按文件名记下的随对账删掉
-        var notYet: Set<URL> = []
         var followed = Followed(limit: Self.followLimit)
 
         func index(_ file: URL, modified: Date?, remember: Bool) async {
@@ -77,11 +75,7 @@ public struct PiHistoryIndexer: Sendable {
                 if let dropped = change.dropped { watcher.unfollow(dropped) }
                 if change.follows { watcher.follow(file.path) }
             }
-            guard update.isSession else {
-                notYet.insert(file)
-                return
-            }
-            notYet.remove(file)
+            guard update.isSession else { return }
             if update.bytesRead > 0 || base?.checkpoint == nil { continuation.yield(.updated(update)) }
         }
 
@@ -92,7 +86,7 @@ public struct PiHistoryIndexer: Sendable {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) && !notYet.contains($0) }))
+        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }
