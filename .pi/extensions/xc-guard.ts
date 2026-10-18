@@ -10,7 +10,7 @@ const SWIFT_BLOCKED = new Set(["build", "test", "run"]);
 const SIMCTL_BLOCKED = new Set(["boot", "shutdown", "create", "clone", "erase", "delete", "rename", "install", "uninstall", "upgrade"]);
 const BUILD =
 	"CuePad 的编译、测试、截图与模拟器开关只经 apple/scripts/xc.sh（产物目录与模拟器固定，用法见它的头注释）：" +
-	"xc.sh build|test <mac|ios|ipad>、xc.sh test kit [swift test 参数]、xc.sh shot|rec|run …、xc.sh check。";
+	"xc.sh build|test <mac|ios|ipad>、xc.sh test kit [xcodebuild 参数]、xc.sh shot|rec|run …、xc.sh check。";
 const INSTANCE =
 	"CuePad 调试实例只经 xc.sh shot|rec|run 起（隔离、每个检出一份、一定退出），run 起的用 xc.sh stop 收，" +
 	"别的进程按自己拿到的 PID 结束。按名字或 bundle id 起停会碰到用户在用的正式版。";
