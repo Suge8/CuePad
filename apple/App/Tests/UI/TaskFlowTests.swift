@@ -48,7 +48,7 @@ struct TaskFlowTests {
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n日志在 logs/0918.txt")
-        #expect(try await store.sendRecords().map(\.content) == ["修乱序\n日志在 logs/0918.txt"])
+        #expect(try RawDB(rig.services.location.databaseURL).rows("SELECT content FROM sendRecords") == [["修乱序\n日志在 logs/0918.txt"]])
 
         // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.toggle(task.id)

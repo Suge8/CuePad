@@ -38,7 +38,7 @@ struct SendTests {
 
         #expect(rig.pasteboard.string(forType: .string) == "before\n\nafter")
         #expect(rig.pasteboard.data(forType: .rtfd) != nil)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，写出就返回、
@@ -60,11 +60,8 @@ struct SendTests {
             PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer, deliveryID: request.id.uuidString)
         ])
         #expect(try await services.store.deliveryRequests().count == 1)
-        let records = try await services.store.sendRecords()
-        #expect(records.count == 1)
-        let record = try #require(records.first)
-        #expect(record.targetKind == .known(.piSession) && record.targetName == "work" && record.targetRef == "sess-1")
-        #expect(record.content == body && record.cardID == task.id)
+        let records = try RawDB(services.location.databaseURL).rows("SELECT targetKind, targetName, targetRef, content, cardID FROM sendRecords")
+        #expect(records == [["piSession", "work", "sess-1", body, task.id.uuidString.lowercased()]])
     }
 
     @Test func Pi会话忙时_直接发送先问马上说还是等它做完再说_不写请求_选了按方式发送() async throws {
@@ -100,7 +97,7 @@ struct SendTests {
         #expect(Workspace(services: services).send("hi", to: AgentTarget(session: "nope")))
 
         #expect(try await settled().failure != nil)
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// Cue 发进会话的话（投送请求 origin 是 cue）送达、请求清理之后，会话页里那条消息仍标着 Cue：认的是发送记录，不是请求。
@@ -136,7 +133,7 @@ struct SendTests {
             try services.copy("x \(missing)")
         }
         #expect(rig.pasteboard.string(forType: .string) == "原有")
-        #expect(try await services.store.sendRecords().isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 }
 #endif
