@@ -106,10 +106,7 @@ import Testing
     try await store.updateCard(card.id) { $0.body = "prompt v2" }
     try await store.purgeCard(card.id)
 
-    let records = try await store.sendRecords()
-    #expect(records.map(\.content) == ["prompt v1"])
-    #expect(records.first?.cardID == nil)
-    #expect(records.first?.targetName == "fix bug")
+    #expect(try RawDB(fixture.url).rows("SELECT content, cardID, targetName FROM sendRecords") == [["prompt v1", "NULL", "fix bug"]])
   }
 
   // MARK: 结构版本

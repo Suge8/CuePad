@@ -281,11 +281,6 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
-  /// 发送记录，最近的在前（同一毫秒按写入先后）。
-  public func sendRecords() throws -> [SendRecord] {
-    try select(SendRecord.self, orderBy: "sentAt DESC, rowid DESC")
-  }
-
   /// 项目（nil = 未分类）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
   /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
   public func lastSends(in project: UUID?) throws -> [UUID: LastSend] {
