@@ -25,7 +25,7 @@ final class ShareModel {
     init(providers: [NSItemProvider], location: LibraryLocation) {
         self.providers = providers
         self.location = location
-        projects = Snapshots.readProjects(from: location.snapshotsDirectory)?.projects ?? []
+        projects = Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects ?? []
     }
 
     func load() async {

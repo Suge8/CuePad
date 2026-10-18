@@ -4,7 +4,9 @@ A 是"有在线会话的 Mac"：这里起一个说桥协议的假扩展，几个
 B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按手机那档）：每轮给 A 的一个会话"马上说"一句、对 Cue 说一句、立即同步一次（打点见 DebugScene+SyncBench.swift）。
 
 用法：sync-bench.py [分钟=10]
-环境：CUEPAD_DERIVED 产物目录（默认 /tmp/sync-bench，库、日志都在里面）；SYNC_BENCH_SESSIONS 会话数（默认 3）；
+构建是本检出 apple/.derived 里开发环境签名的那份（CUEPAD_SIGN=development xc.sh build mac）；库、日志在 /tmp/sync-bench。
+要同时开两个实例，不经 app.py 的每个检出一份；隔离目录同样取 app.isolated_env。
+环境：SYNC_BENCH_SESSIONS 会话数（默认 3）；
       SYNC_BENCH_FLIP 每个会话平均几秒切一次状态（默认 8）；SYNC_BENCH_EVERY B 每轮间隔秒（默认 30）；SYNC_BENCH_WARMUP 预热秒（默认 90，不计入）。
 前提、口径与限制见 docs/verify.md「同步测量」。只结束自己起的进程。
 """
@@ -13,14 +15,15 @@ from collections import Counter
 from datetime import datetime
 
 sys.dont_write_bytecode = True
+from app import isolated_env  # noqa: E402
+
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DERIVED = os.path.abspath(os.environ.get("CUEPAD_DERIVED", "/tmp/sync-bench"))
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
 FLIP = float(os.environ.get("SYNC_BENCH_FLIP", 8))
 EVERY = int(os.environ.get("SYNC_BENCH_EVERY", 30))
 WARMUP = int(os.environ.get("SYNC_BENCH_WARMUP", 90))
-EXE = f"{DERIVED}/Build/Products/Debug/CuePad.app/Contents/MacOS/CuePad"
-BENCH = f"{DERIVED}/sync-bench"
+EXE = f"{APPLE}/.derived/Build/Products/Debug/CuePad.app/Contents/MacOS/CuePad"
+BENCH = "/tmp/sync-bench"
 STATES = [{"kind": "thinking"}, {"kind": "tool", "tool": "bash", "tools": ["bash"], "detail": "pnpm test"},
           {"kind": "outputting"}, {"kind": "done", "aborted": False}, {"kind": "idle"}]
 
@@ -80,9 +83,7 @@ def fake_extension(directory):
 
 def launch(role, socket_dir):
     home = f"{BENCH}/{role}"
-    env = dict(os.environ, CUEPAD_LIBRARY_DIR=f"{home}/library", CUEPAD_SHOT_READY=f"{home}/ready", PI_CODING_AGENT_DIR=f"{home}/pi-agent",
-               CUEPAD_BIN_DIR=f"{home}/bin", CUEPAD_PI_SOCKET_DIR=socket_dir, CLAUDE_CONFIG_DIR=f"{home}/claude",
-               CODEX_HOME=f"{home}/codex", OPENCODE_CONFIG_DIR=f"{home}/opencode")
+    env = dict(isolated_env(f"{home}/library", socket_dir), CUEPAD_SHOT_READY=f"{home}/ready")
     args = [EXE, "-CuePadCloudKit", "YES", "-CuePadHost", f"bench-{role}", "-CuePadSyncBench", "host" if role == "a" else "remote",
             "-CuePadSyncBenchEvery", str(EVERY), "-CuePadOffscreen", "YES"]
     return subprocess.Popen(args, env=env, stdout=open(f"{home}.log", "w"), stderr=subprocess.STDOUT)
@@ -140,7 +141,7 @@ def report(pids, start, end):
 
 def main(minutes):
     if not os.path.exists(EXE) or os.environ.get("SYNC_BENCH_SKIP_BUILD") != "1":
-        subprocess.run([f"{APPLE}/scripts/xc.sh", "build", "mac"], env=dict(os.environ, CUEPAD_DERIVED=DERIVED, CUEPAD_SIGN="development"), check=True)
+        subprocess.run([f"{APPLE}/scripts/xc.sh", "build", "mac"], env=dict(os.environ, CUEPAD_SIGN="development"), check=True)
     subprocess.run(["rm", "-rf", BENCH]); os.makedirs(BENCH)
     socket_a, socket_b = f"/tmp/cpsb-a-{os.getuid()}", f"/tmp/cpsb-b-{os.getuid()}"
     os.makedirs(socket_b, mode=0o700, exist_ok=True); os.chmod(socket_b, 0o700)

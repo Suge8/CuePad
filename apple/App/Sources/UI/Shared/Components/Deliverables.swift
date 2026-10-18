@@ -140,9 +140,7 @@ private struct DeliverableTile: View {
         #if os(macOS)
         .help(label)
         #endif
-        .observing(services.store, id: preview.hash, into: $arrived, immediately: false) { [files = services.store.files, hash = preview.hash] store in
-            try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
-        }
+        .observingArrival(of: preview.hash, in: services.store, into: $arrived)
         .task(id: file) {
             guard let file else { return }
             look = await DeliverableLooks.load(preview, file: file, pixels: pixels, scale: scale)

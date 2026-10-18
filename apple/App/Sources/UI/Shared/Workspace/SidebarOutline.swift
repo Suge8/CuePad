@@ -7,7 +7,7 @@ import CueStore
 /// 手机与 iPad 的列表只列置顶与最近的几个项目，项目区末尾一行"全部项目"进书架；Mac 没有书架，侧栏列出全部项目、项目区自己滚动。
 nonisolated struct SidebarOutline: Equatable {
     /// 侧栏里固定的条目（Cue 与项目行之外的）。
-    enum Entry: CaseIterable {
+    enum Entry {
         case tasks, sessions, allProjects, archive, trash, settings
 
         var title: String {

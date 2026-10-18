@@ -20,7 +20,7 @@ struct WidgetDataTests {
 
         try await services.writeSnapshots()
 
-        let unfiled = try #require(Snapshots.readUnfiled(from: snapshots))
+        let unfiled = try #require(Snapshots.read(UnfiledSnapshot.self, from: snapshots))
         #expect(unfiled.total == 8)
         #expect(unfiled.cards.count == 5)
         #expect(unfiled.cards.first?.title == "", "刚建的纯图片卡最新，没有文字标题")
@@ -35,11 +35,9 @@ struct WidgetDataTests {
         _ = try await services.store.createCard(in: nil, body: "未分类里的")
 
         try await eventually("快照里有新项目与未分类") {
-            Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["新项目"]
-                && Snapshots.readUnfiled(from: snapshots)?.cards.map(\.title) == ["未分类里的"]
+            Snapshots.read(ProjectsSnapshot.self, from: snapshots)?.projects.map(\.name) == ["新项目"]
+                && Snapshots.read(UnfiledSnapshot.self, from: snapshots)?.cards.map(\.title) == ["未分类里的"]
         }
-        #expect(Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["新项目"])
-        #expect(Snapshots.readUnfiled(from: snapshots)?.cards.map(\.title) == ["未分类里的"])
     }
 
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {
@@ -57,7 +55,7 @@ struct WidgetDataTests {
 
         #expect(Set(order) == ["草稿", "另一处"])
         #expect(order.count == 2)
-        #expect(Snapshots.readUnfiled(from: snapshots)?.cards.map(\.title) == ["刚写的"])
+        #expect(Snapshots.read(UnfiledSnapshot.self, from: snapshots)?.cards.map(\.title) == ["刚写的"])
         services.removeBackgroundFlush(token)
     }
 

@@ -21,6 +21,8 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     @State private var oldest: UUID?
     @State private var highlight = ChatHighlight()
     @State private var pendingJump: UUID?
+    /// 这个对话区的身份（`ChatJump` 按它比较）。
+    @State private var column = UUID()
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], ids: [UUID],
@@ -49,7 +51,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             content(window, showEarlier)
         }
         .environment(\.chatHighlight, highlight.id)
-        .environment(\.chatJump) { follow.seek($0) }
+        .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
         .overlay(alignment: .trailing) {
             if !marks.isEmpty {
                 ChatScrubber(marks: marks, scrolling: follow.scrolling) { follow.seek($0) }

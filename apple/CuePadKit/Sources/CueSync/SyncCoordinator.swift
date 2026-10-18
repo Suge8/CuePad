@@ -2,8 +2,8 @@ import CloudKit
 import Foundation
 import os
 
-/// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller`）与发送者（`RecordSender`）
-/// 把服务器给的交进来（`CloudEvent`），发送者从这里取下一批（`nextBatch`）。待推送只有库里推导的一份（`CueStore.pendingSync`）。
+/// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
+/// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
 actor SyncCoordinator {
   private static let issueLimit = 50
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
@@ -14,16 +14,32 @@ actor SyncCoordinator {
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
   /// 构造不出来的记录（附件文件不在本机）与当时的修改时间：同一版不再每批重试、重复报告，改过再试。
   private var unsendable: [String: Int64] = [:]
-  private var sending = false
 
-  private(set) var state = SyncState(status: .starting, issues: []) {
-    didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
+  /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
+  private struct Facts {
+    var status = SyncStatus.starting
+    var sending = false
+    var catchingUp = false
+    var issues: [SyncIssue] = []
+    var alerts = PiAlertSubscriptionStatus.off
+
+    /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行。
+    var state: SyncState {
+      SyncState(
+        status: status == .idle && (sending || catchingUp) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp)
+    }
   }
-  private(set) var status: SyncStatus {
-    get { state.status }
-    set { state.status = newValue }
+
+  private var facts = Facts() {
+    didSet {
+      let state = facts.state
+      if state != oldValue.state { for continuation in subscribers.values { continuation.yield(state) } }
+    }
   }
-  var issues: [SyncIssue] { state.issues }
+
+  var state: SyncState { facts.state }
+  var status: SyncStatus { facts.status }
+  var issues: [SyncIssue] { facts.issues }
 
   init(store: CueStore, zoneID: CKRecordZone.ID) {
     self.store = store
@@ -55,8 +71,8 @@ actor SyncCoordinator {
     needsDecision == nil && ![.noAccount, .accountRestricted].contains(status)
   }
 
-  var alertSubscription: PiAlertSubscriptionStatus { state.alerts }
-  func setAlerts(_ alerts: PiAlertSubscriptionStatus) { state.alerts = alerts }
+  var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
+  func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
 
   /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。
   func resolve(_ resolution: SyncResolution) async throws {
@@ -66,7 +82,7 @@ actor SyncCoordinator {
     case .eraseLocal: try await store.eraseSyncedData()
     }
     unsendable = [:]
-    status = .idle
+    facts.status = .idle
   }
 
   // MARK: 上传批次
@@ -121,36 +137,13 @@ actor SyncCoordinator {
     }
   }
 
-  // MARK: 事件
+  // MARK: 拉取器、发送者与账号检查交进来的
 
-  func handle(_ event: CloudEvent) async {
-    do { try await process(event) } catch { report(error, recordName: nil) }
-  }
+  /// 发送者开始、结束一轮上传。
+  func setSending(_ busy: Bool) { facts.sending = busy }
 
-  private func process(_ event: CloudEvent) async throws {
-    switch event {
-    case .accountStatus(let account):
-      accountStatus(account)
-    case .account(let name):
-      try await account(name)
-    case .zoneMissing(let deletedByUser):
-      try await zoneMissing(deletedByUser: deletedByUser)
-    case .sending(let busy):
-      sending = busy
-      showActivity()
-    case .catchingUp(let busy):
-      state.catchingUp = busy
-      showActivity()
-    case .fetched(let modifications, let deletions):
-      guard needsDecision == nil else { return }
-      try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）留在库里待推送
-      if case .failed = status { status = .idle }
-      reached(nil)
-    case .sent(let sent):
-      guard needsDecision == nil else { return }
-      _ = try await processSent(sent)
-    }
-  }
+  /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
+  func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
 
   /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下来等你决定）时抛出，拉取器不前移令牌。
   /// 单条记录不合法只报告（见 `ZonePuller`）。
@@ -163,7 +156,7 @@ actor SyncCoordinator {
       report(error, recordName: nil)
       throw error
     }
-    if case .failed = status { status = .idle }
+    if case .failed = status { facts.status = .idle }
     reached(nil)
   }
 
@@ -184,45 +177,47 @@ actor SyncCoordinator {
     classify(error, recordName: nil)
   }
 
-  private func showActivity() {
-    let busy = sending || state.catchingUp
-    if busy, status == .idle { status = .syncing }
-    if !busy, status == .syncing { status = .idle }
-  }
-
   private var needsDecision: SyncDecision? {
     if case .needsDecision(let decision) = status { decision } else { nil }
   }
 
-  private func accountStatus(_ account: CKAccountStatus) {
+  func accountStatus(_ account: CKAccountStatus) {
     guard needsDecision == nil else { return }
     switch account {
     case .available:
-      if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { status = .idle }
-    case .noAccount: status = .noAccount
-    case .restricted: status = .accountRestricted
-    case .temporarilyUnavailable, .couldNotDetermine: status = .accountUnavailable
-    @unknown default: status = .accountUnavailable
+      if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .idle }
+    case .noAccount: facts.status = .noAccount
+    case .restricted: facts.status = .accountRestricted
+    case .temporarilyUnavailable, .couldNotDetermine: facts.status = .accountUnavailable
+    @unknown default: facts.status = .accountUnavailable
     }
   }
 
-  /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步（含从 CKSyncEngine 的版本升上来）记下；和上次同步的不是同一个时，
-  /// 本机数据属于上一个账号，停下来等你决定。
-  private func account(_ name: String) async throws {
+  /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
+  func account(_ name: String) async {
     guard needsDecision == nil else { return }
     let current = Data(name.utf8)
-    guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
-    if last != current { status = .needsDecision(.accountSwitched) }
+    do {
+      guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
+      if last != current { facts.status = .needsDecision(.accountSwitched) }
+    } catch {
+      report(error, recordName: nil)
+    }
   }
 
-  /// 同步区不在了：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，停下来等你决定；从没同步过的不用管，第一次上传时建区。
-  private func zoneMissing(deletedByUser: Bool) async throws {
+  /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
+  /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。
+  func zoneMissing(deletedByUser: Bool) async {
     guard needsDecision == nil else { return }
-    let hadToken = try await store.syncState(ZonePuller.tokenKey) != nil
-    let pushedAny = try await !store.syncedRecords().isEmpty
-    let synced = hadToken || pushedAny
-    try await store.setSyncState(ZonePuller.tokenKey, nil)
-    if synced { status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
+    do {
+      let hadToken = try await store.syncState(ZonePuller.tokenKey) != nil
+      let pushedAny = try await !store.syncedRecords().isEmpty
+      let synced = hadToken || pushedAny
+      try await store.setSyncState(ZonePuller.tokenKey, nil)
+      if synced { facts.status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
+    } catch {
+      report(error, recordName: nil)
+    }
   }
 
   // MARK: 远端变更
@@ -326,7 +321,7 @@ actor SyncCoordinator {
     }
     // 收下了：之前的失败与空间不足都过去了
     if !sent.saved.isEmpty || !sent.deleted.isEmpty, sent.failedSaves.isEmpty, sent.failedDeletes.isEmpty, status.isSettledFailure {
-      status = sending ? .syncing : .idle
+      facts.status = .idle
     }
     return outcome
   }
@@ -336,10 +331,10 @@ actor SyncCoordinator {
   private func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
     switch error.code {
     case .quotaExceeded:
-      status = .quotaExceeded
+      facts.status = .quotaExceeded
       return true
     case .notAuthenticated:
-      status = .noAccount
+      facts.status = .noAccount
       return true
     case .networkFailure, .networkUnavailable, .serviceUnavailable, .serverResponseLost:
       reached(error)
@@ -356,10 +351,10 @@ actor SyncCoordinator {
   /// 只在正常状态之间切换：账号、配额、要你决定这些更要紧的状态不被它盖过。
   func reached(_ error: (any Error)?) {
     if let error {
-      guard Self.isOffline(error), status == .idle || status == .syncing || status == .starting else { return }
-      status = .offline
+      guard Self.isOffline(error), status == .idle || status == .starting else { return }
+      facts.status = .offline
     } else if status == .offline {
-      status = sending || state.catchingUp ? .syncing : .idle
+      facts.status = .idle
     }
   }
 
@@ -379,13 +374,13 @@ actor SyncCoordinator {
   }
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
-    var next = state
+    var next = facts
     let issue = SyncIssue(recordType: recordType, recordName: recordName, message: message)
     // 停下后每次重试都会再报同一个错：问题列表里已有的不再加，免得被它刷满
     if !next.issues.contains(issue) { next.issues.append(issue) }
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
     if failed, needsDecision == nil { next.status = .failed(message) }
-    state = next  // 问题与状态一次送达
+    facts = next  // 问题与状态一次送达
   }
 
   private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }

@@ -84,7 +84,7 @@ struct CardEditorScreen: View {
                     onChange: { autosave?.changed($0) },
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
-                    selectionActions: selectionActions(data.card),
+                    selectionActions: [.convertToTasks(from: data.card, workspace: workspace)],
                     onError: workspace.fail)
             }
         }
@@ -112,11 +112,6 @@ struct CardEditorScreen: View {
             }
         }
         .disabled(data == nil)
-    }
-
-    /// 编辑菜单里的选区动作：转为任务。
-    private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        [CueSelectionAction(title: "转为任务", icon: .task) { stored in workspace.convertToTasks(stored, in: card.projectID) }]
     }
 
     /// 当前编辑中的整张正文（未保存的也算）：编辑器是正文的唯一写者，从它读；编辑器还没建好时是打开时的正文。
@@ -192,10 +187,7 @@ private struct VariablesSheet: View {
     }
 
     private func saveAndClose() {
-        let id = card.id, values = values
-        if values != card.variableValues {
-            workspace.perform { try await $0.updateCard(id) { $0.variableValues = values } }
-        }
+        workspace.saveVariables(values, of: card)
         dismiss()
     }
 }

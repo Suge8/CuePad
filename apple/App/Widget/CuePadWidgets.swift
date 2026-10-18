@@ -10,54 +10,27 @@ struct CuePadWidgets: WidgetBundle {
     }
 }
 
-struct UnfiledEntry: TimelineEntry {
+struct SnapshotEntry<S: SnapshotFile>: TimelineEntry {
     let date: Date
-    let snapshot: UnfiledSnapshot
+    let snapshot: S
 }
 
-/// 数据来自主 App 写在共享容器里的快照；主 App 在资料库变化时刷新时间线，所以这里不自己定时刷新。
-struct UnfiledProvider: TimelineProvider {
-    private static let empty = UnfiledSnapshot(cards: [], total: 0)
+/// 数据来自主 App 写在共享容器里的快照；主 App 在快照内容变了时刷新时间线，所以这里不自己定时刷新。
+struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
+    /// 还没有快照（从没打开过主 App）时显示的。
+    let empty: S
 
-    func placeholder(in context: Context) -> UnfiledEntry {
-        UnfiledEntry(date: .now, snapshot: Self.empty)
-    }
+    func placeholder(in context: Context) -> SnapshotEntry<S> { SnapshotEntry(date: .now, snapshot: empty) }
 
-    func getSnapshot(in context: Context, completion: @escaping (UnfiledEntry) -> Void) {
-        completion(current())
-    }
+    func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry<S>) -> Void) { completion(current()) }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<UnfiledEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry<S>>) -> Void) {
         completion(Timeline(entries: [current()], policy: .never))
     }
 
-    private func current() -> UnfiledEntry {
+    private func current() -> SnapshotEntry<S> {
         let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
-        let snapshot = directory.flatMap(Snapshots.readUnfiled(from:)) ?? Self.empty
-        return UnfiledEntry(date: .now, snapshot: snapshot)
-    }
-}
-
-struct CueEntry: TimelineEntry {
-    let date: Date
-    let snapshot: CueSnapshot
-}
-
-/// Cue 的小组件：快照由主 App 在 Cue 的对话、等你的数变化时写，同样不自己定时刷新。
-struct CueProvider: TimelineProvider {
-    private static let empty = CueSnapshot(name: "Cue", waiting: 0, lastSaid: nil, mood: "sleeping")
-
-    func placeholder(in context: Context) -> CueEntry { CueEntry(date: .now, snapshot: Self.empty) }
-
-    func getSnapshot(in context: Context, completion: @escaping (CueEntry) -> Void) { completion(current()) }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<CueEntry>) -> Void) {
-        completion(Timeline(entries: [current()], policy: .never))
-    }
-
-    private func current() -> CueEntry {
-        let directory = (try? LibraryLocation.resolve())?.snapshotsDirectory
-        return CueEntry(date: .now, snapshot: directory.flatMap(Snapshots.readCue(from:)) ?? Self.empty)
+        return SnapshotEntry(date: .now, snapshot: directory.flatMap { Snapshots.read(S.self, from: $0) } ?? empty)
     }
 }
 
@@ -65,7 +38,7 @@ struct CueWidget: Widget {
     static let kind = "CuePadCue"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: CueProvider()) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: CueSnapshot(name: "Cue", waiting: 0, lastSaid: nil, mood: "sleeping"))) { entry in
             WidgetViews.cue(entry.snapshot)
         }
         .configurationDisplayName("Cue")
@@ -79,7 +52,7 @@ struct UnfiledWidget: Widget {
     static let kind = "CuePadInbox"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: Self.kind, provider: UnfiledProvider()) { entry in
+        StaticConfiguration(kind: Self.kind, provider: SnapshotProvider(empty: UnfiledSnapshot(cards: [], total: 0))) { entry in
             WidgetViews.unfiled(entry.snapshot)
         }
         .configurationDisplayName("未分类")

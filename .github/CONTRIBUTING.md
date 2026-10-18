@@ -26,7 +26,7 @@ Conventions and guardrails are in [AGENTS.md](../AGENTS.md); UI, sync, verificat
 
 1. Run the checks that cover your change: `xc.sh test kit` for package changes, `xc.sh test mac` for app changes, and `xc.sh build ios` when you touch shared code.
 2. Keep the diff scoped to the change at hand. Match the existing code style; don't reformat unrelated files.
-3. Add or update tests when you change behavior, and update the docs when interfaces or user-facing behavior change.
+3. Update the docs when interfaces or user-facing behavior change. Tests cover user-visible flows end to end (`apple/App/Tests/UI`, driven through `Workspace`); don't add unit tests that restate the implementation.
 
 ## Commit and PR conventions
 

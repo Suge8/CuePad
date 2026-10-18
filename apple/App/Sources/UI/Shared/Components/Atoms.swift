@@ -31,6 +31,16 @@ extension View {
     }
 }
 
+extension View {
+    /// 附件文件到没到本机（图片、交付物随同步晚于对话到）：库里有这条附件、文件也在。附件表变化时重读；
+    /// 行在滚动中一个个出现，不在主线程上当场读，没读到时按到了画。
+    func observingArrival(of hash: String, in store: CueStore, into arrived: Binding<Bool?>) -> some View {
+        observing(store, id: hash, into: arrived, immediately: false) { [files = store.files] store in
+            try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
+        }
+    }
+}
+
 private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let store: CueStore
     let id: ID
@@ -94,9 +104,7 @@ struct ProjectGlyph: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 旁边总有项目名：图标只是装饰，读屏不念它的系统名
         Image(Self.icon(project?.icon))
-            .accessibilityHidden(true)
             .font(.system(size: size, weight: .medium))
             // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
@@ -153,8 +161,8 @@ struct SectionLabel: View {
     }
 }
 
-/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话都用它）：一分钟内"刚刚"，一小时内"N 分钟前"，一天内"N 小时前"；
-/// 再往前按日历：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
+/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话、对话里的时间标记都用它）：一分钟内"刚刚"，一小时内"N 分钟前"，一天内"N 小时前"；
+/// 再往前按日历（`day`）：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
 /// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
@@ -162,15 +170,22 @@ nonisolated enum DateLabel {
         if elapsed < 60 { return "刚刚" }
         if elapsed < 3600 { return "\(Int(elapsed) / 60) 分钟前" }
         if elapsed < 86_400 { return "\(Int(elapsed) / 3600) 小时前" }
-        if calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) { return "昨天" }
+        return day(date, now: now, calendar: calendar)
+    }
+
+    /// 不是今天的那一天：昨天、一周内写星期、今年写月日、更早带年份。
+    static func day(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "昨天" }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
-        let chinese = Locale(identifier: "zh_CN")
         if days < 7 { return date.formatted(.dateTime.weekday(.abbreviated).locale(chinese)) }
-        if calendar.isDate(date, equalTo: now, toGranularity: .year) {
-            return date.formatted(.dateTime.month(.defaultDigits).day().locale(chinese))
-        }
+        if calendar.isDate(date, equalTo: now, toGranularity: .year) { return date.formatted(monthDay) }
         return date.formatted(.dateTime.year().month(.defaultDigits).day().locale(chinese))
     }
+
+    /// "月/日"（今年里的日期、"更早"分组的周区间）。
+    static let monthDay = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(chinese)
+
+    private static let chinese = Locale(identifier: "zh_CN")
 }
 
 /// 分段标题：名称 + 可选计数；读屏作为一个标题。

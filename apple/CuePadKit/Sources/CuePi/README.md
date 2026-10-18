@@ -42,7 +42,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 
 常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 带文字与图，空闲时开始一轮、正忙时插进当前这一轮，图按各家原生的图片输入交，与托管会话同一份写法；`seesImages` 是模型能不能看图；`configure` 就地换模型与思考强度，进程与上下文不动、下一次请求模型起生效（Pi 是 RPC 的 `set_model` / `set_thinking_level`，Claude Code 是控制请求 `set_model` 与 `apply_flag_settings`，Codex 是每轮随 `turn/start` 给），回到运行时默认做不到，要换大脑；`abort`；`stop` 返回不需要主线程的等待，等进程连同子进程退出），进程与协议用接入里的同一份（Pi 的 RPC 模式直接经 `ChildProcess`）与同形的事件 `CueBrainEvent`（规则在类型的头注释里；一轮的回答就是做完时还留着的正在说的话，Pi 的从 RPC 的逐字增量累积）。系统提示整份替换，用户的 skill 清单、上下文文件（AGENTS.md、CLAUDE.md）与追加提示都不进来（Codex 的 `<CODEX_HOME>/AGENTS.md` 没有开关，是例外），原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
 
-端到端测试 `RealBrainTests` 录的是真实运行时用用户自己的账号跑出来的输出；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着。Cue 用各家开工（带名字、模型、强度开会话，说两句、各自歇下，核对会话文件里实际用的模型）由 `RealCueStartTests` 守着，各家用自己的隔离测试台（Codex 复制的登录不会刷新，见 `copyCodexAuth`；Claude Code 用本机的 Claude 订阅令牌，见 `ClaudeTestbed`）。
+端到端测试 `RealBrainTests` 录的是真实运行时用用户自己的账号跑出来的输出；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着。Cue 用各家开工（带名字、模型、强度开会话，说两句、各自歇下，核对会话文件里实际用的模型）由 `RealCueStartTests` 守着，各家用自己的隔离测试台，登录只用这家自己已有的、不刷新（Codex 复制的登录，见 `copyCodexAuth`；Claude Code 钥匙串里的那条，见 `ClaudeLogin`）。
 
 真 Agent 的用例（真 Pi、各家托管、Codex 钩子、大脑、开工）默认回放录好的 Agent 输出，不起真 Agent；`CUEPAD_AGENT_TESTS=<家,…> apple/scripts/xc.sh test kit --filter 'Real|CodexHooks|ClaudeSettings'` 连真 Agent 跑并重录这几家。录在哪些边界、哪些用例只连真 Agent 跑，只在 `Tests/CuePiTests/RealAgents.swift` 的头注释里。
 
@@ -121,7 +121,7 @@ CuePad → 扩展（都带 `id`）：
 
 扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。
 
-会话结束 = 连接断开（无心跳、无轮询）。有 `bye` 是正常退出；没有就是进程被强杀，此时 socket 文件会残留，由进程退出通知（kqueue）触发删除，启动扫描遇到 `ECONNREFUSED` 且文件名里的 pid 已不存在也会删。pid 还活着（可能刚 bind 还没 listen）不删。
+会话结束 = 连接断开（无心跳、无轮询）。有 `bye` 是正常退出；没有就是进程被强杀，此时 socket 文件会残留，由进程退出通知（kqueue）触发删除，启动扫描遇到 `ECONNREFUSED` 且文件名里的 pid 已不存在也会删。pid 还活着不删、也不重试：扩展先 listen 再把 socket 收紧成 0600（客户端只连 0600 的），收紧产生的目录事件会再触发一次扫描。
 
 托管：CuePad 启动后台 Pi 时带环境变量 `CUEPAD_HOSTED`，值是正整数，表示空闲多少秒后自己退出（`PiRuntime` 默认 1800，测试给几秒）；没有这个变量或值不是正数就不是托管。扩展读出后存在进程内（/reload 重新载入扩展后仍认得）并从环境里删掉，所以 Agent 起的子进程（命令、里面再起的 pi）看不到它、不会也自认托管；扩展据此在 hello 里报 `hosted: true`，并在空闲（不在工作、没有等你回答的弹窗、子代理也都歇下）满这么久时给自己发 SIGTERM；期间状态一变就重新计时。托管进程的标准输入是它自己握着两端的管道，永远读不到 EOF；它不随 CuePad 退出，只因空闲满时限、SIGTERM（结束、让出、不兼容）或自身崩溃而退出。读不懂这个约定的扩展（协议号不同，或把值当别的格式）起出的进程既不自退、也不被认作托管，所以 `PiRuntime` 启动后核对连上的会话报了 `hosted` 且协议号相同，不然让它退出并抛 `PiHostError.extensionMismatch`。
 

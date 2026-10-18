@@ -65,8 +65,6 @@ public final class PiBridge {
     @ObservationIgnored private var releasing: Set<PiSession.ID> = []
     /// 没告别就断开的会话：断开可能先于进程退出被确认（强杀后进程还是僵尸），留着它的退出监视，退出时再删残留 socket
     @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
-    /// 已经重试过一次的"被拒绝"socket：文件还在时不再排重试，之后只在目录事件/重扫时再看
-    @ObservationIgnored private var retried: Set<String> = []
     /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连，避免每次目录事件都重复报告。按文件本身认（不按名字）：
     /// /reload 在同一路径建的新 socket 名字不变，得照常去连
     @ObservationIgnored private var incompatible: [String: PiSocketDirectory.FileIdentity] = [:]
@@ -148,9 +146,6 @@ public final class PiBridge {
             return ack
         }
     }
-
-    /// 对"进程活着但还没 listen"的 socket 只重试一次；之后由下一次目录事件/重扫再看
-    private static let retryDelay: Duration = .milliseconds(200)
 
     /// - Parameter hostedIdle: 托管的 Claude Code、Codex 会话歇着满这么久就请它退出（不算结束，发话时再接着）。
     public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle) {
@@ -376,7 +371,6 @@ public final class PiBridge {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let present = Set(names.filter { $0.hasSuffix(".sock") }.map { String($0.dropLast(".sock".count)) })
         incompatible = incompatible.filter { present.contains($0.key) }
-        retried.formIntersection(present)
         for name in present where links[name] == nil { connect(name) }
     }
 
@@ -390,7 +384,7 @@ public final class PiBridge {
             links[name] = link
             Task { await consume(link, name: name) }
         } catch UnixSocket.Failure.connect(let code) where code == ECONNREFUSED {
-            handleRefused(name)
+            removeIfStale(name)
         } catch UnixSocket.Failure.connect(let code) where code == ENOENT {
             // 扫描与文件删除之间的竞态
         } catch {
@@ -399,16 +393,8 @@ public final class PiBridge {
         }
     }
 
-    /// ECONNREFUSED = 没人在 listen。属主 pid 已死 → 强杀残留，删；pid 还活着 → 可能刚 bind 还没 listen，不删。
-    private func handleRefused(_ name: String) {
-        if removeIfStale(name) { return }
-        guard retried.insert(name).inserted else { return }
-        Task {
-            try? await Task.sleep(for: Self.retryDelay)
-            if links[name] == nil { connect(name) }
-        }
-    }
-
+    /// 连不上（ECONNREFUSED，没人在 listen）的 socket：属主 pid 已死是强杀残留，删；还活着就不删、不重试——扩展先 listen
+    /// 再收紧成 0600，收紧产生的目录事件会再触发一次扫描（/reload 时扫到的还没删的旧文件同理，新文件随后出现）。
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
         guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }

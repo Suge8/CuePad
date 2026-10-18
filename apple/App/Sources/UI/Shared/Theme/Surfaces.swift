@@ -203,6 +203,8 @@ enum ControlMetrics {
     static let compactHeight: CGFloat = 28
     #endif
     static let stroke: CGFloat = 1
+    /// 停用的控件整体变淡到这么多，看得出点不了。
+    static let disabledOpacity = 0.45
 }
 
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
@@ -217,7 +219,7 @@ struct ControlButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.modifier(ControlSurface(kind: kind, compact: compact))
             .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
-            .opacity(isEnabled ? 1 : 0.45)
+            .opacity(isEnabled ? 1 : ControlMetrics.disabledOpacity)
     }
 }
 

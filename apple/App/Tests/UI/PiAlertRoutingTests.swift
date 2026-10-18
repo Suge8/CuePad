@@ -1,6 +1,5 @@
 #if os(iOS)
 import CueStore
-import CueSync
 import Foundation
 import ObjectiveC
 import SwiftUI
@@ -34,7 +33,7 @@ struct PiAlertRoutingTests {
         navigation.open(alert: alerts.consumeTap())
 
         #expect(navigation.root == .unfiled && navigation.path == [.session(session)])
-        #expect(navigation.isViewing(session: session))
+        #expect(!navigation.showsAlert(about: session))  // 正看着它：前台不再弹它的提示
         #expect(alerts.consumeTap() == nil)
     }
 

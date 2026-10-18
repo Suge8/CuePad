@@ -47,9 +47,6 @@ final class AppSettings {
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
 
-    /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
-    static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
-
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
 
@@ -133,7 +130,8 @@ final class AppSettings {
     /// 会话回复框草稿的预览（会话行据此写"有草稿"，`PiRowFacts`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
-    init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
+    /// `launchArguments`：覆盖已存设置的启动参数（只在 Debug 构建有，见 `DebugHooks.launchArgumentOverrides`）。
+    init(defaults: UserDefaults, launchArguments: [String: Any] = DebugHooks.launchArgumentOverrides) {
         DebugHooks.dropLaunchArguments(from: defaults)
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }

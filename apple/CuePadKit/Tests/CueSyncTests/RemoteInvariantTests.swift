@@ -16,11 +16,11 @@ import Testing
 
   @Test func cardsArrivingBeforeTheirProjectAreKeptAndAppearOnceTheProjectArrives() async throws {
     let projectID = UUID()
-    await rig.coordinator.handle(.fetched(modifications: [remoteRecord(.cards, cardFields(project: projectID, body: "early", modifiedAt: 5_000))], deletions: []))
+    try await rig.coordinator.pulled([remoteRecord(.cards, cardFields(project: projectID, body: "early", modifiedAt: 5_000))], [])
     #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])  // 原样保存，没有被改成未分类
     #expect(try await store.cards(in: nil).isEmpty)
 
-    await rig.coordinator.handle(.fetched(modifications: [remoteRecord(.projects, id: projectID, projectFields(name: "late", modifiedAt: 5_000))], deletions: []))
+    try await rig.coordinator.pulled([remoteRecord(.projects, id: projectID, projectFields(name: "late", modifiedAt: 5_000))], [])
     #expect(try await store.cards(in: projectID).map(\.body) == ["early"])
   }
 
@@ -28,10 +28,10 @@ import Testing
     let projectID = UUID()
     var trashed = projectFields(name: "gone", modifiedAt: 5_000)
     trashed["deletedAt"] = .int(5_000)
-    await rig.coordinator.handle(.fetched(modifications: [
+    try await rig.coordinator.pulled([
       remoteRecord(.projects, id: projectID, trashed),
       remoteRecord(.cards, cardFields(project: projectID, body: "inside", modifiedAt: 5_000)),
-    ], deletions: []))
+    ], [])
 
     #expect(try await store.cards(in: projectID).isEmpty)  // 随项目隐藏，由项目推导
     #expect(try await store.cards(in: nil).isEmpty)
@@ -48,7 +48,7 @@ import Testing
     let card = try await store.createCard(in: project.id, body: "written offline")
     let task = try await store.createTask("offline task", in: project.id)
 
-    await rig.coordinator.handle(.fetched(modifications: [], deletions: [(rig.recordID(project.id), "projects")]))
+    try await rig.coordinator.pulled([], [(rig.recordID(project.id), "projects")])
 
     #expect(try await store.project(project.id) == nil)
     #expect(try await store.cards(in: nil).map(\.id) == [card.id])  // 内容保留，归入未分类，而不是悬空隐藏
@@ -62,9 +62,9 @@ import Testing
     let card = try await store.createCard(in: project.id, body: "known to both")
     try await rig.simulatePush()
 
-    await rig.coordinator.handle(.fetched(modifications: [], deletions: [
+    try await rig.coordinator.pulled([], [
       (rig.recordID(project.id), "projects"), (rig.recordID(card.id), "cards"),
-    ]))
+    ])
 
     #expect(try await store.card(card.id) == nil)
     #expect(try await rig.reconcileDelta().saves.isEmpty)
@@ -80,7 +80,7 @@ import Testing
     ]
     let broken = remoteRecord(.deliveryRequests, fields)
 
-    await rig.coordinator.handle(.fetched(modifications: [broken], deletions: []))
+    try await rig.coordinator.pulled([broken], [])
 
     #expect(try await store.deliveryRequests().isEmpty)
     #expect(try RawDB(rig.fixture.url).count("syncRecords") == 0)

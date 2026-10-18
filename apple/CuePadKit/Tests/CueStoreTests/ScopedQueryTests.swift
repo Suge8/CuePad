@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 界面按范围读取的查询（回收站条数、一个项目的任务与下级、一批会话），结果要与全量查询再筛出来的一样。
+/// 界面按范围读取的查询（回收站条数、一个项目的任务与下级），结果要与全量查询再筛出来的一样。
 @Suite struct ScopedQueryTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -47,25 +47,5 @@ import Testing
     }
     // 只算步骤：上线下面一条已完成的步骤加一条提示词，进度是 1/1
     #expect(try await store.subtaskProgress(of: [release.id]) == [release.id: TaskProgress(done: 1, total: 1)])
-  }
-
-  @Test func 一批会话的列表项_等于分页查询里的同一项() async throws {
-    let project = try await store.createProject(name: "P", color: "#111")
-    try await store.setDirectory("/work/p", for: project.id)
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
-    try await recorder.update(sessionID: "s1", state: .thinking, title: "一号")
-    try await recorder.update(sessionID: "s2", state: .settled, title: "二号")
-    try await recorder.update(sessionID: "s3", state: .settled, title: "三号")
-    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/1", cwd: "/work/p/x", lastActivityAt: .now), host: "mac")
-    try await store.requestDelivery("hi", to: SendTarget(kind: .piSession, name: "二号", ref: "s2"), on: "mac")
-
-    let page = try await store.piSessionPage(PiSessionQuery(limit: .max)).items
-    let picked = try await store.piSessions(sessionIDs: ["s1", "s2", "missing"])
-
-    #expect(picked.keys.sorted() == ["s1", "s2"])
-    #expect(picked["s1"] == page.first { $0.state.sessionID == "s1" })
-    #expect(picked["s2"] == page.first { $0.state.sessionID == "s2" })
-    #expect(picked["s2"]?.delivery != nil)
-    #expect(try await store.piSessions(sessionIDs: []).isEmpty)
   }
 }
