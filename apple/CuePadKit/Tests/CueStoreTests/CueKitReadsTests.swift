@@ -10,7 +10,7 @@ import Testing
   /// 待交给大脑的：你说了没交的话、"等你"上没交的回答；交过的不再交。
   @Test func whatIsLeftToDeliverToTheBrain() async throws {
     let said = try await store.addCueMessage(.you, text: "看看发布")
-    let asked = try await store.addCueMessage(.cue, text: "合并吗？", ask: .merge)
+    let asked = try await store.addCueMessage(.cue, text: "合并吗？", ask: try CueAsking(.merge, action: "合并修复"))
     try await store.addCueMessage(.cue, text: "开工了")
     #expect(try await store.cueMessagesToDeliver().map(\.id) == [said.id])
 

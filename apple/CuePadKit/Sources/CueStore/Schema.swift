@@ -62,7 +62,36 @@ enum Schema {
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
     // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
     "DROP INDEX syncRecords_recordType; \(pendingIndexes) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
+    // 56：提问存下类别与范围（`CueMessage.asked`）、要做的动作与依据的规矩（`CueAsking`），不再按选项文字反认；
+    // Mac 名只在 macAgents，目录绑定不再带名字
+    Upgrade { db in
+      try db.exec(
+        """
+        ALTER TABLE cueMessages ADD COLUMN ask TEXT; ALTER TABLE cueMessages ADD COLUMN askAction TEXT; ALTER TABLE cueMessages ADD COLUMN askRule TEXT;
+        ALTER TABLE directoryBindings DROP COLUMN hostName;
+        """)
+      try backfillAsked(db)
+    },
   ]
+
+  /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
+  /// （原先选第二项时就按它记）。没有动作短语，卡片按类别与任务标题拼。modifiedAt 变大，改动才会同步出去，新装的设备拿到的也有。
+  private static let oldAlways: [CueAsk: String] = [
+    .push: "推送", .merge: "合并到共享分支", .release: "发布或部署", .delete: "删除", .outside: "动项目以外的东西", .budget: "超出预算",
+  ]
+
+  private static func backfillAsked(_ db: SQLite) throws {
+    let now = Date.stamp
+    let asked = try db.query(
+      "SELECT m.id, m.choices, c.projectID FROM cueMessages m LEFT JOIN cards c ON c.id = m.taskID WHERE m.choices IS NOT NULL AND m.ask IS NULL"
+    ) { (id: $0.uuid(0), choices: JSONColumn.decode([String].self, from: $0.textOrNil(1)) ?? [], project: $0.uuidOrNil(2)) }
+    for message in asked {
+      let ask = oldAlways.first { message.choices.contains("以后\($0.value)都不用问") }?.key ?? .rule
+      try db.run(
+        "UPDATE cueMessages SET ask = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE id = ?3",
+        [CueAllow(ask, project: message.project).stored, now, message.id])
+    }
+  }
 
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
   /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
@@ -202,7 +231,7 @@ enum Schema {
 
     -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
     CREATE TABLE directoryBindings (
-      id TEXT PRIMARY KEY NOT NULL, projectID TEXT NOT NULL, hostID TEXT NOT NULL, hostName TEXT NOT NULL,
+      id TEXT PRIMARY KEY NOT NULL, projectID TEXT NOT NULL, hostID TEXT NOT NULL,
       folder TEXT NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
 
@@ -239,11 +268,11 @@ enum Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)

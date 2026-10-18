@@ -11,7 +11,7 @@ struct ProjectFoldersTests {
     private func project(_ name: String) async throws -> Project { try await store.createProject(name: name, color: "#111111") }
 
     private func binding(_ project: Project, host: String, name: String, folder: String) -> DirectoryBinding {
-        DirectoryBinding(id: UUID(), projectID: project.id, hostID: host, hostName: name, folder: folder, createdAt: .now, modifiedAt: .now)
+        DirectoryBinding(id: UUID(), projectID: project.id, hostID: host, folder: folder, macName: name, createdAt: .now, modifiedAt: .now)
     }
 
     // MARK: 新会话只列项目

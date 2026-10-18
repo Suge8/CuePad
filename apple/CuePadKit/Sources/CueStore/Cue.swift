@@ -28,11 +28,20 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var author: Open<CueAuthor>
   /// 正文（`CueFormat`）；你的消息可带图片引用。
   public var text: String
-  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk` 给出、Cue 不能自拟，
-  /// 所以你选的那一项就说明了是哪类事（`CueAsk.always`）。
+  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。选项只由 `CueAsk.choices` 在写入时按 `asked` 写出、
+  /// Cue 不能自拟；写下就不再变，卡片与通知照它显示。
   public var choices: [String]?
-  /// 带选项的是哪一类"等你"（`CueAsk.init(choices:)`）。
-  public var ask: CueAsk? { choices.map(CueAsk.init(choices:)) }
+  /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（不在项目里为 nil，是所有项目）。
+  /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
+  /// 更旧版本写的提问没有。
+  public var asked: CueAllow?
+  /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
+  public var askAction: String?
+  public var askRule: String?
+  /// 提问是哪一类事。
+  public var ask: CueAsk? { asked?.ask.known }
+  /// 提问问的是什么；不是提问为 nil。认不出类别（更新的版本写的）按规矩那一类说。
+  public var asking: CueAsking? { choices.map { _ in CueAsking(stored: ask ?? .rule, action: askAction, rule: askRule) } }
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
@@ -72,19 +81,21 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
+    "ask", "askAction", "askRule",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored,
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule,
     ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
-      choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
+      choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
+      askAction: row.textOrNil(14), askRule: row.textOrNil(15), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
   }
@@ -93,7 +104,7 @@ extension CueMessage: Record {
 /// 一条提问怎么结束（`CueStore.endCueQuestion`）：两种结局落到同一个状态上（`CueMessage.answeredAt`）。
 /// 卡片一直挂着，直到你回答或 Cue 撤回，没有"关掉"。
 public enum CueQuestionEnd: Equatable, Sendable {
-  /// 你选了一项，或不选、另外说了一句（"不行，另外说…"）：都交给 Cue、叫醒它
+  /// 你选了一项，或不选、另外说了一句（`CueAsk.otherwise`）：都交给 Cue、叫醒它
   case answered(String)
   /// Cue 撤回了（拿了主意或情况变了）：它自己撤的，不交给它
   case withdrawn
@@ -176,7 +187,7 @@ public struct CueProfile: Equatable, Sendable {
   public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
-  /// 允许清单：哪几类要先问的事以后不用问（唯一的事实源）。卡片上的"以后……都不用问"、设置里的开关与 Cue 的 `memory allow` 都写这里，
+  /// 允许清单：哪几类要先问的事以后不用问（唯一的事实源）。卡片上的"以后……不用问"、设置里的开关与 Cue 的 `memory allow` 都写这里，
   /// Cue 的 `tell` 带 `ask` 时查它（`CueStore.addCueMessage`）。
   public var allows: Set<CueAllow>
   public var modifiedAt: Date
@@ -319,51 +330,124 @@ extension CueState: Record {
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；不允许就在卡片的输入框里另外说（`otherwise`）。
+/// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
-  /// 这类事的说法（"以后推送都不用问"；改规矩那一类只给 Cue 看）。
+  /// 这类事给人看的叫法（"以后推送代码都不用问"、设置里的"不用先问"）；规矩那一类不出现在这两处。
   public var name: String {
     switch self {
-    case .push: "推送"
+    case .push: "推送代码"
+    case .merge: "合并进主分支"
+    case .release: "发布上线"
+    case .delete: "删除文件或数据"
+    case .outside: "动项目外的东西"
+    case .budget: "超出预算"
+    case .rule: "你的规矩要先问的事"
+    }
+  }
+
+  /// 这类事的确切范围，只给 Cue 看（系统提示与工具说明）。
+  public var definition: String {
+    switch self {
+    case .push: "推送到远端"
     case .merge: "合并到共享分支"
     case .release: "发布或部署"
-    case .delete: "删除"
+    case .delete: "删除文件、分支或数据"
     case .outside: "动项目以外的东西"
     case .budget: "超出预算"
-    case .rule: "违反或改动他的规矩，或他的规矩要你先问的事"
+    case .rule: "他的规矩明确要先问的事，或要违反、改动他的规矩"
     }
   }
 
-  public static let once = "允许一次"
+  /// 为什么要问你（卡片与通知的第二句）：做了收不回、或越出这件事的地方。规矩那一类写出是哪条规矩（`rule`）。
+  public func why(rule: String?) -> String {
+    switch self {
+    case .push: "推上去别人就拉得到，撤不回来。"
+    case .merge: "合进主分支会影响所有人，回退麻烦。"
+    case .release: "发出去马上有人用到，出了问题收不回。"
+    case .delete: "删了就找不回来。"
+    case .outside: "要动项目文件夹以外的东西，超出这件事的范围。"
+    case .budget: "要花的钱或额度会超过你定的上限。"
+    case .rule: rule.map { "你说过「\($0)」。" } ?? "你说过这类事要先问你。"
+    }
+  }
+
+  public static let once = "这次可以"
   /// 卡片上选项之后的输入框：不允许，写下你的话（作为回答交给 Cue，叫醒它）。
-  public static let otherwise = "不行，另外说…"
+  public static let otherwise = "不行，我来说怎么做…"
 
-  /// 选了它，这类事以后就不再问：`CueStore.endCueQuestion` 把它记进允许清单（`CueProfile.allows`，问的事关联的任务在项目里时只管这个项目）。
-  /// 规矩那一类没有这一项：一律放行等于没有规矩。
-  public var always: String? { self == .rule ? nil : "以后\(name)都不用问" }
-
-  public var choices: [String] { [Self.once] + (always.map { [$0] } ?? []) }
-
-  /// 由一条"等你"的选项认出是哪一类：选项只由 `choices` 写出，带"以后……都不用问"的是那一类，不带的是规矩那一类。
-  public init(choices: [String]) {
-    self = Self.allCases.first { $0.always.map(choices.contains) ?? false } ?? .rule
+  /// 提问的第二项：选了它，这类事以后在 `project`（关联任务所在项目的名字）里不再问，nil 是所有项目里都不再问；
+  /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。规矩那一类没有这一项：一律放行等于没有规矩。
+  public func always(in project: String?) -> String? {
+    guard self != .rule else { return nil }
+    return project.map { "以后「\($0)」里\(name)不用问" } ?? "以后\(name)都不用问"
   }
 
-  /// 一条"等你"在 Cue 页以外的说法（卡片第一句、侧栏与菜单栏的摘要、小组件、本机与手机通知同一句）：要你定什么，
-  /// 按类别与关联任务的标题（`Card.heading`，没有或空白时不写）由代码写出；Cue 的原话只在 Cue 页的卡片里点开看。
-  public func question(task: String?) -> String {
-    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" } ?? ""
+  /// 所有项目里都不用问那一项；没有它的（规矩那一类）不能记进允许清单。
+  public var always: String? { always(in: nil) }
+
+  /// 提问的选项（写入时定下、照存）：这次可以，与"以后……不用问"（范围同上）。
+  public func choices(in project: String?) -> [String] { [Self.once] + (always(in: project).map { [$0] } ?? []) }
+
+  /// 没有动作短语时（更旧版本写的提问）按类别与关联任务的标题（没有或空白时不写）拼出要做什么。
+  func question(task: String?) -> String {
+    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" }
     return switch self {
-    case .push: "要不要推送\(named)？"
-    case .merge: "要不要把\(named.isEmpty ? "改动" : named)合并到共享分支？"
-    case .release: "要不要发布或部署\(named)？"
-    case .delete: "\(named)要删除东西，允许吗？"
-    case .outside: "\(named)要动项目以外的东西，允许吗？"
-    case .budget: "\(named)要超出预算，允许吗？"
-    case .rule: "\(named)这一步按你的规矩要先问，允许吗？"
+    case .push: "可以推送\(named.map { "\($0)的" } ?? "")改动吗？"
+    case .merge: "可以把\(named ?? "改动")合并进主分支吗？"
+    case .release: "可以发布\(named ?? "")吗？"
+    case .delete: "\(named ?? "")要删东西，可以吗？"
+    case .outside: "\(named ?? "")要动项目外的东西，可以吗？"
+    case .budget: "\(named ?? "")要超出预算，可以吗？"
+    case .rule: "\(named ?? "")这一步你说过要先问，可以吗？"
     }
   }
+}
+
+/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩。动作与规矩是 Cue 写的短语，
+/// 卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这两样，不露 Cue 的原话。
+public struct CueAsking: Equatable, Sendable {
+  public let ask: CueAsk
+  /// 要做的动作（"推送 scheduler 的重连修复"）；更旧版本写的提问没有。
+  public let action: String?
+  /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
+  public let rule: String?
+
+  /// 动作与规矩各至多这么多字。
+  public static let phraseLimit = 30
+
+  /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `askPhrase`。
+  public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
+    self.ask = ask
+    self.action = try Self.phrase(action, "doing", "要做的动作，如“推送 scheduler 的重连修复”")
+    self.rule = ask == .rule ? try Self.phrase(rule, "rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”") : nil
+  }
+
+  package init(stored ask: CueAsk, action: String?, rule: String?) {
+    self.ask = ask
+    self.action = action
+    self.rule = rule
+  }
+
+  private static func phrase(_ text: String?, _ field: String, _ hint: String) throws -> String {
+    let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
+    guard !trimmed.isEmpty, trimmed.count <= phraseLimit, !trimmed.contains(where: \.isNewline) else {
+      throw CueStoreError.askPhrase(field: field, hint: hint, limit: phraseLimit)
+    }
+    return trimmed
+  }
+
+  /// 要你定什么（卡片第一句、摘要、通知同一句）：`task` 是关联任务的标题，只在没有动作短语时用来拼。
+  public func question(task: String?) -> String {
+    guard let action else { return ask.question(task: task) }
+    // 动作两头是字母或数字时与汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法
+    func gap(_ character: Character?) -> String { character.map { $0.isASCII && ($0.isLetter || $0.isNumber) } == true ? " " : "" }
+    return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
+  }
+
+  /// 为什么要问你（`CueAsk.why`）。
+  public var why: String { ask.why(rule: rule) }
 }
 
 /// 允许清单里的一项（`CueProfile.allows`）：一类要先问的事在一个项目里（`project`），或所有项目里（nil）以后不用问。
@@ -377,7 +461,7 @@ public struct CueAllow: Hashable, Sendable {
     self.project = project
   }
 
-  init?(stored: String) {
+  package init?(stored: String) {
     let parts = stored.split(separator: "/", maxSplits: 1).map(String.init)
     guard let raw = parts.first else { return nil }
     ask = Open(rawValue: raw)
@@ -398,14 +482,14 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么（`CueAsk.question`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
+/// "等你"的正文是要你定什么、为什么问你（`CueAsking`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, choices: [String]?, task: String?) -> (title: String, body: String) {
+  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, task: String?) -> (title: String, body: String) {
     let body: String
-    if let choices {
-      body = CueAsk(choices: choices).question(task: task) + "\n" + choices.joined(separator: " / ")
+    if let asking, let choices {
+      body = [asking.question(task: task), asking.why, choices.joined(separator: " / ")].joined(separator: "\n")
     } else {
       body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }

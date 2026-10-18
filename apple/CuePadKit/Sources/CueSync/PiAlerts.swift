@@ -88,8 +88,11 @@ public enum CueAlertText {
   public static func content(message: CKRecord, profile: CKRecord?, task: CKRecord?) -> (title: String, body: String)? {
     guard let text = message.encryptedValues["text"] as? String else { return nil }
     let choices = (message.encryptedValues["choices"] as? String).flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) }
+    let ask = (message["ask"] as? String).flatMap(CueAllow.init(stored:))?.ask.known ?? .rule
+    let asking = CueAsking(
+      stored: ask, action: message.encryptedValues["askAction"] as? String, rule: message.encryptedValues["askRule"] as? String)
     let heading = (task?.encryptedValues["body"] as? String).map { CueSummary($0).title }
-    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, choices: choices, task: heading)
+    return CueAlert.content(name: profile?.encryptedValues["name"] as? String, text: text, asking: asking, choices: choices, task: heading)
   }
 }
 

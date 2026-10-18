@@ -26,7 +26,7 @@ struct FolderCandidateList: View {
         guard hosts.count > 1 else { return [(nil, shown)] }
         return hosts.sorted().map { host in
             let items = shown.filter { $0.hostID == host }
-            return (items.first?.hostName ?? "另一台 Mac", items)
+            return (items.first?.macName, items)
         }
     }
 
