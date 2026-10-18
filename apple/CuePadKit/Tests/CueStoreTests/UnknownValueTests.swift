@@ -21,5 +21,4 @@ import Testing
     #expect(try await store.search(SearchQuery(sent: .sent(kind: .unknown("carrierPigeon")))).cards.map(\.id) == [card.id])
     #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.piSession)))).cards.isEmpty)
   }
-
 }

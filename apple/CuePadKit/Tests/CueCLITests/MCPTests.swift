@@ -31,6 +31,7 @@ import Testing
 
     /// 起一个 `cuepad mcp` 交给 `body`；之后（失败也一样）关它的输入、等它退出。
     static func run(library: URL, _ body: (Server) async throws -> Void) async throws {
+      try #require(FileManager.default.isExecutableFile(atPath: MCPTests.binary.path), "先构建 cuepad 产物：\(MCPTests.binary.path)")
       let server = try Server(library: library)
       let outcome: Result<Void, any Error>
       do { outcome = .success(try await body(server)) } catch { outcome = .failure(error) }
@@ -54,15 +55,20 @@ import Testing
 
     /// 调一个工具，返回正文；期望不出错。
     @discardableResult
-    func call(_ tool: String, _ arguments: [String: Any]) async throws -> String {
+    func call(_ tool: String, _ arguments: [String: Any]) async throws -> String { try await tools(tool, arguments, isError: false) }
+
+    /// 调一个工具，期望被退回（`isError`），返回给 Cue 的理由。
+    @discardableResult
+    func refused(_ tool: String, _ arguments: [String: Any]) async throws -> String { try await tools(tool, arguments, isError: true) }
+
+    private func tools(_ tool: String, _ arguments: [String: Any], isError: Bool) async throws -> String {
       let result = try await request("tools/call", ["name": tool, "arguments": arguments])
-      #expect(result["isError"] as? Bool == false, "\(result)")
+      #expect(result["isError"] as? Bool == isError, "\(tool) \(arguments) → \(result)")
       return try #require((result["content"] as? [[String: Any]])?.first?["text"] as? String)
     }
   }
 
   @Test(.timeLimit(.minutes(1))) func cueDispatchesATaskTellsAndRemembersThroughMCP() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -73,7 +79,6 @@ import Testing
     }
     try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
-
       let hello = try await server.request("initialize", ["protocolVersion": "2025-11-25", "capabilities": [:], "clientInfo": ["name": "pi", "version": "1"]])
       #expect(hello["protocolVersion"] as? String == "2025-11-25")
       let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
@@ -86,9 +91,7 @@ import Testing
       #expect(try await server.call("task", ["action": "peek"]).contains("重写发布脚本（\(task.shortID)）"))
       // 名字宽过上限（汉字算 2）：整件退回，告诉 Cue 怎么改，什么都不写
       for long: [String: Any] in [["title": "让 Agent 编译测试排队、模拟器复用、测试快速失败"], ["title": "发布", "steps": ["调研", "把发布脚本改成按渠道分别打包上传"]]] {
-        let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "add"].merging(long) { $1 }])
-        #expect(refused["isError"] as? Bool == true)
-        #expect(((refused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("上限 24") == true)
+        #expect(try await server.refused("task", ["action": "add"].merging(long) { $1 }).contains("上限 24"))
       }
       #expect(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).filter { $0.parentID == nil }.count == 1)
 
@@ -113,7 +116,6 @@ import Testing
 
   /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，住在哪台 Mac 还留着）。
   @Test(.timeLimit(.minutes(1))) func aDisabledCueCannotDispatchWork() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -124,16 +126,13 @@ import Testing
     }
     let task = try await store.createTask("跑检查", in: project.id)
     try await Server.run(library: sandbox.directory) { server in
-
-      let result = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString]])
-      #expect(result["isError"] as? Bool == true)
+      try await server.refused("task", ["action": "start", "task": task.id.uuidString])
       #expect(try await store.deliveryRequests().isEmpty)
     }
   }
 
   /// 没给项目建的任务落在未分类：Cue 用 edit 的 project 把它连同步骤与草稿挪进项目，就能开工。
   @Test(.timeLimit(.minutes(1))) func cueMovesAnUnfiledTaskIntoAProject() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("greet")
@@ -144,7 +143,6 @@ import Testing
     }
     try await store.recordMacAgents(host: "mac-a", name: nil, [MacAgent(kind: .pi, model: nil, models: [])])
     try await Server.run(library: sandbox.directory) { server in
-
       try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "body": "先看现有问候"])
       let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.heading == "加问候语" }).id
       let taskID = task.uuidString
@@ -159,16 +157,13 @@ import Testing
 
       // 你亲手给步骤绑上会话：再开工被拒（叫它用 say），什么请求都不多写
       try await store.bindSession("s9", to: step.id)
-      let rejected = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": taskID]])
-      #expect(rejected["isError"] as? Bool == true)
-      #expect(((rejected["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("say") == true)
+      #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
       #expect(try await store.deliveryRequests().count == 1)
     }
   }
 
   /// peek 一件事：每个叶子最新的那条回答给全文（至多 4000 字，超了截尾并注明），更早的截短。
   @Test(.timeLimit(.minutes(1))) func peekGivesTheLatestReplyInFull() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let task = try await store.createTask("跑测试", in: nil)
@@ -185,9 +180,7 @@ import Testing
       ],
       recap: PiRecap()))
     try await Server.run(library: sandbox.directory) { server in
-
-      let result = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "task": task.id.uuidString]])
-      let text = try #require((result["content"] as? [[String: Any]])?.first?["text"] as? String)
+      let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
       // 前 4000 字里的"过"（含开头"全部通过"的那个）都在：长串重复字符的子串查找不可靠，按个数比
       #expect(text.filter { $0 == "过" }.count == output.prefix(4000).filter { $0 == "过" }.count)
       #expect(!text.contains("尾巴") && text.contains("后面还有 \(output.count - 4000) 字"))
@@ -197,7 +190,6 @@ import Testing
 
   /// 不带 task 的 peek 是看板：所有没做完的事，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
   @Test(.timeLimit(.minutes(1))) func cueSeesEveryOpenTaskGroupedByProject() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -206,16 +198,13 @@ import Testing
     let done = try await store.createTask("做完的事", in: project.id)
     try await store.setStatus(done.id, .done)
     try await Server.run(library: sandbox.directory) { server in
-
-      let all = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek"]])
-      let text = try #require((all["content"] as? [[String: Any]])?.first?["text"] as? String)
+      let text = try await server.call("task", ["action": "peek"])
       #expect(text.split(separator: "\n").filter { $0.hasPrefix("- ") }.map { String($0.prefix(while: { $0 != "（" })) } == ["- 用户自己的事", "- 未分类的事"])
       #expect(text.contains(mine.id.shortID) && text.contains(unfiled.id.shortID) && !text.contains(done.heading))
       #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "未分类："])
 
       for index in 0..<70 { _ = try await store.createTask("事 \(index)", in: nil) }
-      let many = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek"]])
-      let lines = try #require((many["content"] as? [[String: Any]])?.first?["text"] as? String).split(separator: "\n")
+      let lines = try await server.call("task", ["action": "peek"]).split(separator: "\n")
       #expect(lines.count == 60)
       let shown = lines.filter { $0.hasPrefix("- ") }.count
       #expect(lines.last.map(String.init) == "还有 \(72 - shown) 件")
@@ -226,7 +215,6 @@ import Testing
   /// 给用户写一条结果（关联任务、不是"等你"，正文由代码拼成"「任务名」做完了"加证据要点）。再调一次只说已经完成，不重复写。
   /// 整件事收尾要带证据：没带、多于 3 条或一条太长都退回，什么都不写。
   @Test(.timeLimit(.minutes(1))) func cueFinishesATopTaskAndReportsIt() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -238,13 +226,10 @@ import Testing
     try await store.linkCard(task.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页")
     try await Server.run(library: sandbox.directory) { server in
-
-      let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "done", "task": task.id.uuidString]])
-      #expect(refused["isError"] as? Bool == true)
+      try await server.refused("task", ["action": "done", "task": task.id.uuidString])
       // 证据多于 3 条或一条太长：退回，什么都不写
       for bad in [["一", "二", "三", "四"], ["登录测试 12 个全过，另外把注册页、找回密码页也顺手都改好了"]] {
-        let tooMuch = try await server.request("tools/call", ["name": "task", "arguments": ["action": "done", "task": task.id.uuidString, "evidence": bad]])
-        #expect(tooMuch["isError"] as? Bool == true, "\(bad)")
+        try await server.refused("task", ["action": "done", "task": task.id.uuidString, "evidence": bad])
       }
       #expect(try await store.card(task.id)?.status != .done)
       #expect(try await store.cueMessages().isEmpty)
@@ -267,16 +252,12 @@ import Testing
   /// 用户选"以后推送都不用问"：允许清单记上这个项目的推送；之后 Cue 再为这个项目问推送被拒，叫它直接做，
   /// 别的项目照问；他撤销那一项又会问。他对 Cue 说"以后删除都不用问"，Cue 用 memory allow 记进清单，规矩那一类放不进去。
   @Test(.timeLimit(.minutes(1))) func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let demo = try await sandbox.project("演示"), other = try await sandbox.project("别的")
     let task = try await store.createTask("修好登录页", in: demo.id), elsewhere = try await store.createTask("改文案", in: other.id)
     try await Server.run(library: sandbox.directory) { server in
-
-      let confirm = try await server.request(
-        "tools/call", ["name": "tell", "arguments": ["text": "调研方案好了，照这个做吗？", "ask": "confirm", "task": task.id.uuidString]])
-      #expect(confirm["isError"] as? Bool == true)
+      try await server.refused("tell", ["text": "调研方案好了，照这个做吗？", "ask": "confirm", "task": task.id.uuidString])
       #expect(try await store.cueMessagesWaitingForYou().isEmpty)
 
       let reply = try await server.call("tell", ["text": "改好了，要推送到 origin/main 吗？", "ask": "push", "task": task.id.uuidString])
@@ -287,10 +268,7 @@ import Testing
       #expect(try await store.endCueQuestion(asked, .answered("以后推送都不用问")))
       #expect(try await store.cueProfile()?.allows == [CueAllow(.push, project: demo.id)])
       #expect(try await store.cueMemory().lines.isEmpty)
-      let again = try await server.request(
-        "tools/call", ["name": "tell", "arguments": ["text": "又改了一处，推送吗？", "ask": "push", "task": task.id.uuidString]])
-      #expect(again["isError"] as? Bool == true)
-      #expect(((again["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("直接做") == true)
+      #expect(try await server.refused("tell", ["text": "又改了一处，推送吗？", "ask": "push", "task": task.id.uuidString]).contains("直接做"))
       #expect(try await store.cueMessagesWaitingForYou().isEmpty)
 
       _ = try await server.call("tell", ["text": "文案要推送吗？", "ask": "push", "task": elsewhere.id.uuidString])
@@ -299,11 +277,8 @@ import Testing
       #expect(try await store.cueMessagesWaitingForYou().map(\.text) == ["文案要推送吗？", "又改了一处，推送吗？"])
 
       _ = try await server.call("memory", ["action": "allow", "ask": "delete"])
-      let deleting = try await server.request(
-        "tools/call", ["name": "tell", "arguments": ["text": "要删掉旧分支吗？", "ask": "delete", "task": elsewhere.id.uuidString]])
-      #expect(deleting["isError"] as? Bool == true)
-      let rule = try await server.request("tools/call", ["name": "memory", "arguments": ["action": "allow", "ask": "rule"]])
-      #expect(rule["isError"] as? Bool == true)
+      try await server.refused("tell", ["text": "要删掉旧分支吗？", "ask": "delete", "task": elsewhere.id.uuidString])
+      try await server.refused("memory", ["action": "allow", "ask": "rule"])
       #expect(try await store.cueProfile()?.allows == [CueAllow(.delete, project: nil)])
     }
   }
@@ -312,7 +287,6 @@ import Testing
   /// Pi、OpenCode 要写 provider/id）。不写 agent 用那台 Mac 的默认（能用的第一家）；写了那台 Mac 记着不能用的那家，当场退回并说原因。
   /// 那台 Mac 开不了这家时，失败是这件事的一条变化（还没开成会话也报），写着"开工：原因"，Cue 下次醒来看得到。
   @Test(.timeLimit(.minutes(1))) func cueStartsASessionWithTheAgentItChose() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -326,13 +300,10 @@ import Testing
       host: "mac-a", name: nil, [MacAgent(kind: .claudeCode, model: nil, models: []), MacAgent(kind: .codex, model: nil, models: [])],
       problems: [MacAgentProblem(kind: .pi, reason: "没登录")])
     try await Server.run(library: sandbox.directory) { server in
-
       for bad in [["agent": "pi"], ["agent": "opencode", "model": "big-pickle"], ["agent": "cursor"]] {
-        let refused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString].merging(bad) { $1 }])
-        #expect(refused["isError"] as? Bool == true, "\(bad)")
+        try await server.refused("task", ["action": "start", "task": task.id.uuidString].merging(bad) { $1 })
       }
-      let piRefused = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": task.id.uuidString, "agent": "pi"]])
-      #expect(((piRefused["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("Pi 没登录") == true)
+      #expect(try await server.refused("task", ["action": "start", "task": task.id.uuidString, "agent": "pi"]).contains("Pi 没登录"))
       #expect(try await store.deliveryRequests().isEmpty)
 
       let other = try await store.createTask("改文案", in: project.id)
@@ -363,7 +334,6 @@ import Testing
   /// 下一步还没有草稿时开工报错，不先绑上。最后一步做完，会话结束（界面点圆圈同一条规则，见 App 的 `TaskFlowTests`）。
   /// 草稿发进已有会话是说话：工具等结果至多 `Speech.cueWait`，这里没有 Mac 执行，到点如实说还没送达。
   @Test(.timeLimit(.minutes(2))) func stepsOfATaskContinueInTheSameSession() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -377,30 +347,21 @@ import Testing
     try await store.linkCard(first.id, toSession: "s1")
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "调研")
     try await Server.run(library: sandbox.directory) { server in
-      func refused(_ arguments: [String: Any]) async throws -> String? {
-        let result = try await server.request("tools/call", ["name": "task", "arguments": arguments])
-        guard result["isError"] as? Bool == true else { return nil }
-        return (result["content"] as? [[String: Any]])?.first?["text"] as? String
-      }
-
       _ = try await server.call("task", ["action": "done", "task": first.id.uuidString, "evidence": ["看完了"]])
       #expect(try await store.card(first.id)?.status == .done)
       #expect(try await store.deliveryRequests().isEmpty)
 
       try await store.updateCard(second.id) { $0.body += "\n照调研结论改 release.sh" }
-      let continued = try await server.request("tools/call", ["name": "task", "arguments": ["action": "start", "task": second.id.uuidString]])
-      #expect(continued["isError"] as? Bool == false)
-      #expect(((continued["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("已发出，还没送达") == true)
+      #expect(try await server.call("task", ["action": "start", "task": second.id.uuidString]).contains("已发出，还没送达"))
       let sent = try await store.deliveryRequests()
       #expect(sent.map(\.mode) == [.known(.followUp)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
       #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
       // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
       #expect(try await server.call("task", ["action": "peek"]).contains("改脚本 › 发送中"))
-      let peek = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "task": task.id.uuidString]])
-      #expect(((peek["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("发送中") == true)
-      #expect(try await refused(["action": "start", "task": second.id.uuidString])?.contains("送到") == true)
-      #expect(try await refused(["action": "say", "task": second.id.uuidString, "text": "还有"])?.contains("送到") == true)
+      #expect(try await server.call("task", ["action": "peek", "task": task.id.uuidString]).contains("发送中"))
+      #expect(try await server.refused("task", ["action": "start", "task": second.id.uuidString]).contains("送到"))
+      #expect(try await server.refused("task", ["action": "say", "task": second.id.uuidString, "text": "还有"]).contains("送到"))
 
       // Mac 送到：记下这次发送，这一步绑上会话
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store] request in
@@ -424,7 +385,6 @@ import Testing
   /// 换会话的那一刻与最后一步（"增加系统提示音和提示窗"做完了会话还挂着）：下一步开工用 fresh 开新会话时，上一步留着的会话结束；
   /// 下一步亲手绑到别的会话也一样；最后一步做完，它的会话结束。
   @Test(.timeLimit(.minutes(1))) func aLeftBehindSessionEnds() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let project = try await sandbox.project("演示")
@@ -471,11 +431,9 @@ import Testing
 
   /// Cue 撤回自己问过、他还没答的一条：从"等你"里消失，不交回给 Cue；同一次可以换个问法再问。他再点那条，报已经结束；撤回过的不能再撤。
   @Test(.timeLimit(.minutes(1))) func cueWithdrawsItsQuestion() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     try await Server.run(library: sandbox.directory) { server in
-
       try await server.call("tell", ["text": "要删掉旧的 release 分支吗？", "ask": "delete"])
       let asked = try #require(try await store.cueMessagesWaitingForYou().first).id.uuidString.lowercased()
       _ = try await server.call("tell", ["withdraw": String(asked.prefix(8)), "text": "旧分支先留着。要删掉 build 目录吗？", "ask": "delete"])
@@ -483,14 +441,12 @@ import Testing
       #expect(try await store.cueMessagesToDeliver().isEmpty)
       let id = try #require(UUID(uuidString: asked))
       await #expect(throws: CueStoreError.questionEnded) { try await store.endCueQuestion(id, .answered(CueAsk.once)) }
-      let again = try await server.request("tools/call", ["name": "tell", "arguments": ["withdraw": asked]])
-      #expect(again["isError"] as? Bool == true)
+      try await server.refused("tell", ["withdraw": asked])
     }
   }
 
   /// 看板上一件事的近况取在做的那一步；步骤都做完、整件事还没收尾时取最后做完的那一步（它的会话是最新的进展），不落回第一步。
   @Test(.timeLimit(.minutes(1))) func theBoardShowsTheStepLastWorkedOn() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     let task = try await store.createTask("加语言参数", in: nil)
@@ -521,7 +477,6 @@ import Testing
   /// 会话因为模型出错，你让换个模型：Cue 的 say 带 model、effort，先请会话换模型（与界面换模型同一种请求），再说这句；
   /// 换不了模型的会话（终端里的 Claude Code）直接报错，什么都不写，告诉 Cue 可以 fresh 开新会话。
   @Test(.timeLimit(.minutes(1))) func cueSwitchesTheSessionModelBeforeSpeaking() async throws {
-    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
     let sandbox = try Sandbox()
     let store = sandbox.store
     try await store.updateCueProfile {
@@ -549,10 +504,7 @@ import Testing
       #expect(requests.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
       #expect(requests.last?.content == "用 luna 重试")
 
-      let refused = try await server.request(
-        "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "text": "换个模型", "model": "opus"]])
-      #expect(refused["isError"] as? Bool == true)
-      let reason = try #require((refused["content"] as? [[String: Any]])?.first?["text"] as? String)
+      let reason = try await server.refused("task", ["action": "say", "task": claude.id.uuidString, "text": "换个模型", "model": "opus"])
       #expect(reason.contains("换不了模型") && reason.contains("fresh"))
       #expect(try await store.deliveryRequests().count == 2)
 
@@ -561,12 +513,9 @@ import Testing
       try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
       try await recorder.update(sessionID: "c1", state: .waitingForUser, question: question, agent: .claudeCode)
       let answer = ["action": "say", "task": pi.id.uuidString, "model": "openai/gpt-6-sol", "effort": "low"]
-      let invalid = try await server.request("tools/call", ["name": "task", "arguments": answer.merging(["text": "也许"]) { $1 }])
-      #expect(invalid["isError"] as? Bool == true)
+      try await server.refused("task", answer.merging(["text": "也许"]) { $1 })
       #expect(try await store.deliveryRequests().count == 2)
-      let claudeAnswer = try await server.request(
-        "tools/call", ["name": "task", "arguments": ["action": "say", "task": claude.id.uuidString, "text": "yes", "model": "opus"]])
-      #expect(((claudeAnswer["content"] as? [[String: Any]])?.first?["text"] as? String)?.contains("换不了模型") == true)
+      #expect(try await server.refused("task", ["action": "say", "task": claude.id.uuidString, "text": "yes", "model": "opus"]).contains("换不了模型"))
       #expect(try await store.deliveryRequests().count == 2)
       _ = try await server.call("task", answer.merging(["text": "yes"]) { $1 })
       let answered = try await store.deliveryRequests(toSession: "s1").suffix(2)

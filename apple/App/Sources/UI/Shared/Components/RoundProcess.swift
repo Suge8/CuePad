@@ -40,7 +40,7 @@ struct RoundProcess: View {
                 Button { expanded.toggle() } label: { header(line) }
                     .buttonStyle(.plain)
                     .accessibilityLabel(spoken(line))
-                    .accessibilityValue(expanded ? "已展开" : "已收起")
+                    .accessibilityExpanded(expanded)
                 if expanded {
                     NoteThread {
                         list(tools)
@@ -179,6 +179,13 @@ struct RoundProcess: View {
         case .stop: .endSession
         case .ask: .cueAsking
         }
+    }
+}
+
+extension View {
+    /// 就地展开、收起的那一行给读屏的值；`nil` 是这一行展不开。
+    func accessibilityExpanded(_ open: Bool?) -> some View {
+        accessibilityValue(open.map { $0 ? "已展开" : "已收起" } ?? "")
     }
 }
 

@@ -58,5 +58,4 @@ import Testing
     #expect(CueFormat.imageHashes(in: message.text) == [String(repeating: "a", count: 64)])
     #expect(CueFormat.plainText(message.text).count == PiChatMessage.textLimit)
   }
-
 }

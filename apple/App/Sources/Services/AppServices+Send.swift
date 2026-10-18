@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 import UniformTypeIdentifiers
 #if os(macOS)
@@ -11,18 +12,18 @@ import UIKit
 extension AppServices {
     /// 复制正文（存储格式，变量已填）：文字与图片按原顺序放进系统剪贴板。
     func copy(_ storedText: String) throws {
-        let content = SendContent(stored: storedText)
+        let tokens = CueFormat.parse(storedText)
         #if os(macOS)
-        try Clipboard.write(ClipboardContent(try content.segments.map { segment in
-            switch segment {
+        try Clipboard.write(ClipboardContent(try tokens.map { token in
+            switch token {
             case .text(let text): .text(text)
             case .image(let hash): .image(try store.files.png(hash))
             }
         }), to: pasteboard)
         #else
         // 每段文字、每张图片各一个条目，按原顺序：目标应用能取到哪些由它决定
-        pasteboard.setItems(try content.segments.compactMap { segment -> [String: Any]? in
-            switch segment {
+        pasteboard.setItems(try tokens.compactMap { token -> [String: Any]? in
+            switch token {
             case .text(let text): text.isEmpty ? nil : [UTType.utf8PlainText.identifier: text]
             case .image(let hash): [UTType.png.identifier: try store.files.png(hash)]
             }

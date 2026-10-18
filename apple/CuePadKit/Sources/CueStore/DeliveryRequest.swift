@@ -4,6 +4,13 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing, succeeded, failed
 }
 
+extension DeliveryStatus {
+  /// 还没有结果的状态（等领取、执行中）：`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
+  static let open: Set<DeliveryStatus> = [.pending, .executing]
+  /// `open` 的 SQL `IN (…)` 列表。
+  static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
+}
+
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
 /// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
 /// 说话的三种（`talk`）在请求上有两层含义：执行前是请求的方式；成功后 Mac 改写成 Agent 实际收下的方式（`DeliveryOutcome.accepted`）——
@@ -43,11 +50,6 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 你说的话的几种方式（直接说、马上说、等它做完再说）：没能送达时留着等你重发。
   public static let talk: [DeliveryMode] = [.send, .steer, .followUp]
-
-  /// SQL `mode IN (…)` 里的列表。
-  static func sqlList(_ modes: some Sequence<DeliveryMode>) -> String {
-    modes.map { "'\($0.rawValue)'" }.joined(separator: ", ")
-  }
 }
 
 /// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
@@ -81,7 +83,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isFromCue: Bool { origin == .known(.cue) }
 
   /// 还没有结果（等待执行或执行中）。
-  public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
+  public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 还没被 Mac 领取（仍是 pending）：撤得回、改得了说法。领取后它已交给 Pi，Pi 的扩展接口收不回进了 Pi 队列的话。
   public var isWithdrawable: Bool { status == .known(.pending) }

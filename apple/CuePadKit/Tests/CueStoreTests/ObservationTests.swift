@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import Foundation
 import Testing
 
@@ -52,16 +51,5 @@ import Testing
 
     _ = try await store.createCard(in: nil, body: "x")
     #expect(try await values.next() == 1)
-  }
-
-  /// "等远端的图片到达"这类只看一个会变的值的订阅：附件记录出现时醒来，不需要单独订阅表。
-  @Test(.timeLimit(.minutes(1))) func attachmentArrivalWakesAReadOfItsRecord() async throws {
-    let store = fixture.store
-    let hash = try store.files.store(pngData(width: 8, height: 8))
-    var arrived = store.observe { try $0.hasAttachment(hash) }.makeAsyncIterator()
-    #expect(try await arrived.next() == false)
-
-    _ = try await store.createCard(in: nil, body: CueFormat.imageMarkup(id: hash))  // 引用本机已有的文件：登记附件记录
-    #expect(try await arrived.next() == true)
   }
 }

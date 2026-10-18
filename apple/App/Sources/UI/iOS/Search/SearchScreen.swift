@@ -1,5 +1,4 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
 /// 搜索页（点侧栏列表顶上的搜索框或按 ⌘K 进来，同 Mac 的 ⌘K）：顶上是搜索框（iPhone 在导航栏中间，左边是系统的返回；iPad 是 `RootBar` 那一排），

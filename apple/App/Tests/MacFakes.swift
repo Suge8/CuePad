@@ -83,12 +83,9 @@ final class RecordingHost: AgentRuntime {
         try bridge.start()
         try ext.start()
         extensions[sessionID] = ext
-        try await eventually("bridge.session(id: ext.id) != nil") { bridge.session(id: ext.id) != nil }
-        guard bridge.session(id: ext.id) != nil else { throw ConnectTimeout(sessionID: sessionID) }
+        try await eventually("桥连上 \(sessionID)") { bridge.session(id: ext.id) != nil }
         return ext
     }
-
-    struct ConnectTimeout: Error { var sessionID: String }
 }
 
 extension FakeExtension {
@@ -128,14 +125,5 @@ final class RecordingCueNotifier: CueNotifying {
     private(set) var posted: [(title: String, body: String)] = []
 
     func post(title: String, body: String) async { posted.append((title, body)) }
-}
-
-final class RecordingWindow: ShellWindow {
-    var isVisible = true
-    var isFocused = true
-    private(set) var events: [String] = []
-
-    func show() { events.append("show"); isVisible = true; isFocused = true }
-    func hide() { events.append("hide"); isVisible = false; isFocused = false }
 }
 #endif

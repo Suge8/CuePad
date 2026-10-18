@@ -4,23 +4,22 @@
 #   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）、合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   与交互预算（docs/verify.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
-# 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定；产物在 apple/.derived-perf-release（Instruments 也用这份）。
-# 独占机器（_lock.sh）：别的编译、测试同时跑，指令数之外的数都会被拖歪。iOS 的单次交互见 perf-ios.sh。
+# xc.sh 构建好 Release（带 DEBUG 条件，只为留下测量代码；预算按用户拿到的构建定，产物在 apple/.derived-perf，Instruments 也用这份）、
+# 独占机器（别的编译、测试同时跑，指令数之外的数都会被拖歪）后调这里，第一个参数是 CuePad.app。iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=_lock.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_lock.sh"
-# shellcheck source=_perf.sh source-path=SCRIPTDIR
-. "$APPLE_DIR/scripts/_perf.sh"
-xc_enter exclusive "$0" "$@"
-runs="${1:-3}"
-extra=("${@:2}")
-
-DERIVED="$PERF_MAC_DERIVED"
+APP="$1"
+runs="${2:-3}"
+extra=("${@:3}")
+DERIVED="$(dirname "$(dirname "$(dirname "$APP")")")"
 LIBRARY="$DERIVED/library-perf"
-perf_build mac
-launch() { perf_launch_mac "$@"; }
+
+# 实例经 app.py exec（隔离、占住本检出那一份后 exec 成 CuePad）：后台调用时 $! 就是 CuePad
+launch() {
+  local library="$1"; shift
+  exec python3 "$APPLE_DIR/scripts/app.py" exec "$APP" "$library" -- "$@"
+}
 
 # 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动
 if [ ! -f "$LIBRARY/cuepad.db" ]; then

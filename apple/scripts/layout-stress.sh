@@ -12,6 +12,10 @@
 # --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），检测器有效时脚本必须以 1 退出——用来证明它抓得到这类环。
 set -u
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# 进本检出的入口锁：实例经 app.py 占本检出那一份，同检出的 shot、rec 不能同时在跑
+# shellcheck source=_lock.sh source-path=SCRIPTDIR
+. "$APPLE_DIR/scripts/_lock.sh"
+xc_enter plain "$0" "$@"
 inject=()
 if [ "${1:-}" = --inject-loop ]; then inject=(-CuePadGeometryLoop YES); shift; fi
 app="${1:-$APPLE_DIR/.derived/Build/Products/Debug/CuePad.app}"
@@ -21,13 +25,16 @@ failed=0
 DEMO_DIR="$HOME/$(sed -n 's/.*name: "CuePad".*directory: "\\(home)\([^"]*\)".*/\1/p' "$APPLE_DIR/App/Sources/UI/Debug/DemoLibrary.swift")"
 REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
 READY_TIMEOUT="${CUEPAD_STRESS_READY_TIMEOUT:-60}" # 等资料库文件出现的秒数上限
+SOCK="$(python3 "$APPLE_DIR/scripts/app.py" sockets)"
 
 run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   local name=$1 mode=$2 rounds=$3; shift 3
-  local lib sock start pid alive
-  lib="$(mktemp -d /tmp/cuepad-stress.XXXXXX)"; sock="$(mktemp -d /tmp/cps.XXXXXX)"; chmod 700 "$sock"
+  local lib start pid alive
+  rm -rf "$SOCK" # 上一组留下的连接，免得这一组连到不在了的会话
+  lib="$(mktemp -d /tmp/cuepad-stress.XXXXXX)"
   start="$(date "+%Y-%m-%d %H:%M:%S")"
-  CUEPAD_LIBRARY_DIR="$lib" PI_CODING_AGENT_DIR="$lib/pi-agent" CUEPAD_PI_SOCKET_DIR="$sock" "$app/Contents/MacOS/CuePad" \
+  # 隔离与每个检出一份经 app.py exec：它占住那一份后 exec 成 CuePad，$! 就是 CuePad
+  python3 "$APPLE_DIR/scripts/app.py" exec "$app" "$lib" -- \
     -CuePadDemo YES -CuePadProject CuePad ${inject[@]+"${inject[@]}"} "$@" >/dev/null 2>&1 &
   pid=$!
   if [ "$mode" != none ]; then
@@ -37,7 +44,7 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
       if [ "$waited" -ge $((READY_TIMEOUT * 10)) ]; then
         echo "${name}：$READY_TIMEOUT 秒内没有出现资料库文件，App 进程仍存活（未响应启动）" >&2
         kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
-        echo "  证据留在 ${lib}" >&2; rm -rf "$sock"; failed=1; return
+        echo "  证据留在 ${lib}" >&2; failed=1; return
       fi
       sleep 0.1; waited=$((waited + 1))
     done
@@ -45,9 +52,9 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   if [ "$mode" = none ]; then
     wait "$pid"
   elif [ "$mode" = real ]; then
-    python3 "$APPLE_DIR/scripts/pi-real-churn.py" "$lib/pi-agent" "$sock" "$REAL_DIR" "$rounds" || echo "  真实 pi 提前退出，按已跑的轮数判定覆盖"
+    python3 "$APPLE_DIR/scripts/pi-real-churn.py" "$lib/agents/pi" "$SOCK" "$REAL_DIR" "$rounds" || echo "  真实 pi 提前退出，按已跑的轮数判定覆盖"
   else
-    python3 "$APPLE_DIR/scripts/pi-churn.py" "$sock" "$DEMO_DIR" "$rounds" "$mode"
+    python3 "$APPLE_DIR/scripts/pi-churn.py" "$SOCK" "$DEMO_DIR" "$rounds" "$mode"
   fi
   # 中途退出时 wait 拿到它自己的退出码：大于 128 是被信号结束（减 128 是信号号）
   local status=""
@@ -62,7 +69,7 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   local coverage=""
   if [ "$mode" = real ]; then
     local files rows
-    files=$(find "$lib/pi-agent/sessions" -name '*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
+    files=$(find "$lib/agents/pi/sessions" -name '*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
     rows=$(sqlite3 "$lib/cuepad.db" 'select count(*) from piSessions;' 2>/dev/null || echo 0)
     coverage="  Pi 会话文件 $files  应用历史 $rows"
     if [ "$files" -lt $((rounds / 2)) ] || [ "$rows" -lt 1 ]; then coverage="${coverage}（没覆盖到）"; failed=1; fi
@@ -73,14 +80,13 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   fi
   echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $ending$coverage"
   if [ "$cycles" -gt 0 ] || [ "$iterations" -gt 0 ] || [ "$crashed" = 1 ]; then failed=1; fi
-  [ -f "$lib/pi-agent/pi-stderr.log" ] && cp "$lib/pi-agent/pi-stderr.log" "/tmp/layout-stress-pi-$(date +%s).log"
+  [ -f "$lib/agents/pi/pi-stderr.log" ] && cp "$lib/agents/pi/pi-stderr.log" "/tmp/layout-stress-pi-$(date +%s).log"
   if [ "$crashed" = 1 ]; then
     # 留证：隔离库（资料库、Pi 目录）原样不删，这段进程的系统日志写进去
     printf '%s\n' "$log" > "$lib/process.log"
     echo "  证据留在 ${lib}（资料库与 Pi 目录；进程日志 process.log）"
-    rm -rf "$sock"
   else
-    rm -rf "$lib" "$sock"
+    rm -rf "$lib"
   fi
 }
 

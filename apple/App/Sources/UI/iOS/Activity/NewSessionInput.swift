@@ -16,7 +16,7 @@ struct NewSessionInput: View {
     @Environment(\.palette) private var palette
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
-    @State private var launched: Navigation.NewSession.Launched?
+    @State private var launched: SessionLaunch?
     @State private var progress: LaunchProgress?
     /// 选中的项目绑着的那台 Mac 上能用的几家；还没读到为 nil。
     @State private var agents: MacAgents?
@@ -64,7 +64,7 @@ struct NewSessionInput: View {
         .observing(services.store, id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
             guard let launched else { return LaunchProgress() }
-            return try LaunchProgress.read(request: launched.request, token: launched.token, from: store)
+            return try launched.progress(from: store)
         }
         .observing(services.store, id: chosen?.binding?.hostID, into: $agents, onError: workspace.fail) {
             [host = chosen?.binding?.hostID] store in

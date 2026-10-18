@@ -80,7 +80,7 @@ private struct WindowPanels: View {
             .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } else { mountsPalette = true } }
             .task(id: workspace.isLibraryReady) {
                 guard workspace.isLibraryReady else { return }
-                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
@@ -379,7 +379,7 @@ private struct WorkspaceShortcuts: View {
 }
 
 /// 提示里的动作（撤销、归档）：点了收起提示并做那件事；撤销另有 ⌘Z。
-struct NoticeActionButton: View {
+private struct NoticeActionButton: View {
     let action: Workspace.NoticeAction
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

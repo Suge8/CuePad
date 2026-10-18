@@ -109,12 +109,6 @@ extension AppServices {
         }
     }
 
-    /// 在主线程空闲时收尾（测试与不经 terminate 的场合）。
-    @discardableResult
-    func stop(within limit: Duration = .seconds(2)) async -> String? {
-        await beginShutdown(within: limit)()
-    }
-
     /// Cue：本机能用的运行时、按设置值班、通知（点开去哪见 `AlertCenter`）。
     private func startCue() {
         follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }

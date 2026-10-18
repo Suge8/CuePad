@@ -33,5 +33,4 @@ import Testing
 
     #expect(try await store.projects().map(\.name) == ["置顶", "卡片新", "任务新", "安静", "Pi 新"])
   }
-
 }

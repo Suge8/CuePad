@@ -29,8 +29,9 @@ struct CueHostTests {
 
         /// `failingOnce`：信封里有这些话的请求，假模型第一次报错。
         /// `seesImages`：假模型能不能看图（Pi 的模型表里写的输入）。`asksOnEnable`：刚启用那一轮先用 tell 问你一句，再写最后的回复。
+        /// `claude`：大脑换成真的 Claude Code（`CueEvalTests`），假模型的剧本不再用上。
         init(
-            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false
+            usage: Int = 100, failingOnce: [String] = [], seesImages: Bool = true, asksOnEnable: Bool = false, claude: ClaudeCue? = nil
         ) async throws {
             model = try FakeModel(usage: usage, failingOnce: failingOnce, asksOnEnable: asksOnEnable)
             let port = try await model.start()
@@ -38,8 +39,9 @@ struct CueHostTests {
                 patrolAfter: .seconds(3600), mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
             let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+            let claudeLaunch = try claude.map { try $0.launch(in: TestLibraries.makeDirectory()) }
             app = TestApp(cue: CueDependencies(
-                launch: { agent, _ in agent == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                launch: { agent, _ in agent == .pi ? launch : agent == .claudeCode ? claudeLaunch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000,"input":\#(seesImages ? #"["text","image"]"# : #"["text"]"#)},{"id":"fake-model-2","contextWindow":200000,"reasoning":true,"input":["text"]}]}}}"#.utf8)
@@ -51,6 +53,10 @@ struct CueHostTests {
             try await app.services.store.setDirectory(folder.path, for: project.id)
             try await app.connect(.pi)
             app.services.start()
+            if let claude {
+                try await claude.enable(self)
+                return
+            }
             try await app.services.enableCue(on: TestApp.hostID)
             try await message(.cue, containing: asksOnEnable ? "要交给我跟进吗？" : "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }
@@ -80,9 +86,10 @@ struct CueHostTests {
 
         /// 会话这一轮的回复读到了：像 Mac 读会话文件那样写下问答。放在歇下写进库之后，是回复晚于状态到的那一路
         /// （Claude Code 的轮末标记写在报歇下的钩子之后）：Cue 要等读到回复才醒，信封里带着它。
-        func answered(_ sessionID: String) async throws {
+        /// `messages` 是这时读到的对话（peek 里看得到）。
+        func answered(_ sessionID: String, prompt: String = "接着做", reply: String = "好了", messages: [PiChatMessage] = []) async throws {
             try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
-            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: [], recap: PiRecap(lastPrompt: "接着做", lastReply: "好了")))
+            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply)))
         }
 
         /// 你对 Cue 说一句。
@@ -484,7 +491,7 @@ struct CueHostTests {
     /// 你在别处记下的记忆多到要合并（超过视图预算）：空闲一会儿后 Cue 醒来，按合并提示写摘要。没有别的事件也会醒。
     @Test func 记忆待合并时空闲后醒来合并() async throws {
         let rig = try await Rig()
-        for index in 0..<(CueMemoryView.defaultBudget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
+        for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
         try await rig.message(.note, containing: "记忆合并好了")
         await rig.stop()
     }
@@ -749,8 +756,8 @@ nonisolated final class FakeModel: Sendable {
             finishedAfter.withLock { $0.append(text) }
             return say("办好了")
         }
-        if let answer = text.firstMatch(of: /你回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if let words = text.firstMatch(of: /你没允许「.*」，另外说：(.+)/)?.1 { return say("好，不做：\(words)") }
+        if let answer = text.firstMatch(of: /他回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
+        if let words = text.firstMatch(of: /他没允许「.*」，另外说：(.+)/)?.1 { return say("好，不做：\(words)") }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {

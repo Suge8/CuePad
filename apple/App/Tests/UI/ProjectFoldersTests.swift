@@ -3,8 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 项目与文件夹（iOS 与 Mac 共用的规则）：新会话只列项目；项目操作菜单里的绑定与解除；手机上给项目选文件夹时的候选；绑定请求的进度。
-/// 手机看不到 Mac 的完整路径，候选里只有文件夹名，由 Mac 按"取哪个会话的目录"解析成路径。
+/// 项目与文件夹（iOS 与 Mac 共用的规则）：新会话只列项目；手机请 Mac 绑文件夹的进度。
 struct ProjectFoldersTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -13,10 +12,6 @@ struct ProjectFoldersTests {
 
     private func binding(_ project: Project, host: String, name: String, folder: String) -> DirectoryBinding {
         DirectoryBinding(id: UUID(), projectID: project.id, hostID: host, hostName: name, folder: folder, createdAt: .now, modifiedAt: .now)
-    }
-
-    private func folder(_ name: String, host: String = "mac-a", sessions: Int = 1, latest: String? = nil, project: Project? = nil) -> SessionFolder {
-        SessionFolder(hostID: host, folder: name, sessionID: latest ?? "\(host)-\(name)", projectID: project?.id, count: sessions)
     }
 
     // MARK: 新会话只列项目
@@ -49,16 +44,6 @@ struct ProjectFoldersTests {
         #expect(places.map { $0.binding?.hostID } == ["mac-a", nil])
         #expect(places.map(\.detail) == [nil, nil])
     }
-
-    // MARK: 项目页顶栏写的文件夹
-
-    // MARK: 项目菜单
-
-    // MARK: 手机上选文件夹的候选
-
-    // MARK: 同名文件夹的建议
-
-    // MARK: 引导在哪出现
 
     // MARK: 绑定请求的进度
 

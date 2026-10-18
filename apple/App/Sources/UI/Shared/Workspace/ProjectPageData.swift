@@ -16,6 +16,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var taskCounts: TaskCounts
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
+    /// 排墙用的卡片事实（`cards` 与 `lastSends` 推出，读取时算一次）：排墙、"更早"分组与"要不要重排"都读它。
+    var stamps: [CardStamp]
 
     /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
     var lastTarget: [UUID: String] {
@@ -25,21 +27,19 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
         })
     }
 
-    func stamps() -> [CardStamp] {
-        cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) }
-    }
-
     static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
         // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
+        let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project)
         return ProjectPageData(
             project: try project.flatMap { try store.project($0) },
-            cards: try store.cards(in: project),
-            lastSends: try store.lastSends(in: project),
+            cards: cards,
+            lastSends: lastSends,
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
             done: TaskBoard.recentlyDone(all),
             taskCounts: try store.taskCounts(in: project),
-            subtasks: try store.subtaskProgress(in: project))
+            subtasks: try store.subtaskProgress(in: project),
+            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) })
     }
 }
 
@@ -51,12 +51,11 @@ nonisolated struct WallBoard: Equatable, Sendable {
     /// 用最新数据更新分区；返回是否是第一次排墙（调用方据此决定要不要动画）。
     @discardableResult
     mutating func refresh(with data: ProjectPageData, project: UUID?, now: Date = .now, calendar: Calendar = .current) -> Bool {
-        let stamps = data.stamps()
         guard let previous = arrangement else {
-            arrangement = WallArrangement.arrange(stamps, project: project, now: now)
+            arrangement = WallArrangement.arrange(data.stamps, project: project, now: now)
             return true
         }
-        let next = previous.refreshed(with: stamps, project: project, now: now, calendar: calendar)
+        let next = previous.refreshed(with: data.stamps, project: project, now: now, calendar: calendar)
         floated = next.arrangedAt == previous.arrangedAt
             ? floated.union(Set(previous.older).intersection(next.wall + next.pinned))
             : []
@@ -68,10 +67,7 @@ nonisolated struct WallBoard: Equatable, Sendable {
 extension ProjectPageData {
     /// "更早"的分组。
     func olderGroups(_ arrangement: WallArrangement, now: Date = .now, calendar: Calendar = .current) -> [OlderGroup] {
-        let byID = Dictionary(uniqueKeysWithValues: cards.map { ($0.id, $0) })
-        let stamps = arrangement.older.compactMap { byID[$0] }.map {
-            CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned)
-        }
-        return OlderGroup.group(stamps, now: now, calendar: calendar)
+        let byID = Dictionary(uniqueKeysWithValues: stamps.map { ($0.id, $0) })
+        return OlderGroup.group(arrangement.older.compactMap { byID[$0] }, now: now, calendar: calendar)
     }
 }

@@ -1,6 +1,5 @@
 #if os(iOS)
 import CueStore
-import CueSync
 import SwiftUI
 
 /// Agent 整页（侧栏的"会话"；也从 Cue 页头面板的"全部会话"、项目页的"全部 N 个会话"推入）：只回答"每个会话在做什么、

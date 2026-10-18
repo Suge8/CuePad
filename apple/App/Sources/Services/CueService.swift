@@ -52,24 +52,23 @@ final class CueService {
     var onDuty: Bool { duty != nil }
     /// 在这台 Mac 值班的管理器：Cue 页的"运行情况"读它的经过与上下文；不在这里值班为 nil。
     var keeper: CueKeeper? { duty?.keeper }
-    @ObservationIgnored private let store: CueStore
-    @ObservationIgnored private let sync: (any SyncControlling)?
+    /// 每次值班起管理器用的同一份
+    @ObservationIgnored private let setup: CueKeeper.Setup
     @ObservationIgnored private let hostID: String
-    @ObservationIgnored private let library: URL
-    @ObservationIgnored private let piAgentDirectory: URL
-    @ObservationIgnored private let dependencies: CueDependencies
+    @ObservationIgnored private let notifier: any CueNotifying
     private var duty: (keeper: CueKeeper, task: Task<Void, Never>)?
+    private var store: CueStore { setup.store }
     private nonisolated static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     init(
         store: CueStore, sync: (any SyncControlling)?, hostID: String, library: URL, piAgentDirectory: URL, dependencies: CueDependencies
     ) {
-        self.store = store
-        self.sync = sync
+        setup = CueKeeper.Setup(
+            store: store, launch: { [launch = dependencies.launch] in try await launch($0, store) }, helper: dependencies.helper,
+            library: library, piAgentDirectory: piAgentDirectory, timing: dependencies.timing,
+            upload: { [sync] ids in for id in ids { await sync?.upload(id) } })
         self.hostID = hostID
-        self.library = library
-        self.piAgentDirectory = piAgentDirectory
-        self.dependencies = dependencies
+        notifier = dependencies.notifier
     }
 
     /// 跟着设置值班，直到任务取消。
@@ -99,12 +98,7 @@ final class CueService {
     private func apply(_ profile: CueProfile?) async {
         guard profile?.activeHost == hostID else { return await endDuty() }
         guard duty == nil else { return }
-        let keeper = CueKeeper(
-            CueKeeper.Setup(
-                store: store, launch: { [launch = dependencies.launch, store] in try await launch($0, store) },
-                helper: dependencies.helper, library: library,
-                piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing,
-                upload: { [sync] ids in for id in ids { await sync?.upload(id) } }))
+        let keeper = CueKeeper(setup)
         duty = (keeper, Task { await keeper.run() })
     }
 
@@ -136,13 +130,13 @@ final class CueService {
                 $0.author == .known(.cue) && $0.createdAt >= since && ($0.choices != nil || $0.urgent) && !seen.contains($0.id)
             }
             seen.formUnion(fresh.map(\.id))
-            guard duty != nil, !dependencies.notifier.isWatchingCue else { continue }
+            guard duty != nil, !notifier.isWatchingCue else { continue }
             let name = (try? await store.cueProfile())?.name
             for message in fresh {
                 var task: String?
                 if let id = message.taskID { task = try? await store.card(id)?.heading }
                 let alert = CueAlert.content(name: name, text: message.text, choices: message.choices, task: task)
-                await dependencies.notifier.post(title: alert.title, body: alert.body)
+                await notifier.post(title: alert.title, body: alert.body)
                 do {
                     try await store.flagCueMessageForPush(message.id)
                 } catch {

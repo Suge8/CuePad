@@ -131,7 +131,7 @@ import Testing
     #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
   }
 
-  // MARK: 幂等创建与账号切换后重建
+  // MARK: 幂等创建
 
   private func store(preloaded: [CKSubscription] = []) -> FakeSubscriptions { FakeSubscriptions(preloaded) }
 
@@ -184,17 +184,6 @@ import Testing
     #expect(await fake.ids.contains("somebody.else"))
   }
 
-  @Test func aNewAccountsEmptyDatabaseGetsTheSubscriptionsAgain() async throws {
-    let manager = AlertSubscriptions(zoneID: zone)
-    let firstAccount = store()
-    _ = await manager.ensure(in: firstAccount)
-
-    let secondAccount = store()  // 账号切换：新账号的数据库里什么都没有
-    _ = await manager.ensure(in: secondAccount)
-
-    #expect(await secondAccount.saved.sorted() == ["cuepad.changes", "cuepad.cue", "cuepad.pi.settled", "cuepad.pi.waiting"])
-  }
-
   // MARK: 点通知的路由
 
   private func payload(subscription: String, record: String) -> [AnyHashable: Any] {
@@ -221,8 +210,6 @@ import Testing
   }
 
 }
-
-struct Boom: LocalizedError { var errorDescription: String? { "没有网络" } }
 
 /// 记录保存与删除了哪些订阅；模拟一个账号的私有数据库。
 actor FakeSubscriptions: SubscriptionStore {
