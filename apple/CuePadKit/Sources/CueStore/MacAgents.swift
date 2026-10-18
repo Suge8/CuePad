@@ -22,6 +22,10 @@ public struct MacAgents: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
+  /// 给人看的名字（各处写某台 Mac 都用它）：没报过名字的（更旧的版本写的记录、还没有这台的记录）写 `unnamed`。
+  public var shownName: String { name ?? Self.unnamed }
+  public static let unnamed = "未命名的 Mac"
+
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
 
   public var kinds: [AgentKind] { agents.map(\.kind) }
