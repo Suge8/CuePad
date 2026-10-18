@@ -148,7 +148,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .mac: .ink("mac")
         case .yourAnswer: .ink("restore")
         case .sendAnswer: .ink("badge.up")
-        case .above, .floated, .earlier: .ink("arrow.up")
+        case .above, .floated, .earlier: .ink("send")
         case .photo: .ink("photo")
         case .photoLibrary: .ink("photos")
         case .camera: .ink("camera")

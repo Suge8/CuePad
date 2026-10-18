@@ -527,16 +527,22 @@ def chevron(deg):
     return build
 
 
+def send_parts(g, c, s=1.0):
+    """燕尾箭镞与箭杆（格，朝上）：s 按比例缩放整支，刀口不随着缩，每档仍是一条刻缝。"""
+    k, notch, bx = 0.75, -1.6 * s, 7.6 * s  # V 的斜率、谷底、两翼半宽
+    cut = (c + 2 * g) / math.cos(math.atan(k))
+    head = grown([(0, -12.0 * s), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
+    w, top = 2.4 * s, notch + cut
+    shaft = grown([(0, top), (w, top + w * k), (w, 11.4 * s), (-w, 11.4 * s), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
+    return shaft, head
+
+
 def send(m):
     """发送：一枚燕尾箭镞——高而尖，底边往里凹成 V；箭杆顶削成同角度的尖插在 V 里，中间一道等宽刀口。
     两块都在主层（箭镞比箭杆还大，不是小部件），分两层只为按层动效（箭杆、箭镞依次一跳）。
-    先按 Regular 画，两块各自外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝。"""
-    g, c = GROW[m], CARVE[m]
-    k, notch, bx = 0.75, -1.6, 7.6  # V 的斜率、谷底、两翼半宽
-    cut = (c + 2 * g) / math.cos(math.atan(k))
-    head = grown([(0, -12.0), (bx, notch + bx * k), (0, notch), (-bx, notch + bx * k)], [0.5, 0.45, 0, 0.45], g)
-    w, top = 2.4, notch + cut
-    shaft = grown([(0, top), (w, top + w * k), (w, 11.4), (-w, 11.4), (-w, top + w * k)], [0, 0, 1.0, 1.0, 0], g)
+    先按 Regular 画，两块各自外扩 g：刀口预留 2g，外扩后正好是这一档的刻缝。
+    箭头一族（在上面、拿回来的、更早的就用它；回到最新、压缩上下文按方向转）都是这一支。"""
+    shaft, head = send_parts(GROW[m], CARVE[m])
     return [Layer("shaft", [shaft]), Layer("head", [head])]
 
 
@@ -547,6 +553,9 @@ def stop(m):
     return [Layer("stop", [rpoly([(-h, -h), (h, -h), (h, h), (-h, h)], [r] * 4)])]
 
 
+DONE_TICK = [(-3.95, -0.35), (-1.4, 2.2), (10.6, -8.6)]  # 做完里那一笔勾的三个点（格）
+
+
 def done(stage="done"):
     """做完：C 环（logo 的 C，开口朝右上）里伸出一个勾；勾的拐点在圆心附近，最粗的母版里也离 C 一条刻缝。
     勾与 C 都在主层（勾是一整笔，不是小部件）；分两层只为按层动效。
@@ -554,8 +563,8 @@ def done(stage="done"):
     def build(m):
         g = GROW[m]
         T, tc = 4.2 + 1.2 * g, 3.3 + 1.0 * g
-        v = (-1.4, 2.2)
-        tick = bar([(v[0] - 0.03, v[1]), v, (v[0] + 0.03, v[1] - 0.001)], tc) if stage == "pre" else bar([(v[0] - 2.55, v[1] - 2.55), v, (10.6, -8.6)], tc)
+        v = DONE_TICK[1]
+        tick = bar([(v[0] - 0.03, v[1]), v, (v[0] + 0.03, v[1] - 0.001)], tc) if stage == "pre" else bar(DONE_TICK, tc)
         return [Layer("seal", [bow((-1.0, 0.8), 9.2, 4, 268, T)]), Layer("tick", [tick])]
     return build
 
@@ -1140,27 +1149,31 @@ def seg_scaled(s, k, d):
 
 
 def tick(m):
-    """保存、选中：一个粗勾（同已同步、选上里刻的那笔），不带圆。"""
-    s = 1.75
-    return [Layer("tick", mark_tick((0, 0.6), s, (3.2 + 1.3 * GROW[m]) / s))]
+    """保存、选中：做完里那一笔粗勾（圆头、直刀口的体块），不带 C 环，放大一点、挪到中心。"""
+    k = 1.25
+    cx, cy = 3.3, -3.2  # 勾的外接框中心
+    return [Layer("tick", [bar([((x - cx) * k, (y - cy) * k) for x, y in DONE_TICK], (3.3 + 1.0 * GROW[m]) * k)])]
 
 
-def straight_arrow(down):
-    """回到最新（朝下）/ 在上面、拿回来的、更早的（朝上）：一支粗直箭头（同云里刻的那支）。"""
-    def build(m):
-        s = 1.7
-        return [Layer("arrow", mark_arrow((0, 0.6 if down else -0.6), s, (3.6 + 1.4 * GROW[m]) / s, down=down))]
+def dart(deg, s=1.0, at=(0.0, 0.0)):
+    """发送那一支箭（`send_parts`）转 deg 度（0 朝上、90 朝右）、缩放 s、挪到 at（格）：箭头一族的同一份几何。"""
+    def build(g, c):
+        return [[seg_scaled(sg, 1.0, mul(at, G)) for sg in ct] for ct in turned(list(send_parts(g, c, s)), deg)]
     return build
 
 
+def arrow_down(m):
+    """回到最新：发送那一支箭朝下。"""
+    shaft, head = dart(180)(GROW[m], CARVE[m])
+    return [Layer("shaft", [shaft]), Layer("head", [head])]
+
+
 def compact(m):
-    """压缩上下文：两支斜箭头从左上、右下往中间收，箭尖之间隔一条刻缝。"""
-    g = GROW[m]
-    w = 3.4 + 1.3 * g
-    head = (4.8 * G, 5.0 * G + g * G)
-    def one(k):
-        return arrow([Line(mul((11.4 * k, 11.4 * k), G), mul((4.6 * k, 4.6 * k), G))], w * G, head)
-    return [Layer("a", [one(-1)]), Layer("b", [one(1)])]
+    """压缩上下文：两支发送的箭（缩小）从左上、右下往中间收，箭尖之间隔一道缝。"""
+    g, c = GROW[m], CARVE[m]
+    s, tip = 0.72, 1.0  # 箭尖离中心多少格（沿对角线的分量）
+    d = tip + 12.0 * s * 0.7071
+    return [Layer("a", dart(135, s, (-d, -d))(g, c)), Layer("b", dart(-45, s, (d, d))(g, c))]
 
 
 def bolt(m):
@@ -1214,12 +1227,14 @@ def mac(m):
 
 
 def window(m):
-    """终端窗口：一扇窗，上面一条窄的标题栏与窗身之间一道横刀口。"""
+    """终端窗口：一扇窗——上面一条标题栏，左端刻出三颗小圆（红绿灯），与窗身之间一道比刻缝宽的横缝，12pt 也分得开。"""
     g, c = GROW[m], CARVE[m]
-    y0, split, y1 = -9.6, -5.2, 9.6
-    bar_ = grown([(-11.0, y0), (11.0, y0), (11.0, split), (-11.0, split)], [2.6, 2.6, 0, 0], g)
-    body = grown([(-11.0, split + c + 2 * g), (11.0, split + c + 2 * g), (11.0, y1), (-11.0, y1)], [0, 0, 2.6, 2.6], g)
-    return [Layer("window", [body]), Layer("title", [bar_])]
+    y0, split, y1 = -10.0, -4.0, 10.0
+    gap = c + GAP  # 两块各外扩 g 之后还剩这么宽
+    bar_ = grown([(-11.0, y0), (11.0, y0), (11.0, split), (-11.0, split)], [2.6, 2.6, 0.4, 0.4], g)
+    lights = [disc((x, (y0 + split) / 2), 1.3 - 0.25 * g, hole=True) for x in (-7.4, -3.6, 0.2)]
+    body = grown([(-11.0, split + gap + 2 * g), (11.0, split + gap + 2 * g), (11.0, y1), (-11.0, y1)], [0.4, 0.4, 2.6, 2.6], g)
+    return [Layer("window", [body]), Layer("title", [bar_] + lights)]
 
 
 def terminal(m):
@@ -1256,14 +1271,16 @@ def wrench(m):
 
 
 def branch(m):
-    """分出去（子代理）：一根从下往上的主干；右边一枝从主干半腰斜出、拐上去并排往上走，枝头一颗点（点睛），枝与干之间一条刻缝。"""
+    """分出去（子代理）：主干一竖；从主干中段斜出一枝往右上，枝在主干边上被一道竖的刀口切开；枝头一颗点（点睛）。"""
     g, c = GROW[m], CARVE[m]
-    w = 2.8 + 1.2 * g
-    x = -5.6
+    w = 3.0 + 1.2 * g
+    x = -5.4
     trunk = bar([(x, 10.8), (x, -10.8)], w)
-    arm = bar([(-1.6, 6.0), (5.4, -1.0), (5.4, -5.0)], w, [0, 3.0, 0])
-    r = 2.4 + 0.5 * g
-    knot = disc((5.4, -5.0 - w / 2 - c - r), r)
+    a, b = (x, 5.0), (4.4, -4.8)
+    arm = clip(bar([a, b], w), Along([mul((x, 16), G), mul((x, -16), G)], -(w / 2 + c) * G, -1))
+    r = 2.6 + 0.5 * g
+    u = norm(sub(b, a))
+    knot = disc(add(b, mul(u, w / 2 + c + r)), r)
     return [Layer("branch", [trunk, arm]), Layer("knot", [knot], "secondary")]
 
 
@@ -1531,8 +1548,7 @@ SYMBOLS = {
     "plane.done": plane_done,
     "bolt": bolt,
     "clock": ring_mark(mark_hands),
-    "arrow.up": straight_arrow(False),
-    "arrow.down": straight_arrow(True),
+    "arrow.down": arrow_down,
     "ring.down": ring_mark(lambda c, s, w: mark_arrow(c, s, w, down=True)),
     "ring.stop": ring_mark(mark_square),
     "ring.play": ring_mark(mark_play),
