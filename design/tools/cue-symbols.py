@@ -1247,16 +1247,20 @@ def terminal(m):
     return [Layer("screen", [screen] + holed([prompt, line]))]
 
 
-def doc(m):
-    """读文件：一张纸，右上折角（点睛，同拷贝），纸上刻三行字。"""
-    g, c = GROW[m], CARVE[m]
-    x0, y0, x1, y1 = -8.6, -11.0, 8.6, 11.0
-    e = 5.6 + g * 0.5
-    page = grown([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)], [2.2, 0.4, 0, 0.4, 2.2, 2.2], g)
-    ear = rpoly([(x1 - e + g, y0 - g), (x1 + g, y0 + e - g), (x1 - e + g, y0 + e - g)], [0.6, 0.6, 0])
-    w = MARK_W(m, 2.4)
-    lines = [bar([(-4.4, y), (r, y)], w) for y, r in ((0.6, 4.4), (5.2, 4.4))] + [bar([(-4.4, -4.0), (-1.0, -4.0)], w)]
-    return [Layer("page", [page] + holed(lines)), Layer("ear", [ear], "secondary")]
+def paper(mark=None):
+    """文档一族：一张纸，右上折角（点睛，同拷贝），刻在纸上的记号换意思——三行字（读文件、文稿），什么都不刻（认不出类型的文件）。"""
+    def build(m):
+        g, c = GROW[m], CARVE[m]
+        x0, y0, x1, y1 = -8.6, -11.0, 8.6, 11.0
+        e = 5.6 + g * 0.5
+        page = grown([(x0, y0), (x1 - e - c, y0), (x1 - e - c, y0 + e + c), (x1, y0 + e + c), (x1, y1), (x0, y1)], [2.2, 0.4, 0, 0.4, 2.2, 2.2], g)
+        ear = rpoly([(x1 - e + g, y0 - g), (x1 + g, y0 + e - g), (x1 - e + g, y0 + e - g)], [0.6, 0.6, 0])
+        return [Layer("page", [page] + holed(mark(MARK_W(m, 2.4)) if mark else [])), Layer("ear", [ear], "secondary")]
+    return build
+
+
+def paper_lines(w):
+    return [bar([(-4.4, y), (4.4, y)], w) for y in (0.6, 5.2)] + [bar([(-4.4, -4.0), (-1.0, -4.0)], w)]
 
 
 def wrench(m):
@@ -1449,6 +1453,142 @@ def person(m):
     return [Layer("person", [head, body])]
 
 
+# ---------- Cue 与设置、文件预览的类型 ----------
+
+def badge_dart(deg):
+    """实心圆里刻出发送钮那一支燕尾箭（同一份几何，缩小）：朝上是发送回答，朝下是自动检查更新。"""
+    def build(m):
+        g, c = GROW[m], CARVE[m]
+        return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(deg, 0.62, (0, 0.6 if deg == 0 else -0.6))(0.0, c)))]
+    return build
+
+
+def bookmark(m):
+    """Cue 记得什么：一枚书签——上沿圆角的长条，下端剪出一个 V 口。"""
+    g = GROW[m]
+    return [Layer("bookmark", [grown([(-7.4, -11.0), (7.4, -11.0), (7.4, 11.0), (0, 5.4), (-7.4, 11.0)], [2.4, 2.4, 0.6, 0.4, 0.6], g)])]
+
+
+def power(m):
+    """刚启用：电源——一圈开口朝上的粗环，开口里竖一根短杠，杠与环之间一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    T, r = 3.0 + 1.2 * g, 9.0
+    w = T
+    d = math.degrees(math.asin((w / 2 + c + T / 2) / r)) + 4
+    ring = bow((0, 1.6), r, -90 + d, 360 - 2 * d, T)
+    stem = bar([(0, -11.2), (0, -1.6)], w)
+    return [Layer("power", [ring, stem])]
+
+
+def bubble_solid(m):
+    """你发来消息、对 Cue 说：一只实心的对话气泡（同说了一句的那只，不挖空）。"""
+    ring, _ = bubble_outline(GROW[m], 0)
+    return [Layer("bubble", [ring[0]])]
+
+
+def alarm(m):
+    """提醒到点：闹钟——圆环钟面与指针（同排队的钟），头上左右各一只小铃（点睛），离钟面一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    T = 2.6 + 1.2 * g
+    o, R = (0, 1.4), 9.4
+    face = [disc(o, R + T / 2), disc(o, R - T / 2, hole=True)]
+    hands = mark_hands(o, 0.72, (3.0 + 1.2 * g) / 0.72 * 0.88)
+    rb = 2.5 + 0.3 * g
+    bells = [disc(add(o, rot((0, -(R + T / 2 + c + rb)), k * 42)), rb) for k in (-1, 1)]
+    return [Layer("clock", face + hands), Layer("bells", bells, "secondary")]
+
+
+def swap(m):
+    """换班次前写交接：两支发送的箭（缩小）一上一下、一左一右反着走。"""
+    g, c = GROW[m], CARVE[m]
+    s = 0.62
+    return [Layer("a", dart(90, s, (0, -5.2))(g, c)), Layer("b", dart(-90, s, (0, 5.2))(g, c))]
+
+
+def mail(m):
+    """邮件：一只信封——一块圆角实心，刻出信封盖的 V 槽。"""
+    g = GROW[m]
+    body = grown([(-11.0, -8.4), (11.0, -8.4), (11.0, 8.4), (-11.0, 8.4)], [2.4] * 4, g)
+    flap = bar([(-7.6, -4.6), (0, 1.4), (7.6, -4.6)], MARK_W(m, 2.6), [0, 2.0, 0])
+    return [Layer("mail", [body] + holed([flap]))]
+
+
+def face(m):
+    """Cue 的档案：一张实心的圆脸，刻出两只眼（同 Cue 的竖胶囊眼）与一道笑弧。"""
+    g = GROW[m]
+    w = MARK_W(m, 2.6)
+    eyes = [bar([(x, -4.4), (x, -1.6)], w) for x in (-3.8, 3.8)]
+    smile = bow((0, 0.6), 5.2, 30, 120, w)
+    return [Layer("face", [disc((0, 0), BADGE_R - 1.0 + g)] + holed(eyes + [smile]))]
+
+
+def tag(m):
+    """名字：一枚吊牌——右边削尖的圆角牌子，左头挖一个穿绳的孔。"""
+    g = GROW[m]
+    body = grown([(-11.0, -7.2), (3.6, -7.2), (11.0, 0), (3.6, 7.2), (-11.0, 7.2)], [2.2, 1.2, 1.4, 1.2, 2.2], g)
+    return [Layer("tag", [body, disc((-6.4, 0), 2.0 - 0.3 * g, hole=True)])]
+
+
+def shield_tick(m):
+    """自动允许：一面实心的盾，刻出做完那一笔勾。"""
+    g = GROW[m]
+    shield = grown([(0, -11.6), (10.0, -8.0), (10.0, 0.6), (0, 11.6), (-10.0, 0.6), (-10.0, -8.0)], [1.6, 1.8, 6.0, 1.2, 6.0, 1.8], g)
+    k, (cx, cy) = 0.62, (3.3, -3.2)
+    tick = bar([((x - cx) * k, (y - cy) * k - 0.4) for x, y in DONE_TICK], MARK_W(m, 2.8))
+    return [Layer("shield", [shield] + holed([tick]))]
+
+
+def keyboard(m):
+    """快捷键：一块键盘，刻出两排键与一条空格（同收起键盘那块，不带 V）。"""
+    g = GROW[m]
+    board = grown([(-11.0, -7.4), (11.0, -7.4), (11.0, 7.4), (-11.0, 7.4)], [2.4] * 4, g)
+    k = 1.25 - 0.2 * g
+    keys = [disc((x, y), k) for y in (-3.4, 0.4) for x in (-6.6, -2.2, 2.2, 6.6)]
+    space = bar([(-4.4, 4.0), (4.4, 4.0)], 2 * k)
+    return [Layer("board", [board] + holed(keys + [space]))]
+
+
+def sun(m):
+    """外观：一轮太阳——实心圆盘，外面一圈八道短光芒，各隔一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    r = 5.0 + g
+    w = 2.6 + 1.0 * g
+    r0 = r + c + w / 2
+    rays = [bar([rot((0, -r0), k * 45), rot((0, -11.2 + w / 2), k * 45)], w) for k in range(8)]
+    return [Layer("sun", [disc((0, 0), r)] + rays)]
+
+
+def signal(m):
+    """测试到 Mac 的连接：中间一颗点（点睛），左右各两道往外的弧，像电波。"""
+    g, c = GROW[m], CARVE[m]
+    w = 2.4 + 1.0 * g
+    dot_ = disc((0, 0), 2.4 + 0.5 * g)
+    waves = [bow((0, 0), r, side - 40, 80, w) for r in (6.2, 10.4) for side in (0, 180)]
+    return [Layer("waves", waves), Layer("dot", [dot_], "secondary")]
+
+
+def wave(m):
+    """音频：一排高矮不一的圆头竖条（声波）。"""
+    g = GROW[m]
+    w = 2.6 + 1.1 * g
+    xs, hs = (-9.0, -4.5, 0, 4.5, 9.0), (3.4, 7.6, 11.0, 6.0, 2.6)
+    return [Layer("wave", [bar([(x, -h + w / 2), (x, h - w / 2)], w) for x, h in zip(xs, hs)])]
+
+
+def cube(m):
+    """转动查看：一只等轴的立方体，顶面、左面、右面三块，之间各一条刻缝。"""
+    g, c = GROW[m], CARVE[m]
+    a, h = 10.4, 6.0  # 半宽、顶面半高
+    top = grown([(0, -11.6), (a, -11.6 + h), (0, -11.6 + 2 * h), (-a, -11.6 + h)], [0.8, 0.8, 0.2, 0.8], g)
+    d = (c + 2 * g) / math.cos(math.atan(h / a))
+    mid = (0, -11.6 + 2 * h + d)
+    k = c / 2 + g  # 左右两面各外扩 g 后，中间那道竖缝正好一条刻缝
+    dy = k * h / a
+    left_ = grown([(-a, -11.6 + h + d), (-k, mid[1] - dy), (-k, 11.6 - dy), (-a, 11.6 - h)], [0.2, 0.2, 0.8, 0.8], g)
+    right_ = grown([(k, mid[1] - dy), (a, -11.6 + h + d), (a, 11.6 - h), (k, 11.6 - dy)], [0.2, 0.2, 0.8, 0.8], g)
+    return [Layer("cube", [top, left_, right_])]
+
+
 # "话在路上"三块实心 V：外沿 V 的尖在 tip、两端降 DROP（斜率同发送的箭镞），竖厚 THICK，两端竖切；从下往上排。
 # 22 格、y 朝下（LoopLayer 的画布），符号里减去中心 11。LoopLayer 的 climb 与符号 cue.climb 都只从这里来。
 CLIMB_TIPS, CLIMB_HALF, CLIMB_DROP, CLIMB_THICK = (12.1, 6.9, 1.7), 6.8, 5.1, 3.2
@@ -1553,7 +1693,8 @@ SYMBOLS = {
     "ring.stop": ring_mark(mark_square),
     "ring.play": ring_mark(mark_play),
     "ring.plus": ring_mark(mark_plus),
-    "badge.up": badge(mark_arrow),
+    "badge.up": badge_dart(0),
+    "badge.down": badge_dart(180),
     "compact": compact,
     "hand": hand,
     "mac": mac,
@@ -1565,7 +1706,8 @@ SYMBOLS = {
     "braces": braces,
     "terminal": terminal,
     "window": window,
-    "doc": doc,
+    "doc": paper(paper_lines),
+    "doc.blank": paper(),
     "wrench": wrench,
     "bubble.text": bubble("text"),
     "bubble.dots": bubble("dots"),
@@ -1577,6 +1719,20 @@ SYMBOLS = {
     "brush": brush,
     "eye": eye,
     "person": person,
+    "bookmark": bookmark,
+    "power": power,
+    "bubble": bubble_solid,
+    "alarm": alarm,
+    "swap": swap,
+    "mail": mail,
+    "face": face,
+    "tag": tag,
+    "shield.tick": shield_tick,
+    "keyboard": keyboard,
+    "sun": sun,
+    "signal": signal,
+    "wave": wave,
+    "cube": cube,
 }
 
 

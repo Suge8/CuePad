@@ -17,7 +17,7 @@ enum DebugHooks {
         var toolsOpen = false
         /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
         var explain = false
-        /// 会话页直接打开这张预览（`-CuePadOpenPreview <标题>`）。
+        /// 会话页直接打开这张预览（`-CuePadOpenPreview <批的标题或文件名>`）。
         var openPreview: String?
         /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
@@ -37,6 +37,8 @@ enum DebugHooks {
         /// 正文以它开头的那张灵感卡、那条任务或那一行（回收站按名字）一出现就画成指针停着的样子（`-CuePadHover`）：后台截图里指针进不来，
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
+        /// "运行情况"里垫在前面的几轮（`-CuePadRunRounds`）：每种醒来的原因各一轮；真的几轮只在值班的管理器内存里，隔离实例里没有大脑跑不出来。
+        var runRounds: [CueRound] = []
         #endif
         #if os(iOS)
         /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。

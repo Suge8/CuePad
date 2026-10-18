@@ -7,14 +7,10 @@ struct IconSheet: View {
     @Environment(\.palette) private var palette
 
     private static let icons: [(String, Icon)] = [
-        ("save", .save), ("checked", .checked), ("endSession", .endSession), ("handOff", .handOff), ("delivered", .delivered), ("steer", .steer),
-        ("queued", .queued), ("retry", .retry), ("toLatest", .toLatest), ("fetching", .fetching), ("compact", .compact), ("declined", .declined),
-        ("cannotSend", .cannotSend), ("mac", .mac), ("yourAnswer", .yourAnswer), ("sendAnswer", .sendAnswer), ("above", .above), ("floated", .floated),
-        ("earlier", .earlier), ("photo", .photo), ("photoLibrary", .photoLibrary), ("camera", .camera), ("pickCards", .pickCards), ("expandEdit", .expandEdit),
-        ("selectText", .selectText), ("dismissKeyboard", .dismissKeyboard), ("variables", .variables), ("terminal", .terminal), ("terminalWindow", .terminalWindow), ("readFile", .readFile),
-        ("tool", .tool), ("said", .said), ("started", .started), ("added", .added), ("branch", .branch), ("markUnread", .markUnread),
-        ("fireCode", .fireCode), ("thinking", .thinking), ("researcher", .researcher), ("engineer", .engineer), ("batchWorker", .batchWorker), ("designer", .designer),
-        ("sentinel", .sentinel), ("subagent", .subagent),
+        ("memory", .memory), ("wakeEnabled", .wakeEnabled), ("wakeMessage", .wakeMessage), ("wakeActivity", .wakeActivity), ("wakeIdle", .wakeIdle), ("wakeReminder", .wakeReminder),
+        ("wakeSettings", .wakeSettings), ("mail", .mail), ("profile", .profile), ("name", .name), ("autoApprove", .autoApprove), ("hotkey", .hotkey),
+        ("talkToCue", .talkToCue), ("appearance", .appearance), ("testConnection", .testConnection), ("updates", .updates), ("audio", .audio), ("document", .document),
+        ("downloading", .downloading), ("file", .file), ("inspect3D", .inspect3D), ("readFile", .readFile), ("sendAnswer", .sendAnswer),
     ]
     private static let sizes: [CGFloat] = [12, 17, 22, 34]
     /// 一屏放 `perPage` 行；多出来的配 `-CuePadSheetPage 2` 起看后面的。
