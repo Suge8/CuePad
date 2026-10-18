@@ -110,7 +110,7 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: box, prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty {

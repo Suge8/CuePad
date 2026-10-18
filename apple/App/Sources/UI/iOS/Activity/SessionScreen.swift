@@ -35,23 +35,18 @@ struct SessionScreen: View {
     private var shownEnd: Speech.Trip? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech) }
 
     var body: some View {
-        Group {
-            // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入。
-            // 读到前也要有一个真的视图（不能什么都不排）：这一页里的 .task 要等视图出现才启动，读库的 .observing 就挂在它上面；
-            // 没有首帧时（点通知、点横幅）整页没有任何视图，读库不启动，页面永远空白
-            if let digest {
-                if let session {
-                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
-                } else {
-                    EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
-                        .padding(.horizontal, 16)
-                        .frame(maxHeight: .infinity)
-                }
-            } else {
-                Color.clear
+        // 回复框浮在对话底上（`FloatingReply`，同 Cue 页与 Mac）：发出时回复框收回一行，对话不被系统先拉下来再滑上去
+        FloatingReply(backed: false) {
+            chat
+        } reply: {
+            if let session {
+                // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
+                SessionDock(session: session, digest: digest, compact: !follow.atNewest) { follow.sent() }
+                    .padding(.horizontal, 12).padding(.bottom, Self.barGap)
+                    .frame(maxWidth: Self.readingWidth)
+                    .animation(Motion.quick, value: session.question)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scrollDismissesKeyboard(.interactively)
         // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(digest?.title(at: services.speech) ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
@@ -82,16 +77,6 @@ struct SessionScreen: View {
             }
         }
         .renameSession($renaming)
-        .safeAreaBar(edge: .bottom, spacing: 0) {
-            if let session {
-                // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
-                SessionDock(session: session, digest: digest, compact: !follow.atNewest) { follow.sent() }
-                    .padding(.horizontal, 12).padding(.bottom, Self.barGap)
-                    .frame(maxWidth: Self.readingWidth)
-                    .frame(maxWidth: .infinity)
-                    .animation(Motion.quick, value: session.question)
-            }
-        }
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
@@ -103,6 +88,26 @@ struct SessionScreen: View {
         // 开着这页就算看过：进来、Pi 每次换状态、离开时都记一下（列表里的"有新回复"据此消失）
         .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
         .onDisappear { if let session { services.settings.markSeen(session) } }
+    }
+
+    private var chat: some View {
+        Group {
+            // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入。
+            // 读到前也要有一个真的视图（不能什么都不排）：这一页里的 .task 要等视图出现才启动，读库的 .observing 就挂在它上面；
+            // 没有首帧时（点通知、点横幅）整页没有任何视图，读库不启动，页面永远空白
+            if let digest {
+                if let session {
+                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
+                } else {
+                    EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
+                        .padding(.horizontal, 16)
+                        .frame(maxHeight: .infinity)
+                }
+            } else {
+                Color.clear
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -5,7 +5,7 @@ import SwiftUI
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
 /// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
 /// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
-/// 一直展开的（`ComposerForm.open`，不变形）文字铺满整宽在上，底下一排是＋、工具与提交钮；会展开收起的文字区一直在两颗圆钮中间、往上长，
+/// 一直展开（`ComposerForm.open`，不变形）又有工具的，文字铺满整宽在上，底下一排是＋、工具与提交钮；其余的文字区一直在两颗圆钮中间、往上长，
 /// 工具排（有就）在文字下面、两颗圆钮之间：变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西——文字区是平台的文本视图，
 /// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
@@ -27,6 +27,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var showsSendEmpty = false
     /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
+    /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
+    /// 会收起的在聚焦时文字下面多一排。
+    var tooled = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     var commands: [PiSlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
@@ -133,7 +136,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.images), !draft.images.isEmpty {
                 imageStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
-            if form == .open { layered } else { row }
+            if form == .open, tooled { layered } else { row }
         }
         // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
         .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
@@ -156,7 +159,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 一直展开：文字铺满整宽在上，底下一排＋、工具与提交钮的位置。
+    /// 一直展开、有工具：文字铺满整宽在上，底下一排＋、工具与提交钮的位置。
     private var layered: some View {
         VStack(alignment: .leading, spacing: 0) {
             text.padding(.horizontal, 18).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
@@ -169,7 +172,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
     }
 
-    /// 会展开收起：文字区（换形态时不重建，焦点与输入法组合都不断）一直在＋与提交钮之间，两颗圆钮底对齐、钉在角上。
+    /// 其余：文字区（换形态时不重建，焦点与输入法组合都不断）一直在＋与提交钮之间，两颗圆钮底对齐、钉在角上。
     private var row: some View {
         HStack(alignment: .bottom, spacing: 0) {
             if !accepts.isEmpty { plus }
@@ -179,7 +182,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     .padding(.vertical, ComposerMetrics.textTop)
                     .frame(minHeight: ComposerMetrics.slot)
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
-                if expanded, showsTools {
+                if tooled, expanded, showsTools {
                     tools()
                         .frame(height: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
                         .padding(.bottom, ComposerMetrics.inset)

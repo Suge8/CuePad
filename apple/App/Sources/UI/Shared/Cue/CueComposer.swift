@@ -38,7 +38,7 @@ struct CueComposer: View {
             draft: Bindable(cue).draft, prompt: cue.canHear ? "对 \(cue.name) 说" : "记一条灵感",
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .images,
-            form: form, showsSendEmpty: sending, shortcuts: shortcuts,
+            form: form, showsSendEmpty: sending, tooled: tooled, shortcuts: shortcuts,
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
@@ -69,6 +69,15 @@ struct CueComposer: View {
                 .buttonStyle(PressStyle(.button))
                 .accessibilityLabel("记下")
         }
+    }
+
+    /// 模型与思考强度只在 Mac 的 Cue 页上（`tools`）。
+    private var tooled: Bool {
+        #if os(macOS)
+        style == .page
+        #else
+        false
+        #endif
     }
 
     @ViewBuilder private var tools: some View {

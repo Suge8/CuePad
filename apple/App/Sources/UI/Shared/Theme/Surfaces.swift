@@ -72,8 +72,9 @@ private struct GlassSurface<S: Shape>: ViewModifier {
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
         } else if ink == .solid {
-            // 实底垫在玻璃下面、不在玻璃里：顶栏里的玻璃由系统提到它那一层上画，垫在里面的实底不起作用，玻璃照样透着背后的图
-            content.glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
+            // 实底玻璃里外各垫一层：里面那层定平时的明暗（Mac 的玻璃会在下面那层上再压暗、提亮一档，只垫外面的话整块发灰）；
+            // 外面那层给 iOS 顶栏：系统把顶栏里的玻璃提到它那一层上画，里面那层被盖在玻璃下、不起作用
+            content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }

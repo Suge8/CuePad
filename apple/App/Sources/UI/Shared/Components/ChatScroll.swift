@@ -159,7 +159,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var deferred = false
     /// `holding` 期间自己要回到最新（发出一句、点圆钮）：这一次对完之前照常跟着。
     @State private var unheld = false
-    /// 排到下一帧、直到滑完的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    /// 排到下一帧的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
     @State private var sliding: Task<Void, Never>?
 
     init(
@@ -339,22 +339,20 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         sliding = Task {
             await NextFrame.wait()
             guard !Task.isCancelled else { return }
-            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return sliding = nil }
-            // 滑完之前一直记着在滑：补滚（`settle`）看到在滑就不动，不把滑到一半的截成一跳
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) } completion: {
-                sliding = nil
-                settle()
-            }
+            sliding = nil
+            guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling else { return }
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
     }
 
-    /// 补滚到了没有：读数报的最新处比滚动区真用上的内容高早一步（回复框一帧里接连长高两次，第二次补滚按旧的内容高被截在半路；
-    /// 滑着的途中最新处又变了），下一帧还没到最新处就再补一次。只补一次，不轮询。
+    /// 补滚到了没有：读数报的最新处比滚动区真用上的内容高早一步（回复框一帧里接连长高两次，第二次补滚按旧的内容高被截在半路），
+    /// 下一帧还没到最新处就再补一次。只补一次，不轮询。带上滑同一条曲线：正赶上整段在往上滑时（这时也还没到最新处）是顺着它
+    /// 改个终点，不把滑到一半的截成一跳（滚动位置的动画没有可靠的"滑完了"回调，分不出这两种）。
     private func settle() {
         Task {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
-            scroll(to: offset.end)
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
         }
     }
 
