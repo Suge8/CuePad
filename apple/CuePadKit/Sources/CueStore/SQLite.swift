@@ -90,9 +90,12 @@ struct Row {
 
 /// 一个写事务改动的行：每张表插入或更新过的 rowid，以及删过行的表。由 SQLite 的 update hook 记下（含触发器引起的改动）。
 struct Changes {
+  /// 插入或改动的行（rowid），按表。
   var rows: [String: Set<Int64>] = [:]
-  var deletedFrom: Set<String> = []
+  /// 删掉的行（rowid），按表。
+  var deleted: [String: Set<Int64>] = [:]
 
+  var deletedFrom: Set<String> { Set(deleted.keys) }
   var tables: Set<String> { deletedFrom.union(rows.keys) }
 }
 
@@ -224,6 +227,14 @@ final class SQLite {
     return (value, tracked ?? [])
   }
 
+  /// 执行 `body`，其间读到 `table` 不记进正在进行的 `tracking`：调用方自己按行登记依赖（`CueStore.narrow`）。
+  /// 这之前或之后的读也碰了 `table` 的，照常记下。
+  func untracked<T>(_ table: Table, _ body: () throws -> T) rethrows -> T {
+    let had = tracked?.contains(table) ?? true
+    defer { if !had { tracked?.remove(table) } }
+    return try body()
+  }
+
   private func error(_ sql: String) -> any Error {
     if sqlite3_errcode(handle) & 0xff == SQLITE_READONLY { return CueStoreError.readOnlyLibrary }
     let error = SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
@@ -243,7 +254,7 @@ private final class ChangeLog: @unchecked Sendable {
 
   func record(_ operation: Int32, _ table: String, _ rowid: Int64) {
     if operation == SQLITE_DELETE {
-      changes.deletedFrom.insert(table)
+      changes.deleted[table, default: []].insert(rowid)
     } else {
       changes.rows[table, default: []].insert(rowid)
     }

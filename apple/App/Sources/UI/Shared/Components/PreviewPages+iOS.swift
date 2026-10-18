@@ -153,6 +153,7 @@ struct PreviewStill: View {
     let preview: PiPreview
     let file: URL
     @Environment(\.palette) private var palette
+    @Environment(AppServices.self) private var services
     @Environment(\.displayScale) private var scale
     @State private var look: DeliverableLook?
     @State private var inspecting: URL?
@@ -177,7 +178,11 @@ struct PreviewStill: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: file) { look = await DeliverableLooks.load(preview, file: file, box: LookBox(width: Int(Self.side * scale), height: Int(Self.side * scale), fills: false), scale: scale) }
+        .task(id: file) {
+            look = await DeliverableLooks.load(
+                preview, file: file, box: LookBox(width: Int(Self.side * scale), height: Int(Self.side * scale), fills: false), scale: scale,
+                caches: services.store.files.caches)
+        }
         .quickLookPreview($inspecting)
     }
 }
