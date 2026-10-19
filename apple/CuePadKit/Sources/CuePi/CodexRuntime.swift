@@ -616,7 +616,7 @@ public final class CodexRuntime: AgentRuntime {
             return
         case "thread/status/changed":
             switch params["status"]?["type"]?.string {
-            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次
+            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（托管与终端实测）
             case "idle" where session.facts.running:
                 release(session)
                 session.facts.endTurn()
@@ -795,7 +795,8 @@ public final class CodexRuntime: AgentRuntime {
         turn?["startedAt"]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now
     }
 
-    /// 线程最近的一轮。在不在跑看它（`inProgress`），不看线程状态：睡着等（`clock.sleep`）时线程报 idle，这一轮还没结束。
+    /// 线程最近的一轮。接上时在不在跑看它（`inProgress`），不看 `thread/read` 给的线程状态：子代理睡着等（`clock.sleep`）时
+    /// 读到的是 idle，它这一轮还没结束（实测）。推送里的 idle 不同，睡着等时不报（见 `notification`）。
     private static func lastTurn(_ thread: String, on rpc: CodexRPC) async throws -> JSONValue? {
         try await rpc.call("thread/turns/list", ["threadId": .string(thread), "limit": 1])["data"]?.array?.first
     }
