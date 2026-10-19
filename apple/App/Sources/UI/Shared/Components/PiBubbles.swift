@@ -94,13 +94,6 @@ struct UserBubble<Menu: View>: View {
     }
 }
 
-extension UserBubble where Menu == EmptyView {
-    /// 没有长按菜单的气泡（会话近况里的上一句）。
-    init(stored: String) {
-        self.init(stored: stored, look: .session) { EmptyView() }
-    }
-}
-
 
 /// 气泡本身（颜色是 `Palette.bubble`）。Mac 上可以直接拖选文字。
 struct BubbleText: View {

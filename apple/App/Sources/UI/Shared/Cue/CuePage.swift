@@ -159,7 +159,9 @@ struct CuePage: View {
                     })
                     .equatable()
                 }
-                CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
+                CueEnding(
+                    newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading,
+                    roundInRows: live.map { live in rows.contains { $0.contains(round: live.round) } } ?? false)
             }
             #if os(iOS)
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
@@ -421,7 +423,7 @@ private struct CueRenewal: View {
     }
 }
 
-/// Cue 页对话的末尾：它在做事、这一轮还没调过工具（经过那一行还没写下）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
+/// Cue 页对话的末尾：它在做事、这一轮在对话里还没有一格（还没调过工具，或设置里关了工具步骤）时是一行此刻在做的（`RoundProcess` 的那一行，同会话页）。
 /// Cue 在这台 Mac 值班时，在回答你的一轮出字就换成逐字长出的正在说的话
 /// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
 /// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。已落库而 Cue 的状态还没歇下时也不冒出进展那一行（话已经说完）；
@@ -431,6 +433,9 @@ private struct CueEnding: View {
     let newestSaid: Date?
     /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
+    /// 在跑的那一轮在对话里有一格（它的经过，或收着它的动态）：此刻在做的写在那一格里，这里不再写一遍。
+    /// 没有那一格时（还没调过工具；设置里关了工具步骤，`CueThread.rows` 不排经过）写在这里。
+    let roundInRows: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     #if os(macOS)
@@ -458,8 +463,7 @@ private struct CueEnding: View {
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
-        // 在跑的那一轮有经过那一行时它就在那一行里；设置里关了工具步骤时对话里没有经过，只在这里写一行
-        if workspace.cue.round == nil || !services.settings.showsCueSteps, let shown = presence.shown, let progress = presence.progress {
+        if !roundInRows, let shown = presence.shown, let progress = presence.progress {
             RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
                 .padding(.leading, CueBubble.noteInset)
                 .padding(.top, CuePage.gap(before: nil, joined: false))
