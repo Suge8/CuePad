@@ -17,7 +17,7 @@ struct ArchiveList: View {
             if cards?.isEmpty == true {
                 // 空态不放进列表：列表的行内边距会让纸缩进一层，和页面的边线（Mac 的标题、iPhone 的页边距）对不齐
                 ScrollView {
-                    EmptyState(mascot: .clean, title: "归档是空的", message: "做完的灵感与任务归档后放在这里")
+                    EmptyState(mascot: .clean, title: "还没有归档的", message: "做完的灵感与任务归档后放在这里")
                         #if os(iOS)
                         .padding(.horizontal, 16)
                         #endif

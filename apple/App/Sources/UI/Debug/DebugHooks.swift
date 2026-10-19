@@ -271,10 +271,16 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）。
+    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
     func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onAppear { DebugScene.togglePlaces = toggle }
+        onAppear {
+            DebugScene.togglePlaces = toggle
+            if DebugScene.defaults.bool(forKey: "CuePadPlacesOpen"), !DebugScene.placesOpened {
+                DebugScene.placesOpened = true
+                toggle()
+            }
+        }
         #else
         self
         #endif
@@ -367,6 +373,7 @@ extension View {
         }
             .task {
                 await DebugScene.prepare(workspace, navigation)
+                DebugScene.noticeIfAsked(workspace)
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 let from = (navigation.root, navigation.path)

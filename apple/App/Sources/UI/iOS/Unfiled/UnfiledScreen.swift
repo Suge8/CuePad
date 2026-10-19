@@ -28,7 +28,8 @@ struct UnfiledScreen: View {
         }
         .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
-        .floatingHeader(CaptureCopy.unfiled, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
+        // 空的时不写那一行：下面的空态已经说了
+        .floatingHeader(CaptureCopy.unfiled, detail: cards.map { $0.isEmpty ? nil : Dotted("\($0.count) 条") } ?? "")
         .observing(services.store, into: $cards, onError: workspace.fail) { store in
             try store.cards(in: nil).sorted { $0.modifiedAt > $1.modifiedAt }
         }

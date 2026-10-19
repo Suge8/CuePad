@@ -35,7 +35,7 @@ struct TrashPage: View {
     @ViewBuilder
     private func content(_ data: TrashSummary) -> some View {
         if data.isEmpty {
-            EmptyState(mascot: .trash, title: "回收站是空的")
+            EmptyState(mascot: .trash, title: "没有删掉的东西")
         }
         if !data.projects.isEmpty {
             group("项目") {
