@@ -6,9 +6,9 @@ import CuePi
 
 /// Cue 页（Mac 内容区的一页、iPhone 与 iPad 侧栏最上面那一行点进的页、iPad 右侧面板；iPhone 打开 App 就在这一页），与会话页同一套消息版式：
 /// 页头一直在（头像、名字、此刻在做什么；Mac 在窗口工具栏，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`，点开是在做、等你与记忆的面板）；
-/// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`Bubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
+/// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
 /// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、动态与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
-/// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行），这一轮说的话与结果按先后在它之后；
+/// 你发起的一轮在你的话之后先是这一轮的经过（`RoundProcess`，同会话页：在跑时实时展开，做完收成一行；设置里可关，`AppSettings.showsCueSteps`），这一轮说的话与结果按先后在它之后；
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行旁注（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
@@ -48,10 +48,13 @@ struct CuePage: View {
     #endif
 
     private var cue: CueWatch { workspace.cue }
+    private var showsSteps: Bool { services.settings.showsCueSteps }
 
     var body: some View {
         page
-            .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
+            .observing(services.store, id: showsSteps, into: $thread, onError: workspace.fail) { [showsSteps] in
+                try CueThread.read(from: $0, showsSteps: showsSteps)
+            }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .modifier(CueViewing(active: active))
@@ -96,7 +99,6 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
             .scrollDismissesKeyboard(.interactively)
-            .fadesUnderBars(throughTopRow: inBar)
             .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
             .overlay(alignment: .top) { CueHeader(inBar: inBar) }
             .navigationTitle(cue.name)
@@ -128,7 +130,7 @@ struct CuePage: View {
     }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
-    /// 每 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
+    /// 约 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
     /// 这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白（不估真实的高：估高了就排少了，
     /// 打开时接着一段段地补，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
@@ -176,14 +178,14 @@ struct CuePage: View {
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
-    /// 一段几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
+    /// 一段约几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
     /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
     static let segment = 6, spare = 8
 
     /// 一格上面空多少：同一边连着说的收成一串，你开始说的新一轮与上一轮拉开，其余（Cue 接你的话、经过、动态、分隔）是一般的间距。
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
-        if joined { return Bubble.joinedGap }
+        if joined { return CueBubble.joinedGap }
         return speaker == .trailing ? 32 : 16
     }
 
@@ -208,16 +210,16 @@ struct CuePage: View {
     private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12, strip: CGFloat = 60
         let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
-        let bubble = Bubble.padding.top + Bubble.padding.bottom
+        let bubble = CueBubble.padding.top + CueBubble.padding.bottom
         // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
-        func width(_ fraction: CGFloat) -> CGFloat { column * fraction - Bubble.padding.leading - Bubble.padding.trailing }
+        func width(_ fraction: CGFloat) -> CGFloat { column * fraction - CueBubble.padding.leading - CueBubble.padding.trailing }
         let body: CGFloat = switch row {
         case .you(let message):
-            bubble + text(message.text, width: width(Bubble.youWidth), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
+            bubble + text(message.text, width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
         case .cue(let message, _):
-            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
+            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
         case .result(let message, _, let deliverables):
-            bubble + text(message.text, width: width(Bubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
+            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
         case .notes, .process, .renewed: note
         }
         return above + body
@@ -299,7 +301,7 @@ struct CuePage: View {
     }
 }
 
-/// 对话里的一段（`CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
+/// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
 private struct CueSegment: View, Equatable {
     let rows: [CueRow]
 
@@ -344,7 +346,7 @@ private struct CueRow: View, Equatable {
         let cue = workspace.cue
         switch row {
         case .you(let message):
-            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, joined: joined) { _ in
+            SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
                 MessageActions(text: message.text, kind: .cue)
             }
         case .cue(let message, _):
@@ -352,9 +354,9 @@ private struct CueRow: View, Equatable {
         case .result(let message, _, let deliverables):
             if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
         case .notes(let notes):
-            CueNotes(notes: notes, live: live).padding(.leading, Bubble.noteInset)
+            CueNotes(notes: notes, live: live).padding(.leading, CueBubble.noteInset)
         case .process(let message):
-            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, Bubble.noteInset)
+            RoundProcess(tools: message.tools, ending: CueLiveRound.ending(of: message, in: live)).padding(.leading, CueBubble.noteInset)
         case .renewed(let handoff):
             CueRenewal(handoff: handoff, name: cue.name)
         }
@@ -415,11 +417,11 @@ private struct CueEnding: View {
         let landed = draft?.landed(newestReply: newestSaid) ?? false
         if let draft, !landed {
             // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
-            BubbleWidth(fraction: Bubble.cueWidth, edge: .leading) {
+            BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                 MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
             }
             .padding(.top, CuePage.gap(before: .leading, joined: joined))
-            .transition(.asymmetric(insertion: Bubble.arrival(.leading, reduceMotion: reduceMotion), removal: .identity))
+            .transition(.asymmetric(insertion: CueBubble.arrival(.leading, reduceMotion: reduceMotion), removal: .identity))
         } else if !landed {
             live
         }
@@ -430,9 +432,10 @@ private struct CueEnding: View {
 
     @ViewBuilder private var live: some View {
         let presence = workspace.cue.presence
-        if workspace.cue.round == nil, let shown = presence.shown, let progress = presence.progress {
+        // 在跑的那一轮有经过那一行时它就在那一行里；设置里关了工具步骤时对话里没有经过，只在这里写一行
+        if workspace.cue.round == nil || !services.settings.showsCueSteps, let shown = presence.shown, let progress = presence.progress {
             RoundProcess(tools: nil, ending: .live(shown, doing: progress, step: nil))
-                .padding(.leading, Bubble.noteInset)
+                .padding(.leading, CueBubble.noteInset)
                 .padding(.top, CuePage.gap(before: nil, joined: false))
                 .transition(.asymmetric(insertion: .entry, removal: .identity))
         }

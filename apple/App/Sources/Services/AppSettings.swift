@@ -29,6 +29,7 @@ final class AppSettings {
         static let unreadSince = "unreadSince"
         static let holdSendLearned = "holdSendLearned"
         static let lastAgent = "lastAgent"
+        static let showsCueSteps = "showsCueSteps"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -52,6 +53,9 @@ final class AppSettings {
 
     /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
+
+    /// Cue 页对话里显示 Cue 每一轮的工具步骤（"跑了 3 步 · 建了 1 件任务"那一行与展开的清单，`CueThread.rows`）；默认显示。
+    var showsCueSteps: Bool { didSet { defaults.set(showsCueSteps, forKey: Key.showsCueSteps) } }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -164,6 +168,7 @@ final class AppSettings {
         #endif
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
+        showsCueSteps = string(Key.showsCueSteps).map { ($0 as NSString).boolValue } ?? true
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
             .mapValues(ReplyDraftSlot.init)
