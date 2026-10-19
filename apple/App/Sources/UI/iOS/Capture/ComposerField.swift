@@ -17,6 +17,9 @@ struct ComposerField: UIViewRepresentable {
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 字号从这里来，不交给 UIKit 自己跟（`adjustsFontForContentSizeCategory`）：App 开着时改字号，UIKit 换了字体，SwiftUI 却不知道
+    /// 要重量高度（`sizeThatFits` 量的还是旧字号），一行字被切掉下半截。随环境给字体，字号一变这里就跟着更新、重量。
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -24,8 +27,6 @@ struct ComposerField: UIViewRepresentable {
     func makeUIView(context: Context) -> GrowingTextView {
         let view = GrowingTextView()
         view.delegate = context.coordinator
-        view.font = .preferredFont(forTextStyle: .body)
-        view.adjustsFontForContentSizeCategory = true
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
@@ -46,6 +47,13 @@ struct ComposerField: UIViewRepresentable {
             view.layOutAll()
             view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
             view.revealsEnd = true
+            view.setNeedsLayout()
+        }
+        let font = UIFont.preferredFont(
+            forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
+        if view.font != font {
+            view.font = font
+            view.placeholder.font = font
             view.setNeedsLayout()
         }
         view.placeholder.text = prompt
@@ -158,8 +166,6 @@ final class GrowingTextView: UITextView {
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
-        placeholder.font = .preferredFont(forTextStyle: .body)
-        placeholder.adjustsFontForContentSizeCategory = true
         placeholder.isAccessibilityElement = false
         addSubview(placeholder)
     }
