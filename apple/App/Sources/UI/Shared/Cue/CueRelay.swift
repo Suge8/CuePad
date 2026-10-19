@@ -15,12 +15,13 @@ import SwiftUI
 /// 弧向窗口竖中线那边鼓（从侧栏、屏边起飞时弧在屏内）；来回两个方向走同一条弧。整个过程约 1.3～1.4s：
 /// 这是全 App 唯一超过 300ms 的动效（docs/ui.md），它讲的是一件低频的事从哪到哪，短了看不清起点。
 ///
-/// 会话在屏上的位置（`RelayEnd`）：它的状态标；没有在屏上的状态标时是它的任务行（任务圈，`relaySpot(task:)`）——
+/// 会话在屏上的位置（`RelayEnd`）：它的状态标；没有在屏上的状态标时是它的任务行（任务圈，`relaySpot(task:)`，Cue 页上是 Cue 那句话下面的那一行）；
+/// 都不在屏上时是 iPhone 底部那一排里它的去处（会话、开新会话时是任务；Cue 页上收起成一颗时就是那一颗，`relaySpot(dock:)`）——
 /// 开新会话还没有会话 id，只认任务。同一个会话出现几处时取离头像最近的那处。Cue 的头像同时在屏上几处时取等级高的（`CueSpot`）。
 ///
 /// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
-/// - 会话那头不在屏上（不在这一页、滚出去了）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
-/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，手机在 Cue 页与列表以外的页）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
+/// - 会话那头连同底部那一排都不在屏上（推入的页、Mac、iPad）：叫醒只在头像上亮环、漾开；交给是头像亮一下、环离开头像朝窗口中间飘一小段就淡去——"它把事交出去了"。
+/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，iPhone 推入的页，iPad 不在 Cue 页与侧栏收起时）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
 ///   交给是只在会话那头外扩一圈、垫一层淡光。
 /// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己就在转环，会话的状态标自己会变。
 /// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
@@ -87,6 +88,8 @@ struct CueRelayStage: ViewModifier {
                     guard case .task(let task, let session) = role else { return false }
                     return task == end.task || (end.session != nil && session == end.session)
                 }
+                ?? nearest { $0 == .dock(end.session == nil ? .tasks : .sessions) }
+                ?? nearest { $0 == .dock(nil) }
         }
     }
 
@@ -168,6 +171,12 @@ extension View {
     func relaySpot(cue spot: CueSpot?) -> some View {
         background { if let spot { RelayAnchor(role: .cue(spot)) } }
     }
+
+    /// iPhone 底部那一排里的去处（`SidebarOutline.Entry`；nil 是 Cue 页上收起成一颗的那颗）：会话与它的任务行都不在屏上时接力落在这里。
+    /// 只有几颗，一直挂着。
+    func relaySpot(dock entry: SidebarOutline.Entry?) -> some View {
+        background { RelayAnchor(role: .dock(entry)) }
+    }
 }
 
 /// 读 `CueWatch` 里在接力的会话（只在变了时才写），不经环境值：在窗口根上换一个环境值，整棵树里每个读环境的视图都要重新比一遍，
@@ -213,6 +222,7 @@ final class RelayAnchorView: RelayAnchorBase {
         case cue(CueSpot)
         case session(String)
         case task(UUID, session: String?)
+        case dock(SidebarOutline.Entry?)
     }
 
     var role: Role
