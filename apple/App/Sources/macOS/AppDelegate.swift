@@ -77,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             toggleWindow: { window.toggleFromMenu() })
 
         services.start()
+        services.follow { await services.sessionViewer?.follow(workspace) }
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
         settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services, cueBar: cueBar) }
