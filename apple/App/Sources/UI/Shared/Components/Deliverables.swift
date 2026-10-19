@@ -113,7 +113,7 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
-        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、居中裁切填满，白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、按显著区域裁切填满（`LookBox.salient`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
         /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。
         case shot(side: CGFloat)
     }
@@ -243,7 +243,7 @@ struct DeliverableTile: View {
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图居中裁（只为认出是哪张，整张点开看）
+        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已按显著区域裁好（`LookBox.salient`），居中放
         // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
         return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
             .overlay(alignment: isShot ? .center : .top) {
@@ -300,7 +300,7 @@ struct DeliverableTile: View {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
-        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true)
+        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true, salient: true)
         }
     }
 }

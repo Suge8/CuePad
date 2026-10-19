@@ -54,44 +54,53 @@ extension DebugScene {
 
     private enum Proposal { case sheet, thread, slide, drawer }
 
-    /// 一个方案的手机效果图：一页对话，底下是那种样子的提问卡。
+    /// 一个方案的手机效果图：一页对话，中间是那种样子的提问（各有一块显眼、彼此分得开的样子：黄卡大蓝钮、对话气泡、绿色滑轨、深色抽屉），
+    /// 方形缩略图按显著区域裁出来也一眼认得出是哪张。
     private static func proposalPNG(_ proposal: Proposal) -> Data {
-        let indigo = Color(red: 0.18, green: 0.29, blue: 0.62), wash = Color(red: 0.97, green: 0.92, blue: 0.76)
-        func button(_ text: String, primary: Bool) -> some View {
-            Text(text).font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 9)
-                .background(primary ? indigo : .white, in: .capsule).foregroundStyle(primary ? .white : .black)
-        }
-        let card = VStack(alignment: .leading, spacing: 8) {
-            Text("可以推送 scheduler 的重连修复吗？").font(.system(size: 14, weight: .semibold))
-            Text("推上去别人就拉得到，撤不回来").font(.system(size: 11)).foregroundStyle(.gray)
+        let indigo = Color(red: 0.18, green: 0.29, blue: 0.62)
+        let question = Text("可以推送 scheduler 的重连修复吗？").font(.system(size: 15, weight: .semibold))
+        @ViewBuilder var middle: some View {
             switch proposal {
             case .sheet:
-                button("这次可以", primary: true)
-                button("以后「圆桌」里推送代码不用问", primary: false)
-            case .thread:
-                HStack { button("以后不用问", primary: false); button("这次可以", primary: true) }
-            case .slide:
-                HStack {
-                    Circle().fill(indigo).frame(width: 30, height: 30)
-                    Text("滑过去，这次可以 ›").font(.system(size: 12)).foregroundStyle(.gray)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 12) {
+                    question
+                    Text(CueAsk.once).font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 56).background(indigo, in: .capsule)
+                    Text("以后「圆桌」里推送代码不用问").font(.system(size: 13, weight: .medium)).frame(maxWidth: .infinity)
                 }
-                .padding(3).background(.white, in: .capsule)
+                .padding(18).background(Color(red: 0.98, green: 0.88, blue: 0.55), in: .rect(cornerRadius: 22))
+            case .thread:
+                VStack(alignment: .trailing, spacing: 10) {
+                    question.padding(14).background(Color(white: 0.9), in: .rect(cornerRadius: 18)).frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(["以后不用问", CueAsk.once], id: \.self) { choice in
+                        Text(choice).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 22).padding(.vertical, 14).background(Color(red: 0.2, green: 0.55, blue: 0.95), in: .capsule)
+                    }
+                }
+            case .slide:
+                VStack(spacing: 18) {
+                    question
+                    Capsule().fill(Color(red: 0.2, green: 0.7, blue: 0.4)).frame(height: 72)
+                        .overlay(alignment: .leading) { Circle().fill(.white).frame(width: 60, height: 60).padding(6) }
+                        .overlay { Text("滑过去，可以 ›").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white) }
+                }
             case .drawer:
-                Capsule().fill(.gray.opacity(0.4)).frame(width: 36, height: 4).frame(maxWidth: .infinity)
-                button("这次可以", primary: true)
+                VStack(spacing: 14) {
+                    Capsule().fill(.white.opacity(0.5)).frame(width: 44, height: 5)
+                    question.foregroundStyle(.white)
+                    Text(CueAsk.once).font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity).frame(height: 48).background(.white, in: .capsule)
+                }
+                .padding(18).background(Color(white: 0.15), in: .rect(cornerRadius: 26))
             }
         }
-        .padding(14).background(wash, in: .rect(cornerRadius: 18))
         let view = VStack(alignment: .leading, spacing: 12) {
             HStack { Text("9:41").font(.system(size: 13, weight: .semibold)); Spacer() }
             Text("Cue").font(.system(size: 17, weight: .semibold))
-            ForEach(["重连后保留原来的轮次", "同一时刻入座按座位号排", "README 换成新截图"], id: \.self) { line in
-                Text("• \(line)").font(.system(size: 12))
-            }
-            RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.94)).frame(height: 120)
+            Text("• 重连后保留原来的轮次").font(.system(size: 12))
             Spacer()
-            card
+            middle
+            Spacer()
             Capsule().fill(Color(white: 0.93)).frame(height: 36).overlay(alignment: .leading) { Text("对 Cue 说").font(.system(size: 12)).foregroundStyle(.gray).padding(.leading, 14) }
         }
         .padding(16).frame(width: 320, height: 696).background(.white).foregroundStyle(.black)
