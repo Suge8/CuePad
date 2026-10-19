@@ -545,7 +545,7 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try? await recorder.end(sessionID: "piwork")
-        // 没归类的想法：书架顶上提醒去整理
+        // 没归类的想法：书架末尾"未分类"那一行带条数
         for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
             _ = try? await store.createCard(in: nil, body: body)
         }

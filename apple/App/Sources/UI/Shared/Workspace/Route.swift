@@ -12,7 +12,7 @@ nonisolated enum Route: Hashable {
     case trash
     case settings
     case conflicts
-    /// 跨项目的任务看板（iPhone、iPad 侧栏的"任务"，书架上一行入口）。
+    /// 跨项目的任务看板（iPhone、iPad 侧栏的"任务"）。
     case tasks
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue

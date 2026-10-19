@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、Mac 侧栏共用这一处规则；iPhone 书架不带会话，只剩任务与介绍）。
+/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、Mac 侧栏与手机项目页共用这一处规则）。
 /// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
@@ -20,7 +20,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         let title: String
     }
 
-    /// Agent 的事才有状态（书架、侧栏的状态标与项目长按菜单的标题读它）。
+    /// Agent 的事才有状态（项目页、侧栏的状态标与项目长按菜单的标题读它）。
     var shown: PiShown? {
         if case .agent(let shown, _) = source { shown } else { nil }
     }
@@ -46,16 +46,6 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     private static func pick(task: String?, intro: String?) -> ProjectNow? {
         if let task { return ProjectNow(source: .task, text: task) }
         return intro.map { ProjectNow(source: .intro, text: $0) }
-    }
-
-    /// iPhone 书架的"此刻"：书架不带会话（会话在 Cue 页），只有最近开始的进行中任务与介绍；
-    /// `listed` 是同一屏"正在推进"已列出的任务，任务那一档跳过它们、取下一条。
-    static func shelf(_ projects: [Project], tasks: [UUID: [InProgress]], listed: Set<UUID>) -> [UUID: ProjectNow] {
-        var result: [UUID: ProjectNow] = [:]
-        for project in projects {
-            result[project.id] = pick(task: tasks[project.id]?.first { !listed.contains($0.id) }?.title, intro: project.intro)
-        }
-        return result
     }
 
     /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话

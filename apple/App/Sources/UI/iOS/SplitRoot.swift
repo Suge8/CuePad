@@ -203,10 +203,7 @@ private struct SplitSidebar: View {
 
     /// 同步到不了 Mac 时设置那一行带的点（提示赭黄、真出错胭脂），点进设置看 iCloud 那一节；平时没有。
     private var syncAlert: SidebarRow.Alert? {
-        let status = services.syncStatus
-        guard !status.reachesMac else { return nil }
-        let summary = SyncSummary(status)
-        return .init(color: palette.color(summary.tone), text: summary.title)
+        services.macAlert.map { .init(color: palette.color($0.tone), text: $0.title) }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {

@@ -173,7 +173,7 @@ struct Palette {
         return Color(hex: dark ? entry.dark : entry.light)
     }
 
-    /// 项目色铺的淡底（书架的项目卡、项目行的图标底）。
+    /// 项目色铺的淡底（项目页置顶卡）。
     func projectWash(_ stored: String) -> Color { project(stored).opacity(dark ? 0.16 : 0.1) }
 }
 
