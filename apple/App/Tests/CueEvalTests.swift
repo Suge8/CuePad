@@ -122,7 +122,7 @@ struct CueEvalTests {
                 Check("按规矩请他允许（等你关联到这件任务）", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "rule" }),
                 Check("卡片写得出要做的动作与哪条规矩（迁移或建表、数据库）", try await eval.said().contains { message in
                     guard let asking = message.asking else { return false }
-                    return asking.action?.contains(/迁移|表/) == true && asking.rule?.contains("数据库") == true
+                    return asking.action.contains(/迁移|表/) && asking.rule?.contains("数据库") == true
                 }),
                 Check("text 不写分类名（rule）", !eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("rule") == true }),
             ]
@@ -555,8 +555,11 @@ private func mockShot(_ name: String) throws -> Data {
             // 改动前的原样：现在的提问卡，一行小字的问题与两个小选项
             VStack(alignment: .leading, spacing: 8) {
                 Text("现在的样子").font(.caption2).foregroundStyle(.secondary)
-                Text("推送前要先问你：scheduler 的重连修复已提交到本地 main，要推送到 origin/main 吗？").font(.footnote)
-                HStack { Text("允许一次").font(.caption).padding(6).background(fill, in: .capsule); Text("我再看看").font(.caption).padding(6).background(fill, in: .capsule) }
+                Text("可以推送 scheduler 的重连修复吗？").font(.footnote)
+                HStack {
+                    Text(CueAsk.once).font(.caption).padding(6).background(fill, in: .capsule)
+                    Text(CueAsk.otherwise).font(.caption).padding(6).background(fill, in: .capsule)
+                }
             }
         } else if name.hasPrefix("decision-sheet") {
             VStack(alignment: .leading, spacing: 10) {

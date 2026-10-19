@@ -247,19 +247,18 @@ struct CueSays: View {
     }
 }
 
-/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueAsking.question`，
+/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueMessage.headline`，
 /// 点它跳回问的那句），下面是选的那一项或另外写的话的全文。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
-    var ref: CueTaskRef?
     var joined = false
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
         AnswerBubble(
-            answer: answer, quote: question.asking.map { BubbleQuote(text: $0.question(task: ref?.task.heading), target: question.id) },
-            look: .cue(joined: joined), highlighted: highlight == id
+            answer: answer, quote: question.headline.map { BubbleQuote(text: $0, target: question.id) }, look: .cue(joined: joined),
+            highlighted: highlight == id
         ) {
             MessageActions(text: answer, kind: .cue)
         }
@@ -282,18 +281,18 @@ private struct CueBubbleSurface: ViewModifier {
     }
 }
 
-/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsking.question`），下面一行小字是为什么问你（`CueAsking.why`，规矩那一类是哪条规矩）。
+/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueMessage.headline`），下面一行小字是为什么问你（`CueAsking.why`，规矩那一类是哪条规矩）。
 /// "等你"卡与全屏预览的底栏共用。
 struct CueQuestionLine: View {
-    let asking: CueAsking?
-    let question: String
+    let message: CueMessage
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let asking = message.asking
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PiStateGlyph(status: .asking)
             VStack(alignment: .leading, spacing: 4) {
-                Text(question)
+                Text(message.headline ?? "")
                     .font(Typography.title).foregroundStyle(palette.ink)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 if let why = asking?.why {
@@ -365,7 +364,7 @@ struct CueShots: View {
     }
 }
 
-/// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按类别与关联任务写出
+/// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
 /// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
@@ -385,7 +384,7 @@ struct CueWaitingDock: View {
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
     @State private var reading: UUID?
-    /// 不允许时另外说的话。
+    /// 不选选项、另外说的话。
     @State private var otherwise = ""
     /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueMessage?
@@ -460,12 +459,11 @@ struct CueWaitingDock: View {
 
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
-        let question = message.asking?.question(task: ref?.task.heading) ?? ""
         return VStack(alignment: .leading, spacing: 12) {
-            CueQuestionLine(asking: message.asking, question: question)
+            CueQuestionLine(message: message)
             if reading == message.id { original(message.text).transition(.opacity) }
             if let shots = shots[message.id] {
-                CueShots(shots: shots, group: "waiting", reply: .answer(message, question: question), open: open)
+                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open)
             }
             CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
             otherwiseField(message)
@@ -509,7 +507,7 @@ struct CueWaitingDock: View {
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
     }
 
-    /// 不允许时另外说：回车或点发送交给 Cue。
+    /// 另外说：回车或点发送交给 Cue。
     private func otherwiseField(_ message: CueMessage) -> some View {
         let empty = otherwise.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return HStack(spacing: 6) {

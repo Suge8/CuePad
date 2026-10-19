@@ -18,7 +18,7 @@ struct PreviewReplyBar: View {
             switch reply {
             case .cue: field("关于「\(about)」对 \(workspace.cue.name) 说…", to: .cue)
             case .session(let session): field("关于「\(about)」对会话说…", to: .session(session, mode: .send))
-            case .answer(let message, let question): choices(message, question: question)
+            case .answer(let message): choices(message)
             }
         }
         .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
@@ -49,9 +49,9 @@ struct PreviewReplyBar: View {
         done()
     }
 
-    private func choices(_ message: CueMessage, question: String) -> some View {
+    private func choices(_ message: CueMessage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            CueQuestionLine(asking: message.asking, question: question)
+            CueQuestionLine(message: message)
             CueChoices(options: message.choices ?? []) { option in
                 workspace.attempt { try await workspace.answerCueQuestion(message, option) }
                 done()

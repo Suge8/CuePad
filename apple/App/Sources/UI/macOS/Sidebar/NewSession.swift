@@ -31,8 +31,8 @@ struct NewSessionButton: View {
 }
 
 /// 新会话开在哪、用哪个 Agent 与模型：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
-/// 开场的话下面一排选 Agent、模型与思考强度（`AgentModelControls`，与手机的新会话、Cue 同一排）：Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），
-/// 默认上次用的（`MacAgents.preferred`）；模型与思考强度默认跟着这家的默认，换了 Agent 回到默认。一家都不能用时写为什么（`whyNone`）、开不了。
+/// 开场的话下面一排选 Agent、模型与思考强度（`PiConfigControls.init(choice:)`，与手机的新会话、Cue 同一排）：Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），
+/// 默认上次选的（`MacAgents.preferred`，选了就记作下次的默认，同手机）；模型与思考强度默认跟着这家的默认，换了 Agent 回到默认。一家都不能用时写为什么（`whyNone`）、开不了。
 /// 还没有项目时说一句为什么，主按钮是"新建项目"（关掉表单、打开新建项目）。
 struct NewSessionForm: View {
     /// 这台 Mac 上的 Agent；还没读到为 nil。
@@ -43,8 +43,7 @@ struct NewSessionForm: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var chosen: String?
-    /// 这次选的；没选过跟着默认。
-    @State private var picked: AgentKind?
+    /// 这次指定的模型与思考强度（nil 是这家的默认）。
     @State private var model: PiModelKey?
     @State private var thinking: PiThinkingLevel?
     @State private var prompt = ""
@@ -67,8 +66,7 @@ struct NewSessionForm: View {
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
         // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
-        let kinds = agents?.kinds ?? []
-        let agent = picked.flatMap { kinds.contains($0) ? $0 : nil } ?? agents?.preferred(services.settings.lastAgent)
+        let agent = agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             if places.isEmpty {
@@ -87,8 +85,8 @@ struct NewSessionForm: View {
                     .paper(radius: 10)
                     .accessibilityLabel("开场的话")
                 if let agents, let agent {
-                    AgentModelControls(choice: AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)) {
-                        picked = $0
+                    PiConfigControls(choice: choice(agents, agent)) {
+                        services.settings.lastAgent = $0
                         model = nil
                     } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
                     .disabled(stage == .opening)

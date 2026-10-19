@@ -374,7 +374,7 @@ private struct CueRow: View, Equatable {
                 MessageActions(text: message.text, kind: .cue)
             }
         case .answer(let question):
-            CueAnswer(question: question, ref: ref, joined: joined)
+            CueAnswer(question: question, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _, let deliverables):

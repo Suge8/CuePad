@@ -794,11 +794,11 @@ final class CueKeeper {
     /// 重试可能好的错：额度、登录类的不算。
     private static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
 
-    /// 回答交给 Cue 的说法：选了一项写选的那项；不在选项里的是他没允许、另外说的话。
+    /// 回答交给 Cue 的说法：选了一项写选的那项；不在选项里的是他没选、另外说的话（不一定是不同意，也可能是选别的方案、补一句条件）。
     private static func answerLine(_ message: CueMessage) -> String {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let answer = message.answer ?? ""
-        guard message.choices?.contains(answer) != false else { return "他没允许「\(question)」，另外说：\(answer)" }
+        guard message.choices?.contains(answer) != false else { return "他没选「\(question)」的选项，另外说：\(answer)" }
         return "他回答了「\(question)」：\(answer)"
     }
 

@@ -114,16 +114,15 @@ import Testing
   }
 
   /// 手机上答了会话的提问：Mac 作答成功时把你答了什么写进那个会话的对话（带着当时的问题），经同步回到手机；
-  /// 作答请求清理掉以后这一句还在。Cue 替你答的不写；在手机上答了 Cue 的提问，Mac 那边是同一条提问带着你的回答。
+  /// 作答请求清理掉以后这一句还在（排在哪、Cue 替你答的不写见 App 的 `AnswerLineTests`）。
   @Test(.timeLimit(.minutes(1)))
-  func answersLeaveTheirLineOnBothDevices() async throws {
+  func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
       store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
     ) { _ in .succeeded }
     try await executor.start()
     let target = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
     let mine = try await phone.store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("另存为 feed-full.xml"), question: "要覆盖 public/feed.xml 吗？"), to: target, on: "mac")
-    let cue = try await phone.store.requestAnswer(PiAnswer(promptID: "p-2", value: .confirmed(true), question: "部署到生产吗？"), to: target, on: "mac", cue: true)
     try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequests().allSatisfy { $0.status == .known(.succeeded) } }) { $0 }
     await clock.waitForSleeper()
@@ -133,16 +132,9 @@ import Testing
 
     let lines = try await phone.store.piMessages(of: "s1")
     #expect(lines.map { [$0.role.rawValue, $0.text, $0.question ?? ""] } == [["answer", "另存为 feed-full.xml", "要覆盖 public/feed.xml 吗？"]])
-    #expect(lines.first?.deliveryID == mine.id && !lines.contains { $0.deliveryID == cue.id })
+    #expect(lines.first?.deliveryID == mine.id)
     #expect(try await phone.store.deliveryRequests().isEmpty)
     await executor.stop()
-
-    let asked = try await mac.store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送登录页的修复"))
-    try await cloud.exchange()
-    try await phone.store.endCueQuestion(asked.id, .answered("先别推，等我看完日志"))
-    try await cloud.exchange()
-    let seen = try #require(try await mac.store.cueMessages().first { $0.id == asked.id })
-    #expect(seen.answer == "先别推，等我看完日志" && seen.answeredAt != nil)
   }
 
   /// 断网时手机说的话（发给会话、对 Cue 说）：马上传失败，同步状态是连不上 iCloud、话是同步不通，Mac 那边还没有；

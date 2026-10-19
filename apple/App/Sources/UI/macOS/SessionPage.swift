@@ -189,12 +189,11 @@ extension Workspace {
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
     /// `host`：由哪台 Mac 开，默认这台。`card`：从这条灵感或任务开的，开好后它关联到新会话，会话名也按它定（`CueStore.requestLaunch`）。
-    /// `agent`：用哪个 Agent 开，记作下次的默认（`AppSettings.lastAgent`）；`model`、`thinking` 为 nil 是这家的默认。
+    /// `agent`：用哪个 Agent 开；`model`、`thinking` 为 nil 是这家的默认。
     func startSession(
         in project: UUID, prompt: String?, title: String, on host: String? = nil, card: UUID? = nil, agent: AgentKind,
         model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, launched: @escaping () -> Void
     ) async throws -> String {
-        services.settings.lastAgent = agent
         let launch = try await services.launchSession(
             in: project, prompt: prompt, title: title, on: host ?? services.hostID, card: card, agent: agent, model: model, thinking: thinking)
         var reported = false

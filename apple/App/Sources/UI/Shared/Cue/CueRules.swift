@@ -101,7 +101,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var waiting: Int
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsking.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
     /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
@@ -134,7 +134,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             waiting: try CueWaiting.count(in: store),
             unread: try store.cueUnread().count,
-            lastSaid: said.flatMap { $0.asking?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
+            lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
@@ -142,6 +142,12 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     private static let recentWindow = 40
+}
+
+nonisolated extension CueMessage {
+    /// Cue 的一句在对话以外的那一行（侧栏与菜单栏的摘要、"等你"卡与全屏预览底栏的第一句、回答的引用）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），

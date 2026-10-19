@@ -133,9 +133,7 @@ final class CueService {
             guard duty != nil, !notifier.isWatchingCue else { continue }
             let name = (try? await store.cueProfile())?.name
             for message in fresh {
-                var task: String?
-                if let id = message.taskID { task = try? await store.card(id)?.heading }
-                let alert = CueAlert.content(name: name, text: message.text, asking: message.asking, choices: message.choices, task: task)
+                let alert = CueAlert.content(name: name, text: message.text, asking: message.asking, choices: message.choices)
                 await notifier.post(title: alert.title, body: alert.body)
                 do {
                     try await store.flagCueMessageForPush(message.id)

@@ -1,22 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 用哪个 Agent、哪个模型与多大思考强度：新会话（手机的输入框、Mac 的表单）与 Cue（Mac 的 Cue 页输入框、手机的 Cue 面板、两端的 Cue 设置）
-/// 都是这一排，交互同一套——Agent 胶囊（能用的不止一家时点开选；换了家，模型回到那家的默认）、模型胶囊、思考强度（`PiConfigControls`，
-/// 与会话页回复框同一个样子）。可选什么、当前是什么只在 `AgentModelChoice`；选了做什么由调用方给。
-struct AgentModelControls: View {
-    let choice: AgentModelChoice
-    var pending = false
-    var opening: Binding<PiConfigPick?> = .constant(nil)
-    let chooseAgent: (AgentKind) -> Void
-    let chooseModel: (PiModelKey?) -> Void
-    let chooseThinking: (PiThinkingLevel) -> Void
-
-    var body: some View {
-        PiConfigControls(
+extension PiConfigControls where Trailing == EmptyView {
+    /// 用哪个 Agent、哪个模型与多大思考强度：新会话（手机的输入框、Mac 的表单）与 Cue（Mac 的 Cue 页输入框、手机的 Cue 面板、两端的 Cue 设置）
+    /// 都是这一排，与会话页回复框同一个样子，最左多一枚 Agent 胶囊（`PiAgentCapsule`）。可选什么、当前是什么只在 `AgentModelChoice`；选了做什么由调用方给，
+    /// 换了家时模型回到那家的默认也由调用方写（新会话记在表单里，Cue 记在设置里）。
+    init(
+        choice: AgentModelChoice, opening: Binding<PiConfigPick?> = .constant(nil), chooseAgent: @escaping (AgentKind) -> Void,
+        chooseModel: @escaping (PiModelKey?) -> Void, chooseThinking: @escaping (PiThinkingLevel) -> Void
+    ) {
+        self.init(
             agent: choice.agent.map { PiAgentPick(kinds: choice.agents.map(\.kind), current: $0, choose: chooseAgent) },
-            groups: choice.groups(choose: chooseModel),
-            shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: pending),
+            groups: choice.groups(choose: chooseModel), shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: false),
             unnamed: "默认模型", levels: choice.levels, opening: opening, chooseThinking: chooseThinking)
     }
 }

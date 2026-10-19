@@ -30,8 +30,8 @@ private struct ReplyNoteLayer: ViewModifier {
         content
             .environment(\.openURL, OpenURLAction { url in
                 guard let id = ReplyNote.id(of: url) else { return .systemAction }
-                if let note = services.settings.replyNotes(for: session).first(where: { $0.id == id }) {
-                    float = .editing(ReplyNote.Edit(note: note, fresh: false), at: Spot(point: watch.view?.pointer ?? .zero))
+                if let edit = services.settings.editReplyNote(id, in: session) {
+                    float = .editing(edit, at: Spot(point: watch.view?.pointer ?? .zero))
                 }
                 return .handled
             })

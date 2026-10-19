@@ -51,7 +51,7 @@ final class AppSettings {
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
 
-    /// 上次开新会话用的 Agent：新会话默认用它（Mac 上它没接入时退到第一个接入了的）。
+    /// 新会话上次选的 Agent（两端的新会话在 Agent 胶囊上一选就记）：新会话默认用它（那台 Mac 上它不能用时退到第一个能用的，`MacAgents.preferred`）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
 
     /// Cue 页对话里显示 Cue 每一轮的工具步骤（"跑了 3 步 · 建了 1 件任务"那一行与展开的清单，`CueThread.rows`）；默认显示。
@@ -127,6 +127,11 @@ final class AppSettings {
     func editReplyNote(at place: ReplyNote, in session: UUID) -> ReplyNote.Edit {
         replyNotes(for: session).first { $0.marksSamePlace(as: place) }.map { ReplyNote.Edit(note: $0, fresh: false) }
             ?? ReplyNote.Edit(note: place, fresh: true)
+    }
+
+    /// 改已有的一条（点对话里那处高亮）；草稿里已没有它时为 nil。
+    func editReplyNote(_ id: UUID, in session: UUID) -> ReplyNote.Edit? {
+        replyNotes(for: session).first { $0.id == id }.map { ReplyNote.Edit(note: $0, fresh: false) }
     }
 
     /// 记下：新的一条按在对话里的先后排进草稿（`order` 是对话里回答的 id 顺序）；已有的那条改字（写的时候在回复框上删掉了就不再加回来）。

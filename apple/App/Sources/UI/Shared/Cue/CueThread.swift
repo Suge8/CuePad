@@ -123,13 +123,12 @@ nonisolated struct CueThread: Equatable, Sendable {
             return UUID(uuid: bytes)
         }
 
-        /// 这一格用到的那件活：Cue 第一次提到它的话、结果卡下面挂的那一件；回答引用的那张卡关联的那一件（拼问句用）。
+        /// 这一格下面挂的那件活：Cue 第一次提到它的话、结果卡。
         var taskID: UUID? {
             switch self {
             case .cue(_, let task): task
             case .result(_, let task, _): task
-            case .answer(let question): question.taskID
-            case .you, .notes, .process, .renewed: nil
+            case .you, .answer, .notes, .process, .renewed: nil
             }
         }
 
