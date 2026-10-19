@@ -539,6 +539,7 @@ extension PiHistoryCheckpoint {
 
     /// 这一轮做完，`text` 是结束它的那段（可以为空——如只调了工具、出错）：最后说的那段成一条消息，带这一轮的工具活动，
     /// 问与答一起更新——提问是这一轮里你说的话，机器消息触发的轮沿用上一次的提问。什么都没说、也没有提问的（只压缩了上下文）只结束这一轮。
+    /// 收尾的时刻记在摘要上（`PiRecap.answeredAt`）：歇下就绪只看它。
     mutating func answered(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
         spoke(text, entry)
         if reply != nil {
@@ -546,6 +547,7 @@ extension PiHistoryCheckpoint {
         } else if let prompt = recap.pendingPrompt {
             recap = PiRecap(lastPrompt: prompt, lastReply: "", pendingPrompt: nil)
         }
+        recap.answeredAt = entry.at
         round = nil
     }
 
@@ -560,6 +562,7 @@ extension PiHistoryCheckpoint {
         transcript.add(self, entry, role: .system, text: (current.declined ? PiNotice.declined : .stopped).rawValue)
         round = nil
         recap.pendingPrompt = nil
+        recap.answeredAt = entry.at
     }
 
     /// 压缩上下文：一行系统行，不动问答。
@@ -574,7 +577,9 @@ extension PiHistoryCheckpoint {
         transcript.add(
             self, PiHistory.Entry(id: reply.id, seq: reply.seq, at: reply.at), role: .pi, text: reply.text, tools: current.tools.summary(),
             roundStartedAt: current.startedAt)
-        recap = PiRecap(lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply.text, PiRecap.replyLimit), pendingPrompt: nil)
+        recap = PiRecap(
+            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply.text, PiRecap.replyLimit), pendingPrompt: nil,
+            answeredAt: recap.answeredAt)
         self.reply = nil
     }
 }

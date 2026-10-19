@@ -678,7 +678,7 @@ public final class CodexRuntime: AgentRuntime {
     /// 开始新的一轮（`start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，
     /// 钩子没有时刻用收到的时刻）：歇着时落定的子代理的结果随这一轮交给模型，不再在飞。开始一轮只经这里。
     private func startTurn(_ session: Tracked, at start: Date) {
-        session.facts.startTurn()
+        session.facts.startTurn(at: start)
         session.facts.inFlight.subtract(session.unread.keys)
         session.unread = [:]
     }
@@ -762,13 +762,7 @@ public final class CodexRuntime: AgentRuntime {
         switch method {
         case "turn/started":
             // 再跑一轮（v2 的 followup_task、v1 的 send_input）也是在跑
-            if session.facts.subagents.contains(where: { $0.id == child }) {
-                session.facts.updateSubagent(child, at: now) { agent in
-                    (agent.phase, agent.action, agent.startedAt, agent.settledAt) = (.known(.running), "", now, nil)
-                }
-            } else {
-                session.facts.startSubagent(child, name: name, role: role, at: now)
-            }
+            session.facts.runSubagent(child, name: name, role: role, at: now)
             session.unread[child] = nil
             session.facts.inFlight.insert(child)
         case "turn/completed":

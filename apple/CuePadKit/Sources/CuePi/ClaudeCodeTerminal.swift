@@ -82,7 +82,7 @@ final class ClaudeTerminalSession: SessionLink {
         let tool = input["tool_name"]?.string ?? "?"
         switch event {
         case "UserPromptSubmit":
-            facts.startTurn()
+            facts.startTurn(at: now)  // 钩子挡着这一句：收到它一定早于这一轮的回答
         case "PreToolUse" where tool == "AskUserQuestion":
             let ask = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
             return hold(Pending(question: ask.question(), kind: .ask(ask), call: call, agent: agent), answerable: ask.answerable, at: now)

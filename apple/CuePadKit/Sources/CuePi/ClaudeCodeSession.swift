@@ -11,19 +11,6 @@ extension PiSession {
     static func claudeID(sessionID: String, pid: Int32) -> String { "\(sessionID).\(pid)" }
 }
 
-extension SessionFacts {
-    /// Claude Code 的子代理开始（钩子 `SubagentStart`、托管的 `task_started`）。被自己名下的后台命令叫醒时它以同一 id 再跑一次：
-    /// 名册里还是那一项，回到在跑。
-    mutating func runSubagent(_ id: String, name: String, role: String, at now: Date) {
-        guard subagents.contains(where: { $0.id == id }) else { return startSubagent(id, name: name, role: role, at: now) }
-        updateSubagent(id, at: now) { agent in
-            agent.phase = .known(.running)
-            agent.action = ""
-            agent.settledAt = nil
-        }
-    }
-}
-
 enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`sonnet`）在它自己的命名空间里
     static let provider = AgentKind.claudeCode.modelProvider!

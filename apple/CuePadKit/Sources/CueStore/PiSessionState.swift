@@ -116,6 +116,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var lastReply: String?
   public var pendingPrompt: String?
   public var pendingTools: PiChatMessage.Tools?
+  public var answeredAt: Date?
   public var question: PiQuestion?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
@@ -123,6 +124,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var stateSince: Date
   /// 旧版本写的记录没有。
   public var busySince: Date?
+  /// 主会话最后一轮开始的时刻（你开的，或 Agent 自己为子代理的结果开的；等子代理到跟进轮之间 `busySince` 不变，这个要变）：
+  /// 早于这一轮可能在会话文件里收尾的任何时刻（取法见 `SessionFacts.startTurn(at:)` 与 Pi 扩展的 `turnSince`）。还没开过一轮为 nil。
+  public var turnStartedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
   /// 由 CuePad 发起的新会话（投送方式 `start`）带着发起方生成的标识（`PiLaunch.start` 的 `token`），
@@ -149,7 +153,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, model: PiModelOption? = nil,
-    thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil
+    thinking: Open<PiThinkingLevel>? = nil, context: PiContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
+    turnStartedAt: Date? = nil, answeredAt: Date? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -177,6 +182,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.context = context
     self.agent = agent
     self.catalogID = catalogID
+    self.turnStartedAt = turnStartedAt
+    self.answeredAt = answeredAt
   }
 
   /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
@@ -210,7 +217,17 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   }
 
   /// 记录上的摘要（对话的投影）。
-  public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt, pendingTools: pendingTools) }
+  public var recap: PiRecap {
+    PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt, pendingTools: pendingTools, answeredAt: answeredAt)
+  }
+
+  /// 最后一轮的回答已经读到：这一轮在会话文件里的收尾不早于它的开始。状态由 Agent 报、问答由读会话文件写，两路先后不定；
+  /// 歇下只在这之后才是 Cue 的变化（`CueStore.cueChanges`），你开的、Agent 自己开的（子代理交回、补开的空输入）同一条规则。
+  /// 一轮都没开过（刚开出来就歇着）没有开始时刻，不算。
+  public var answered: Bool {
+    guard let turnStartedAt, let answeredAt else { return false }
+    return answeredAt >= turnStartedAt
+  }
 
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
@@ -229,16 +246,17 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
   /// 对话的投影（见 `PiRecap`），只由 `writePiTranscript` 写
-  static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools"]
+  static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools", "answeredAt"]
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID", "pendingTools",
+    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
-     model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored]
+     model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
+     turnStartedAt, answeredAt]
   }
   init(row: Row) {
     self.init(
@@ -254,7 +272,8 @@ extension PiSessionState: Record {
       pendingTools: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(25).flatMap(PiChatMessage.Tools.init(stored:)),
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(22)),
-      agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24))
+      agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
+      answeredAt: row.dateOrNil(27))
   }
 }
 

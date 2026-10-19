@@ -183,8 +183,9 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后的 `system/init` 是同一轮）。
+    /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或 `system/init` 的那一刻，都早于这一轮的回答。
     private func beginTurn() {
-        if !facts.running { facts.startTurn() }
+        if !facts.running { facts.startTurn(at: .now) }
     }
 
     /// 已用上下文：最近一次模型调用的输入（含缓存）加输出；窗口从 `result` 的模型用量里来。

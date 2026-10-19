@@ -25,13 +25,18 @@ struct SessionFacts {
     /// 各家整份写入自己的权威来源（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
     /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
+    /// 主会话最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
+    private(set) var turnStartedAt: Date?
     /// 子代理名册（按 Agent 给的 id），按出现先后
     private(set) var subagents: [(id: String, state: PiSubagentState)] = []
     /// 歇着时开始压缩那一刻的计时：压完回到它
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
-    /// 开始新的一轮。
-    mutating func startTurn() {
+    /// 开始新的一轮（你开的，或 Agent 自己为子代理的结果开的、接入补开的）。`start` 要早于这一轮可能在会话文件里收尾的任何时刻：
+    /// 歇下就绪看收尾不早于它（`PiSessionState.answered`）。取 Agent 自己给的开始时刻；没有就取一个一定在它之前的时刻——
+    /// 会挡住这一轮的钩子（收到 `UserPromptSubmit`）、CuePad 发出话或空输入的那一刻、收到 Agent 报这一轮开始（或开它的那件事）的那一刻。
+    mutating func startTurn(at start: Date) {
+        turnStartedAt = start
         running = true
         work(.thinking)
         failure = nil
@@ -53,6 +58,15 @@ struct SessionFacts {
 
     mutating func startSubagent(_ id: String, name: String, role: String, at now: Date) {
         subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
+    }
+
+    /// 子代理开始一次运行：第一次是新的一项；同一 id 再跑（Claude Code 被自己名下的后台命令叫醒、Codex 的 followup）名册里还是那一项，
+    /// 回到在跑，从此刻重新算（同 FireCode 名册的"本次运行"）。
+    mutating func runSubagent(_ id: String, name: String, role: String, at now: Date) {
+        guard subagents.contains(where: { $0.id == id }) else { return startSubagent(id, name: name, role: role, at: now) }
+        updateSubagent(id, at: now) { agent in
+            (agent.phase, agent.action, agent.startedAt, agent.settledAt) = (.known(.running), "", now, nil)
+        }
     }
 
     /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
@@ -100,6 +114,7 @@ struct SessionFacts {
             }
         }
         if state == .error { session.errorMessage = failure }
+        session.turnStartedAt = turnStartedAt
         session.question = question
         let roster = subagents.map(\.state)
         if session.subagents != roster { session.subagents = roster }

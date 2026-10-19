@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 14
+    static let protocolVersion = 15
 
     struct State: Decodable {
         var kind: String
@@ -17,6 +17,8 @@ enum PiWire {
         var since: Double
         /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
         var busySince: Double?
+        /// 主会话最后一次模型回合开始的时间（毫秒）；还没开过为 nil
+        var turnSince: Double?
 
         /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。扩展还报的在跑工具全集、`aborted`、弹窗种类没有人读，不解码。
         var work: (state: PiWorkState, detail: String?)? {
@@ -36,6 +38,7 @@ enum PiWire {
 
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
         var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
+        var turnSinceDate: Date? { turnSince.map { Date(timeIntervalSince1970: $0 / 1000) } }
     }
 
     struct Hello: Decodable {

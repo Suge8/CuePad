@@ -705,7 +705,7 @@ extension CueStore {
   /// Cue 按它分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来。
   public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
 
-  /// 写入序号 `marks` 之后有会话的事与不归没做完的事的活会话（`isLoose`）里的变化，按事件时刻从早到晚：会话歇下（这一轮的回复读到之后，见 `sessionChange`）、等回答、出错，Cue 发起的请求没能执行
+  /// 写入序号 `marks` 之后有会话的事与不归没做完的事的活会话（`isLoose`）里的变化，按事件时刻从早到晚：会话歇下（最后一轮的回答读到之后，见 `sessionChange`）、等回答、出错，Cue 发起的请求没能执行
   /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算），
   /// 等子代理停住（停住的时刻在 `marks.stalls` 之后、不晚于 `now`；序号是会话记录的）。等子代理本身不是变化：子代理的结果交回、会话为它跑完那一轮歇下才报。
   /// 会话里用户说的话不另报：他那一轮歇下时 Cue 照常醒来，变化标着这一轮是他说的（`CueChange.byUser`）。
@@ -773,12 +773,12 @@ extension CueStore {
   }
 
   /// 会话停在的状态是一处变化时（歇下、被打断、等回答、出错）的那条变化；在跑、已结束为 nil。
-  /// 歇下要等这一轮的回复读到才算：状态由桥报，问答由 Mac 读会话文件写，两路先后不定（Claude Code 的轮末标记写在报歇下的钩子之后）。
-  /// 提问还在处理中（`pendingPrompt`）就是回复还没读到；一轮都没做过（刚开出来就歇着）没有动静。读到时问答一变，这一行盖上新序号，变化随之出现。
+  /// 歇下要等最后一轮的回答读到才算（`PiSessionState.answered`）：状态由 Agent 报，问答由 Mac 读会话文件写，两路先后不定
+  /// （Claude Code 的轮末标记写在报歇下的钩子之后）。读到时收尾时刻一变，这一行盖上新序号，变化随之出现。
   private func sessionChange(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
     let (kind, detail): (CueChange.Kind?, String?) =
       switch session.state.known {
-      case .settled where session.pendingPrompt != nil || (session.lastPrompt == nil && session.lastReply == nil): (nil, nil)
+      case .settled where !session.answered: (nil, nil)
       case .settled, .interrupted: (.settled, nil)
       case .waitingForUser: (.waitingForUser, session.question?.text ?? session.detail)
       case .error: (.failed, session.detail)

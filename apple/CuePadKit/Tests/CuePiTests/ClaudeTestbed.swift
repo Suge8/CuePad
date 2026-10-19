@@ -190,8 +190,10 @@ final class ClaudeTestbed {
     /// 歇下时的回答是那一轮的（含 `reply`），名册里只有一项、落在 `roster`。
     func expectSettledOnce(_ id: PiSession.ID, since start: Date, reply: String, roster: PiSubagentPhase, waits: Int = 1) async throws {
         let session = { [bridge] in bridge.session(id: id) }
+        // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次歇下
         try await eventually("交回结果的那一轮做完", timeout: .seconds(240)) {
             session()?.state == .settled && (try? transcript(session()?.sessionFile))?.recap.lastReply?.contains(reply) == true
+                && log.states.last == .settled
         }
         try await waitForDraftLanded(id)
         var states: [PiWorkState] = []
@@ -202,6 +204,12 @@ final class ClaudeTestbed {
         #expect(states.filter { $0 == .settled } == [.settled] && states.last == .settled, "\(states)")
         #expect(states.dropLast().last?.isWorking == true && states.dropLast().last != .delegating, "歇下前是交回结果的那一轮：\(states)")
         #expect(session()?.subagents.map(\.phase) == [.known(roster)], "\(String(describing: session()?.subagents))")
+        // 歇下就绪（`PiSessionState.answered`）：交回结果那一轮的收尾不早于它的开始（收到开它的 `task_notification` 的时刻）。
+        // 只有连真 Agent 时可比：回放时 Mac 一侧的时刻随回放压缩，会话文件的时刻照录下的间隔
+        if RealAgents.mode(of: .claudeCode) == .record {
+            let turn = try #require(session()?.turnStartedAt), answered = try #require(try transcript(session()?.sessionFile).recap.answeredAt)
+            #expect(turn <= answered, "\(turn) \(answered)")
+        }
     }
 
     /// 会话文件此刻的对话（从头读）

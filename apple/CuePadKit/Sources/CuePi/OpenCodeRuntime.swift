@@ -367,7 +367,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.started":
-            await change(sessionID, connection, active: true) { $0.facts.startTurn() }
+            await change(sessionID, connection, active: true) { $0.facts.startTurn(at: .now) }
         case "session.step.started":
             // 没给会话选过模型时它用配置里的默认模型：每一步都带着实际用的那个
             await change(sessionID, connection) {

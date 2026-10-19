@@ -1,29 +1,36 @@
 {"a":["--version"],"c":"p1","d":"pi","k":"spawn","p":"{pwd}"}
 {"c":"p1","k":"eof"}
-{"c":"p1","d":"1.2.0","k":"stdout"}
+{"c":"p1","d":"1.3.0","k":"stdout"}
 {"c":"p1","k":"exit","n":0}
 {"a":["--mode","rpc","--offline","--no-context-files","--no-skills","--no-prompt-templates","--no-themes","--model","fake/echo","--thinking","off","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:1}/work"}
 {"k":"dir","p":"{tmp:1}/agent/sessions/--private{dtmp:1}-work--"}
-{"c":"s1","k":"listen","p":"{tmp:1}/s/01a13c33-08b2-76e9-a16f-e12e41c1147c.{pid:p2}.sock"}
+{"c":"s1","k":"listen","p":"{tmp:1}/s/01a153ff-6fe3-75c7-a60e-8fc390a5b1a3.{pid:p2}.sock"}
 {"c":"s1.1","k":"connect"}
-{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":14,\"extensionVersion\":30,\"sessionId\":\"01a13c33-08b2-76e9-a16f-e12e41c1147c\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-14T20-55-39-954Z_01a13c33-08b2-76e9-a16f-e12e41c1147c.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:189},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"],\"images\":false}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
-{"c":"p2","d":"{\"message\":\"/ask\",\"type\":\"prompt\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"26d5fae1-1736-4353-8698-bd6194f0ef11\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"86192ab6-5753-4068-b3c9-294bd8c4d547\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:216},\"busySince\":{ms:216}}}","k":"recv"}
-{"c":"p2","d":"{\"id\":\"86192ab6-5753-4068-b3c9-294bd8c4d547\",\"confirmed\":true,\"type\":\"extension_ui_response\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":15,\"extensionVersion\":33,\"sessionId\":\"01a153ff-6fe3-75c7-a60e-8fc390a5b1a3\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-19T11-50-11-683Z_01a153ff-6fe3-75c7-a60e-8fc390a5b1a3.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:190},\"busySince\":null,\"turnSince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"],\"images\":false}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/ask\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"fa499858-710a-480e-b428-fd5360cb7d0f\",\"kind\":\"confirm\",\"text\":\"Proceed?\\ntest dialog\",\"options\":[]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"764d322d-9d29-49e2-b7d1-88b262e9c4d2\",\"method\":\"confirm\",\"title\":\"Proceed?\",\"message\":\"test dialog\"}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"confirm\",\"title\":\"Proceed?\",\"since\":{ms:222},\"busySince\":{ms:222},\"turnSince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_response\",\"confirmed\":true,\"id\":\"764d322d-9d29-49e2-b7d1-88b262e9c4d2\"}","k":"stdin"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"0c180fe3-ccff-4ef9-8411-c9384b0425ce\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:228},\"busySince\":null}}","k":"recv"}
-{"c":"p2","d":"{\"message\":\"/pick\",\"type\":\"prompt\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"40983e1c-54dc-452b-a7b1-a06b1bf9bea7\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"dac3d9e7-2c71-486d-a575-3cc2769494dd\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:240},\"busySince\":{ms:240}}}","k":"recv"}
-{"c":"p2","d":"{\"id\":\"dac3d9e7-2c71-486d-a575-3cc2769494dd\",\"value\":\"Alpha\",\"type\":\"extension_ui_response\"}","k":"stdin"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"2badeb26-38de-4231-a6c4-b0953d46d182\",\"method\":\"notify\",\"message\":\"confirmed:true\",\"notifyType\":\"info\"}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:232},\"busySince\":null,\"turnSince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/pick\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"7b271b77-27ad-412a-8d74-1099fde48f69\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"604052c0-3a5e-4e34-9037-b29689ad145f\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:245},\"busySince\":{ms:245},\"turnSince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_response\",\"id\":\"604052c0-3a5e-4e34-9037-b29689ad145f\",\"value\":\"Alpha\"}","k":"stdin"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"d3adab5e-6a85-4d16-aec9-08ae03dfb865\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:251},\"busySince\":null}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"5bf56c30-a126-437a-8698-d516c88a8178\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:258},\"busySince\":null,\"turnSince\":null}}","k":"recv"}
 {"c":"s1.1","k":"hangup"}
 {"c":"p2","k":"signal","n":15}
+{"c":"s1.2","k":"connect"}
 {"c":"s1.1","k":"close"}
+{"c":"s1.2","k":"close"}
+{"c":"s1.2","k":"hangup"}
+{"c":"s1.3","k":"connect"}
+{"c":"s1.3","k":"close"}
+{"c":"s1.4","k":"connect"}
+{"c":"s1.4","k":"close"}
 {"c":"p2","k":"exit","n":143}

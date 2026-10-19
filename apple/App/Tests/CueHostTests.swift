@@ -90,7 +90,7 @@ struct CueHostTests {
         /// `messages` 是这时读到的对话（peek 里看得到）。
         func answered(_ sessionID: String, prompt: String = "接着做", reply: String = "好了", messages: [PiChatMessage] = []) async throws {
             try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
-            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply)))
+            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply, answeredAt: .now)))
         }
 
         /// 你对 Cue 说一句。
@@ -340,7 +340,8 @@ struct CueHostTests {
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 半路断开", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-2")
-        try await PiStateRecorder(store: rig.store, hostID: "mac-b").update(sessionID: "remote-2", state: .settled, title: "修好登录页")
+        try await PiStateRecorder(store: rig.store, hostID: "mac-b")
+            .update(sessionID: "remote-2", state: .settled, title: "修好登录页", turnStartedAt: .now)
         try await rig.answered("remote-2")
         try await eventually("Cue 说了话、工具在等结果") {
             try await rig.store.deliveryRequests(toSession: "remote-2").contains { $0.isOpen && $0.isFromCue }
@@ -384,7 +385,7 @@ struct CueHostTests {
         let task = try await rig.store.createTask("修好登录页 晚到", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
-        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
         let settledAt = Date.now
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
@@ -402,7 +403,7 @@ struct CueHostTests {
         let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
         let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
-        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
+        try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.answered("remote-1")
         try await rig.message(.note, containing: "登录页那边歇下了")
