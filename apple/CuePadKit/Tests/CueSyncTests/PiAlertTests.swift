@@ -126,7 +126,7 @@ import Testing
     #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")
     let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     let text = try #require(CueAlertText.content(message: record, profile: profile))
-    #expect(text.title == "小管家" && text.body == "可以把登录页修复合并进 main 吗？\n合进大家共用的分支会影响所有人，回退麻烦。\n看图：改后的登录页\n可以 / 以后合并进共享分支都不用问")
+    #expect(text.title == "小管家" && text.body == "可以把登录页修复合并进 main 吗？\n看图：改后的登录页\n可以 / 以后合并进共享分支都不用问")
 
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))

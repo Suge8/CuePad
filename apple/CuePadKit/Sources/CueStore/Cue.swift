@@ -373,19 +373,6 @@ public enum CueAsk: String, CaseIterable, Sendable {
     }
   }
 
-  /// 为什么要问你（卡片与通知的第二句）：做了收不回、或越出这件事的地方。规矩那一类写出是哪条规矩（`rule`）。
-  public func why(rule: String?) -> String {
-    switch self {
-    case .push: "推上去别人就拉得到，撤不回来。"
-    case .merge: "合进大家共用的分支会影响所有人，回退麻烦。"
-    case .release: "发出去马上有人用到，出了问题收不回。"
-    case .delete: "删了就找不回来。"
-    case .outside: "要动项目文件夹以外的东西，超出这件事的范围。"
-    case .budget: "要花的钱或额度会超过你定的上限。"
-    case .rule: "你说过「\(rule ?? "")」。"
-    }
-  }
-
   /// 第一项（主按钮）：允许这一次。
   public static let once = "可以"
 
@@ -454,8 +441,8 @@ public struct CueAsking: Equatable, Sendable {
     return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
   }
 
-  /// 为什么要问你（`CueAsk.why`）。
-  public var why: String { ask.why(rule: rule) }
+  /// 规矩那一类为什么问你：引他的规矩原话（卡片与通知的第二句）。别的类没有：推送、删除这些收不回的地方他自己知道，卡上只留问句。
+  public var why: String? { rule.map { "你说过「\($0)」。" } }
 }
 
 /// 提问要你看的一张图：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
@@ -506,7 +493,7 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、为什么问你（`CueAsking`）、要看的图各看什么，接选项，不露原话；其余（读不出 `CueAsking` 的提问也是）是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
+/// "等你"的正文是要你定什么、规矩那一类引的规矩（`CueAsking`）、要看的图各看什么，接选项，不露原话；其余（读不出 `CueAsking` 的提问也是）是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
@@ -514,7 +501,7 @@ public enum CueAlert {
     let body: String
     if let asking, let choices {
       let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
-      body = ([asking.question, asking.why] + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
+      body = ([asking.question] + [asking.why].compactMap(\.self) + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }
