@@ -165,7 +165,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             id: id, sessionID: sessionID, agent: .claudeCode, sessionFile: file, pid: envelope.pid, cwd: cwd,
             terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), extensionVersion: 0, state: .settled, stateSince: .now)
         session.model = input["model"]?.string.map { ClaudeCode.model($0) }
-        let terminal = attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], busy: false, waiting: false)
+        let terminal = attach(session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], runningSince: nil, waiting: false)
         recall(id, sessionID: sessionID)
         return terminal
     }
@@ -178,8 +178,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         bridge.update(terminal.id) { $0.terminal = fresh }
     }
 
-    private func attach(_ session: PiSession, inbox: String?, busy: Bool, waiting: Bool) -> ClaudeTerminalSession {
-        let terminal = ClaudeTerminalSession(id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, busy: busy, waiting: waiting)
+    private func attach(_ session: PiSession, inbox: String?, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
+        let terminal = ClaudeTerminalSession(
+            id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, runningSince: runningSince, waiting: waiting)
         terminals[session.id] = terminal
         let pid = session.pid
         if exitWatchers[pid] == nil {
@@ -235,6 +236,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     /// CuePad 启动前就在跑的会话：补上桥。之后的变化靠钩子；钩子先到的已经上桥，不重复。
     private func discover() async {
         let list: [Running]
+        let listed = Date.now  // 列表里在跑的那一轮此刻之后才收尾
         do {
             list = try await running()
         } catch AgentRuntimeError.notInstalled {
@@ -250,7 +252,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: entry.sessionID),
                 pid: entry.pid, cwd: cwd, terminal: PiTerminal(tty: Self.controllingTerminal(of: entry.pid)), extensionVersion: 0,
                 state: .settled, stateSince: .now)
-            _ = attach(session, inbox: inbox(of: entry.pid), busy: entry.status == "busy", waiting: entry.status == "waiting")
+            let waiting = entry.status == "waiting"
+            _ = attach(session, inbox: inbox(of: entry.pid), runningSince: waiting || entry.status == "busy" ? listed : nil, waiting: waiting)
             recall(id, sessionID: entry.sessionID)
         }
     }

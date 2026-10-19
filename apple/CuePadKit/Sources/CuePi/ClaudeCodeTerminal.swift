@@ -50,14 +50,14 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
-    init(id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, busy: Bool, waiting: Bool) {
+    /// - Parameter runningSince: 接上时已在跑（在忙或在等你）：这一轮的开始取不晚于看到它在跑的时刻（`SessionFacts.startTurn(at:)`）
+    init(id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, runningSince: Date?, waiting: Bool) {
         self.id = id
         self.pid = pid
         self.bridge = bridge
         self.gate = gate
         self.inbox = inbox
-        // 接上时已在跑：这一轮从此刻算（`SessionFacts.startTurn(at:)`）
-        if busy || waiting { facts.startTurn(at: .now) }
+        if let runningSince { facts.startTurn(at: runningSince) }
         if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: "在终端里等你")] }
     }
 

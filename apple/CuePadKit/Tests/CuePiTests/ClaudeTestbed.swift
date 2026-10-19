@@ -42,8 +42,9 @@ final class ClaudeTestbed {
     }
 
     /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
-    /// - Parameter wrapped: CuePad 托管时起的 `claude` 是一层外壳、真 claude 是它的子进程（钩子的父进程不是 CuePad 起的那个）。
-    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false) async throws {
+    /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程，
+    ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。
+    init(installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil) async throws {
         root = try makeTempDirectory()
         config = root.appending(path: "config")
         sockets = root.appending(path: "s")
@@ -78,12 +79,12 @@ final class ClaudeTestbed {
         let presence = TestPresence()
         self.presence = presence
         var bin = AgentTape.executable("claude").deletingLastPathComponent()
-        if wrapped {
+        if let wrapper {
             let real = bin.appending(path: "claude")
             bin = root.appending(path: "wrapper", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
             let script = bin.appending(path: "claude")
-            try "#!/bin/sh\n'\(real.path)' \"$@\"\n".write(to: script, atomically: true, encoding: .utf8)
+            try "#!/bin/sh\nREAL='\(real.path)'\n\(wrapper)\n".write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         }
         runtime = ClaudeCodeRuntime(
@@ -95,10 +96,10 @@ final class ClaudeTestbed {
 
     /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapped: Bool = false,
+        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil,
         _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
-        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapped: wrapped)
+        let testbed = try await ClaudeTestbed(installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper)
         do {
             try await body(testbed)
         } catch {
@@ -184,6 +185,7 @@ final class ClaudeTestbed {
         + "prompt: Run the Bash command `for i in $(seq 1 12); do sleep 5; done; echo V` as one foreground Bash call (not run_in_background), then reply V. "
         + "After launching it, reply only with the word launched and end your turn. Do not wait or poll."
     static let stopSubagent = "Stop the background subagent now with the TaskStop tool, then reply only STOPPED."
+    static let passThrough = #""$REAL" "$@""#
     static let backgroundSettings = #"{"permissions": {"allow": ["Bash", "TaskStop"]}}"#
 
     /// 有后台工作的一件事：在飞时等子代理（至少 `waits` 段），最后交回结果的那一轮做完才歇下，只歇下一次；

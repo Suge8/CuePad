@@ -13,7 +13,7 @@ struct RealClaudeHostTests {
     /// CuePad 起的 `claude` 是外壳、真 claude 是它的子进程：托管进程的钩子仍认得是它自己的，桥上不多出一个终端会话。
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
     @Test func aWrappedClaudeIsNotSeenTwice() async throws {
-        try await ClaudeTestbed.run(wrapped: true) { testbed in
+        try await ClaudeTestbed.run(wrapper: ClaudeTestbed.passThrough) { testbed in
             try testbed.runtime.start()
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)

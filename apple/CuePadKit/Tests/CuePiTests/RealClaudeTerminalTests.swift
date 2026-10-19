@@ -233,11 +233,15 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// CuePad 在一轮中途才启动（重启、更新都是这样）：接上的这一轮开始时刻不知道，从接上的此刻算，不沿用库里上一轮的——
-    /// 上一轮的回答早于它（歇下先到时 Cue 不会读到上一轮的回答），这一轮的回答不早于它（读到就算就绪，`PiSessionState.answered`）。
-    @Test func aRoundAlreadyRunningWhenCuePadStartsCountsFromWhenItWasSeen() async throws {
-        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
-            testbed.hooks.stop()  // CuePad 没在跑：钩子连不上，Claude Code 照常往下走
+    /// CuePad 在一轮中途才启动（重启、更新都是这样），这一轮恰在 `claude agents --json` 列出它在跑之后、接上之前答完：
+    /// 开始时刻取发出列表的那一刻——上一轮的回答早于它（歇下先到时 Cue 不会读到上一轮的回答），这一轮的回答不早于它
+    /// （读到就算就绪，`PiSessionState.answered`）。外壳把列表扣到这一轮答完才交出；不装钩子，会话只能从列表接上。
+    @Test func aRoundThatEndsWhileCuePadIsListingItCountsAsAnswered() async throws {
+        let gate = try makeTempDirectory()
+        let release = gate.appending(path: "release")
+        #expect(mkfifo(release.path, 0o600) == 0)
+        let wrapper = #"if [ "$1" = agents ]; then out=$("$REAL" "$@"); touch '\#(gate.path)/listed'; cat '\#(release.path)' >/dev/null; printf '%s' "$out"; else "$REAL" "$@"; fi"#
+        try await ClaudeTestbed.run(installHooks: false, settings: ClaudeTestbed.backgroundSettings, wrapper: wrapper) { testbed in
             let terminal = try await testbed.terminal()
             // 等它起好（登记了会话）再打字：之前的回车会被吞掉
             try await eventually("Claude Code 登记了这个会话", timeout: .seconds(60)) {
@@ -245,22 +249,21 @@ struct RealClaudeTerminalTests {
             }
             try await terminal.type("What is 6 times 7? Reply with only the number.")
             try await eventually("上一轮答完", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""text":"42""#) } }
-            try await terminal.type("Run the shell command sleep 20 with the Bash tool, then reply with only the word FINISHED.")
-            try await eventually("这一轮在跑命令", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""command":"sleep 20""#) } }
+            let previous = Date.now  // 上一轮的回答不晚于此刻
+            try await terminal.type("Run the shell command sleep 5 with the Bash tool, then reply with only the word FINISHED.")
+            try await eventually("这一轮在跑命令", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""command":"sleep 5""#) } }
 
-            try testbed.hooks.start()
             try testbed.runtime.start()
+            try await eventually("列出它在跑") { FileManager.default.fileExists(atPath: gate.appending(path: "listed").path) }
+            try await eventually("这一轮答完", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""text":"FINISHED""#) } }
+            let writer = open(release.path, O_WRONLY)
+            close(writer)
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let turn = try #require(session.turnStartedAt)
-            let before = try #require(try testbed.transcript(session.sessionFile).recap.answeredAt)
-            #expect(session.state.isWorking && before < turn, "\(before) \(turn)")
-
-            try await eventually("这一轮答完歇下", timeout: .seconds(180)) {
-                testbed.bridge.session(id: session.id)?.state == .settled
-                    && (try? testbed.transcript(session.sessionFile))?.recap.lastReply?.contains("FINISHED") == true
-            }
-            let answered = try #require(try testbed.transcript(session.sessionFile).recap.answeredAt)
-            #expect(testbed.bridge.session(id: session.id)?.turnStartedAt == turn && turn <= answered, "\(turn) \(answered)")
+            let recap = try testbed.transcript(session.sessionFile).recap
+            let answered = try #require(recap.answeredAt)
+            #expect(recap.lastReply == "FINISHED")
+            #expect(previous < turn && turn <= answered, "\(previous) \(turn) \(answered)")
         }
     }
 
