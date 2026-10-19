@@ -47,7 +47,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     static func read(from store: isolated CueStore, showsSteps: Bool) throws -> CueThread {
         let recent = try store.cueMessages(limit: limit)
-        let messages = try (recent.first.map { try store.cueQuestionsAnswered(since: $0.createdAt) } ?? []) + recent
+        let messages = try store.cueQuestionsAnswered(outside: recent) + recent
         let waiting = try store.cueMessagesWaitingForYou()
         let mentioned = Set((messages + waiting).compactMap(\.taskID))
         // 提到的一次取完交付物与步骤进度，不逐件读细节
@@ -154,8 +154,9 @@ nonisolated struct CueThread: Equatable, Sendable {
     private static func rows(
         _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool
     ) -> [Row] {
-        var answers = messages.filter { $0.answer != nil && $0.answeredAt != nil }
-            .sorted { ($0.answeredAt!, $0.id.uuidString) < ($1.answeredAt!, $1.id.uuidString) }[...]
+        // 同一毫秒答的按问的先后（`messages` 的顺序）
+        var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
+            .sorted { ($0.element.answeredAt!, $0.offset) < ($1.element.answeredAt!, $1.offset) }.map(\.element)[...]
         let waiting = Set(waiting.map(\.id))
         var shown = Set<UUID>()
         /// 每件活上一次挂到的时刻

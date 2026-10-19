@@ -185,10 +185,13 @@ extension CueStore {
     try select(CueMessage.self, where: Self.openQuestion, orderBy: "createdAt, rowid")
   }
 
-  /// 早于 `time` 问的、在它之后你答了的提问（撤回的不算）：Cue 页只读最近的对话，问的那句掉出去了，你的回答还在读到的这段时间里。
-  public func cueQuestionsAnswered(since time: Date) throws -> [CueMessage] {
-    try select(
-      CueMessage.self, where: "\(Self.answered) AND answeredAt >= ?1 AND createdAt < ?1", [time], orderBy: "answeredAt, rowid")
+  /// 读到的最近对话（`recent`，从早到晚，同 `cueMessages`）之外问的、在它最早那条之后你答了的提问（撤回的不算）：
+  /// 问的那句掉出了读的范围，你的回答还在读到的这段时间里。范围按 id 排除，不按时刻切：同一毫秒写下的几条，`cueMessages` 按 rowid 截，按时刻切会两边都漏掉。
+  public func cueQuestionsAnswered(outside recent: [CueMessage]) throws -> [CueMessage] {
+    guard let oldest = recent.first else { return [] }
+    return try select(
+      CueMessage.self, where: "\(Self.answered) AND answeredAt >= ?1 AND createdAt <= ?1 AND id NOT IN (SELECT value FROM json_each(?2))",
+      [oldest.createdAt, Self.idList(recent.map(\.id))], orderBy: "createdAt, rowid")
   }
 
   /// 你答了的提问（撤回的 answer 为空）：也是它的部分索引（`Schema` 第 57 步）的条件，不一样就用不上。
