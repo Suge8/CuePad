@@ -204,6 +204,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         self.content = content()
     }
 
+    /// 可见区变矮、内容没变时滑上去（键盘升起）。只在手机上：Mac 上可见区变矮是拖窗口，要跟手、当下补。
+    #if os(iOS)
+    private static var followsKeyboard: Bool { true }
+    #else
+    private static var followsKeyboard: Bool { false }
+    #endif
+
     private func margin(_ width: CGFloat) -> CGFloat { ChatLayout.margin(width, readingWidth: readingWidth, inset: inset) }
 
     /// 内容底下让出浮着的回复框（Mac，`chatBottomInset`）的留白。发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
@@ -242,7 +249,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         offset.set(read: max(0, read.rounded()), end: end)
                         return Reading(
                             nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
-                            height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded())
+                            height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded(),
+                            container: screen)
                     } action: { previous, reading in
                         let last = offset.deliver(reading) ?? previous
                         let grown = reading.height - last.height
@@ -274,7 +282,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             deferred = true
                             return
                         }
-                        // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
+                        // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、栏的高度第一次加进内容边距
                         // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                         // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
                         // 内容或浮着的那块变矮（"等你"卡沉下去、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
@@ -282,6 +290,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
                         if grown > 0, reading.inset == last.inset {
+                            slide()
+                        } else if Self.followsKeyboard, reading.container < last.container, grown == 0 {
+                            // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。同新内容一样滑上去，
+                            // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路
                             slide()
                         } else if reading.end > last.end || reading.inset != last.inset || (shrank && offset.read > reading.end) {
                             scroll(to: reading.end)
@@ -375,6 +387,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         var end: CGFloat
         /// 顶部的内容边距：它一变系统就把偏移放回顶上，读数要跟着变，才会再补滚一次。
         var inset: CGFloat
+        /// 可见区的高（扣掉上下边距）：手机上它从底下变矮是键盘升起来了。
+        var container: CGFloat
     }
 
     /// 内容在下面长出来了，整段滑到最新处（减弱动态效果时直接到）。用定长的 `Motion.move`，不用弹簧：弹簧最后那段一两像素的尾巴
