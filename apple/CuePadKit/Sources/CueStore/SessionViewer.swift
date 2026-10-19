@@ -30,6 +30,9 @@ extension SessionViewer: Record {
 }
 
 extension CueStore {
+  /// 各设备的记录（每台一条，没几条）。
+  public func sessionViewers() throws -> [SessionViewer] { try select(SessionViewer.self, where: "1", [], orderBy: "id") }
+
   /// 这台设备写下自己开着哪个会话：`sessionID` 为 nil 是没开着任何会话（离开、后台、睡眠、退出），期限写成此刻；
   /// 开着时期限是 `activeAt`（最近一次有人在用的时刻）加 `SessionViewer.lifetime`。和库里一样就不写。返回记录 id（立即上传用），没写为 nil。
   @discardableResult

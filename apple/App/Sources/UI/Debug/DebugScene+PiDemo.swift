@@ -521,6 +521,10 @@ extension DebugScene {
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: "把迁移脚本拆成三步", lastReply: "拆好了，三步各自能回滚。")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", "闲鱼", DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
+            // 他自己在会话里问的、答完歇着：Cue 值班时留给他回，会话行写"待回复"（`seedCue`）
+            ("sync-why", .settled, nil, "CuePad", DemoRecap(
+                lastPrompt: "同步为什么不用 CKSyncEngine？",
+                lastReply: "macOS 上它的手动拉取只在全新状态第一次真发请求，之后没收到推送就原地返回；Mac 又不收推送，用它就拉不到东西。所以拉与推都是自己的循环。")),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
             // 终端里刚开、还没说过话

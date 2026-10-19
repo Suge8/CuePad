@@ -43,11 +43,12 @@ public struct CueTools: Sendable {
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
+          leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话列表显示"待回复"（等回答的回到等他确认）；不用另外 tell，他或你再对它说话就作废；
           done{task|session,evidence?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
-            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "done"]],
+            "action": ["type": "string", "enum": ["add", "edit", "start", "say", "peek", "stop", "leave", "done"]],
             "task": string, "session": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "body": string,
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
             "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
@@ -155,8 +156,13 @@ public struct CueTools: Sendable {
       let target = try await speaker(args)
       _ = try await store.stopSession(target.session, host: try await host(), cue: true)
       return .ok("已请\(target.label)停下这一轮。（\(target.short)）")
+    case "leave":
+      _ = try await host()  // 停用后不再替他判断谁接手
+      let target = try await speaker(args)
+      try await store.leaveToYou(target.session)
+      return .ok("已把\(target.label)留给他回：会话列表上写着待回复，他或你再对它说话就作废。（\(target.short)）")
     case "done": return try await done(args)
-    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / done")
+    case let other: throw Failure("task 没有 \(other)：可用 add / edit / start / say / peek / stop / leave / done")
     }
   }
 
@@ -381,6 +387,7 @@ public struct CueTools: Sendable {
   /// 末尾是最近完成的 `recentlyDone` 件，各带会话与它此刻的状态：在旧会话上做别的事时从这里找（add 带 session）。
   private func board() async throws -> Result {
     let board = try await store.cueBoard()
+    let left = try await store.cueState()?.left ?? []
     let recent = try await store.cueRecentlyDone(limit: Self.recentlyDone)
     let items = board.tasks
     let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
@@ -391,11 +398,11 @@ public struct CueTools: Sendable {
         group = item.task.projectID
         lines.append(((item.task.projectID.flatMap { names[$0] } ?? "未分类") + "：", false))
       }
-      lines.append(("- " + CueEnvelope.boardLine(item, now: now), true))
+      lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left), true))
     }
     if !board.sessions.isEmpty {
       lines.append(("不归没做完的事的会话：", false))
-      lines += board.sessions.map { ("- " + CueEnvelope.sessionLine($0, now: now), true) }
+      lines += board.sessions.map { ("- " + CueEnvelope.sessionLine($0, now: now, left: left), true) }
     }
     let total = items.count + board.sessions.count
     let room = Self.overviewLimit - 1 - (recent.isEmpty ? 0 : recent.count + 1)  // 第一行是"没做完的 N 件"，最近完成的总在末尾
@@ -427,7 +434,7 @@ public struct CueTools: Sendable {
 
   private func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
-    let now = Date()
+    let now = Date(), left = try await store.cueState()?.left ?? []
     var lines = [
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 步骤 \($0.done)/\($0.total)" } ?? "")
         + " · " + status(detail.task)
@@ -435,7 +442,7 @@ public struct CueTools: Sendable {
     for leaf in detail.leaves {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
       if let session = leaf.session {
-        head += " · " + Self.sessionHead(session.session, now: now)
+        head += " · " + Self.sessionHead(session.session, now: now, left: left)
       } else {
         head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"
       }
@@ -450,7 +457,8 @@ public struct CueTools: Sendable {
   private func peek(_ session: PiSessionState) async throws -> Result {
     guard let detail = try await store.cueSessionDetail(session.sessionID) else { throw Failure("找不到会话「\(session.title)」") }
     let bound = try await store.tasks(boundTo: session.sessionID)
-    var lines = ["会话「\(session.title)」（\(session.shortID)）· " + Self.sessionHead(detail.session, now: Date())]
+    let left = try await store.cueState()?.left ?? []
+    var lines = ["会话「\(session.title)」（\(session.shortID)）· " + Self.sessionHead(detail.session, now: Date(), left: left)]
     lines.append(
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
@@ -474,8 +482,9 @@ public struct CueTools: Sendable {
   }
 
   /// 会话那一段：哪家、名字、状态与多久、在等的提问。
-  private static func sessionHead(_ session: PiSessionState, now: Date) -> String {
+  private static func sessionHead(_ session: PiSessionState, now: Date, left: [CueLeft]) -> String {
     var head = "\(agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
+    if left.contains(where: { $0.holds(for: session) }) { head += " · " + CueEnvelope.leftNote }
     if let question = session.question {
       head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）")
     }
