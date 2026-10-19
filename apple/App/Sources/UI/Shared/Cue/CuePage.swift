@@ -212,17 +212,20 @@ struct CuePage: View {
             }
             return max(count, 1)
         }
-        let covered = covered(thread)
-        return ChatPaging(first: { count(filling: CGSize(width: $0.width, height: $0.height - covered), above: $1) }, step: { count(filling: $0, above: $1) })
+        return ChatPaging(
+            first: { count(filling: CGSize(width: $0.width, height: $0.height - covered(thread, size: $0)), above: $1) },
+            step: { count(filling: $0, above: $1) })
     }
 
     /// 浮在对话底上的那一块（`bottom`）至少多高：对话底下让出它那么高的留白（`chatBottomInset`），最新处停在它上方。
     /// Mac 上按输入框（`ComposerMetrics`）、底下的边距与"等你"卡（`CueWaitingDock.floor`）的下限算，只能数少；
     /// 手机上没算这两样的下限，按整屏数（多排几格，不会铺不满）。
-    private static func covered(_ thread: CueThread) -> CGFloat {
+    private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
         #if os(macOS)
         let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
-        let dock = thread.waiting.first.map { CueWaitingDock.floor($0, shots: thread.shots) } ?? 0
+        // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
+        let floor = thread.waiting.first.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) } ?? 0
+        let dock = min(floor, size.height / 2)
         return composer + replyPadding + dock
         #else
         0
@@ -247,7 +250,7 @@ struct CuePage: View {
         // 引用那一行至少一行小字，下面是回答
         case .answer(let question): bubble + note + 6 + said(question.answer ?? "")
         // 字与图之间隔 8（`CueSays`）
-        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor)
+        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
         // 字、交付物与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
         case .result(let message, _, let deliverables):
             bubble + answer(message.text) + 12 + DeliverableStrip.floor(count: deliverables.count, size: .result, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
@@ -277,9 +280,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                // 卡高过可视区时只有它让出高（在卡里滚），输入框不被挤
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
-                    .layoutPriority(-1)
             }
             if !cue.canHear {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
