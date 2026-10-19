@@ -35,13 +35,13 @@ struct PiConversation: View {
     var body: some View {
         let all = items
         let notes = services.settings.replyNotes(for: session.id)
-        let first = Self.firstSegment(count: all.count, window: window)
+        let first = max(0, all.count - window)
         VStack(alignment: .leading, spacing: Self.spacing) {
             if first > 0 {
                 EarlierRow(count: Self.segment, action: showEarlier)
             }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, size: Self.segment, from: first * Self.segment, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
+            ChatSegments(items: all, size: Self.segment, from: first, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
@@ -77,12 +77,9 @@ struct PiConversation: View {
     }
 
     static var spacing: CGFloat { 16 }
-    /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
+    /// 最初至少排开几条；一段约几条（`ChatSegments`），每次再排开这么多条。
     static let firstWindow = 4, segment = 5
     static let paging = ChatPaging.fixed(first: firstWindow, step: segment)
-
-    /// 排开最近 `window` 条要从第几段起。
-    static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }
 
     /// 回答原位换下正在说的话（Mac 上本机在线的会话），不淡入。
     private var swapsInPlace: Bool {
@@ -148,7 +145,7 @@ struct SessionDraft: View {
 #endif
 
 
-/// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
+/// 对话里的一段（约 `PiConversation.segment` 条，`ChatSegments`）。只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
     let items: [PiChatEntry]
     let session: PiSessionState

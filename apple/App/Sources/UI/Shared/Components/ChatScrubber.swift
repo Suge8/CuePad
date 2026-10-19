@@ -7,6 +7,7 @@ import SwiftUI
 /// 平时最多画 30 个刻度，更多时每个代表按序号均分的一段；拖动时以手指为中心鱼眼放大成逐条刻度、附近的刻度像程序坞那样变长，
 /// 逐条轻触一下，旁边浮出那一条的第一行，松手（或点一下）跳过去。手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
 /// 读屏上是一个可调节的元素：上下轻扫跳到上一处、下一处。不到两处时没有滑条。
+/// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，刻度挤在输入框旁边只是碍眼；键盘收起再淡回来。
 struct ChatScrubber: View {
     let marks: [ChatMark]
     /// 用户正在滚对话。
@@ -25,6 +26,8 @@ struct ChatScrubber: View {
     @State private var current: UUID?
     /// 指针停在右缘这条上（Mac、iPad 触控板）。
     @State private var hovering = false
+    /// 键盘弹着（从 willShow 到 willHide，跟着键盘一起动）。
+    @State private var keyboard = false
 
     /// 会话的刻度：你发的话与换了上下文的地方（`PiNotice.changesContext`）。不到两处为空（没有滑条）。
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
@@ -132,6 +135,14 @@ struct ChatScrubber: View {
             Button("上一处") { go(to: max((currentIndex ?? marks.count) - 1, 0)) }
             Button("下一处") { go(to: min((currentIndex ?? marks.count) + 1, marks.count - 1)) }
         }
+        .opacity(keyboard ? 0 : 1)
+        .allowsHitTesting(!keyboard)
+        .accessibilityHidden(keyboard)
+        .animation(reduceMotion ? nil : Motion.quick, value: keyboard)
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
+        #endif
     }
 
     /// 手指旁浮出的那一条：你的话是它的第一行，换了上下文的地方带一个同样的标。

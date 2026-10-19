@@ -128,7 +128,7 @@ struct CuePage: View {
     }
 
     /// 只排开铺满可见区要的那几格（`paging`）：打开时铺一屏，离最早那头不到一屏时（打开后紧接着就是）往上再铺一屏；
-    /// 每 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
+    /// 约 `segment` 格一段地排，离屏远的段换成同高的空白（`ChatSegments`），发出一句时只重排最新那段。一格多高要排出来才知道，
     /// 这里按每格至少多高（`floor`）往上数：数到的只会多不会少，第一帧就铺满、不露空白（不估真实的高：估高了就排少了，
     /// 打开时接着一段段地补，按字数估的高在真实库上排少了、更慢）。
     private func conversation(_ thread: CueThread) -> some View {
@@ -176,7 +176,7 @@ struct CuePage: View {
         return CueLiveRound(round: round, ending: .live(shown, doing: progress, step: presence.isUsingTool ? RoundProcess.icon(.other) : nil))
     }
 
-    /// 一段几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
+    /// 一段约几格；屏上那几段上下各留几段真的（`ChatSegments`）。Cue 的回答长、一段要排几十毫秒（真实库），只留一段的话
     /// 来回翻几屏时每拆了又建一段就卡一下；留八段时翻动与整段都挂着一样顺，挂着的仍有上限。
     static let segment = 6, spare = 8
 
@@ -299,7 +299,7 @@ struct CuePage: View {
     }
 }
 
-/// 对话里的一段（`CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
+/// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
 private struct CueSegment: View, Equatable {
     let rows: [CueRow]
 
