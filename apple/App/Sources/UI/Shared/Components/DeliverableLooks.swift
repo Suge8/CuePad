@@ -47,7 +47,9 @@ nonisolated struct LookBox: Hashable, Sendable {
 
 /// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
 /// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
-/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与生成都不在主线程。
+/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
+/// Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在
+/// 页面出来的这一帧上（第一次打开 Cue 页，结果卡与"等你"里的网页还没有快照）。
 /// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
 /// （真实库上一次约 650ms 的后台 CPU，与主线程抢核），同一份在别处再出现、滚走再滚回来都不重读，第一帧就是它该有的比例。
 enum DeliverableLooks {
@@ -70,9 +72,12 @@ enum DeliverableLooks {
         var look = DeliverableLook()
         if let stored = await LookFiles.image(key, in: caches) {
             look.image = stored
-        } else if let made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
-            look.image = made
-            await LookFiles.store(made, as: key, in: caches)
+        } else {
+            await NextFrame.drawn()
+            if let made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
+                look.image = made
+                await LookFiles.store(made, as: key, in: caches)
+            }
         }
         look.detail = await detail
         look.aspect = look.image.flatMap { $0.height > 0 ? CGFloat($0.width) / CGFloat($0.height) : nil }

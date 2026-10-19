@@ -70,11 +70,11 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                 let index = start ?? ids.count - self.window(size)
                 if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }
             }
-            // 下一帧再排开：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排一屏
+            // 这一帧画上屏之后再排开：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排一屏
             .onChange(of: follow.nearOldest, initial: true) { _, near in
                 guard near else { return }
                 Task {
-                    await NextFrame.wait()
+                    await NextFrame.drawn()
                     if follow.nearOldest, !follow.prepending { showEarlier(size) }
                 }
             }
