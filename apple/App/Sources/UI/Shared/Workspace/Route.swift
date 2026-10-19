@@ -12,13 +12,13 @@ nonisolated enum Route: Hashable {
     case trash
     case settings
     case conflicts
-    /// 跨项目的任务看板（iPhone、iPad 侧栏的"任务"）。
+    /// 跨项目的任务看板（iPhone 底部与 iPad 侧栏的"任务"）。
     case tasks
     /// Cue 页：和总控 Agent Cue 的对话（`CuePage`）。
     case cue
     /// Cue 的设置（手机从 Cue 面板推入，`CueSettingsScreen`；Mac 的在设置窗口里）。
     case cueSettings
-    /// Agent 页：全部 Pi 会话（侧栏的"会话"）。
+    /// Agent 页：全部 Pi 会话（iPhone 底部与 iPad 侧栏的"会话"）。
     case agent
     /// 一个项目的全部 Pi 会话（同 Agent 页，只列这个项目的）。
     case projectSessions(UUID)

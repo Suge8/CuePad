@@ -31,6 +31,7 @@ struct DockRoot: View {
                 }
                 .opacity(!current && fading ? 0 : 1)
                 .allowsHitTesting(current)
+                .environment(\.dockLeaving, !current && fading)
             }
         }
         .onAppear { shown = root }
@@ -43,7 +44,6 @@ struct DockRoot: View {
             fading = false
             Task {
                 await NextFrame.wait()
-                // 旧栈淡得比底部那一排长得快：它盖在上面，淡得慢就把形变遮住了
                 withAnimation(reduceMotion ? Motion.crossfade : Motion.quick) {
                     fading = true
                 } completion: {
@@ -73,7 +73,7 @@ private struct HomePage: View {
             .overlay(alignment: .bottom) {
                 // 不随键盘升起：键盘出来时盖住它
                 if route != .cue {
-                    Dock(arrival: reduceMotion ? nil : Dock.Arrival(from: navigation.previousRoot, to: route))
+                    Dock(route: route, arrival: reduceMotion ? nil : Dock.Arrival(from: navigation.previousRoot, to: route))
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
             }
@@ -123,12 +123,15 @@ struct Dock: View {
         }
     }
 
+    /// 这一排所在的去处（选中那一格）：读它而不读此刻的去处，换走时淡出中的旧页还是它原来的样子。
+    let route: Route
     let arrival: Arrival?
     @Environment(Navigation.self) private var navigation
     /// 还在长成自己的样子之前的第一帧。
     @State private var arriving: Bool
 
-    init(arrival: Arrival?) {
+    init(route: Route, arrival: Arrival?) {
+        self.route = route
         self.arrival = arrival
         _arriving = State(initialValue: arrival != nil)
     }
@@ -166,7 +169,7 @@ struct Dock: View {
     /// 滴在哪一格：刚从三页之一来时先在那一格。
     private var dropIndex: Int? {
         if arriving, case .fromPlace(let previous) = arrival, let index = Self.places.firstIndex(where: { $0.route == previous }) { return index }
-        return Self.places.firstIndex { $0.route == navigation.root }
+        return Self.places.firstIndex { $0.route == route }
     }
 
     /// `collapsed`：还是 Cue 页左边那颗圆钮的样子（刚从 Cue 页来的第一帧）。
@@ -182,7 +185,7 @@ struct Dock: View {
             .overlay(alignment: .leading) {
                 HStack(spacing: 0) {
                     ForEach(Self.places, id: \.self) { place in
-                        DockCell(place: place, selected: place.route == navigation.root, size: .bar) { navigation.select(place.route) }
+                        DockCell(place: place, selected: place.route == route, size: .bar) { navigation.select(place.route) }
                             .frame(width: Self.cellWidth)
                     }
                 }
@@ -379,22 +382,29 @@ extension SidebarOutline.Entry {
     var dockIcon: Icon { self == .allProjects ? .projects : icon }
 }
 
-/// 新去处的栈建好、开始淡入时（`dockSettled`），底部那一排从旧的样子长成自己的，与淡入同一条弹簧。
+/// 换去处时底部那一排的两头：新去处的栈建好、旧栈开始淡出时（`dockSettled`），新的那一排从旧的样子长成自己的（`Motion.dock`）；
+/// 旧的那一排同一刻当场隐去（`dockLeaving`），不随旧页慢慢淡：它盖在新的上面，淡着就把形变的前半段遮住了。
 private struct Arrive: ViewModifier {
     @Binding var arriving: Bool
     @Environment(\.dockSettled) private var settled
+    @Environment(\.dockLeaving) private var leaving
 
     func body(content: Content) -> some View {
-        content.onChange(of: settled, initial: true) {
-            guard settled, arriving else { return }
-            withAnimation(Motion.snappy) { arriving = false }
-        }
+        content
+            .opacity(leaving ? 0 : 1)
+            .animation(nil, value: leaving)
+            .onChange(of: settled, initial: true) {
+                guard settled, arriving else { return }
+                withAnimation(Motion.dock) { arriving = false }
+            }
     }
 }
 
 extension EnvironmentValues {
     /// 窄屏当前去处的栈已经建好、在显示（`DockRoot`）：换去处时新栈先不显示地建好一帧，这之后底部那一排才开始长。
     @Entry var dockSettled = true
+    /// 这个栈是换去处时正在淡出的旧栈：它底部那一排当场隐去（`Arrive`）。
+    @Entry var dockLeaving = false
     /// Cue 页底部那一排离安全区底边的距离（负的是伸进 Home 指示条那一段，与 Dock 离屏幕底边一样远）。
     @Entry var dockLift: CGFloat = Dock.keyboardGap
 }

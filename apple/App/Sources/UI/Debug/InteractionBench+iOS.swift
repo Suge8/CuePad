@@ -106,7 +106,7 @@ enum IOSInteractionBench {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
-        // Agent 整页（侧栏的"会话"）点会话（先读出这一页再推入）→ 返回
+        // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
         navigation.select(.agent)
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {
