@@ -18,8 +18,6 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case send
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
-  /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
-  case ping
   /// 在 Mac 上开一个新会话（后台托管）；正文是 `PiLaunch`
   case start
   /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）；正文是会话 id，不写发送记录

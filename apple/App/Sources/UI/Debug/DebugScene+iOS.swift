@@ -64,6 +64,7 @@ extension DebugScene {
             }
         case "cue", "cuememory", "cuesettings":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             // 一夜里来的话是看着 Cue 页时写进去的：先离开再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
                 navigation.show(.tasks)
@@ -128,7 +129,7 @@ extension DebugScene {
         await presetSpeech(workspace)
     }
 
-    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示
+    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
     /// （演示模式没有同步、真实状态出不来）。
     static var alertStatus: PiAlertStatus? {
         switch defaults.string(forKey: "CuePadAlertStatus") {

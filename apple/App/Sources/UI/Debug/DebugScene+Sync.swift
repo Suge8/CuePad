@@ -10,9 +10,21 @@ extension DebugScene {
     /// `-CuePadSync arrive`：像隔了一阵没打开的手机，启动后的第一次拉取带回别的设备写下的 Cue 的话，分几页陆续到（`ArrivingSync`）。
     /// `-CuePadSync offline`：一开始连不上 iCloud，`-CuePadOfflineSeconds`（默认 6）秒后恢复；配 `-CuePadDemoMac YES` 与
     /// `-CuePadSpeech send` 录"断网时说 → 同步不通 → 恢复 → 送达"（演示 Mac 断网时不接手）。
+    /// `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的替身，设置里 iCloud 同步那一行、
+    /// 要你决定的两个选择、立即同步与 Mac 工具栏的同步提示都按有同步时的样子出现；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
     static var syncSource: AppServices.SyncSource {
-        switch defaults.string(forKey: "CuePadSync") {
-        case "stalled": .custom(StalledSync())
+        let issues = [
+            SyncIssue(recordType: "Card", recordName: "A1B2", message: "CKError 14: server record changed"),
+            SyncIssue(recordType: "Attachment", recordName: "9F3E", message: "CKError 27: asset file not found"),
+        ]
+        return switch defaults.string(forKey: "CuePadSync") {
+        case "stalled": .custom(StandInSync(stalls: true))
+        case "conflicts": .custom(StandInSync())
+        case "noAccount": .custom(StandInSync(SyncState(status: .noAccount, issues: [])))
+        case "decide": .custom(StandInSync(SyncState(status: .needsDecision(.accountSwitched), issues: [])))
+        case "failed": .custom(StandInSync(SyncState(status: .failed("同步出错"), issues: issues)))
+        case "syncing": .custom(StandInSync(SyncState(status: .syncing, issues: [])))
+        case "restricted": .custom(StandInSync(SyncState(status: .accountRestricted, issues: [])))
         case "offline": .custom(OfflineSync(seconds: defaults.object(forKey: "CuePadOfflineSeconds") as? Double ?? 6))
         case "arrive": .custom(ArrivingSync())
         default: .iCloud
@@ -90,34 +102,25 @@ extension DebugScene {
         }
     }
 
-    /// 立即同步不返回（像网络一直没有回音），其余什么都不做。
-    nonisolated final class StalledSync: SyncControlling {
-        var stateUpdates: AsyncStream<SyncState> { AsyncStream { $0.yield(SyncState(status: .idle, issues: [])) } }
+    /// 报 `state`（默认已同步），其余什么都不做；`stalls` 时立即同步不返回（像网络一直没有回音）。
+    nonisolated final class StandInSync: SyncControlling {
+        let state: SyncState
+        let stalls: Bool
+        init(_ state: SyncState = SyncState(status: .idle, issues: []), stalls: Bool = false) { (self.state, self.stalls) = (state, stalls) }
+        var stateUpdates: AsyncStream<SyncState> { AsyncStream { [state] in $0.yield(state) } }
         func start() async throws {}
         func stop() async {}
-        func syncNow() async throws { try await Task.sleep(for: .seconds(86_400)) }
+        func syncNow() async throws { if stalls { try await Task.sleep(for: .seconds(86_400)) } }
         func send(recordName: String) async -> Bool { true }
         func push() async {}
         func resolve(_ resolution: SyncResolution) async throws {}
     }
 
-    /// `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：设置里 iCloud 同步那一行按这个状态显示（两端都认）。
-    /// 隔离库没有同步、真实状态出不来，状态直接写进服务；`failed` 带两条没能同步的记录，`conflicts` 在演示库里造一份冲突副本。
+    /// 摆画面时交给同步替身的：`arrive` 的资料库，`conflicts` 的冲突副本（冲突那一行由有同步时的订阅读出，`AppServices.startSync`）。
     static func presetSync(_ services: AppServices) async {
-        let issues = [
-            SyncIssue(recordType: "Card", recordName: "A1B2", message: "CKError 14: server record changed"),
-            SyncIssue(recordType: "Attachment", recordName: "9F3E", message: "CKError 27: asset file not found"),
-        ]
         switch defaults.string(forKey: "CuePadSync") {
         case "arrive": ArrivingSync.library.continuation.yield(services.store)
-        case "noAccount": services.setSyncState(SyncState(status: .noAccount, issues: []))
-        case "decide": services.setSyncState(SyncState(status: .needsDecision(.accountSwitched), issues: []))
-        case "failed": services.setSyncState(SyncState(status: .failed("同步出错"), issues: issues))
-        case "syncing": services.setSyncState(SyncState(status: .syncing, issues: []))
-        case "restricted": services.setSyncState(SyncState(status: .accountRestricted, issues: []))
-        case "conflicts":
-            services.setSyncState(SyncState(status: .idle, issues: []))
-            await seedConflict(services)
+        case "conflicts": await seedConflict(services)
         default: break
         }
     }
@@ -131,15 +134,7 @@ extension DebugScene {
         }
         guard let original, let copy = try? await store.createCard(in: original.projectID, body: original.body + "\n另一台设备上补了一句")
         else { return }
-        guard markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL) else { return }
-        // 与有同步时一样跟着库走（`AppServices.startSync`）：选好保留哪份，这一行就消失
-        Task {
-            do {
-                for try await conflicts in store.observe({ try $0.conflicts() }) { services.setConflicts(conflicts) }
-            } catch {
-                demoLog.error("演示冲突的订阅停了：\(error)")
-            }
-        }
+        _ = markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL)
     }
 
     /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。

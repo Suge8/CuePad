@@ -471,17 +471,6 @@ struct MacSyncTests {
         #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
-    @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestPing(on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded) && done.mode == .known(.ping))
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
     /// 领取与写回结果后各立即只上传这一条，不等引擎调度：手机才能尽早知道 Mac 接手了、拉到结果。
     /// 领取那次在后台任务里传，两次的先后不定：两次都传过才说明结果已写回并传出。
     @Test(.timeLimit(.minutes(1)))
@@ -489,7 +478,8 @@ struct MacSyncTests {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
-        let request = try await services.store.requestPing(on: TestApp.hostID)
+        // 停止一个不在这台桥上的会话：不碰 Pi，当场按成功写回
+        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "不在的会话", ref: "absent"), on: TestApp.hostID)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
         let name = request.id.uuidString.lowercased()
 

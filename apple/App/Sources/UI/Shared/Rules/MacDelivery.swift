@@ -101,7 +101,6 @@ nonisolated extension DeliveryMode {
         case .send: "说话"
         case .command: "斜杠命令"
         case .answer: "作答"
-        case .ping: "连接测试"
         case .start: "新会话"
         case .transcript: "补写对话"
         case .config: "模型与思考强度"

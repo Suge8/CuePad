@@ -81,7 +81,6 @@ final class MacExecutor {
     private func perform(_ request: DeliveryRequest) async throws -> DeliveryOutcome {
         guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
         switch mode {
-        case .ping: break  // 连接测试：收到即成功，不碰目标、不写发送记录
         case .start: try await startSession(request)
         case .transcript: try await writeTranscript(of: request.content)
         case .bind: try await bindFolder(request)

@@ -328,7 +328,7 @@ private struct SyncAlert: View {
         let summary = SyncSummary(services.syncStatus)
         if services.sync != nil, summary.tone != .calm {
             Button {
-                NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+                SettingsPane.open(.general)
             } label: {
                 Image(summary.icon).foregroundStyle(palette.color(summary.tone))
             }

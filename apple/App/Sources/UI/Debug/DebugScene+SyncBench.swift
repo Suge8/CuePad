@@ -89,7 +89,7 @@ enum SyncBench {
             let request = try await services.store.requestDelivery(
                 "同步测量第 \(round) 句", to: session.target, on: session.hostID)
             let written = ContinuousClock.now
-            async let done = services.result(of: request.id, within: timeout)
+            async let done = result(of: request.id, in: services.store)
             await services.upload(request.id)
             let uploaded = (instant: ContinuousClock.now, date: Date.now)
             guard let (result, seen) = try await done else {
@@ -105,6 +105,25 @@ enum SyncBench {
                 """)
         } catch {
             log.error("bench-error 发送：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
+    private static func result(
+        of request: DeliveryRequest.ID, in store: CueStore
+    ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
+        try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
+            group.addTask {
+                let done = try await store.outcome(of: request)
+                return (done, (ContinuousClock.now, Date()))
+            }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
     }
 

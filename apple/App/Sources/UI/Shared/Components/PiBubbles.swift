@@ -408,11 +408,16 @@ struct SpeechBubble<Menu: View>: View {
 
 nonisolated extension Speech.Failure {
     /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通与 Mac 一直没收下（只说这句话，不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）。
-    /// 同步不通写同步状态那套说法（`sync` 此刻的状态），手里没有同步状态的规则（项目"此刻"）只写"同步不通"——那时同步状态另有提示。
-    func text(sync: SyncStatus?) -> String {
+    /// 同步不通写同步状态那套说法（`sync` 此刻的状态）。
+    func text(sync: SyncStatus) -> String {
+        reason ?? "\(SyncSummary(sync).title)，发不到 Mac"
+    }
+
+    /// 这一句自己的原因（Mac 写回的、Mac 一直没收下）；本机同步不通是全局的事，不是哪一句的原因，没有（nil）。
+    var reason: String? {
         switch self {
         case .reported(let reason): reason
-        case .offline: "\(sync.map { SyncSummary($0).title } ?? "同步不通")，发不到 Mac"
+        case .offline: nil
         case .timedOut: "Mac 迟迟没收下这句"
         }
     }

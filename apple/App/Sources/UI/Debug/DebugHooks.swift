@@ -41,7 +41,7 @@ enum DebugHooks {
         var showsDone = false
         /// 任务页一出现就弹出正文的编辑页（`-CuePadBrief`）。
         var briefOpen = false
-        /// 设置页"Pi 通知"一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
+        /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
         var searchScope = SearchScreen.Scope.cards
@@ -64,7 +64,7 @@ enum DebugHooks {
         #endif
     }()
 
-    /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
+    /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身，`-CuePadSync <状态>` 换成报这个状态的替身（`DebugScene.StandInSync`），其余照常按 iCloud。
     static var syncSource: AppServices.SyncSource {
         #if DEBUG
         DebugScene.syncSource
@@ -271,10 +271,16 @@ extension View {
         #endif
     }
 
-    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）。
+    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）；`-CuePadPlacesOpen YES` 时第一次出现就展开（就绪前摆好，截得到）。
     func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onAppear { DebugScene.togglePlaces = toggle }
+        onAppear {
+            DebugScene.togglePlaces = toggle
+            if DebugScene.defaults.bool(forKey: "CuePadPlacesOpen"), !DebugScene.placesOpened {
+                DebugScene.placesOpened = true
+                toggle()
+            }
+        }
         #else
         self
         #endif
@@ -367,6 +373,7 @@ extension View {
         }
             .task {
                 await DebugScene.prepare(workspace, navigation)
+                DebugScene.noticeIfAsked(workspace)
                 await DebugScene.signalReady(workspace.services)
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 let from = (navigation.root, navigation.path)

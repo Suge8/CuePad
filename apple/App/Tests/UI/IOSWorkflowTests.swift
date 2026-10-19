@@ -16,7 +16,7 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
-    @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
+    @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识_答案与所答的问题() async throws {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
             sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
@@ -26,6 +26,7 @@ struct IOSWorkflowTests {
 
         #expect(request.hostID == "mac-b" && request.mode == .known(.answer))
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
+        // 问题原文随答案带去：作答成功后连同答案写进对话
         #expect(request.answer == PiAnswer(promptID: "p-7", value: .option("覆盖"), question: "覆盖吗？"))
     }
 

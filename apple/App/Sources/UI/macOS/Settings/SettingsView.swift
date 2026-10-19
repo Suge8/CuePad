@@ -3,47 +3,50 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 设置窗口的内容：只放会主动去改的（外观、Cue、通知、显示/隐藏与"对 Cue 说"的快捷键、自动检查更新）与几样连接各一行状态（iCloud、接入 Agent、命令行）。
-/// 每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。
-/// 窗口高度随内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
+/// 设置窗口的几页，工具栏上一排标签切换（同系统各应用的设置窗口），按要紧排：
+/// Cue（在哪台运行、不用先问的事）、通用（iCloud、通知、外观与快捷键、更新）、Agent（接入哪几家与 cuepad 命令，接好就很少再来）。
+/// Cue 那一页的标签写它的名字（同手机设置里 Cue 那一行）。
+enum SettingsPane: String, CaseIterable {
+    case cue, general, agents
+
+    func title(cue name: String) -> String {
+        switch self {
+        case .cue: name
+        case .general: "通用"
+        case .agents: "Agent"
+        }
+    }
+
+    var icon: Icon {
+        switch self {
+        case .cue: .cue
+        case .general: .settings
+        case .agents: .agent
+        }
+    }
+
+    /// 打开设置窗口；给了 `pane` 就翻到那一页，否则停在上次那一页。
+    static func open(_ pane: SettingsPane? = nil) {
+        NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: pane)
+    }
+}
+
+/// 设置窗口的一页：只放会主动去改的与几样连接各一行状态。每一行都是 `SettingRow`；有事时那一行变色、状态后面给解决链接，
+/// 细节在链接弹出的框里（`SettingPopover`），窗口本身不长出段落。窗口高度随这一页的内容、不滚动；回复框的快捷键在主菜单"回复"里，这里不重复。
 struct SettingsView: View {
-    @Environment(AppServices.self) private var services
-    /// "对 Cue 说"的快捷键（调试画面里没有）。
-    @Environment(CueBar.self) private var cueBar: CueBar?
+    let pane: SettingsPane
     @Environment(\.palette) private var palette
 
     var body: some View {
-        @Bindable var settings = services.settings
         Form {
-            Section {
-                SettingRow(title: "外观", icon: Image(.appearance)) {
-                    Picker("外观", selection: $settings.theme) {
-                        Text("跟随系统").tag(AppSettings.Theme.system)
-                        Text("浅色").tag(AppSettings.Theme.light)
-                        Text("深色").tag(AppSettings.Theme.dark)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+            switch pane {
+            case .cue: CueSettingsPane()
+            case .general: GeneralSections()
+            case .agents:
+                Section {
+                    AgentRows()
+                    CommandLineToolRow()
                 }
-                ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
-                if let cueBar {
-                    ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
-                }
-            }
-            CueSettingsSection()
-            if let alerts = services.alerts { NotificationSection(alerts: alerts) }
-            Section {
-                SyncRow()
-                if !services.conflicts.isEmpty { ConflictsRow() }
-            }
-            Section {
-                AgentRows()
-                CommandLineToolRow()
-            }
-            Section {
-                if let report = services.diagnostics.latest { CrashRow(report: report) }
-                UpdateRow()
             }
         }
         .formStyle(.grouped)
@@ -53,6 +56,42 @@ struct SettingsView: View {
         .frame(width: 520)
         // 与主窗口同一种桌面色，不用系统的白底
         .background(palette.desk)
+    }
+}
+
+/// 通用那一页：iCloud 同步（与冲突）、通知、外观与两个全局快捷键、更新（与上次崩溃）。
+private struct GeneralSections: View {
+    @Environment(AppServices.self) private var services
+    /// "对 Cue 说"的快捷键（调试画面里没有）。
+    @Environment(CueBar.self) private var cueBar: CueBar?
+
+    var body: some View {
+        @Bindable var settings = services.settings
+        Section {
+            SyncRow()
+            if !services.conflicts.isEmpty { ConflictsRow() }
+        }
+        if let alerts = services.alerts { NotificationSection(alerts: alerts) }
+        Section {
+            SettingRow(title: "外观", icon: Image(.appearance)) {
+                Picker("外观", selection: $settings.theme) {
+                    Text("跟随系统").tag(AppSettings.Theme.system)
+                    Text("浅色").tag(AppSettings.Theme.light)
+                    Text("深色").tag(AppSettings.Theme.dark)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
+            if let cueBar {
+                ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
+            }
+        }
+        Section {
+            if let report = services.diagnostics.latest { CrashRow(report: report) }
+            UpdateRow()
+        }
     }
 }
 
@@ -128,7 +167,7 @@ private struct ShortcutRow: View {
     }
 }
 
-/// 通知：先一行系统权限（没决定过给"开启"，拒绝了给"打开系统设置"，开着时说横幅与专注模式在系统设置里调），
+/// 通知：系统权限没开时先一行（没决定过给"开启"，拒绝了给"打开系统设置"；开着就不占一行，横幅样式本来就在系统设置里），
 /// 再是两种提示（`AlertRoute.kind`）各一行：开关与提示音（选中即试听一次）。关掉一种 = 它的横幅与声音都没有。
 private struct NotificationSection: View {
     let alerts: AlertCenter
@@ -144,10 +183,9 @@ private struct NotificationSection: View {
     }
 
     @ViewBuilder private var permission: some View {
-        let icon = Image(.alertsPending)
         switch alerts.authorization {
         case .notDetermined:
-            SettingRow(title: "系统通知", icon: icon, tone: .notice, status: "还没开启") { EmptyView() } fix: {
+            SettingRow(title: "系统通知", icon: Image(.alertsPending), tone: .notice, status: "还没开启") { EmptyView() } fix: {
                 Button("开启") { Task { await alerts.requestAuthorization() } }.settingFix()
             }
         case .denied:
@@ -155,7 +193,7 @@ private struct NotificationSection: View {
                 Button("打开系统设置", action: openSystemSettings).settingFix()
             }
         default:
-            SettingRow(title: "系统通知", icon: icon, status: "横幅样式与专注模式在系统设置里调") { EmptyView() }
+            EmptyView()
         }
     }
 
@@ -217,7 +255,8 @@ private struct CrashRow: View {
     }
 }
 
-/// 冲突副本：同一张卡在两台设备上离线改过。行里只说有几条，"处理…"弹出两个版本上下并排，选一份保留、另一份删除。
+/// 冲突副本：同一张卡在两台设备上离线改过。行里只说有几条，"选一份…"弹出两个版本上下并排，选一份保留、另一份删除
+/// （不叫"处理…"：同步要你决定时 iCloud 那一行也有"处理…"，同一屏两个同名链接分不清）。
 private struct ConflictsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -231,7 +270,7 @@ private struct ConflictsRow: View {
         ) {
             EmptyView()
         } fix: {
-            Button("处理…") { showing = true }
+            Button("选一份…") { showing = true }
                 .settingFix()
                 .popover(isPresented: $showing, arrowEdge: .bottom) { versions }
         }

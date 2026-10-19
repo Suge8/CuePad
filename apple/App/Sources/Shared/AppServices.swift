@@ -263,63 +263,6 @@ final class AppServices {
         uploaded(try await store.requestTranscript(of: session))
     }
 
-    /// 连接测试一次往返的分段。`upload`（写库完成 → 上传完成）与 `total`（开始写库 → 看到结果）用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
-    /// 用 Mac 写回的完成时间，跨设备时钟，有误差（两台设备的时钟一般相差零点几秒，偶尔为负）。
-    struct PingTiming: Sendable {
-        var upload: Duration
-        var toMac: Duration
-        var back: Duration
-        var total: Duration
-    }
-
-    /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），立即上传，等它写回结果，返回分段的往返时间。
-    /// 超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。
-    /// 用过的请求删掉。
-    func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> PingTiming {
-        let started = ContinuousClock.now
-        let request = try await store.requestPing(on: host)
-        let written = ContinuousClock.now
-        defer {
-            Task { [store] in
-                do {
-                    try await store.deleteDelivery(request.id)
-                } catch {
-                    Self.log.error("连接测试的请求没能删掉：\(error.localizedDescription)")
-                }
-            }
-        }
-        async let seen = result(of: request.id, within: timeout)
-        await upload(request.id)
-        let uploaded = (instant: ContinuousClock.now, date: Date())
-        guard let (result, seenAt) = try await seen else {
-            throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应")
-        }
-        if let reason = result.failure { throw SendError.notDelivered(reason) }
-        let completed = result.completedAt ?? seenAt.date
-        return PingTiming(
-            upload: uploaded.instant - written, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),
-            back: .seconds(seenAt.date.timeIntervalSince(completed)), total: seenAt.instant - started)
-    }
-
-    /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
-    func result(
-        of request: DeliveryRequest.ID, within timeout: Duration
-    ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
-        try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
-            group.addTask {
-                let done = try await self.store.outcome(of: request)
-                return (done, (ContinuousClock.now, Date()))
-            }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                return nil
-            }
-            let first = try await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-    }
-
     // 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     // （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
     #if os(macOS)
