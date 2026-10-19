@@ -9,8 +9,10 @@ import Testing
 @testable import CuePi
 
 /// 本机装的 Codex（录制时用）；它自己的登录复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉，真实的 ~/.codex 只读这一个文件。
+/// `CUEPAD_CODEX_AUTH` 指向另一份 auth.json 时读它（不碰 ~/.codex）。
 let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-let realCodexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
+let realCodexAuth = ProcessInfo.processInfo.environment["CUEPAD_CODEX_AUTH"].map { URL(filePath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 /// 账号里最便宜的模型
 let codexTestModel = "gpt-6-luna"
 

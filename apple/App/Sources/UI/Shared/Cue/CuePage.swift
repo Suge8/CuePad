@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import SwiftUI
 #if os(macOS)
 import CuePi
@@ -48,6 +49,8 @@ struct CuePage: View {
     #if os(macOS)
     private static let readingWidth: CGFloat = 760
     private static let inset: CGFloat = 24
+    /// "等你"卡与输入框离页底。
+    private static let replyPadding: CGFloat = 16
     #else
     private static let readingWidth: CGFloat = 640
     private static let inset: CGFloat = 16
@@ -80,7 +83,7 @@ struct CuePage: View {
                 chat
             } reply: {
                 bottom
-                    .padding(.horizontal, Self.inset).padding(.bottom, 16)
+                    .padding(.horizontal, Self.inset).padding(.bottom, Self.replyPadding)
                     .frame(maxWidth: Self.readingWidth)
             }
             if cue.showsRun, let keeper = services.cue.keeper {
@@ -229,7 +232,8 @@ struct CuePage: View {
     /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
     static let stampAbove: CGFloat = 16, stampBelow: CGFloat = 4
 
-    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
+    /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格；打开时最新处停在浮着的那一块上方，
+    /// 只铺它上面那一截（`covered`）。
     private static func paging(_ thread: CueThread) -> ChatPaging {
         let rows = thread.rows
         func count(filling size: CGSize, above: Int) -> Int {
@@ -242,71 +246,51 @@ struct CuePage: View {
             }
             return max(count, 1)
         }
-        return ChatPaging(first: { count(filling: $0, above: $1) }, step: { count(filling: $0, above: $1) })
+        return ChatPaging(
+            first: { count(filling: CGSize(width: $0.width, height: $0.height - covered(thread, size: $0)), above: $1) },
+            step: { count(filling: $0, above: $1) })
     }
 
-    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`text`），结果卡另有交付物的一排（有的话；`strip`，比最矮的那种还矮）与下面那件活一行，
-    /// 带图的提问另有图的一排（`shots` 张，至少一行看什么），
-    /// 旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）；数得越贴，打开时多排的越少。
+    /// 浮在对话底上的那一块（`bottom`）至少多高：对话底下让出它那么高的留白（`chatBottomInset`），最新处停在它上方。
+    /// Mac 上按输入框（`ComposerMetrics`）、底下的边距与"等你"卡（`CueWaitingDock.floor`）的下限算，只能数少；
+    /// 手机上没算这两样的下限，按整屏数（多排几格，不会铺不满）。
+    private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
+        #if os(macOS)
+        let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
+        // 卡与阅读栏同宽（`page` 里回复那一块两边让出同样的边距），至多占对话区的一半
+        let floor = thread.waiting.first.map { CueWaitingDock.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) } ?? 0
+        let dock = min(floor, size.height / 2)
+        return composer + replyPadding + dock
+        #else
+        0
+        #endif
+    }
+
+    /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`TextFloor`），带图的提问另有图（`shots` 张，`CueShots.floor`），
+    /// 结果卡另有交付物（`DeliverableStrip.floor`）与下面那件活一行，旁注、经过与分隔至少一行小字（`note`）。
+    /// 只能数少、不能数多（数多了第一帧铺不满）；数得越贴，打开时多排的越少。
     private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
-        let note: CGFloat = 12, strip: CGFloat = 60
+        let note: CGFloat = 12
         let above = stamped ? stampAbove + note + stampBelow : gap(before: row.speaker, joined: joined)
         let bubble = CueBubble.padding.top + CueBubble.padding.bottom
         // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
         func width(_ fraction: CGFloat) -> CGFloat { column * fraction - CueBubble.padding.leading - CueBubble.padding.trailing }
+        func said(_ text: String) -> CGFloat {
+            TextFloor.plain(CueFormat.plainText(text), width: width(UserBubble<EmptyView>.widthFraction), limit: UserBubble<EmptyView>.foldedLines)
+        }
+        func answer(_ text: String) -> CGFloat { TextFloor.markdown(text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing) }
         let body: CGFloat = switch row {
-        case .you(let message):
-            bubble + text(message.text, width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
-        case .answer(let question):
-            // 引用那一行至少一行小字，下面是回答
-            bubble + note + 6 + text(question.answer ?? "", width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
-        case .cue(let message, _):
-            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + (shots == 0 ? 0 : strip + note)
+        case .you(let message): bubble + said(message.text)
+        // 引用那一行至少一行小字，下面是回答
+        case .answer(let question): bubble + note + 6 + said(question.answer ?? "")
+        // 字与图之间隔 8（`CueSays`）
+        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
+        // 字、交付物与那件活（至少 `CueTaskLine` 那么高）之间各隔 12
         case .result(let message, _, let deliverables):
-            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
+            bubble + answer(message.text) + 12 + DeliverableStrip.floor(count: deliverables.count, size: .result, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         case .notes, .process, .renewed: note
         }
         return above + body
-    }
-
-    /// 气泡里的字至少多大（iOS 按动态字体最小的一档）：一行至少多高、一个全角字至少多宽。正文是 `Typography.reading`；
-    /// 代码块的字更小，按代码的算。全角字留一点余量：连着的全角标点会挤紧。
-    private enum MinimumText {
-        #if os(macOS)
-        static let prose = (line: CGFloat(19), wide: CGFloat(15)), code = (line: CGFloat(18), wide: CGFloat(13))
-        #else
-        static let prose = (line: CGFloat(16), wide: CGFloat(13)), code = (line: CGFloat(14), wide: CGFloat(11))
-        #endif
-    }
-
-    /// 原文在 `width` 宽里至少排多高：每个不空的行至少一行（段落里的换行照原样换，见 `MarkdownBlock`；段与段之间的空行、代码块的围栏与
-    /// 表格的对齐行不算）；长的行折成几行只按全角字算：半角的不算（链接地址、行内记号不显示，窄的字母也窄），表格行（横着滚、不折）与图片行只算一行。
-    /// 正文的行与行之间另隔 `spacing`（`Paragraphs` 的行距；代码行按不带行距的算），最多排 `limit` 行（折起的气泡）。
-    private static func text(_ text: String, width: CGFloat, spacing: CGFloat, limit: Int?) -> CGFloat {
-        var lines: [CGFloat] = [], fenced = false
-        for line in text.split(whereSeparator: \.isNewline) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("```") { fenced.toggle(); continue }
-            if trimmed.isEmpty { continue }
-            if trimmed.hasPrefix("|") || trimmed.contains("![") {
-                if MarkdownTable.alignments(trimmed) == nil { lines.append(MinimumText.code.line) }
-                continue
-            }
-            let font = fenced ? MinimumText.code : MinimumText.prose, height = fenced ? font.line : font.line + spacing
-            let wide = trimmed.unicodeScalars.reduce(0) { $0 + (isWide($1) ? 1 : 0) }
-            lines += repeatElement(height, count: max(1, Int((CGFloat(wide) * font.wide / width).rounded(.up))))
-        }
-        if lines.isEmpty { lines = [MinimumText.code.line] }
-        // 最后一行下面没有行距
-        return lines.prefix(limit ?? lines.count).reduce(0, +) - spacing
-    }
-
-    /// 全角：汉字与假名、谚文、全角标点（排出来至少一个字宽）。
-    private static func isWide(_ scalar: Unicode.Scalar) -> Bool {
-        switch scalar.value {
-        case 0x3000...0x30FF, 0x3400...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFF01...0xFF60: true
-        default: false
-        }
     }
 
     /// 有新内容：多了消息、有一条被答了、"等你"变了、末尾的进展出现或收起。
@@ -330,9 +314,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                // 卡高过可视区时只有它让出高（在卡里滚），输入框不被挤
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
-                    .layoutPriority(-1)
             }
             if !cue.canHear {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)

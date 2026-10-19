@@ -8,6 +8,7 @@ struct TaskAgentLook: Equatable {
         switch shown.status {
         case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
         case .asking: (mascot, title, note) = (.error, "Agent 在等你\(shown.waitWord)", line)
+        case .awaitsReply: (mascot, title, note) = (.error, shown.presence, "去会话里回它")
         case .failed, .restart: (mascot, title, note) = (.error, shown.label, line)
         case .unread: (mascot, title, note) = (.welcome, "Agent 回复了", "去会话里看看")
         case .ended: (mascot, title, note) = (.clean, "会话结束了", "在会话里说一句会把它叫回来")

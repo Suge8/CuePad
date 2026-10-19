@@ -20,14 +20,13 @@ struct CodexHooks: AgentHookConfig {
     let environment: [String: String]
     let hooks: HookFile
 
-    /// 全部 12 个事件；权限确认要等 CuePad 作答（远程的回答可能很久才来，超时后 Codex 当作钩子没给决定，回到终端里问），
-    /// 会话结束与中断 Codex 最多给 3 秒，其余当场就回。
+    /// 子代理的起止不挂钩子（只认 app-server 的子线程推送，见 `CodexRuntime`）；权限确认要等 CuePad 作答（远程的回答可能很久才来，
+    /// 超时后 Codex 当作钩子没给决定，回到终端里问），会话结束与中断 Codex 最多给 3 秒，其余当场就回。
     static let events: [HookFile.Event] = [
         .init(name: "SessionStart", timeout: 10), .init(name: "UserPromptSubmit", timeout: 10), .init(name: "PreToolUse", timeout: 10),
         .init(name: "PermissionRequest", timeout: 86_400, statusMessage: waitingMessage), .init(name: "PostToolUse", timeout: 10),
-        .init(name: "PreCompact", timeout: 10), .init(name: "PostCompact", timeout: 10), .init(name: "SubagentStart", timeout: 10),
-        .init(name: "SubagentStop", timeout: 10), .init(name: "Stop", timeout: 10), .init(name: "Interrupt", timeout: 3),
-        .init(name: "SessionEnd", timeout: 3),
+        .init(name: "PreCompact", timeout: 10), .init(name: "PostCompact", timeout: 10), .init(name: "Stop", timeout: 10),
+        .init(name: "Interrupt", timeout: 3), .init(name: "SessionEnd", timeout: 3),
     ]
 
     /// 权限确认的钩子挂住等 CuePad 时（人不在这台 Mac 前），Codex 终端里那一行显示它（钩子拿着这次确认，终端里不弹框）。
@@ -76,6 +75,9 @@ struct CodexHooks: AgentHookConfig {
             footprint.config = ConfigFootprint(file: FileManager.default.fileExists(atPath: configFile.path))
             try hooks.save(footprint)
         }
+        // 旧版挂过、这一版不再挂的事件（如子代理的起止）：先撤掉它们的信任，卸载时才与装之前一致
+        let retired = trustedKeys { event in !Self.events.contains { $0.name == event } }
+        if !retired.isEmpty { try await untrust(retired, footprint: nil) }
         try hooks.install(command: command)
         try await trust(command: command)
         guard files(command: command) == .current else { throw CodexHooksError.notTrusted }
@@ -83,13 +85,18 @@ struct CodexHooks: AgentHookConfig {
 
     func uninstall() async throws {
         let footprint = hooks.footprint() ?? .unknown
-        if let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) {
-            let path = hooks.file.realPath.path
-            let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
-            let keys = hooks.ourGroups(in: tree).map { Self.key(path, $0.event, $0.index) }.filter { Self.trustedHash(of: $0, in: config) != nil }
-            if !keys.isEmpty { try await untrust(keys, footprint: footprint.config) }
-        }
+        let keys = trustedKeys { _ in true }
+        if !keys.isEmpty { try await untrust(keys, footprint: footprint.config) }
         try hooks.uninstall()
+    }
+
+    /// hooks.json 里 CuePad 的、事件合 `include` 的组在 `config.toml` 里已被信任的键。
+    private func trustedKeys(_ include: (String) -> Bool) -> [String] {
+        guard let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
+        let path = hooks.file.realPath.path
+        let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
+        return hooks.ourGroups(in: tree).filter { include($0.event) }.map { Self.key(path, $0.event, $0.index) }
+            .filter { Self.trustedHash(of: $0, in: config) != nil }
     }
 
     /// 让 Codex 信任 CuePad 的条目：它列出的键与哈希原样写回。第一次写之前记下 `[hooks]`、`[hooks.state]` 原来在不在。

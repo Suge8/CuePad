@@ -1,5 +1,4 @@
 import CueStore
-import ImageIO
 import SwiftUI
 
 /// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
@@ -77,7 +76,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         var shots: [UUID: [CueShown]] = [:]
         for message in asked {
             let shown = message.askShots.compactMap { shot in
-                previews[shot.preview].map { CueShown(preview: $0, look: shot.look, aspect: CueShown.aspect(of: $0, in: store.files)) }
+                previews[shot.preview].map { CueShown(preview: $0, look: shot.look) }
             }
             if !shown.isEmpty { shots[message.id] = shown }
         }
@@ -235,23 +234,5 @@ nonisolated struct CueTaskRef: Equatable, Sendable {
 nonisolated struct CueShown: Identifiable, Equatable, Sendable {
     let preview: PiPreview
     let look: String
-    /// 宽比高，读画面之前就知道的：图片按像素尺寸（只读文件头，按拍摄方向转过）；别的类型、还没同步到本机的为 nil（`DeliverableTile.guessedAspect`）。
-    /// 一行图多高看有没有竖图（`CueShots`），读到之前就要定，不能等画面出来再跳。
-    let aspect: CGFloat?
     var id: UUID { preview.id }
-
-    /// 竖的（宽小于高）：没读到比例的按类型猜。
-    var portrait: Bool { DeliverableTile.guessedAspect(preview, known: aspect) < 1 }
-
-    static func aspect(of preview: PiPreview, in files: AttachmentFiles) -> CGFloat? {
-        guard preview.kind == .image, let file = files.fileURL(for: preview.hash),
-            let source = CGImageSourceCreateWithURL(file as CFURL, nil),
-            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-            let width = properties[kCGImagePropertyPixelWidth] as? CGFloat, let height = properties[kCGImagePropertyPixelHeight] as? CGFloat,
-            width > 0, height > 0
-        else { return nil }
-        // 拍摄方向 5–8 是转了 90°：横竖对调
-        let turned = (properties[kCGImagePropertyOrientation] as? Int).map { (5...8).contains($0) } ?? false
-        return turned ? height / width : width / height
-    }
 }

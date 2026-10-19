@@ -5,6 +5,7 @@ import ImageIO
 import QuickLookThumbnailing
 import SwiftUI
 import UniformTypeIdentifiers
+import Vision
 import WebKit
 
 /// 一份交付物的缩略图里画什么：画面、宽高比（宽 / 高）与类型后面那一截（视频、音频的时长，PDF 的页数）。
@@ -22,6 +23,9 @@ nonisolated struct LookBox: Hashable, Sendable {
     var width: Int
     var height: Int
     var fills: Bool
+    /// 出画面时就裁成框的比例、以显著区域（`DeliverableLooks.salientCrop`）为中心：提问的方形缩略图只为认出是哪张，
+    /// 截图的中间常是空白，居中裁认不出。裁好的随缩略图存，画的时候居中铺满即可。
+    var salient = false
 
     /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
     private static let longestFactor = 4
@@ -47,7 +51,9 @@ nonisolated struct LookBox: Hashable, Sendable {
 
 /// 交付物缩略图（`DeliverableStrip`）全是真内容：图片按框降采样（`LookBox`）；网页是离线 WebKit 渲的一张快照（`PageSnapshots`）；
 /// Markdown 用全屏页同一个 `MarkdownText` 画首屏（不另写一套 Markdown 渲染）；
-/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与生成都不在主线程。
+/// 音频只有时长；其余（视频、PDF、演示文稿、文稿、表格、3D、文本）交给系统缩略图。解码与系统缩略图不在主线程；网页快照（`WebPage`）与
+/// Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在
+/// 页面出来的这一帧上（第一次打开 Cue 页，结果卡与"等你"里的网页还没有快照）。
 /// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍
 /// （真实库上一次约 650ms 的后台 CPU，与主线程抢核），同一份在别处再出现、滚走再滚回来都不重读，第一帧就是它该有的比例。
 enum DeliverableLooks {
@@ -70,9 +76,13 @@ enum DeliverableLooks {
         var look = DeliverableLook()
         if let stored = await LookFiles.image(key, in: caches) {
             look.image = stored
-        } else if let made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
-            look.image = made
-            await LookFiles.store(made, as: key, in: caches)
+        } else {
+            await NextFrame.drawn()
+            if var made = await image(preview, file: file, box: box, scale: scale, caches: caches) {
+                if box.salient { made = await salientCrop(made, aspect: CGFloat(box.width) / CGFloat(box.height)) }
+                look.image = made
+                await LookFiles.store(made, as: key, in: caches)
+            }
         }
         look.detail = await detail
         look.aspect = look.image.flatMap { $0.height > 0 ? CGFloat($0.width) / CGFloat($0.height) : nil }
@@ -101,7 +111,42 @@ enum DeliverableLooks {
     }
 
     private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
-        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")"
+        "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.salient ? "-salient" : "")"
+    }
+
+    /// 按宽高比 `aspect` 裁出一块，中心是注意力显著热图（Vision 的 attention saliency）的加权重心，夹在图内；热图全空（或出错）时居中。
+    /// 不用它给的显著区域外框：白底页面上的框很松，常把顶上一行字连主体一起框进去，中心落在两者之间的空白上，还随图的尺寸漂。
+    @concurrent private static func salientCrop(_ image: CGImage, aspect: CGFloat) async -> CGImage {
+        let width = image.width, height = image.height
+        let cropWidth = CGFloat(width) / CGFloat(height) > aspect ? Int(CGFloat(height) * aspect) : width
+        let cropHeight = cropWidth == width ? Int(CGFloat(width) / aspect) : height
+        let heat = try? await GenerateAttentionBasedSaliencyImageRequest().perform(on: image).heatMap.cgImage
+        let center = heat.flatMap(centroid) ?? CGPoint(x: 0.5, y: 0.5)
+        let x = min(max(Int(center.x * CGFloat(width)) - cropWidth / 2, 0), width - cropWidth)
+        let y = min(max(Int(center.y * CGFloat(height)) - cropHeight / 2, 0), height - cropHeight)
+        return image.cropping(to: CGRect(x: x, y: y, width: cropWidth, height: cropHeight)) ?? image
+    }
+
+    /// 灰度热图的加权重心（0…1，原点左上，同 CGImage）；全黑为 nil。
+    nonisolated private static func centroid(_ heat: CGImage) -> CGPoint? {
+        let width = heat.width, height = heat.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn = pixels.withUnsafeMutableBytes { buffer in
+            CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ).map { $0.draw(heat, in: CGRect(x: 0, y: 0, width: width, height: height)) } != nil
+        }
+        guard drawn else { return nil }
+        var total = 0.0, sumX = 0.0, sumY = 0.0
+        for (index, value) in pixels.enumerated() where value > 0 {
+            let weight = Double(value)
+            total += weight
+            sumX += weight * Double(index % width)
+            sumY += weight * Double(index / width)
+        }
+        guard total > 0 else { return nil }
+        return CGPoint(x: (sumX / total + 0.5) / Double(width), y: (sumY / total + 0.5) / Double(height))
     }
 
     /// Markdown 的首屏：纸色底上的 `MarkdownText`，4:3（同网页快照）。只读开头一段，首屏之外的字不进排版；

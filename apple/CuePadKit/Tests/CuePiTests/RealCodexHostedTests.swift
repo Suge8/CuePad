@@ -125,7 +125,7 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定。
+    /// 子代理：派出去时出现在会话的子代理名册里（名字是派它时给的任务名），交回结果后落定；在这一轮里等到了它，这一轮做完只歇下一次。
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig { rig in
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-3", name: nil, model: nil, thinking: nil)
@@ -134,6 +134,7 @@ struct RealCodexHostedTests {
             _ = try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name pong and ask it to reply with the word PONG. Wait for it, then tell me what it said."), to: id)
 
             try await eventually("这一轮做完", timeout: .seconds(180)) { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) }
+            #expect(log.settles == 1, "\(log.states)")
             let roster = try #require(rig.bridge.session(id: id)?.subagents)
             #expect(roster.map(\.name) == ["pong"])
             #expect(roster.first?.phase == .known(.done) && roster.first?.settledAt != nil)
@@ -150,6 +151,35 @@ struct RealCodexHostedTests {
             #expect(Set(history.updates.map(\.checkpoint.sessionID)) == [main])
             let indexed = history.events.compactMap { if case .backfillFinished(let files) = $0 { files } else { nil } }.first
             #expect(indexed?.map(\.lastPathComponent).allSatisfy { $0.contains(main) } == true && indexed?.count == 1)
+        }
+    }
+
+    /// 派完不等的子代理：这一轮结束时它还在跑，会话在等子代理、不歇下；它做完后 CuePad 补一轮让会话读到结果，
+    /// 那一轮答出结果后才歇下，只歇下一次。
+    @Test func aSubagentLeftRunningIsReadBackBeforeSettling() async throws {
+        try await withCodexRig { rig in
+            let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-wake", name: nil, model: nil, thinking: nil)
+            let log = ChangeLog(rig.bridge)
+
+            _ = try await rig.bridge.send(PiMessage(text: "Spawn exactly one subagent with task name fruit. Tell it: sleep 15 seconds with the sleep tool, then reply with exactly the word BANANA. Do not wait for it: end your turn right away, replying only DISPATCHED. When its result reaches you later, reply with exactly the word it sent you."), to: id)
+
+            try await eventually("这一轮结束、在等子代理", timeout: .seconds(120)) { rig.bridge.session(id: id)?.state == .delegating }
+            #expect(log.settles == 0)
+            let delegating = try #require(rig.bridge.session(id: id))
+            let dispatched = try #require(try rig.transcript(delegating).recap.answeredAt)
+            try await eventually("读到结果后歇下", timeout: .seconds(180)) {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("BANANA") == true } == true
+            }
+            #expect(log.settles == 1, "\(log.states)")
+            // 歇下就绪（`PiSessionState.answered`）：派活那一轮的收尾早于补的那一轮的开始（CuePad 发出空输入的时刻），那一轮的收尾不早于它。
+            // 只有连真 Agent 时可比：回放时 Mac 一侧的时刻随回放压缩，会话文件的时刻照录下的间隔
+            if RealAgents.mode(of: .codex) == .record {
+                let settled = try #require(rig.bridge.session(id: id))
+                let turn = try #require(settled.turnStartedAt), answered = try #require(try rig.transcript(settled).recap.answeredAt)
+                #expect(dispatched < turn && turn <= answered, "\(dispatched) \(turn) \(answered)")
+            }
+            let roster = try #require(rig.bridge.session(id: id)?.subagents)
+            #expect(roster.map(\.name) == ["fruit"] && roster.first?.phase == .known(.done))
         }
     }
 

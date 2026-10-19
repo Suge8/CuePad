@@ -30,7 +30,10 @@ extension Date {
 
 /// 时间存 Unix 毫秒整数。
 extension Date: SQLBindable {
-  var sqlValue: SQLValue { .int(Int64((timeIntervalSince1970 * 1000).rounded())) }
+  var sqlValue: SQLValue { .int(stored) }
+
+  /// 库里存的样子（毫秒）：同一时刻经库、经 JSON、或从桥上直接来的值，按它比是不是同一刻。
+  public var stored: Int64 { Int64((timeIntervalSince1970 * 1000).rounded()) }
 }
 extension Optional: SQLBindable where Wrapped: SQLBindable {
   var sqlValue: SQLValue { map(\.sqlValue) ?? .null }

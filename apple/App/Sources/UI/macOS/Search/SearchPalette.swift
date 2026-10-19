@@ -157,7 +157,7 @@ struct SearchPalette: View {
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
-        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], cueOnDuty: services.liveSessions.cueOnDuty, now: .now, at: services.speech)
+        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], cue: services.liveSessions.cue, now: .now, at: services.speech)
     }
 
     private var results: some View {

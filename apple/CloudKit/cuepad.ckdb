@@ -97,6 +97,8 @@ DEFINE SCHEMA
         agent         STRING,
         catalogID     STRING,
         pendingTools  ENCRYPTED STRING,
+        turnStartedAt INT64,
+        answeredAt    INT64,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
@@ -247,6 +249,7 @@ DEFINE SCHEMA
         round         STRING,
         woke          STRING,
         context       STRING,
+        leftToYou     STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -274,6 +277,15 @@ DEFINE SCHEMA
         problems      ENCRYPTED STRING,
         modifiedAt    INT64,
         name          ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE sessionViewers (
+        "___recordID" REFERENCE QUERYABLE,
+        device        STRING,
+        sessionID     STRING,
+        modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

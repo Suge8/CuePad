@@ -217,6 +217,11 @@ final class Navigation {
     /// 此刻屏幕上最上面的页。
     var top: Route { path.last ?? root }
 
+    /// 屏幕上最上面那一页是会话页时是它（这台手机开着哪个会话，`SessionViewerKeeper`）。
+    var shownSession: SessionViewerKeeper.Page? {
+        if case .session(let route) = top { SessionViewerKeeper.Page(id: route.id, sessionID: route.sessionID) } else { nil }
+    }
+
     /// 会话的前台提示（等你确认、做完了）弹不弹：屏幕上最上面那一页盖住了这个会话（`Route.covers`）时不弹。
     func showsAlert(about session: UUID) -> Bool { !top.covers(session: session) }
 

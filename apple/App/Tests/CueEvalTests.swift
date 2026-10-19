@@ -55,6 +55,19 @@ struct CueEvalTests {
         }
     }
 
+    @Test func r大事先对齐() async throws {
+        try await CueEval.run("r-大事先对齐", expect: "他要重新设计设置页（界面设计、没说清要做成什么样）：建任务但不开工，回复里一两句说清打算、等他点头") { eval in
+            try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
+            let reply = try await eval.reply()
+            return [
+                Check("建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
+                Check("没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
+                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check("回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+            ]
+        }
+    }
+
     @Test func b验收证据不足() async throws {
         try await CueEval.run("b-验收证据不足", expect: "会话只回一句「改好了」：不 done，say 要证据") { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
@@ -183,6 +196,48 @@ struct CueEvalTests {
         }
     }
 
+    @Test func s等子代理停住() async throws {
+        try await CueEval.run(
+            "s-等子代理停住",
+            expect: "会话派了子代理 e2e 跑端到端测试、自己在等，e2e 20 分钟没动静：Cue 对那个会话 say，点名 e2e 多久没动静、让它自己判断（卡住就停掉重派或接手，在正常跑就接着等）；不 tell 他、不停会话"
+        ) { eval in
+            let rig = eval.rig
+            let project = try #require(try await rig.store.projects().first { $0.name == "演示" })
+            let first = "\(Self.title)\n\(Self.body)", id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
+            let task = try await rig.store.createTask(first, in: project.id)
+            try await rig.store.linkCard(task.id, toSession: id)
+            try await rig.store.recordSend(first, to: SendTarget(kind: .piSession, name: Self.title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
+            let dispatched = "后端与登录页都改好了，单元测试 23 个全过。派了 e2e 去跑端到端测试（真浏览器走一遍忘记密码），等它交回再汇报。"
+            try await eval.trigger {
+                // 在另一台 Mac 上：e2e 最后一次进展再过 3 秒满 20 分钟
+                let due = Date.now.addingTimeInterval(3)
+                let e2e = PiSubagentState(
+                    name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
+                    progressAt: due - PiSessionState.stallAfter)
+                try await PiStateRecorder(store: rig.store, hostID: "mac-b")
+                    .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
+                let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
+                let reply = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
+                try await rig.store.writePiTranscript(PiTranscript(
+                    sessionID: id, messages: [prompt, reply], recap: PiRecap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
+            }
+            // 给的是这件任务（id 前缀或标题），或它的会话（id 前缀）
+            let toIt = eval.calls("task", "say").filter { call in
+                if let ref = (call.args["task"] as? String)?.lowercased(), !ref.isEmpty {
+                    return ref == Self.title || task.id.uuidString.lowercased().hasPrefix(ref)
+                }
+                return (call.args["session"] as? String).map { !$0.isEmpty && id.hasPrefix($0.lowercased()) } ?? false
+            }
+            let said = toIt.compactMap { $0.args["text"] as? String }
+            return [
+                Check("对这件任务的会话 say", !toIt.isEmpty),
+                Check("say 点名 e2e 与多久没动静", said.contains { $0.contains("e2e") && $0.contains(/20|二十/) }),
+                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+                Check("没停会话（没 stop、没 done）", eval.calls("task", "stop").isEmpty && eval.calls("task", "done").isEmpty),
+            ]
+        }
+    }
+
     @Test func g答问() async throws {
         try await CueEval.run("g-答问", expect: "用户问在做的那件做到哪了：直接回答进展，不派新活") { eval in
             let rig = eval.rig
@@ -287,6 +342,90 @@ struct CueEvalTests {
                 Check("没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
                 Check("卡还在等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
                 Check("回了他", try await eval.reply() != nil),
+            ]
+        }
+    }
+
+    @Test func n他走开后的常规问题() async throws {
+        try await CueEval.run(
+            "n-他走开后的常规问题",
+            expect: "他 15 分钟前直接在会话里补了一句（不在场），会话做完那句停下来问一个常规的技术取舍：Cue 接着推进（say 作答），不留给他、不发等你"
+        ) { eval in
+            let work = try await eval.rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await eval.rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            return [
+                Check("对会话 say 作答（说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
+                Check("没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
+                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+            ]
+        }
+    }
+
+    @Test func o答他自己问的() async throws {
+        try await CueEval.run(
+            "o-答他自己问的",
+            expect: "他 15 分钟前在会话里自己问了个问题（不在场），会话答完停下：Cue 不替他接（不 say），task leave 留给他，会话显示待回复"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await rig.settleHisTurn(
+                    work, said: "等下，重置令牌为什么要存哈希而不是原文？", ago: 15 * 60,
+                    reply: "存哈希是为了库被拖走时令牌不能直接拿来用：令牌本身就等于一次性密码，原文落库的话，谁读到库谁就能重置任何人的密码。验证时把用户带来的令牌同样哈希再比对就行，代价只是一次 SHA-256。")
+            }
+            let session = try #require(try await rig.store.sessions(matching: work.id).first)
+            let duty = try await rig.store.cueDuty()
+            return [
+                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
+                Check("留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check("会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
+                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+            ]
+        }
+    }
+
+    @Test func p他在场不插嘴() async throws {
+        try await CueEval.run(
+            "p-他在场不插嘴",
+            expect: "他 2 分钟前刚在会话里说过话（在场），会话停下问一个常规取舍：Cue 不插嘴（不 say、不 leave、不 tell）"
+        ) { eval in
+            let work = try await eval.rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await eval.rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 2 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            return [
+                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
+                Check("没 leave", eval.calls("task", "leave").isEmpty),
+                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+            ]
+        }
+    }
+
+    @Test func q他离开后接着推进() async throws {
+        try await CueEval.run(
+            "q-他离开后接着推进",
+            expect: "会话停下问常规取舍时他正在手机上开着它（在场，Cue 不动）；他离开那一页后 Cue 被再叫醒（他已离开），接着推进（say 作答）"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.store.recordViewing(device: "phone", sessionID: work.id)
+            try await eval.trigger {
+                try await rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            let quiet = eval.calls("task", "say").isEmpty && eval.calls("task", "leave").isEmpty
+            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
+            return [
+                Check("他开着时没插嘴", quiet),
+                Check("他离开后再被叫醒（信封写着他已离开）", eval.round?.sent.contains { $0.contains("他已离开") } == true),
+                Check("接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
             ]
         }
     }
@@ -461,6 +600,15 @@ extension CueHostTests.Rig {
     func settle(_ work: Working, reply text: String) async throws {
         work.session.setState(["kind": "idle"])
         try await answered(work.id, prompt: oneLine(work.prompt.text), reply: text, messages: [work.prompt, reply(work, text)])
+    }
+
+    /// 他 `ago` 秒前直接在会话里（终端里打的，不带 Cue 的发送记录）说了 `said`，会话做完他这一轮、回复 `reply` 后歇下。
+    func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
+        let first = reply(work, "后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。")
+        let his = PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: said, at: .now - ago)
+        let answer = PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: text, at: .now)
+        work.session.setState(["kind": "idle"])
+        try await answered(work.id, prompt: said, reply: text, messages: [work.prompt, first, his, answer])
     }
 
     /// 会话这一轮说了 `said` 后停下来问一个选择题。

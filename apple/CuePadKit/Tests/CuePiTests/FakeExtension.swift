@@ -56,6 +56,8 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         /// 收到的命令与此刻的状态存原样的 JSON 字节：字典里是 Any，不能交给锁，读的时候再解。
         var commands: [(connection: Int, line: Data)] = []
         var state = Data(#"{"kind":"idle"}"#.utf8)
+        /// 最后一轮开始的时刻（毫秒，扩展的 `turnSince`）
+        var turnSince: Int?
     }
     private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
@@ -187,7 +189,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
             "t": "hello", "protocol": options.protocolVersion, "extensionVersion": options.extensionVersion,
             "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "mode": options.mode,
             "term": options.env,
-            "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis]) { a, _ in a },
+            "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull()]) { a, _ in a },
         ]
         msg["sessionFile"] = options.sessionFile ?? NSNull()
         msg["model"] = options.model?.json ?? NSNull()
@@ -244,10 +246,17 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "quota", "provider": provider, "windows": windows, "complete": complete])
     }
 
-    /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。
+    /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。
     func setState(_ state: [String: Any]) {
         var s = state
         s["since"] = Self.nowMillis
+        let turnSince = shared.withLock { shared -> Int? in
+            let running = ["thinking", "tool"]
+            let was = Self.object(shared.state)["kind"] as? String ?? ""
+            if let kind = s["kind"] as? String, running.contains(kind), !running.contains(was) { shared.turnSince = Self.nowMillis }
+            return shared.turnSince
+        }
+        s["turnSince"] = turnSince ?? NSNull()
         let data = try! JSONSerialization.data(withJSONObject: s)
         shared.withLock { $0.state = data }
         broadcast(["t": "state", "state": s])

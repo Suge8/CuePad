@@ -22,6 +22,7 @@ public enum CueActivity {
       case "say": return line("跟会话说话")
       case "peek": return line("看进展")
       case "stop": return line("停下会话")
+      case "leave": return line("留给你回")
       case "done": return line("做完")
       default: return line("看任务")
       }
@@ -67,6 +68,7 @@ public enum CueActivity {
       case "say": return item(.talk, "对\(named)说：\(args.line("text") ?? "")")
       case "peek": return task == nil && session == nil ? item(.read, "看板") : item(.read, "看\(named)的近况")
       case "stop": return item(.stop, "停下\(named)")
+      case "leave": return item(.other, "\(named)留给你回")
       case "done": return item(.done, "做完\(named)")
       default: return item(.other, "task")
       }

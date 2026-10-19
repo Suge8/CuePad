@@ -214,7 +214,13 @@ public final class OpenCodeRuntime: AgentRuntime {
             all += page.data
             cursor = page.data.isEmpty ? nil : page.cursor?.next
         } while cursor != nil
+        let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
+        var started: [String: Date] = [:]
+        for info in all where info.parentID == nil && active.contains(info.id) {
+            let read = try await OpenCodeHistory.read(client, info, from: try await checkpoint(of: info.id), files: store.files)
+            started[info.id] = read.checkpoint.history.lastTurnStart ?? asked
+        }
         guard self.connection === connection else { return }
         for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
 
@@ -223,7 +229,8 @@ public final class OpenCodeRuntime: AgentRuntime {
             var tracked = sessions[info.id] ?? Tracked(info: info)
             tracked.info = info
             // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
-            tracked.facts.running = active.contains(info.id)
+            // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
+            if let start = started[info.id] { tracked.facts.startTurn(at: start) } else { tracked.facts.running = false }
             tracked.facts.work(.thinking)
             tracked.toolNames = [:]
             tracked.facts.compacting = false
@@ -367,7 +374,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
         case "session.execution.started":
-            await change(sessionID, connection, active: true) { $0.facts.startTurn() }
+            await change(sessionID, connection, active: true) { $0.facts.startTurn(at: .now) }
         case "session.step.started":
             // 没给会话选过模型时它用配置里的默认模型：每一步都带着实际用的那个
             await change(sessionID, connection) {
@@ -469,8 +476,11 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     private func subagent(_ id: String, of parent: String, _ body: (inout PiSubagentState) -> Void) {
         guard var tracked = sessions[parent] else { return }
-        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: Date()) }
-        tracked.facts.updateSubagent(id, body)
+        let now = Date()
+        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
+        tracked.facts.updateSubagent(id, at: now, body)
+        // 执行中的子会话就是在飞的
+        tracked.facts.inFlight = Set(tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id))
         sessions[parent] = tracked
     }
 
