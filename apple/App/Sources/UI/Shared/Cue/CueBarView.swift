@@ -23,6 +23,7 @@ struct CueBarView: View {
 import SwiftUI
 
 /// 一行 Cue 的现状（侧栏最上面、菜单栏面板、输入条）：头像、名字、此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄），有新消息的写几条（石绿）。
+/// 有新消息时同会话行的"有新回复"：名字加粗，它最近一句用正文墨色（新的那句就是它），又来一句时头像外漾开一圈石绿（`CueArrival`）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
     @ViewBuilder var trailing: Trailing
@@ -33,9 +34,10 @@ struct CueStatusRow<Trailing: View>: View {
         let cue = workspace.cue
         HStack(spacing: 10) {
             CueAvatar(mood: cue.expression, presence: cue.presence, size: .row).relaySpot(cue: .entry)
+                .background { CueArrival(color: palette.replied, reach: 1.5) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(cue.name).font(font).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.lastSaid).lineLimit(1)
+                Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                CueStatusLine(fallback: cue.lastSaid, fresh: cue.unread > 0).lineLimit(1)
             }
             Spacer(minLength: 6)
             WaitingCount(count: cue.waiting).font(Typography.meta)
@@ -57,7 +59,7 @@ private struct UnreadCount: View {
     var body: some View {
         if count > 0 {
             HStack(spacing: 5) {
-                Circle().fill(palette.replied).frame(width: 7, height: 7)
+                Circle().fill(palette.replied).frame(width: CueDot.size, height: CueDot.size)
                 Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
             }
             .foregroundStyle(palette.replied)
@@ -70,10 +72,11 @@ private struct UnreadCount: View {
 }
 
 /// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
-/// 都没有时是 `fallback`。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
+/// 都没有时是 `fallback`（`fresh`：它是还没读的新消息，用正文墨色，不然次要灰）。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
 /// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态可能已经过时。
 struct CueStatusLine: View {
     var fallback: String?
+    var fresh = false
     var font = Typography.meta
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -90,7 +93,7 @@ struct CueStatusLine: View {
             } else if let shown {
                 PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
             } else if let line = cue.presence.line(name: cue.name) ?? fallback {
-                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3).id(line).transition(.handOff)
+                Text(line).foregroundStyle(cue.presence.isUnreachable ? palette.failure : fresh ? palette.ink : palette.ink3).id(line).transition(.handOff)
             }
         }
         .font(font)

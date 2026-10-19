@@ -75,14 +75,19 @@ struct SplitRoot: View {
         }
     }
 
-    /// 右边的页：宽屏上 Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
+    /// 右边的页：宽屏上 Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多；
+    /// 折成一层层的页时没有面板，Cue 有新消息时返回钮旁浮出 Cue 圆钮（`CueNewsButton`），Cue 页自己不带。
     @ViewBuilder private func page(_ route: Route) -> some View {
-        if !wide || route.isCard || route == .cue {
-            RouteView(route: route)
-        } else {
+        if !wide, route != .cue {
+            RouteView(route: route).toolbar {
+                ToolbarItem(placement: .topBarLeading) { CueNewsButton() }.sharedBackgroundVisibility(.hidden)
+            }
+        } else if wide, !route.isCard, route != .cue {
             RouteView(route: route).toolbar {
                 ToolbarItem(placement: .primaryAction) { AgentPanelButton() }
             }
+        } else {
+            RouteView(route: route)
         }
     }
 
@@ -92,18 +97,41 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你的时带点（`WaitingDot`）。
+/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你或新消息时带点（`CueDot`）。
 private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let waiting = workspace.cue.waiting
+        let waiting = workspace.cue.waiting, unread = workspace.cue.unread
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
             Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
-                .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
+                .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
         }
-        .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
+        .accessibilityValue(unread > 0 ? "\(unread) 条新消息" : waiting > 0 ? "等你 \(waiting)" : "")
+    }
+}
+
+/// 折成一层层的页上（iPhone、窄窗口 iPad）：Cue 有新消息时返回钮右边浮出一颗 Cue 圆钮（带点，`CueDot`），点它去 Cue 页，读过就收起；
+/// 一路返回也能到侧栏列表最上面的 Cue。系统返回钮上加不了点（`UIBarButtonItem.badge` 不画在返回钮上），宽屏有常驻的面板钮（`AgentPanelButton`）。
+/// 只看新消息：等你一直在、会让它常驻，等你的卡在 Cue 页与会话里各有。工具栏项常驻、只换里面的内容（docs/ui.md），系统给项的玻璃关掉、圆钮自己画，空着时不留空圆。
+private struct CueNewsButton: View {
+    @Environment(Navigation.self) private var navigation
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let unread = workspace.cue.unread
+        ZStack {
+            if unread > 0 {
+                Button { navigation.select(.cue) } label: {
+                    CueMark().overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
+                }
+                .buttonStyle(ControlButtonStyle(kind: .circular))
+                .accessibilityLabel("\(workspace.cue.name)，\(unread) 条新消息")
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.snappy, value: unread > 0)
     }
 }
 

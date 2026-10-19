@@ -30,7 +30,7 @@ enum ScrollAnchor {
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
 /// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；
 ///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
-///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句（`saysIfAsked`，同一处）；
+///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句，`-CuePadVisitCue <秒>` 说完这么久去 Cue 页读、再回原处（`saysIfAsked`，同一处）；
 /// - `-CuePadCueFlow YES`（配 cue 画面与 `-CuePadDemo YES`）：画面就绪后按固定节奏走一遍完整的一轮（发送、在想、用工具、回复、结果卡、等你、切页），录 Cue 页的流转；
 ///   `-CuePadCueFlowLog <路径>` 另量静止与发送各一段（`cueFlowIfAsked`，见 `DebugScene+CueFlow.swift`）；
 /// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
