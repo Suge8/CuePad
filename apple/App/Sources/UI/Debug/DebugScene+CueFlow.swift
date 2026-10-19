@@ -8,7 +8,7 @@ import SwiftUI
 /// 2. Cue 在想，再用工具（建任务、开工两步进展，同值班的管理器写下的经过与此刻的状态）；
 /// 3. Cue 回复：直接落库。逐字长出的正在说的话（`CueKeeper.speech`）只在 Cue 于这台 Mac 值班时有，演示库里 Cue 住在演示 Mac 上；
 ///    让它在这台值班就会真起大脑，管理器每次对账还把此刻的状态写回它自己的（歇着、起不来），盖掉这里写的在想与用工具，所以不喂；
-/// 4. 第 2 步建的任务交来一张截图后做完（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"允许一次"（同点卡上的选项）；
+/// 4. 第 2 步建的任务交来一张截图后做完（结果卡，同演示库的 `seedEvidence` 加 `finishTask`），再来一条"等你"，停 2 秒替你选"这次可以"（同点卡上的选项）；
 ///    演示库原有的那条"等你"写入时就答掉（`seedCue`），这张卡是"等你"里唯一的一张，出现与消失都看得到；
 /// 5. 切页：Mac 开再收任务面板（同点侧栏的"任务"）；iPhone 回到侧栏列表再点 Cue 进来，iPad 侧栏点"任务"再点 Cue。
 /// `-CuePadCueFlowLog <路径>`：同 `measureFlight` 的量法，量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
@@ -113,7 +113,7 @@ extension DebugScene {
         await seedEvidence(store, session: flowSession, title: "登录页（超时后）")
         _ = try await store.finishTask(task.id, evidence: ["网络断开时 10 秒后回到登录页", "重连用例 4 个都过了"])
         try await beat(FlowBeat.result)
-        let asked = try await store.addCueMessage(.cue, text: "登录回调的修复验过了，要**推送到 origin/main** 吗？", ask: .push, task: task.id)
+        let asked = try await store.addCueMessage(.cue, text: "登录回调的修复验过了，要**推送到 origin/main** 吗？", ask: try CueAsking(.push, action: "把登录回调的超时修复推送到 origin/main"), task: task.id)
         try await beat(FlowBeat.asking)
         try await workspace.answerCueQuestion(asked, CueAsk.once)
         try await beat(FlowBeat.answered)

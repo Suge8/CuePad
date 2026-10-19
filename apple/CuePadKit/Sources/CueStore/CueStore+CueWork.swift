@@ -396,7 +396,8 @@ extension CueStore {
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。
   private func launchHost(for project: UUID, preferring host: String?) throws -> String? {
     if let host, try directory(of: project) != nil { return host }
-    let hosts = try db.query("SELECT hostID FROM directoryBindings WHERE projectID = ? ORDER BY hostName, hostID", [project]) { $0.text(0) }
+    let hosts = try db.query(
+      "SELECT hostID FROM directoryBindings WHERE projectID = ? ORDER BY \(DirectoryBinding.macNameSQL), hostID", [project]) { $0.text(0) }
     return host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first
   }
 

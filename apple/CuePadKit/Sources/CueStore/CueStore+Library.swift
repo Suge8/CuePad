@@ -710,13 +710,13 @@ extension CueStore {
     try write { try db.run("DELETE FROM piSessions WHERE \(Self.agentOf) = ?", [agent.rawValue]) }
   }
 
-  /// 全部目录绑定（各台 Mac 的），按项目、Mac 名排。
+  /// 全部目录绑定（各台 Mac 的），按项目、Mac 名（`MacAgents.name`）排。
   public func directoryBindings() throws -> [DirectoryBinding] {
-    try select(DirectoryBinding.self, orderBy: "projectID, hostName, hostID")
+    try select(DirectoryBinding.self, orderBy: "projectID, \(DirectoryBinding.macNameSQL), hostID")
   }
 
-  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（目录末段名或 Mac 名变了才改），没了的删；别的 Mac 的不动。
-  public func publishDirectoryBindings(host: String, hostName: String) throws {
+  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（目录末段名变了才改），没了的删；别的 Mac 的不动。
+  public func publishDirectoryBindings(host: String) throws {
     try write {
       let local = try projectDirectories()
       let mine = Dictionary(
@@ -725,13 +725,11 @@ extension CueStore {
       for (project, directory) in local {
         let folder = URL(filePath: directory, directoryHint: .isDirectory).lastPathComponent
         if let existing = mine[project] {
-          guard existing.folder != folder || existing.hostName != hostName else { continue }
-          try db.run(
-            "UPDATE directoryBindings SET folder = ?, hostName = ?, modifiedAt = ? WHERE id = ?", [folder, hostName, now, existing.id])
+          guard existing.folder != folder else { continue }
+          try db.run("UPDATE directoryBindings SET folder = ?, modifiedAt = ? WHERE id = ?", [folder, now, existing.id])
         } else {
           _ = try insert(DirectoryBinding(
-            id: DirectoryBinding.recordID(project: project, host: host), projectID: project, hostID: host, hostName: hostName,
-            folder: folder, createdAt: now, modifiedAt: now))
+            id: DirectoryBinding.recordID(project: project, host: host), projectID: project, hostID: host, folder: folder, createdAt: now, modifiedAt: now))
         }
       }
       for (project, binding) in mine where local[project] == nil {

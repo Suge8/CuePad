@@ -124,9 +124,9 @@ extension DebugScene {
     /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"），走 `CueService.followNotifications` 同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         try? await Task.sleep(for: delay)
-        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: .push),
+        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: try? CueAsking(.push, action: "把登录页的修复推送到 origin/main")),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices, task: nil)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, task: nil)
         guard !alerts.isWatchingCue else { return }
         await alerts.post(title: content.title, body: content.body)
     }

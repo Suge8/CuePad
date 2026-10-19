@@ -131,7 +131,7 @@ struct NewSessionInput: View {
             case .idle:
                 // 那台一家都不能用时先说它：同步通了也开不了
                 if let binding = chosen?.binding, let agents, agents.agents.isEmpty {
-                    Text("\(binding.hostName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
+                    Text("\(binding.macName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
                 } else if !services.reachesPiHost {
                     SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
                 }

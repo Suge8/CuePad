@@ -115,15 +115,15 @@ import Testing
   @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     try await rig.store.updateCueProfile { $0.name = "小管家" }
-    let message = try await rig.store.addCueMessage(.cue, text: "要合并到 main 吗？", ask: .merge)
+    let message = try await rig.store.addCueMessage(.cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main"))
     try await rig.store.flagCueMessageForPush(message.id)
 
     let record = try #require(await rig.coordinator.record(for: rig.recordID(message.id)))
-    #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？")
+    #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")
     let profile = try #require(await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     #expect(CueAlertText.task(of: record) == nil)
     let text = try #require(CueAlertText.content(message: record, profile: profile, task: nil))
-    #expect(text.title == "小管家" && text.body == "要不要把改动合并到共享分支？\n允许一次 / 以后合并到共享分支都不用问")
+    #expect(text.title == "小管家" && text.body == "可以把登录页修复合并进 main 吗？\n合进大家共用的分支会影响所有人，回退麻烦。\n这次可以 / 以后合并进共享分支都不用问")
 
     try await rig.simulatePush()
     try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))

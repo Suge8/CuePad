@@ -2,7 +2,6 @@
 import CuePi
 import CueStore
 import Foundation
-import SystemConfiguration
 
 /// Mac 端的远程职责：把 Pi 会话的状态写成同步记录（手机据此显示 Pi 在干什么）与目录绑定。
 extension AppServices {
@@ -73,11 +72,10 @@ extension AppServices {
     /// 之后本机绑定每次变化时跟上，直到后台任务取消。
     func startDirectoryBindings() async throws {
         let host = hostID
-        let name = SCDynamicStoreCopyComputerName(nil, nil) as String? ?? "Mac"
-        try await store.publishDirectoryBindings(host: host, hostName: name)
+        try await store.publishDirectoryBindings(host: host)
         let changes = store.observe { try $0.projectDirectories() }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { [store] in
-            for try await _ in changes { try await store.publishDirectoryBindings(host: host, hostName: name) }
+            for try await _ in changes { try await store.publishDirectoryBindings(host: host) }
         }
     }
 }

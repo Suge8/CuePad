@@ -51,7 +51,7 @@ struct PreviewReplyBar: View {
 
     private func choices(_ message: CueMessage, question: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            CueQuestionLine(question: question)
+            CueQuestionLine(asking: message.asking, question: question)
             CueChoices(options: message.choices ?? []) { option in
                 workspace.attempt { try await workspace.answerCueQuestion(message, option) }
                 done()

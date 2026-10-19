@@ -125,21 +125,24 @@ import Testing
   // MARK: 目录绑定
 
   /// 项目在哪台 Mac 上绑定了目录：只带目录末段名，不同步完整路径；只管这台 Mac 自己的，别的 Mac 的不动。
+  /// Mac 的名字读它自报的（`MacAgents`），没报过的写"未命名的 Mac"。
   @Test func directoryBindingsFollowThisMacsDirectoriesWithTheFolderNameOnly() async throws {
     let app = try await store.createProject(name: "App", color: "#111")
     let site = try await store.createProject(name: "Site", color: "#222")
     try await store.setDirectory("/Users/someone/work/app", for: app.id)
     try await store.setDirectory("/Users/someone/work/site", for: site.id)
-    try await store.publishDirectoryBindings(host: "mac-b", hostName: "Other")
+    try await store.publishDirectoryBindings(host: "mac-b")
+    try await store.recordMacAgents(host: "mac-a", name: "Studio", [])
 
-    try await store.publishDirectoryBindings(host: "mac-a", hostName: "Studio")
+    try await store.publishDirectoryBindings(host: "mac-a")
     let bindings = try await store.directoryBindings().filter { $0.hostID == "mac-a" }
-    #expect(Set(bindings.map(\.folder)) == ["app", "site"] && bindings.allSatisfy { $0.hostName == "Studio" })
+    #expect(Set(bindings.map(\.folder)) == ["app", "site"] && bindings.allSatisfy { $0.macName == "Studio" })
+    #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.allSatisfy { $0.macName == MacAgents.unnamed })
     let stored = try RawDB(fixture.url).rows("SELECT * FROM directoryBindings")
     #expect(!stored.flatMap { $0 }.contains { $0.contains("/Users/someone") })
 
     try await store.setDirectory(nil, for: site.id)
-    try await store.publishDirectoryBindings(host: "mac-a", hostName: "Studio")
+    try await store.publishDirectoryBindings(host: "mac-a")
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-a" }.map(\.projectID) == [app.id])
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.count == 2)
   }

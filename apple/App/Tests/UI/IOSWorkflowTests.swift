@@ -66,11 +66,13 @@ struct IOSWorkflowTests {
     @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/table", for: project.id)
-        try await store.publishDirectoryBindings(host: "mac-z", hostName: "Zulu")
-        try await store.publishDirectoryBindings(host: "mac-a", hostName: "Alpha")
+        try await store.publishDirectoryBindings(host: "mac-z")
+        try await store.publishDirectoryBindings(host: "mac-a")
+        try await store.recordMacAgents(host: "mac-z", name: "Alpha", [])
+        try await store.recordMacAgents(host: "mac-a", name: "Zulu", [])
         let (task, draft) = try await leaf(in: project.id)
         let plan = try await store.handOffPlan(task.id, host: nil)
-        #expect(plan.destination == .launch(project: project.id, host: "mac-a") && plan.name == "修乱序")
+        #expect(plan.destination == .launch(project: project.id, host: "mac-z") && plan.name == "修乱序")  // 按 Mac 自报的名字排第一台
         let workspace = Workspace(services: app.services), navigation = Navigation(settings: app.services.settings)
 
         HandOffInput.startDefault(
@@ -81,7 +83,7 @@ struct IOSWorkflowTests {
         let place = try #require(start.place(among: places)), binding = try #require(place.binding)
         _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, services: app.services)
         let request = try #require(try await store.deliveryRequests().first)
-        #expect(request.launch?.project == project.id && request.hostID == "mac-a")
+        #expect(request.launch?.project == project.id && request.hostID == "mac-z")
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)
         #expect(request.launch?.prompt == "修乱序\n先复现")
     }
