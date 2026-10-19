@@ -431,15 +431,17 @@ extension CueStore {
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
-  /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤为 nil）与结束请求。
+  /// 已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。
+  /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤与已完成的为 nil）与结束请求。
   @discardableResult
   public func finishTask(_ task: UUID, evidence: [String]) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
       try checkStepsDone(task)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
+      let finished = card.status != .done
       _ = try applyStatus(task, .done)
       let ended = try endUnusedSessions(of: task, cue: true)
-      guard card.parentID == nil else { return (nil, ended) }
+      guard finished, card.parentID == nil else { return (nil, ended) }
       return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), task: task), ended)
     }
   }
