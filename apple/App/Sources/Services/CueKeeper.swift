@@ -186,6 +186,10 @@ final class CueKeeper {
             guard let wake = selfStarted?.wake else { return true }
             return !delivered.isEmpty || (wake != .enabled && author == .cue)
         }
+
+        /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮什么都没做（没有落了结果的一步，`Kind.acts`）就不写——
+        /// 系统提示里"什么都没做就不写"只在这里定。
+        var writesReply: Bool { answersYou || selfStarted?.wake == .enabled || round.process?.items.contains(where: \.kind.acts) == true }
     }
 
     /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`）。
@@ -452,7 +456,7 @@ final class CueKeeper {
         case .turnFinished:
             guard let finished = turn else { return }
             await recordRound()  // 中途插了你的话：这一轮成了回答你的
-            if let reply = finished.speaking?.text, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if finished.writesReply, let reply = finished.speaking?.text, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 lastFailure = nil
                 do {
                     try await setup.store.replyCueRound(

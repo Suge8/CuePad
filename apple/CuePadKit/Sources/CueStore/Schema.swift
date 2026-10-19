@@ -127,7 +127,7 @@ enum Schema {
   private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
   private static let cueRead = "CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
   private static let sessionViewers = """
-    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT NOT NULL, until INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT, modifiedAt INTEGER NOT NULL) STRICT;
     """
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。

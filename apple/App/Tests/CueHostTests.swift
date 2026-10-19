@@ -199,7 +199,7 @@ struct CueHostTests {
     @Test func 你的图_Cue转给会话() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 转图")
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
         let image = try rig.image()
         try await rig.say("请把这张图转给登录页\n\(image)")
         let session = try #require(rig.app.host.extensions.values.first)
@@ -221,8 +221,8 @@ struct CueHostTests {
     }
 
     /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
-    /// 会话歇下后 Cue 马上自己醒来，这一轮的动态写成灰色一行（note）。
-    @Test func 建任务开工_会话歇下后Cue醒来写动态() async throws {
+    /// 会话歇下后 Cue 马上自己醒来。
+    @Test func 建任务开工_会话歇下后Cue醒来() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
         try await rig.message(.cue, containing: "办好了")
@@ -241,7 +241,16 @@ struct CueHostTests {
         session.setState(["kind": "thinking"])
         session.setState(["kind": "idle"])
         try await rig.answered(session.sessionID)
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
+        await rig.stop()
+    }
+
+    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话，没有灰色的一行。
+    @Test func 会话歇下后Cue什么都没做_不写动态() async throws {
+        let rig = try await Rig()
+        try await rig.settleTask(titled: "修好登录页 只看看")
+        try await eventually("被叫醒的那一轮做完") { rig.rounds.contains { $0.wake == .sessionActivity && $0.finishedAt != nil } }
+        #expect(try await rig.store.cueMessages().allSatisfy { $0.author != .known(.note) })
         await rig.stop()
     }
 
@@ -272,7 +281,7 @@ struct CueHostTests {
         try await rig.settleTask(titled: "修好登录页 要作答")
         let session = try #require(rig.app.host.extensions.values.first)
         session.setState(["kind": "waiting_user", "title": "允许使用 Bash？"])
-        try await rig.message(.note, containing: "去作答了", timeout: .seconds(5))
+        try await rig.message(.cue, containing: "去作答了", timeout: .seconds(5))
         await rig.stop()
     }
 
@@ -282,7 +291,7 @@ struct CueHostTests {
         rig.app.host.openFailure = #"Error: Model "fake/nope" not found"#
         try await rig.say("请建个任务并开工")
         try await rig.message(.cue, containing: "办好了")
-        let seen = try await rig.message(.note, containing: "看到了")
+        let seen = try await rig.message(.cue, containing: "看到了")
         #expect(seen.text.contains("修好登录页") && seen.text.contains("开工") && seen.text.contains(#"Model "fake/nope" not found"#))
         await rig.stop()
     }
@@ -305,7 +314,7 @@ struct CueHostTests {
 
         let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed("会话已关闭") }
         try await macB.start()
-        let seen = try await rig.message(.note, containing: "看到了")
+        let seen = try await rig.message(.cue, containing: "看到了")
         #expect(seen.text.contains("[发送失败] 修好登录页 说不出去") && seen.text.contains("会话已关闭"), "\(seen.text)")
         let failed = try #require(try await rig.store.deliveryRequest(sent.id))
         #expect(Said.request(failed).trip(at: .always(at: .now)) == .failed(.reported("会话已关闭")))
@@ -350,7 +359,7 @@ struct CueHostTests {
 
         let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", onIssue: { Issue.record("\($0)") }) { _ in .failed("会话已关闭") }
         try await macB.start()
-        let seen = try await rig.message(.note, containing: "看到了")
+        let seen = try await rig.message(.cue, containing: "看到了")
         #expect(seen.text.contains("[发送失败] 修好登录页 半路断开") && seen.text.contains("会话已关闭"), "\(seen.text)")
         await macB.stop()
         await rig.stop()
@@ -391,7 +400,7 @@ struct CueHostTests {
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
         try await remote.update(sessionID: "remote-1", state: .settled, times: PiTimes(stateSince: settledAt, busySince: nil))
         try await rig.answered("remote-1")
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
         await rig.stop()
     }
 
@@ -405,7 +414,7 @@ struct CueHostTests {
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页")
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.answered("remote-1")
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
 
         /// 你请 Cue 对会话说一句，这一轮做完后由替身当那台 Mac 按 `clock` 的时刻回报没送达，Cue 醒来看到 `reason`。
         func sayFails(_ reason: String, at clock: Timing) async throws {
@@ -416,7 +425,7 @@ struct CueHostTests {
             }
             let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", timing: clock, onIssue: { Issue.record("\($0)") }) { _ in .failed(reason) }
             try await macB.start()
-            try await rig.message(.note, containing: reason)
+            try await rig.message(.cue, containing: reason)
             await macB.stop()
         }
         try await sayFails("会话已关闭", at: .system)
@@ -444,12 +453,12 @@ struct CueHostTests {
     }
 
     /// Cue 自己醒来的一轮出错（多是网络偶发）：先不告诉你，基线不前移；隔一会儿再醒一次，成了就照常。
-    /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了就只有动态。
+    /// 刚启用那一轮出错，重试后照常看一眼；会话有动静那一轮出错，重试时看到的还是同一处变化，成了照常。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"])  // 等到"我看了一眼"才返回
         #expect(rig.model.errors == 1)
         try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
         await rig.stop()
@@ -483,7 +492,7 @@ struct CueHostTests {
     @Test func 记忆待合并时空闲后醒来合并() async throws {
         let rig = try await Rig()
         for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
-        try await rig.message(.note, containing: "记忆合并好了")
+        try await rig.message(.cue, containing: "记忆合并好了")
         await rig.stop()
     }
 
@@ -524,7 +533,7 @@ struct CueHostTests {
         for title in titles { #expect(board.text.contains(title), "信封里有「\(title)」") }
 
         sessions[1].crash()
-        let after = try await rig.message(.note, containing: "被打断")
+        let after = try await rig.message(.cue, containing: "被打断")
         let lines = after.text.split(separator: "\n")
         #expect(lines.first { $0.contains("提示音和提示窗") }?.contains("被打断") == true)
         #expect(lines.filter { $0.contains("被打断") }.count == 1)
@@ -721,6 +730,8 @@ nonisolated final class FakeModel: Sendable {
             return .delta(["role": "assistant", "tool_calls": [["index": 0, "id": "call-\(UUID().uuidString.prefix(8))", "type": "function", "function": ["name": tool(suffix), "arguments": json]]]], finish: "tool_calls")
         }
         func say(_ text: String) -> Reply { .delta(["role": "assistant", "content": text], finish: "stop") }
+        // Cue 自己醒来、什么都没做的一轮最后的话不写（`CueKeeper.Turn.writesReply`）：要让你看到它醒来看到了什么，就用 tell 对你说
+        func tell(_ text: String) -> Reply { call("tell", ["text": text]) }
 
         let last = (request["messages"] as? [[String: Any]])?.last ?? [:]
         let text: String = switch last["content"] {
@@ -761,24 +772,25 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
-        if text.contains("写回：memory merge") { return say("记忆合并好了") }
+        if text.contains("写回：memory merge") { return tell("记忆合并好了") }
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
-            return say("看板：\n" + board)
+            return text.contains("醒来：会话有动静") ? tell("看板：\n" + board) : say("看板：\n" + board)
         }
         if text.contains("醒来：会话有动静"), let failed = text.firstMatch(of: /\n- (\[(?:出错|发送失败)[^\]]*\] [^\n]*)/)?.1 {
-            return say("看到了：\(failed)")
+            return tell("看到了：\(failed)")
         }
         if text.contains("醒来：会话有动静"), text.contains("半路断开"), once("midway") {
             return call("task", ["action": "say", "task": "修好登录页 半路断开", "text": "继续"])
         }
-        if text.contains("醒来：会话有动静"), text.contains("要作答") { return say("去作答了") }
+        if text.contains("醒来：会话有动静"), text.contains("要作答") { return tell("去作答了") }
         if text.contains("醒来：会话有动静"), text.contains("请收一下") {
             return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": ["登录测试全过"]])
         }
         if text.contains("醒来：会话有动静") {
             if text.contains("先出一次错"), once("error") { return fail() }
             if text.contains("先出两次错"), once("error", times: 2) { return fail() }
-            return say("登录页那边歇下了")
+            if text.contains("只看看") { return say("只是看了看") }
+            return tell("登录页那边歇下了")
         }
         if text.contains("醒来：空闲，例行看一眼") { return say("巡视了一圈") }
         if text.contains("醒来：刚启用") {
