@@ -19,6 +19,12 @@ struct ComposerField: UIViewRepresentable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
+    /// 这个字号下文字区一行中文的高（`ComposerMetrics.lineSlot`）。
+    static func lineHeight(_ size: DynamicTypeSize) -> CGFloat {
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+        return GrowingTextView.rulerHeight(font: .preferredFont(forTextStyle: .body, compatibleWith: traits), lines: 1)
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> GrowingTextView {
@@ -101,14 +107,7 @@ final class GrowingTextView: UITextView {
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
     /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
-        let key = RulerKey(lines: maxLines, size: font?.pointSize ?? 0)
-        let rulerHeight = Self.rulerHeights[key] ?? {
-            Self.ruler.font = font
-            Self.ruler.text = Array(repeating: "国", count: maxLines).joined(separator: "\n")
-            let height = Self.ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
-            Self.rulerHeights[key] = height
-            return height
-        }()
+        let rulerHeight = Self.rulerHeight(font: font ?? .preferredFont(forTextStyle: .body), lines: maxLines)
         // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
         let pitch = rulerHeight / CGFloat(maxLines)
         let limit = (window?.bounds.height ?? .greatestFiniteMagnitude) * 0.3
@@ -125,6 +124,17 @@ final class GrowingTextView: UITextView {
     }()
     private struct RulerKey: Hashable { var lines: Int; var size: CGFloat }
     private static var rulerHeights: [RulerKey: CGFloat] = [:]
+
+    /// 这个字体排满 `lines` 行中文的高。
+    static func rulerHeight(font: UIFont, lines: Int) -> CGFloat {
+        let key = RulerKey(lines: lines, size: font.pointSize)
+        if let height = rulerHeights[key] { return height }
+        ruler.font = font
+        ruler.text = Array(repeating: "国", count: lines).joined(separator: "\n")
+        let height = ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
+        rulerHeights[key] = height
+        return height
+    }
 
     /// 文字区在这个宽度下要多高：排出来的高度，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
     func fittingHeight(width: CGFloat) -> CGFloat {

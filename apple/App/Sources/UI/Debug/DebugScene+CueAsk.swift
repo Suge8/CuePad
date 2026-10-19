@@ -1,0 +1,126 @@
+#if DEBUG
+import CueStore
+import SwiftUI
+
+/// `-CuePadCueAsk <proposals|push|one|four|evidence>`（配 `-CuePadScene cue` 与演示库）：把"等你"换成提问卡的一种样子，对照设计稿截图。
+/// 演示库原有的两条先撤回，换上这一条：
+/// - proposals：真实那张卡的同款——按你的规矩在三个方案里挑，推荐 1，点名每个方案一张手机截图；
+/// - push：推送，有第二项（"以后……不用问"），不带图；
+/// - one：部署到预发，只点名一张竖图（说明在右）；
+/// - four：四张竖图（一行放不下、横滑露出第四张）；
+/// - evidence：合并，三张横图的证据，说明不带"："。
+extension DebugScene {
+    static func seedAsk(_ variant: String, store: CueStore, task: UUID?) async throws {
+        for open in try await store.cueMessagesWaitingForYou() { try await store.endCueQuestion(open.id, .withdrawn) }
+        func shots(_ items: [(name: String, title: String, look: String, png: Data)]) async throws -> [CueShot] {
+            let folder = FileManager.default.temporaryDirectory.appending(path: "cue-ask-\(variant)", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            var shots: [CueShot] = []
+            for item in items {
+                let file = folder.appending(path: item.name)
+                try item.png.write(to: file)
+                let preview = try await store.addPreviews(filesAt: [file], title: item.title, sessionID: "ask-card-design")[0].preview
+                shots.append(CueShot(preview: preview.id, look: item.look))
+            }
+            return shots
+        }
+        let proposals = [
+            ("decision-sheet-iphone.png", "提问卡方案 1：决定单", "方案 1 决定单：大按钮占满一行", proposalPNG(.sheet)),
+            ("in-thread-iphone.png", "提问卡方案 2：对话里问", "方案 2 对话里问：按钮贴输入框", proposalPNG(.thread)),
+            ("slide-to-allow-iphone.png", "提问卡方案 3：郑重放行", "方案 3 郑重放行：滑过去才同意", proposalPNG(.slide)),
+        ]
+        let (text, asking): (String, CueAsking) = switch variant {
+        case "push":
+            ("发言顺序修好了，测试都过了。要推送到 origin/main 吗？", try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"))
+        case "one":
+            ("1.4.2 在预发分支上打好包了，要部署到预发吗？", try CueAsking(.release, action: "把 1.4.2 部署到预发环境", shots: try await shots([
+                ("staging-1.4.2.png", "预发 1.4.2", "预发 1.4.2 要上的四处改动", stagingPNG()),
+            ])))
+        case "four":
+            ("提问卡我重画了四个方向，你挑一个。", try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: try await shots(
+                proposals + [("drawer-iphone.png", "提问卡方案 4：抽屉", "方案 4 抽屉：从底下拉出来", proposalPNG(.drawer))])))
+        case "evidence":
+            ("修复验过了，三处证据都在。要合并进 main 吗？", try CueAsking(.merge, action: "把发言顺序的修复合并进 main", shots: try await shots([
+                ("before-after.png", "改前改后", "改前改后的发言顺序", evidencePNG("改前 / 改后", tint: .indigo)),
+                ("tests.png", "测试", "重连用例全部通过", evidencePNG("✔ 4 tests passed", tint: .green)),
+                ("pressure.png", "压测", "6 人同时重连的压测", evidencePNG("p95 9ms", tint: .orange)),
+            ])))
+        default:
+            ("提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", try CueAsking(
+                .rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: try await shots(proposals)))
+        }
+        _ = try await store.addCueMessage(.cue, text: text, ask: asking, task: task)
+    }
+
+    private enum Proposal { case sheet, thread, slide, drawer }
+
+    /// 一个方案的手机效果图：一页对话，底下是那种样子的提问卡。
+    private static func proposalPNG(_ proposal: Proposal) -> Data {
+        let indigo = Color(red: 0.18, green: 0.29, blue: 0.62), wash = Color(red: 0.97, green: 0.92, blue: 0.76)
+        func button(_ text: String, primary: Bool) -> some View {
+            Text(text).font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 9)
+                .background(primary ? indigo : .white, in: .capsule).foregroundStyle(primary ? .white : .black)
+        }
+        let card = VStack(alignment: .leading, spacing: 8) {
+            Text("可以推送 scheduler 的重连修复吗？").font(.system(size: 14, weight: .semibold))
+            Text("推上去别人就拉得到，撤不回来").font(.system(size: 11)).foregroundStyle(.gray)
+            switch proposal {
+            case .sheet:
+                button("这次可以", primary: true)
+                button("以后「圆桌」里推送代码不用问", primary: false)
+            case .thread:
+                HStack { button("以后不用问", primary: false); button("这次可以", primary: true) }
+            case .slide:
+                HStack {
+                    Circle().fill(indigo).frame(width: 30, height: 30)
+                    Text("滑过去，这次可以 ›").font(.system(size: 12)).foregroundStyle(.gray)
+                    Spacer()
+                }
+                .padding(3).background(.white, in: .capsule)
+            case .drawer:
+                Capsule().fill(.gray.opacity(0.4)).frame(width: 36, height: 4).frame(maxWidth: .infinity)
+                button("这次可以", primary: true)
+            }
+        }
+        .padding(14).background(wash, in: .rect(cornerRadius: 18))
+        let view = VStack(alignment: .leading, spacing: 12) {
+            HStack { Text("9:41").font(.system(size: 13, weight: .semibold)); Spacer() }
+            Text("Cue").font(.system(size: 17, weight: .semibold))
+            ForEach(["重连后保留原来的轮次", "同一时刻入座按座位号排", "README 换成新截图"], id: \.self) { line in
+                Text("• \(line)").font(.system(size: 12))
+            }
+            RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.94)).frame(height: 120)
+            Spacer()
+            card
+            Capsule().fill(Color(white: 0.93)).frame(height: 36).overlay(alignment: .leading) { Text("对 Cue 说").font(.system(size: 12)).foregroundStyle(.gray).padding(.leading, 14) }
+        }
+        .padding(16).frame(width: 320, height: 696).background(.white).foregroundStyle(.black)
+        return render(view)
+    }
+
+    /// 预发的一页：版本与四处改动。
+    private static func stagingPNG() -> Data {
+        let view = VStack(alignment: .leading, spacing: 10) {
+            Text("预发 1.4.2").font(.system(size: 22, weight: .bold)).padding(.top, 40)
+            Text("staging.roundtable.app · 今天 10:12").font(.system(size: 11)).foregroundStyle(.gray)
+            ForEach([("修好", "同一时刻入座按座位号排"), ("修好", "断线重连后保留发言轮次"), ("改进", "README 换成新截图"), ("改进", "发言计时到点会轻震一下")], id: \.1) { tag, line in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tag).font(.system(size: 10)).foregroundStyle(.indigo)
+                    Text(line).font(.system(size: 13))
+                }
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(.white, in: .rect(cornerRadius: 10))
+            }
+            Spacer()
+        }
+        .padding(18).frame(width: 320, height: 640).background(Color(white: 0.95)).foregroundStyle(.black)
+        return render(view)
+    }
+
+    /// 一张横的证据图（16:9）：一行大字。
+    private static func evidencePNG(_ headline: String, tint: Color) -> Data {
+        let view = Text(headline).font(.system(size: 40, weight: .heavy)).foregroundStyle(tint)
+            .frame(width: 640, height: 360).background(Color(white: 0.97))
+        return render(view)
+    }
+}
+#endif

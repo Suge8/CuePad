@@ -7,7 +7,7 @@ import SwiftUI
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
-/// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"这次可以"（回到对话里、带着你的回答），
+/// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
 /// 之后你又说了一句、Cue 跑了一轮（经过那一行）、连着回了两句（看问询回到对话里的样子、一串气泡；配 `-showsCueSteps YES` 看工具步骤那一行）；你的最后一句已交给 Cue（气泡旁的纸飞机）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
@@ -134,12 +134,13 @@ extension DebugScene {
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main", shots: try await deployShots(store)), task: order?.id)
-            // 第二张"等你"（答完第一张接着露出来）：在卡上另外说一句的演示
+            // 第二张"等你"（答完第一张接着露出来）：还有几条在等的演示
             if !cueFlows, let billing = task("清理旧的计费脚本") {
                 _ = try await store.addCueMessage(
                     .cue, text: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？",
                     ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"), task: billing.id)
             }
+            if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             try await store.seed(cueLines: demoMemory)
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)

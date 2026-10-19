@@ -1170,6 +1170,14 @@ def compact(m):
     return [Layer("a", dart(135, s, (-d, -d))(g, c)), Layer("b", dart(-45, s, (d, d))(g, c))]
 
 
+def enlarge(m):
+    """放大看：两支燕尾箭（缩小）从中间往右上、左下张开（压缩上下文那两支反过来），箭尾之间隔一道缝。"""
+    g, c = GROW[m], CARVE[m]
+    s, tail = 0.72, 1.0  # 箭尾离中心多少格（沿对角线的分量）
+    d = tail + 12.0 * s * 0.7071
+    return [Layer("a", dart(45, s, (d, -d))(g, c)), Layer("b", dart(225, s, (-d, d))(g, c))]
+
+
 def bolt(m):
     """插话：一道闪电（同"断了"的那道，不截断）。"""
     return [Layer("bolt", [grown(sc(K, BOLT), [1.0, 1.0, 0, 0.9, 0.8, 0, 0.9], GROW[m])])]
@@ -1453,12 +1461,6 @@ def badge_dart(m):
     """自动检查更新：实心圆里刻一支朝下的燕尾箭（同一份几何，缩小）。"""
     g, c = GROW[m], CARVE[m]
     return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(dart(180, 0.62, (0, -0.6))(0.0, c)))]
-
-
-def badge_plane(m):
-    """发送回答：实心圆里刻出发送钮那架纸飞机（同一份几何，缩小）。"""
-    g, c = GROW[m], CARVE[m]
-    return [Layer("badge", [disc((0, 0), BADGE_R + g)] + holed(list(plane_parts(0.0, c, 0.6))))]
 
 
 def bookmark(m):
@@ -1876,9 +1878,9 @@ SYMBOLS = {
     "ring.stop": ring_mark(mark_square),
     "ring.play": ring_mark(mark_play),
     "ring.plus": ring_mark(mark_plus),
-    "badge.send": badge_plane,
     "badge.down": badge_dart,
     "compact": compact,
+    "enlarge": enlarge,
     "hand": hand,
     "mac": mac,
     "photo": photo,

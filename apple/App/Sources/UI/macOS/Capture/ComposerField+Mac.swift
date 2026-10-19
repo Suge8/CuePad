@@ -19,6 +19,9 @@ struct ComposerField: NSViewRepresentable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
 
+    /// 文字区一行中文的高（`ComposerMetrics.lineSlot`）；Mac 的字号不跟系统的动态字号走。
+    static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> ComposerScrollView {
@@ -153,13 +156,13 @@ final class GrowingTextView: NSTextView {
         Self.maxHeights[maxLines] = height
         return height
     }
+    static let lineHeight = height(of: "国", width: .greatestFiniteMagnitude)
     /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
     private static var maxHeights: [Int: CGFloat] = [:]
 
-    /// 按给定宽度排下现有文字要多高，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）；空着时是一行的高度。
+    /// 按给定宽度排下现有文字要多高，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
     func fittingHeight(width: CGFloat) -> CGFloat {
-        let text = textStorage?.string as NSString? ?? ""
-        return heights.height(of: text.length == 0 ? "国" : text, width: width, em: Self.bodyFont.pointSize, limit: maxHeight) {
+        heights.height(of: textStorage?.string as NSString? ?? "", width: width, em: Self.bodyFont.pointSize, limit: maxHeight) {
             Self.height(of: $0, width: width)
         }
     }

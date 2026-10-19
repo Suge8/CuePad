@@ -44,8 +44,8 @@ struct AskShotsTests {
         #expect(before.shots[question.id]?.map(\.look) == ["方案 1：大按钮占满一行", "方案 2：按钮贴在输入框上"])
         #expect(before.shots[plain.id] == nil)
 
-        try await workspace.answerCueQuestion(question, "用 2")
-        _ = try await store.addCueMessage(.cue, text: "好，按方案 2 做。", task: task.id)
+        try await workspace.answerCueQuestion(question, CueAsk.once)
+        _ = try await store.addCueMessage(.cue, text: "好，按方案 1 做。", task: task.id)
 
         let after = try await thread()
         // 提问回到对话里只带它点名的两张；关联任务发过的九份挂在 Cue 之后那句话下面
@@ -56,6 +56,6 @@ struct AskShotsTests {
         guard case .result(let next, _, let deliverables) = after.rows.first(where: { if case .result = $0 { true } else { false } }) else {
             Issue.record("Cue 之后那句是结果卡"); return
         }
-        #expect(next.text == "好，按方案 2 做。" && Set(deliverables.map(\.id)) == Set((earlier + one + two).map(\.id)))
+        #expect(next.text == "好，按方案 1 做。" && Set(deliverables.map(\.id)) == Set((earlier + one + two).map(\.id)))
     }
 }

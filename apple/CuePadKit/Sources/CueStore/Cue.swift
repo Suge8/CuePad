@@ -48,7 +48,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var urgent: Bool
   /// 关联的卡片。
   public var taskID: UUID?
-  /// 你选的那一项，或你不选、另外说的话（不在 `choices` 里）；Cue 撤回的为 nil。
+  /// 你选的那一项（`choices` 之一；更旧版本存下的可能是卡上另外写的一句，照原文显示）；Cue 撤回的为 nil。
   public var answer: String?
   /// 提问结束的时刻。
   public var answeredAt: Date?
@@ -104,9 +104,10 @@ extension CueMessage: Record {
 }
 
 /// 一条提问怎么结束（`CueStore.endCueQuestion`）：两种结局落到同一个状态上（`CueMessage.answeredAt`）。
-/// 卡片一直挂着，直到你回答或 Cue 撤回，没有"关掉"。
+/// 卡片一直挂着，直到你选一项或 Cue 撤回，没有"关掉"。你不选、在 Cue 页底下直接说的话是一句普通的话：Cue 读了自己判断是不是在答哪张卡，
+/// 是就照办并撤回那张。
 public enum CueQuestionEnd: Equatable, Sendable {
-  /// 你选了一项，或不选、另外说了一句（`CueAsk.otherwise`，不一定是不同意）：都交给 Cue、叫醒它
+  /// 你选了一项（`choices` 之一）：交给 Cue、叫醒它
   case answered(String)
   /// Cue 撤回了（拿了主意或情况变了）：它自己撤的，不交给它
   case withdrawn
@@ -339,7 +340,8 @@ extension CueState: Record {
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
-/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）在卡片的输入框里另外说（`otherwise`）。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，
+/// Cue 判断是在答这张就照办并撤回它（`CueQuestionEnd.withdrawn`）。
 /// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
@@ -384,9 +386,8 @@ public enum CueAsk: String, CaseIterable, Sendable {
     }
   }
 
-  public static let once = "这次可以"
-  /// 卡片上选项之后的输入框：不选，另外说你的话（不一定是不同意，也可以是别的想法；作为回答交给 Cue，叫醒它）。
-  public static let otherwise = "另外说…"
+  /// 第一项（主按钮）：允许这一次。
+  public static let once = "可以"
 
   /// 提问的第二项：选了它，这类事以后在 `project`（关联任务所在项目的名字）里不再问，nil 是所有项目里都不再问；
   /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。规矩那一类没有这一项：一律放行等于没有规矩。
@@ -398,7 +399,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// 所有项目里都不用问那一项；没有它的（规矩那一类）不能记进允许清单。
   public var always: String? { always(in: nil) }
 
-  /// 提问的选项（写入时定下、照存）：这次可以，与"以后……不用问"（范围同上）。
+  /// 提问的选项（写入时定下、照存，之前写下的照旧显示当时的字）：可以，与"以后……不用问"（范围同上）。
   public func choices(in project: String?) -> [String] { [Self.once] + (always(in: project).map { [$0] } ?? []) }
 }
 
@@ -513,7 +514,7 @@ public enum CueAlert {
     let body: String
     if let asking, let choices {
       let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
-      body = ([asking.question, asking.why] + shots + [(choices + [CueAsk.otherwise]).joined(separator: " / ")]).joined(separator: "\n")
+      body = ([asking.question, asking.why] + shots + [choices.joined(separator: " / ")]).joined(separator: "\n")
     } else {
       body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }
