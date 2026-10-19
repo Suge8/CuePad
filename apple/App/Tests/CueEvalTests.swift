@@ -55,6 +55,19 @@ struct CueEvalTests {
         }
     }
 
+    @Test func r大事先对齐() async throws {
+        try await CueEval.run("r-大事先对齐", expect: "他要重新设计设置页（界面设计、没说清要做成什么样）：建任务但不开工，回复里一两句说清打算、等他点头") { eval in
+            try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
+            let reply = try await eval.reply()
+            return [
+                Check("建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
+                Check("没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
+                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check("回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+            ]
+        }
+    }
+
     @Test func b验收证据不足() async throws {
         try await CueEval.run("b-验收证据不足", expect: "会话只回一句「改好了」：不 done，say 要证据") { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
