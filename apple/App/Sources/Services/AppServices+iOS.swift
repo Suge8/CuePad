@@ -15,6 +15,9 @@ extension AppServices {
         startLiveSessions()
         startAccountQuotas()
         startSessionAlerts()
+        if let sessionViewer {
+            follow(reporting: { .syncUnavailable("这台手机开着的会话没能写下：\($0)") }) { try await sessionViewer.keep() }
+        }
         if !location.isIsolated { diagnostics.start() }
     }
 
