@@ -96,13 +96,12 @@ struct ProjectNowSeenTests {
 }
 
 #if os(iOS)
-/// 侧栏的"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍；
-/// iPhone 书架不写会话（会话在侧栏的"会话"），同一个项目写介绍。
-struct ProjectNowShelfTests {
+/// 项目的"此刻"（侧栏、iPhone 项目页）看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
+struct ProjectNowEndedSessionTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    @Test func 发给已结束会话的话_在侧栏的此刻里_书架只写介绍() async throws {
+    @Test func 发给已结束会话的话_在项目的此刻里() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.updateProject(project.id) { $0.intro = "多 Agent 调度本月可上线" }
         let recorder = PiStateRecorder(store: store, hostID: "mac")
@@ -110,13 +109,11 @@ struct ProjectNowShelfTests {
         try await recorder.end(sessionID: "atlas")
         try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
 
-        let shelf = try await ShelfData.read(from: store)
         let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
         let workspace = Workspace(services: app.services)
-        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: shelf.leading) { workspace.shown($0) }[project.id]?.text == "正在唤醒 Agent")
-        #expect(shelf.now(projects: projects)[project.id]?.text == "多 Agent 调度本月可上线")
+        #expect(ProjectNow.byProject(projects, sessions: sessions, tasks: [:]) { workspace.shown($0) }[project.id]?.text == "正在唤醒 Agent")
     }
 }
 #endif

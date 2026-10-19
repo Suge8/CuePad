@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 任务看板（手机任务页、Mac 任务面板共用），三组：进行中、待办、最近完成。
-/// 进行中是"现在哪些在动"这条跨项目的主线：顶层的进行中任务，最近开始的在前（与 `counts.inProgress`、书架"正在推进"同一批、同一个顺序），
+/// 进行中是"现在哪些在动"这条跨项目的主线：顶层的进行中任务，最近开始的在前（与 `counts.inProgress` 同一批），
 /// 行上带所在项目的小图标。待办按项目分段（`todo`，项目顺序、未分类在后），段头写项目、行里不写，段里是同级的手动顺序。
 /// 步骤（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）。最近完成见 `recentlyDone`。
 /// 每条带所在项目；交给的会话此刻怎样不在这里读，行取窗口那一份（`AgentLinks`，经 `Workspace.next(for:)`）。
@@ -22,6 +22,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     /// 最近完成列多少条。
     static let doneLimit = 30
+    /// 待办收着时露出几条。
+    static let latestLimit = 3
 
     /// 没完成的任务的层级。
     var tree: TaskTree
@@ -29,11 +31,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var inProgress: [Row]
     /// 待办的顶层任务按项目分的段。
     var todo: [Section]
+    /// 待办里最近添加的几个顶层任务（新的在前，至多 `latestLimit` 个）：手机任务页待办收着时露出的那几条。
+    var latestTodo: [Row]
     var done: [Row]
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
 
-    /// 顶层任务数（`CueStore.taskCounts` 一处定义）：任务页页头、面板标题与"最近完成"、书架的"任务"一行都读它。
+    /// 顶层任务数（`CueStore.taskCounts` 一处定义）：任务页页头、面板标题与"最近完成"都读它。
     var counts: TaskCounts
     /// 从上到下的任务 id（含步骤）：列表增删、挪动的动画键，读库时算一次（放在 body 里每次重算都要分配）。
     var order: [UUID]
@@ -46,7 +50,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let done = recentlyDone(all)
         func row(_ task: Card) -> Row { Row(task: task, project: task.projectID.flatMap { projects[$0] }) }
         let roots = tree.roots.compactMap(tree.task)
-        // 先后只在 `CueStore.startedTasks` 定义一处（书架"正在推进"同一批、同一个顺序）
+        // 先后只在 `CueStore.startedTasks` 定义一处
         let started = try store.startedTasks(topLevelOnly: true).compactMap { tree.task($0.id) }.map(row)
         // 相邻同项目的归成一段
         var todo: [Section] = []
@@ -57,10 +61,11 @@ nonisolated struct TaskBoard: Sendable, Equatable {
                 todo.append(Section(project: task.projectID.flatMap { projects[$0] }, roots: [task.id]))
             }
         }
+        let latest = roots.filter { $0.status == .todo }.sorted { $0.createdAt > $1.createdAt }.prefix(latestLimit).map(row)
         let finished = done.map(row)
         let open = tree.rows(of: started.map(\.id) + todo.flatMap(\.roots))
         return TaskBoard(
-            tree: tree, inProgress: started, todo: todo, done: finished, subtasks: try store.subtaskProgress(),
+            tree: tree, inProgress: started, todo: todo, latestTodo: latest, done: finished, subtasks: try store.subtaskProgress(),
             counts: try store.taskCounts().values.reduce(.zero, +), order: open.map(\.id) + finished.map(\.id))
     }
 
@@ -71,35 +76,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return Array(all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
             .prefix(doneLimit))
-    }
-
-    /// 书架"正在推进"：列出的任务，加上放不下的还有几项（纸底写"还有 N 项"）。
-    struct Active: Sendable, Equatable {
-        var tasks: [ActiveTask]
-        var more: Int
-    }
-
-    /// 正在推进的一件：任务、步骤做了几个，与正在做的那一步（最近开始、还没做完的步骤；没有为 nil）。
-    struct ActiveTask: Identifiable, Sendable, Equatable {
-        var task: Card
-        var steps: TaskProgress?
-        var step: Card?
-        var id: UUID { task.id }
-    }
-
-    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress`、任务看板的进行中同一批，步骤跟着上级），最近开始的在前，
-    /// 同刻按原来的先后；取前 `limit` 条，其余数个数。`started` 是 `CueStore.startedTasks()`（书架同一份也给 `leading`）。书架不看会话，不读会话。
-    static func active(limit: Int, started: [Card], from store: isolated CueStore) throws -> Active {
-        let top = try store.startedTasks(topLevelOnly: true)
-        let shown = top.prefix(limit)
-        let ids = Set(shown.map(\.id))
-        let progress = try store.subtaskProgress(of: ids)
-        // 最近开始的在前：每个上级取第一条
-        var steps: [UUID: Card] = [:]
-        for step in started { if let parent = step.parentID, ids.contains(parent), steps[parent] == nil { steps[parent] = step } }
-        return Active(
-            tasks: shown.map { ActiveTask(task: $0, steps: progress[$0.id], step: steps[$0.id]) },
-            more: max(0, top.count - limit))
     }
 
     /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：`started` 是 `CueStore.startedTasks()`，按项目归拢。

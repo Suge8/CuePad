@@ -6,9 +6,9 @@ import QuartzCore
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
-/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：分栏折叠成一层层的页）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
+/// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone：以去处为根的导航栈加底部一排）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
-/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点列表行的 `select`、系统返回改的 `column`、浮窗与面板的状态），不经触摸投递。
+/// 动作是点击最终调用的同一条路（导航路径、`openSession`、点底部那一排与侧栏的 `select`、浮窗与面板的状态），不经触摸投递。
 /// 长按菜单在进程内没有入口：由 `perf-ios.sh` 在模拟器上真按（`AWAIT` 行），从手指按下起量。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
@@ -96,23 +96,17 @@ enum IOSInteractionBench {
         }
         navigation.select(.cue)
         try? await Task.sleep(for: .seconds(1))
-        // 主导航：回到列表（系统返回改的就是它）、点列表里的 Cue 推进去
+        // 主导航：Cue 页点底部的去处去任务（配 `-CuePadManyTasks` 量任务多时）、任务页点 Cue 圆钮回来（点按调的就是 `select`，过渡由 `DockRoot` 接着做）
         for _ in 0..<2 {
-            await step("回到列表") { navigation.showList() }
-            await step("列表进 Cue") { navigation.select(.cue) }
+            await step("Cue 进任务") { navigation.select(.tasks) }
+            await step("任务回 Cue") { navigation.select(.cue) }
         }
         // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
         }
-        // 任务列表（侧栏的"任务"，配 `-CuePadManyTasks` 量任务多时）：从列表点进去（一条任务的任务页见下面的"打开任务页"）。这一页与 Cue 页的滚动区在进程内找不到可驱动的 UIScrollView，不量滚动
-        for _ in 0..<2 where wants("列表进任务") {
-            navigation.showList()
-            try? await Task.sleep(for: .seconds(1))
-            await step("列表进任务") { navigation.select(.tasks) }
-        }
-        // Agent 整页（侧栏的"会话"）点会话（先读出这一页再推入）→ 返回
+        // 会话页（底部的"会话"）点会话（先读出这一页再推入）→ 返回
         navigation.select(.agent)
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions[0], sessions[0], sessions[1]] {

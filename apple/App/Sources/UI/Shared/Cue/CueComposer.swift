@@ -17,6 +17,8 @@ struct CueComposer: View {
     /// 每变一次就拿到焦点（手机的 ⌘⇧N、随手记小组件，`Navigation.cueFocusRequests`）。
     var focusRequests = 0
     var sent: () -> Void = {}
+    /// 焦点进出时告诉外面（iPhone Cue 页底部的去处圆钮随它让开）。
+    var focusChanged: (Bool) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -44,6 +46,7 @@ struct CueComposer: View {
             send: { sendButton })
             .onChange(of: opens, initial: true) { if opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true } }
             .onChange(of: focusRequests) { focused = true }
+            .onChange(of: focused) { focusChanged(focused) }
             .onChange(of: workspace.cue.lastYouSaid) { launched = false }
             .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }
     }

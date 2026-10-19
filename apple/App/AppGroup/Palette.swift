@@ -111,13 +111,15 @@ struct Palette {
     static let searchMatch = Color(hex: indigoMid).opacity(0.22)
     private static let indigoMid: UInt32 = 0x4A64B8
 
-    /// 靛青、胭脂实底上的字与图标：暖白。
+    /// 靛青、胭脂、赭黄实底上的字与图标：暖白。
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
     // MARK: 状态（只上状态图形与紧挨着的那个词，不给整段字上色）
 
     /// 等你确认：赭黄，全 App 只有等你用它（问号圆、"等你 N"、Cue 头像的环）；表达等你经 Waiting.swift。对比度 4.7，深色 6.9。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
+    /// 等你的角标底（iPhone 底部那一排 Cue 圆钮上的数，`WaitingBadge`）。字 6.0，深色 4.6。
+    var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
@@ -181,7 +183,7 @@ struct Palette {
         return Color(hex: dark ? entry.dark : entry.light)
     }
 
-    /// 项目色铺的淡底（书架的项目卡、项目行的图标底）。
+    /// 项目色铺的淡底（项目页置顶卡）。
     func projectWash(_ stored: String) -> Color { project(stored).opacity(dark ? 0.16 : 0.1) }
 }
 

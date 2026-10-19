@@ -30,12 +30,14 @@ enum ScrollAnchor {
 /// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
 /// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；
 ///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
-///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句，`-CuePadVisitCue <秒>` 说完这么久去 Cue 页读、再回原处（`saysIfAsked`，同一处）；
+///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadNoAsks YES`：等你回答的演示会话都歇着、Cue 的提问撤回，"等你"为 0（`settleAsks`）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句，`-CuePadVisitCue <秒>` 说完这么久去 Cue 页读、再回原处（`saysIfAsked`，同一处）；
 /// - `-CuePadCueFlow YES`（配 cue 画面与 `-CuePadDemo YES`）：画面就绪后按固定节奏走一遍完整的一轮（发送、在想、用工具、回复、结果卡、等你、切页），录 Cue 页的流转；
 ///   `-CuePadCueFlowLog <路径>` 另量静止与发送各一段（`cueFlowIfAsked`，见 `DebugScene+CueFlow.swift`）；
 /// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
+/// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开去处、去三页、推入与返回、搜索、换去处清掉推入的页、回 Cue，
+///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`PiSubagentList`、`CueNotes`）；
@@ -74,6 +76,8 @@ enum DebugScene {
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
+    /// 点 Cue 页底部去处圆钮的那条路（`debugExposesPlaces`）。
+    static var togglePlaces: () -> Void = {}
     #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。

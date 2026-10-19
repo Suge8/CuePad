@@ -231,8 +231,8 @@ struct TaskFlowTests {
         #expect(board.done.first?.task.id == shipped.id)  // 最近完成按完成时间排，不按项目分组
     }
 
-    /// 书架只管灵感与任务：正在推进按最近开始排，不看交给的会话在怎样（会话在侧栏的"会话"）。
-    @Test func 书架正在推进按最近开始_只列顶层() async throws {
+    /// 任务页的"进行中"按最近开始排，只列顶层（步骤跟着上级）。
+    @Test func 进行中按最近开始_只列顶层() async throws {
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
         let step = try await store.createTask("步骤", under: oldest.id)
@@ -242,10 +242,6 @@ struct TaskFlowTests {
         let newest = try await store.createTask("最近开始", in: nil)
         try await store.setStatus(newest.id, .inProgress)
 
-        let active = try await TaskBoard.active(limit: 2, started: store.startedTasks(), from: store)
-
-        #expect(active.tasks.map(\.id) == [newest.id, middle.id] && active.more == 1)
-        // 任务页的"进行中"与它同一批、同一个顺序
         let board = try await TaskBoard.read(from: store)
         #expect(board.inProgress.map(\.id) == [newest.id, middle.id, oldest.id])
         #expect(board.counts.inProgress == 3)  // 标题上的"3 进行中"：顶层，不含步骤

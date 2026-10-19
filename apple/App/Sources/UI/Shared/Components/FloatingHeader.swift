@@ -8,6 +8,7 @@ extension View {
     /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
+    /// 窄屏导航栈的根（任务、会话、项目三页，`largeTitle`）不是推入页：标题是系统大标题，那一行要紧信息不写，右边的圆钮照旧。
     /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
         _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
@@ -37,6 +38,11 @@ extension View {
     }
 }
 
+extension EnvironmentValues {
+    /// 这一页是窄屏导航栈的根（`RouteView.home`）：顶栏用系统大标题。
+    @Entry var largeTitle = false
+}
+
 enum FloatingHeaderLayout {
     /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅与它同高、落在两侧圆钮之间（`NoticeBanner`）。
     static let height: CGFloat = 44
@@ -50,8 +56,22 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
     let label: Label
     let trailing: Trailing
     @Environment(\.palette) private var palette
+    @Environment(\.largeTitle) private var largeTitle
 
     func body(content: Content) -> some View {
+        if largeTitle {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar {
+                    if Trailing.self != EmptyView.self { ToolbarItem(placement: .primaryAction) { trailing } }
+                }
+        } else {
+            floating(content)
+        }
+    }
+
+    private func floating(_ content: Content) -> some View {
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)

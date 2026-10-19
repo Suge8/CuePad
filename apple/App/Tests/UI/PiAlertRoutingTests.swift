@@ -21,13 +21,12 @@ struct PiAlertRoutingTests {
         ]
     }
 
-    /// 推在正看着的页上（返回回到原处）；iPhone 停在侧栏列表上时也推进去。
+    /// 推在正看着的页上（返回回到原处）。
     @Test func 点Pi通知_打开该会话的近况() {
         let session = UUID()
         let alerts = AlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.select(.unfiled)
-        navigation.showList()
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
         navigation.open(alert: alerts.consumeTap())

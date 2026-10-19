@@ -270,6 +270,15 @@ extension View {
         self
         #endif
     }
+
+    /// 点 Cue 页底部去处圆钮展开、收起三格的那条路交给演示（`dockTourIfAsked`）。
+    func debugExposesPlaces(_ toggle: @escaping () -> Void) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.togglePlaces = toggle }
+        #else
+        self
+        #endif
+    }
     #endif
 
     /// 项目页任务纸点"还有 N 条"的那条路交给测量（两端 `InteractionBench` 的"展开任务"）：看得见的那一页（`active`）的纸。
@@ -362,13 +371,17 @@ extension View {
                 async let wakes: Void = DebugScene.wakeIfAsked(workspace)
                 let from = (navigation.root, navigation.path)
                 async let says: Void = DebugScene.saysIfAsked(
-                    workspace.services, visit: { navigation.select(.cue) }, back: { (navigation.root, navigation.path) = from })
+                    workspace.services, visit: { navigation.select(.cue) }, back: {
+                        navigation.select(from.0)
+                        navigation.path = from.1
+                    })
                 async let relays: Void = DebugScene.relayIfAsked(workspace)
                 async let flow: Void = DebugScene.cueFlowIfAsked(workspace, navigation)
                 async let away: Void = DebugScene.awayIfAsked(
                     workspace.services.store, leave: { navigation.show(.tasks) }, back: { navigation.show(.cue) })
+                async let tour: Void = DebugScene.dockTourIfAsked(workspace, navigation)
                 await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (wakes, says, relays, flow, away)
+                _ = await (wakes, says, relays, flow, away, tour)
             }
         #else
         self
