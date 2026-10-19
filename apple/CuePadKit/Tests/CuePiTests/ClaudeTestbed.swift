@@ -166,6 +166,44 @@ final class ClaudeTestbed {
         return try await waitForQuestion(id, on: terminal)
     }
 
+    /// 叫它同时派出一个后台子代理（前台跑约 8 秒命令）与一条 20 秒的后台命令，然后歇下；做完的各自由 Claude Code 再跑一轮交回。
+    static let backgroundWork = "Do two things in one message, then stop. (1) Launch one subagent with the Agent tool: subagent_type general-purpose, "
+        + "run_in_background true, description ticker, prompt: Run the Bash command `for i in 1 2; do sleep 4; done; echo SUB_DONE` as one foreground "
+        + "Bash call (not run_in_background), then reply SUB_DONE. (2) Run a Bash command with run_in_background true: `sleep 20; echo BG_DONE`. "
+        + "After launching both, reply only with the word launched and end your turn. Do not wait or poll. "
+        + "Whenever a background task reports back later, reply only with the word it printed."
+
+    /// 子代理交回中途结果后，名下的后台命令做完时它以同一 id 再跑一次、再交回（调研的 B4）。
+    static let earlyReport = "Launch one subagent with the Agent tool: subagent_type general-purpose, run_in_background true, description nested, "
+        + "prompt: Run one Bash command with run_in_background true: `sleep 15; echo NESTED`. Then immediately reply with just WAITING and end your turn. "
+        + "Do not wait, poll, sleep or use Monitor. When that command reports back later, reply only with NESTED_DONE. "
+        + "After launching the subagent, reply only with the word launched and end your turn. Do not wait or poll. "
+        + "Whenever the subagent reports back later, reply only with the last word it said."
+    /// 派一个要跑约一分钟的后台子代理，你再叫它停掉（调研的 B7）。
+    static let longSubagent = "Launch one subagent with the Agent tool: subagent_type general-purpose, run_in_background true, description victim, "
+        + "prompt: Run the Bash command `for i in $(seq 1 12); do sleep 5; done; echo V` as one foreground Bash call (not run_in_background), then reply V. "
+        + "After launching it, reply only with the word launched and end your turn. Do not wait or poll."
+    static let stopSubagent = "Stop the background subagent now with the TaskStop tool, then reply only STOPPED."
+    static let backgroundSettings = #"{"permissions": {"allow": ["Bash", "TaskStop"]}}"#
+
+    /// 有后台工作的一件事：在飞时等子代理（至少 `waits` 段），最后交回结果的那一轮做完才歇下，只歇下一次；
+    /// 歇下时的回答是那一轮的（含 `reply`），名册里只有一项、落在 `roster`。
+    func expectSettledOnce(_ id: PiSession.ID, since start: Date, reply: String, roster: PiSubagentPhase, waits: Int = 1) async throws {
+        let session = { [bridge] in bridge.session(id: id) }
+        try await eventually("交回结果的那一轮做完", timeout: .seconds(240)) {
+            session()?.state == .settled && (try? transcript(session()?.sessionFile))?.recap.lastReply?.contains(reply) == true
+        }
+        try await waitForDraftLanded(id)
+        var states: [PiWorkState] = []
+        for case .stateChanged(let changed, _) in log.changes where changed.id == id && changed.stateSince > start && changed.state != states.last {
+            states.append(changed.state)
+        }
+        #expect(states.filter { $0 == .delegating }.count >= waits, "\(states)")
+        #expect(states.filter { $0 == .settled } == [.settled] && states.last == .settled, "\(states)")
+        #expect(states.dropLast().last?.isWorking == true && states.dropLast().last != .delegating, "歇下前是交回结果的那一轮：\(states)")
+        #expect(session()?.subagents.map(\.phase) == [.known(roster)], "\(String(describing: session()?.subagents))")
+    }
+
     /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
