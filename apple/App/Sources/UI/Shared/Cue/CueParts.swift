@@ -180,7 +180,7 @@ enum CueBubble {
     #endif
     /// 同一边连着说的两颗之间。
     static let joinedGap: CGFloat = 4
-    /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
+    /// 气泡旁的旁注（经过、动态，`NoteLine`）离那一边的距离：图标对着气泡里的字。
     static let noteInset: CGFloat = padding.leading
     /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
     #if os(macOS)
