@@ -103,9 +103,12 @@ struct CueEnableCard: View {
 
 /// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务。
 struct CueTaskLine: View {
+    /// 平时可点的高（对话里、结果卡里）；Cue 页数格子时按它算那一行至少多高（`CuePage.floor`）。
+    static let lineHeight: CGFloat = 24
+
     let ref: CueTaskRef
     /// 可点的高（"等你"卡的末行撑满 44）
-    var height: CGFloat = 24
+    var height = CueTaskLine.lineHeight
     /// 标题至多几行（"等你"卡在辅助功能字号下两行）
     var lines = 1
     @Environment(\.palette) private var palette
@@ -403,6 +406,8 @@ struct CueShots: View {
     #else
     private static let besideOne = true
     #endif
+    /// 最矮的一档（辅助功能字号下竖排的横图）：每种排法里图都是定高、不比它矮，所以也是这一块至少多高（Cue 页数格子，`CuePage.floor`）。
+    static let floor: CGFloat = 110
 
     /// 一行多高：有竖图时按竖图（手机截图 240 高约 110 宽，三张正好排满；四张降到 220、第四张露一角），全是横图矮一些。
     private var rowHeight: CGFloat {
@@ -418,7 +423,7 @@ struct CueShots: View {
     var body: some View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(shots) { beside($0, height: $0.portrait ? 200 : 110) }
+                ForEach(shots) { beside($0, height: $0.portrait ? 200 : Self.floor) }
             }
         } else if shots.count == 1, Self.besideOne {
             beside(shots[0], height: rowHeight)
@@ -511,7 +516,19 @@ struct CueWaitingDock: View {
     /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueMessage?
     /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时是不透明度。
-    @State private var level: CGFloat = 0
+    @State private var level: CGFloat
+
+    /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
+    /// 对话按它让出的高又要重排一遍。
+    init(waiting: [CueMessage], tasks: [UUID: CueTaskRef], shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
+        self.waiting = waiting
+        self.tasks = tasks
+        self.shots = shots
+        self.open = open
+        _moving = moving
+        _shown = State(initialValue: waiting.first)
+        _level = State(initialValue: waiting.isEmpty ? 0 : 1)
+    }
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
@@ -538,6 +555,17 @@ struct CueWaitingDock: View {
     }
 
     private static let below: CGFloat = 8
+    /// 卡的内边距：下边小，末行自带可点的高，字离卡底看着与上边距差不多（Mac 两栏版的底行在上面补齐到 16）。
+    private static let padding = EdgeInsets(top: 16, leading: 16, bottom: 6, trailing: 16)
+
+    #if os(macOS)
+    /// 卡至少多高（Cue 页打开时数要排几格，`CuePage.covered`）：内边距与卡底的间距，中间带图时至少是图（`CueShots.floor`；两栏时左栏与图齐平），
+    /// 不带图时是问句（至少一行标题字）与末行（`footerHeight`）；原话收着。只能数少。
+    static func floor(_ message: CueMessage, shots: [UUID: [CueShown]]) -> CGFloat {
+        let body = shots[message.id] == nil ? Typography.titleSize + footerGap + footerHeight : CueShots.floor
+        return padding.top + body + padding.bottom + below
+    }
+    #endif
 
     /// 跟上在等的第一条：来了升起，没了沉下去、沉完再拿掉，换了一条原地交替；减弱动态效果时来去都只淡。
     /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉，看着是冒一点、停一下、窜一大截。
@@ -613,13 +641,13 @@ struct CueWaitingDock: View {
                     VStack(alignment: .leading, spacing: 0) {
                         question
                         pictures(16).padding(.top, 16)
-                        footer(message, ref, choices, height: Self.footerHeight).padding(.top, 12)
+                        footer(message, ref, choices, height: Self.footerHeight).padding(.top, Self.footerGap)
                     }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     question
-                    footer(message, ref, choices, height: Self.footerHeight).padding(.top, 12)
+                    footer(message, ref, choices, height: Self.footerHeight).padding(.top, Self.footerGap)
                 }
             }
         }
@@ -640,18 +668,27 @@ struct CueWaitingDock: View {
             }
         }
         #endif
-        // 下边距小：末行自带可点的高，字离卡底看着与上边距差不多（Mac 两栏版的底行在上面补齐到 16）
         let padded = content
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 6, trailing: 16))
+            .padding(Self.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-        // 卡浮在输入框上方、不随对话滚：高过可视区（辅助功能字号带图）时卡里能滚，选项总够得着
-        return ViewThatFits(in: .vertical) {
-            padded
-            ScrollView { padded }.scrollBounceBehavior(.basedOnSize)
+        return scrollingIfTall(padded)
+            .paper(radius: ComposerMetrics.radius, lifted: true)
+            .animation(Motion.quick, value: reading)
+            .padding(.bottom, Self.below)
+    }
+
+    /// 卡浮在输入框上方、不随对话滚：高过可视区（辅助功能字号带图、窗口很矮又展开了原话）时卡里能滚，选项总够得着。
+    /// Mac 上是一个滚动区、按内容高（`UpToHeight`）：用 ViewThatFits 在内容与滚动区里的内容之间挑的话两份都要建，第一次打开 Cue 页时卡多建一遍；
+    /// 手机上仍是挑：滚动区里的按钮按下要晚一下才有反馈，卡放得下时不该这样。
+    @ViewBuilder private func scrollingIfTall(_ content: some View) -> some View {
+        #if os(macOS)
+        UpToHeight { ScrollView { content }.scrollBounceBehavior(.basedOnSize) }
+        #else
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }.scrollBounceBehavior(.basedOnSize)
         }
-        .paper(radius: ComposerMetrics.radius, lifted: true)
-        .animation(Motion.quick, value: reading)
-        .padding(.bottom, Self.below)
+        #endif
     }
 
     /// 末行（任务、原话；Mac 上连同选项）可点的高。
@@ -676,6 +713,8 @@ struct CueWaitingDock: View {
         .accessibilityElement(children: .contain)
     }
     #if os(macOS)
+    /// 末行离上面的问句与图。
+    private static let footerGap: CGFloat = 12
     /// 带图时左栏问句至少这么宽，再窄就上下排。
     private static let questionWidth: CGFloat = 280
     #endif
@@ -775,3 +814,17 @@ private struct RiseLayout: Layout {
         child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }
 }
+
+#if os(macOS)
+/// 按里面的理想高（滚动区是它内容的高）、最高到给的高：放得下时与内容一样高，放不下时只占给的高。
+private struct UpToHeight: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, proposal.height ?? ideal.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+#endif

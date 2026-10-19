@@ -70,26 +70,16 @@ struct ChatScrubber: View {
         GeometryReader { proxy in
             let band = Band(height: proxy.size.height, count: marks.count)
             let pointed = finger.map(band.index(at:))
-            Canvas { context, size in
-                var last = -CGFloat.infinity
-                for (index, y) in ticks(band) where y - last >= Self.minGap || index == pointed || marks[index].kind == .boundary {
-                    last = y
-                    // 离手指越近越长越粗越深（程序坞那样）：平时 7×1.5 的淡色短线，手指正下方 18×3、签名色（此刻的焦点）。
-                    // 刻度贴着右缘（离边 `edge`），离气泡右缘（页边距 16）还有一段
-                    let near = finger.map { max(0, 1 - abs(y - $0) / Self.reach) } ?? 0
-                    let swell = near * near
-                    if marks[index].kind == .boundary {
-                        // 上下文换了的地方：一个墨点，放大时跟着变大
-                        let side = 5 + 4 * swell
-                        let rect = CGRect(x: size.width - Self.edge - 3.5 - side / 2, y: y - side / 2, width: side, height: side)
-                        context.fill(Path(ellipseIn: rect), with: .color(index == pointed ? palette.signature : palette.ink2))
-                        continue
-                    }
-                    let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
-                    let rect = CGRect(x: size.width - length - Self.edge, y: y - thickness / 2, width: length, height: thickness)
-                    let color = index == pointed ? palette.signature : palette.ink3.mix(with: palette.ink, by: swell)
-                    context.fill(Path(roundedRect: rect, cornerRadius: thickness / 2), with: .color(color))
+            let ticks = layout(band, width: proxy.size.width, pointed: pointed)
+            // 刻度画成几条路径（不用 Canvas：第一次进页时它一张画布就要几毫秒）：平时的淡墨、上下文换了的墨点、手指下的签名色；
+            // 离手指近的几道各按远近往墨色加深（`swell`），只在拖动时有
+            ZStack {
+                Marks(ticks: ticks.filter { !$0.dot && !$0.pointed && $0.swell == 0 }).fill(palette.ink3)
+                ForEach(Array(ticks.enumerated().filter { !$1.dot && !$1.pointed && $1.swell > 0 }), id: \.offset) { _, tick in
+                    Marks(ticks: [tick]).fill(palette.ink3.mix(with: palette.ink, by: tick.swell))
                 }
+                Marks(ticks: ticks.filter { $0.dot && !$0.pointed }).fill(palette.ink2)
+                Marks(ticks: ticks.filter(\.pointed)).fill(palette.signature)
             }
             .opacity(active ? 1 : Self.restOpacity)
             .overlay(alignment: .topTrailing) {
@@ -187,6 +177,33 @@ struct ChatScrubber: View {
         }
     }
 
+    /// 画出来的一个刻度：你的话是一道短线，上下文换了的地方是一个点；`pointed` 是手指下的那一个。
+    nonisolated fileprivate struct Tick: Sendable {
+        let rect: CGRect
+        let dot: Bool
+        let pointed: Bool
+        /// 离手指多近（0 到 1）。
+        let swell: CGFloat
+    }
+
+    /// 此刻画的刻度（`ticks`），太密的略过（手指下的与上下文换了的点都画）。离手指越近越长越粗（程序坞那样）：平时 7×1.5 的短线，手指正下方 18×3；
+    /// 刻度贴着右缘（离边 `edge`），离气泡右缘（页边距 16）还有一段。
+    private func layout(_ band: Band, width: CGFloat, pointed: Int?) -> [Tick] {
+        var last = -CGFloat.infinity
+        return ticks(band).compactMap { index, y in
+            let dot = marks[index].kind == .boundary
+            guard y - last >= Self.minGap || index == pointed || dot else { return nil }
+            last = y
+            let swell = finger.map { pow(max(0, 1 - abs(y - $0) / Self.reach), 2) } ?? 0
+            if dot {
+                let side = 5 + 4 * swell
+                return Tick(rect: CGRect(x: width - Self.edge - 3.5 - side / 2, y: y - side / 2, width: side, height: side), dot: true, pointed: index == pointed, swell: swell)
+            }
+            let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
+            return Tick(rect: CGRect(x: width - length - Self.edge, y: y - thickness / 2, width: length, height: thickness), dot: false, pointed: index == pointed, swell: swell)
+        }
+    }
+
     /// 刻度区：上下边、所有刻度不放大时的排布（按序号均匀，条数少时间距不超过 `maxPitch`、贴着下沿）。
     private struct Band {
         let top: CGFloat
@@ -213,6 +230,19 @@ struct ChatScrubber: View {
         func index(at y: CGFloat) -> Int {
             guard step > 0 else { return 0 }
             return min(max(Int(((y - first) / step).rounded()), 0), count - 1)
+        }
+    }
+}
+
+/// 一组刻度合成的一条路径：短线是两头圆的条，点是圆。
+nonisolated private struct Marks: Shape {
+    let ticks: [ChatScrubber.Tick]
+
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            for tick in ticks {
+                if tick.dot { path.addEllipse(in: tick.rect) } else { path.addRoundedRect(in: tick.rect, cornerSize: CGSize(width: tick.rect.height / 2, height: tick.rect.height / 2)) }
+            }
         }
     }
 }

@@ -9,6 +9,13 @@ import UIKit
 /// 主队列异步不行：它有时排在同一次提交之前，几步又挤回一帧。
 /// 窗口被遮挡时刷新不来：等待的任务被取消就立刻醒来，不悬着。
 enum NextFrame {
+    /// 这一次更新画上屏之后：SwiftUI 按自己的刷新回调画，与这里的刷新谁先谁后不定，下一次刷新可能还排在它画这一帧之前，
+    /// 等过两次刷新才一定画过。打开页面后紧接着要做的重活（往上再排开一段、出缩略图）等它，不挤进页面出来的那一帧。
+    static func drawn() async {
+        await wait()
+        await wait()
+    }
+
     static func wait() async {
         let tick = Tick()
         await withTaskCancellationHandler {
