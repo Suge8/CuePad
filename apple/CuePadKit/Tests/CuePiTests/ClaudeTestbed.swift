@@ -214,12 +214,6 @@ final class ClaudeTestbed {
         }
     }
 
-    /// 配置目录下全部会话文件此刻的内容（还没上桥、不知道会话 id 时看它在做什么）
-    var transcriptFiles: [String] {
-        let files = FileManager.default.enumerator(at: config.appending(path: "projects"), includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? []
-        return files.filter { $0.pathExtension == "jsonl" }.compactMap { try? String(contentsOf: $0, encoding: .utf8) }
-    }
-
     /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)

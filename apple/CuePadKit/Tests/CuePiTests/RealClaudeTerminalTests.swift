@@ -233,40 +233,6 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// CuePad 在一轮中途才启动（重启、更新都是这样），这一轮恰在 `claude agents --json` 列出它在跑之后、接上之前答完：
-    /// 开始时刻取发出列表的那一刻——上一轮的回答早于它（歇下先到时 Cue 不会读到上一轮的回答），这一轮的回答不早于它
-    /// （读到就算就绪，`PiSessionState.answered`）。外壳把列表扣到这一轮答完才交出；不装钩子，会话只能从列表接上。
-    @Test func aRoundThatEndsWhileCuePadIsListingItCountsAsAnswered() async throws {
-        let gate = try makeTempDirectory()
-        let release = gate.appending(path: "release")
-        #expect(mkfifo(release.path, 0o600) == 0)
-        let wrapper = #"if [ "$1" = agents ]; then out=$("$REAL" "$@"); touch '\#(gate.path)/listed'; cat '\#(release.path)' >/dev/null; printf '%s' "$out"; else "$REAL" "$@"; fi"#
-        try await ClaudeTestbed.run(installHooks: false, settings: ClaudeTestbed.backgroundSettings, wrapper: wrapper) { testbed in
-            let terminal = try await testbed.terminal()
-            // 等它起好（登记了会话）再打字：之前的回车会被吞掉
-            try await eventually("Claude Code 登记了这个会话", timeout: .seconds(60)) {
-                FileManager.default.fileExists(atPath: testbed.config.appending(path: "sessions/\(terminal.pid).json").path)
-            }
-            try await terminal.type("What is 6 times 7? Reply with only the number.")
-            try await eventually("上一轮答完", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""text":"42""#) } }
-            let previous = Date.now  // 上一轮的回答不晚于此刻
-            try await terminal.type("Run the shell command sleep 5 with the Bash tool, then reply with only the word FINISHED.")
-            try await eventually("这一轮在跑命令", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""command":"sleep 5""#) } }
-
-            try testbed.runtime.start()
-            try await eventually("列出它在跑") { FileManager.default.fileExists(atPath: gate.appending(path: "listed").path) }
-            try await eventually("这一轮答完", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""text":"FINISHED""#) } }
-            let writer = open(release.path, O_WRONLY)
-            close(writer)
-            let session = try await testbed.waitForSession(pid: terminal.pid)
-            let turn = try #require(session.turnStartedAt)
-            let recap = try testbed.transcript(session.sessionFile).recap
-            let answered = try #require(recap.answeredAt)
-            #expect(recap.lastReply == "FINISHED")
-            #expect(previous < turn && turn <= answered, "\(previous) \(turn) \(answered)")
-        }
-    }
-
     /// 改名经收件箱改到 Claude Code 自己（终端标题与会话列表里都是新名字）；结束是让它像在终端里按 Ctrl-C 那样退出。
     @Test func cuePadRenamesAndEndsATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
@@ -326,6 +292,95 @@ struct RealClaudeTerminalTests {
             let indexed = IndexedSession(
                 id: session.sessionID, path: session.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)
             await #expect(throws: AgentRuntimeError.openElsewhere) { try await testbed.runtime.resume(indexed) }
+        }
+    }
+}
+
+/// CuePad 在一轮中途才启动（重启、更新都是这样）：从 `claude agents --json` 接上在跑的会话，这一轮的开始取列出它之后会话文件里读到的。
+/// 列表请求途中可能换轮或收尾：外壳把列表扣住，期间写好会话文件，再交出"在跑"。不起 Claude Code（录像带是空的）。
+@MainActor
+@Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
+struct ClaudeDiscoveryTests {
+    /// 换轮：上一轮在请求途中答完、这一轮紧接着开始，回答还没写——上一轮的回答不算这一轮的（歇下先到时 Cue 不读它），这一轮的回答写下就算。
+    /// 收尾：这一轮在请求途中答完——它的回答算（Cue 照样被叫醒）。
+    @Test func aRoundThatChangesOrEndsWhileCuePadIsListingItIsReadFromTheSessionFile() async throws {
+        let gate = try makeTempDirectory()
+        let release = gate.appending(path: "release"), listing = gate.appending(path: "listing.json")
+        #expect(mkfifo(release.path, 0o600) == 0)
+        let wrapper = #"if [ "$1" = agents ]; then touch '\#(gate.path)/listed'; cat '\#(release.path)' >/dev/null; cat '\#(listing.path)'; else "$REAL" "$@"; fi"#
+        try await ClaudeTestbed.run(installHooks: false, wrapper: wrapper) { testbed in
+            try testbed.runtime.start()
+            let listed = gate.appending(path: "listed")
+            try await eventually("列表请求发出") { FileManager.default.fileExists(atPath: listed.path) }
+            // 都写在列表请求发出之后，相隔 1 毫秒（会话文件的时间戳精确到毫秒）
+            let base = try #require(try FileManager.default.attributesOfItem(atPath: listed.path)[.modificationDate] as? Date)
+            let at = { (step: Double) in base + step / 1000 }
+            let ended = try Transcript(testbed, id: UUID().uuidString.lowercased())
+            try ended.user("go", at: at(1))
+            try ended.reply("DONE", at: at(2))
+            let changed = try Transcript(testbed, id: UUID().uuidString.lowercased())
+            try changed.user("first", at: at(3))
+            try changed.reply("ONE", at: at(4))
+            try changed.user("second", at: at(5))
+            // 列表里的进程要活着：起一个读标准输入的进程顶替 Claude Code，关掉输入它就退出（测试台停时等它退出）
+            let stand = Process(), input = Pipe()
+            stand.executableURL = URL(filePath: "/bin/cat")
+            stand.standardInput = input
+            try stand.run()
+            defer { try? input.fileHandleForWriting.close() }
+            let pid = stand.processIdentifier
+            let entries: JSONValue = .array([changed, ended].map { ["pid": .number(Double(pid)), "sessionId": .string($0.id), "cwd": .string(testbed.work.path), "status": "busy"] })
+            try entries.data.write(to: listing)
+            close(open(release.path, O_WRONLY))
+
+            try await eventually("两个会话接上") { testbed.bridge.sessions.count == 2 }
+            let first = try #require(testbed.bridge.sessions.first { $0.sessionID == changed.id })
+            let turn = try #require(first.turnStartedAt)
+            let before = try testbed.transcript(first.sessionFile).recap
+            #expect(before.lastReply == "ONE")
+            #expect(try #require(before.answeredAt) < turn)
+            try changed.reply("TWO", at: .now)
+            let after = try testbed.transcript(first.sessionFile).recap
+            #expect(after.lastReply == "TWO")
+            #expect(try #require(after.answeredAt) >= turn)
+
+            let second = try #require(testbed.bridge.sessions.first { $0.sessionID == ended.id })
+            let recap = try testbed.transcript(second.sessionFile).recap
+            #expect(recap.lastReply == "DONE")
+            #expect(try #require(recap.answeredAt) >= #require(second.turnStartedAt))
+        }
+    }
+
+    /// 像 Claude Code 那样逐行追加的会话文件。
+    private struct Transcript {
+        let id: String
+        let url: URL
+
+        init(_ testbed: ClaudeTestbed, id: String) throws {
+            self.id = id
+            url = ClaudeCode.sessionFile(home: testbed.config, cwd: testbed.work, sessionID: id)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        }
+
+        func user(_ text: String, at time: Date) throws {
+            try write(["type": "user", "message": ["role": "user", "content": .string(text)]], at: time)
+        }
+
+        func reply(_ text: String, at time: Date) throws {
+            let message: JSONValue = ["role": "assistant", "model": "claude-test", "stop_reason": "end_turn", "content": [["type": "text", "text": .string(text)]]]
+            try write(["type": "assistant", "message": message], at: time)
+        }
+
+        private func write(_ line: JSONValue, at time: Date) throws {
+            guard case .object(var fields) = line else { return }
+            fields["uuid"] = .string(UUID().uuidString)
+            fields["sessionId"] = .string(id)
+            fields["timestamp"] = .string(time.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true)))
+            let handle = try FileHandle(forWritingTo: url)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: JSONValue.object(fields).data + Data("\n".utf8))
         }
     }
 }

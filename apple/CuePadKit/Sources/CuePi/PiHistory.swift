@@ -476,6 +476,14 @@ public enum PiHistory {
 /// 下一句你的话（`said`，含一轮在跑时插进来的）或这一轮结束（`answered`）时，最后那段归给前一句。
 /// 没有回答就结束的一轮按现有规则：被停下留"已停止"（`interrupted`）。
 extension PiHistoryCheckpoint {
+    /// 看到会话在跑之后读到的最后一轮的开始（接上时已在跑的一轮，`SessionFacts.startTurn(at:)`）：与收尾的时刻（`PiRecap.answeredAt`）
+    /// 出自同一份记录、同一个时钟。还开着的一轮取它开始的那条；已收尾的（看到它在跑之后才答完）取收尾那条——它就是那一轮的回答。
+    /// 一轮都没读到为 nil。
+    var lastTurnStart: Date? {
+        if let round { return round.startedAt }
+        return recap.answeredAt
+    }
+
     /// 写到会话记录上的摘要：问答，加上进行中这一轮到目前为止的经过（`PiRecap.pendingTools`，由轮次推出、不另存）。
     var projectedRecap: PiRecap {
         var projected = recap

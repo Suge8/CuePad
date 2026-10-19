@@ -214,8 +214,13 @@ public final class OpenCodeRuntime: AgentRuntime {
             all += page.data
             cursor = page.data.isEmpty ? nil : page.cursor?.next
         } while cursor != nil
-        let asked = Date.now  // 快照里在跑的那一轮此刻之后才收尾
+        let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
         let active = Set(try await client.get(OpenCodeData<[String: OpenCodeActive]>.self, "/api/session/active").data.keys)
+        var started: [String: Date] = [:]
+        for info in all where info.parentID == nil && active.contains(info.id) {
+            let read = try await OpenCodeHistory.read(client, info, from: try await checkpoint(of: info.id), files: store.files)
+            started[info.id] = read.checkpoint.history.lastTurnStart ?? asked
+        }
         guard self.connection === connection else { return }
         for id in drafts.reset() { bridge.setDraft(bridgeID(id, connection), nil) }
 
@@ -224,8 +229,8 @@ public final class OpenCodeRuntime: AgentRuntime {
             var tracked = sessions[info.id] ?? Tracked(info: info)
             tracked.info = info
             // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
-            // 快照里在跑的一轮，开始时刻不知道（可能是断线期间开始的另一轮）：取发出快照请求的时刻（`SessionFacts.startTurn(at:)`）
-            if active.contains(info.id) { tracked.facts.startTurn(at: asked) } else { tracked.facts.running = false }
+            // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
+            if let start = started[info.id] { tracked.facts.startTurn(at: start) } else { tracked.facts.running = false }
             tracked.facts.work(.thinking)
             tracked.toolNames = [:]
             tracked.facts.compacting = false
