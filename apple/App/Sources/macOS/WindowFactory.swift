@@ -27,10 +27,12 @@ enum WindowFactory {
         return window
     }
 
-    /// 设置窗口：系统设置窗口的工具栏标签（`tabs` 的样式是 toolbar），标题藏起（选中的标签就是这一页的名字），尺寸随选中那一页。
+    /// 设置窗口：系统设置窗口的工具栏标签（`tabs` 的样式是 toolbar），标题"设置"只给读屏与"窗口"菜单、不显示（选中的标签就是这一页的名字），尺寸随选中那一页。
     static func settings(_ tabs: NSTabViewController) -> NSWindow {
+        tabs.canPropagateSelectedChildViewControllerTitle = false
         let window = dress(NSWindow(
             contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false), controller: tabs)
+        window.title = "设置"
         window.toolbarStyle = .preference
         window.titleVisibility = .hidden
         return window

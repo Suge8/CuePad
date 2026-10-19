@@ -80,7 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.follow { await services.sessionViewer?.follow(workspace) }
         let cueBar = CueBar(services: services, workspace: workspace)
         self.cueBar = cueBar
-        settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings($0, services, cueBar: cueBar) }
+        settingsWindow = SettingsWindowController(cueName: { workspace.cue.name }) {
+            RootViews.settings($0, services, cueBar: cueBar)
+        }
         DebugHooks.present(window)
         // 首次打开请你接入检测到的 Agent（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
         if !location.isIsolated { Task { await workspace.offerAgentSetup() } }

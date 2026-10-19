@@ -89,7 +89,9 @@ extension DebugScene {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
-            SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap { name in SettingsPane.allCases.first { "\($0)" == name } })
+            // 通知权限先读到：没读到前按还没决定算，通用页会先多一行"系统通知"再收掉，截到的是缩放中的窗口
+            await workspace.services.alerts?.refresh()
+            SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap(SettingsPane.init(rawValue:)))
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)
