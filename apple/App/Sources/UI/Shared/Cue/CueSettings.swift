@@ -2,7 +2,7 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，两端同一份：Mac 设置里的 Cue 一节（`CueSettingsSection`）、手机 Cue 面板推入的设置页（`CueSettingsScreen`）与两端的启用卡
+/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsSection`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端的启用卡
 /// （`CueEnableCard`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
 /// 哪台上运行就是这几台）与项目名（允许清单里写）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
 /// 允许清单的一项（`CueStore.setCueAllow`），写完都立即上传。没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
@@ -111,19 +111,6 @@ nonisolated struct CueSettings: Equatable, Sendable {
         return hosts
     }
 
-    /// 说在哪台上运行时的那台："这台 Mac"，或别的那台的名字加书名号（"在「Mac Studio」上运行"）。
-    private func place(_ host: String, here: String?) -> String {
-        host == here ? Self.here : "「\(macs.first { $0.hostID == host }?.shownName ?? MacAgents.unnamed)」"
-    }
-
-    /// 启用那一项的现状：在哪台上运行、用哪家；没启用时写上次在哪台。
-    func status(here: String?) -> Dotted {
-        guard let active = profile.activeHost else {
-            return Dotted("没启用", profile.hostID.map { "上次在\(place($0, here: here))上运行" })
-        }
-        return Dotted("在\(place(active, here: here))上运行", profile.runtime.known?.name)
-    }
-
     /// 允许清单的一类：所有项目都不用问（`all`），与只管一个项目的几项（名字是「项目名」，删了的写"已删的项目"）。规矩那一类没有。
     struct AllowGroup: Identifiable {
         let ask: CueAsk
@@ -134,12 +121,11 @@ nonisolated struct CueSettings: Equatable, Sendable {
         var everywhere: CueAllow { CueAllow(ask, project: nil) }
     }
 
-    /// 允许清单那一节的写法（两端同一份）。
+    /// 两端同一套写法：选在哪台运行的那一项，与允许清单那一节（开关打开的那类在所有项目里都不用问）。
+    static let hostTitle = "在哪台 Mac 上运行"
     static let allowsTitle = "不用先问的事"
-    static let asksFirst = "先问你"
-    static let allowedEverywhere = "所有项目都不用问"
     static func allowsNote(_ name: String) -> String {
-        "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类以后直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
+        "推送、删除这类收不回的事，\(name) 做之前会先问你；打开的那类在所有项目里直接做。在它的提问上选\u{201C}以后……不用问\u{201D}也记在这里。"
     }
 
     var allowGroups: [AllowGroup] {

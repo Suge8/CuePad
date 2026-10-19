@@ -105,7 +105,6 @@ nonisolated extension DeliveryMode {
         case .followUp: "等它做完再说"
         case .command: "斜杠命令"
         case .answer: "作答"
-        case .ping: "连接测试"
         case .start: "新会话"
         case .transcript: "补写对话"
         case .config: "模型与思考强度"
@@ -121,7 +120,7 @@ nonisolated extension DeliveryMode {
         switch self {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
-        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop, .bind, .quota: nil
+        case .send, .command, .answer, .start, .transcript, .config, .end, .stop, .bind, .quota: nil
         }
     }
 }

@@ -110,7 +110,7 @@ struct CueHeader: View {
 
 /// 页头展开后的面板，手机上 Cue 的总面板（Mac 上这些分在 Cue 页输入框、"运行情况"、侧栏与设置里）：
 /// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
-/// （`CueSettingsScreen`：名字、在哪台 Mac 上运行、Agent 与模型、不用先问的事；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
+/// （`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
 /// 同 Mac 侧栏的 Agent 区；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
 /// 放不下时面板里面滚。
@@ -156,7 +156,7 @@ private struct CueNowPanel: View {
 
     /// 大脑那一行的右端：它在哪台运行与齿轮，窄屏放不下名字时只留齿轮（名字在设置页的顶栏里看得到），点它推入设置。
     private func settings(_ cue: CueWatch) -> some View {
-        let home = cue.canHear ? cue.hostName : "没启用"
+        let home = cue.home
         return Button {
             close()
             navigation.push(.cueSettings)

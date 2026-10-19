@@ -129,7 +129,7 @@ extension DebugScene {
         await presetSpeech(workspace)
     }
 
-    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示
+    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页通知那一行按这个状态显示
     /// （演示模式没有同步、真实状态出不来）。
     static var alertStatus: PiAlertStatus? {
         switch defaults.string(forKey: "CuePadAlertStatus") {

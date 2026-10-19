@@ -2,37 +2,40 @@
 import CueSync
 import SwiftUI
 
-/// 设置：外观、iCloud 同步（状态、需要你决定的情况、问题明细）、冲突副本、启动时没完成的事；版本写在最底下。
+/// 设置（项目页末尾、宽屏侧栏底部推入），按要紧排，分组与说法同 Mac 的设置窗口：Cue 一行（推入它的设置页，右边写它在哪台运行）；
+/// iCloud 同步（状态、需要你决定时的两个选择或立即同步、两个版本的灵感或任务、没能同步的记录）；通知；外观；
+/// 启动时没完成的事与上次崩溃有才出现；版本写在最底下。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    /// 宽屏上表单限宽居中，分段控件与说明不被拉成一长条。
-    private static let readableWidth: CGFloat = 640
+    /// 宽屏上表单限宽居中，分段控件与说明不被拉成一长条（Cue 的设置页同宽）。
+    static let readableWidth: CGFloat = 640
 
     var body: some View {
         @Bindable var settings = services.settings
         Form {
             Group {
                 Section {
-                    // 与下面的同步状态一样带图标，两节的行首对齐
+                    NavigationLink(value: Route.cueSettings) {
+                        LabeledContent {
+                            Text(workspace.cue.home ?? "")
+                        } label: {
+                            Label(workspace.cue.name, icon: .cue)
+                        }
+                    }
+                }
+                SyncSection()
+                if services.sync != nil || Self.previewsAlerts { AlertSection() }
+                Section {
                     Picker(selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
                         Text("深色").tag(AppSettings.Theme.dark)
                     } label: {
                         Label("外观", icon: .appearance)
-                    }
-                }
-                SyncSection()
-                if services.sync != nil || Self.previewsAlerts { AlertSection() }
-                if !services.conflicts.isEmpty {
-                    Section {
-                        NavigationLink(value: Route.conflicts) {
-                            Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
-                                .foregroundStyle(palette.ink)
-                        }
                     }
                 }
                 if !services.startupIssues.isEmpty {
@@ -56,11 +59,11 @@ struct SettingsScreen: View {
         .floatingHeader("设置")
     }
 
-    /// 演示模式没有同步：调试参数要看"Pi 通知"各状态时照样显示这一节。
+    /// 演示模式没有同步：调试参数要看通知各状态时照样显示这一节。
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
-/// Pi 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
+/// 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
 private struct AlertSection: View {
     @Environment(AppServices.self) private var services
     @Environment(AlertCenter.self) private var alerts
@@ -102,12 +105,12 @@ private struct AlertSection: View {
                 EmptyView()
             }
         } header: {
-            Text("Agent 通知")
+            Text("通知")
         }
     }
 }
 
-/// iCloud 同步：一行状态，需要决定时给出两个选择，问题明细可展开。
+/// iCloud 同步：一行状态，需要决定时给出两个选择，否则是立即同步；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -138,7 +141,12 @@ private struct SyncSection: View {
                 } else {
                     Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
                         .disabled(!services.canSyncNow)
-                    MacConnectionTest()
+                }
+                if !services.conflicts.isEmpty {
+                    NavigationLink(value: Route.conflicts) {
+                        Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
+                            .foregroundStyle(palette.ink)
+                    }
                 }
                 if !services.syncIssues.isEmpty {
                     DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {

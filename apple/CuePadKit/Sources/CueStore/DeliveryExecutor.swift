@@ -114,11 +114,6 @@ extension CueStore {
     try requestDelivery(bind.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .bind)
   }
 
-  /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。
-  public func requestPing(on host: String) throws -> DeliveryRequest {
-    try requestDelivery("ping", to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: .ping)
-  }
-
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
     try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")
