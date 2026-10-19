@@ -157,14 +157,13 @@ public struct CueTools: Sendable {
   /// 做完：Cue 按证据确认过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence。已完成的只结束没人再用的会话。
   /// 给 session 是收掉那个会话（`CueStore.endIdleSession`）。
   private func done(_ args: Args) async throws -> Result {
+    _ = try await host()  // 停用后不能再做完事
     if args.string("task") == nil, let ref = args.string("session") {
       let session = try await session(ref)
-      _ = try await host()
       let ended = try await store.endIdleSession(session.sessionID) != nil
       return .ok((ended ? "已请会话「\(session.title)」结束" : "会话「\(session.title)」早已结束") + "。（\(session.shortID)）")
     }
     let card = try await task(args.required("task"))
-    _ = try await host()  // 停用后不能再做完事
     let evidence = card.parentID == nil && card.status != .done ? try Self.evidence(args) : []
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
     let ended = ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束"
