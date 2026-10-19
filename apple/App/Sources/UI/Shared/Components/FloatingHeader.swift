@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// 推入页的顶栏（全 App 只此一种）：左边系统的圆形返回，中间一块玻璃（标题，下面一行要紧信息），右边最多一个圆钮
-    /// （多个操作时调用方给一个"⋯"`Menu`）。内容一直滚到状态栏与顶栏下面（沉浸式），栏后面不垫模糊或渐变，玻璃本身就是遮挡（见 `RouteView`）。
+    /// （多个操作时调用方给一个"⋯"`Menu`）。内容一直滚到顶栏下面（沉浸式，状态栏那一条除外，见 `Bars`），栏后面不垫模糊或渐变，玻璃本身就是遮挡。
     /// `hidden` 时中间那块与右边的圆钮让开（淡到透明、不可点、读屏跳过），返回钮一直在——随时看得到怎么回去，
     /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
     /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
@@ -18,13 +18,6 @@ extension View {
         let label = TitleStack(title: title, detail: detail()).padding(.horizontal, 16)
         return modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal, explanation: explanation, label: label, trailing: trailing()))
-    }
-
-    /// 玻璃里不是"标题与一行信息"的页（Cue 页：头像接名字与状态，`CueTitle`）：`label` 是玻璃里的全部内容，边距自己给；`title` 只给读屏与系统。
-    func floatingHeader<Label: View, Trailing: View>(
-        _ title: String, @ViewBuilder label: () -> Label, @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: false, reveal: nil, explanation: nil, label: label(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -75,6 +68,8 @@ private struct FloatingHeader<Label: View, Trailing: View>: ViewModifier {
     private func floating(_ content: Content) -> some View {
         content
             .navigationTitle(title)
+            // 标题只在中间那块玻璃里：不在 `RouteView` 里的页（任务正文的编辑 sheet）也不能让系统在下面再排一个大标题
+            .navigationBarTitleDisplayMode(.inline)
             // 两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
             // 换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间
             .toolbar {
