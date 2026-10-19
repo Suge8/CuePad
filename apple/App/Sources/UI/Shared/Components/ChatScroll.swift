@@ -269,6 +269,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             } else { position.scrollTo(y: offset.read + grown) }
                             return
                         }
+                        // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。
+                        // 变高矮常晚于跳的那一下：图的比例读到之前按猜的排
+                        if grown != 0, !follow.wrappedValue.scrolling, let target = follow.wrappedValue.target {
+                            reader.scrollTo(target.id, anchor: target.anchor)
+                            return
+                        }
                         // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环
                         if held != nil, grown > 0 { held = nil }
                         // 贴着最新、用户没在滚时离最新处远了是这里自己要补滚（内容长高、回复框长高、留白收起），补滚途中照"在最新处"报：

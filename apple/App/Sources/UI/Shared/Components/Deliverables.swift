@@ -27,10 +27,10 @@ struct DeliverableStrip: View {
         case 0:
             EmptyView()
         case 1 where size != .mini:
-            tile(previews[0], .hero(maxHeight: heroMaxHeight))
+            tile(previews[0], .hero(maxHeight: Self.heroMaxHeight(size)))
         case 2 where size != .mini:
             HStack(alignment: .top, spacing: Self.gap) {
-                ForEach(previews) { tile($0, .column(maxHeight: heroMaxHeight)) }
+                ForEach(previews) { tile($0, .column(maxHeight: Self.heroMaxHeight(size))) }
             }
         default:
             // 懒加载：一件活常常挂着几十上百份（真实库里一张结果卡 278 份），整排都建的话第一次打开 Cue 页光这一张就占 300ms 主线程。
@@ -57,22 +57,42 @@ struct DeliverableStrip: View {
 
     static let gap: CGFloat = 8
 
+    /// 在 `width` 宽里至少多高（Cue 页打开时数铺满一屏要排几格，`CuePage.floor`）：一份是主图，比例最扁到 16:9；两份各按真实比例，
+    /// 可能扁得几乎没有高；三份起是定高的一排。图下面那行字至少一行小字。
+    static func floor(count: Int, size: Size, width: CGFloat) -> CGFloat {
+        let caption: CGFloat = size == .mini ? 0 : DeliverableTile.captionGap + 12
+        switch count {
+        case 0: return 0
+        case 1 where size != .mini: return min(heroMaxHeight(size), width * 9 / 16) + caption
+        case 2 where size != .mini: return caption
+        default: return stripHeight(size, regular: false) + caption
+        }
+    }
+
     private var stripHeight: CGFloat {
+        #if os(macOS)
+        Self.stripHeight(size, regular: true)
+        #else
+        Self.stripHeight(size, regular: sizeClass == .regular)
+        #endif
+    }
+
+    /// 三份起那一排的高；`regular`：宽屏（iPad），卡宽得多，迷你一排与 Mac 同高。
+    private static func stripHeight(_ size: Size, regular: Bool) -> CGFloat {
         switch size {
         #if os(macOS)
         case .mini: 88
         case .result: 200
         case .chat: 176
         #else
-        // 宽屏（iPad）的卡宽得多，与 Mac 同高
-        case .mini: sizeClass == .regular ? 88 : 72
+        case .mini: regular ? 88 : 72
         case .result: 150
         case .chat: 132
         #endif
         }
     }
 
-    private var heroMaxHeight: CGFloat {
+    private static func heroMaxHeight(_ size: Size) -> CGFloat {
         #if os(macOS)
         size == .result ? 360 : 320
         #else
@@ -118,6 +138,9 @@ struct DeliverableTile: View {
         case shot(side: CGFloat)
     }
 
+    /// 画面与下面那行字之间。
+    static let captionGap: CGFloat = 5
+
     let preview: PiPreview
     let label: String
     let shape: Shape
@@ -151,7 +174,7 @@ struct DeliverableTile: View {
 
     var body: some View {
         Button { open(preview) } label: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: Self.captionGap) {
                 framed
                 if captioned { caption }
             }
