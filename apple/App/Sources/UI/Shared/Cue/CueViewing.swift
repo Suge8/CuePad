@@ -89,6 +89,9 @@ struct CueViewing: ViewModifier {
 /// 一条新消息的末尾在不在可见区里：在滚动区里、又不在浮着的输入框与"等你"卡底下（`chatBottomInset`）才算看到了这一条（长的回答要读到底）。
 /// 被盖着的那截仍在滚动区里，可见性回调（`onScrollVisibilityChange`）分不出，所以按滚动区此刻的边界自己比；只报变化，
 /// 浮着的那块的高在这里读，升起时每帧变也只重算新消息的这一格。
+/// 滚动区这个坐标空间不含上下的内容边距（`ChatLayout.edge`），浮着那块的高却是从滚动区真正的下沿量起：比之前补回这一截。
+/// 末尾按最后一行字算，不按气泡的下沿（量的这一线抬起气泡的下内边距）：打开时停在分隔线上，下面那条的气泡底常常刚好压在"等你"卡的上沿下一两点，
+/// 字全露着也读不到它。
 struct CueEndProbe: View {
     let seen: (Bool) -> Void
     @Environment(\.chatBottomInset) private var covered
@@ -97,8 +100,9 @@ struct CueEndProbe: View {
         Color.clear.frame(height: 1)
             .onGeometryChange(for: Bool.self) { [covered] proxy in
                 guard let visible = proxy.bounds(of: .scrollView) else { return false }
-                return visible.minY <= 0 && 1 <= visible.maxY - covered
+                return visible.minY <= ChatLayout.edge && 1 <= visible.maxY + ChatLayout.edge - covered
             } action: { seen($0) }
+            .padding(.bottom, CueBubble.padding.bottom)
     }
 }
 

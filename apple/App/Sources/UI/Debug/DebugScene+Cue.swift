@@ -217,12 +217,20 @@ extension DebugScene {
     }
 
     /// `-CuePadCueSays <秒>`（配 `-CuePadDemo YES`）：画面就绪后这么久 Cue 自己说一句（同值班的 Mac 做完一件事时写下的样子），
-    /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。
-    static func saysIfAsked(_ services: AppServices) async {
+    /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。之前的都先算读过，开始时没有新消息。
+    /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页（`visit`），停够读到它再回原来那页（`back`），录"别处时有提示、读过就没了"。
+    static func saysIfAsked(_ services: AppServices, visit: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
         let delay = defaults.double(forKey: "CuePadCueSays")
         guard delay > 0 else { return }
+        try? await services.store.markCueRead(through: .now)
         try? await Task.sleep(for: .seconds(delay))
         _ = try? await services.store.addCueMessage(.cue, text: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。")
+        let visitAfter = defaults.double(forKey: "CuePadVisitCue")
+        guard visitAfter > 0 else { return }
+        try? await Task.sleep(for: .seconds(visitAfter))
+        visit()
+        try? await Task.sleep(for: .seconds(3))
+        back()
     }
 
     /// 你不在的一夜里 Cue 陆续说的几句（中间夹一条它自己醒来的动态）：之前的对话一段段挪早，最后一句是刚说的。
@@ -255,7 +263,7 @@ extension DebugScene {
     /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页（`leave`），你说一句去睡了、Cue 接着说一夜的那几句，再回来（`back`）。
     /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
     /// 不挪早：连着 iCloud 时挪早会挪进别的设备写过的对话中间；等这么久是先把 iCloud 里已有的拉完，之前的都在你这一句之前，不算新的。
-    static func awayIfAsked(_ store: CueStore, leave: () -> Void = {}, back: () -> Void = {}) async {
+    static func awayIfAsked(_ store: CueStore, leave: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
         let delay = defaults.double(forKey: "CuePadAwayAfter")
         guard delay > 0 else { return }
         try? await Task.sleep(for: .seconds(delay))
