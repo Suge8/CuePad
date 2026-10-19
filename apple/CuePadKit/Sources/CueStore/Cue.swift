@@ -335,12 +335,13 @@ public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
 
   /// 这类事给人看的叫法（"以后推送代码都不用问"、设置里的"不用先问"）；规矩那一类不出现在这两处。
+  /// 范围要与 `definition` 一样大：选项照它写，选了放行的是整类。
   public var name: String {
     switch self {
     case .push: "推送代码"
-    case .merge: "合并进主分支"
-    case .release: "发布上线"
-    case .delete: "删除文件或数据"
+    case .merge: "合并进共享分支"
+    case .release: "发布或部署"
+    case .delete: "删除文件、分支或数据"
     case .outside: "动项目外的东西"
     case .budget: "超出预算"
     case .rule: "你的规矩要先问的事"
@@ -364,7 +365,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
   public func why(rule: String?) -> String {
     switch self {
     case .push: "推上去别人就拉得到，撤不回来。"
-    case .merge: "合进主分支会影响所有人，回退麻烦。"
+    case .merge: "合进大家共用的分支会影响所有人，回退麻烦。"
     case .release: "发出去马上有人用到，出了问题收不回。"
     case .delete: "删了就找不回来。"
     case .outside: "要动项目文件夹以外的东西，超出这件事的范围。"
@@ -395,7 +396,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" }
     return switch self {
     case .push: "可以推送\(named.map { "\($0)的" } ?? "")改动吗？"
-    case .merge: "可以把\(named ?? "改动")合并进主分支吗？"
+    case .merge: "可以把\(named ?? "改动")合并进共享分支吗？"
     case .release: "可以发布\(named ?? "")吗？"
     case .delete: "\(named ?? "")要删东西，可以吗？"
     case .outside: "\(named ?? "")要动项目外的东西，可以吗？"

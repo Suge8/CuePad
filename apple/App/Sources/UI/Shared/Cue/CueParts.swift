@@ -235,17 +235,24 @@ private struct AnswerChip: View {
     }
 }
 
-/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsking.question`）。"等你"卡与全屏预览的底栏共用。
+/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsking.question`），下面一行小字是为什么问你（`CueAsking.why`，规矩那一类是哪条规矩）。
+/// "等你"卡与全屏预览的底栏共用。
 struct CueQuestionLine: View {
+    let asking: CueAsking?
     let question: String
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PiStateGlyph(status: .asking)
-            Text(question)
-                .font(Typography.title).foregroundStyle(palette.ink)
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(question)
+                    .font(Typography.title).foregroundStyle(palette.ink)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                if let why = asking?.why {
+                    Text(why).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer(minLength: 0)
         }
     }
@@ -371,7 +378,7 @@ struct CueWaitingDock: View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let question = message.asking?.question(task: ref?.task.heading) ?? ""
         return VStack(alignment: .leading, spacing: 12) {
-            CueQuestionLine(question: question)
+            CueQuestionLine(asking: message.asking, question: question)
             if reading == message.id { original(message.text).transition(.opacity) }
             if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
                 let batch = Array(deliverables)
