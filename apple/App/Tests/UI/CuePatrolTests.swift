@@ -27,7 +27,7 @@ struct CuePatrolTests {
         session.close(bye: "quit")
         try await eventually("会话的记录删掉") { try await store.sessions(matching: "quiet").isEmpty }
         try await eventually("退出之后巡视", timeout: .seconds(15)) {
-            try await store.cueMessages().contains { $0.author == .known(.note) && $0.text.contains("巡视了一圈") && $0.createdAt > exited }
+            try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > exited }
         }
         await rig.stop()
     }
@@ -57,7 +57,7 @@ struct CuePatrolTests {
         #expect(try await store.applyRemote([.save(deleted, systemFields: Data())]).isEmpty)
         #expect(try await store.card(task.id)?.deletedAt != nil)
         try await eventually("删掉之后巡视", timeout: .seconds(15)) {
-            try await store.cueMessages().contains { $0.author == .known(.note) && $0.text.contains("巡视了一圈") && $0.createdAt > synced }
+            try await store.cueMessages().contains { $0.author == .known(.cue) && $0.text.contains("巡视了一圈") && $0.createdAt > synced }
         }
         await rig.stop()
     }

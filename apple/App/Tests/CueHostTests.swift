@@ -792,7 +792,7 @@ nonisolated final class FakeModel: Sendable {
             if text.contains("只看看") { return say("只是看了看") }
             return tell("登录页那边歇下了")
         }
-        if text.contains("醒来：空闲，例行看一眼") { return say("巡视了一圈") }
+        if text.contains("醒来：空闲，例行看一眼") { return tell("巡视了一圈") }
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
