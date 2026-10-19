@@ -64,7 +64,7 @@ struct CueEnableCard: View {
         .animation(Motion.quick, value: model.failure)
     }
 
-    /// 这台 Mac（手机没有）：Mac 上它排第一、点按就住这台。
+    /// 这台 Mac（手机没有）：Mac 上它排第一、点按就在这台运行。
     private var here: String? {
         #if os(macOS)
         services.hostID

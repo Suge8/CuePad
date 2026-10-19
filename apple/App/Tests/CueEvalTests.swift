@@ -237,21 +237,7 @@ struct CueEvalTests {
                 + "tell 带 ask=rule 关联任务，doing 写推荐的那个，show 每个方案一张、同一种样子、推荐的在前，每张一句看什么；不带别的改动的图"
         ) { eval in
             let rig = eval.rig
-            try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
-            let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
-            func send(_ names: [String], title: String) async throws {
-                var files: [URL] = []
-                for name in names {
-                    files.append(rig.app.directory.appending(path: name))
-                    try await mockShot(name).write(to: files[files.count - 1])
-                }
-                _ = try await rig.store.addPreviews(filesAt: files, title: title, sessionID: work.id)
-            }
-            try await send(["1-01-改前-长按菜单.png", "1-02-改后-长按菜单.png", "2-01-改前-设置.png", "2-02-改后-设置.png"], title: "上一轮的改动")
-            for (slug, title) in Self.proposals {
-                try await send(["iphone", "iphone-dark", "iphone-original", "mac"].map { "\(slug)-\($0).png" }, title: title)
-            }
-            try await eval.trigger { try await rig.settle(work, reply: Self.proposalReply) }
+            let work = try await Self.proposalsDelivered(eval)
             let previews = try await rig.store.previews(of: work.id)
             let asked = eval.calls("tell").filter { $0.args["ask"] as? String == "rule" && !$0.call.failed }
             let shown = (asked.last?.args["show"] as? [[String: Any]] ?? []).compactMap { item -> PiPreview? in
@@ -268,6 +254,48 @@ struct CueEvalTests {
                 Check("没带别的改动的图", !shown.contains { $0.title == "上一轮的改动" }),
             ]
         }
+    }
+
+    @Test func l另外说选别的方案() async throws {
+        try await CueEval.run(
+            "l-另外说选别的方案",
+            expect: "Cue 按他的规矩把三个方案放到卡上、推荐 1；他不选选项、另外说「用 2，按钮再小一点」："
+                + "照方案 2 加上按钮再小一点让会话去做，不当成拒绝（不撤回、不收掉、不叫会话停），不再为这件事发等你"
+        ) { eval in
+            let work = try await Self.proposalsDelivered(eval)
+            let question = try #require(try await eval.rig.store.cueMessagesWaitingForYou().first { $0.taskID == work.task.id }, "Cue 先在卡上问了")
+            try await eval.trigger { try await Workspace(services: eval.rig.services).answerCueQuestion(question, "用 2，按钮再小一点") }
+            let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
+            return [
+                Check("让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
+                Check("带上按钮再小一点", said.contains { $0.contains(/小/) }),
+                Check("不当成拒绝（没 done、没撤回、没叫会话停）",
+                      eval.calls("task", "done").isEmpty && !eval.calls("tell").contains { $0.args["withdraw"] != nil }
+                        && !said.contains { $0.contains(/先别(改|做|动)|不做了|不用(改|做)了|停下手|停掉/) }),
+                Check("没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
+            ]
+        }
+    }
+
+    /// 他交代过界面方案要在卡上选；会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
+    private static func proposalsDelivered(_ eval: CueEval) async throws -> Working {
+        let rig = eval.rig
+        try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
+        let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
+        func send(_ names: [String], title: String) async throws {
+            var files: [URL] = []
+            for name in names {
+                files.append(rig.app.directory.appending(path: name))
+                try await mockShot(name).write(to: files[files.count - 1])
+            }
+            _ = try await rig.store.addPreviews(filesAt: files, title: title, sessionID: work.id)
+        }
+        try await send(["1-01-改前-长按菜单.png", "1-02-改后-长按菜单.png", "2-01-改前-设置.png", "2-02-改后-设置.png"], title: "上一轮的改动")
+        for (slug, title) in proposals {
+            try await send(["iphone", "iphone-dark", "iphone-original", "mac"].map { "\(slug)-\($0).png" }, title: title)
+        }
+        try await eval.trigger { try await rig.settle(work, reply: proposalReply) }
+        return work
     }
 
     private static let proposals = [
@@ -346,7 +374,7 @@ struct ClaudeCue {
         return CueLaunch(executable: script, path: claude.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
     }
 
-    /// 启用、住在这台 Mac、用这个模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的 Claude Code 报不出来。
+    /// 启用、运行在这台 Mac、用这个模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的 Claude Code 报不出来。
     func enable(_ rig: CueHostTests.Rig) async throws {
         let host = TestApp.hostID
         try await rig.store.updateCueProfile { [model, effort] profile in

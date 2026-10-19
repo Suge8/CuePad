@@ -70,7 +70,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 - 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，构建完只在测量那段独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
 - 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] [启动参数…]`，从进程外读内核记账，不独占机器；`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh`、`rusage.py` 头注释）。
 
-- Cue 值班时的开销：库里要有 Cue 住在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成替身 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`（每轮多久、记下每次交来的话见它的头注释）；会话的动静由 `CUEPAD_PI_SOCKET_DIR` 里说桥协议的假扩展给。
+- Cue 值班时的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成替身 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`（每轮多久、记下每次交来的话见它的头注释）；会话的动静由 `CUEPAD_PI_SOCKET_DIR` 里说桥协议的假扩展给。
 
 方法与坑：
 

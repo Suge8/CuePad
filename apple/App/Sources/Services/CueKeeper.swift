@@ -34,7 +34,7 @@ nonisolated struct CueTiming: Sendable {
     }
 }
 
-/// 一个"在这台 Mac 上值班"的时段：Cue 住在这台 Mac 且已启用时由 `CueService` 起一个，不再住这里时停掉。
+/// 一个"在这台 Mac 上值班"的时段：Cue 运行在这台 Mac 且已启用时由 `CueService` 起一个，不再运行在这里时停掉。
 /// 一个班次是一个大脑进程（`CueBrain`），系统提示在班次内不变；对话、看板与"等你"都在库里，换班次、App 重启都不丢。
 /// 设置（`CueProfile`，唯一的事实源）每次对账从库里读，与大脑在用的（`BrainSettings`）不同就去对上：
 /// - 只换了模型或思考强度：空闲时就地交给在跑的大脑（`CueBrain.configure`），下一轮起生效，不换班次、上下文不丢；
@@ -794,7 +794,7 @@ final class CueKeeper {
     /// 重试可能好的错：额度、登录类的不算。
     private static func retryable(_ summary: PiErrorSummary) -> Bool { summary.kind != .quota && summary.kind != .authentication }
 
-    /// 回答交给 Cue 的说法：选了一项写选的那项；不在选项里的是他没选、另外说的话（不一定是不同意，也可能是选别的方案、补一句条件）。
+    /// 回答交给 Cue 的说法：选了一项写选的那项；不在选项里的是他没选、另外说的话（可能是不同意、选别的方案或补条件）。
     private static func answerLine(_ message: CueMessage) -> String {
         let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         let answer = message.answer ?? ""

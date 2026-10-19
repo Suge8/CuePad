@@ -184,13 +184,13 @@ final class AppServices {
     }
 
     /// 改 Cue 的设置（同步的 `CueProfile`）：两端的写入口——名字、停用、Agent、模型与思考强度；启用另走 `enableCue`（要按那台 Mac 判断）。
-    /// 写库后马上传这一条，别的设备马上看到；Cue 住的那台 Mac 的管理器读到就按新设置值班。
+    /// 写库后马上传这一条，别的设备马上看到；Cue 运行的那台 Mac 的管理器读到就按新设置值班。
     func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
         try await store.updateCueProfile(edit)
         await upload(CueProfile.recordID)
     }
 
-    /// 让 Cue 住在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
+    /// 让 Cue 运行在 `host` 那台 Mac 并启用（规则 `CueStore.enableCue`）：两端同一个入口。是这台 Mac 时先重新探测一次本机的 Agent
     /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。写完马上传。
     func enableCue(on host: String) async throws {
         #if os(macOS)
@@ -200,7 +200,7 @@ final class AppServices {
         await upload(CueProfile.recordID)
     }
 
-    /// 停用 Cue（住在哪台留着）。
+    /// 停用 Cue（运行在哪台留着）。
     func disableCue() async throws {
         try await updateCue { $0.enabledAt = nil }
     }

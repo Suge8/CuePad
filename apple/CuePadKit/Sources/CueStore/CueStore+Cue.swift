@@ -129,7 +129,7 @@ extension CueStore {
     try select(CueMessage.self, where: Self.toDeliver, orderBy: "createdAt, rowid")
   }
 
-  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 住的那台 Mac 写）。只记还待交的（`toDeliver`）：已记过的不改，回答在那之后改过的再记一次。
+  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 运行的那台 Mac 写）。只记还待交的（`toDeliver`）：已记过的不改，回答在那之后改过的再记一次。
   public func markCueMessagesDelivered(_ ids: [UUID], at time: Date = .now) throws {
     guard !ids.isEmpty else { return }
     try write {
@@ -338,7 +338,7 @@ extension CueStore {
     try write { try editProfile(edit) }
   }
 
-  /// 让 Cue 住在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
+  /// 让 Cue 运行在 `host` 那台 Mac 并启用（另一台上的会停下）——手机与 Mac 同一条规则，按那台写下的能用的 Agent（`MacAgents`）判断：
   /// 选的 Agent 那台用不了才换成 `CueProfile.runtimes` 里第一家能用的，模型属于原来那家、一并清掉；强度留着（运行时自己取档）。
   /// 那台一家都不能用时抛 `CueEnableError`，带上各家为什么。
   public func enableCue(on host: String) throws {

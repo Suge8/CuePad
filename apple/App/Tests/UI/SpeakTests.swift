@@ -15,7 +15,7 @@ struct SpeakTests {
     var store: CueStore { app.services.store }
     var files: AttachmentFiles { app.services.store.files }
 
-    /// Cue 住在 mac-cue（不是这台：发给它要经同步），那台醒着（它的在线记录同步来了）。
+    /// Cue 运行在 mac-cue（不是这台：发给它要经同步），那台醒着（它的在线记录同步来了）。
     private func enableCue() async throws {
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-cue"
@@ -72,7 +72,7 @@ struct SpeakTests {
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
         #expect(try await presence() == .sending)  // Cue 页头与气泡同一个"在路上"
 
-        try await store.markCueMessagesDelivered([message.id])  // Cue 住的那台 Mac 交给了它
+        try await store.markCueMessagesDelivered([message.id])  // Cue 运行的那台 Mac 交给了它
         let delivered = try #require(try await youSaid().first)
         #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }

@@ -114,7 +114,7 @@ import Testing
     }
   }
 
-  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，住在哪台 Mac 还留着）。
+  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，运行在哪台 Mac 还留着）。
   @Test(.timeLimit(.minutes(1))) func aDisabledCueCannotDispatchWork() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store

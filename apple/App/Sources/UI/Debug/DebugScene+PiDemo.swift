@@ -261,7 +261,7 @@ extension DebugScene {
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
-    /// 录"发出 → 返回列表 → 状态流转"用。Cue 住在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达），它想一会儿回一句（`demoCueAnswers`）。
+    /// 录"发出 → 返回列表 → 状态流转"用。Cue 运行在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达），它想一会儿回一句（`demoCueAnswers`）。
     /// 同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
@@ -319,7 +319,7 @@ extension DebugScene {
         try await store.setCueState(.settled, context: context)
     }
 
-    /// 你对住在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
+    /// 你对运行在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
     private static func toDemoCue(_ store: isolated CueStore) throws -> [UUID] {
         guard try store.cueProfile()?.hostID == "demo-mac", try store.macOnline("demo-mac") else { return [] }
         return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
@@ -460,7 +460,7 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示的几台 Mac 上的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 住在这台）与 Mac 上的这台本机
+    /// 演示的几台 Mac 上的 Agent（`MacAgents`，配 `-CuePadDemo YES`）：工作室的 Mac Studio（demo-mac，Cue 运行在这台）与 Mac 上的这台本机
     /// 有 Pi、Claude Code、Codex（OpenCode 没装：新会话里不列它），demo-mini 有 Claude Code 与 Codex；
     /// MacBook Air（demo-air，只绑了 CuePad）一家都不能用，各有原因（新会话里选"CuePad · MacBook Air"看为什么）。
     /// Mac 上给 `-CuePadHost bare` 时本机是一家都不能用的那台（看 + 的悬停与表单里的原因）；本机的记录会被它自己的探测改写成隔离目录里真实的样子。

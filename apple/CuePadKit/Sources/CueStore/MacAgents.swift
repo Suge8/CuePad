@@ -117,7 +117,7 @@ extension CueStore {
     }
   }
 
-  /// 各台 Mac 写下的（Cue 能住的就是这几台），按名字排。
+  /// 各台 Mac 写下的（Cue 能运行的就是这几台），按名字排。
   public func allMacAgents() throws -> [MacAgents] {
     try select(MacAgents.self, orderBy: "name, hostID")
   }

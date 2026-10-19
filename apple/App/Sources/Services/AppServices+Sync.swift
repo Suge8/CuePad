@@ -162,7 +162,7 @@ extension AppServices {
     /// 按节奏的拉取与收到推送的拉取也不算：它们一拉就完，算上的话页头每几秒闪一次。
     var isCatchingUp: Bool { isSyncingNow || syncCatchingUp }
 
-    /// 事实写在 `host` 上的这一页（Cue 住的 Mac、会话所在的 Mac）此刻可能不是最新：本机就是它时库里就是最新的，不用等（Mac）。
+    /// 事实写在 `host` 上的这一页（Cue 运行的 Mac、会话所在的 Mac）此刻可能不是最新：本机就是它时库里就是最新的，不用等（Mac）。
     func isCatchingUp(on host: String?) -> Bool {
         #if os(macOS)
         isCatchingUp && host != hostID

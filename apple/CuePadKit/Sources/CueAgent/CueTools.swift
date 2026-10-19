@@ -65,7 +65,7 @@ public struct CueTools: Sendable {
           卡片、摘要与通知只显示"可以<doing>吗？"、为什么要问他（rule 那类就是这条规矩）、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单；他也可能不选、另外说一句给你（不同意、选别的方案或别的想法）。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单；他也可能不选、另外说一句给你（可能是不同意、选别的方案或补条件，照他说的办）。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
           urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里你问的那条的 id，撤回它，可同时带 text 说明或换个问法。
           """,
         "inputSchema": schema(

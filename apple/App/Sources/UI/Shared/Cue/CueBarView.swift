@@ -71,7 +71,7 @@ private struct UnreadCount: View {
 
 /// Cue 此刻在做什么的那一句：话在路上、在做事与会话顶栏同一个样子（`PiShownLabel`）；不在时写原因（`CuePresence.line`，起不来是失败色，其余次要灰）；
 /// 都没有时是 `fallback`。页头与状态行同用。Cue 在这台 Mac 值班、正在说回答你的话（`CueKeeper.speech`）时说"输出中"（`PiShown.speaking`）。
-/// 它住在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态可能已经过时。
+/// 它运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态可能已经过时。
 struct CueStatusLine: View {
     var fallback: String?
     var font = Typography.meta

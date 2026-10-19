@@ -58,7 +58,7 @@ enum Schema {
     "ALTER TABLE cueState ADD COLUMN woke TEXT;",
     // 53：会话记录的问答（读会话文件写的，可能晚于桥报的状态）变了也盖写入序号：歇下要等这一轮的回复读到才算变化（`CueStore.cueChanges`）
     "DROP TRIGGER piSessionStates_writeSeq_update; \(stampOnChange("piSessionStates", sessionChanges))",
-    // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
+    // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能运行在哪几台、运行在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
     // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
     // 后来加的同步表那时还没有，各在建它的那一步建自己的索引

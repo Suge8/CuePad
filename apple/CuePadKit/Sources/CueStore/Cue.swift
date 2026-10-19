@@ -52,7 +52,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var answer: String?
   /// 提问结束的时刻。
   public var answeredAt: Date?
-  /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
+  /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 运行的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
@@ -179,7 +179,7 @@ public struct CueMemory: Equatable, Sendable {
 /// Cue 的设置（同步，只有一行）。
 public struct CueProfile: Equatable, Sendable {
   public var name: String
-  /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
+  /// 运行在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
   /// 大脑跑在哪家 Agent 里（`runtimes` 之一）
   public var runtime: Open<AgentKind>
@@ -197,8 +197,8 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
-  /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
+  /// Cue 在值班（唯一规则）：启用了，它运行的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
+  /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它运行的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
   public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
