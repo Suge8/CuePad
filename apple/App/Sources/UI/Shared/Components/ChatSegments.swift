@@ -45,8 +45,9 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
 
     var body: some View {
         let runs = Self.runs(items, size: size, from: from)
+        let target = highlight.flatMap { id in items.firstIndex { $0.id == id } }
         let shown = runs.filter { run in
-            run.index == runs.count - 1 || onScreen.contains(run.id) || items[run.range].contains { $0.id == highlight }
+            run.index == runs.count - 1 || onScreen.contains(run.id) || target.map(run.range.contains) == true
         }.map(\.index)
         ForEach(runs) { run in
             cell(run, real: shown.contains { abs($0 - run.index) <= spare })
