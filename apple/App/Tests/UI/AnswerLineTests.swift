@@ -30,21 +30,32 @@ struct AnswerLineTests {
 
         let thread = try await thread()
         let rows = thread.rows.suffix(3)
-        guard case .cue(let later, _) = rows.first, case .answer(let first, let asked) = rows.dropFirst().first, case .answer(let second, _) = rows.last
+        guard case .cue(let later, _) = rows.first, case .answer(let first) = rows.dropFirst().first, case .answer(let second) = rows.last
         else { Issue.record("最后是 Cue 后来那句与你的两条回答：\(thread.rows.map(\.id))"); return }
         #expect(later.text == "重连用例我也补上了。")
-        #expect(first.id == push.id && first.answer == CueAsk.once && asked)
+        #expect(first.id == push.id && first.answer == CueAsk.once && thread.rows.contains { $0.id == push.id })
         #expect(first.asking?.question(task: "发言轮次乱序") == "可以把发言顺序的修复推送到 origin/main 吗？")
         #expect(second.id == delete.id && second.answer == long)
-        #expect(!thread.rows.contains { if case .answer(let question, _) = $0 { question.id == gone.id } else { false } })
+        #expect(!thread.rows.contains { if case .answer(let question) = $0 { question.id == gone.id } else { false } })
         #expect(thread.rows.last?.speaker == .trailing)
         #expect(thread.marks.map(\.preview).suffix(2) == [CueAsk.once, long].map { ChatMark.firstLine($0) })
         // "等你"里不再有它们，计数与摘要照旧只看还开着的提问
         #expect(thread.waiting.isEmpty)
     }
 
+    /// 问得早、对话里已经又说了超过 Cue 页读的那么多句才答：你的回答在最新处，它引用的那条提问也读进来（排在最前），点引用回得去。
+    @Test func 早先的提问_答完引用仍回得去() async throws {
+        let old = try await store.addCueMessage(.cue, text: "要删掉旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"))
+        for index in 0..<CueThread.limit { _ = try await store.addCueMessage(.cue, text: "第 \(index) 句") }
+        try await Workspace(services: app.services).answerCueQuestion(old, CueAsk.once)
+
+        let rows = try await thread().rows
+        guard case .answer(let question) = rows.last else { Issue.record("最新的是你的回答"); return }
+        #expect(question.id == old.id && rows.first?.id == old.id)
+    }
+
     /// 会话里你在 CuePad 答了它的提问：执行作答的 Mac 把你答了什么连同当时的问题写进这个会话的对话，排在答的那一刻
-    /// （你的话之后、它接着答完的回答之前）；Cue 替你答的不写。
+    /// （你的话之后、它接着答完的回答之前；Mac 晚领到也不往后挪）；Cue 替你答的不写。
     @Test func 会话的提问_答完在答的那一刻留下你的回答() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac")
         let question = PiQuestion(promptID: "p-1", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml"])
@@ -55,21 +66,25 @@ struct AnswerLineTests {
             sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u1", seq: 1, role: .user, text: "把 RSS 改成全文", at: asked.addingTimeInterval(-60))],
             recap: PiRecap(lastPrompt: "把 RSS 改成全文")))
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
-        try await executor.start()
         defer { Task { await executor.stop() } }
 
         let request = try await app.services.answer(.option("另存为 feed-full.xml"), to: session)
         _ = try await store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("覆盖"), question: question.text), to: session.target, on: "mac", cue: true)
+        // Mac 晚了一阵才领到（离线答的、Mac 睡着）：这期间你在终端里又说了一句；回答仍排在答的那一刻，在这句之前
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u2", seq: 2, role: .user, text: "顺便把 Atom 也输出", at: .now.addingTimeInterval(30))],
+            recap: PiRecap(lastPrompt: "顺便把 Atom 也输出")))
+        try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequests().allSatisfy { !$0.isOpen } }) { $0 }
         try await store.writePiTranscript(PiTranscript(
             sessionID: "s",
-            messages: [PiChatMessage(sessionID: "s", entryID: "a1", seq: 2, role: .pi, text: "另存好了。", at: .now.addingTimeInterval(60))],
+            messages: [PiChatMessage(sessionID: "s", entryID: "a1", seq: 3, role: .pi, text: "另存好了。", at: .now.addingTimeInterval(60))],
             recap: PiRecap(lastPrompt: "把 RSS 改成全文", lastReply: "另存好了。")))
 
         let entries = PiChat.entries(try await store.piMessages(of: "s"))
-        #expect(entries.map(\.role) == [.user, .answer, .pi])
+        #expect(entries.map(\.role) == [.user, .answer, .user, .pi])
         #expect(entries[1].text == "另存为 feed-full.xml" && entries[1].question == question.text)
         #expect(try await store.piMessages(of: "s").filter { $0.role == .known(.answer) }.map(\.deliveryID) == [request.id])
-        #expect(ChatScrubber.marks(entries).map(\.preview) == ["把 RSS 改成全文", "另存为 feed-full.xml"])
+        #expect(ChatScrubber.marks(entries).map(\.preview) == ["把 RSS 改成全文", "另存为 feed-full.xml", "顺便把 Atom 也输出"])
     }
 }

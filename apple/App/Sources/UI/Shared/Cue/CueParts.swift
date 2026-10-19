@@ -244,10 +244,9 @@ struct CueSays: View {
 }
 
 /// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueAsking.question`，
-/// 问的那句在对话里时点它跳回去），下面是选的那一项或另外写的话的全文。从刻度滑条跳过来时描一圈。
+/// 点它跳回问的那句），下面是选的那一项或另外写的话的全文。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
-    let asked: Bool
     var ref: CueTaskRef?
     var joined = false
     @Environment(\.chatHighlight) private var highlight
@@ -255,7 +254,7 @@ struct CueAnswer: View {
     var body: some View {
         let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
         AnswerBubble(
-            answer: answer, quote: question.asking.map { BubbleQuote(text: $0.question(task: ref?.task.heading), target: asked ? question.id : nil) },
+            answer: answer, quote: question.asking.map { BubbleQuote(text: $0.question(task: ref?.task.heading), target: question.id) },
             look: .cue(joined: joined), highlighted: highlight == id
         ) {
             MessageActions(text: answer, kind: .cue)

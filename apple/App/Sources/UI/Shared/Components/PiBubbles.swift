@@ -195,7 +195,7 @@ struct AnswerBubble<Menu: View>: View {
 }
 
 /// 你的一句答的是哪个问题：气泡里字上面一行，回复的箭头接问题。
-/// `target` 是对话里那个问题所在的一格，点引用跳回去（`chatJump`）；问题已不在对话里（会话的问题答完就没了，Cue 的掉出了读的范围）为 nil，不能点。
+/// `target` 是对话里那个问题所在的一格，点引用跳回去（`chatJump`）；问题已不在对话里（会话的问题答完就没了）为 nil，不能点。
 nonisolated struct BubbleQuote: Equatable, Sendable {
     let text: String
     var target: UUID?
