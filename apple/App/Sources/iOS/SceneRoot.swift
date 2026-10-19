@@ -62,4 +62,31 @@ enum BackgroundWork {
         end()
     }
 }
+
+/// 进后台时系统把窗口场景切到另一种外观拍一张快照再切回来（App 切换器里备用的那张）。切过去的那一遍在快照里当场画完；切回来的那一遍
+/// 排在快照的后台任务结束之后，SwiftUI 要把整窗的字按新外观重排一遍（几十到几百毫秒），这段时间只靠别的后台任务碰巧撑着，
+/// 进程等不到它画完就被挂起时窗口停在另一种外观上，回前台先露出它再翻回来——浅色下切回来闪一下深色。
+/// 后台里外观每变一次，这里当场撑住进程，等切回那一遍画完、提交给渲染再放。
+enum AppearanceSettle {
+    /// 启动时登记一次：之后连上的每个窗口场景都看着。
+    static func watch() {
+        NotificationCenter.default.addObserver(forName: UIScene.willConnectNotification, object: nil, queue: .main) { note in
+            guard let scene = note.object as? UIWindowScene else { return }
+            MainActor.assumeIsolated {
+                _ = scene.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (scene: UIWindowScene, _) in hold(scene) }
+            }
+        }
+    }
+
+    private static func hold(_ scene: UIWindowScene) {
+        guard scene.activationState == .background else { return }
+        let task = UIApplication.shared.beginBackgroundTask(withName: "CuePad.appearance")
+        // UIKit 先把 SwiftUI 按新外观重画的那一遍排进主队列、再通知外观的观察者，排在它后面就是等它画完；
+        // 同一轮主队列里它画的还没提交，先提交再放
+        DispatchQueue.main.async {
+            CATransaction.flush()
+            UIApplication.shared.endBackgroundTask(task)
+        }
+    }
+}
 #endif
