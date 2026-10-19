@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 手机上 Cue 的设置（从 Cue 面板的"设置"推入）：名字；住在哪台 Mac——Cue 能住的几台直接列成一组单选（每台下面写能当大脑的几家，
 /// 或为什么一家都不能用），选一台就是住过去并启用，"不启用"是停用；允许清单（每类要先问的事一个"所有项目都不用问"的开关，
-/// 只管一个项目的那几项各一行、可撤销）。顶栏是它的名字与现状（住在哪、用哪家；没写成时是原因）。
+/// 只管一个项目的那几项各一行、可撤销）；对话里显示不显示工具步骤（`CueStepsSetting`，存本机）。顶栏是它的名字与现状（住在哪、用哪家；没写成时是原因）。
 /// 读写都经两端同一份 `CueSettingsModel`（Mac 上是设置窗口里的 `CueSettingsSection`）；大脑在 Cue 面板第一行选。
 struct CueSettingsScreen: View {
     @Environment(AppServices.self) private var services
@@ -30,6 +30,11 @@ struct CueSettingsScreen: View {
                     Text("名字")
                 }
                 home(settings)
+                Section {
+                    Toggle(CueStepsSetting.title, isOn: Bindable(services.settings).showsCueSteps)
+                } footer: {
+                    Text(CueStepsSetting.note)
+                }
                 allows(settings)
             }
             .listRowBackground(palette.paper)

@@ -14,60 +14,58 @@ extension AnyTransition {
 }
 
 
-/// 对话气泡（你的话、Cue 的话）共用的样子。说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
-/// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
-enum Bubble {
-    static let radius: CGFloat = 22
-    static let corner: CGFloat = 6
-    #if os(macOS)
-    static let padding = EdgeInsets(top: 13, leading: 18, bottom: 13, trailing: 18)
-    #else
-    static let padding = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
-    #endif
-    /// 同一边连着说的两颗之间。
-    static let joinedGap: CGFloat = 4
-    /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
-    static let noteInset: CGFloat = padding.leading
-    /// 最宽占所在一栏的比例：你的话短，窄一些；Cue 的回答常带列表与代码，宽一些（手机上窄，再宽一点）。
-    static let youWidth: CGFloat = 0.78
-    #if os(macOS)
-    static let cueWidth: CGFloat = 0.86
-    #else
-    static let cueWidth: CGFloat = 0.9
-    #endif
+/// 你的话那颗气泡长什么样，两处各一种，只在这里分：
+/// - 会话页（`session`）：四角同圆的一颗，新到的淡入。会话页是 Agent 干活的记录，回答全宽、不成泡，你的话只标出哪句是你说的，不画两边对说的样子。
+/// - Cue 页（`cue`）：两边对说的对话气泡，说话那一边下角收成小角、连着说的收成一串、从右下角长出来（`CueBubble`）。
+enum BubbleLook: Equatable {
+    case session
+    /// `joined`：上面紧挨着你的另一句。
+    case cue(joined: Bool)
 
-    /// `joined`：上面紧挨着同一边的一颗。
-    static func shape(_ edge: HorizontalEdge, joined: Bool = false) -> UnevenRoundedRectangle {
-        let top = joined ? corner : radius
-        return switch edge {
-        case .trailing: UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: corner, topTrailingRadius: top, style: .continuous)
-        case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: corner, bottomTrailingRadius: radius, topTrailingRadius: radius, style: .continuous)
+    private static let sessionRadius: CGFloat = 20
+
+    var shape: UnevenRoundedRectangle {
+        switch self {
+        case .session: UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
+            topLeading: Self.sessionRadius, bottomLeading: Self.sessionRadius, bottomTrailing: Self.sessionRadius, topTrailing: Self.sessionRadius),
+            style: .continuous)
+        case .cue(let joined): CueBubble.shape(.trailing, joined: joined)
         }
     }
 
-    /// 新说出的一颗从说话那一边的下角长出来（淡入并从 92% 放大到位）：你发出的从回复框那一角冒出，与对话上滑是同一段；只动变换，不改排版。
-    /// 消失只淡出。减弱动态效果时只淡入淡出。
-    static func arrival(_ edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
-        guard !reduceMotion else { return .entry }
-        let grow = AnyTransition.opacity.combined(with: .scale(scale: 0.92, anchor: edge == .trailing ? .bottomTrailing : .bottomLeading))
-        return .asymmetric(insertion: grow.animation(Motion.snappy), removal: .entry)
+    var padding: EdgeInsets {
+        switch self {
+        case .session: EdgeInsets(top: 11, leading: 16, bottom: 11, trailing: 16)
+        case .cue: CueBubble.padding
+        }
+    }
+
+    /// 气泡下那一行（发送中、已送达、没能送达）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
+    var statusSpacing: CGFloat { self == .session ? 6 : 2 }
+    var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
+
+    func arrival(reduceMotion: Bool) -> AnyTransition {
+        switch self {
+        case .session: .entry
+        case .cue: CueBubble.arrival(.trailing, reduceMotion: reduceMotion)
+        }
     }
 }
 
 
-/// 你的一句话：右侧气泡（样子见 `Bubble`）；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
+/// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     static var foldedLines: Int { 6 }
+    static var widthFraction: CGFloat { 0.78 }
 
     let stored: String
+    let look: BubbleLook
     var trip = BubbleTrip.arrived
     var highlighted = false
     /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
     var fromCue = false
-    /// 上面紧挨着你的另一句（`Bubble.shape`）。
-    var joined = false
     @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
@@ -75,18 +73,18 @@ struct UserBubble<Menu: View>: View {
 
     var body: some View {
         let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
-        BubbleWidth(fraction: Bubble.youWidth, edge: .trailing) {
+        BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: text, highlighted: highlighted, trip: trip, joined: joined, lineLimit: expanded ? nil : Self.foldedLines,
+                        text: text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil)
                 }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
             }
             #if os(iOS)
-            .contentShape(.contextMenuPreview, Bubble.shape(.trailing, joined: joined))
+            .contentShape(.contextMenuPreview, look.shape)
             #endif
             .contextMenu { menu }
         }
@@ -95,9 +93,9 @@ struct UserBubble<Menu: View>: View {
 }
 
 extension UserBubble where Menu == EmptyView {
-    /// 没有长按菜单的气泡（近况里的上一句）。
+    /// 没有长按菜单的气泡（会话近况里的上一句）。
     init(stored: String) {
-        self.init(stored: stored) { EmptyView() }
+        self.init(stored: stored, look: .session) { EmptyView() }
     }
 }
 
@@ -105,9 +103,9 @@ extension UserBubble where Menu == EmptyView {
 /// 气泡本身（颜色是 `Palette.bubble`）。Mac 上可以直接拖选文字。
 struct BubbleText: View {
     let text: String
+    let look: BubbleLook
     var highlighted = false
     var trip = BubbleTrip.arrived
-    var joined = false
     var lineLimit: Int?
     /// 给了时报告文字是否被 `lineLimit` 截掉。
     var truncated: Binding<Bool>?
@@ -116,7 +114,7 @@ struct BubbleText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = Bubble.shape(.trailing, joined: joined)
+        let shape = look.shape
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
                 PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
@@ -125,7 +123,7 @@ struct BubbleText: View {
                 .font(Typography.reading).foregroundStyle(palette.ink)
                 .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
                 .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
-                .padding(Bubble.padding)
+                .padding(look.padding)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
                 // 在路上：整颗淡一些，还没落进对话；送达那一刻显出实色（下面一行写着发送中，钮上是话在路上）。
@@ -242,8 +240,7 @@ struct SpeechBubble<Menu: View>: View {
     /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
     var transit: PiDelivery.Transit?
     var fromCue = false
-    /// 上面紧挨着你的另一句（Cue 页）。
-    var joined = false
+    let look: BubbleLook
     /// 长按菜单（消息菜单）；给的是此刻到哪了。
     @ViewBuilder var menu: (Speech.Trip) -> Menu
     @Environment(Workspace.self) private var workspace
@@ -255,13 +252,13 @@ struct SpeechBubble<Menu: View>: View {
 
     var body: some View {
         let trip = said.trip(at: services.speech)
-        VStack(alignment: .trailing, spacing: 2) {
-            UserBubble(stored: said.content, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue, joined: joined) { menu(trip) }
+        VStack(alignment: .trailing, spacing: look.statusSpacing) {
+            UserBubble(stored: said.content, look: look, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
             // 与气泡显出实色同一拍换字（发送中 → 已送达，`handOff`）
-            status(trip).font(Typography.caption).padding(.trailing, Bubble.noteInset)
+            status(trip).font(Typography.caption).padding(.trailing, look.statusInset)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .transition(Bubble.arrival(.trailing, reduceMotion: reduceMotion))
+        .transition(look.arrival(reduceMotion: reduceMotion))
     }
 
     @ViewBuilder private func status(_ trip: Speech.Trip) -> some View {

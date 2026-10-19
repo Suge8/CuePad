@@ -8,7 +8,7 @@ import SwiftUI
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 住在这台 Mac，"运行情况"才有。
 /// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"允许一次"（回到对话里、带着你的回答），
-/// 之后你又说了一句、Cue 连着回了两句（看问询回到对话里的样子、一串气泡）；你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
+/// 之后你又说了一句、Cue 跑了一轮（经过那一行）、连着回了两句（看问询回到对话里的样子、一串气泡、工具步骤那一行）；你的最后一句已交给 Cue（气泡下"已送达"）、它在想（thinking）或在用工具（tool：看会话进展）、
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
 /// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
@@ -146,6 +146,9 @@ extension DebugScene {
             case "answered":
                 _ = try await store.endCueQuestion(asked.id, .answered("允许一次"))
                 try await you("顺便看看登录回调那个超时")
+                _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
+                    step(.read, "看板"), step(.add, "建任务「登录回调超时」"), step(.start, "开工「登录回调超时」"),
+                    step(.talk, "对「登录回调超时」说：先复现回调等 token 刷新时一直挂着")))
                 _ = try await store.addCueMessage(.cue, text: "好，我先让 auth 会话复现一下。")
                 _ = try await store.addCueMessage(.cue, text: "复现了：回调里等 token 刷新时没设超时，网络慢时会一直挂着。改成 10 秒超时、超时后回登录页重新授权，测试在跑。")
             case "thinking":
@@ -192,6 +195,15 @@ extension DebugScene {
             guard !woke.isEmpty, (try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))) != nil else { return nil }
             return ("wake", { try? await store.setCueState(.settled) })
         }
+    }
+
+    /// `-CuePadCueSays <秒>`（配 `-CuePadDemo YES`）：画面就绪后这么久 Cue 自己说一句（同值班的 Mac 做完一件事时写下的样子），
+    /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。
+    static func saysIfAsked(_ services: AppServices) async {
+        let delay = defaults.double(forKey: "CuePadCueSays")
+        guard delay > 0 else { return }
+        try? await Task.sleep(for: .seconds(delay))
+        _ = try? await services.store.addCueMessage(.cue, text: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。")
     }
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
@@ -294,7 +306,7 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadLongChat YES`：演示对话前面多 90 轮更早的来回（Cue 页读得到的差不多就是这么多），中间换过三次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
+    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库），中间换过三次新上下文（看 Cue 页往上翻、刻度滑条与换新的分隔）。
     /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
     /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     private static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
@@ -302,7 +314,7 @@ extension DebugScene {
         let replies = ["先看圆桌：乱序会影响所有 5 人以上的房间。", "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", "测试在跑，大概二十分钟后能部署到预发。",
                        "记下了，周五不发版。", "浅色那张换好了，深色的还在拍。", "加了 2 个，第 3 个等排序改完再补。"]
         let shot = CueFormat.imageMarkup(id: try store.files.store(swatchPNG()))
-        for round in 0..<90 {
+        for round in 0..<110 {
             if round % 30 == 12 {
                 _ = try await store.addCueMessage(.handoff, text: "**在做**\n- 圆桌乱序：在改排序，测试在跑。\n\n**下一步**\n- 测试过了派重连用例，再部署预发。")
             }

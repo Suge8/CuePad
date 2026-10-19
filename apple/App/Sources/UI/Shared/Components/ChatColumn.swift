@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近几条（多少由 `paging` 按可见区的高定），
-/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段。排开到哪按那一条记（`oldest`），不按条数：新的在下面长出来、
-/// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜；右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
+/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段。排开到哪按那一条记（`shown`），不按条数：新的在下面长出来、
+/// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜。
+/// 右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
 /// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
 /// 内容只管按 `ChatWindow` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。`holding`：本机正在和 iCloud 对，见 `ChatScroll`。
 struct ChatColumn<Content: View, Key: Equatable>: View {
@@ -17,8 +18,10 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     let paging: ChatPaging
     let holding: Bool
     @ViewBuilder let content: (ChatWindow) -> Content
-    /// 排开到的最早那一条；还没排（没有内容）为 nil。
-    @State private var oldest: UUID?
+    /// 排开到的最早那一条起、记下时对话里的各条；还没排（没有内容）为 nil。连后面的一起记：那一条自己掉出了读的范围（排开到了最早那头，
+    /// 来一句新的它就掉出去），从它后面还在的第一条排（`start`），不缩回一屏——缩回去内容一下矮了几屏，可见区落在内容外、整屏空白。
+    /// 在同一次更新里就接上：等 `onChange` 改记已晚了一帧，那一帧缩回去又长回来，正在看的先被甩到最早那头再滑回来。
+    @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
     @State private var pendingJump: UUID?
     /// 这个对话区的身份（`ChatJump` 按它比较）。
@@ -43,8 +46,16 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     /// （iPhone 冷启动时第一次排版的窗口只有图标那么大），按那时记的条数排，可见区长大的那一帧上面就空着。
     private func window(_ size: CGSize) -> Int {
         let screen = min(ids.count, paging.first(size, ids.count))
-        guard let oldest, let index = ids.firstIndex(of: oldest) else { return screen }
-        return max(ids.count - index, screen)
+        guard let start else { return screen }
+        return max(ids.count - start, screen)
+    }
+
+    /// 排开到的最早那一条此刻是第几条：它不在了是它后面还在的第一条；都不在了（或还没排）为 nil。
+    private var start: Int? {
+        guard let shown, let first = shown.first else { return nil }
+        if let index = ids.firstIndex(of: first) { return index }
+        let present = Dictionary(ids.enumerated().map { ($1, $0) }) { earlier, _ in earlier }
+        return shown.lazy.compactMap { present[$0] }.first
     }
 
     /// 可见区的尺寸在同一次排版里拿到（GeometryReader 先拿到自己的尺寸再排里面）：打开的第一帧就按它排开，不先排一帧再补。
@@ -54,7 +65,11 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
             }
-            .onChange(of: ids, initial: true) { if oldest.flatMap(ids.firstIndex(of:)) == nil { show(from: ids.count - self.window(size)) } }
+            // 改记成接上的那条，之后不用每次再找
+            .onChange(of: ids, initial: true) {
+                let index = start ?? ids.count - self.window(size)
+                if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }
+            }
             // 下一帧再排开：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排一屏
             .onChange(of: follow.nearOldest, initial: true) { _, near in
                 guard near else { return }
@@ -104,9 +119,9 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         show(from: from)
     }
 
-    /// 从第 `index` 条排起（记下那一条）。
+    /// 从第 `index` 条排起（记下那一条与它后面的）。
     private func show(from index: Int) {
-        oldest = ids.indices.contains(index) ? ids[index] : nil
+        shown = ids.indices.contains(index) ? ids[index...] : nil
     }
 }
 
