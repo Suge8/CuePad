@@ -196,6 +196,7 @@ struct RealClaudeTerminalTests {
             #expect(await !terminal.screen.contains("Held"))
             let said = try testbed.transcript(file).messages.filter { $0.role == .known(.user) }.map(\.text)
             #expect(said == ["INBOX-PROBE 只回复 OK"])
+            #expect(testbed.bridge.session(id: session.id)?.firstMessage == "INBOX-PROBE 只回复 OK", "标题与回复框占位里没有给模型看的说明")
         }
     }
 

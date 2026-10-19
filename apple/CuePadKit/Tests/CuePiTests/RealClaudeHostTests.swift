@@ -93,20 +93,26 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 在跑时说话（`priority: "now"`）：连同正等你确认的工具一起停下这一轮，再以这句开新一轮；被停下的那一轮不算出错，
-    /// 等你确认的问题收起，对话里在这句之前留一行"已停止"。
-    @Test func aMessageWhileItWaitsForYouStopsTheTurnAndStartsANewOne() async throws {
-        try await ClaudeTestbed.run { testbed in
+    /// 在跑时说话：先停下这一轮（连同正等你确认的工具、或前台跑着的命令），再以这句开新一轮；被停下的那一轮不算出错、不算歇下，
+    /// 等你确认的问题收起，对话里在这句之前留一行"已停止"。命令比等的时限长：没被打断就等不到这句的回答。
+    @Test(arguments: [false, true]) func aMessageWhileBusyStopsTheTurnAndStartsANewOne(toolRunning: Bool) async throws {
+        AgentTape.variant(toolRunning ? "tool" : "asking")
+        try await ClaudeTestbed.run(settings: toolRunning ? #"{"permissions": {"allow": ["Bash"]}}"# : nil) { testbed in
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let never = testbed.work.appending(path: "never.txt")
 
-            try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(never.path) ，然后只回复 ZEBRA"), to: id)
-            _ = try await testbed.waitForQuestion(id)
+            if toolRunning {
+                try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 110 127.0.0.1 && touch \(never.path)`（不要放后台），然后只回复 ZEBRA"), to: id)
+                try await eventually("在跑命令", timeout: .seconds(60)) { testbed.bridge.session(id: id)?.detail?.contains("ping -c 110") == true }
+            } else {
+                try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(never.path) ，然后只回复 ZEBRA"), to: id)
+                _ = try await testbed.waitForQuestion(id)
+            }
             let delivery = UUID().uuidString
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery), to: id)
-            try await testbed.waitForTurn(id, since: asked)
+            try await testbed.waitForTurn(id, since: asked, timeout: .seconds(60))
             try await testbed.waitForDraftLanded(id)
 
             let session = try #require(testbed.bridge.session(id: id))

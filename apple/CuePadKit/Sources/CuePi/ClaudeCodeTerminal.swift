@@ -75,7 +75,8 @@ final class ClaudeTerminalSession: SessionLink {
         bridge?.update(id) { session in
             if let level = input["effort"]?["level"]?.string { session.thinking = Open(rawValue: level) }
             if let title = input["session_title"]?.string, !title.isEmpty { session.name = title }
-            if session.firstMessage == nil, event == "UserPromptSubmit", let prompt = input["prompt"]?.string, !prompt.isEmpty {
+            // CuePad 经收件箱发的那句带着说明，与会话历史一样去掉
+            if session.firstMessage == nil, event == "UserPromptSubmit", let prompt = input["prompt"]?.string.map(ClaudeHistory.withoutPeerWrapper), !prompt.isEmpty {
                 session.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
             }
             if event == "PostModelSwitch", let model = input["to_model"]?.string { session.model = ClaudeCode.model(model) }

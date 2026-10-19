@@ -260,28 +260,13 @@ struct ConversationRuleTests {
         #expect(transcript.messages.map { "\($0.role.rawValue):\($0.text)" } == ["user:写个故事", "pi:从前有座山", "system:已停止"])
     }
 
-    /// 你拒绝了它要跑的命令、这一轮因此停下：写"已拒绝"，不写"已停止"（Codex 的命令记成 `declined`，Claude Code 的工具结果是它固定的那句拒绝）。
+    /// 你拒绝了它要跑的命令、这一轮因此停下：写"已拒绝"，不写"已停止"（Codex 的命令记成 `declined`）。
     @Test func aRoundEndedByADeclinedToolSaysDeclined() throws {
         let codex = try codexFile([
             ["type": "task_started"], user("u1", "建个文件"),
             item(["type": "CommandExecution", "id": "c1", "command": ["/bin/zsh", "-lc", "touch x"], "status": "declined"]), ["type": "turn_aborted"],
         ])
         #expect(try PiHistory.index(file: codex, agent: .codex, from: nil, files: scratchFiles).messages.map(\.text) == ["建个文件", "已拒绝"])
-
-        let claude = try makeTempDirectory().appending(path: "6f1c0d2e-0000-4000-8000-000000000001.jsonl")
-        let stamp = "2026-10-14T01:00:00.000Z"
-        let lines: [[String: Any]] = [
-            ["type": "user", "uuid": "u1", "timestamp": stamp, "message": ["role": "user", "content": "建个文件"]],
-            ["type": "assistant", "uuid": "a1", "timestamp": stamp, "message": ["stop_reason": "tool_use", "content": [
-                ["type": "tool_use", "id": "t1", "name": "Bash", "input": ["command": "touch x"]]]]],
-            ["type": "user", "uuid": "r1", "timestamp": stamp, "message": ["role": "user", "content": [
-                ["type": "tool_result", "tool_use_id": "t1", "is_error": true,
-                 "content": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."]]]],
-            ["type": "user", "uuid": "i1", "timestamp": stamp, "message": ["role": "user", "content": [["type": "text", "text": "[Request interrupted by user for tool use]"]]]],
-        ]
-        try lines.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }.joined(separator: "\n").appending("\n")
-            .write(to: claude, atomically: true, encoding: .utf8)
-        #expect(try PiHistory.index(file: claude, agent: .claudeCode, from: nil, files: scratchFiles).messages.map(\.text) == ["建个文件", "已拒绝"])
     }
 
     /// 回答上的"用时"是你那句话到它说完：OpenCode 的一步从开始出字（`time.created`）到说完（`time.completed`）也算在里面。

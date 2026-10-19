@@ -9,7 +9,8 @@ import Foundation
 /// - 状态来自它的输出：一轮从 `system/init` 起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// - 发话与斜杠命令一律 `priority: "now"`：在跑就中止这一轮（连同在跑的工具，原因 `interrupt`），再以这句开新一轮，被中止的那一轮不算歇下；歇着就直接开始。
+/// - 发话与斜杠命令：歇着就直接开始；在跑就先停下这一轮（`interrupt` 控制请求，连同在跑的工具），等它收尾（`result`）再送进去开新一轮，
+///   被停下的那一轮不算歇下。不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
@@ -25,8 +26,12 @@ final class ClaudeHostedSession: SessionLink {
     private var commands: Set<String> = []
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
-    /// 在跑时发出了话：被它停下的这一轮的 `result` 不算歇下，接着就是它开的新一轮（从这一刻算）
+    /// 为送进一句话停下这一轮：被停下的这一轮的 `result` 不算歇下，接着就是这句开的新一轮（从这一刻算）
     private var restart = false
+    /// 等着这一轮收尾（`result`）的停下；进程退出时也放行
+    private var closing: [CheckedContinuation<Void, Never>] = []
+    /// 收尾过的轮数：停下时据此认出它在等回应的工夫里已经收尾
+    private var closed = 0
     /// 发出的话开了一轮、还没等到它的 `system/init`（中间隔着钩子）：Claude Code 还没开始跑，这时收到的中断不起作用（实测 2.1.299）。
     /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行
     private var starting: [CheckedContinuation<Void, Never>]?
@@ -143,6 +148,8 @@ final class ClaudeHostedSession: SessionLink {
                 facts.startTurn(at: now)
                 starting = []
             }
+            closed += 1
+            release()
         default:
             return
         }
@@ -216,19 +223,41 @@ final class ClaudeHostedSession: SessionLink {
     /// 输出读完了（进程退出）：下桥（没答的请求 `ClaudeStream` 已以会话结束收尾）。
     private func ended() {
         started()
+        release()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
     private var busy: Bool { facts.running }
 
-    /// 送进一句话（`priority: "now"`，见类注释）；在跑的这一轮随之被打断。
-    private func say(_ content: JSONValue, uuid: String) throws {
-        if busy, starting == nil { stopping = true; restart = true }
+    /// 送进一句话：在跑就先停下这一轮、等它收尾（见类注释）。写明 `next`：不写时缺省可能是 `later`，要等后台的工作做完才读（实测等到被停下时挪去后台的命令跑完）。
+    private func say(_ content: JSONValue, uuid: String) async throws {
+        try await stop(restarting: true)
         try stream.write([
             "type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null, "session_id": "",
-            "uuid": .string(uuid), "priority": "now",
+            "uuid": .string(uuid), "priority": "next",
         ])
         began()
+    }
+
+    /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
+    private func stop(restarting: Bool) async throws {
+        if starting != nil { await withCheckedContinuation { starting?.append($0) } }
+        guard busy else { return }
+        stopping = true
+        restart = restarting
+        let turn = closed
+        do {
+            _ = try await stream.request(["subtype": "interrupt"])
+        } catch {
+            restart = false
+            throw error
+        }
+        if closed == turn { await withCheckedContinuation { closing.append($0) } }
+    }
+
+    private func release() {
+        closing.forEach { $0.resume() }
+        closing = []
     }
 
     // MARK: SessionLink
@@ -237,7 +266,7 @@ final class ClaudeHostedSession: SessionLink {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")
         }
-        try say(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID ?? UUID().uuidString)
+        try await say(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID ?? UUID().uuidString)
         // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
@@ -249,11 +278,10 @@ final class ClaudeHostedSession: SessionLink {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
         guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
-        try say(.string(line), uuid: UUID().uuidString)
+        try await say(.string(line), uuid: UUID().uuidString)
     }
 
-    /// 歇着时发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）。在跑时发出的打断这一轮，
-    /// 新的一轮从被打断那一轮的 `result` 之后的 `system/init` 起算。
+    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
     private func began() {
         if !facts.running { starting = [] }
         beginTurn()
@@ -267,10 +295,7 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     func abort() async throws {
-        if starting != nil { await withCheckedContinuation { starting?.append($0) } }
-        guard busy else { return }
-        stopping = true
-        _ = try await stream.request(["subtype": "interrupt"])
+        try await stop(restarting: false)
     }
 
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {

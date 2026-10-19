@@ -9,8 +9,6 @@ import Foundation
 ///   它的文字就是 Claude Code 这一轮的回答。没有文字就做完的一轮（只调了工具）在 `stop_hook_summary` / `turn_duration` 收尾。
 /// - 你的话：`type: user` 的文字与图片（图片内嵌 base64，存进附件目录）；一轮正在跑时插进去的话不是 user 行，是
 ///   `queued_command` 附件。工具结果、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
-///   这一轮还没做完就来了 user 行的话，是这句（`priority: "now"`，CuePad 发话就是）打断了这一轮：Claude Code 不写中断标记，
-///   这里照停下处理，"已停止"排在这句之前。
 /// - CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）；
 ///   收件箱送来的会被包上"另一个 Claude 会话发来的"英文说明，这里剥掉。终端里直接打的（`origin.kind` 为 `human`）没有投送请求。
 /// - 会话名只认 `/rename`（及 CuePad 的改名）写下的 `custom-title`；自动生成的 `ai-title` 不算，与 Pi 的 `/name` 同一层意思。
@@ -79,11 +77,9 @@ enum ClaudeHistory {
     private static func user(_ line: Line, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
         guard let content = line.message?.content else { return }
         if case .blocks(let blocks) = content, blocks.contains(where: { $0.type == "tool_result" }) {
+            // 你拒绝了要用的工具与停下了在跑的工具，Claude Code 写的一样（同一句拒绝、`toolDenialKind: user-rejected`，2.1.299 实测），
+            // 分不出来：都照停下处理，不写"已拒绝"
             for result in blocks where result.type == "tool_result" {
-                if result.isError == true, result.content?.plainText.hasPrefix(declinedResult) == true {
-                    cp.toolDeclined(id: result.toolUseID ?? "")
-                    continue
-                }
                 cp.toolFinished(id: result.toolUseID ?? "", failed: result.isError == true)
             }
             return
@@ -91,38 +87,37 @@ enum ClaudeHistory {
         let peer = line.origin?.kind == "peer"
         guard line.isCompactSummary != true, line.isMeta != true || peer else { return }
         let delivery = peer || line.promptSource == "sdk" ? line.uuid : nil
-        try said(content, peer: peer, entry, deliveryID: delivery, cutsOpenRound: true, into: &cp, transcript: &transcript)
+        try said(content, peer: peer, entry, deliveryID: delivery, into: &cp, transcript: &transcript)
     }
 
-    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。`cutsOpenRound`：这句是 user 行（不是插话的附件），
-    /// 来时这一轮还没做完就是它打断了这一轮（见类型注释），"已停止"用前一行的序号，排在这句之前。
+    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。
     private static func said(
-        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, cutsOpenRound: Bool = false,
-        into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript
+        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint,
+        transcript: inout PiHistory.Transcript
     ) throws {
         var said = transcript.said()
         try content.said(into: &said, peer: peer)
         let trimmed = said.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix(interruptedMarker) { return cp.interrupted(entry, into: &transcript) }
         guard !commandEchoPrefixes.contains(where: trimmed.hasPrefix) else { return }
-        if cutsOpenRound, cp.round != nil {
-            cp.interrupted(PiHistory.Entry(id: entry.id + "#cut", seq: entry.seq - 1, at: entry.at), into: &transcript)
-        }
         cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
 
     // MARK: 收件箱送来的话
 
     /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；CuePad 发的正文前还有一句
-    /// `ClaudeInbox.userNote`。
+    /// `ClaudeInbox.userNote`。钩子交来的那句不一定包着英文说明，说明与那句各自有就去掉。
     private static let peerPrefix = "Another Claude session sent a message:\n"
     private static let peerSuffix = "\n\nThis came from another Claude session"
 
     static func withoutPeerWrapper(_ text: String) -> String {
-        guard text.hasPrefix(peerPrefix) else { return text }
-        var body = text.dropFirst(peerPrefix.count)
+        var body = Substring(text)
+        if body.hasPrefix(peerPrefix) {
+            body = body.dropFirst(peerPrefix.count)
+            body = body.range(of: peerSuffix).map { body[..<$0.lowerBound] } ?? body
+        }
         if body.hasPrefix(ClaudeInbox.userNote) { body = body.dropFirst(ClaudeInbox.userNote.count) }
-        return String(body.range(of: peerSuffix).map { body[..<$0.lowerBound] } ?? body)
+        return String(body)
     }
 
     private static let interruptedMarker = "[Request interrupted by user"
@@ -130,7 +125,6 @@ enum ClaudeHistory {
     /// 只留出错的（`isApiErrorMessage`，"API Error: …"、额度用完）
     private static let syntheticModel = "<synthetic>"
     /// 你在终端里对权限确认答"否"时工具结果的开头（2.1.299，后面跟"停下"或你说的怎么做）
-    private static let declinedResult = "The user doesn't want to proceed with this tool use."
     /// 斜杠命令与 `!` 命令留下的回显：终端的对话里是命令本身与它的输出，不是你对模型说的话
     private static let commandEchoPrefixes = ["<command-name>", "<command-message>", "<local-command-", "<bash-input>", "<bash-stdout>", "<bash-stderr>"]
 
