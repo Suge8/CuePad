@@ -153,6 +153,8 @@ extension EnvironmentValues {
     @Entry var chatJump: ChatJump?
     /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的"等你"卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
+    /// 对话区可见的高（`FloatingReply` 给浮在底上的那一块）："等你"卡至多占它一半。
+    @Entry var chatHeight: CGFloat = .infinity
 }
 
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，

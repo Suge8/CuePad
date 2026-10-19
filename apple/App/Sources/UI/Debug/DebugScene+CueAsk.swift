@@ -6,8 +6,8 @@ import SwiftUI
 /// 演示库原有的两条先撤回，换上这一条：
 /// - proposals：真实那张卡的同款——按你的规矩在三个方案里挑，推荐 1，点名每个方案一张手机截图；
 /// - push：推送，有第二项（"以后……不用问"），不带图；
-/// - one：部署到预发，只点名一张竖图（说明在右）；
-/// - four：四张竖图（一行放不下、横滑露出第四张）；
+/// - one：部署到预发，只点名一张竖图；
+/// - four：四张竖图（一行平分，缩略图变小）；
 /// - evidence：合并，三张横图的证据，说明不带"："。
 extension DebugScene {
     static func seedAsk(_ variant: String, store: CueStore, task: UUID?) async throws {

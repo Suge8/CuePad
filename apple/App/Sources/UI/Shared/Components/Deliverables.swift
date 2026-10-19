@@ -113,9 +113,9 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
-        /// 提问点名的图（`CueShots`）：同高、宽按比例、整张不裁，白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
-        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。`aspect` 是读到画面之前已知的比例（图片的像素尺寸，`CueShown.aspect`）。
-        case shot(height: CGFloat, aspect: CGFloat?)
+        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、居中裁切填满，白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。
+        case shot(side: CGFloat)
     }
 
     let preview: PiPreview
@@ -181,15 +181,11 @@ struct DeliverableTile: View {
 
     private var aspect: CGFloat {
         // 读到之前按类型猜：PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳
-        let raw = shown?.aspect ?? Self.guessedAspect(preview, known: shotAspect)
+        let raw = shown?.aspect ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3)
         guard case .hero = shape else { return raw }
         return min(max(raw, 4 / 3), 16 / 9)
     }
 
-    /// 读到画面之前的比例：已知的（图片的像素尺寸）照用，否则按类型猜——PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳。
-    nonisolated static func guessedAspect(_ preview: PiPreview, known: CGFloat?) -> CGFloat { known ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3) }
-
-    private var shotAspect: CGFloat? { if case .shot(_, let aspect) = shape { aspect } else { nil } }
     private var isShot: Bool { if case .shot = shape { true } else { false } }
 
     /// 放大的记号：图宽到这么多才放（再窄就挡住了图）。
@@ -222,10 +218,11 @@ struct DeliverableTile: View {
             picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
         case .strip(let height):
             picture.frame(width: (height * aspect).rounded(), height: height)
-        case .shot(let height, _):
-            let width = (height * aspect).rounded()
-            picture.frame(width: width, height: height)
-                .overlay(alignment: .topTrailing) { if width >= Self.enlargeMinWidth { enlarge } }
+        case .shot:
+            picture.aspectRatio(1, contentMode: .fit)
+                .overlay(alignment: .topTrailing) {
+                    GeometryReader { frame in if frame.size.width >= Self.enlargeMinWidth { enlarge.frame(maxWidth: .infinity, alignment: .trailing) } }
+                }
                 #if os(macOS)
                 .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
                 #endif
@@ -246,10 +243,10 @@ struct DeliverableTile: View {
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // 裁的时候留上沿：截图与页面要紧的多在上面
+        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图居中裁（只为认出是哪张，整张点开看）
         // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
         return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
-            .overlay(alignment: .top) {
+            .overlay(alignment: isShot ? .center : .top) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
@@ -302,7 +299,8 @@ struct DeliverableTile: View {
         return switch shape {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
-        case .strip(let height), .shot(let height, _): LookBox(width: 0, height: pixels(height), fills: true)
+        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
+        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true)
         }
     }
 }
