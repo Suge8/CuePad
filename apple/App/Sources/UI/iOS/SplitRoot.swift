@@ -2,16 +2,11 @@
 import CueStore
 import SwiftUI
 
-/// iOS 的分栏，各种宽度同一个：左栏是侧栏列表（`SplitSidebar`），右边是选中的页与其上推入的页（打开的卡片纸页推在项目页上）。
-/// 宽屏两栏并排，Cue 可在右侧面板里与项目并排看；iPhone（与窄窗口 iPad）上由系统折叠成一层层的页：列表是首页，打开 App 落在 Cue，
-/// 系统的返回与左缘右滑回到列表（`Navigation.column`）。不另写抽屉、手势或标签栏。
-/// 代价在冷启动：折叠后的分栏这个容器本身比以列表为根的导航栈多约 3000M 指令（同口径交替量，换成导航栈长相与手势一样；
-/// 列表里的行、搜索框、各项目此刻去掉都量不出差别）。
-/// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
+/// 宽屏（iPad）的分栏：左栏是侧栏列表（`SplitSidebar`），右边是选中的页与其上推入的页（打开的卡片纸页推在项目页上），
+/// Cue 可在右侧面板里与项目并排看。窄屏不用它（`DockRoot`）：折叠后的分栏这个容器本身比导航栈多约 3000M 指令（冷启动同口径交替量）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.statusBarBottom) private var statusBar
     @State private var width: CGFloat = 0
     /// 侧栏选中的项目（宽屏恢复窗口时选回它；选的不是项目时为空）。只存这一个：当前项目由路径推出（`Navigation.currentProject`）
@@ -24,32 +19,25 @@ struct SplitRoot: View {
     private static let maxSidebarWidth: CGFloat = 420
     private static let maxPanelWidth: CGFloat = 480
 
-    private var wide: Bool { sizeClass == .regular }
-
     var body: some View {
         @Bindable var navigation = navigation
-        NavigationSplitView(columnVisibility: $navigation.sidebar, preferredCompactColumn: $navigation.column) {
-            SplitSidebar(underPage: !wide)
+        NavigationSplitView(columnVisibility: $navigation.sidebar) {
+            SplitSidebar()
                 .navigationSplitViewColumnWidth(
                     min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
         } detail: {
-            // 折叠时右边这一栏的导航栈直接接在列表后面，外面不能再包一层：包了系统就认不出它，推入的页成了栈里套栈
-            if wide {
-                // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
-                // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
-                HStack(spacing: 0) {
-                    // 宽屏的提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮。竖直按状态栏下沿排，与窄屏同一排：
-                    // 这一栏的上安全区还含着分栏的工具栏那一排，按它排就掉到页头上了
-                    stack.overlay(alignment: .top) { NoticeBanner().padding(.top, statusBar).ignoresSafeArea(edges: .top) }
-                    if navigation.agentPanel {
-                        Divider().ignoresSafeArea()
-                        AgentPanel()
-                            .frame(width: min(panelWidth, Self.maxPanelWidth))
-                            .transition(.move(edge: .trailing))
-                    }
+            // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
+            // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
+            HStack(spacing: 0) {
+                // 提示横幅在右边这一栏里居中：按整个窗口居中时盖住侧栏顶上的圆钮。竖直按状态栏下沿排，与窄屏同一排：
+                // 这一栏的上安全区还含着分栏的工具栏那一排，按它排就掉到页头上了
+                stack.overlay(alignment: .top) { NoticeBanner().padding(.top, statusBar).ignoresSafeArea(edges: .top) }
+                if navigation.agentPanel {
+                    Divider().ignoresSafeArea()
+                    AgentPanel()
+                        .frame(width: min(panelWidth, Self.maxPanelWidth))
+                        .transition(.move(edge: .trailing))
                 }
-            } else {
-                stack
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -60,8 +48,7 @@ struct SplitRoot: View {
         .onChange(of: navigation.path) { _, path in
             if case .card = path.last { collapseSidebarIfNarrow() }
         }
-        .background { SplitShortcuts() }
-        .onAppear { if wide { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) } }
+        .onAppear { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) }
         .onChange(of: navigation.root) { _, root in
             if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
         }
@@ -75,9 +62,9 @@ struct SplitRoot: View {
         }
     }
 
-    /// 右边的页：宽屏上 Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
+    /// 右边的页：Cue 面板的开关在每一页上（推入的页也有），卡片纸页与 Cue 页本身除外——纸页有自己的复制、发送与更多。
     @ViewBuilder private func page(_ route: Route) -> some View {
-        if !wide || route.isCard || route == .cue {
+        if route.isCard || route == .cue {
             RouteView(route: route)
         } else {
             RouteView(route: route).toolbar {
@@ -87,7 +74,7 @@ struct SplitRoot: View {
     }
 
     private func collapseSidebarIfNarrow() {
-        guard wide, width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
+        guard width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
         withAnimation(Motion.panel) { navigation.sidebar = .detailOnly }
     }
 }
@@ -121,36 +108,24 @@ private struct AgentPanel: View {
     }
 }
 
-/// 侧栏列表，结构见 `SidebarOutline`：顶上是搜索框（点它去搜索页并聚焦），Cue（`CueSidebarItem`），任务与会话，置顶与最近的项目
-/// （末尾未分类与"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。
-/// iPhone 上它就是首页：宽屏选中的那一行垫选中底，iPhone 只在推进去的那一页还在时垫着，回到列表时淡掉（同系统列表返回时的取消选中）。
+/// 侧栏列表，结构见 `SidebarOutline`：顶上是搜索框（点它把搜索页推在当前页上并聚焦），Cue（`CueSidebarItem`），任务与会话，置顶与最近的项目
+/// （末尾未分类与"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。选中的那一行垫选中底。
 private struct SplitSidebar: View {
-    /// iPhone：列表压在打开的那一页底下，不在第一帧里。
-    let underPage: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
     @State private var leading: [UUID: [ProjectNow.InProgress]]?
-    /// 列表建出来了。iPhone 上打开 App 落在 Cue 页、列表压在底下：等 Cue 页那一帧交出去再建，冷启动的第一帧里不排一整个看不见的列表；
-    /// 下一帧就建，返回列表之前早已建好（等到返回时才建，左缘右滑的第一帧要现排整个列表）。
-    @State private var built = false
 
     var body: some View {
-        Group {
-            if built || !underPage || navigation.column == .sidebar { list } else { Color.clear }
-        }
-        // 侧栏用共用的侧栏层色（深色是更深一档的暖黑），不用系统偏冷的灰
-        .background(palette.sidebar)
-        .navigationTitle("CuePad")
-        .toolbar {
-            Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
-        }
-        .task {
-            await NextFrame.wait()
-            built = true
-        }
+        list
+            // 侧栏用共用的侧栏层色（深色是更深一档的暖黑），不用系统偏冷的灰
+            .background(palette.sidebar)
+            .navigationTitle("CuePad")
+            .toolbar {
+                Button("新建项目", icon: .newProject) { navigation.projectForm = .init() }
+            }
     }
 
     private var list: some View {
@@ -202,10 +177,7 @@ private struct SplitSidebar: View {
 
     /// 同步到不了 Mac 时设置那一行带的点（提示赭黄、真出错胭脂），点进设置看 iCloud 那一节；平时没有。
     private var syncAlert: SidebarRow.Alert? {
-        let status = services.syncStatus
-        guard !status.reachesMac else { return nil }
-        let summary = SyncSummary(status)
-        return .init(color: palette.color(summary.tone), text: summary.title)
+        services.macAlert.map { .init(color: palette.color($0.tone), text: $0.title) }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
@@ -214,7 +186,7 @@ private struct SplitSidebar: View {
     }
 }
 
-/// 列表顶上的搜索框：点它去搜索页，那里的搜索框接着拿到键盘（同 ⌘K）。长相同搜索页的搜索框（`SearchCapsule`）。
+/// 列表顶上的搜索框：点它把搜索页推在当前页上，那里的搜索框接着拿到键盘（同 ⌘K）。长相同搜索页的搜索框（`SearchCapsule`）。
 private struct SidebarSearchField: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -247,7 +219,7 @@ private struct CueSidebarItem: View {
     @Environment(Navigation.self) private var navigation
 
     var body: some View {
-        let selected = navigation.shows(.cue)
+        let selected = navigation.root == .cue
         Button { navigation.select(.cue) } label: {
             CueStatusRow(font: .body.weight(selected ? .semibold : .medium)).frame(minHeight: 60).contentShape(.rect)
         }
@@ -279,7 +251,7 @@ private struct SidebarRow: View {
     @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 16
 
     var body: some View {
-        let selected = navigation.shows(route)
+        let selected = navigation.root == route
         Button { navigation.select(route) } label: {
             Label {
                 VStack(alignment: .leading, spacing: 1) {
@@ -312,54 +284,6 @@ private struct SidebarRow: View {
 private extension SidebarRow {
     init(entry: SidebarOutline.Entry, badge: Int = 0, alert: Alert? = nil) {
         self.init(route: entry.route, title: entry.title, icon: entry.icon, badge: badge, alert: alert)
-    }
-}
-
-private extension Navigation {
-    /// 侧栏这一行此刻垫不垫选中底：选中的那一页，iPhone 上只在推进去的那一页还在时（回到列表时淡掉；宽屏一直在页里）。
-    /// 不按尺寸类判断宽窄：侧栏这一栏里的尺寸类总是窄的。
-    func shows(_ route: Route) -> Bool { root == route && column == .detail }
-}
-
-/// 外接键盘快捷键（不占位的隐形按钮）。
-private struct SplitShortcuts: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
-
-    /// 新卡放进正在看的项目（不在项目里时进未分类），随即打开。
-    private func newCard() {
-        let project = navigation.currentProject
-        workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            if navigation.root == .search { navigation.closeSearch() }
-            navigation.push(.card(card.id))
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            Button("搜索") { navigation.openSearch() }.keyboardShortcut("k")
-            Button("搜索") { navigation.openSearch() }.keyboardShortcut("f")
-            // 搜索框没有焦点时 Esc 退出搜索（有焦点时第一下 Esc 由系统收起输入）
-            if navigation.root == .search {
-                Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
-            }
-            Button("记一条灵感", action: newCard).keyboardShortcut("n")
-            Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
-            Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
-            Button("侧栏") {
-                withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
-            }
-            .keyboardShortcut("\\")
-            Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
-            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { navigation.show(.project(project.id)) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
-            }
-        }
-        .opacity(0)
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
     }
 }
 #endif

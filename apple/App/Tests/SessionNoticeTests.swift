@@ -76,7 +76,7 @@ struct SessionNoticeTests {
     }
 
     /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
-    /// Agent 整页是侧栏的"会话"；Cue 页本身与 iPad 右侧面板不是会话列表；iPhone 回到了侧栏列表就是没在看。
+    /// Agent 整页是侧栏的"会话"；Cue 页本身与 iPad 右侧面板不是会话列表。
     @Test func 正看着Agent列表或那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let navigation = navigation()
@@ -89,8 +89,6 @@ struct SessionNoticeTests {
         #expect(navigation.showsAlert(about: session))
         navigation.path = [.session(session)]
         #expect(!navigation.showsAlert(about: session))
-        navigation.showList()  // iPhone 返回到了侧栏列表
-        #expect(navigation.showsAlert(about: session))
         navigation.select(.cue)
         navigation.push(.session(session))  // Cue 页里点进了这个会话
         #expect(!navigation.showsAlert(about: session))

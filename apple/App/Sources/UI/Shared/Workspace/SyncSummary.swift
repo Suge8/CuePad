@@ -80,6 +80,17 @@ nonisolated extension SyncStatus {
     }
 }
 
+#if os(iOS)
+extension AppServices {
+    /// 同步到不了 Mac 时（`SyncStatus.reachesMac`）给人看的那一句；送得到时为 nil。手机与 iPad 上设置那一行（侧栏、项目页末尾）
+    /// 与 iPhone 底部项目那一格带的点都只读它，点的颜色按它的 `tone`。
+    var macAlert: SyncSummary? {
+        let status = syncStatus
+        return status.reachesMac ? nil : SyncSummary(status)
+    }
+}
+#endif
+
 extension AppServices {
     /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
     var reachesPiHost: Bool {

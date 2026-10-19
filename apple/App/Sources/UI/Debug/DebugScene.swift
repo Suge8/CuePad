@@ -36,6 +36,8 @@ enum ScrollAnchor {
 /// - `-CuePadClick x,y`、`-CuePadRightClick x,y`（仅 Mac）：就绪后在主窗口里左键、右键点一下，打开那里的系统菜单再截图（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
+/// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开去处、去三页、推入与返回、搜索、换去处清掉推入的页、回 Cue，
+///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`PiSubagentList`、`CueNotes`）；
@@ -74,6 +76,8 @@ enum DebugScene {
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路（`debugExposesCuePanel`）。
     static var toggleCuePanel: () -> Void = {}
+    /// 点 Cue 页底部去处圆钮的那条路（`debugExposesPlaces`）。
+    static var togglePlaces: () -> Void = {}
     #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。

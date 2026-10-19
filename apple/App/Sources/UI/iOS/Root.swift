@@ -1,7 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：各种宽度都是同一个分栏（`SplitRoot`），iPhone 上由系统折叠成一层层的页。
+/// iOS/iPadOS 一个窗口的根视图（建出本窗口的 `Workspace` 与 `Navigation`）：宽屏是分栏（`SplitRoot`），窄屏（iPhone 与窄窗口 iPad）
+/// 是以当前去处为根的导航栈加底部一排（`DockRoot`）。两种容器读写同一份 `Navigation`。
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -20,7 +21,10 @@ struct IOSRoot: View {
     var body: some View {
         @Bindable var navigation = navigation
         CatalogGate {
-            SplitRoot()
+            Group {
+                if sizeClass == .regular { SplitRoot() } else { DockRoot() }
+            }
+            .background { RootShortcuts() }
             // 浮起的输入框（新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
             // 否则键盘一出来、一收起，底下整页都要按新的安全区重排一遍
             .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
@@ -48,7 +52,7 @@ struct IOSRoot: View {
         }
         // 这一层还没有导航栏：上安全区就是状态栏
         .measuresStatusBar()
-        // 窄屏（折成一层层的页）盖在整个窗口上；宽屏在右边那一栏里（`SplitRoot`）
+        // 窄屏盖在整个窗口上；宽屏在右边那一栏里（`SplitRoot`）
         .overlay(alignment: .top) { if sizeClass != .regular { NoticeBanner() } }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
@@ -61,8 +65,7 @@ struct IOSRoot: View {
         .environment(navigation)
         .environment(workspace.services)
         .preferredColorScheme(scheme)
-        // 变宽后两栏都在：此后再变窄，折叠出来的是右边那一页（不停在列表上）
-        .onChange(of: sizeClass) { _, size in if size == .regular { navigation.column = .detail } }
+        .onChange(of: sizeClass, initial: true) { navigation.compact = sizeClass != .regular }
         .task { await workspace.follow() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
@@ -84,6 +87,8 @@ struct IOSRoot: View {
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Route
+    /// 窄屏导航栈的根（底部那一排的去处）：任务、会话、项目用系统大标题（`FloatingHeader` 读 `largeTitle`）。
+    var home = false
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -96,8 +101,9 @@ struct RouteView: View {
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
             .containerBackground(background, for: .navigation)
-            // 右边的页都不用大标题（推入页的标题在顶栏玻璃里，Cue、搜索自带顶上一排）：不随打开的第一页是谁而变
-            .navigationBarTitleDisplayMode(.inline)
+            // 只有窄屏的去处用大标题；推入页的标题在顶栏玻璃里，Cue、搜索自带顶上一排
+            .navigationBarTitleDisplayMode(home ? .large : .inline)
+            .environment(\.largeTitle, home)
             .scrollEdgeEffectHidden()
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
             .modifier(KeyboardHold())
@@ -131,6 +137,48 @@ struct RouteView: View {
                 CardEditorScreen(cardID: id)
             }
         }
+    }
+}
+
+/// 外接键盘快捷键（不占位的隐形按钮），两种容器同一组，与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏（宽屏）、⌘N 新建卡片、
+/// ⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。
+struct RootShortcuts: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
+
+    /// 新卡放进正在看的项目（不在项目里时进未分类），随即打开。
+    private func newCard() {
+        let project = navigation.currentProject
+        workspace.attempt {
+            let card = try await workspace.createCard(in: project)
+            navigation.push(.card(card.id))
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Button("搜索") { navigation.openSearch() }.keyboardShortcut("k")
+            Button("搜索") { navigation.openSearch() }.keyboardShortcut("f")
+            // 搜索框没有焦点时 Esc 退出搜索（有焦点时第一下 Esc 由系统收起输入）
+            if navigation.top == .search {
+                Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
+            }
+            Button("记一条灵感", action: newCard).keyboardShortcut("n")
+            Button("对 Cue 说") { navigation.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
+            Button("侧栏") {
+                withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
+            }
+            .keyboardShortcut("\\")
+            Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
+            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
+                Button("项目 \(index + 1)") { navigation.show(.project(project.id)) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+            }
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 }
 #endif

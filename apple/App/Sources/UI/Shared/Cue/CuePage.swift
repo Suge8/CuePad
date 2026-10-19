@@ -28,6 +28,11 @@ struct CuePage: View {
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dockLift) private var dockLift
+    /// 输入框有焦点：左边的去处圆钮让开，输入框占满整排。
+    @State private var composing = false
+    /// 去处圆钮展开成了三格。
+    @State private var placesOpen = false
     #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
@@ -88,28 +93,57 @@ struct CuePage: View {
         .background(palette.desk)
     }
     #else
-    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。iPhone 上页头在导航栏那一排里，左边是系统的返回
-    /// （自带顶上一排的页的规则，同搜索页）；宽屏与右侧面板里列表就在旁边，没有返回。
+    /// 页头浮在对话上（`CueHeader`），对话让出固定的一段：页头展开成面板时对话不重排。窄屏上 Cue 页是导航栈的根、不需要返回，导航栏藏起来，
+    /// 页头就是最上面那一排；底部是一排里左边那颗去处圆钮（`DockPlaces`）加输入框。
     /// "等你"卡与输入框浮在对话底上（`FloatingReply`，同 Mac；在键盘之上）：不做成底下那一栏（安全区）——栏一变矮（发出时输入框收回一行、
     /// 卡沉下去）可见区当帧变高、系统把对话一下拉下去，发出的话一两帧后才到、再滑上来；栏一变高（卡升起）系统当帧挪、滚动区下一帧才跟上。
     private var page: some View {
         FloatingReply(backed: false) {
-            chat
+            chat.overlay { if placesOpen { closePlaces } }
         } reply: {
             bottom
-                .padding(.horizontal, 12).padding(.bottom, 8)
+                .padding(.horizontal, docked ? Dock.margin : 12).padding(.bottom, docked ? dockLift : 8)
                 .frame(maxWidth: Self.readingWidth)
         }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaPadding(.top, CueHeader.reserve(inBar: inBar))
-            .overlay(alignment: .top) { CueHeader(inBar: inBar) }
+            .safeAreaPadding(.top, CueHeader.reserve)
+            .overlay(alignment: .top) { CueHeader(underBanner: docked) }
             .navigationTitle(cue.name)
-            // 标题只给读屏与系统；iPhone 上标题那一格让给页头的点按区（`inNavigationBarRow`）
-            .toolbar(removing: inBar ? nil : .title)
+            // 标题只给读屏与系统：名字在页头里
+            .toolbar(removing: .title)
     }
 
-    /// 页头在导航栏那一排里（iPhone）。
-    private var inBar: Bool { !inPanel && sizeClass == .compact }
+    /// 窄屏导航栈的根（不是 iPad 右侧面板）：底部是去处圆钮加输入框，导航栏藏起。
+    private var docked: Bool { !inPanel && sizeClass == .compact }
+
+    /// 去处圆钮展开时铺在对话上的一层：点一下或一划就收起。
+    private var closePlaces: some View {
+        Color.clear.contentShape(.rect)
+            .onTapGesture(perform: collapsePlaces)
+            .gesture(DragGesture(minimumDistance: 4).onChanged { _ in collapsePlaces() })
+            .accessibilityHidden(true)
+    }
+
+    private func collapsePlaces() {
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen = false }
+    }
+
+    /// 窄屏底部那一排：左边去处圆钮（输入框有焦点时让开），右边输入框；从三页来时从 Dock 的样子长过来。
+    private var dockRow: some View {
+        CueDockRow(
+            placesOpen: $placesOpen, composing: composing,
+            arrival: reduceMotion ? nil : Dock.Arrival(from: navigation.previousRoot, to: .cue)
+        ) { composer }
+            .debugExposesPlaces { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { placesOpen.toggle() } }
+    }
+    #endif
+
+    #if os(iOS)
+    private var composer: some View {
+        CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests, sent: { follow.sent() }) { focused in
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { composing = focused }
+        }
+    }
     #endif
 
     // MARK: 对话
@@ -304,7 +338,7 @@ struct CuePage: View {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
-            CueComposer(style: .page, focusRequests: inPanel ? 0 : navigation.cueFocusRequests) { follow.sent() }
+            if docked { dockRow } else { composer }
             #else
             CueComposer(style: .page) { follow.sent() }
             #endif

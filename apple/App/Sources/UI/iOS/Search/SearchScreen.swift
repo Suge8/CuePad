@@ -1,9 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
-/// 搜索页（点侧栏列表顶上的搜索框或按 ⌘K 进来，同 Mac 的 ⌘K）：顶上是搜索框（iPhone 在导航栏中间，左边是系统的返回；iPad 是 `RootBar` 那一排），
-/// 下面两个范围——灵感与任务（`CardSearchResults`，筛选胶囊、按项目分组）、会话（`SessionList`，现在与历史）；一个搜索词两边共用，换范围不清空。
-/// 进入、再点列表的搜索框或再按 ⌘K 都聚焦搜索框。
+/// 搜索页（窄屏三页根上的搜索钮、宽屏侧栏顶上的搜索框或 ⌘K，同 Mac 的 ⌘K）：各宽度都推在当前页上，退出就是返回。
+/// 搜索框在窄屏的导航栏中间（左边是系统的返回）；宽屏导航栏里还有侧栏钮与 Cue 面板钮，放不下一整条，搜索框在导航栏下面那一排。下面两个范围——灵感与任务（`CardSearchResults`，筛选胶囊、按项目分组）、
+/// 会话（`SessionList`，现在与历史）；一个搜索词两边共用，换范围不清空。进入、在搜索页上再点搜索框或再按 ⌘K 都聚焦搜索框。
 struct SearchScreen: View {
     enum Scope: Hashable, CaseIterable {
         case cards, sessions
@@ -35,22 +35,20 @@ struct SearchScreen: View {
         }
         .safeAreaBar(edge: .top, spacing: 0) {
             VStack(spacing: 8) {
-                if !compact { RootBar { field } }
+                if !compact { field }
                 Picker("范围", selection: $scope) {
                     ForEach(Scope.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
             }
-            .padding(.top, compact ? 4 : 0)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
             .padding(.bottom, 4)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // 标题给读屏、返回菜单与系统；窄屏标题那一格是搜索框
         .navigationTitle("搜索")
-        // 标题只给读屏与系统；iPhone 上标题那一格是搜索框
-        .toolbar(removing: compact ? nil : .title)
         .toolbar {
-            // iPhone：搜索框在导航栏中间那一格，左边是系统的返回（左缘右滑回到列表要导航栏在）
             if compact {
                 ToolbarItem(placement: .principal) { field.frame(width: max(0, width - Self.barInset)) }
                     .sharedBackgroundVisibility(.hidden)
@@ -70,6 +68,31 @@ struct SearchScreen: View {
         var instant = Transaction()
         instant.disablesAnimations = true
         withTransaction(instant) { searching = true }
+    }
+}
+
+/// 搜索框：玻璃胶囊（搜索页顶上）。在输入或有字时右端一个叉：清空并收起键盘。
+struct SearchCapsule: View {
+    static let height: CGFloat = ControlMetrics.height
+    let prompt: String
+    @Binding var query: String
+    let focus: FocusState<Bool>.Binding
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(.search).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            TextField(prompt, text: $query, palette: palette).submitLabel(.search).focused(focus).accessibilityLabel("搜索")
+            if !query.isEmpty || focus.wrappedValue {
+                Button("清除", icon: .clear) {
+                    query = ""
+                    focus.wrappedValue = false
+                }
+                .labelStyle(.iconOnly).buttonStyle(ControlButtonStyle(kind: .quiet, compact: true))
+            }
+        }
+        .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: Self.height)
+        .glass(in: .capsule)
     }
 }
 #endif

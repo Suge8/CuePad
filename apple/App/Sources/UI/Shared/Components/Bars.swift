@@ -12,7 +12,7 @@ enum Bars {
 
 #if os(iOS)
 extension View {
-    /// 窗口根视图上量出状态栏的下沿，交给里面按它排的那一排（`inNavigationBarRow`、宽屏的提示横幅）。
+    /// 窗口根视图上量出状态栏的下沿，交给里面按它排的那一排（宽屏的提示横幅）。
     func measuresStatusBar() -> some View { modifier(StatusBarReader()) }
 }
 

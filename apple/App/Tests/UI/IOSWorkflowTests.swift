@@ -81,7 +81,7 @@ struct IOSWorkflowTests {
         let start = try #require(navigation.newSession)
         let places = ProjectFolders.launchPlaces(projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil)
         let place = try #require(start.place(among: places)), binding = try #require(place.binding)
-        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, services: app.services)
+        _ = try await start.launch(in: place.project, binding: binding, draft: try #require(start.draft), agent: .pi, model: nil, thinking: nil, services: app.services)
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.launch?.project == project.id && request.hostID == "mac-z")
         #expect(request.launch?.name == "修乱序" && request.target.name == "修乱序" && request.cardID == task.id)

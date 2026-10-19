@@ -26,7 +26,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case alertsPending, alertsOn, alertsOff
     // 任务与卡片操作
     case complete, reopen, restore, start, add, indent, outdent, link, unlink
-    case folder, newProject, unbindFolder, folderMissing, resource, isResource, pin, unpin
+    case projects, folder, newProject, unbindFolder, folderMissing, resource, isResource, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
@@ -113,7 +113,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .outdent: .ink("outdent")
         case .link: .ink("link")
         case .unlink: .ink("unlink")
-        case .folder: .ink("folder")
+        case .folder, .projects: .ink("folder")
         case .newProject: .ink("folder.add")
         case .unbindFolder: .ink("folder.remove")
         case .folderMissing: .ink("folder.missing")
