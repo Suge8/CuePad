@@ -117,6 +117,76 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
+  /// 把新建的库退回结构 `version`（48–50）：撤掉 52、54 加的列与 55 加的索引（53 重建触发器、55 重建的类型索引，留着新的照样能升），
+  /// 退到 48 再撤掉 49 加的允许清单列。50 只改数据，49 → 50 的结构相同。
+  private func downgrade(to version: Int) throws {
+    let added = try RawDB(fixture.url).rows(
+      """
+      SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
+        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open')
+      """)
+    try RawDB(fixture.url).exec(
+      """
+      ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
+      \(added.map { "DROP INDEX \($0[0]);" }.joined()) \(version < 49 ? "ALTER TABLE cueProfile DROP COLUMN allows;" : "")
+      PRAGMA user_version = \(version);
+      """)
+  }
+
+  /// 结构 48 的库（手机停在发出 49 之前的版本）照样升上来，不按"太旧"拒绝：记忆里"以后……都不用问"的规矩行换成允许清单里的一项、
+  /// 那一行忘掉；写着项目名却对不上唯一一个项目的留在记忆里。还开着的提问去掉"拒绝"。
+  @Test func schema48LibraryUpgradesAndMovesRulesIntoAllows() async throws {
+    let project = try await store.createProject(name: "甲", color: "#111")
+    _ = try await store.updateCueProfile { _ in }
+    let push = try await store.noteCueLine("以后推送都不用问", source: .you, pinned: true).line
+    let delete = try await store.noteCueLine("以后删除都不用问（项目「甲」）", source: .you, pinned: true).line
+    let unknown = try await store.noteCueLine("以后发布或部署都不用问（项目「乙」）", source: .you, pinned: true).line
+    let question = try await store.addCueMessage(.cue, text: "推吗？", ask: .push)
+    try downgrade(to: 48)
+    try RawDB(fixture.url).exec(
+      "UPDATE cueMessages SET choices = '[\"允许一次\",\"拒绝\"]' WHERE id = '\(question.id.uuidString.lowercased())';")
+
+    let upgraded = try CueStore(location: .isolated(fixture.directory))
+    #expect(try await upgraded.cueProfile()?.allows == [CueAllow(.push, project: nil), CueAllow(.delete, project: project.id)])
+    let lines = try await upgraded.cueMemory().lines
+    #expect(lines.first { $0.id == push.id }?.deletedAt != nil)
+    #expect(lines.first { $0.id == delete.id }?.deletedAt != nil)
+    #expect(lines.first { $0.id == unknown.id }?.deletedAt == nil)
+    #expect(try await upgraded.cueMessages().first { $0.id == question.id }?.choices == ["允许一次"])
+  }
+
+  /// 结构 49 的库里任务下挂着提示词（不是资料的灵感）：升到 50 时按先后拼进任务的正文、删掉；投送请求与发送记录改指任务，
+  /// 提示词记着的会话交给还没会话的任务；资料与回收站里的不动，任务带新的修改时间。
+  @Test func schema49LibraryFoldsPromptsIntoTasks() async throws {
+    let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
+    let task = try await store.createTask("修乱序", in: nil)
+    let ideas = [
+      try await store.createCard(in: nil, body: "先复现"), try await store.createCard(in: nil, body: "再改排序"),
+      try await store.createCard(in: nil, body: "常用说明"), try await store.createCard(in: nil, body: "删掉的"),
+    ]
+    let (first, second, resource, trashed) = (ideas[0], ideas[1], ideas[2], ideas[3])
+    try await store.updateCard(resource.id) { $0.isPinned = true }
+    _ = try await store.trashCard(trashed.id)
+    let request = try await store.requestDelivery(second.body, to: atlas, on: "mac", card: second.id)
+    try await store.recordSend(second.body, to: atlas, card: second.id)
+    let before = try #require(try await store.card(task.id)).modifiedAt
+    let parents = zip(ideas, ["b", "c", "a", "d"]).map {
+      "UPDATE cards SET parentID = '\(task.id.uuidString.lowercased())', sortKey = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';"
+    }.joined()
+    try downgrade(to: 49)
+    try RawDB(fixture.url).exec(parents + "UPDATE cards SET piSessionID = 's1' WHERE id = '\(second.id.uuidString.lowercased())';")
+
+    let upgraded = try CueStore(location: .isolated(fixture.directory))
+    let folded = try #require(try await upgraded.card(task.id))
+    #expect(folded.body == "修乱序\n\n先复现\n\n再改排序" && folded.piSessionID == "s1" && folded.modifiedAt > before)
+    #expect(try await upgraded.children(of: task.id).map(\.id) == [resource.id])
+    #expect(try await upgraded.card(first.id) == nil)
+    #expect(try await upgraded.card(second.id) == nil)
+    #expect(try await upgraded.trashedCards().map(\.id) == [trashed.id])
+    #expect(try await upgraded.deliveryRequests().first { $0.id == request.id }?.cardID == task.id)
+    #expect(try RawDB(fixture.url).rows("SELECT cardID FROM sendRecords") == [[task.id.uuidString.lowercased()]])
+  }
+
   /// 结构 50 的库里分割线是私有标记 `---split---`（独占一行）：升到 51 时换成 Markdown 的 `---`，行里夹着的不是分割线、不动；
   /// 改过的卡带新的修改时间（同步出去），回收站里的也换。
   @Test func schema50LibraryWritesDividersAsMarkdown() async throws {
@@ -126,17 +196,7 @@ import Testing
     _ = try await store.trashCard(trashed.id)
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
-    // 退回 50：撤掉 52、54 加的列与 55 加的索引（53 重建触发器、55 重建的类型索引，留着新的照样能升）
-    let added = try RawDB(fixture.url).rows(
-      """
-      SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
-        ('syncRecords_pushed', 'piSessionStates_folder', 'piMessages_sessionID_at', 'piSessions_agent', 'cueMessages_open')
-      """)
-    try RawDB(fixture.url).exec(
-      """
-      ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
-      \(added.map { "DROP INDEX \($0[0]);" }.joined()) PRAGMA user_version = 50;
-      """)
+    try downgrade(to: 50)
 
     let upgraded = try CueStore(location: .isolated(fixture.directory))
     let converted = try #require(try await upgraded.card(card.id))
