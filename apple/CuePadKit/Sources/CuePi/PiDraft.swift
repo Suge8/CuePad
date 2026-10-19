@@ -22,8 +22,11 @@ public struct PiDraft: Equatable, Sendable {
     }
 
     /// 这条话已在对话里（会话页与 Cue 页同一条规则）：对话里最近一条回答的时刻（`newestReply`）不早于它的起点。
-    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。
-    public func landed(newestReply: Date?) -> Bool { newestReply.map { $0 >= since } ?? false }
+    /// 按时刻认、不按文字认：两轮说了一样的话也认得开。按毫秒比：两边是同一个毫秒精度的时钟，一边从毫秒数、一边从会话文件的时间文字换算，
+    /// 同一毫秒换出的 `Date` 会差一个舍入误差（实测差 1e-7 秒），直接比时常认不出同一刻。
+    public func landed(newestReply: Date?) -> Bool { newestReply.map { Self.milliseconds($0) >= Self.milliseconds(since) } ?? false }
+
+    private static func milliseconds(_ date: Date) -> Int64 { Int64((date.timeIntervalSince1970 * 1000).rounded()) }
 }
 
 /// 一条回答正在说的话怎么拼（各家协议层共用，各自只把事件映射到这几个动作）：依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；

@@ -20,7 +20,7 @@ Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界�
 
 | | Claude Code | Codex | OpenCode |
 | --- | --- | --- | --- |
-| 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`，事件表在 `HookFile.claudeCode`：要人作答的权限确认、AskUserQuestion 的 PreToolUse、MCP 表单 Elicitation 挡住等 CuePad，其余当场放行）；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`） | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
+| 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`，事件表在 `HookFile.claudeCode`：要人作答的权限确认、AskUserQuestion 的 PreToolUse、MCP 表单 Elicitation 挡住等 CuePad，其余当场放行）；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`）；子代理不挂钩子，托管与终端会话都只认 app-server 的子线程推送（终端的经常驻服务，CuePad 启动时从它已载入的线程补回名册）。父线程歇着时子代理做完，Codex 不自己接着跑：最后一个落定时 CuePad 补一轮空输入让它读到结果，那一轮做完才歇下（父线程上一轮被停下、在 Plan 模式、这一批都被停下的不补），规则在 `CodexRuntime` 头注释 | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
 | 终端会话的说话 | 它的收件箱 socket，只收文字；插话不打断在跑的工具 | 常驻服务的控制 socket（`turn/steer`、`thread/queue/add`），能带图 | `POST /prompt`（steer / queue），能带图 |
 | 远程作答 | 权限：阻塞的 PermissionRequest 钩子，终端里同时弹出，哪边先答算哪边。提问（AskUserQuestion 的 PreToolUse 钩子）与 MCP 要你填的表单（Elicitation 钩子，只有一个字段时能答）：挂住时终端不弹，所以与 Codex 的权限一样按人在不在分 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式（托管会话在 CuePad 里用斜杠命令 `/plan [话]` 进、`/default` 回默认模式）的提问：不挡着这一轮的（`request_user_input_async`，0.162 起的默认）终端与托管会话都能从 CuePad 答，答案作为你的下一句话交给它；挡着这一轮的（`request_user_input`）终端会话的只能在终端里答，托管会话的经 `item/tool/requestUserInput`、只有一个问题时能从 CuePad 答 | 权限与单个问题的表单 |
 | 后台托管 | `claude --input-format stream-json --output-format stream-json`，全部能力；会话开在终端里时拒绝接着（两边会各写各的） | `codex app-server --listen stdio://`；线程被常驻服务持有时改走控制 socket | 在它的服务里开会话，服务没开时 `opencode service start` |
@@ -36,7 +36,7 @@ CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大
 - Claude Code 的收件箱 socket、认证行与 `CLAUDE_CODE_MESSAGING_SOCKET` / `CLAUDE_CODE_MESSAGING_TOKEN` 已在官方文档（cross-session-messaging），消息体格式与控制消息（改名）没有，来自实测；会话登记文件 `<配置目录>/sessions/<pid>.json` 也不在文档里，只用来给 CuePad 启动前就在跑的会话补上收件箱地址。经收件箱发进去的话 Claude Code 一律包成"另一个会话发来的"（收件箱行里没有能改这一点的字段，"宿主注入"只对托管进程的标准输入），CuePad 在正文前加一句"这是用户本人从 CuePad 发的、直接回答、不必回传"：模型多半照做，但仍被告知这不是用户亲手打的、不能当作对待确认的批准，偶尔仍会试着回传。接收方在 bypassPermissions 模式下默认挂起它；CuePad 带上会话的收件箱令牌（认证行）后直接收下（令牌只在钩子到过之后才有）。
 - AskUserQuestion 的官方作答路径是它的 PreToolUse（`permissionDecision: allow` 加带答案的 `updatedInput`），CuePad 走这条；PermissionRequest 会不会为它触发文档没写，CuePad 不在那里答它。
 - Pi 1.2 在工具跑着时被停下，有时把这一轮记成 `stopReason: error`（"The operation was aborted."，工具被中止后再请求模型、请求因中止失败）：扩展按"这一轮收到过停止或中止信号已触发"报成被中止，会话歇着、不显示出错；会话文件里它仍是一轮出错，历史与对话照文件，这一轮没有"已停止"那一行。
-- Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（实测，文档里没有这个数），期间仍在线、能收话；历史会话没有名字（会话名只在它的 `session_index.jsonl`）。`thread/queue/*` 是实验接口（要 `experimentalApi`）。
+- Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（实测，文档里没有这个数），期间仍在线、能收话；历史会话没有名字（会话名只在它的 `session_index.jsonl`）。`thread/queue/*` 是实验接口（要 `experimentalApi`）。常驻服务把子线程的推送广播给没订阅的连接是实测行为，文档里没有；补的空输入那一轮在终端里显示为一段没有提问的回答，不触发 UserPromptSubmit，输入框里打了一半的话不受影响（实测）。Codex 的 `wake_on_agent_messages`（openai/codex#54961）发布并默认开启后改用它、删掉补的这一轮。
 - OpenCode 只认 v2：官方 v2 已发布，brew 与官方安装脚本装的就是它（npm 上是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）；v1 的服务接口不同，不做兼容。它的服务登记文件 `service.json` 不在文档里。会话在线规则"服务活着期间有过活动"是 CuePad 定的。从没取过模型表的头一次启动（实测 2.0.25），它先用随包的旧表、同时联网取新表（约 1～2 秒）：这期间说的话，配置的默认模型不在旧表里时它改用旧表第一个（它自己的终端界面也一样）；CuePad 不补，会话页显示的就是实际用的模型。
 
 ## Cue 的大脑（`Brain/`）
