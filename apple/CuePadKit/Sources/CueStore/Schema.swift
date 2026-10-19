@@ -33,14 +33,86 @@ enum Schema {
 
   /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。
   /// 发出的版本把用户的库都升过了某一版，就把那一版及以前的步骤折进 `create`、起点挪到那一版：`create` 建的就是最新结构，
-  /// 升级步骤只留还有库没跑过的。
-  static let baseVersion = 50
+  /// 升级步骤只留还有库没跑过的。挪之前要确认每一端（尤其是不常更新的 iPhone、iPad）发出的版本都已跑过那一版：
+  /// 起点曾挪到 50，但 49、50 两步只发出了半天，停在 48 的手机库就打不开了，所以起点退回 48、补回这两步。
+  static let baseVersion = 48
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
   /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
+    // 49：允许清单（`CueProfile.allows`）取代记忆里"以后……都不用问"的规矩行：一直记着、没忘掉的规矩行换成清单里的一项，那一行忘掉；
+    // 写着项目名、按名字对不上唯一一个项目的（改了名、删了）留在记忆里。"等你"没有关掉也没有"拒绝"了（不允许在卡片的输入框里另外说）：
+    // 还开着的提问去掉"拒绝"。modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      try db.exec(cueAllows)
+      let now = Date.stamp
+      try db.run(
+        """
+        UPDATE cueMessages SET modifiedAt = MAX(modifiedAt + 1, ?1),
+          choices = (SELECT json_group_array(value) FROM json_each(cueMessages.choices) WHERE value <> '拒绝')
+        WHERE author = 'cue' AND answeredAt IS NULL AND choices IS NOT NULL
+          AND EXISTS (SELECT 1 FROM json_each(cueMessages.choices) WHERE value = '拒绝')
+        """, [now])
+      guard try db.first("SELECT 1 FROM cueProfile", [], { _ in true }) != nil else { return }  // 没设过 Cue 就没有规矩行
+      let projects = try db.query("SELECT id, name FROM projects WHERE deletedAt IS NULL") { (id: $0.uuid(0), name: $0.text(1)) }
+      let lines = try db.query("SELECT id, text FROM cueLines WHERE pinned = 1 AND deletedAt IS NULL") { (id: $0.text(0), text: $0.text(1)) }
+      var allows: Set<CueAllow> = [], converted: [String] = []
+      for line in lines {
+        for ask in CueAsk.allCases {
+          guard let always = ask.always else { continue }
+          var project: UUID?
+          if line.text != always {
+            let head = always + "（项目「", tail = "」）"
+            guard line.text.hasPrefix(head), line.text.hasSuffix(tail) else { continue }
+            let name = String(line.text.dropFirst(head.count).dropLast(tail.count))
+            let hits = projects.filter { $0.name == name }
+            guard hits.count == 1 else { continue }
+            project = hits[0].id
+          }
+          allows.insert(CueAllow(ask, project: project))
+          converted.append(line.id)
+        }
+      }
+      guard !converted.isEmpty else { return }
+      try db.run("UPDATE cueProfile SET allows = ?1, modifiedAt = MAX(modifiedAt + 1, ?2)", [CueAllow.encode(allows), now])
+      try db.run(
+        "UPDATE cueLines SET deletedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id IN (SELECT value FROM json_each(?2))",
+        [now, JSONColumn.encode(converted)])
+    },
+    // 50：提示词并进任务：任务的正文第一行是标题、其余是开工时发出的话，发出后留在任务上。任务下的提示词（不是资料的灵感，回收站里的不算；
+    // 送达的早已删掉，留着的都没发出去）按先后拼进任务正文末尾、空行隔开，变量取值并入（同名的留任务的），再删掉；
+    // 带着它们的投送请求与发送记录改指任务，提示词记着的会话交给还没会话的任务。modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let prompts = try db.query(
+        """
+        SELECT c.id, c.parentID FROM cards c JOIN cards t ON t.id = c.parentID
+        WHERE c.todoAt IS NULL AND c.isPinned = 0 AND c.deletedAt IS NULL AND t.todoAt IS NOT NULL ORDER BY c.parentID, c.sortKey, c.id
+        """
+      ) { (id: $0.uuid(0), task: $0.uuid(1)) }
+      let read = { (row: Row) in (body: row.text(0), values: JSONColumn.decode([String: String].self, from: row.text(1)) ?? [:]) }
+      for (task, group) in Dictionary(grouping: prompts, by: \.task) {
+        let ids = group.map(\.id), list = CueStore.idList(ids)
+        guard let kept = try db.first("SELECT body, variableValues FROM cards WHERE id = ?", [task], read) else { continue }
+        let parts = try ids.compactMap { try db.first("SELECT body, variableValues FROM cards WHERE id = ?", [$0], read) }
+        let body = ([kept] + parts).map { $0.body.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let values = ([kept] + parts).reduce(into: [String: String]()) { $0.merge($1.values) { first, _ in first } }
+        try db.run(
+          """
+          UPDATE cards SET body = ?1, variableValues = ?2, modifiedAt = MAX(modifiedAt + 1, ?3),
+            piSessionID = COALESCE(piSessionID, (SELECT piSessionID FROM cards WHERE id IN (SELECT value FROM json_each(?5)) AND piSessionID IS NOT NULL))
+          WHERE id = ?4
+          """, [body, JSONColumn.encode(values), now, task, list])
+        for table in ["deliveryRequests", "sendRecords"] {
+          try db.run(
+            "UPDATE \(table) SET cardID = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE cardID IN (SELECT value FROM json_each(?3))", [task, now, list])
+        }
+        // 投送请求与发送记录已改指任务，没有别的记录还引用这些提示词，直接删（与当初这一步一样，不在升级里回收图片）
+        try db.run("DELETE FROM cards WHERE id IN (SELECT value FROM json_each(?))", [list])
+      }
+    },
     // 51：正文是标准 Markdown，分割线就是 `---`：独占一行（可带首尾空白）的私有标记 `---split---` 换成它，行里夹着的不是分割线。
     // 回收站里的也换；modifiedAt 变大，改动才会同步出去
     Upgrade { db in
@@ -63,6 +135,9 @@ enum Schema {
     // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
     "DROP INDEX syncRecords_recordType; \(pendingIndexes) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
   ]
+
+  /// 49 加的列：Cue 的允许清单（`CueProfile.allows`）。
+  private static let cueAllows = "ALTER TABLE cueProfile ADD COLUMN allows TEXT;"
 
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
   /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
