@@ -420,9 +420,11 @@ struct CueHostTests {
         /// 你请 Cue 对会话说一句，这一轮做完后由替身当那台 Mac 按 `clock` 的时刻回报没送达，Cue 醒来看到 `reason`。
         func sayFails(_ reason: String, at clock: Timing) async throws {
             try await rig.say("请对登录页说继续")
-            try await eventually("这一轮做完", timeout: .seconds(60)) {  // 说话工具等结果至多 `Speech.cueWait`
-                let open = try await rig.store.deliveryRequests(toSession: "remote-1").contains { $0.isOpen }
-                return try await rig.store.cueState()?.state == .known(.settled) && open
+            // 说话工具等结果至多 `Speech.cueWait`。歇着要晚于这句写下：上一轮刚做完、这一轮还没记成在跑时，歇着是旧的，
+            // 这时就替那台 Mac 回报，说话工具当场拿到没送到、Cue 不会再被叫醒
+            try await eventually("这一轮做完", timeout: .seconds(60)) {
+                guard let cue = try await rig.store.cueState(), cue.state == .known(.settled) else { return false }
+                return try await rig.store.deliveryRequests(toSession: "remote-1").contains { $0.isOpen && $0.createdAt < cue.modifiedAt }
             }
             let macB = DeliveryExecutor(store: rig.store, hostID: "mac-b", timing: clock, onIssue: { Issue.record("\($0)") }) { _ in .failed(reason) }
             try await macB.start()
