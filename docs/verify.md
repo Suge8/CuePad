@@ -14,6 +14,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 - 报窗口被缩小显示时，是调度中心或台前调度开着：请用户收起，Agent 不发系统按键。
 - 后台窗口里的网页截图不可信（过几秒就成了空白）：看网页预览用 `-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview`，载入完存成 PNG）。
 - Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（会到前台），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 上的菜单没有从代码打开的公开接口，截菜单用 `xc.sh run` 起实例后 axe 点开。
+- iPhone 的系统返回（返回钮、左缘滑动）同样只能真操作：录屏时另起 axe 点左上的返回钮、从左缘滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
 - 图标：`-CuePadScene icons`（iPad）一屏看全部墨块符号（层级与单色各一个）和 全部项目图标 × 8 色，改了生成器先看它。
 - 交付物与预览：`-CuePadAllKinds`（配 scratch 会话）发每种文件类型各一份，`-CuePadOpenPreview <标题或文件名>` 直接打开那张预览。
 - 展开的样子：`-CuePadToolsOpen YES` 让每轮经过、子代理名册与 Cue 的动态一出现就展开，截全清单用。
