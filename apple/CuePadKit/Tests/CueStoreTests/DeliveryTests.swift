@@ -94,7 +94,7 @@ import Testing
     let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
     _ = try await eventually(store, { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
     await handler.setOutcome(.succeeded)
-    _ = try await store.requestDelivery("ping", to: pi, on: "mac-a", mode: .ping)
+    _ = try await store.requestDelivery("quota", to: pi, on: "mac-a", mode: .quota)
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
 
     await clock.waitForSleeper()

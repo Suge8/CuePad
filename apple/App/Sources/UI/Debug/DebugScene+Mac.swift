@@ -80,7 +80,7 @@ extension DebugScene {
             let busy = { pi.sessions.contains { $0.hosted && $0.state.hasPendingWork } }
             if !busy() { for await _ in pi.changes() where busy() { break } }
             workspace.services.updates.checkForUpdates()
-            NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            SettingsPane.open(.general)
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
         case "settings":
@@ -89,7 +89,7 @@ extension DebugScene {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
-            NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap { name in SettingsPane.allCases.first { "\($0)" == name } })
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)

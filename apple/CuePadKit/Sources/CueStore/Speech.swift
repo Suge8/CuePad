@@ -33,7 +33,7 @@ public enum Speech {
   /// （每 2 秒）、交给 Agent 或 Cue（0.2 秒内）、回执立即上传、发出方主动拉取（每 2 秒），几秒就回来；实测最慢的约 21 秒（2026-10-14
   /// 手机对 Cue 说的话，当时值班的 Mac 没在拉）。取 60 秒：是最慢实测的约三倍，活着的 Mac 慢一点也不会被报成没能送达；
   /// 又只是手机为在等的话主动拉取时长（`SyncPoller.Cadence.phone`，2 分钟）的一半——报了没能送达之后手机还接着拉一分钟，
-  /// 晚到的回执照样拉回来、气泡自己变成已送达。与连接测试的等待（`AppServices.ping`）一样长。
+  /// 晚到的回执照样拉回来、气泡自己变成已送达。
   public static let receiptLimit: TimeInterval = 60
 
   /// Cue 的说话工具（say、answer）写下请求后等结果多久。这一轮停在这里等，所以比 `receiptLimit` 短得多：Cue 多半运行在会话所在的

@@ -9,7 +9,7 @@ enum WindowFactory {
     static func main(content: some View) -> MainShellWindow {
         let window = dress(DebugHooks.MainWindowClass(
             contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered, defer: false), content: content)
+            backing: .buffered, defer: false), controller: NSHostingController(rootView: content))
         window.title = "CuePad"
         window.delegate = window
         window.titleVisibility = .hidden
@@ -18,17 +18,27 @@ enum WindowFactory {
         return window
     }
 
-    /// 设置、资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区）。
+    /// 资料库读不出这类辅助窗口：有标题、可关闭，尺寸由内容定。内容自己让开标题栏（安全区）。
     static func utility(title: String, content: some View) -> NSWindow {
         let window = dress(NSWindow(
-            contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false), content: content)
+            contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false),
+            controller: NSHostingController(rootView: content))
         window.title = title
         return window
     }
 
-    private static func dress<Window: NSWindow>(_ window: Window, content: some View) -> Window {
+    /// 设置窗口：系统设置窗口的工具栏标签（`tabs` 的样式是 toolbar），标题藏起（选中的标签就是这一页的名字），尺寸随选中那一页。
+    static func settings(_ tabs: NSTabViewController) -> NSWindow {
+        let window = dress(NSWindow(
+            contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false), controller: tabs)
+        window.toolbarStyle = .preference
+        window.titleVisibility = .hidden
+        return window
+    }
+
+    private static func dress<Window: NSWindow>(_ window: Window, controller: NSViewController) -> Window {
         window.titlebarAppearsTransparent = true
-        window.contentViewController = NSHostingController(rootView: content)
+        window.contentViewController = controller
         window.isReleasedWhenClosed = false
         return window
     }

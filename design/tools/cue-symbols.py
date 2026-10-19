@@ -1513,15 +1513,6 @@ def mail(m):
     return [Layer("mail", [body] + holed([flap]))]
 
 
-def face(m):
-    """Cue 的档案：一张实心的圆脸，刻出两只眼（同 Cue 的竖胶囊眼）与一道笑弧。"""
-    g = GROW[m]
-    w = MARK_W(m, 2.6)
-    eyes = [bar([(x, -4.4), (x, -1.6)], w) for x in (-3.8, 3.8)]
-    smile = bow((0, 0.6), 5.2, 30, 120, w)
-    return [Layer("face", [disc((0, 0), BADGE_R - 1.0 + g)] + holed(eyes + [smile]))]
-
-
 def tag(m):
     """名字：一枚吊牌——右边削尖的圆角牌子，左头挖一个穿绳的孔。"""
     g = GROW[m]
@@ -1556,15 +1547,6 @@ def sun(m):
     r0 = r + c + w / 2
     rays = [bar([rot((0, -r0), k * 45), rot((0, -11.2 + w / 2), k * 45)], w) for k in range(8)]
     return [Layer("sun", [disc((0, 0), r)] + rays)]
-
-
-def signal(m):
-    """测试到 Mac 的连接：中间一颗点（点睛），左右各两道往外的弧，像电波。"""
-    g, c = GROW[m], CARVE[m]
-    w = 2.4 + 1.0 * g
-    dot_ = disc((0, 0), 2.4 + 0.5 * g)
-    waves = [bow((0, 0), r, side - 40, 80, w) for r in (6.2, 10.4) for side in (0, 180)]
-    return [Layer("waves", waves), Layer("dot", [dot_], "secondary")]
 
 
 def wave(m):
@@ -1910,12 +1892,10 @@ SYMBOLS = {
     "alarm": alarm,
     "swap": swap,
     "mail": mail,
-    "face": face,
     "tag": tag,
     "shield.tick": shield_tick,
     "keyboard": keyboard,
     "sun": sun,
-    "signal": signal,
     "wave": wave,
     "cube": cube,
     "bubbles": bubbles,

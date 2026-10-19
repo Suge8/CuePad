@@ -51,7 +51,7 @@ struct PageMenuSlot: View {
                 if workspace.services.cue.keeper != nil {
                     Toggle("运行情况", icon: .session, isOn: Bindable(workspace.cue).showsRun)
                 }
-                Button("Cue 设置…", icon: .settings) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                Button("Cue 设置…", icon: .settings) { SettingsPane.open(.cue) }
             case .session(nil), .none: EmptyView()
             }
         } label: {
