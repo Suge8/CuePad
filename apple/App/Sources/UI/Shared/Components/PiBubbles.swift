@@ -40,7 +40,7 @@ enum BubbleLook: Equatable {
         }
     }
 
-    /// 没能送达时气泡下那一行（原因与重发）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
+    /// 没能送达时气泡下那一行（"未送达 · 重发"）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
 
@@ -209,16 +209,31 @@ private struct QuoteLine: View {
 }
 
 
-/// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法：发送中、送达中、正在唤醒）、已送达（来回用时）、没能送达。
-/// 记号在气泡左下角外（`TripMark`）：路上转圈带说法、已送达一架小纸飞机（不写字，用时给读屏与 Mac 的悬停说明）、没能送达胭脂叹号；
-/// 只有没能送达在气泡下面多一行原因与重发（`SpeechBubble`）——最常见的已送达不占一行。
+/// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`；nil 是"发送中"）、已送达（来回用时）、没能送达。
+/// 记号在气泡左下角外（`TripMark`）：路上只转圈（发送中、送达中你分不出也不用分，卡住了到点就是没能送达、写着原因），
+/// 唤醒已结束的会话要好几秒，带上说法，免得看着像卡住；已送达一架小纸飞机（用时给读屏与 Mac 的悬停说明）；没能送达胭脂叹号，点它是原因全文与重发、移除。
+/// 只有没能送达在气泡下面多一行"未送达 · 重发"（`SpeechBubble`），原因不常驻：Mac 写回的原文长短不定，常驻就得折叠。
 enum BubbleTrip: Hashable {
     case arrived
-    case sending(String)
+    case sending(PiDelivery.Transit?)
     case delivered(String?)
-    case failed
+    case failed(Undelivered)
 
     var inTransit: Bool { if case .sending = self { true } else { false } }
+}
+
+/// 没能送达的这一句：原因全文与能做的事（叹号的菜单、气泡下那一行共用）。只按原因与能不能重发比较：动作随每次求值新建，比它们会让记号每次都重画。
+struct Undelivered: Hashable {
+    let reason: String
+    let canResend: Bool
+    let resend: () -> Void
+    let remove: () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.reason == rhs.reason && lhs.canResend == rhs.canResend }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(reason)
+        hasher.combine(canResend)
+    }
 }
 
 private extension View {
@@ -238,16 +253,38 @@ private struct TripMark: View {
         Group {
             switch trip {
             case .arrived: EmptyView()
-            case .sending(let label):
-                HStack(spacing: 4) { Spinner(.mini); Text(label).fixedSize() }
-                    .accessibilityElement(children: .combine)
+            case .sending(let transit):
+                HStack(spacing: 4) {
+                    Spinner(.mini)
+                    if transit == .waking { Text(PiDelivery.Transit.waking.label).fixedSize() }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(transit?.label ?? PiDelivery.Transit.sending.label)
             case .delivered(let roundTrip):
                 let said = Dotted("已送达", roundTrip)
                 Image(.delivered).accessibilityLabel(Text(said))
                     #if os(macOS)
                     .help(said.visible)
                     #endif
-            case .failed: PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
+            case .failed(let undelivered):
+                Menu {
+                    Section(undelivered.reason) {
+                        Button(MessageMenu.Item.resend.title, icon: MessageMenu.Item.resend.icon, action: undelivered.resend)
+                            .disabled(!undelivered.canResend)
+                        Button(MessageMenu.Item.remove.title, icon: MessageMenu.Item.remove.icon, role: .destructive, action: undelivered.remove)
+                    }
+                } label: {
+                    PiStateGlyph.undelivered
+                }
+                .menuStyle(.button).buttonStyle(.plain)
+                #if os(macOS)
+                .menuIndicator(.hidden)
+                #endif
+                .fixedSize()
+                // 点按区放大到 44 点，记号本身不变大、不挪位
+                .contentShape(.rect.inset(by: -14))
+                .accessibilityLabel("没能送达")
+                .accessibilityValue(undelivered.reason)
             }
         }
         .font(Typography.caption).foregroundStyle(palette.ink3)
@@ -311,7 +348,7 @@ struct MessageActions: View {
 
 
 /// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。
-/// 到哪了画在气泡上（`BubbleTrip`；已送达只在 `showsDelivered` 时）；没能送达时下面一行写原因，给"重发"与"移除"（长按菜单里也有）。
+/// 到哪了画在气泡上（`BubbleTrip`；已送达只在 `showsDelivered` 时）；没能送达时下面一行"未送达 · 重发"，原因与移除在叹号的菜单里。
 /// 到点翻成没能送达靠全 App 一份的此刻（`AppServices.speech`）；超时后回执来了，记录一变就是已送达。
 struct SpeechBubble<Menu: View>: View {
     let said: Said
@@ -319,7 +356,7 @@ struct SpeechBubble<Menu: View>: View {
     let box: Binding<ComposerDraft>
     /// 已送达标不标：会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
-    /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
+    /// 还在路上时的说法（会话：发送中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
     var transit: PiDelivery.Transit?
     var fromCue = false
     let look: BubbleLook
@@ -333,10 +370,10 @@ struct SpeechBubble<Menu: View>: View {
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
-        let trip = said.trip(at: services.speech)
+        let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
-            UserBubble(stored: said.content, look: look, trip: bubble(trip), highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            if case .failed(let failure) = trip { failed(failure).font(Typography.caption).padding(.trailing, look.statusInset) }
+            UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
+            if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .transition(look.arrival(reduceMotion: reduceMotion))
@@ -344,27 +381,25 @@ struct SpeechBubble<Menu: View>: View {
 
     private func bubble(_ trip: Speech.Trip) -> BubbleTrip {
         switch trip {
-        case .sending: .sending(transit?.label ?? "发送中")
+        case .sending: .sending(transit)
         case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
-        case .failed: .failed
+        case .failed(let failure):
+            .failed(Undelivered(reason: failure.text(sync: services.syncStatus), canResend: services.reachesPiHost, resend: resend, remove: remove))
         }
     }
 
-    private func failed(_ failure: Speech.Failure) -> some View {
-        HStack(spacing: 10) {
-            Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure).lineLimit(2)
-            Button("移除", role: .destructive, action: remove)
-                .foregroundStyle(palette.ink2).buttonStyle(.plain)
-                .frame(minHeight: 44).contentShape(.rect)
-            // 送不到 Mac 时也露出来（停用），看得出能重发
-            Button("重发", icon: .retry, action: resend)
-                .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
-                .padding(.horizontal, 10).frame(minHeight: 28)
-                .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
-                .frame(minHeight: 44).contentShape(.rect)
+    /// 一行，和旁注一样高：重发是行里的字，不画胶囊；点按区放大到 44 点而不撑高这一行。送不到 Mac 时也露出来（停用），看得出能重发。
+    private func failedLine(_ undelivered: Undelivered) -> some View {
+        HStack(spacing: 4) {
+            Text("未送达")
+            Dot()
+            Button(MessageMenu.Item.resend.title, action: undelivered.resend)
+                .fontWeight(.semibold)
                 .buttonStyle(.plain)
-                .disabled(!services.reachesPiHost)
+                .contentShape(.rect.inset(by: -14))
+                .disabled(!undelivered.canResend)
         }
+        .font(Typography.caption).foregroundStyle(palette.failure)
     }
 
     private func resend() { workspace.resend(said, restoringInto: box) }
