@@ -216,6 +216,15 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadNoAsks YES`（配 `-CuePadDemo YES`）：演示库里等你回答的会话都改成歇着、Cue 还没结束的提问都由它撤回（同 Cue 的 withdraw），
+    /// "等你"为 0：看只有新消息时 Cue 入口上的样子（石绿点）。
+    static func settleAsks(_ store: CueStore) async {
+        for asked in (try? await store.cueMessagesWaitingForYou()) ?? [] { try? await store.endCueQuestion(asked.id, .withdrawn) }
+        for session in (try? await store.piSessionPage(PiSessionQuery(limit: 500)))?.items.map(\.state) ?? [] where session.state == .known(.waitingForUser) {
+            _ = try? await PiStateRecorder(store: store, hostID: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
+        }
+    }
+
     /// `-CuePadCueSays <秒>`（配 `-CuePadDemo YES`）：画面就绪后这么久 Cue 自己说一句（同值班的 Mac 做完一件事时写下的样子），
     /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。之前的都先算读过，开始时没有新消息。
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页（`visit`），停够读到它再回原来那页（`back`），录"别处时有提示、读过就没了"。
