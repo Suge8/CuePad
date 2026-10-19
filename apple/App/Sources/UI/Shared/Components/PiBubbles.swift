@@ -179,7 +179,7 @@ enum BubbleTrip { case arrived, inTransit, failed }
 
 
 /// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
-/// 编辑后重发放回这个会话的回复框（文字进输入框、图片进图片条），已经写了字就接在后面。只属于某一行的动作（选择文本、重发、移除）由那一行给。
+/// 编辑后重发放回这个会话的回复框（文字进输入框、图片进图片条），已经写了字就接在后面。只属于某一行的动作（选择文本、批注、重发、移除）由那一行给。
 /// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 与 Cue 的回答是 Markdown。
 /// `session`：会话里的消息才有（存为灵感、编辑后重发要它）；Cue 页的菜单（`.cue`）没有这两项。
 struct MessageActions: View {
@@ -187,6 +187,7 @@ struct MessageActions: View {
     let kind: MessageMenu.Kind
     var session: PiSessionState?
     var selectText: (() -> Void)?
+    var annotate: (() -> Void)?
     var resend: (() -> Void)?
     var remove: (() -> Void)?
     @Environment(Workspace.self) private var workspace
@@ -203,6 +204,7 @@ struct MessageActions: View {
         switch item {
         case .copy: Button(item.title, icon: item.icon) { workspace.copy(text) }
         case .selectText: if let selectText { Button(item.title, icon: item.icon, action: selectText) }
+        case .annotate: if let annotate { Button(item.title, icon: item.icon, action: annotate) }
         case .share: ShareLink(item: kind == .reply ? text : CueFormat.plainText(text)) { Label(item.title, icon: item.icon) }
         case .saveAsIdea:
             if let session {

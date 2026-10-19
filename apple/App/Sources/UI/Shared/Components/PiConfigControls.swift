@@ -2,24 +2,34 @@ import CueStore
 import SwiftUI
 
 
-/// Mac 的 ⌘⇧M、⌘⇧E（`ReplyShortcut`）请弹出的那个菜单。
-enum PiConfigPick { case model, thinking }
+/// 工具排里弹出的菜单：Mac 的 ⌘⇧M、⌘⇧E（`ReplyShortcut`）请弹出模型与思考强度；Agent 只由点胶囊弹出。
+enum PiConfigPick { case agent, model, thinking }
 
 
-/// 模型菜单的一组与组里能选的模型（会话页按提供方，Cue 页按 Agent）；选了做什么由调用方给。
+/// Agent 胶囊的内容（新会话与 Cue，`AgentModelControls`）：能选的几家与当前那家；只有一家时胶囊只写它、不能点。
+struct PiAgentPick {
+    let kinds: [AgentKind]
+    let current: AgentKind
+    let choose: (AgentKind) -> Void
+
+    var choosable: Bool { kinds.count > 1 || !kinds.contains(current) }
+
+    var menu: [ChoiceMenu.Section] {
+        [ChoiceMenu.Section(title: "Agent", choices: kinds.map { kind in
+            ChoiceMenu.Choice(title: kind.name, image: .brand(kind.mark), checked: kind == current) { choose(kind) }
+        })]
+    }
+}
+
+
+/// 模型菜单的一组：一家提供方与它能选的模型（组名是提供方的名字，这家有订阅额度时带用量，`PiModelLabel.title`，到了重置时刻随即更新）；
+/// 选了做什么由调用方给。
 struct PiModelGroup: Identifiable {
     let id: String
-    /// 组名；nil 是 `provider` 的名字，这家有订阅额度时带用量（`PiModelLabel.title`，到了重置时刻随即更新）。
-    var title: String?
-    /// 组名的提供方（会话页）；Cue 页的组是 Agent，不给。
-    var provider: PiProvider?
-    /// 组名旁的标志：Agent 的产品标志，或提供方的；都没有不带。
-    var agent: AgentKind?
+    let provider: PiProvider
     let items: [Item]
 
-    var mark: BrandMark? { agent?.mark ?? provider?.mark }
-
-    /// 一项：一个模型。名字与标志都按模型定（`BrandMark.model`），这里一处；不指定模型时用的那项（Cue 页）在名字下注"默认"。
+    /// 一项：一个模型。名字与标志都按模型定（`BrandMark.model`），这里一处；不指定模型时用的那项（新会话与 Cue）在名字下注"默认"。
     struct Item: Identifiable {
         let id: String
         let model: PiModelOption
@@ -34,11 +44,11 @@ struct PiModelGroup: Identifiable {
 }
 
 extension [PiModelGroup] {
-    /// 模型菜单的内容，两端同一份：没给组名的写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）。
+    /// 模型菜单的内容，两端同一份：组名写提供方与它的额度用量（`PiModelLabel.title`，到了 `now` 按已重置算）。
     func menu(quotas: [AccountQuota], at now: Date) -> [ChoiceMenu.Section] {
         map { group in
             ChoiceMenu.Section(
-                title: group.title ?? group.provider.map { PiModelLabel.title($0, quotas: quotas, at: now) }, image: group.mark.map(ChoiceMenu.Glyph.brand),
+                title: PiModelLabel.title(group.provider, quotas: quotas, at: now), image: group.provider.mark.map(ChoiceMenu.Glyph.brand),
                 choices: group.items.map { item in
                     ChoiceMenu.Choice(
                         title: item.name, subtitle: item.note, image: item.mark.map(ChoiceMenu.Glyph.brand), checked: item.checked, choose: item.choose)
@@ -53,12 +63,15 @@ extension PiModelOption {
 }
 
 
-/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`、Cue 页输入框 `CueConfigControls` 各自接线）：左边模型胶囊（模型的标志 + 模型短名；
+/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`；新会话与 Cue 的 `AgentModelControls` 在最左再放一枚 Agent 胶囊，
+/// 产品标志 + 名字，点开选哪家）：模型胶囊（模型的标志 + 模型短名；
 /// 有订阅额度的提供方，标志外一圈细环是卡着的那个窗口还剩多少。点开是分好组的菜单，当前打勾），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是可选的档位，一格比一格高，
 /// 当前档以下填满，关着时格全空、一道斜线；点在哪格或横着拖就调到哪档，每过一档轻触一下；按下就在上方浮出档位名，
 /// 松手后停一会儿再淡出，点"思考"的标只看现在是哪档；最高档填色有一道流光），再往右是调用方给的（会话页的上下文用量）。
 /// 只管显示与选择：可选什么、当前值、送达中（填色轻轻呼吸）、选了之后做什么都由调用方给；没换成的原因由调用方写在输入框头部。减弱动态效果时没有流光与呼吸。
 struct PiConfigControls<Trailing: View>: View {
+    /// 最左的 Agent 胶囊；会话的 Agent 换不了，不给。
+    var agent: PiAgentPick?
     let groups: [PiModelGroup]
     let shown: PiConfigShown
     /// 胶囊上没有当前模型时写的。
@@ -74,14 +87,15 @@ struct PiConfigControls<Trailing: View>: View {
     @State private var available: CGFloat = 0
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
-    @State var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
+    @State var anchors = [PiConfigPick.agent: PopUpAnchor(), .model: PopUpAnchor(), .thinking: PopUpAnchor()]
     #endif
 
     init(
-        groups: [PiModelGroup], shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
+        agent: PiAgentPick? = nil, groups: [PiModelGroup], shown: PiConfigShown, unnamed: String = "模型", levels: [PiThinkingLevel],
         opening: Binding<PiConfigPick?> = .constant(nil), chooseThinking: @escaping (PiThinkingLevel) -> Void,
         @ViewBuilder trailing: () -> Trailing = { EmptyView() }
     ) {
+        self.agent = agent
         self.groups = groups
         self.shown = shown
         self.unnamed = unnamed
@@ -114,6 +128,7 @@ struct PiConfigControls<Trailing: View>: View {
 
     private func row(wordy: Bool) -> some View {
         HStack(spacing: 6) {
+            if let agent { agentCapsule(agent) }
             modelCapsule
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
@@ -124,6 +139,23 @@ struct PiConfigControls<Trailing: View>: View {
             trailing
         }
         .fixedSize()
+    }
+
+    @ViewBuilder private func agentCapsule(_ agent: PiAgentPick) -> some View {
+        let label = PiAgentLabel(kind: agent.current)
+        if !agent.choosable {
+            label.accessibilityElement(children: .ignore).accessibilityLabel("用 \(agent.current.name)")
+        } else {
+            #if os(macOS)
+            Button { open(.agent) } label: { label }
+                .buttonStyle(.plain)
+                .popUpAnchor(anchors[.agent])
+                .accessibilityLabel("Agent")
+                .accessibilityValue(agent.current.name)
+            #else
+            MenuButton(sections: agent.menu, accessibilityLabel: "Agent", value: agent.current.name) { label }
+            #endif
+        }
     }
 
     private var modelCapsule: some View {

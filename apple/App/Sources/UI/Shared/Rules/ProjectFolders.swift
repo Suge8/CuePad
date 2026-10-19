@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目与文件夹的规则（iOS 与 Mac 共用）。绑定是 Mac 本机的事（`CueStore.setDirectory`，路径因设备而异）；
-/// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`：Mac 名与文件夹名），要绑时经投送请求（`PiBind`）让那台 Mac 解析成完整路径。
+/// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`：文件夹名，读出时带上那台 Mac 报的名字），要绑时经投送请求（`PiBind`）让那台 Mac 解析成完整路径。
 nonisolated enum ProjectFolders {
     /// 新会话可以开在哪：每个项目一项，按项目的顺序（`ProjectCatalog.projects`）；没绑文件夹的也列（`binding` 为 nil，选中时就地引导去绑）；
     /// 同一项目绑在几台 Mac 上时每台一项（手机选发给哪台 Mac，`detail` 写 Mac 名）。
@@ -20,7 +20,7 @@ nonisolated enum ProjectFolders {
             guard !own.isEmpty else { return [LaunchPlace(id: project.id.uuidString, project: project, binding: nil, detail: nil)] }
             return own.map { binding in
                 LaunchPlace(
-                    id: binding.id.uuidString, project: project, binding: binding, detail: own.count > 1 ? binding.hostName : nil)
+                    id: binding.id.uuidString, project: project, binding: binding, detail: own.count > 1 ? binding.macName : nil)
             }
         }
     }
@@ -47,15 +47,15 @@ nonisolated enum ProjectFolders {
         let own = bindings.filter { $0.projectID == project && (host == nil || $0.hostID == host) }
         return Menu(
             bindTitle: own.isEmpty ? "绑定文件夹…" : "换文件夹…",
-            unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.hostName : nil), binding: $0) })
+            unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.macName : nil), binding: $0) })
     }
 
     /// 手机上给项目选文件夹的一个候选：Mac 上已知的一个文件夹（只有名字）与"让那台 Mac 从哪里取"。
     struct Candidate: Identifiable, Equatable, Sendable {
         var id: String { "\(hostID)/\(folder)" }
         let hostID: String
-        /// 那台 Mac 的名字；Mac 还没写过目录绑定时不知道。
-        let hostName: String?
+        /// 那台 Mac 给人看的名字（`MacAgents.shownName`）。
+        let macName: String
         let folder: String
         let target: PiFolder
         /// 已经是哪个项目在用（会话归的项目，或绑着它的项目）。
@@ -67,7 +67,6 @@ nonisolated enum ProjectFolders {
     /// 候选来自同步来的现成数据：各 Mac 上跑过 Agent 的文件夹（`CueStore.sessionFolders`，最近的在前），其次是别的项目绑着、但没有会话跑过的文件夹；
     /// 同一台 Mac 上同名的只列一个（手机分不出同名的两个文件夹）；`excluding` 项目在那台 Mac 上已绑着的不再列。
     static func candidates(folders: [SessionFolder], bindings: [DirectoryBinding], projects: [Project], excluding project: UUID?) -> [Candidate] {
-        let names = Dictionary(bindings.map { ($0.hostID, $0.hostName) }, uniquingKeysWith: { first, _ in first })
         let own = Set(bindings.filter { $0.projectID == project }.map { "\($0.hostID)/\($0.folder)" })
         let owners = Dictionary(
             bindings.filter { $0.projectID != project }.compactMap { binding in
@@ -75,18 +74,18 @@ nonisolated enum ProjectFolders {
             }, uniquingKeysWith: { first, _ in first })
         var seen = own
         var result: [Candidate] = []
-        func add(host: String, folder: String, target: PiFolder, usedBy: String?, sessions: Int) {
+        func add(host: String, macName: String, folder: String, target: PiFolder, usedBy: String?, sessions: Int) {
             let key = "\(host)/\(folder)"
             guard seen.insert(key).inserted else { return }
-            result.append(Candidate(hostID: host, hostName: names[host], folder: folder, target: target, usedBy: usedBy ?? owners[key], sessions: sessions))
+            result.append(Candidate(hostID: host, macName: macName, folder: folder, target: target, usedBy: usedBy ?? owners[key], sessions: sessions))
         }
         for item in folders {
             add(
-                host: item.hostID, folder: item.folder, target: .besideSession(item.sessionID),
+                host: item.hostID, macName: item.macName, folder: item.folder, target: .besideSession(item.sessionID),
                 usedBy: item.projectID.flatMap { id in projects.first { $0.id == id }?.name }, sessions: item.count)
         }
         for binding in bindings where binding.projectID != project {
-            add(host: binding.hostID, folder: binding.folder, target: .project(binding.projectID), usedBy: nil, sessions: 0)
+            add(host: binding.hostID, macName: binding.macName, folder: binding.folder, target: .project(binding.projectID), usedBy: nil, sessions: 0)
         }
         return result
     }
@@ -100,7 +99,7 @@ nonisolated enum ProjectFolders {
 
     /// 建议按钮上的字："绑定 cuepad 文件夹（312 个会话）"；建议来自几台 Mac 时写上 Mac 名。
     static func suggestionTitle(_ candidate: Candidate, showsMac: Bool) -> Dotted {
-        Dotted("绑定 \(candidate.folder)", "\(candidate.sessions) 个会话", showsMac ? candidate.hostName ?? "另一台 Mac" : nil)
+        Dotted("绑定 \(candidate.folder)", "\(candidate.sessions) 个会话", showsMac ? candidate.macName : nil)
     }
 
     /// 项目已经绑着文件夹（Mac 上只看本机）。

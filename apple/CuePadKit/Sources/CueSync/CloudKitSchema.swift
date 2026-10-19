@@ -17,6 +17,8 @@ enum CloudKitSchema {
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
     "piMessages": [("toolCount", "INT64")],
     "cueMessages": [("acceptance", "INT64")],
+    // Mac 的名字只在 macAgents
+    "directoryBindings": [("hostName", "ENCRYPTED STRING")],
     // 可换的模型与斜杠命令拆进了 agentCatalogs
     "piSessionStates": [("models", "ENCRYPTED STRING"), ("commands", "ENCRYPTED STRING")],
   ]

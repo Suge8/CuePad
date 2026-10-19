@@ -1,0 +1,66 @@
+import CueStore
+import SwiftUI
+
+/// 用哪个 Agent、哪个模型与多大思考强度：新会话（手机的输入框、Mac 的表单）与 Cue（Mac 的 Cue 页输入框、手机的 Cue 面板、两端的 Cue 设置）
+/// 都是这一排，交互同一套——Agent 胶囊（能用的不止一家时点开选；换了家，模型回到那家的默认）、模型胶囊、思考强度（`PiConfigControls`，
+/// 与会话页回复框同一个样子）。可选什么、当前是什么只在 `AgentModelChoice`；选了做什么由调用方给。
+struct AgentModelControls: View {
+    let choice: AgentModelChoice
+    var pending = false
+    var opening: Binding<PiConfigPick?> = .constant(nil)
+    let chooseAgent: (AgentKind) -> Void
+    let chooseModel: (PiModelKey?) -> Void
+    let chooseThinking: (PiThinkingLevel) -> Void
+
+    var body: some View {
+        PiConfigControls(
+            agent: choice.agent.map { PiAgentPick(kinds: choice.agents.map(\.kind), current: $0, choose: chooseAgent) },
+            groups: choice.groups(choose: chooseModel),
+            shown: PiConfigShown(model: choice.current, thinking: choice.shownThinking, pending: pending),
+            unnamed: "默认模型", levels: choice.levels, opening: opening, chooseThinking: chooseThinking)
+    }
+}
+
+/// 一台 Mac 上选 Agent 与模型的规则（新会话与 Cue 同一份）：
+/// - 能选的几家是那台 Mac 上能用的（`MacAgents`，调用方再按自己的条件筛，如 Cue 只能用能当大脑的）；当前那家不在里面时照样写它（胶囊写它的名字、菜单里不打勾）。
+/// - 模型只列当前那家在那台上能选的，按提供方分组（同会话页）；不指定时用的那项标着默认，选它写回 nil：跟着这家的默认走，它换了默认也跟着换。
+///   指定了却不在清单里（清单变了）照指定的 id 显示。
+/// - 思考强度的档跟着当前模型：在清单里就是它支持的档；不知道时取这家各模型的档的并集，再没有是全部档（起会话、大脑起来时都按模型夹取，
+///   `PiThinkingLevel.clamped`）；显示的当前档同样夹到这一集合里。没指定是"默认"。
+nonisolated struct AgentModelChoice: Equatable, Sendable {
+    let agents: [MacAgent]
+    /// 当前那家；一家都没有为 nil（不出 Agent 胶囊）。
+    let agent: AgentKind?
+    /// 指定的模型；nil 是这家的默认。
+    let model: PiModelKey?
+    let thinking: PiThinkingLevel?
+
+    private var brain: MacAgent? { agent.flatMap { kind in agents.first { $0.kind == kind } } }
+
+    /// 胶囊上写的模型：指定的那项，没指定是这家的默认。
+    var current: PiModelOption? {
+        guard let model else { return brain?.defaultModel }
+        return brain?.models.first { $0.key == model } ?? PiModelOption(key: model, name: "", thinkingLevels: [])
+    }
+
+    var levels: [PiThinkingLevel] {
+        if let listed = current.flatMap({ current in brain?.models.first { $0.key == current.key } }) { return listed.thinkingLevels }
+        let supported = Set((brain?.models ?? []).flatMap(\.thinkingLevels))
+        return supported.isEmpty ? PiThinkingLevel.allCases : PiThinkingLevel.allCases.filter(supported.contains)
+    }
+
+    var shownThinking: PiThinkingLevel? { thinking.map { $0.clamped(to: levels) } }
+
+    @MainActor func groups(choose: @escaping (PiModelKey?) -> Void) -> [PiModelGroup] {
+        guard let brain else { return [] }
+        let current = current?.key
+        return PiModelLabel.groups(brain.models).map { group in
+            PiModelGroup(id: group.provider.id, provider: group.provider, items: group.models.map { option in
+                let isDefault = option.key == brain.model
+                return PiModelGroup.Item(id: "\(option.key.provider)/\(option.key.id)", model: option, isDefault: isDefault, checked: option.key == current) {
+                    choose(isDefault ? nil : option.key)
+                }
+            })
+        }
+    }
+}

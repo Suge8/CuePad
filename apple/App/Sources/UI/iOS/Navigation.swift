@@ -39,14 +39,15 @@ final class Navigation {
             } ?? places.first
         }
 
-        /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent` 开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
+        /// 在 `binding` 那台 Mac、它绑的文件夹用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`）
         /// （没有就是带上的第一张）。
         func launch(
-            in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, services: AppServices
+            in project: Project, binding: DirectoryBinding, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?,
+            services: AppServices
         ) async throws -> SessionLaunch {
             try await services.launchSession(
                 in: project.id, prompt: try draft.stored(in: services.store.files).nonEmpty, title: name ?? project.name, on: binding.hostID,
-                card: card ?? draft.attachments.first?.card, agent: agent)
+                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking)
         }
     }
 

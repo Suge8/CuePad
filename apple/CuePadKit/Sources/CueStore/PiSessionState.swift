@@ -13,9 +13,12 @@ public struct SessionFolder: Sendable, Equatable {
   public var sessionID: String
   public var projectID: UUID?
   public var count: Int
+  /// 那台 Mac 给人看的名字（`MacAgents.shownName`，读出时取）。
+  public var macName: String
 
-  public init(hostID: String, folder: String, sessionID: String, projectID: UUID?, count: Int) {
+  public init(hostID: String, folder: String, sessionID: String, projectID: UUID?, count: Int, macName: String) {
     self.hostID = hostID
+    self.macName = macName
     self.folder = folder
     self.sessionID = sessionID
     self.projectID = projectID

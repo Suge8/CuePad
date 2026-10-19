@@ -60,13 +60,16 @@ public struct CueTools: Sendable {
       [
         "name": "tell",
         "description": """
-          对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)；选项由 CuePad 给（如推送：\(CueAsk.push.choices.joined(separator: " / "))），不允许时他另外写一句给你。带 ask 时 text 写清要做什么、为什么、不做会怎样；允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)。
+          带 ask 必写 doing：要做的动作，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。卡片、摘要与通知只显示"可以<doing>吗？"、为什么要问他（rule 那类就是这条规矩）与选项，不显示 text。
+          text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单，不允许时他另外写一句给你。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
           urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里你问的那条的 id，撤回它，可同时带 text 说明或换个问法。
           """,
         "inputSchema": schema(
           [
-            "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "urgent": ["type": "boolean"], "task": string,
-            "withdraw": string,
+            "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "doing": string, "rule": string,
+            "urgent": ["type": "boolean"], "task": string, "withdraw": string,
           ],
           required: []),
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
@@ -498,14 +501,14 @@ public struct CueTools: Sendable {
   /// 先撤回（若有 withdraw），再说（若有 text）；两样都没有是参数错。
   private func tell(_ args: Args) async throws -> Result {
     let related = try await args.string("task").asyncMap(task)
+    let ask = try args.string("ask").map { raw -> CueAsking in
+      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
+      return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"))
+    }
     let withdrawn = try await args.string("withdraw").asyncMap(withdraw)
     guard let text = args.string("text") else {
       guard let withdrawn else { throw Failure("要给 text（说什么）或 withdraw（撤回哪条提问）") }
       return .ok("已撤回「\(CueEnvelope.clip(CueFormat.plainText(withdrawn.text), 40))」。")
-    }
-    let ask = try args.string("ask").map { raw -> CueAsk in
-      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
-      return ask
     }
     let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)
     return .ok(

@@ -28,12 +28,16 @@ nonisolated struct ChatFollow: Equatable {
     /// 用户正拖着或甩着滚动区（滚动区写入）。刚开始滚时人已经离开了最新处（读数先到）就在这里解除贴底。
     var scrolling = false {
         didSet {
+            if scrolling { jumping = false }
             if scrolling, !withinSlack {
                 atNewest = false
                 revealed = false
             }
         }
     }
+    /// 已请滚动区跳到某一条（`jump(to:)`）、还没离开最新处：跳的那一下顶栏让开、回复框收起，滚动区排好了下一帧才滚过去，
+    /// 这期间的读数还报着在最新处，不算回到了最新。离开最新处（跳过去了）、用户自己滚、回到最新时放掉；跳到的就在最新处时，用户一滚就重新贴上。
+    private var jumping = false
     /// 最近一次读数里离最新处不超过 `slack`。
     private var withinSlack = true
     /// 在看历史时点顶部唤出了顶栏。
@@ -61,7 +65,8 @@ nonisolated struct ChatFollow: Equatable {
         showsJump = beyondScreen
         self.nearOldest = nearOldest
         withinSlack = near
-        if near {
+        if !near { jumping = false }
+        if near, !jumping {
             atNewest = true
             hasUnseen = false
             revealed = false
@@ -80,9 +85,15 @@ nonisolated struct ChatFollow: Equatable {
         if !atNewest { hasUnseen = true }
     }
 
-    mutating func jumpToNewest() { toNewest = ToNewest(sent: false) }
+    mutating func jumpToNewest() {
+        jumping = false
+        toNewest = ToNewest(sent: false)
+    }
 
-    mutating func sent() { toNewest = ToNewest(sent: true) }
+    mutating func sent() {
+        jumping = false
+        toNewest = ToNewest(sent: true)
+    }
 
     mutating func willPrepend() { prepending = true }
 
@@ -91,10 +102,11 @@ nonisolated struct ChatFollow: Equatable {
     /// 去读某一条（刻度滑条、回复框上的批注）：它可能还没排开，先由对话排开再 `jump(to:)`。
     mutating func seek(_ id: UUID) { seeking = Target(id: id) }
 
-    /// 跳到某一条去读：不再贴着最新（跳到的就在最新处时，滚到后会重新贴上）。
+    /// 跳到某一条去读：不再贴着最新。
     mutating func jump(to id: UUID) {
         atNewest = false
         revealed = false
+        jumping = true
         target = Target(id: id)
     }
 }
@@ -189,82 +201,96 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
         // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
         GeometryReader { proxy in
-            let padding = bottomPadding
-            ScrollView { content.padding(.bottom, padding) }
-                // 只管打开时停在最新处、不满一屏时贴底。内容变高时不靠底锚：它一下跳到新的底，新来的那条没法滑上来（贴着最新由读数补滚）
-                .defaultScrollAnchor(.bottom, for: .initialOffset)
-                .defaultScrollAnchor(.bottom, for: .alignment)
-                // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
-                .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
-                .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
-                .contentMargins(.vertical, ChatLayout.edge, for: .scrollContent)
-                .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
-                .scrollPosition($position)
-                .onScrollPhaseChange { _, phase in
-                    let scrolling = phase == .interacting || phase == .decelerating
-                    if follow.wrappedValue.scrolling != scrolling { follow.wrappedValue.scrolling = scrolling }
-                }
-                .onScrollGeometryChange(for: Reading.self) { geometry in
-                    // 可见区底边 = 偏移 + 顶部 inset + 容器高（containerSize 已扣掉上下 inset）
-                    let read = geometry.contentOffset.y + geometry.contentInsets.top
-                    let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
-                    let screen = geometry.containerSize.height.rounded()
-                    let end = (geometry.contentSize.height - geometry.containerSize.height).rounded()
-                    offset.set(read: max(0, read.rounded()), end: end)
-                    return Reading(
-                        nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
-                        height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded())
-                } action: { previous, reading in
-                    let last = offset.deliver(reading) ?? previous
-                    let grown = reading.height - last.height
-                    if follow.wrappedValue.prepending, grown > 0 {
-                        follow.wrappedValue.prepended()
-                        // 贴着最新时正在读的就是最新处：停回新的最新处。按偏移补的话，打开时顶栏边距刚生效、系统把偏移放回了顶上，
-                        // 补出来的是顶上那一截
-                        if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { scroll(to: reading.end) } else { position.scrollTo(y: offset.read + grown) }
-                        return
+            ScrollViewReader { reader in
+                let padding = bottomPadding
+                ScrollView { content.padding(.bottom, padding) }
+                    // 只管打开时停在最新处、不满一屏时贴底。内容变高时不靠底锚：它一下跳到新的底，新来的那条没法滑上来（贴着最新由读数补滚）
+                    .defaultScrollAnchor(.bottom, for: .initialOffset)
+                    .defaultScrollAnchor(.bottom, for: .alignment)
+                    // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
+                    .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
+                    .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
+                    .contentMargins(.vertical, ChatLayout.edge, for: .scrollContent)
+                    .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
+                    .scrollPosition($position)
+                    .onScrollPhaseChange { _, phase in
+                        let scrolling = phase == .interacting || phase == .decelerating
+                        if follow.wrappedValue.scrolling != scrolling { follow.wrappedValue.scrolling = scrolling }
                     }
-                    // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环
-                    if held != nil, grown > 0 { held = nil }
-                    // 贴着最新、用户没在滚时离最新处远了是这里自己要补滚（内容长高、回复框长高、留白收起），补滚途中照"在最新处"报：
-                    // 不然贴底状态先变后变回来，读它的对话与页面跟着重算两遍
-                    let following = follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling
-                    var next = follow.wrappedValue
-                    next.scrolled(
-                        atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
-                        byUser: next.scrolling)
-                    if next != follow.wrappedValue { follow.wrappedValue = next }
-                    guard following else { return }
-                    if holding, !unheld, grown > 0, reading.inset == last.inset {
-                        deferred = true
-                        return
+                    .onScrollGeometryChange(for: Reading.self) { geometry in
+                        // 可见区底边 = 偏移 + 顶部 inset + 容器高（containerSize 已扣掉上下 inset）
+                        let read = geometry.contentOffset.y + geometry.contentInsets.top
+                        let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
+                        let screen = geometry.containerSize.height.rounded()
+                        let end = (geometry.contentSize.height - geometry.containerSize.height).rounded()
+                        offset.set(read: max(0, read.rounded()), end: end)
+                        return Reading(
+                            nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
+                            height: (geometry.contentSize.height - padding).rounded(), floating: padding, end: end, inset: geometry.contentInsets.top.rounded())
+                    } action: { previous, reading in
+                        let last = offset.deliver(reading) ?? previous
+                        let grown = reading.height - last.height
+                        if follow.wrappedValue.prepending, grown > 0 {
+                            follow.wrappedValue.prepended()
+                            // 贴着最新时正在读的就是最新处：停回新的最新处。按偏移补的话，打开时顶栏边距刚生效、系统把偏移放回了顶上，
+                            // 补出来的是顶上那一截
+                            if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
+                                scroll(to: reading.end)
+                                settle(animated: false)
+                            } else { position.scrollTo(y: offset.read + grown) }
+                            return
+                        }
+                        // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环
+                        if held != nil, grown > 0 { held = nil }
+                        // 贴着最新、用户没在滚时离最新处远了是这里自己要补滚（内容长高、回复框长高、留白收起），补滚途中照"在最新处"报：
+                        // 不然贴底状态先变后变回来，读它的对话与页面跟着重算两遍
+                        let following = follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling
+                        var next = follow.wrappedValue
+                        next.scrolled(
+                            atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
+                            byUser: next.scrolling)
+                        if next != follow.wrappedValue { follow.wrappedValue = next }
+                        guard following else { return }
+                        if holding, !unheld, grown > 0, reading.inset == last.inset {
+                            deferred = true
+                            return
+                        }
+                        // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
+                        // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
+                        // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
+                        // 内容或浮着的那块变矮（"等你"卡沉下去、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
+                        // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
+                        // 按"越过了"补回的话对话先掉下去再滑上来
+                        let shrank = grown < 0 || reading.floating < last.floating
+                        if grown > 0, reading.inset == last.inset {
+                            slide()
+                        } else if reading.end > last.end || reading.inset != last.inset || (shrank && offset.read > reading.end) {
+                            scroll(to: reading.end)
+                            settle()
+                        }
                     }
-                    // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
-                    // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
-                    // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
-                    // 内容或浮着的那块变矮（"等你"卡沉下去、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
-                    // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
-                    // 按"越过了"补回的话对话先掉下去再滑上来
-                    let shrank = grown < 0 || reading.floating < last.floating
-                    if grown > 0, reading.inset == last.inset {
+                    .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
+                    .onChange(of: holding) {
+                        unheld = false
+                        if holding, let sliding {
+                            sliding.cancel()
+                            self.sliding = nil
+                            deferred = true
+                        }
+                        guard !holding, deferred else { return }
+                        deferred = false
                         slide()
-                    } else if reading.end > last.end || reading.inset != last.inset || (shrank && offset.read > reading.end) {
-                        scroll(to: reading.end)
-                        settle()
                     }
-                }
-                .onChange(of: followKey) { follow.wrappedValue.contentChanged() }
-                .onChange(of: holding) {
-                    unheld = false
-                    if holding, let sliding {
-                        sliding.cancel()
-                        self.sliding = nil
-                        deferred = true
+                    // 跳到某一条：按条的 id 在整段内容里找（`ScrollViewReader`；滚动位置的按 id 跳只认滚动目标布局的直接子视图，
+                    // 对话分段排（`ChatSegments`），那里只有段）。等这一下顶栏让开、回复框收起排好了再滚：同一次更新里滚，滚动区不动
+                    .onChange(of: follow.wrappedValue.target) { _, target in
+                        guard let target else { return }
+                        Task {
+                            await NextFrame.wait()
+                            withAnimation(reduceMotion ? nil : Motion.quick) { reader.scrollTo(target.id, anchor: .center) }
+                        }
                     }
-                    guard !holding, deferred else { return }
-                    deferred = false
-                    slide()
-                }
+            }
         }
         .overlay(alignment: .bottomTrailing) {
             if follow.wrappedValue.showsJump {
@@ -276,10 +302,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)
         .animation(Motion.quick, value: follow.wrappedValue.hasUnseen)
         .onChange(of: follow.wrappedValue.toNewest) { _, request in if let request { toNewest(sent: request.sent) } }
-        .onChange(of: follow.wrappedValue.target) { _, target in
-            guard let target else { return }
-            withAnimation(reduceMotion ? nil : Motion.quick) { position.scrollTo(id: target.id, anchor: .center) }
-        }
     }
 
     /// 最近一次读数（偏移、最新处）与上一次交给读数 action 的读数。读数闭包不一定在主线程，所以带锁；
@@ -354,11 +376,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 补滚到了没有：读数报的最新处比滚动区真用上的内容高早一步（回复框一帧里接连长高两次，第二次补滚按旧的内容高被截在半路），
     /// 下一帧还没到最新处就再补一次。只补一次，不轮询。带上滑同一条曲线：正赶上整段在往上滑时（这时也还没到最新处）是顺着它
     /// 改个终点，不把滑到一半的截成一跳（滚动位置的动画没有可靠的"滑完了"回调，分不出这两种）。
-    private func settle() {
+    /// 在上面排开一段后停回最新处（`prepending`）也会被截在半路（打开时排开的那一段与上一次上滑挤在相邻两帧），那时不带动画：正在读的就是最新处，不该看到一段滑动。
+    private func settle(animated: Bool = true) {
         Task {
             await NextFrame.wait()
             guard follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling, sliding == nil, offset.read < offset.end else { return }
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { scroll(to: offset.end) }
+            withAnimation(animated ? Motion.spatial(Motion.move, reduceMotion: reduceMotion) : nil) { scroll(to: offset.end) }
         }
     }
 

@@ -118,15 +118,20 @@ import Testing
   }
 
   /// 结构 50 的库里分割线是私有标记 `---split---`（独占一行）：升到 51 时换成 Markdown 的 `---`，行里夹着的不是分割线、不动；
-  /// 改过的卡带新的修改时间（同步出去），回收站里的也换。
-  @Test func schema50LibraryWritesDividersAsMarkdown() async throws {
+  /// 改过的卡带新的修改时间（同步出去），回收站里的也换。升到 56 时已有的提问照当时的选项认出类别、范围是关联任务所在的项目
+  /// （带新的修改时间同步出去），目录绑定去掉 Mac 名、绑定照旧在。
+  @Test func schema50LibraryUpgradesDividersAndQuestions() async throws {
     let card = try await store.createCard(in: nil, body: "上\n---split---\n中 ---split--- 夹着\n  ---split---  \n下")
     let plain = try await store.createCard(in: nil, body: "没有分割线")
     let trashed = try await store.createCard(in: nil, body: "甲\n---split---\n乙")
     _ = try await store.trashCard(trashed.id)
     let before = try #require(try await store.card(card.id)).modifiedAt
     let untouched = try #require(try await store.card(plain.id)).modifiedAt
-    // 退回 50：撤掉 52、54 加的列与 55 加的索引（53 重建触发器、55 重建的类型索引，留着新的照样能升）
+    let demo = try await store.createProject(name: "演示", color: "#111")
+    let task = try await store.createTask("修好登录页", in: demo.id)
+    try await store.setDirectory("/work/demo", for: demo.id)
+    try await store.publishDirectoryBindings(host: "mac")
+    // 退回 50：撤掉 52、54、56 加的列与 55 加的索引，放回 56 删掉的列（53 重建触发器、55 重建的类型索引，留着新的照样能升）
     let added = try RawDB(fixture.url).rows(
       """
       SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
@@ -135,7 +140,12 @@ import Testing
     try RawDB(fixture.url).exec(
       """
       ALTER TABLE cueState DROP COLUMN woke; ALTER TABLE cueState DROP COLUMN context; ALTER TABLE macAgents DROP COLUMN name;
+      ALTER TABLE cueMessages DROP COLUMN ask; ALTER TABLE cueMessages DROP COLUMN askAction; ALTER TABLE cueMessages DROP COLUMN askRule;
+      ALTER TABLE directoryBindings ADD COLUMN hostName TEXT NOT NULL DEFAULT 'Studio';
       \(added.map { "DROP INDEX \($0[0]);" }.joined()) PRAGMA user_version = 50;
+      INSERT INTO cueMessages (id, author, text, choices, urgent, taskID, createdAt, modifiedAt) VALUES
+        ('\(UUID().uuidString.lowercased())', 'cue', '要推送吗？', '["允许一次","以后推送都不用问"]', 0, '\(task.id.uuidString.lowercased())', 1, 1),
+        ('\(UUID().uuidString.lowercased())', 'cue', '按规矩要先问', '["允许一次"]', 0, NULL, 2, 2);
       """)
 
     let upgraded = try CueStore(location: .isolated(fixture.directory))
@@ -143,6 +153,11 @@ import Testing
     #expect(converted.body == "上\n---\n中 ---split--- 夹着\n---\n下" && converted.modifiedAt > before)
     #expect(try await upgraded.card(plain.id)?.modifiedAt == untouched)
     #expect(try await upgraded.trashedCards().map(\.body) == ["甲\n---\n乙"])
+    let questions = try await upgraded.cueMessagesWaitingForYou()
+    #expect(questions.map(\.asked) == [CueAllow(.push, project: demo.id), CueAllow(.rule, project: nil)])
+    #expect(questions.allSatisfy { $0.modifiedAt > Date(timeIntervalSince1970: 1) })
+    #expect(questions.map { $0.asking?.question(task: "修好登录页") } == ["可以推送「修好登录页」的改动吗？", "「修好登录页」这一步你说过要先问，可以吗？"])
+    #expect(try await upgraded.directoryBindings().map(\.folder) == ["demo"])
   }
 
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。

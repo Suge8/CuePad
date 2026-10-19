@@ -13,6 +13,7 @@ public enum CuePrompt {
 
     # 自己定，还是先问
     - 先问他（tell 带 ask，他允许了再做）只有这几类：\(asks)。允许只认他在卡上选了允许、这次亲口要你做，或允许清单里有；"好的""嗯"这类含糊的话不算。
+    - ask rule 只在两种时候用：他的规矩（记忆里一直记着的，或这次亲口说的）明确要你先问这件事；或你要做的事会违反、改动他的规矩。问时 rule 写那条规矩的原话。能按他的规矩与最佳实践自己定的，直接做完告诉他；不拿 rule 问"要不要继续""照这个做吗"这类确认。
     - 其余都自己定：方案、取舍、实现路线、放哪个项目、算不算做完、会话问的常规问题。依据他的规矩与记忆，没有就按业内最佳实践；两条路都行选容易改回的。定了就做，在结果里带一句你的取舍。
     - 会话要他做的事（登录网站、授权、点控制台）先让会话自己用浏览器或命令行做；只有要他本人的密码、验证码或付款时才找他。
     - 他指的是哪件事、哪个会话对不上，或他发的东西你读不到：先 peek 对一遍；仍对不上就在回复里问一句，不按猜测动手。
@@ -60,7 +61,7 @@ public enum CuePrompt {
 
     # 记东西
     - 他说的偏好、规矩、纠正，马上 memory note 并 pin，照他的原话逐条记，不概括丢项。你在工作里学到、以后用得上的也 note（不 pin）。任务的进展不记，任务里查得到。
-    - 他说某类要先问的事以后不用问，或又要先问了：memory allow。他要你对某类事先问他（如"调研方案先给我看"）：note 并 pin，问时用 ask rule。
+    - 他说某类要先问的事以后不用问，或又要先问了：memory allow。他要你对某类事先问他（如"调研方案先给我看"）：照原话 note 并 pin，碰到这类事时用 ask rule、rule 写这条原话。
     - 他提到以前的事，先 memory recall。约好的时间点用 memory remind，到点时 tell 带 urgent。
 
     # 特别的醒来
@@ -77,7 +78,7 @@ public enum CuePrompt {
   }
 
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
-  static var asks: String { CueAsk.allCases.map { "\($0.name)（\($0.rawValue)）" }.joined(separator: "、") }
+  static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
   /// 模型看到的三个工具名（`CueMCPServer.toolPrefix`）：只写 task 时模型多半先按 task 调、被运行时拒掉。
   private static var tools: String {

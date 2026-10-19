@@ -124,9 +124,9 @@ extension DebugScene {
     /// `-CuePadSampleCue`：Cue 请你允许一件事（算进"等你"），走 `CueService.followNotifications` 同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         try? await Task.sleep(for: delay)
-        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: .push),
+        guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: try? CueAsking(.push, action: "把登录页的修复推送到 origin/main")),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, choices: message.choices, task: nil)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, task: nil)
         guard !alerts.isWatchingCue else { return }
         await alerts.post(title: content.title, body: content.body)
     }
@@ -215,14 +215,16 @@ final class DebugWindow: MainShellWindow {
     }
 }
 
-/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。
+/// `newsession` 画面：新会话表单（平时从 + 弹出，+ 读这台 Mac 的 Agent 交给它）。配 `-CuePadDemo YES` 时读演示 Mac（demo-mac）的 Agent：
+/// 隔离实例里这台一家都不能用，看不到选 Agent 与模型的那一排。
 struct DebugNewSessionForm: View {
     @Environment(Workspace.self) private var workspace
     @State private var agents: MacAgents?
 
     var body: some View {
+        let host = DebugScene.defaults.bool(forKey: "CuePadDemo") ? "demo-mac" : workspace.services.hostID
         NewSessionForm(agents: agents) { _ in }
-            .observing(workspace.services.store, into: $agents) { [host = workspace.services.hostID] in try $0.macAgents(on: host) }
+            .observing(workspace.services.store, into: $agents) { try $0.macAgents(on: host) }
     }
 }
 

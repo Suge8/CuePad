@@ -23,7 +23,7 @@ import Testing
       context: PiContextUsage(tokens: 1_000, window: 200_000), commands: [PiSlashCommand(name: "compact", summary: "压缩", source: .known(.builtin))])
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
-    try await store.publishDirectoryBindings(host: "mac", hostName: "Studio")
+    try await store.publishDirectoryBindings(host: "mac")
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now)],
       recap: PiRecap(pendingPrompt: "修好登录")))
@@ -32,7 +32,7 @@ import Testing
     _ = try await store.addPreviews(filesAt: [page], title: "登录页", sessionID: "s1")
     try await store.recordQuota(
       QuotaReport(provider: "anthropic", windows: [QuotaWindow(seconds: 18_000, used: 0.2, resetsAt: .now)], complete: true), host: "mac")
-    try await store.addCueMessage(.cue, text: "要发布吗？", ask: .release, urgent: true, task: card.id)
+    try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4"), urgent: true, task: card.id)
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")

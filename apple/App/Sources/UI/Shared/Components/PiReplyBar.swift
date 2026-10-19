@@ -32,7 +32,7 @@ struct PiReplyBar: View {
     var queued: [DeliveryRequest] = []
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
     var recall: String?
-    /// 点批注一叠里的一条：回到原文（批注只在 Mac 会话页写，见 `ReplyNote`）。
+    /// 点批注一叠里的一条：回到原文（会话页给）。
     var revealNote: (ReplyNote) -> Void = { _ in }
     /// 发出之后（会话页回到最新）。
     let sent: () -> Void
@@ -300,9 +300,7 @@ struct PiReplyBar: View {
         }
     }
 
-    private func removeNote(_ note: ReplyNote) {
-        services.settings.setReplyNotes(draft.notes.filter { $0.id != note.id }, for: session.id)
-    }
+    private func removeNote(_ note: ReplyNote) { services.settings.removeReplyNote(note.id, in: session.id) }
 
     /// 斜杠命令走投送方式 `command`（由 Agent 展开执行），不分马上说还是等它做完再说：是不是命令只在发出这一刻按草稿与会话报的清单认
     /// （`commandLine`），不看按钮上次排版时带来的方式。`held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。

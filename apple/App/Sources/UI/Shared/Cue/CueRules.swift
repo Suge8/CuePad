@@ -65,7 +65,7 @@ nonisolated enum CuePresence: Equatable, Sendable {
     func line(name: String) -> String? {
         switch self {
         case .disabled: "\(name) 还没启用"
-        case .asleep: "\(name) 在睡觉：它住的那台 Mac 好像没开"
+        case .asleep: "\(name) 在睡觉：它运行的那台 Mac 好像没开"
         case .unreachable(let reason): reason
         case .idle, .sending, .working: nil
         }
@@ -94,17 +94,17 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
     var enabled: Bool
-    /// 它住（或停用前住）的那台 Mac 与它的名字（那台自报的，`MacAgents.name`；更旧版本的 Mac 没写）。
+    /// 它运行（或停用前运行）的那台 Mac 与它的名字（`MacAgents.shownName`）。
     var hostID: String?
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
-    /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsk.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsking.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
-    /// 它住的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
+    /// 它运行的那台 Mac 此刻在线（`CueStore.macOnline`）；没启用为 false。
     var hostOnline: Bool
     /// 你最近一句：写下与交给它的时刻（`CueStore.cueLastYou`）；你还没说过为 nil。到哪了按此刻推（`derive`）。
     var lastYou: LastYou?
@@ -129,9 +129,9 @@ nonisolated struct CueDigest: Equatable, Sendable {
             name: profile?.name ?? CueProfile.defaultName,
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
-            hostName: try profile?.hostID.flatMap { try store.macAgents(on: $0).name },
+            hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             waiting: try CueWaiting.count(in: store),
-            lastSaid: said.flatMap { $0.ask?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
+            lastSaid: said.flatMap { $0.asking?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },

@@ -13,16 +13,6 @@ nonisolated extension AgentKind {
     }
 }
 
-/// 选哪家 Agent 的菜单里的一项：标志与名字。macOS 27、iPadOS 27 起菜单默认藏起选项的图片，这里的标志说的是"哪一家"
-/// （对象而非动作），要显示（同模型菜单，`ChoiceMenu`）。
-struct AgentLabel: View {
-    let kind: AgentKind
-
-    var body: some View {
-        Label { Text(kind.name) } icon: { kind.mark.image }.labelStyle(.titleAndIcon)
-    }
-}
-
 nonisolated extension PiSessionState {
     /// 标出是哪家 Agent 的会话时写的名字（`AgentKind.name`）：每个会话都标，Pi 也标。其他版本写的、不认识的不标。
     var agentMark: String? { agent.known?.name }

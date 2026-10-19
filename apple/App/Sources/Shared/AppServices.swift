@@ -243,15 +243,16 @@ final class AppServices {
             of: session.target, on: session.hostID))
     }
 
-    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话，`prompt` 作开场：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
+    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
     /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
     /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
     func launchSession(
-        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind
+        in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
+        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent), title: title, on: host, card: card))
+            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking), title: title, on: host, card: card))
         return SessionLaunch(request: request.id, token: token)
     }
 

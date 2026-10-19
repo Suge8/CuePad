@@ -42,7 +42,7 @@ extension Workspace {
         }
     }
 
-    /// 回答 Cue 的一条"等你"：选一项，或另外说一句。选"以后……都不用问"时 Store 同时把它记进允许清单（Cue 的设置），一起上传。
+    /// 回答 Cue 的一条"等你"：选一项，或另外说一句。选"以后……不用问"时 Store 同时按提问存的范围把它记进允许清单（Cue 的设置），一起上传。
     func answerCueQuestion(_ message: CueMessage, _ answer: String) async throws {
         let allowed = try await services.store.endCueQuestion(message.id, .answered(answer))
         await services.upload(message.id)

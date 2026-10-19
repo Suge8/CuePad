@@ -30,9 +30,9 @@ struct NewSessionButton: View {
     }
 }
 
-/// 新会话开在哪、用哪个 Agent：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
-/// Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），默认上次用的（`MacAgents.preferred`）；只有一家时只写它的名字，
-/// 一家都不能用时写为什么（`whyNone`）、开不了。
+/// 新会话开在哪、用哪个 Agent 与模型：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
+/// 开场的话下面一排选 Agent、模型与思考强度（`AgentModelControls`，与手机的新会话、Cue 同一排）：Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），
+/// 默认上次用的（`MacAgents.preferred`）；模型与思考强度默认跟着这家的默认，换了 Agent 回到默认。一家都不能用时写为什么（`whyNone`）、开不了。
 /// 还没有项目时说一句为什么，主按钮是"新建项目"（关掉表单、打开新建项目）。
 struct NewSessionForm: View {
     /// 这台 Mac 上的 Agent；还没读到为 nil。
@@ -45,6 +45,8 @@ struct NewSessionForm: View {
     @State private var chosen: String?
     /// 这次选的；没选过跟着默认。
     @State private var picked: AgentKind?
+    @State private var model: PiModelKey?
+    @State private var thinking: PiThinkingLevel?
     @State private var prompt = ""
     @State private var stage = Stage.idle
 
@@ -68,21 +70,7 @@ struct NewSessionForm: View {
         let kinds = agents?.kinds ?? []
         let agent = picked.flatMap { kinds.contains($0) ? $0 : nil } ?? agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
-                Spacer(minLength: 0)
-                if kinds.count > 1, let agent {
-                    Picker("用哪个 Agent", selection: Binding(get: { agent }, set: { picked = $0 })) {
-                        ForEach(kinds) { (kind: AgentKind) in AgentLabel(kind: kind).tag(kind) }
-                    }
-                    .pickerStyle(.menu).labelsHidden().fixedSize()
-                    .controlSize(.small)
-                    .disabled(stage == .opening)
-                    .help("用哪个 Agent 开")
-                } else if let agent {
-                    BrandMark.label(agent.mark, agent.name).font(Typography.meta).foregroundStyle(palette.ink3)
-                }
-            }
+            Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             if places.isEmpty {
                 Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
                     .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
@@ -94,10 +82,17 @@ struct NewSessionForm: View {
                 .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
                 TextField("开场的话（可不填）", text: $prompt, palette: palette, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(2...5)
-                    .onSubmit { if let place, let agent, place.binding != nil, stage != .opening { start(place, agent) } }
+                    .onSubmit { if let place, let agents, let agent, place.binding != nil, stage != .opening { start(place, choice(agents, agent)) } }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                     .paper(radius: 10)
                     .accessibilityLabel("开场的话")
+                if let agents, let agent {
+                    AgentModelControls(choice: AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)) {
+                        picked = $0
+                        model = nil
+                    } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
+                    .disabled(stage == .opening)
+                }
             }
             HStack(spacing: 8) {
                 switch stage {
@@ -129,7 +124,7 @@ struct NewSessionForm: View {
                         .keyboardShortcut(.defaultAction)
                 } else {
                     // ↩ 开始（浮层开着时 ⌘ 组合键只交给主菜单，⌘↩ 到不了这里），换行用 ⌥↩
-                    Button("开始") { if let place, let agent { start(place, agent) } }
+                    Button("开始") { if let place, let agents, let agent { start(place, choice(agents, agent)) } }
                         .buttonStyle(.borderedProminent)
                         .keyboardShortcut(.defaultAction)
                         .disabled(place == nil || agent == nil || stage == .opening)
@@ -161,13 +156,19 @@ struct NewSessionForm: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func start(_ place: ProjectFolders.LaunchPlace, _ agent: AgentKind) {
+    private func choice(_ agents: MacAgents, _ agent: AgentKind) -> AgentModelChoice {
+        AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking)
+    }
+
+    private func start(_ place: ProjectFolders.LaunchPlace, _ choice: AgentModelChoice) {
+        guard let agent = choice.agent else { return }
         stage = .opening
         let words = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
                 let id = try await workspace.startSession(
-                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name, agent: agent
+                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name, agent: agent,
+                    model: choice.model, thinking: choice.shownThinking
                 ) { stage = .connecting }
                 stage = .idle
                 opened(id)
