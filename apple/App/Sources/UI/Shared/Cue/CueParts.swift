@@ -384,7 +384,7 @@ struct CueChoices: View {
 
 /// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
 /// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），居中裁切填满。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
-/// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明）。辅助功能字号下一张一行、说明在右。
+/// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
 /// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
 struct CueShots: View {
     let shots: [CueShown]
@@ -392,7 +392,6 @@ struct CueShots: View {
     let reply: PreviewReply
     let open: (PreviewOpening) -> Void
     @Environment(\.palette) private var palette
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(macOS)
     static let side: CGFloat = 140
@@ -400,25 +399,13 @@ struct CueShots: View {
     static let side: CGFloat = 120
     #endif
     private static let gap = DeliverableStrip.gap
-    private static let besideGap: CGFloat = 14
 
     var body: some View {
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(shots) { shot in
-                    HStack(alignment: .top, spacing: Self.besideGap) {
-                        tile(shot).frame(width: Self.side)
-                        caption(shot.look).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        } else {
-            ShotRow(side: Self.side, gap: Self.gap) {
-                ForEach(shots) { shot in
-                    VStack(alignment: .leading, spacing: 8) {
-                        tile(shot)
-                        caption(shot.look)
-                    }
+        ShotRow(side: Self.side, gap: Self.gap) {
+            ForEach(shots) { shot in
+                VStack(alignment: .leading, spacing: 8) {
+                    tile(shot)
+                    caption(shot.look)
                 }
             }
         }
