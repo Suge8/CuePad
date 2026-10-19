@@ -6,14 +6,14 @@ import Testing
 @testable import CuePi
 
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
-/// 斜杠命令、结束、接着已结束的会话、空闲退出（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
+/// 斜杠命令、结束、接着已结束的会话、空闲退出、后台工作交回后才歇下（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
 @Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.serialWhenRecording(.claudeCode), RealAgents.timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
     /// CuePad 起的 `claude` 是外壳、真 claude 是它的子进程：托管进程的钩子仍认得是它自己的，桥上不多出一个终端会话。
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
     @Test func aWrappedClaudeIsNotSeenTwice() async throws {
-        try await ClaudeTestbed.run(wrapped: true) { testbed in
+        try await ClaudeTestbed.run(wrapper: ClaudeTestbed.passThrough) { testbed in
             try testbed.runtime.start()
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)
@@ -178,6 +178,41 @@ struct RealClaudeHostTests {
             #expect(lastAnswer(in: file)?.model?.contains(claudeOtherModel) == true)
             let replies = transcript.messages.filter { $0.role == .known(.pi) }.map(\.text)
             #expect(!replies.contains("No response requested."), "\(replies)")
+        }
+    }
+
+    /// 后台子代理与后台命令都算在飞：这一轮歇下时是等子代理，交回结果的那一轮做完才歇下一次（叫醒 Cue、提示"完成了"都只这一次）。
+    @Test func backgroundWorkKeepsTheSessionBusyUntilItsResultIsReportedBack() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
+            try await testbed.expectSettledOnce(id, since: start, reply: "BG_DONE", roster: .done)
+        }
+    }
+
+    /// 子代理先交回中途结果、名下的后台命令做完后以同一 id 再跑：中间一直算在飞，交回最终结果的那一轮做完才歇下一次，名册里还是那一项。
+    @Test func aSubagentThatReportsEarlyAndRunsAgainSettlesTheSessionOnce() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.earlyReport), to: id)
+            try await testbed.expectSettledOnce(id, since: start, reply: "NESTED_DONE", roster: .done, waits: 2)
+        }
+    }
+
+    /// 等子代理时你叫它停掉子代理：被停下的不算在飞，这件事只歇下一次，名册里它记成被停下。
+    @Test func aStoppedSubagentSettlesTheSessionOnce() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.longSubagent), to: id)
+            try await eventually("等子代理", timeout: .seconds(120)) { testbed.bridge.session(id: id)?.state == .delegating }
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.stopSubagent), to: id)
+            try await testbed.expectSettledOnce(id, since: start, reply: "STOPPED", roster: .interrupted)
         }
     }
 

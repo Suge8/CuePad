@@ -217,6 +217,9 @@ struct ConversationRuleTests {
         return url
     }
 
+    /// `codexFile` 里第 n 个事件的时刻（第 n 秒）
+    private func second(_ n: Int) -> Date { ISO8601DateFormatter().date(from: String(format: "2026-10-14T19:21:%02dZ", n))! }
+
     private func item(_ item: [String: Any]) -> [String: Any] { ["type": "item_completed", "item": item] }
     private func user(_ id: String, _ text: String) -> [String: Any] { item(["type": "UserMessage", "id": id, "content": [["type": "text", "text": text]]]) }
     private func agent(_ id: String, _ text: String, _ phase: String) -> [String: Any] {
@@ -237,7 +240,8 @@ struct ConversationRuleTests {
         let read = try PiHistory.index(file: stopped.url, from: nil)
         try await fixture.store.writePiTranscript(read.transcript)
 
-        #expect(read.recap == PiRecap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil))
+        // 最后一轮（第三问，什么都没说就被停下）收尾在它被停下的那一刻
+        #expect(read.recap == PiRecap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil, answeredAt: SessionFile.date(8)))
         #expect(try await fixture.store.piMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
             "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "machine:<some_event>\n子任务完成\n</some_event>", "pi:汇报",
             "user:第三问", "system:已停止",
@@ -297,14 +301,14 @@ struct ConversationRuleTests {
     }
 
     /// Codex 先报歇下（`Stop` 钩子）、钩子返回后才往会话文件写 `task_complete`：最后的回答（`final_answer`）一落盘就是这一轮的回答，
-    /// 歇下时对话与摘要里已经有它，不等 `task_complete`。
+    /// 歇下时对话与摘要里已经有它、这一轮也已收尾（歇下就绪），不等 `task_complete`。
     @Test func codexsFinalAnswerIsTheAnswerBeforeTheRoundIsMarkedComplete() throws {
         let file = try codexFile([["type": "task_started"], user("u1", "Reply with WRAPPED"), agent("m1", "WRAPPED", "final_answer")])
 
         let read = try PiHistory.index(file: file, agent: .codex, from: nil, files: scratchFiles)
 
         #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == ["user:Reply with WRAPPED", "pi:WRAPPED"])
-        #expect(read.recap == PiRecap(lastPrompt: "Reply with WRAPPED", lastReply: "WRAPPED", pendingPrompt: nil))
+        #expect(read.recap == PiRecap(lastPrompt: "Reply with WRAPPED", lastReply: "WRAPPED", pendingPrompt: nil, answeredAt: second(3)))
     }
 
     @Test func aSteeredMessageInTheSameTurnGetsItsOwnAnswer() throws {
@@ -318,7 +322,7 @@ struct ConversationRuleTests {
         #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == [
             "user:跑 sleep 20，跑完回 LONG-DONE", "pi:先跑命令。", "user:顺便：6+6 等于几", "pi:LONG-DONE",
         ])
-        #expect(read.recap == PiRecap(lastPrompt: "顺便：6+6 等于几", lastReply: "LONG-DONE", pendingPrompt: nil))
+        #expect(read.recap == PiRecap(lastPrompt: "顺便：6+6 等于几", lastReply: "LONG-DONE", pendingPrompt: nil, answeredAt: second(7)))
     }
 }
 

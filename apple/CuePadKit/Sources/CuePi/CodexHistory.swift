@@ -112,6 +112,58 @@ enum CodexHistory {
         }
     }
 
+    /// 会话文件里最后一轮的样子：在不在 Plan 模式（`task_started` 的 `collaboration_mode_kind`）、是不是被停下的
+    /// （`turn_aborted` 的 `reason` 为 interrupted）。终端里的 Plan 模式归终端界面管，app-server 不报，只有会话文件里有。
+    struct LastTurn {
+        var plan: Bool
+        var interrupted: Bool
+    }
+
+    /// 从文件尾往前一块一块读到最后一个 `task_started`（一行可能很长：带图的工具结果）；读不了或没有为 nil。
+    @concurrent static func lastTurn(in file: URL) async -> LastTurn? {
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+        defer { try? handle.close() }
+        let block: UInt64 = 64 * 1024
+        guard var end = try? handle.seekToEnd() else { return nil }
+        var head = Data()
+        var ended: Bool?
+        while end > 0 {
+            let start = end > block ? end - block : 0
+            guard (try? handle.seek(toOffset: start)) != nil, let chunk = try? handle.read(upToCount: Int(end - start)) else { return nil }
+            var lines = (chunk + head).split(separator: 0x0A)
+            // 这一块的第一行可能不完整：留着拼上前一块
+            head = start > 0 && !lines.isEmpty ? Data(lines.removeFirst()) : Data()
+            for line in lines.reversed() {
+                guard line.firstRange(of: Data("task_".utf8)) != nil || line.firstRange(of: Data("turn_aborted".utf8)) != nil,
+                      let event = try? decoder.decode(Lifecycle.self, from: Data(line)), event.type == "event_msg" else { continue }
+                switch event.payload.type {
+                case "task_started": return LastTurn(plan: event.payload.mode == "plan", interrupted: ended ?? false)
+                case "task_complete": ended = ended ?? false
+                case "turn_aborted": ended = ended ?? (event.payload.reason == "interrupted")
+                default: break
+                }
+            }
+            end = start
+        }
+        return nil
+    }
+
+    private struct Lifecycle: Decodable {
+        var type: String
+        var payload: Payload
+
+        struct Payload: Decodable {
+            var type: String?
+            var reason: String?
+            var mode: String?
+
+            private enum CodingKeys: String, CodingKey {
+                case type, reason
+                case mode = "collaboration_mode_kind"
+            }
+        }
+    }
+
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let decoder = JSONDecoder()
 

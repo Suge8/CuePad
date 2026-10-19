@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 14
+    static let protocolVersion = 15
 
     struct State: Decodable {
         var kind: String
@@ -17,6 +17,8 @@ enum PiWire {
         var since: Double
         /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
         var busySince: Double?
+        /// 主会话最后一次模型回合开始的时间（毫秒）；还没开过为 nil
+        var turnSince: Double?
 
         /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。扩展还报的在跑工具全集、`aborted`、弹窗种类没有人读，不解码。
         var work: (state: PiWorkState, detail: String?)? {
@@ -36,6 +38,7 @@ enum PiWire {
 
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
         var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
+        var turnSinceDate: Date? { turnSince.map { Date(timeIntervalSince1970: $0 / 1000) } }
     }
 
     struct Hello: Decodable {
@@ -133,7 +136,9 @@ enum PiWire {
             try field(.name, String.self) { $0.name = $1 }
             try field(.firstMessage, String.self) { $0.firstMessage = $1 }
             try field(.question, WireQuestion.self) { $0.question = $1?.question }
-            try field(.subagents, [WireSubagent].self) { $0.subagents = $1?.map(\.subagent) ?? [] }
+            try field(.subagents, [WireSubagent].self) { session, roster in
+                session.subagents = Self.stamped(roster?.map(\.subagent) ?? [], since: session.subagents, at: Date())
+            }
             try field(.model, PiModelOption.self) { $0.model = $1 }
             try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
             try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
@@ -143,6 +148,19 @@ enum PiWire {
 
         func apply(to session: inout PiSession) {
             for update in updates { update(&session) }
+        }
+
+        /// 名册不带进展时刻，Mac 收到时记（`PiSubagentState.progressAt`）：一项（按名字对上上一份）有任何变化——状态、动作文字、起止——就是此刻有进展，
+        /// 没变的沿用上一份的时刻，新出现的是此刻。FireCode 的名字在一个指挥官下唯一。
+        private static func stamped(_ roster: [PiSubagentState], since previous: [PiSubagentState], at now: Date) -> [PiSubagentState] {
+            roster.map { agent in
+                var agent = agent
+                let before = previous.first { $0.name == agent.name }
+                var unstamped = before
+                unstamped?.progressAt = nil
+                agent.progressAt = unstamped == agent ? before?.progressAt : now
+                return agent
+            }
         }
     }
 

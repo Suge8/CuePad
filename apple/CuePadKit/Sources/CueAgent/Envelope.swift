@@ -135,6 +135,7 @@ public enum CueEnvelope {
       case .failed: "出错"
       case .undelivered: "发送失败"
       case .done: "完成"
+      case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
       }
     let tags = [label, change.byUser ? "他说的" : nil, presence(change, now: now)].compactMap(\.self)
     var text = "[\(tags.joined(separator: " · "))] \(where_(change))"
@@ -143,9 +144,9 @@ public enum CueEnvelope {
     return text
   }
 
-  /// 会话停着（歇下、等回答、出错；被打断的不算）时他此刻在不在场（`SessionPresence`）：在场时 Cue 不插嘴，他离开时还停着会再报一次（`CueChange.away`）。
+  /// 会话停着（`CueChange.isStop`）时他此刻在不在场（`SessionPresence`）：在场时 Cue 不插嘴，他离开时还停着会再报一次（`CueChange.away`）。
   private static func presence(_ change: CueChange, now: Date) -> String? {
-    guard [.settled, .waitingForUser, .failed].contains(change.kind), !change.interrupted else { return nil }
+    guard change.isStop else { return nil }
     if change.away { return "他已离开" }
     guard let presence = change.presence else { return "他不在场" }
     if presence.viewing { return "他在场：正开着这个会话" }

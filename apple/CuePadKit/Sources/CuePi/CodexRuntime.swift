@@ -6,8 +6,14 @@ import OSLog
 
 /// Codex 的接入：终端里的会话经钩子（`AgentHookServer`）上报、经它常驻服务的控制 socket 说话；后台托管的会话是 CuePad 起的 `codex app-server`。
 ///
-/// - 状态来自钩子：提交一句话进入工作，调工具、等权限确认、压缩、子代理随事件更新，`Stop`/`Interrupt` 歇下，`SessionEnd` 下线。
+/// - 状态来自钩子：提交一句话进入工作，调工具、等权限确认、压缩随事件更新，`Stop`/`Interrupt` 歇下，`SessionEnd` 下线。
 ///   托管的会话另有自己进程的 `turn/started`、`turn/completed` 通知管忙闲（钩子没装好时也对）。
+/// - 子代理只认 app-server 的子线程推送（托管的是自己的进程，终端的是常驻服务：子线程没有订阅者，它的推送广播给所有连接）。
+///   钩子不行：`SubagentStop` 只在正常做完时发，出错、被停没有；v2 `followup_task` 再跑不发 `SubagentStart`。
+///   子线程按 `thread/read` 的 `parentThreadId` 一路找到会话（`threads`）；它的一轮开始是在跑，结束按状态落定（做完、出错、被停），
+///   卸载或出错也算落定，每条推送是一次进展。启动时从常驻服务已载入的线程补回名册。
+///   在飞（`SessionFacts.inFlight`）是在跑的，加上父线程歇着时落定、结果还没交给一轮的；父线程这一轮在跑时落定的，结果并进这一轮。
+///   父线程歇着时子代理做完，Codex 不自己接着跑（结果在它的历史或邮箱里等下一轮）：最后一个落定时 CuePad 补一轮空输入（`wake`）。
 ///   会话 id 是 `<线程 id>.<承载进程>`：终端会话的承载进程是钩子的父进程（常驻服务）；托管的是 CuePad 起的进程，它的钩子按环境里的
 ///   `HostMark` 认回（`codex` 可能是外壳，钩子的父进程是外壳起的子进程，不按进程号认）。
 ///   承载进程退出时它上面的会话都下线。常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置后才卸载并报 `SessionEnd`），
@@ -48,6 +54,14 @@ public final class CodexRuntime: AgentRuntime {
     /// 常驻服务的控制 socket（服务在跑时问到的）
     private var controlSocket: String?
     private var exitWatchers: [Int32: ProcessExitWatcher] = [:]
+    /// 收到过推送的线程（`<线程 id>.<承载进程>`）属于谁：会话的子代理（名字、角色）、不是子代理（Codex 自己起的临时线程等），
+    /// 或还在问 Codex（先攒着它的推送）
+    private var threads: [String: Owner] = [:]
+    private enum Owner {
+        case asking([(method: String, params: JSONValue)])
+        case session(PiSession.ID, name: String, role: String)
+        case foreign
+    }
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     private var models: [CodexModel]?
     private var stopped = true
@@ -74,8 +88,10 @@ public final class CodexRuntime: AgentRuntime {
         var turnID: String?
         /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
         var reply: Reply?
-        /// 发起的子代理的任务名，等 `SubagentStart` 认领（按先后）
-        var spawnNames: [String] = []
+        /// 父线程歇着时落定、结果还没交给一轮的子代理（线程 id）：有没有交回结果（做完、出错交回；被停下的不交）
+        var unread: [String: Bool] = [:]
+        /// 子代理最后说的一段话：落定时作那句说明
+        var lastWords: [String: String] = [:]
         /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
         var lastError: String?
         var skills: [(name: String, path: String)] = []
@@ -222,13 +238,22 @@ public final class CodexRuntime: AgentRuntime {
         return rpc
     }
 
-    /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）。子代理的线程不算会话。
+    /// 启动时把常驻服务里已经载入的线程接上（CuePad 晚于终端里的会话启动）：会话先接上，子代理的线程再补进它们的名册。
     private func discover() async {
         do {
             guard let rpc = try await daemonConnection() else { return }
             let loaded = try await rpc.call("thread/loaded/list", [:])
+            var children: [JSONValue] = []
             for threadID in loaded["data"]?.array?.compactMap(\.string) ?? [] where tracked["\(threadID).\(rpc.pid)"] == nil {
-                _ = try await adopt(threadID, on: rpc)
+                // Codex 自己起的临时线程（起标题等）不是会话
+                guard let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
+                      thread["ephemeral"]?.bool != true else { continue }
+                if thread["parentThreadId"]?.string != nil { children.append(thread) } else { try await adopt(thread, on: rpc) }
+            }
+            for child in children {
+                guard let id = child["id"]?.string, threads["\(id).\(rpc.pid)"] == nil else { continue }
+                threads["\(id).\(rpc.pid)"] = .asking([])
+                await register(child, on: rpc)
             }
         } catch {
             Self.log.notice("没能读出常驻服务里的会话：\(String(describing: error))")
@@ -238,26 +263,25 @@ public final class CodexRuntime: AgentRuntime {
     private func adoptFromDaemon(_ threadID: String) async throws -> PiSession.ID? {
         guard let rpc = try? await daemonConnection() else { return nil }
         let loaded = try await rpc.call("thread/loaded/list", [:])
-        guard loaded["data"]?.array?.contains(.string(threadID)) == true else { return nil }
-        return try await adopt(threadID, on: rpc)
+        guard loaded["data"]?.array?.contains(.string(threadID)) == true,
+              let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
+              thread["parentThreadId"]?.string == nil, thread["ephemeral"]?.bool != true else { return nil }
+        return try await adopt(thread, on: rpc)
     }
 
+    /// 接上一个线程（`thread/read` 读到的，不是子代理）。
     @discardableResult
-    private func adopt(_ threadID: String, on rpc: CodexRPC) async throws -> PiSession.ID? {
+    private func adopt(_ thread: JSONValue, on rpc: CodexRPC) async throws -> PiSession.ID {
+        let threadID = thread["id"]?.string ?? ""
         let id = "\(threadID).\(rpc.pid)"
         if tracked[id] != nil { return id }
-        let read = try await rpc.call("thread/read", ["threadId": .string(threadID)])
-        guard let thread = read["thread"], thread["parentThreadId"] == nil || thread["parentThreadId"] == .null else { return nil }
         // 正在跑一轮：停止、插话要这一轮的 id，从最近一轮取（钩子要等下一个事件才带来）
-        var running: String?
-        if thread["status"]?["type"]?.string == "active" {
-            let turns = try await rpc.call("thread/turns/list", ["threadId": .string(threadID), "limit": 1])
-            running = turns["data"]?.array?.first.flatMap { $0["status"]?.string == "inProgress" ? $0["id"]?.string : nil }
-        }
+        let last = try await Self.lastTurn(threadID, on: rpc)
+        let running = last?["status"]?.string == "inProgress" ? last?["id"]?.string : nil
         if tracked[id] != nil { return id }
         attach(makeSession(thread, pid: rpc.pid)) { session in
             session.turnID = running
-            if running != nil { session.facts.startTurn() }
+            if running != nil { self.startTurn(session, at: Self.startedAt(last)) }
         }
         return id
     }
@@ -307,11 +331,13 @@ public final class CodexRuntime: AgentRuntime {
         exitWatchers.removeValue(forKey: pid)?.cancel()
         hosted[pid] = nil
         marks = marks.filter { $0.value != pid }
+        threads = threads.filter { !$0.key.hasSuffix(".\(pid)") }
         for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
     private func detach(_ id: PiSession.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
+        threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
         release(session)
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
@@ -379,8 +405,8 @@ public final class CodexRuntime: AgentRuntime {
             call.finish()
             return detach(id)
         }
-        let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input)
         let agent = input["agent_id"]?.string
+        let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input, transcript: agent == nil)
         if let turn = input["turn_id"]?.string, agent == nil { session.turnID = turn }
         let tool = input["tool_name"]?.string ?? ""
         let now = Date.now
@@ -388,19 +414,13 @@ public final class CodexRuntime: AgentRuntime {
         case "PermissionRequest":
             // 子代理要的确认也挂在这个会话上问
             return ask(session, call: call, input)
-        case "SubagentStart":
-            if let agent {
-                let role = input["agent_type"]?.string ?? "default"
-                session.facts.startSubagent(agent, name: session.spawnNames.isEmpty ? role : session.spawnNames.removeFirst(), role: role, at: now)
-            }
-        case "SubagentStop":
-            if let agent { session.facts.settleSubagent(agent, .done, summary: input["last_assistant_message"]?.string, at: now) }
         case _ where agent != nil:
             // 子代理自己线程里的事件（session_id 是同一棵树的根，agent_id 是它自己）：只更新它在做什么
-            if event == "PreToolUse", let agent { session.facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
+            if event == "PreToolUse", let agent { session.facts.updateSubagent(agent, at: now) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
         case "UserPromptSubmit":
             session.facts.standingQuestion = nil
-            session.facts.startTurn()
+            // 钩子里没有时刻：用收到它的时刻
+            startTurn(session, at: now)
             bridge.update(id) { s in
                 if s.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
                     s.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
@@ -408,7 +428,6 @@ public final class CodexRuntime: AgentRuntime {
             }
             refresh(id)
         case "PreToolUse":
-            if tool.hasSuffix("spawn_agent"), let name = input["tool_input"]?["task_name"]?.string { session.spawnNames.append(name) }
             if tool == "request_user_input", session.reply == nil {
                 // 终端会话的 Plan 模式提问只发给终端界面：CuePad 只显示（托管的经 `item/tool/requestUserInput` 来）
                 session.facts.questions = [Self.userInput(input["tool_input"] ?? .object([:]), promptID: nil)]
@@ -444,9 +463,11 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     /// 钩子先于其他途径报出的会话（终端里刚开、或 CuePad 晚启动）：接上桥，名字与模型随后从 Codex 读。
-    private func adoptFromHook(_ threadID: String, pid: Int32, _ input: JSONValue) -> Tracked {
+    /// 子代理的钩子（`transcript` 为 false）带的会话文件是子代理自己的，不用。
+    private func adoptFromHook(_ threadID: String, pid: Int32, _ input: JSONValue, transcript: Bool) -> Tracked {
         let session = PiSession(
-            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: input["transcript_path"]?.string.map { URL(filePath: $0) },
+            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex,
+            sessionFile: transcript ? input["transcript_path"]?.string.map { URL(filePath: $0) } : nil,
             pid: pid, cwd: URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
             extensionVersion: 0, state: .settled, stateSince: .now)
         attach(session)
@@ -583,14 +604,19 @@ public final class CodexRuntime: AgentRuntime {
     // MARK: 通知
 
     private func notification(_ method: String, _ params: JSONValue, from pid: Int32) {
-        guard let threadID = params["threadId"]?.string, let session = tracked["\(threadID).\(pid)"] else { return }
+        // 子代理的线程没有 `thread/started`：报出来的顶层线程不是子代理（Codex 起的临时线程等），之后它的推送不必去问
+        if method == "thread/started", let thread = params["thread"], let id = thread["id"]?.string, thread["parentThreadId"]?.string == nil {
+            threads["\(id).\(pid)"] = threads["\(id).\(pid)"] ?? .foreign
+        }
+        guard let threadID = params["threadId"]?.string else { return }
+        guard let session = tracked["\(threadID).\(pid)"] else { return child(method, params, thread: threadID, pid: pid) }
         switch method {
         case "thread/name/updated":
             bridge.update(session.id) { $0.name = params["threadName"]?.string }
             return
         case "thread/status/changed":
             switch params["status"]?["type"]?.string {
-            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次
+            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（托管与终端实测）
             case "idle" where session.facts.running:
                 release(session)
                 session.facts.endTurn()
@@ -609,7 +635,7 @@ public final class CodexRuntime: AgentRuntime {
             session.turnID = params["turn"]?["id"]?.string
             session.lastError = nil
             guard !session.facts.running else { return }
-            session.facts.startTurn()
+            startTurn(session, at: Self.startedAt(params["turn"]))
         case "turn/completed" where params["turn"]?["status"]?.string == "failed":
             // 失败的一轮没有 Stop 钩子，状态停在这里
             release(session)
@@ -640,11 +666,183 @@ public final class CodexRuntime: AgentRuntime {
     private func readFailure(_ session: Tracked) {
         Task {
             guard let rpc = try? await control(session),
-                  let turns = try? await rpc.call("thread/turns/list", ["threadId": .string(session.threadID), "limit": 1]),
-                  let turn = turns["data"]?.array?.first, turn["status"]?.string == "failed", tracked[session.id] === session,
+                  let turn = try? await Self.lastTurn(session.threadID, on: rpc), turn["status"]?.string == "failed", tracked[session.id] === session,
                   !session.facts.running else { return }
             session.facts.failure = CodexModel.failure(of: turn)
             publish(session)
+        }
+    }
+
+    // MARK: 子代理
+
+    /// 开始新的一轮（`start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，
+    /// 钩子没有时刻用收到的时刻）：歇着时落定的子代理的结果随这一轮交给模型，不再在飞。开始一轮只经这里。
+    private func startTurn(_ session: Tracked, at start: Date) {
+        session.facts.startTurn(at: start)
+        session.facts.inFlight.subtract(session.unread.keys)
+        session.unread = [:]
+    }
+
+    /// 子线程的推送里管生命周期与进展的
+    private static let childMethods: Set = ["turn/started", "turn/completed", "thread/status/changed", "item/started", "item/completed"]
+
+    /// 不是会话的线程的推送：子代理的交给它的会话；第一次见的先问 Codex 它是谁的（`register`），问的时候攒着之后的推送。
+    private func child(_ method: String, _ params: JSONValue, thread: String, pid: Int32) {
+        guard Self.childMethods.contains(method) else { return }
+        let key = "\(thread).\(pid)"
+        switch threads[key] {
+        case .session(let id, let name, let role):
+            guard let session = tracked[id] else { return }
+            childEvent(method, params, child: thread, name: name, role: role, in: session)
+        case .foreign:
+            return
+        case .asking(let queued):
+            threads[key] = .asking(queued + [(method, params)])
+        case nil:
+            threads[key] = .asking([(method, params)])
+            Task { await resolve(thread, pid: pid) }
+        }
+    }
+
+    private func resolve(_ thread: String, pid: Int32) async {
+        guard let rpc = hosted[pid] ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }),
+              let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] else {
+            threads["\(thread).\(pid)"] = .foreign
+            return
+        }
+        await register(info, on: rpc)
+    }
+
+    /// 认下一个线程（`thread/read` 读到的，推送先攒着）：是子代理就补进会话的名册——最近一轮还在跑的算在飞（没赶上它这一轮开始：CuePad 晚启动），
+    /// 歇着的按它最近一轮的结果落定（还没跑过的等它开始）；再按先后补上攒着的推送。
+    private func register(_ thread: JSONValue, on rpc: CodexRPC) async {
+        guard let child = thread["id"]?.string else { return }
+        let key = "\(child).\(rpc.pid)"
+        let owner = await owner(of: thread, on: rpc)
+        var last: JSONValue?
+        if case .session = owner { last = try? await Self.lastTurn(child, on: rpc) }
+        let running = last?["status"]?.string == "inProgress"
+        guard case .asking(let queued) = threads[key] else { return }
+        threads[key] = owner
+        if case .session(let id, let name, let role) = owner, let session = tracked[id],
+           !session.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
+            let date = { (field: String) in thread[field]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now }
+            session.facts.startSubagent(child, name: name, role: role, at: date("createdAt"))
+            if running {
+                session.facts.updateSubagent(child, at: date("updatedAt")) { $0.progressAt = date("updatedAt") }
+                session.facts.inFlight.insert(child)
+            } else {
+                session.facts.settleSubagent(child, Self.phase(of: last), summary: nil, at: date("updatedAt"))
+            }
+            publish(session)
+        }
+        for (method, params) in queued { self.child(method, params, thread: child, pid: rpc.pid) }
+    }
+
+    /// 线程（`thread/read` 读到的）属于哪个会话：顺着 `parentThreadId` 往上找到接着的会话或已认得的子代理（孙代理算进同一个会话）。
+    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。
+    private func owner(of thread: JSONValue, on rpc: CodexRPC) async -> Owner {
+        let spawn = thread["source"]?["subAgent"]?["thread_spawn"]
+        let role = thread["agentRole"]?.string ?? spawn?["agent_role"]?.string ?? "default"
+        let path = spawn?["agent_path"]?.string.flatMap { $0.split(separator: "/").last.map(String.init) }
+        let name = path ?? thread["agentNickname"]?.string ?? role
+        var current = thread
+        while let parent = current["parentThreadId"]?.string {
+            let key = "\(parent).\(rpc.pid)"
+            if let session = tracked[key] { return .session(session.id, name: name, role: role) }
+            if case .session(let id, _, _) = threads[key] { return .session(id, name: name, role: role) }
+            guard let up = try? await rpc.call("thread/read", ["threadId": .string(parent)])["thread"] else { break }
+            current = up
+        }
+        return .foreign
+    }
+
+    private func childEvent(_ method: String, _ params: JSONValue, child: String, name: String, role: String, in session: Tracked) {
+        let now = Date.now
+        switch method {
+        case "turn/started":
+            // 再跑一轮（v2 的 followup_task、v1 的 send_input）也是在跑
+            session.facts.runSubagent(child, name: name, role: role, at: now)
+            session.unread[child] = nil
+            session.facts.inFlight.insert(child)
+        case "turn/completed":
+            let turn = params["turn"]
+            let phase = Self.phase(of: turn)
+            settle(child, phase, summary: phase == .failed ? CodexModel.failure(of: turn) : session.lastWords[child], in: session)
+        case "thread/status/changed":
+            switch params["status"]?["type"]?.string {
+            case "systemError": settle(child, .failed, summary: session.lastWords[child], in: session)
+            case "notLoaded": settle(child, .interrupted, summary: nil, in: session)
+            default: return
+            }
+        default:
+            if method == "item/completed", let item = params["item"], item["type"]?.string == "agentMessage", let text = item["text"]?.string {
+                session.lastWords[child] = text
+            }
+            session.facts.updateSubagent(child, at: now) { $0.progressAt = now }
+        }
+        publish(session)
+    }
+
+    /// 一轮的开始时刻（`Turn.startedAt`，Unix 秒）；没给的（`turn/start` 的回应里是 null）为此刻。
+    private static func startedAt(_ turn: JSONValue?) -> Date {
+        turn?["startedAt"]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now
+    }
+
+    /// 线程最近的一轮。接上时在不在跑看它（`inProgress`），不看 `thread/read` 给的线程状态：子代理睡着等（`clock.sleep`）时
+    /// 读到的是 idle，它这一轮还没结束（实测）。推送里的 idle 不同，睡着等时不报（见 `notification`）。
+    private static func lastTurn(_ thread: String, on rpc: CodexRPC) async throws -> JSONValue? {
+        try await rpc.call("thread/turns/list", ["threadId": .string(thread), "limit": 1])["data"]?.array?.first
+    }
+
+    /// 一轮的结束状态（`Turn.status`）→ 子代理落定的样子
+    private static func phase(of turn: JSONValue?) -> PiSubagentPhase {
+        switch turn?["status"]?.string {
+        case "completed": .done
+        case "failed": .failed
+        default: .interrupted
+        }
+    }
+
+    /// 子代理落定：父线程这一轮在跑，结果并进这一轮；歇着就等这一批都落定再补一轮。已经落定的（一轮结束后又卸载）不再算。
+    private func settle(_ child: String, _ phase: PiSubagentPhase, summary: String?, in session: Tracked) {
+        guard session.facts.inFlight.contains(child), session.unread[child] == nil else { return }
+        session.facts.settleSubagent(child, phase, summary: summary, at: .now)
+        session.lastWords[child] = nil
+        if session.facts.running {
+            session.facts.inFlight.remove(child)
+        } else {
+            session.unread[child] = phase != .interrupted
+            wake(session)
+        }
+    }
+
+    /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，这一轮发出就算开始，它做完才歇下。空输入的一轮先把子代理的结果取进来再请求模型；
+    /// 带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答"还没收到"。
+    /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
+    /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮与你说的话同时到时并进你那一轮（`start_or_steer_turn`）。
+    private func wake(_ session: Tracked) {
+        let batch = session.facts.inFlight
+        guard !session.facts.running, batch == Set(session.unread.keys) else { return }
+        let delivered = session.unread.values.contains(true)
+        let file = bridge.session(id: session.id)?.sessionFile
+        Task {
+            var last: CodexHistory.LastTurn?
+            if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
+            guard tracked[session.id] === session, !session.facts.running, session.facts.inFlight == batch else { return }
+            session.unread = [:]
+            session.facts.inFlight = []
+            guard delivered, last?.plan != true, last?.interrupted != true else { return publish(session) }
+            startTurn(session, at: .now)
+            publish(session)
+            do {
+                let started = try await control(session).call("turn/start", ["threadId": .string(session.threadID), "input": []])
+                if let turn = started["turn"]?["id"]?.string { session.turnID = turn }
+            } catch {
+                guard tracked[session.id] === session, session.facts.running else { return }
+                session.facts.endTurn(failure: error.localizedDescription)
+                publish(session)
+            }
         }
     }
 

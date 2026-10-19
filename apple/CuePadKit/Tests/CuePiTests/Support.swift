@@ -121,5 +121,10 @@ final class ChangeLog {
     var states: [PiWorkState] {
         changes.compactMap { if case .stateChanged(let s, _) = $0 { s.state } else { nil } }
     }
+
+    /// 歇下了几次（连着的同一状态算一次）
+    var settles: Int {
+        zip(states, [nil] + states.map(Optional.some)).filter { $0 == .settled && $1 != .settled }.count
+    }
 }
 #endif
