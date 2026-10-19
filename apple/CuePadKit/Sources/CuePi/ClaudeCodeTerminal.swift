@@ -50,7 +50,7 @@ final class ClaudeTerminalSession: SessionLink {
         }
     }
 
-    /// - Parameter runningSince: 接上时已在跑（在忙或在等你）：这一轮的开始取不晚于看到它在跑的时刻（`SessionFacts.startTurn(at:)`）
+    /// - Parameter runningSince: 接上时已在跑（在忙或在等你）这一轮的开始（取法见 `SessionFacts.startTurn(at:)`）
     init(id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, runningSince: Date?, waiting: Bool) {
         self.id = id
         self.pid = pid

@@ -42,11 +42,15 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         gate = PresenceGate(presence: presence)
     }
 
-    /// 会话索引里记下的会话名与首条消息（索引器读会话文件得出，存在检查点里）；没索引过为 nil。
+    /// 索引器读会话文件存下的检查点；没索引过为 nil。
+    private func checkpoint(of sessionID: String) async -> PiHistoryCheckpoint? {
+        guard let data = try? await store.piCheckpoint(of: sessionID) else { return nil }
+        return try? JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
+    }
+
+    /// 会话索引里记下的会话名与首条消息；没索引过为 nil。
     private func remembered(_ sessionID: String) async -> (name: String?, firstMessage: String?)? {
-        guard let data = try? await store.piCheckpoint(of: sessionID),
-              let checkpoint = try? JSONDecoder().decode(PiHistoryCheckpoint.self, from: data) else { return nil }
-        return (checkpoint.name, checkpoint.firstMessage)
+        await checkpoint(of: sessionID).map { ($0.name, $0.firstMessage) }
     }
 
     /// 上桥后补上索引里记下的名字与首条消息：首条消息以索引为准（钩子先到时记下的可能是重新接上后说的第一句），
@@ -250,7 +254,8 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             let cwd = URL(filePath: entry.cwd, directoryHint: .isDirectory)
             let file = ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: entry.sessionID)
             let waiting = entry.status == "waiting"
-            let running = waiting || entry.status == "busy" ? await Self.lastTurnStart(in: file, files: store.files) ?? listed : nil
+            let running = waiting || entry.status == "busy"
+                ? await Self.lastTurnStart(in: file, from: checkpoint(of: entry.sessionID), files: store.files) ?? listed : nil
             guard terminals[id] == nil else { continue }  // 读文件时钩子先到、已上桥
             let session = PiSession(
                 id: id, sessionID: entry.sessionID, agent: .claudeCode, sessionFile: file,
@@ -261,9 +266,10 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         }
     }
 
-    /// 会话文件里最后一轮的开始（`PiHistoryCheckpoint.lastTurnStart`）；文件还没落盘或读不了为 nil。
-    @concurrent private static func lastTurnStart(in file: URL, files: AttachmentFiles) async -> Date? {
-        try? PiHistory.index(file: file, agent: .claudeCode, from: nil, transcript: false, files: files).checkpoint.lastTurnStart
+    /// 会话文件里最后一轮的开始（`PiHistoryCheckpoint.lastTurnStart`）：从索引器存下的检查点接着读（会话文件可能有几百 MB），
+    /// 没有或已失效从头读；文件还没落盘或读不了为 nil。
+    @concurrent private static func lastTurnStart(in file: URL, from checkpoint: PiHistoryCheckpoint?, files: AttachmentFiles) async -> Date? {
+        try? PiHistory.index(file: file, agent: .claudeCode, from: checkpoint, transcript: false, files: files).checkpoint.lastTurnStart
     }
 
     /// 会话的收件箱：Claude Code 的会话登记文件（`<配置目录>/sessions/<pid>.json`，官方没有写）里记着；`claude agents --json` 不给。

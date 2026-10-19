@@ -296,7 +296,8 @@ struct RealClaudeTerminalTests {
     }
 }
 
-/// CuePad 在一轮中途才启动（重启、更新都是这样）：从 `claude agents --json` 接上在跑的会话，这一轮的开始取列出它之后会话文件里读到的。
+/// CuePad 在一轮中途才启动（重启、更新都是这样）：从 `claude agents --json` 接上在跑的会话，这一轮的开始取列出它之后会话文件里读到的
+/// （从索引器存下的检查点接着读）。
 /// 列表请求途中可能换轮或收尾：外壳把列表扣住，期间写好会话文件，再交出"在跑"。不起 Claude Code（录像带是空的）。
 @MainActor
 @Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.timeLimit(.minutes(5)))
@@ -315,12 +316,15 @@ struct ClaudeDiscoveryTests {
             // 都写在列表请求发出之后，相隔 1 毫秒（会话文件的时间戳精确到毫秒）
             let base = try #require(try FileManager.default.attributesOfItem(atPath: listed.path)[.modificationDate] as? Date)
             let at = { (step: Double) in base + step / 1000 }
+            // 索引器已读过的部分接着检查点读：收尾的一轮读到时还开着，换轮的读到上一轮收尾
             let ended = try Transcript(testbed, id: UUID().uuidString.lowercased())
             try ended.user("go", at: at(1))
+            try await testbed.index(ended.url)
             try ended.reply("DONE", at: at(2))
             let changed = try Transcript(testbed, id: UUID().uuidString.lowercased())
             try changed.user("first", at: at(3))
             try changed.reply("ONE", at: at(4))
+            try await testbed.index(changed.url)
             try changed.user("second", at: at(5))
             // 列表里的进程要活着：起一个读标准输入的进程顶替 Claude Code，关掉输入它就退出（测试台停时等它退出）
             let stand = Process(), input = Pipe()

@@ -22,7 +22,7 @@ struct SessionFacts {
     /// 上一轮出错的原文；开始新的一轮时清掉
     var failure: String?
     /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
-    /// 各家整份写入自己的权威来源（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
+    /// 各家只按自己的权威来源写（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
     /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
     /// 主会话最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
@@ -32,13 +32,10 @@ struct SessionFacts {
     /// 歇着时开始压缩那一刻的计时：压完回到它
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
-    /// 开始新的一轮（你开的，或 Agent 自己为子代理的结果开的、接入补开的）。`start` 要早于这一轮可能在会话文件里收尾的任何时刻：
-    /// 歇下就绪看收尾不早于它（`PiSessionState.answered`）。取 Agent 自己给的开始时刻；没有就取一个一定在它之前的时刻——
-    /// 会挡住这一轮的钩子（收到 `UserPromptSubmit`）、CuePad 发出话或空输入的那一刻、收到 Agent 报这一轮开始（或开它的那件事）的那一刻。
-    /// 接上时已在跑的一轮（CuePad 晚启动、断线重连）：拿到列表或快照之后从会话记录里读它的开始（`PiHistoryCheckpoint.lastTurnStart`）。
-    /// CuePad 自己的时刻都分不清这期间换没换轮：接上的此刻可能晚于它的收尾（永远不算就绪），请求前的时刻可能早于上一轮的回答
-    /// （上一轮在请求途中收尾、这一轮紧接着开始时，上一轮的回答也算就绪），库里旧的更早。记录里一轮都读不到才取请求前的时刻：
-    /// 这时也没有上一轮的回答可比。
+    /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`PiSessionState.answered`）：
+    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——挡住这一轮的钩子、CuePad 发出话或空输入、收到开始通知的那一刻；
+    /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`PiHistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
+    /// 库里旧的都分不清期间换没换轮（会晚于这一轮的收尾或早于上一轮的回答），记录里一轮都读不到才取请求前的时刻。
     mutating func startTurn(at start: Date) {
         turnStartedAt = start
         running = true
