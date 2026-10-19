@@ -80,7 +80,7 @@ struct PiReplyBar: View {
     private var reachable: Bool { services.reachesPiHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && reachable && speakBlocked == nil }
-    /// 这会儿说不了的原因（`PiSessionState.speakBlocked`）：占位与发送钮的说明写它，发送钮不可用；作答不是说话，不受它管。
+    /// 这会儿说不了的原因（`PiSessionState.speakBlocked`）：发送钮的说明写全文，占位写短的（手机一行放不下全文），发送钮不可用；作答不是说话，不受它管。
     private var speakBlocked: String? { answering == nil ? session.speakBlocked : nil }
     private var canStop: Bool { session.canStop }
     private var shownSending: Bool { !hasDraft && !canStop && (launched || sending) }
@@ -213,12 +213,13 @@ struct PiReplyBar: View {
     /// 发出会打断 Agent 正在跑的这一轮（`MacDelivery`）：占位与发送钮的说明写明；打断不了的写说不了的原因。
     private var interrupts: Bool { session.state.known?.isTurnRunning == true }
     private static let interruptNote = "会打断这一轮，以这句接着做"
+    private static let blockedPrompt = "在终端里跑着：按 Esc 或等它做完"
     private var sendNote: String { speakBlocked ?? (interrupts ? Self.interruptNote : "") }
 
     /// 占位只说这里写什么；Agent 在跑时写明发出会打断它，打断不了时写原因。
     private var placeholder: String {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
-        if let speakBlocked { return speakBlocked }
+        if speakBlocked != nil { return Self.blockedPrompt }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
         return interrupts ? "插话（会打断这一轮）" : replyPrompt
     }
