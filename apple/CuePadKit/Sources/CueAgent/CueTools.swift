@@ -61,15 +61,21 @@ public struct CueTools: Sendable {
         "name": "tell",
         "description": """
           对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)。
-          带 ask 必写 doing：要做的动作，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。卡片、摘要与通知只显示"可以<doing>吗？"、为什么要问他（rule 那类就是这条规矩）与选项，不显示 text。
+          带 ask 必写 doing：一句说清要他定什么，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"；几个方案里挑时写你推荐的那个，如"按方案 1 决定单改提问卡"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。
+          卡片、摘要与通知只显示"可以<doing>吗？"、为什么要问他（rule 那类就是这条规矩）、show 的图与选项，不显示 text。
+          show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
-          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单，不允许时他另外写一句给你。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
+          选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单；他也可能不选、另外说一句给你（不同意、选别的方案或别的想法）。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。
           urgent 推送到手机；task 关联一个任务（按它的项目查允许清单）；withdraw 写"等你"里你问的那条的 id，撤回它，可同时带 text 说明或换个问法。
           """,
         "inputSchema": schema(
           [
             "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "doing": string, "rule": string,
             "urgent": ["type": "boolean"], "task": string, "withdraw": string,
+            "show": [
+              "type": "array", "maxItems": CueShot.limit,
+              "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]],
+            ],
           ],
           required: []),
         "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
@@ -453,11 +459,11 @@ public struct CueTools: Sendable {
     return .ok(lines.joined(separator: "\n"))
   }
 
-  /// 发到手机的文件，每份一行：标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
+  /// 发到手机的文件，每份一行：id（提问的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，给的是按原文件名放的那份）。
   private func deliveredLines(_ previews: [PiPreview]) -> [String] {
     guard !previews.isEmpty else { return [] }
-    return ["发到手机的（图片、PDF 用 read 打开）："] + previews.map { preview in
-      "  - 「\(preview.title)」\(preview.kind?.label ?? preview.name) · \(Self.clock(preview.createdAt)) · "
+    return ["发到手机的（id，图片、PDF 用 read 打开）："] + previews.map { preview in
+      "  - \(preview.id.shortID) 「\(preview.title)」\(preview.kind?.label ?? preview.name) · \(Self.clock(preview.createdAt)) · "
         + (store.files.url(of: preview)?.path ?? "还没同步到这台 Mac")
     }
   }
@@ -509,10 +515,12 @@ public struct CueTools: Sendable {
   /// 先撤回（若有 withdraw），再说（若有 text）；两样都没有是参数错。
   private func tell(_ args: Args) async throws -> Result {
     let related = try await args.string("task").asyncMap(task)
+    let shots = try await shots(args.raw["show"])
     let ask = try args.string("ask").map { raw -> CueAsking in
       guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
-      return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"))
+      return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"), shots: shots)
     }
+    if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }
     let withdrawn = try await args.string("withdraw").asyncMap(withdraw)
     guard let text = args.string("text") else {
       guard let withdrawn else { throw Failure("要给 text（说什么）或 withdraw（撤回哪条提问）") }
@@ -521,6 +529,22 @@ public struct CueTools: Sendable {
     let message = try await store.addCueMessage(.cue, text: text, ask: ask, urgent: args.bool("urgent") ?? false, task: related?.id)
     return .ok(
       (withdrawn == nil ? "" : "已撤回原来那条，") + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）")
+  }
+
+  /// show 点名的图：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。
+  private func shots(_ raw: Any?) async throws -> [CueShot] {
+    guard let raw else { return [] }
+    guard let items = raw as? [[String: Any]] else { throw Failure("show 是数组：[{file, look}]") }
+    var shots: [CueShot] = []
+    for item in items {
+      let key = (item["file"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+      let hits = key.isEmpty ? [] : try await store.previews(idPrefix: key)
+      guard hits.count == 1 else {
+        throw Failure(hits.isEmpty ? "发到手机的里没有 \(key)：照 task peek 里列的 id 写" : "前缀 \(key) 对上了 \(hits.count) 份：多写几位")
+      }
+      shots.append(CueShot(preview: hits[0].id, look: item["look"] as? String ?? ""))
+    }
+    return shots
   }
 
   /// 撤回"等你"里的一条提问（id 或前缀）。

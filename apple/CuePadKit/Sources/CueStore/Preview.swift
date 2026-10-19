@@ -188,6 +188,13 @@ extension CueStore {
   public func previews(of sessionID: String) throws -> [PiPreview] {
     try select(PiPreview.self, where: "sessionID = ?", [sessionID], orderBy: "createdAt, id")
   }
+
+  /// 按 id 取几份预览（提问点名的图，`CueAsking.shots`）；不在了的不在结果里。
+  public func previews(_ ids: some Collection<UUID>) throws -> [UUID: PiPreview] {
+    guard !ids.isEmpty else { return [:] }
+    let found = try select(PiPreview.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
+    return Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })
+  }
 }
 
 extension PiPreviewAdded {

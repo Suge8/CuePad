@@ -6,4 +6,9 @@ extension CueStore {
   public func cards(idPrefix prefix: String) throws -> [Card] {
     try select(Card.self, where: "id >= ?1 AND id < ?1 || '~'", [prefix.lowercased()], orderBy: "id")
   }
+
+  /// id 以 `prefix` 开头的发到手机的预览（同上）。
+  public func previews(idPrefix prefix: String) throws -> [PiPreview] {
+    try select(PiPreview.self, where: "id >= ?1 AND id < ?1 || '~'", [prefix.lowercased()], orderBy: "id")
+  }
 }

@@ -7,10 +7,12 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
-    /// 对话与"等你"提到的活（消息上收成一行的引用、结果卡与"等你"里的交付物）。
+    /// 对话与"等你"提到的活（消息上收成一行的引用、结果卡挂的交付物）。
     let tasks: [UUID: CueTaskRef]
     /// 在等你的（Kit 的 `cueMessagesWaitingForYou` 是唯一的规则）。
     let waiting: [CueMessage]
+    /// 提问点名要你看的图（`CueAsking.shots`），按提问的 id：只有点了名、那一份还在的
+    let shots: [UUID: [CueShown]]
     let rows: [Row]
     /// 紧挨着上面同一边一颗气泡的气泡（你的话接你的话、Cue 的话接 Cue 的话，中间没隔着时间）：收紧成一串（`CueBubble`）。
     let joined: Set<UUID>
@@ -28,10 +30,13 @@ nonisolated struct CueThread: Equatable, Sendable {
     static let limit = 200
 
     /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）。
-    init(messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], unread: Set<UUID>, showsSteps: Bool) {
+    init(
+        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool
+    ) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
+        self.shots = shots
         self.unread = unread
         let rows = Self.rows(messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
         self.rows = rows
@@ -66,7 +71,14 @@ nonisolated struct CueThread: Equatable, Sendable {
             guard let card = try store.card(id), card.isTask, card.deletedAt == nil else { continue }
             tasks[id] = CueTaskRef(task: card, progress: progress[id], deliverables: deliverables[id] ?? [])
         }
-        return CueThread(messages: messages, tasks: tasks, waiting: waiting, unread: Set(try store.cueUnread()), showsSteps: showsSteps)
+        let asked = (messages + waiting).filter { !$0.askShots.isEmpty }
+        let previews = try store.previews(Set(asked.flatMap { $0.askShots.map(\.preview) }))
+        var shots: [UUID: [CueShown]] = [:]
+        for message in asked {
+            let shown = message.askShots.compactMap { shot in previews[shot.preview].map { CueShown(preview: $0, look: shot.look) } }
+            if !shown.isEmpty { shots[message.id] = shown }
+        }
+        return CueThread(messages: messages, tasks: tasks, waiting: waiting, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps)
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
@@ -157,8 +169,8 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 
     /// 回答按答的那一刻插进对话（`answer`）：排在那一刻之前最近的那格之后，与会话里的作答、预览卡同一条规则（`PiChat.entries`）。
-    /// 交付物挂在哪句话下面（只此一处）：一件活的 Cue 的话（还在"等你"里的除外）挂上这件活从上一次挂出之后、到这句话为止新发来的交付物
-    /// （按发来的时刻切），挂了的就是结果卡——Cue 做完时写下的"「X」做完了"自然是一张。还在"等你"里的不消耗：答完它回到对话里时才挂。
+    /// 交付物挂在哪句话下面（只此一处）：一件活的 Cue 的话挂上这件活从上一次挂出之后、到这句话为止新发来的交付物
+    /// （按发来的时刻切），挂了的就是结果卡——Cue 做完时写下的"「X」做完了"自然是一张。提问不挂：它只带自己点名的图（`shots`）。
     private static func rows(
         _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool
     ) -> [Row] {
@@ -182,7 +194,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .you: rows.append(.you(message))
             case .cue:
                 if waiting.contains(message.id) { continue }
-                if let id = message.taskID, let ref = tasks[id] {
+                if message.choices == nil, let id = message.taskID, let ref = tasks[id] {
                     let fresh = ref.deliverables.filter { $0.createdAt <= message.createdAt && $0.createdAt > hung[id, default: .distantPast] }
                     if !fresh.isEmpty {
                         hung[id] = message.createdAt
@@ -215,4 +227,11 @@ nonisolated struct CueTaskRef: Equatable, Sendable {
     var deliverables: [PiPreview]
 
     var done: Bool { task.status == .done }
+}
+
+/// 提问点名要你看的一张图：发到手机的那一份与看它的什么（`CueShot`）。
+nonisolated struct CueShown: Identifiable, Equatable, Sendable {
+    let preview: PiPreview
+    let look: String
+    var id: UUID { preview.id }
 }

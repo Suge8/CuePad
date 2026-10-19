@@ -7,7 +7,7 @@ import Foundation
 extension CueStore {
   /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
   /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
-  /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、什么都不写。
+  /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsking? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
@@ -17,6 +17,7 @@ extension CueStore {
       if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
       }
+      for shot in ask.shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
       return try insertCueMessage(author, text: text, asking: ask, in: project, urgent: urgent, task: task)
     }
   }
@@ -29,7 +30,8 @@ extension CueStore {
     let now = Date.stamp
     let message = CueMessage(
       id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
-      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, urgent: urgent, taskID: task,
+      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, askShots: asking?.shots ?? [],
+      urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
     try insert(message)
     try registerImages(in: text)

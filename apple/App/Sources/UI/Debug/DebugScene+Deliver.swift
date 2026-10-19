@@ -5,7 +5,7 @@ import SwiftUI
 /// 演示库里 Cue 页的结果卡（`seedCue` 里调）：三件活各有会话发来的交付物——"落地页深浅两版"做完了，挂着两份网页（同一组两份网页左右翻）；
 /// "修好登录页的键盘遮挡"做完了，挂着修复前与修复后两张截图；
 /// "重做定价区"中途 Cue 核对过一批，挂着网页、PDF、横图与 Markdown 四份（三份起横向滑）。README 那件挂着一张（`seedCue`），
-/// "等你"里的推送挂着部署会话发来的截图与测试报告（迷你一排）。
+/// "等你"里的推送点名了部署会话发来的截图与测试报告（`seedCue`）。
 extension DebugScene {
     static func seedDeliveries(_ store: CueStore) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-deliver", directoryHint: .isDirectory)

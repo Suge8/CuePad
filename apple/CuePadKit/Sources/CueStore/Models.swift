@@ -448,6 +448,10 @@ public enum CueStoreError: Error, Equatable {
   case alreadyAllowed(String?)
   /// 提问的动作或规矩短语缺了、超长或不止一行（`CueAsking`）。
   case askPhrase(field: String, hint: String, limit: Int)
+  /// 提问的图多于 `limit` 张或有重复（`CueAsking`）。
+  case askShots(limit: Int)
+  /// 提问点名的那一份不在发到手机的里（参数是 id）。
+  case shotMissing(String)
   /// 规矩那一类不能放进允许清单。
   case cannotAllowRule
 }
@@ -497,6 +501,8 @@ extension CueStoreError: LocalizedError {
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
     case .askPhrase(let field, let hint, let limit): "带 ask 要写 \(field)：\(hint)，一行、不超过 \(limit) 字"
+    case .askShots(let limit): "show 至多 \(limit) 张、不重复：只挑回答这个问题必须看的"
+    case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"
     case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
     case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"
     }

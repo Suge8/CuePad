@@ -38,10 +38,12 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
   public var askRule: String?
+  /// 提问要你看的图（`CueAsking.shots`；看什么是用户内容，加密同步）。
+  public var askShots: [CueShot] = []
   /// 提问是哪一类事。
   public var ask: CueAsk? { asked?.ask.known }
   /// 提问问的是什么；不是提问为 nil。认不出类别（更新的版本写的）按规矩那一类说。
-  public var asking: CueAsking? { choices.map { _ in CueAsking(stored: ask ?? .rule, action: askAction, rule: askRule) } }
+  public var asking: CueAsking? { choices.map { _ in CueAsking(stored: ask ?? .rule, action: askAction, rule: askRule, shots: askShots) } }
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
@@ -81,21 +83,21 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule",
+    "ask", "askAction", "askRule", "askShots",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule,
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(askShots),
     ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
-      askAction: row.textOrNil(14), askRule: row.textOrNil(15), urgent: row.bool(4), taskID: row.uuidOrNil(5),
+      askAction: row.textOrNil(14), askRule: row.textOrNil(15), askShots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
       modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
   }
@@ -104,7 +106,7 @@ extension CueMessage: Record {
 /// 一条提问怎么结束（`CueStore.endCueQuestion`）：两种结局落到同一个状态上（`CueMessage.answeredAt`）。
 /// 卡片一直挂着，直到你回答或 Cue 撤回，没有"关掉"。
 public enum CueQuestionEnd: Equatable, Sendable {
-  /// 你选了一项，或不选、另外说了一句（`CueAsk.otherwise`）：都交给 Cue、叫醒它
+  /// 你选了一项，或不选、另外说了一句（`CueAsk.otherwise`，不一定是不同意）：都交给 Cue、叫醒它
   case answered(String)
   /// Cue 撤回了（拿了主意或情况变了）：它自己撤的，不交给它
   case withdrawn
@@ -337,7 +339,7 @@ extension CueState: Record {
 
 /// Cue 要先问你的几类事（唯一定义，Cue 的提示词与工具说明照它写）：收不回或越出它职责的事。只有这几类能写带选项的"等你"
 /// （`CueStore.addCueMessage` 的 `ask`）；调研方案、设计取舍、实现路线、步骤与整件事算不算做完，Cue 按你的规矩与最佳实践自己定，做完告诉你。
-/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；不允许就在卡片的输入框里另外说（`otherwise`）。
+/// 选项也由这里给（`choices`），Cue 不能自拟"照这个做 / 我再看看"这类确认；别的想法（不同意、选别的方案、补一句条件）在卡片的输入框里另外说（`otherwise`）。
 /// 给人看的只有 `name`（选项、设置里的"不用先问"）与 `why`；`definition` 只给 Cue 看。
 public enum CueAsk: String, CaseIterable, Sendable {
   case push, merge, release, delete, outside, budget, rule
@@ -383,8 +385,8 @@ public enum CueAsk: String, CaseIterable, Sendable {
   }
 
   public static let once = "这次可以"
-  /// 卡片上选项之后的输入框：不允许，写下你的话（作为回答交给 Cue，叫醒它）。
-  public static let otherwise = "不行，我来说怎么做…"
+  /// 卡片上选项之后的输入框：不选，另外说你的话（不一定是不同意，也可以是别的想法；作为回答交给 Cue，叫醒它）。
+  public static let otherwise = "另外说…"
 
   /// 提问的第二项：选了它，这类事以后在 `project`（关联任务所在项目的名字）里不再问，nil 是所有项目里都不再问；
   /// `CueStore.endCueQuestion` 按提问存的范围记进允许清单（`CueProfile.allows`）。规矩那一类没有这一项：一律放行等于没有规矩。
@@ -414,35 +416,43 @@ public enum CueAsk: String, CaseIterable, Sendable {
   }
 }
 
-/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩。动作与规矩是 Cue 写的短语，
-/// 卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这两样，不露 Cue 的原话。
+/// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩，以及要你看的那几张图。
+/// 动作、规矩与每张图看什么是 Cue 写的短语，卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这些，不露 Cue 的原话。
 public struct CueAsking: Equatable, Sendable {
   public let ask: CueAsk
   /// 要做的动作（"推送 scheduler 的重连修复"）；更旧版本写的提问没有。
   public let action: String?
   /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
   public let rule: String?
+  /// 回答这个问题要看的图（Cue 点名、按它给的先后），卡片、通知与全屏预览只读它；没点名的没有图。
+  public let shots: [CueShot]
 
   /// 动作与规矩各至多这么多字。
   public static let phraseLimit = 30
 
   /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `askPhrase`。
-  public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
+  /// 图至多 `CueShot.limit` 张、不重复，每张一句看什么（`CueShot.lookLimit` 字以内），不合要求抛 `askShots`。
+  public init(_ ask: CueAsk, action: String?, rule: String? = nil, shots: [CueShot] = []) throws {
     self.ask = ask
-    self.action = try Self.phrase(action, "doing", "要做的动作，如“推送 scheduler 的重连修复”")
-    self.rule = ask == .rule ? try Self.phrase(rule, "rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”") : nil
+    self.action = try Self.phrase(action, "doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
+    self.rule = ask == .rule ? try Self.phrase(rule, "rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
+    guard shots.count <= CueShot.limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.askShots(limit: CueShot.limit) }
+    self.shots = try shots.map {
+      CueShot(preview: $0.preview, look: try Self.phrase($0.look, "show 的 look", "这张看什么，如“方案 1：大按钮占满一行”", limit: CueShot.lookLimit))
+    }
   }
 
-  package init(stored ask: CueAsk, action: String?, rule: String?) {
+  package init(stored ask: CueAsk, action: String?, rule: String?, shots: [CueShot] = []) {
     self.ask = ask
     self.action = action
     self.rule = rule
+    self.shots = shots
   }
 
-  private static func phrase(_ text: String?, _ field: String, _ hint: String) throws -> String {
+  private static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
     let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
-    guard !trimmed.isEmpty, trimmed.count <= phraseLimit, !trimmed.contains(where: \.isNewline) else {
-      throw CueStoreError.askPhrase(field: field, hint: hint, limit: phraseLimit)
+    guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
+      throw CueStoreError.askPhrase(field: field, hint: hint, limit: limit)
     }
     return trimmed
   }
@@ -457,6 +467,22 @@ public struct CueAsking: Equatable, Sendable {
 
   /// 为什么要问你（`CueAsk.why`）。
   public var why: String { ask.why(rule: rule) }
+}
+
+/// 提问要你看的一张图：发到手机的哪一份（`PiPreview.id`）与看它的什么（Cue 写的一句）。写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。
+public struct CueShot: Codable, Hashable, Sendable {
+  public let preview: UUID
+  public let look: String
+
+  /// 一次提问至多这么多张：只挑回答这个问题必须看的。
+  public static let limit = 4
+  /// 看什么至多这么多字。
+  public static let lookLimit = 20
+
+  public init(preview: UUID, look: String) {
+    self.preview = preview
+    self.look = look
+  }
 }
 
 /// 允许清单里的一项（`CueProfile.allows`）：一类要先问的事在一个项目里（`project`），或所有项目里（nil）以后不用问。
@@ -491,14 +517,15 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、为什么问你（`CueAsking`，`task` 是关联任务的标题）接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
+/// "等你"的正文是要你定什么、为什么问你（`CueAsking`，`task` 是关联任务的标题）、要看的图各看什么，接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
   public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, task: String?) -> (title: String, body: String) {
     let body: String
     if let asking, let choices {
-      body = [asking.question(task: task), asking.why, choices.joined(separator: " / ")].joined(separator: "\n")
+      let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
+      body = ([asking.question(task: task), asking.why] + shots + [(choices + [CueAsk.otherwise]).joined(separator: " / ")]).joined(separator: "\n")
     } else {
       body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }

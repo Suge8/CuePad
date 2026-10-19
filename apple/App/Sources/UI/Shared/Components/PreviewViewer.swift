@@ -5,11 +5,13 @@ import Quartz
 import SwiftUI
 
 /// 点开的那一份，和与它同一组的几份（全屏页里左右翻）；`group` 认它从哪张缩略图放大（`PreviewZoomKey`），`reply` 是底栏对谁说。
+/// `looks`：提问点名的图各看什么（`CueShown`），有的话页顶写它，不写标题。
 struct PreviewOpening: Identifiable, Equatable {
     let preview: PiPreview
     let batch: [PiPreview]
     let group: String
     let reply: PreviewReply
+    var looks: [UUID: String] = [:]
 
     var id: UUID { preview.id }
 }
@@ -81,7 +83,7 @@ private struct PreviewPager: View {
     private var batch: [PiPreview] { opening.batch }
     private var index: Int { batch.firstIndex { $0.id == current } ?? 0 }
     private var preview: PiPreview { batch[index] }
-    private var title: String { DeliverableStrip.label(of: preview, in: batch) }
+    private var title: String { opening.looks[preview.id] ?? DeliverableStrip.label(of: preview, in: batch) }
     /// "2 / 3 · 图片"，只有一份时只写类型
     private var position: Dotted { Dotted(batch.count > 1 ? "\(index + 1) / \(batch.count)" : nil, preview.kind?.label) }
 

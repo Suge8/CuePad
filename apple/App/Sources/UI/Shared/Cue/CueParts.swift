@@ -209,11 +209,14 @@ enum CueBubble {
 
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你的，答完或撤回后回到问的位置，只有这句话；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
+/// 问过你的，答完或撤回后回到问的位置，这句话下面是它点名的图（`CueShots`）；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
     var task: CueTaskRef?
+    /// 提问点名的图（`CueThread.shots`）与点开一张
+    var shots: [CueShown] = []
+    var open: (PreviewOpening) -> Void = { _ in }
     /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
     /// 新到的从左下角长出来；原位换下正在说的话时（`CueEnding`）直接出现
@@ -227,6 +230,7 @@ struct CueSays: View {
             BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                 VStack(alignment: .leading, spacing: 8) {
                     MarkdownText(source: message.text).equatable()
+                    if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
                     if let task { CueTaskLine(ref: task) }
                 }
                 .cueBubble(joined: joined)
@@ -326,14 +330,51 @@ struct CueChoices: View {
     }
 }
 
-/// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
-/// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务的全部交付物
-/// （迷你一排，新的在前；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
+/// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张）：并排等宽，每张下面一句看什么（Cue 写的），按 Cue 给的先后。
+/// 点一张全屏看，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
+struct CueShots: View {
+    let shots: [CueShown]
+    let group: String
+    let reply: PreviewReply
+    let open: (PreviewOpening) -> Void
+    @Environment(\.palette) private var palette
+
+    #if os(macOS)
+    static let height: CGFloat = 120
+    #else
+    static let height: CGFloat = 96
+    #endif
+    static let gap: CGFloat = 8
+
+    var body: some View {
+        let batch = shots.map(\.preview), looks = Dictionary(uniqueKeysWithValues: shots.map { ($0.id, $0.look) })
+        HStack(alignment: .top, spacing: Self.gap) {
+            ForEach(shots) { shot in
+                VStack(alignment: .leading, spacing: 5) {
+                    DeliverableTile(
+                        preview: shot.preview, label: shot.look, shape: .column(maxHeight: Self.height), captioned: false,
+                        zoom: PreviewZoomKey(group: group, preview: shot.id)
+                    ) { open(PreviewOpening(preview: $0, batch: batch, group: group, reply: reply, looks: looks)) }
+                    Text(shot.look).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+/// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按类别与关联任务写出
+/// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
+/// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
 /// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
     let tasks: [UUID: CueTaskRef]
+    /// 提问点名的图（`CueThread.shots`）
+    let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
     /// 卡正在升起、沉下或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
     @Binding var moving: Bool
@@ -423,11 +464,8 @@ struct CueWaitingDock: View {
         return VStack(alignment: .leading, spacing: 12) {
             CueQuestionLine(asking: message.asking, question: question)
             if reading == message.id { original(message.text).transition(.opacity) }
-            if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
-                let batch = Array(deliverables)
-                DeliverableStrip(previews: batch, size: .mini, group: "waiting", bleed: 16) {
-                    open(PreviewOpening(preview: $0, batch: batch, group: "waiting", reply: .answer(message, question: question)))
-                }
+            if let shots = shots[message.id] {
+                CueShots(shots: shots, group: "waiting", reply: .answer(message, question: question), open: open)
             }
             CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
             otherwiseField(message)

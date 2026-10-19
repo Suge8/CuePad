@@ -206,6 +206,7 @@ DEFINE SCHEMA
         ask           STRING,
         askAction     ENCRYPTED STRING,
         askRule       ENCRYPTED STRING,
+        askShots      ENCRYPTED STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
