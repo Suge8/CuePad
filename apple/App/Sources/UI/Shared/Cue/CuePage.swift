@@ -35,7 +35,6 @@ struct CuePage: View {
     @State private var opened: PreviewOpening?
     /// 对话那一列的宽：离屏远的段换成的空白按它估高（`ChatSegments`）。
     @State private var width: CGFloat = 0
-    @Environment(\.chatHighlight) private var highlight
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
 
@@ -146,7 +145,7 @@ struct CuePage: View {
                 if first > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
                 let live = live
                 ChatSegments(
-                    items: rows, size: Self.segment, from: first, width: width, spare: Self.spare, pinned: { $0.contains { $0.id == highlight } }
+                    items: rows, size: Self.segment, from: first, width: width, spare: Self.spare
                 ) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
