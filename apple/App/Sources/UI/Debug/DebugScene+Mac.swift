@@ -89,7 +89,7 @@ extension DebugScene {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
-            SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap { name in SettingsPane.allCases.first { "\($0)" == name } })
+            SettingsPane.open(defaults.string(forKey: "CuePadSettingsPane").flatMap(SettingsPane.init(rawValue:)))
             mainWindow?.animationBehavior = .none
             mainWindow?.orderOut(nil)
         case "trash": workspace.show(.trash)

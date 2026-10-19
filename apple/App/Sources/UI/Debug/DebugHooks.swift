@@ -64,7 +64,7 @@ enum DebugHooks {
         #endif
     }()
 
-    /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身（`DebugScene.StalledSync`），其余照常按 iCloud。
+    /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身，`-CuePadSync <状态>` 换成报这个状态的替身（`DebugScene.StandInSync`），其余照常按 iCloud。
     static var syncSource: AppServices.SyncSource {
         #if DEBUG
         DebugScene.syncSource

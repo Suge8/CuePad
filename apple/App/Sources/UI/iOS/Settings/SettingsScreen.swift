@@ -9,58 +9,72 @@ struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
-    /// 宽屏上表单限宽居中，分段控件与说明不被拉成一长条（Cue 的设置页同宽）。
-    static let readableWidth: CGFloat = 640
 
     var body: some View {
         @Bindable var settings = services.settings
-        Form {
-            Group {
-                Section {
-                    NavigationLink(value: Route.cueSettings) {
-                        LabeledContent {
-                            Text(workspace.cue.home ?? "")
-                        } label: {
-                            Label(workspace.cue.name, icon: .cue)
-                        }
+        SettingsForm {
+            Section {
+                NavigationLink(value: Route.cueSettings) {
+                    LabeledContent {
+                        Text(workspace.cue.home ?? "")
+                    } label: {
+                        Label(workspace.cue.name, icon: .cue)
                     }
                 }
-                SyncSection()
-                if services.sync != nil || Self.previewsAlerts { AlertSection() }
-                Section {
-                    Picker(selection: $settings.theme) {
+            }
+            SyncSection()
+            if services.sync != nil || Self.previewsAlerts { AlertSection() }
+            Section {
+                // 三项分段，同 Mac：选中哪个一眼看得到，不用点开菜单
+                LabeledContent {
+                    Picker("外观", selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
                         Text("深色").tag(AppSettings.Theme.dark)
-                    } label: {
-                        Label("外观", icon: .appearance)
                     }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                } label: {
+                    Label("外观", icon: .appearance)
                 }
-                if !services.startupIssues.isEmpty {
-                    Section("没能完成的事") {
-                        ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
-                            Label { Text(issue.text) } icon: { FailureMark() }.font(.footnote)
-                        }
-                    }
-                }
-                if services.diagnostics.latest != nil { Section { LastCrashRow() } }
             }
-            .listRowBackground(palette.paper)
+            if !services.startupIssues.isEmpty {
+                Section("没能完成的事") {
+                    ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
+                        Label { Text(issue.text) } icon: { FailureMark() }.font(.footnote)
+                    }
+                }
+            }
+            if services.diagnostics.latest != nil { Section { LastCrashRow() } }
             Section {} footer: {
                 Text("CuePad \(AppServices.version)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
             }
         }
-        .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
-        .frame(maxWidth: .infinity)
-        .scrollContentBackground(.hidden)
         .floatingHeader("设置")
     }
 
     /// 演示模式没有同步：调试参数要看通知各状态时照样显示这一节。
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
+}
+
+/// 设置与 Cue 设置两页共用的表单：分组是纸色的行、底是页面色，宽屏上限宽居中（分段控件与说明不被拉成一长条）。
+struct SettingsForm<Content: View>: View {
+    @ViewBuilder var content: Content
+    @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private static var readableWidth: CGFloat { 640 }
+
+    var body: some View {
+        Form {
+            Group { content }.listRowBackground(palette.paper)
+        }
+        .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
+        .frame(maxWidth: .infinity)
+        .scrollContentBackground(.hidden)
+    }
 }
 
 /// 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
@@ -134,27 +148,26 @@ private struct SyncSection: View {
                     Image(summary.icon).foregroundStyle(palette.color(summary.tone))
                 }
             }
-            if services.sync != nil {
-                if case .needsDecision = services.syncStatus {
-                    Button("上传本机数据", icon: .uploadLocal) { resolve(.uploadLocal) }
-                    Button("用云端数据替换本机…", icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
-                } else {
-                    Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
-                        .disabled(!services.canSyncNow)
+            // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
+            if case .needsDecision = services.syncStatus {
+                Button("上传本机数据", icon: .uploadLocal) { resolve(.uploadLocal) }
+                Button("用云端数据替换本机…", icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
+            } else if services.sync != nil {
+                Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
+                    .disabled(!services.canSyncNow)
+            }
+            if !services.conflicts.isEmpty {
+                NavigationLink(value: Route.conflicts) {
+                    Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
+                        .foregroundStyle(palette.ink)
                 }
-                if !services.conflicts.isEmpty {
-                    NavigationLink(value: Route.conflicts) {
-                        Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
-                            .foregroundStyle(palette.ink)
-                    }
-                }
-                if !services.syncIssues.isEmpty {
-                    DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
-                        ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(issue.summary).font(.footnote)
-                                Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
-                            }
+            }
+            if !services.syncIssues.isEmpty {
+                DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
+                    ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(issue.summary).font(.footnote)
+                            Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
                         }
                     }
                 }

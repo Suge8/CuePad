@@ -2,7 +2,7 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsSection`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端的启用卡
+/// Cue 的设置，两端同一份：Mac 设置窗口的 Cue 那一页（`CueSettingsPane`）、手机的 Cue 设置页（`CueSettingsScreen`）与两端的启用卡
 /// （`CueEnableCard`）都读写它。读的是同步的设置（`CueProfile`）、各台 Mac 自报的名字与能用的 Agent（`CueStore.allMacAgents`，Cue 能在
 /// 哪台上运行就是这几台）与项目名（允许清单里写）；动作是改名、在哪台运行并启用（`AppServices.enableCue`，规则在 `CueStore.enableCue`）、停用、
 /// 允许清单的一项（`CueStore.setCueAllow`），写完都立即上传。没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
