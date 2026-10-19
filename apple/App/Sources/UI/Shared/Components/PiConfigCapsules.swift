@@ -72,6 +72,28 @@ struct PiModelCapsule: View {
 }
 
 
+/// Agent 胶囊的样子：产品标志 + 名字，与模型胶囊同一种底与高（`PiConfigControls`）。
+struct PiAgentLabel: View {
+    let kind: AgentKind
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
+            Text(kind.name).lineLimit(1).contentTransition(.opacity)
+        }
+        .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+        .padding(.leading, 6).padding(.trailing, 11)
+        .fixedSize()
+        .frame(height: 30)
+        .background(palette.fill, in: .capsule)
+        .frame(minHeight: 44)
+        .contentShape(.capsule)
+        .animation(Motion.quick, value: kind)
+    }
+}
+
+
 /// 胶囊上的模型标志（次要墨色）；它的提供方有订阅额度时外面一圈细环：卡着的那个窗口还剩多少（`QuotaRing`），
 /// 没有额度的只有标志、占同样大，换模型时不跳。认不出的模型（`BrandMark`）只有环；两样都没有时胶囊上不放它。
 struct ModelBadge: View {

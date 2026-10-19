@@ -48,12 +48,12 @@ struct PiConversation: View {
             ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
             ending
         }
-        // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
+        // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
         #if os(iOS)
-        // 手机上长按出的是消息菜单，挑字走菜单里的"选择文本"：对话里的字不开行内选择，每行少建一套文字交互。
+        // 手机上长按出的是消息菜单，挑字、批注走菜单里的"选择文本""批注"：对话里的字不开行内选择，每行少建一套文字交互。
         // 挂在弹出预览之内：从这里打开的文件预览照常可选
         .environment(\.inlineTextSelection, false)
         #endif
@@ -186,7 +186,7 @@ private struct ChatSegment: View, Equatable {
                 .padding(.top, Self.turnGap)
         case .pi:
             ReplyBlock(
-                text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
+                id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
             // 压缩：上下文从这里起换了，与 Cue 换新同一条分隔
             ContextBoundary(title: entry.text, highlighted: entry.id == highlight)

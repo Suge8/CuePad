@@ -154,9 +154,13 @@ extension CueStore {
   private func folders(where condition: String, _ arguments: [any SQLBindable]) throws -> [SessionFolder] {
     try db.query(
       """
-      SELECT hostID, folder, sessionID, projectID, count(*), max(stateSince) FROM piSessionStates
-      WHERE \(condition) GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
+      SELECT hostID, folder, sessionID, projectID, count(*), max(stateSince), \(MacAgents.nameSQL(host: "piSessionStates.hostID"))
+      FROM piSessionStates WHERE \(condition) GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
       """, arguments
-    ) { SessionFolder(hostID: $0.text(0), folder: $0.text(1), sessionID: $0.text(2), projectID: $0.uuidOrNil(3), count: Int($0.int(4))) }
+    ) {
+      SessionFolder(
+        hostID: $0.text(0), folder: $0.text(1), sessionID: $0.text(2), projectID: $0.uuidOrNil(3), count: Int($0.int(4)),
+        macName: MacAgents.shownName($0.textOrNil(6)))
+    }
   }
 }

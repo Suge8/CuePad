@@ -5,27 +5,31 @@ import Foundation
 // MARK: 对话
 
 extension CueStore {
-  /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"，选项是 `CueAsk.choices`）：
-  /// 允许清单里有这类事（`CueProfile.allowing`，按关联任务所在的项目）就抛 `alreadyAllowed`、什么都不写。
+  /// 写一条对话。正文不能为空。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
+  /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
+  /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、什么都不写。
   @discardableResult
-  public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsk? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
+  public func addCueMessage(_ author: CueAuthor, text: String, ask: CueAsking? = nil, urgent: Bool = false, task: UUID? = nil) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
-      if let ask, let allowed = try cueProfile()?.allowing(ask, in: try projectID(of: task)) {
+      guard let ask else { return try insertCueMessage(author, text: text, urgent: urgent, task: task) }
+      let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
+      if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
       }
-      return try insertCueMessage(author, text: text, choices: ask?.choices, urgent: urgent, task: task)
+      return try insertCueMessage(author, text: text, asking: ask, in: project, urgent: urgent, task: task)
     }
   }
 
-  /// 写一条对话（在写事务内调用）。`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
+  /// 写一条对话（在写事务内调用）。`asking` 是提问问的什么，`project` 是它的范围；`at`：排在对话里的时刻，缺省是此刻（一轮的经过排在这一轮开始的时刻）。
   func insertCueMessage(
-    _ author: CueAuthor, text: String, choices: [String]? = nil, urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil,
-    at time: Date? = nil
+    _ author: CueAuthor, text: String, asking: CueAsking? = nil, in project: Project? = nil, urgent: Bool = false, task: UUID? = nil,
+    tools: PiChatMessage.Tools? = nil, at time: Date? = nil
   ) throws -> CueMessage {
     let now = Date.stamp
     let message = CueMessage(
-      id: UUID(), author: .known(author), text: text, choices: choices, urgent: urgent, taskID: task,
+      id: UUID(), author: .known(author), text: text, choices: asking?.ask.choices(in: project?.name),
+      asked: asking.map { CueAllow($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, urgent: urgent, taskID: task,
       answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, notify: false)
     try insert(message)
     try registerImages(in: text)
@@ -63,7 +67,7 @@ extension CueStore {
   }
 
   /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。回答交给 Cue（`toDeliver`），撤回的不交。
-  /// 你选"以后……都不用问"（`CueAsk.always`）时，同一个事务里把这类事记进允许清单（关联任务在项目里时只管这个项目）；
+  /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把提问存的类别与范围（`CueMessage.asked`）记进允许清单；
   /// 清单改了返回真，调用方上传设置。
   @discardableResult
   public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> Bool {
@@ -71,10 +75,10 @@ extension CueStore {
       guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
         throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
       }
-      guard case .answered(let answer) = end, let ask = CueAsk.allCases.first(where: { $0.always == answer }),
-        let message = try find(CueMessage.self, id)
+      guard case .answered(let answer) = end, let message = try find(CueMessage.self, id), let asked = message.asked,
+        let choices = message.choices, choices.count > 1, answer == choices[1]
       else { return false }
-      return try changeAllows(CueAllow(ask, project: try projectID(of: message.taskID)), allowed: true)
+      return try changeAllows(asked, allowed: true)
     }
   }
 

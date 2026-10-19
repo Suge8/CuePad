@@ -26,9 +26,9 @@ struct CueTaskButton<Label: View>: View {
     }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：一句说明，下面直接选一台 Mac 启用（Cue 能住的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：一句说明，下面直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
-/// Mac 上点按是住在这台、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
+/// Mac 上点按是在这台运行、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
 /// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。
 struct CueEnableCard: View {
     @Environment(Workspace.self) private var workspace
@@ -39,7 +39,7 @@ struct CueEnableCard: View {
     var body: some View {
         let hosts = (model.settings ?? .empty).hosts(here: here)
         VStack(alignment: .leading, spacing: 10) {
-            Text("启用后 \(workspace.cue.name) 住在一台 Mac 上，替你派活、跟进，只在要你拿主意时找你")
+            Text("启用后 \(workspace.cue.name) 在你选的一台 Mac 上运行，替你派活、跟进，只在要你拿主意时找你")
                 .font(Typography.secondary).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             if hosts.isEmpty {
@@ -276,17 +276,24 @@ private struct AnswerChip: View {
     }
 }
 
-/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsk.question`）。"等你"卡与全屏预览的底栏共用。
+/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueAsking.question`），下面一行小字是为什么问你（`CueAsking.why`，规矩那一类是哪条规矩）。
+/// "等你"卡与全屏预览的底栏共用。
 struct CueQuestionLine: View {
+    let asking: CueAsking?
     let question: String
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PiStateGlyph(status: .asking)
-            Text(question)
-                .font(Typography.title).foregroundStyle(palette.ink)
-                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(question)
+                    .font(Typography.title).foregroundStyle(palette.ink)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                if let why = asking?.why {
+                    Text(why).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer(minLength: 0)
         }
     }
@@ -318,7 +325,7 @@ struct CueChoices: View {
 }
 
 /// "等你"：固定在输入框上方，最早的那一条，收得紧（iPhone 上约三分之一屏以内）。第一句是要你定什么，由代码按类别与关联任务写出
-/// （`CueAsk.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务的全部交付物
+/// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是关联任务的全部交付物
 /// （迷你一排，新的在前；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、不允许时另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
 /// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
@@ -410,9 +417,9 @@ struct CueWaitingDock: View {
 
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
-        let question = (message.ask ?? .rule).question(task: ref?.task.heading)
+        let question = message.asking?.question(task: ref?.task.heading) ?? ""
         return VStack(alignment: .leading, spacing: 12) {
-            CueQuestionLine(question: question)
+            CueQuestionLine(asking: message.asking, question: question)
             if reading == message.id { original(message.text).transition(.opacity) }
             if let deliverables = ref?.deliverables.reversed(), !deliverables.isEmpty {
                 let batch = Array(deliverables)

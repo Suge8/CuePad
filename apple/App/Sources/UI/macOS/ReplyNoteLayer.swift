@@ -23,7 +23,7 @@ private struct ReplyNoteLayer: ViewModifier {
     /// 浮在对话上的那一块：选中后的"批注"钮，或正在写的那条批注（新的记下时才进草稿，回复框不在写的时候长高、把对话顶走）。
     enum Floating: Equatable {
         case offer(ReplyNote, at: Spot)
-        case editing(ReplyNote, at: Spot, fresh: Bool)
+        case editing(ReplyNote.Edit, at: Spot)
     }
 
     func body(content: Content) -> some View {
@@ -31,7 +31,7 @@ private struct ReplyNoteLayer: ViewModifier {
             .environment(\.openURL, OpenURLAction { url in
                 guard let id = ReplyNote.id(of: url) else { return .systemAction }
                 if let note = services.settings.replyNotes(for: session).first(where: { $0.id == id }) {
-                    float = .editing(note, at: Spot(point: watch.view?.pointer ?? .zero), fresh: false)
+                    float = .editing(ReplyNote.Edit(note: note, fresh: false), at: Spot(point: watch.view?.pointer ?? .zero))
                 }
                 return .handled
             })
@@ -57,9 +57,14 @@ private struct ReplyNoteLayer: ViewModifier {
             .buttonStyle(PressStyle())
             .glass(in: .capsule, interactive: true)
             .help("批注这段，随下一句发出")
-        case .editing(let note, _, let fresh):
-            NoteEditor(note: note) { text in
-                if let text { save(note, text: text, fresh: fresh) } else if !fresh { remove(note) }
+        case .editing(let edit, _):
+            NoteEditor(note: edit.note) { text in
+                let settings = services.settings
+                if let text {
+                    settings.save(edit, text: text, order: messages.map(\.id), in: session)
+                } else if !edit.fresh {
+                    settings.removeReplyNote(edit.note.id, in: session)
+                }
                 self.float = nil
             }
         }
@@ -94,26 +99,8 @@ private struct ReplyNoteLayer: ViewModifier {
         return nil
     }
 
-    /// 同一处已经批注过就打开那一条，否则开始写新的一条。
     private func begin(_ note: ReplyNote, at: Spot) {
-        let same = services.settings.replyNotes(for: session).first { $0.marksSamePlace(as: note) }
-        float = .editing(same ?? note, at: at, fresh: same == nil)
-    }
-
-    /// 新的一条按在对话里的先后排进草稿；已有的那条改字（写的时候在回复框上删掉了就不再加回来）。
-    private func save(_ note: ReplyNote, text: String, fresh: Bool) {
-        var notes = services.settings.replyNotes(for: session), note = note
-        note.note = text
-        if fresh {
-            notes = ReplyNote.sorted(notes + [note], by: messages.map(\.id))
-        } else if let index = notes.firstIndex(where: { $0.id == note.id }) {
-            notes[index] = note
-        }
-        services.settings.setReplyNotes(notes, for: session)
-    }
-
-    private func remove(_ note: ReplyNote) {
-        services.settings.setReplyNotes(services.settings.replyNotes(for: session).filter { $0.id != note.id }, for: session)
+        float = .editing(services.settings.editReplyNote(at: note, in: session), at: at)
     }
 }
 
@@ -126,7 +113,7 @@ private struct Spot: Equatable {
 private extension ReplyNoteLayer.Floating {
     var at: Spot {
         switch self {
-        case .offer(_, let at), .editing(_, let at, _): at
+        case .offer(_, let at), .editing(_, let at): at
         }
     }
 }

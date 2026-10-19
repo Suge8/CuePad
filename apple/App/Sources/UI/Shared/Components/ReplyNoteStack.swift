@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// 回复框玻璃里、输入区上面的批注（`ComposerDraft.notes`，按在对话里的先后）：与带上的灵感同一种淡底圆角块，一条一行——
-/// 左边一道次墨色短竖条，先是批注，后面淡淡的「摘录」。点一条回到原文；× 删掉（悬停时才露出）。
-/// 批注只在 Mac 上写、只存在本机，所以只按 Mac 排（手机上不会有这一块）。
+/// 左边一道次墨色短竖条，先是批注，后面淡淡的「摘录」。点一条回到原文；× 删掉（Mac 悬停时才露出，触屏上常显）。批注只存在本机。
 /// 多于 `shown` 条时这一块定高、可滚，不把对话挤走。改批注在对话里点那处高亮。
 struct ReplyNoteStack: View {
     let notes: [ReplyNote]
-    /// 回到原文（Mac 会话页给）。
+    /// 回到原文（会话页给）。
     let reveal: (ReplyNote) -> Void
     let remove: (ReplyNote) -> Void
     @Environment(\.palette) private var palette
@@ -48,7 +47,14 @@ private struct NoteRow: View {
     @Environment(\.palette) private var palette
     @State private var hovering = false
 
+    #if os(iOS)
+    static let height: CGFloat = 40
+    /// 触屏没有悬停：× 常显，按得着的宽度够一根手指。
+    private static let alwaysShowsRemove = true, removeWidth: CGFloat = 44
+    #else
     static let height: CGFloat = 30
+    private static let alwaysShowsRemove = false, removeWidth = height
+    #endif
 
     var body: some View {
         HStack(spacing: 0) {
@@ -70,10 +76,10 @@ private struct NoteRow: View {
             .accessibilityHint("回到原文")
             Button(action: remove) {
                 Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .frame(width: Self.height, height: Self.height).contentShape(.rect)
+                    .frame(width: Self.removeWidth, height: Self.height).contentShape(.rect)
             }
             .buttonStyle(PressStyle())
-            .opacity(hovering ? 1 : 0)
+            .opacity(Self.alwaysShowsRemove || hovering ? 1 : 0)
             .accessibilityLabel("删掉这条批注")
             .help("删掉这条批注")
         }

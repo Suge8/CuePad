@@ -26,7 +26,7 @@ final class CueWatch {
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
     private(set) var lastSaid: String?
-    /// 它住的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
+    /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
     private(set) var hostName: String?
     /// 它此刻的上下文（`CueState.context`，值班那台写、随状态同步）：上下文用量（`CueContextCard`）只读它。

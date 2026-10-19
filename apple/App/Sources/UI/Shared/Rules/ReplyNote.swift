@@ -14,6 +14,13 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
 
     var range: NSRange { NSRange(location: location, length: quote.utf16.count) }
 
+    /// 正在写的一条（`AppSettings.editReplyNote`）：`fresh` 是还没进草稿的新的一条，记下时才排进去。
+    struct Edit: Equatable, Identifiable, Sendable {
+        var note: ReplyNote
+        let fresh: Bool
+        var id: UUID { note.id }
+    }
+
     /// 同一处（同一条回答、同一段、同样的选区）。
     func marksSamePlace(as other: ReplyNote) -> Bool {
         entry == other.entry && run == other.run && location == other.location && quote == other.quote

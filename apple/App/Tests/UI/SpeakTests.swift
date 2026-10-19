@@ -123,7 +123,7 @@ struct SpeakTests {
         try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
         #expect(try await presence() == .asleep)
         #expect(try await !store.cueOnDuty())  // 值班与"在睡觉"同一条
-        #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它住的那台 Mac 好像没开")
+        #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它运行的那台 Mac 好像没开")
         #expect(try await presence(reachable: false) == .idle)
 
         try await store.recordMacPresence(host: "mac-cue") { true }  // 醒来续上在线，收下你的话

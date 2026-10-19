@@ -424,20 +424,22 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 请你允许推送；你选"以后推送都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
+    /// Cue 请你允许推送；你选"以后推送代码都不用问"后 Cue 被唤醒，回答写成 Cue 说的，允许清单记上推送（不进记忆）；
     /// 它再问推送就被拒、叫它直接做。"等你"推了通知（正文是要你定什么，不露原话）。
     @Test func 等你被回答_Cue被唤醒_以后都不用问记进允许清单() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
-        #expect(question.choices == ["允许一次", "以后推送都不用问"])
-        try await eventually("推了通知") { rig.notifier.posted.map(\.body) == ["要不要推送？\n允许一次 / 以后推送都不用问"] }
+        #expect(question.choices == ["这次可以", "以后推送代码都不用问"])
+        try await eventually("推了通知") {
+            rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n推上去别人就拉得到，撤不回来。\n这次可以 / 以后推送代码都不用问"]
+        }
         try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送都不用问")
-        try await rig.message(.cue, containing: "知道了：以后推送都不用问")
+        try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送代码都不用问")
+        try await rig.message(.cue, containing: "知道了：以后推送代码都不用问")
         #expect(try await rig.store.cueProfile()?.allows == [CueAllow(.push, project: nil)])
         #expect(try await rig.store.cueMemory().lines.isEmpty)
-        await #expect(throws: CueStoreError.alreadyAllowed(nil)) { try await rig.store.addCueMessage(.cue, text: "又要推送吗？", ask: .push) }
+        await #expect(throws: CueStoreError.alreadyAllowed(nil)) { try await rig.store.addCueMessage(.cue, text: "又要推送吗？", ask: try CueAsking(.push, action: "推送修复")) }
         await rig.stop()
     }
 
@@ -769,7 +771,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
-        if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push"]) }
+        if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         if text.contains("请慢慢想"), once("hang") { return .hang }
         if text.contains("写回：memory merge") { return say("记忆合并好了") }

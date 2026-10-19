@@ -36,14 +36,14 @@ extension DebugScene {
             recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
 
-    /// 两台 Mac 的项目目录绑定：工作室的 Mac 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
+    /// 两台 Mac 的项目目录绑定（名字是各自报的，`seedMacAgents`）：Mac Studio 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
     /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {
-        try? await store.publishDirectoryBindings(host: "demo-mac", hostName: "工作室的 Mac Studio")
+        try? await store.publishDirectoryBindings(host: "demo-mac")
         guard let directories = try? await store.projectDirectories() else { return }
         let others = projects.filter { $0.name != "CuePad" }.map(\.id)
         for id in others { try? await store.setDirectory(nil, for: id) }
-        try? await store.publishDirectoryBindings(host: "demo-air", hostName: "MacBook Air")
+        try? await store.publishDirectoryBindings(host: "demo-air")
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 

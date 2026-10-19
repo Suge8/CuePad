@@ -445,6 +445,8 @@ public enum CueStoreError: Error, Equatable {
   case questionEnded
   /// 允许清单里有这类事（参数是只管的那个项目的名字；不分项目的为 nil）。
   case alreadyAllowed(String?)
+  /// 提问的动作或规矩短语缺了、超长或不止一行（`CueAsking`）。
+  case askPhrase(field: String, hint: String, limit: Int)
   /// 规矩那一类不能放进允许清单。
   case cannotAllowRule
 }
@@ -493,6 +495,7 @@ extension CueStoreError: LocalizedError {
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
+    case .askPhrase(let field, let hint, let limit): "带 ask 要写 \(field)：\(hint)，一行、不超过 \(limit) 字"
     case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
     case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"
     }

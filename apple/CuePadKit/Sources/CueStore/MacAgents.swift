@@ -22,6 +22,13 @@ public struct MacAgents: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
+  /// 给人看的名字（各处写某台 Mac 都用它）：没报过名字的（更旧的版本写的记录、还没有这台的记录）写 `unnamed`。
+  public var shownName: String { Self.shownName(name) }
+  public static let unnamed = "未命名的 Mac"
+  static func shownName(_ name: String?) -> String { name ?? unnamed }
+  /// 读别的记录时顺带取它 `host` 列那台 Mac 报的名字（没有为 NULL，读出后经 `shownName(_:)`）：目录绑定、会话跑过的文件夹都这样带上名字，不另存。
+  static func nameSQL(host column: String) -> String { "(SELECT name FROM macAgents WHERE macAgents.hostID = \(column))" }
+
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
 
   public var kinds: [AgentKind] { agents.map(\.kind) }

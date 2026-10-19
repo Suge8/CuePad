@@ -139,10 +139,10 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         projectID     STRING,
         hostID        STRING,
-        hostName      ENCRYPTED STRING,
         folder        ENCRYPTED STRING,
         createdAt     INT64,
         modifiedAt    INT64,
+        hostName      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -202,6 +202,9 @@ DEFINE SCHEMA
         modifiedAt    INT64,
         notify        STRING QUERYABLE,
         tools         ENCRYPTED STRING,
+        ask           STRING,
+        askAction     ENCRYPTED STRING,
+        askRule       ENCRYPTED STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

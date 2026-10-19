@@ -123,6 +123,28 @@ final class AppSettings {
         }
     }
 
+    /// 在一处开始写批注（Mac 的批注层与手机的可选文本页同一套，下面两个也是）：同一处已经批注过就打开那一条，否则是新的一条。
+    func editReplyNote(at place: ReplyNote, in session: UUID) -> ReplyNote.Edit {
+        replyNotes(for: session).first { $0.marksSamePlace(as: place) }.map { ReplyNote.Edit(note: $0, fresh: false) }
+            ?? ReplyNote.Edit(note: place, fresh: true)
+    }
+
+    /// 记下：新的一条按在对话里的先后排进草稿（`order` 是对话里回答的 id 顺序）；已有的那条改字（写的时候在回复框上删掉了就不再加回来）。
+    func save(_ edit: ReplyNote.Edit, text: String, order: [UUID], in session: UUID) {
+        var notes = replyNotes(for: session), note = edit.note
+        note.note = text
+        if edit.fresh {
+            notes = ReplyNote.sorted(notes + [note], by: order)
+        } else if let index = notes.firstIndex(where: { $0.id == note.id }) {
+            notes[index] = note
+        }
+        setReplyNotes(notes, for: session)
+    }
+
+    func removeReplyNote(_ id: UUID, in session: UUID) {
+        setReplyNotes(replyNotes(for: session).filter { $0.id != id }, for: session)
+    }
+
     /// 把还没写的草稿写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
     func flush() {
         guard let timer = draftTimer else { return }
