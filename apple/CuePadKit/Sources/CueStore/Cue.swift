@@ -271,6 +271,14 @@ public struct CueState: Equatable, Sendable {
   static let recordID = DeterministicID.uuid("cue-state")
 }
 
+/// 你在 Cue 页读到哪（同步，只有一行，各端都写）：读到的那条 Cue 的话写下的时刻，就记成这一行的修改时间，没有别的列。
+/// 同步时两个版本按修改时间取晚的（`CueStore.applyVersion`），本机也只往后挪（`CueStore.markCueRead`）：两台设备各读各的，
+/// 谁也冲不掉另一台读得更远的；另记一列"读到哪"的话，按修改时间取胜的那一版可能读得更近。新消息的规则在 `CueStore.cueUnread`。
+enum CueRead {
+  static let recordID = DeterministicID.uuid("cue-read")
+  static let columns = ["id", "modifiedAt"]
+}
+
 public enum CueEnableError: LocalizedError, Equatable {
   /// 那台 Mac 上没有能当大脑的 Agent（参数是各家为什么不能用，`MacAgents.whyNone`）
   case noRuntime(String)

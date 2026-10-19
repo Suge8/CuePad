@@ -99,6 +99,8 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
+    /// 新消息有几条（`CueStore.cueUnread`）。
+    var unread: Int
     /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsking.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
@@ -112,7 +114,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var state: CueState?
 
     static let empty = CueDigest(
-        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
+        name: CueProfile.defaultName, enabled: false, hostID: nil, hostName: nil, waiting: 0, unread: 0, lastSaid: nil, lastSaidDone: false, hostOnline: false,
         lastYou: nil, state: nil)
 
     struct LastYou: Equatable, Sendable {
@@ -131,6 +133,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostID: profile?.hostID,
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             waiting: try CueWaiting.count(in: store),
+            unread: try store.cueUnread().count,
             lastSaid: said.flatMap { $0.asking?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,

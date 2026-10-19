@@ -12,7 +12,7 @@ import SwiftUI
 /// 刚说的还没交出去（sending：话在路上，时限内气泡转圈）、
 /// 演示 Mac 不在线、两分钟前说的一直没交出去（asleep：它在睡觉，气泡过了等回执的时限 `Speech.receiptLimit`、没能送达可重发；
 /// 隔离库没有同步，要配 `-CuePadDemoMac YES` 才算同步通着、说它在睡觉）、
-/// 没启用。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
+/// 没启用；away 是你答了"等你"、说了句去睡了，一夜里 Cue 陆续说了几句（Cue 页的新消息与分隔线，`CueReadingTracker`）。演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`；在线管一个期限 `MacPresence.lifetime`）。
 extension DebugScene {
     /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你记的与 Cue 记的，时间从刚刚到几个月前。
     private static var demoMemory: [SeedCueLine] {
@@ -167,6 +167,10 @@ extension DebugScene {
                 try await store.setCueState(.tool, detail: "跟会话说话", round: row, context: context)
             case "sending":
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
+            case "away":
+                _ = try await store.endCueQuestion(asked.id, .answered("允许一次"))
+                try await you("推吧。我去睡了，后面的你盯着，明早看")
+                try await seedAway(store)
             case "asleep":
                 // 两分钟前说的、一直没交出去（之前的对话挪得更早）
                 try await store.seedAgeCueMessages(by: 480)
@@ -211,6 +215,43 @@ extension DebugScene {
         try? await Task.sleep(for: .seconds(delay))
         _ = try? await services.store.addCueMessage(.cue, text: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。")
     }
+
+    /// 你不在的一夜里 Cue 陆续说的几句（中间夹一条它自己醒来的动态）：之前的对话一段段挪早，最后一句是刚说的。
+    /// `aged` 为 false 时不挪，都是此刻说的（连着 iCloud 的实例里挪早会挪进别的设备写过的对话中间）。
+    static func seedAway(_ store: CueStore, aged: Bool = true) async throws {
+        let hour: TimeInterval = 3600
+        for (hours, author, text) in [
+            (2.5, CueAuthor.cue, "推上去了，CI 在跑正式环境的部署。"),
+            (1.5, .note, "看了圆桌：正式环境部署完成，冒烟测试全过"),
+            (2, .cue, "正式环境部署好了。5 人以上的房间我开了两个试过，发言顺序都对，重连后也保持首次加入的顺序。"),
+            (1, .cue, """
+                导入旧数据那个会话又出错了：模型拒绝了请求（prompt 太长）。我打算拆成按年份导：
+
+                - 2019–2021 一批
+                - 2022–2023 一批
+                - 2024 至今一批
+
+                每批单独开会话，等你点头再开工。
+                """),
+            (0.5, .cue, "README 的深色截图也补上了，和浅色那张一起在任务里。"),
+            (0.25, .cue, "今天的看板：圆桌做完了，导入旧数据等你定怎么拆，别的都在跑。"),
+        ] {
+            if aged { try await store.seedAgeCueMessages(by: hours * hour) }
+            _ = try await store.addCueMessage(author, text: text)
+        }
+    }
+
+    #if os(macOS)
+    /// `-CuePadAwayAfter <秒>`（Mac，两台设备同步读到哪时当写下新消息的那台）：就绪后这么久你说一句去睡了，Cue 接着说一夜的那几句（不挪早）。
+    /// 等这么久是让它先把 iCloud 里已有的对话拉完：之前的都在你这一句之前，不算新的。
+    static func awayIfAsked(_ services: AppServices) async {
+        let delay = defaults.double(forKey: "CuePadAwayAfter")
+        guard delay > 0 else { return }
+        try? await Task.sleep(for: .seconds(delay))
+        _ = try? await services.store.addCueMessage(.you, text: "推吧。我去睡了，后面的你盯着，明早看")
+        try? await seedAway(services.store, aged: false)
+    }
+    #endif
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
     /// （同 Cue 的 say 与 start 写下的样子，`CueFlight`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），

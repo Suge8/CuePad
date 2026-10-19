@@ -7,7 +7,7 @@ import SwiftUI
 /// 按位置切的话最早那条一掉每段都往前挪一条，离屏空白按旧的高排，几十段的差加起来能有几屏：正在读的被推走，贴着最新时可见区落在内容外、整屏空白。
 /// 段由 `segment` 排，交出来的要只按内容比较（`equatable()`）：没变的段不重算也不重排，系统直接用上次量好的尺寸。
 ///
-/// 屏上的段、最新一段（还会长）、描圈的那条所在的段（刻度滑条正要跳过去），连同离它们不到 `spare` 段的，还有没量过或量过之后条目变了的段排真的：
+/// 屏上的段、最新一段（还会长）、要跳去的那条所在的段（刻度滑条、新消息的分隔线），连同离它们不到 `spare` 段的，还有没量过或量过之后条目变了的段排真的：
 /// 最新那头与要跳去的地方一直是真的，回到最新、跳过去落下的那一帧不露空白，不用等"到了屏上"的回报。
 /// 哪几段在屏上按段在滚动区可见范围里的几何算（`bounds(of: .scrollView)`），不按系统的滚进滚出通知（`onScrollVisibilityChange`）：
 /// 那个通知管的是在不在屏幕上，页一被盖住（回到列表、推入别的页）就报全都不在，回来时全靠它再报一次才排回真的，
@@ -23,8 +23,8 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     /// 屏上那几段上下各再留几段真的：快甩时滑进来的先是排好的，不露空白；来回翻时离开不远的段不拆了又建。
     var spare = 1
     @ViewBuilder let segment: (ArraySlice<Item>) -> Segment
-    /// 描圈的那一条（`ChatColumn` 往列里给）：它所在的段与要跳去的地方。在这里读，不由放列的页传：页在列外，读到的一直是空。
-    @Environment(\.chatHighlight) private var highlight
+    /// 要跳去的那一条（`ChatColumn` 往列里给）。在这里读，不由放列的页传：页在列外，读不到。
+    @Environment(\.chatTarget) private var target
     /// 量过的段，按段首那一条记。
     @State private var sizes: [Item.ID: Measured] = [:]
     /// 在屏上的段（段首那一条）。
@@ -45,7 +45,7 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
 
     var body: some View {
         let runs = Self.runs(items, size: size, from: from)
-        let target = highlight.flatMap { id in items.firstIndex { $0.id == id } }
+        let target = target.flatMap { id in items.firstIndex { $0.id == id } }
         let shown = runs.filter { run in
             run.index == runs.count - 1 || onScreen.contains(run.id) || target.map(run.range.contains) == true
         }.map(\.index)
