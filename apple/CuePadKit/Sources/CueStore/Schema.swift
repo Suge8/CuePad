@@ -5,7 +5,7 @@ import Foundation
 ///
 /// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState、cueRead、macPresence、macAgents。约束：
+/// cueMessages、cueLines、cueProfile、cueState、cueRead、macPresence、macAgents、sessionViewers。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -79,6 +79,8 @@ enum Schema {
     "\(cueRead) \(modifiedIndex(.cueRead))",
     // 59：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
     "ALTER TABLE cueMessages ADD COLUMN askShots TEXT;",
+    // 60：会话停下时谁接手——Cue 留给你回的会话（`CueState.left`），每台设备开着哪个会话（`SessionViewer`）
+    "ALTER TABLE cueState ADD COLUMN leftToYou TEXT; \(sessionViewers) \(modifiedIndex(.sessionViewers))",
   ]
 
   /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
@@ -124,6 +126,9 @@ enum Schema {
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
   private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
   private static let cueRead = "CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
+  private static let sessionViewers = """
+    CREATE TABLE sessionViewers (id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionID TEXT NOT NULL, until INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    """
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
   private static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
@@ -307,7 +312,9 @@ enum Schema {
     CREATE TABLE cueSummaries (
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
-    CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT, context TEXT) STRICT;
+    CREATE TABLE cueState (
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT, context TEXT, leftToYou TEXT
+    ) STRICT;
     \(cueRead)
 
     \(writeSeq)
@@ -315,6 +322,8 @@ enum Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
+    -- 每台设备自己写、Cue 值班的 Mac 读：此刻开着哪个会话（会话停下时他在不在场的一半）。
+    \(sessionViewers)
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

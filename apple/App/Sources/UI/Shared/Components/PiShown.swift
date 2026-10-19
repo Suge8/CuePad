@@ -15,14 +15,14 @@ nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
     /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
-    /// `cueOnDuty`：Cue 在值班（`LiveSessions.cueOnDuty`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`）。`moment`：此刻（话超时就是没能送达）。
+    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`），等它回答的与在跑的同档（`PiShown.Status.cueAsking`），它留给你回的与等你确认同档。
+    /// `moment`：此刻（话超时就是没能送达）。
     static func inListOrder(
-        _ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false, at moment: Speech.Moment
+        _ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil, at moment: Speech.Moment
     ) -> [PiSessionState] {
         sessions.enumerated()
             .map { index, session in
-                // 排序只看档位，不读说法：Cue 的名字给空串
-                let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cueOnDuty ? "" : nil, at: moment)
+                let shown = PiShown(session, delivery: deliveries[session.sessionID], cue: cue, at: moment)
                 return (rank: shown.rank, offset: index, session: session)
             }
             .sorted { ($0.rank, $0.offset) < ($1.rank, $1.offset) }
@@ -113,14 +113,16 @@ nonisolated enum PiUnread {
 /// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
 /// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）；
-/// Cue 在值班（`CueProfile.onDuty`）时这时该看的是 Cue，只说"歇着"；会话等的回答 CuePad 答得了时等的也是 Cue
-/// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`CueWaiting`）。计时读哪一种（`clock`）也在这里定。
+/// Cue 在值班（`CueProfile.onDuty`）时接手的是 Cue，只说"歇着"，它把这次停下留给你回的（`CueDuty.leftToYou`）是"待回复"；会话等的回答 CuePad 答得了时等的也是 Cue
+/// （"等 Cue 回答"，中性墨色，`PiSessionState.waitsForCue`），赭黄只留给在等你的（与"等你 N"同一条规则，`PiSessionState.asksYou`、`CueWaiting`）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
         /// 思考、运行工具、等子代理、压缩上下文。
         case working(PiWorkState)
         case asking
+        /// 歇着，Cue 值班时把这次停下留给了你回（`CueDuty.leftToYou`）。
+        case awaitsReply
         /// 在等回答，等的是 Cue（`PiSessionState.waitsForCue`），不是你。
         case cueAsking
         case failed
@@ -160,16 +162,16 @@ nonisolated struct PiShown: Hashable, Sendable {
 }
 
 nonisolated extension PiShown {
-    /// `cue`：值班的 Cue 的名字（Cue 在值班时给，见 `Workspace.shown`）；`moment`：此刻（`AppServices.speech`）。
+    /// `cue`：Cue 在值班时的那一份（`LiveSessions.cue`，见 `Workspace.shown`）；`moment`：此刻（`AppServices.speech`）。
     init(
-        _ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue: String? = nil,
+        _ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue duty: CueDuty? = nil,
         at moment: Speech.Moment
     ) {
-        let onDuty = cue != nil
+        let cue = duty?.name
         let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.state.isWorking || session.state == .known(.waitingForUser)
         let reported = Self.status(of: session.state)
-        let asked = session.waitsForCue(cueOnDuty: onDuty) ? Status.cueAsking : reported
+        let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch PiDelivery.phase(of: delivery, for: session, seen: seen, at: moment) {
         case .failed(let failure):
             self.init(status: .delivery(.failed(failure)), clock: own, cue: cue)
@@ -179,7 +181,8 @@ nonisolated extension PiShown {
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) }, cue: cue)
         case nil where session.state == .known(.settled):
-            self.init(status: !session.hasStarted ? .fresh : onDuty ? .resting : unread ? .unread : .idle, clock: own, cue: cue)
+            let rest: Status = duty.map { $0.leftToYou(session) ? .awaitsReply : .resting } ?? (unread ? .unread : .idle)
+            self.init(status: session.hasStarted ? rest : .fresh, clock: own, cue: cue)
         case nil:
             self.init(status: asked, clock: own, cue: cue)
         }
@@ -187,7 +190,7 @@ nonisolated extension PiShown {
     }
 
     /// 没有发给它的话在路上（会话页顶栏、对话里的会话卡）：只按会话自己的状态，不涉及此刻。
-    init(_ session: PiSessionState, cue: String? = nil) {
+    init(_ session: PiSessionState, cue: CueDuty? = nil) {
         self.init(session, delivery: nil, cue: cue, at: .always())
     }
 
@@ -219,6 +222,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "正在压缩上下文"
         case .working: speaking ? "输出中" : "思考中"
         case .asking: "等你\(waitWord)"
+        case .awaitsReply: "待回复"
         case .cueAsking: "等 \(cue ?? "") 回答"
         case .failed: "出错"
         case .restart: "在线，需要 /reload"
@@ -246,6 +250,7 @@ nonisolated extension PiShown {
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你\(waitWord)"
+        case .awaitsReply: "Agent 在等你回复"
         case .cueAsking: "Agent 在等 \(cue ?? "") 回答"
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
@@ -276,10 +281,10 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 会话列表的档：等你确认 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
+    /// 会话列表的档：等你确认与待回复 → 出错与没能送达 → 工作中与话在路上 → 停下的 → 已结束。
     var rank: Int {
         switch status {
-        case .asking: 0
+        case .asking, .awaitsReply: 0
         case .failed, .delivery(.failed): 1
         case .working, .delivery, .cueAsking: 2
         // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
@@ -289,10 +294,10 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
+    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认与待回复 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
     var urgency: Int {
         switch status {
-        case .asking: 6
+        case .asking, .awaitsReply: 6
         case .failed, .delivery(.failed): 5
         case .unread: 4
         case .working, .delivery, .cueAsking: 3
@@ -304,10 +309,10 @@ nonisolated extension PiShown {
 }
 
 nonisolated extension PiShown {
-    /// 要你动手：等你确认、出错、没能送达。只有它们带彩色（需要 /reload 是维护，次要墨色）。
+    /// 要你动手：等你确认、待回复、出错、没能送达。只有它们带彩色（需要 /reload 是维护，次要墨色）。
     var needsYou: Bool {
         switch status {
-        case .asking, .failed, .delivery(.failed): true
+        case .asking, .awaitsReply, .failed, .delivery(.failed): true
         default: false
         }
     }
@@ -316,7 +321,7 @@ nonisolated extension PiShown {
 extension AppSettings {
     /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
     /// `cue`：值班的 Cue 的名字（不在值班为 nil）；界面经 `Workspace.shown` 调，名字从那里来。
-    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: String? = nil, at moment: Speech.Moment) -> PiShown {
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?, cue: CueDuty? = nil, at moment: Speech.Moment) -> PiShown {
         PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID], cue: cue, at: moment)
     }
 }
@@ -325,12 +330,12 @@ extension Workspace {
     /// 这个会话在本机界面上显示的状态（`AppSettings.shown`）：Cue 在值班时带上用户给 Cue 起的名字（"等 X 回答"），
     /// 这台 Mac 上它正在出字时说"输出中"（`speaking`）。
     func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        services.settings.shown(session, delivery: delivery, cue: cueOnDuty, at: services.speech).speaking(speaking(session))
+        services.settings.shown(session, delivery: delivery, cue: cueDuty, at: services.speech).speaking(speaking(session))
     }
 
     /// 会话页顶栏的状态：只说会话自己的（你的话到哪了写在气泡下面，正在看的会话没有"有新回复"），其余同 `shown`。
     func shownInHeader(_ session: PiSessionState) -> PiShown {
-        PiShown(session, cue: cueOnDuty).speaking(speaking(session))
+        PiShown(session, cue: cueDuty).speaking(speaking(session))
     }
 
     /// 这台 Mac 上它此刻有正在说的话（手机上没有）。只随出字开始、结束通知，不随每个增量（`PiBridge.Slot.speaking`）。
@@ -342,8 +347,8 @@ extension Workspace {
         #endif
     }
 
-    /// 值班的 Cue 的名字（`PiShown` 的 `cue`）；Cue 不在值班为 nil。
-    var cueOnDuty: String? { services.liveSessions.cueOnDuty ? cue.name : nil }
+    /// Cue 在值班时的那一份（`PiShown` 的 `cue`）；Cue 不在值班为 nil。
+    var cueDuty: CueDuty? { services.liveSessions.cue }
 
     func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery) }
 }

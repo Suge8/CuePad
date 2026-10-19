@@ -258,11 +258,15 @@ public struct CueState: Equatable, Sendable {
   public var woke: CueWoke?
   /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
+  /// 它留给你回的会话（`CueLeft`，只由 `CueStore.leaveToYou` 写，`setCueState` 不动它）
+  public var left: [CueLeft]
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil, modifiedAt: Date = .now
+    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil, left: [CueLeft] = [],
+    modifiedAt: Date = .now
   ) {
+    self.left = left
     self.state = state
     self.detail = detail
     self.round = round
@@ -327,14 +331,49 @@ public struct CueWoke: StoredJSON, Equatable, Sendable {
   }
 }
 
+/// Cue 把会话的这一次停下留给你回（`CueStore.leaveToYou`）：会话停在 `since` 起的那次停下（歇着或等回答）时成立，
+/// 谁再对它说话、它动起来（`stateSince` 变了）就自然作废，不用谁去清。只有一份：会话列表的"待回复"、等你确认与"等你 N"都经 `CueDuty` 读它。
+public struct CueLeft: StoredJSON, Equatable, Sendable {
+  public var sessionID: String
+  public var since: Date
+
+  public init(sessionID: String, since: Date) {
+    self.sessionID = sessionID
+    self.since = since
+  }
+
+  /// 这一条说的就是会话此刻的这次停下。
+  public func holds(for session: PiSessionState) -> Bool {
+    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.state.known?.isStopped == true
+  }
+}
+
+/// Cue 在值班时各端看会话要用的那一份（`CueStore.cueDuty`；不在值班为 nil）：它的名字（"等 X 回答"）与它留给你回的会话。
+/// 会话等的是 Cue 还是你（`PiSessionState.waitsForCue`、`asksYou`）、会话行的"待回复"都只读它。
+public struct CueDuty: Equatable, Sendable {
+  public var name: String
+  public var left: [CueLeft]
+
+  public init(name: String, left: [CueLeft] = []) {
+    self.name = name
+    self.left = left
+  }
+
+  /// Cue 把会话此刻的这次停下留给了你。
+  public func leftToYou(_ session: PiSessionState) -> Bool { left.contains { $0.holds(for: session) } }
+}
+
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke", "context"]
-  var bindings: [any SQLBindable] { [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored, context?.stored] }
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke", "context", "leftToYou"]
+  var bindings: [any SQLBindable] {
+    [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
+  }
   init(row: Row) {
     self.init(
       state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), woke: row.textOrNil(5).flatMap(CueWoke.init(stored:)),
-      context: row.textOrNil(6).flatMap(CueContext.init(stored:)), modifiedAt: row.date(3))
+      context: row.textOrNil(6).flatMap(CueContext.init(stored:)), left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(7)),
+      modifiedAt: row.date(3))
   }
 }
 

@@ -28,7 +28,7 @@ extension AppServices {
         follow {
             var tracker = SessionAlertTracker()
             for await live in Observations({ self.liveSessions.live }) {
-                let alerts = tracker.alerts(for: live, cueOnDuty: self.liveSessions.cueOnDuty, since: active.date)
+                let alerts = tracker.alerts(for: live, cue: self.liveSessions.cue, since: active.date)
                 guard UIApplication.shared.applicationState == .active else { continue }
                 if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { self.post(alert) }
             }
