@@ -397,7 +397,7 @@ public final class CodexRuntime: AgentRuntime {
             if let agent { session.facts.settleSubagent(agent, .done, summary: input["last_assistant_message"]?.string, at: now) }
         case _ where agent != nil:
             // 子代理自己线程里的事件（session_id 是同一棵树的根，agent_id 是它自己）：只更新它在做什么
-            if event == "PreToolUse", let agent { session.facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
+            if event == "PreToolUse", let agent { session.facts.updateSubagent(agent, at: now) { $0.action = ToolDetail.line(tool, input["tool_input"]) } }
         case "UserPromptSubmit":
             session.facts.standingQuestion = nil
             session.facts.startTurn()

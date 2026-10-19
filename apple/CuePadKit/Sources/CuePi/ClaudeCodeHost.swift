@@ -166,7 +166,7 @@ final class ClaudeHostedSession: SessionLink {
             facts.startSubagent(task, name: message["description"]?.string ?? "", role: message["subagent_type"]?.string ?? "", at: now)
         case "task_progress":
             if let task = message["task_id"]?.string, let action = message["description"]?.string {
-                facts.updateSubagent(task) { $0.action = action.clipped(ToolDetail.limit) }
+                facts.updateSubagent(task, at: now) { $0.action = action.clipped(ToolDetail.limit) }
             }
         case "task_notification":
             guard let task = message["task_id"]?.string else { return }

@@ -5,7 +5,7 @@ import Foundation
 
 /// 一个会话此刻的事实：各家把自己的事件（钩子、stream-json、app-server 通知、服务事件）翻译成对它的修改，桥上的状态、那句说明、
 /// 要你回答的、子代理与出错原文都由它推出（`publish`）。状态的规则只在这一处：
-/// 要你回答的优先；在压缩；自己这一轮在跑就看在做什么；歇下了还有子代理在跑是等子代理；上一轮出错是出错；否则空闲。
+/// 要你回答的优先；在压缩；自己这一轮在跑就看在做什么；歇下了还有在飞的工作（`inFlight`）是等子代理；上一轮出错是出错；否则空闲。
 /// 计时与 Pi 扩展同一规则（`PiSession.enter`）；歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
 struct SessionFacts {
     /// 自己这一轮在跑（子代理不算）
@@ -21,6 +21,10 @@ struct SessionFacts {
     var compacting = false
     /// 上一轮出错的原文；开始新的一轮时清掉
     var failure: String?
+    /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
+    /// 各家整份写入自己的权威来源（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
+    /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
+    var inFlight: Set<String> = []
     /// 子代理名册（按 Agent 给的 id），按出现先后
     private(set) var subagents: [(id: String, state: PiSubagentState)] = []
     /// 歇着时开始压缩那一刻的计时：压完回到它
@@ -47,21 +51,21 @@ struct SessionFacts {
         activityDetail = detail
     }
 
-    var hasRunningSubagent: Bool { subagents.contains { $0.state.phase == .known(.running) } }
-
     mutating func startSubagent(_ id: String, name: String, role: String, at now: Date) {
-        subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now)))
+        subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
     }
 
-    /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）。
-    mutating func updateSubagent(_ id: String, _ change: (inout PiSubagentState) -> Void) {
+    /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
+    mutating func updateSubagent(_ id: String, at now: Date, _ change: (inout PiSubagentState) -> Void) {
         guard let index = subagents.lastIndex(where: { $0.id == id }) else { return }
+        let before = subagents[index].state
         change(&subagents[index].state)
+        if subagents[index].state != before { subagents[index].state.progressAt = now }
     }
 
     /// 子代理歇下：那句说明是它最后的话的首行。
     mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
-        updateSubagent(id) { agent in
+        updateSubagent(id, at: now) { agent in
             agent.phase = .known(phase)
             agent.action = summary.flatMap(ToolDetail.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
             agent.settledAt = now
@@ -73,7 +77,7 @@ struct SessionFacts {
         if let question { return (.waitingForUser, ToolDetail.singleLine(question.text).clipped(ToolDetail.limit)) }
         if compacting { return (.compacting, nil) }
         if running { return (activity, activityDetail) }
-        if hasRunningSubagent { return (.delegating, nil) }
+        if !inFlight.isEmpty { return (.delegating, nil) }
         if let failure { return (.error, PiErrorSummary(failure).line) }
         return (.settled, nil)
     }

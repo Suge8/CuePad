@@ -84,7 +84,7 @@ final class ClaudeTerminalSession: SessionLink {
             return hold(Pending(question: ask.question(), kind: .ask(ask), call: call, agent: agent), answerable: ask.answerable, at: now)
         case "PreToolUse":
             if let agent {
-                facts.updateSubagent(agent) { $0.action = ToolDetail.line(tool, input["tool_input"]) }
+                facts.updateSubagent(agent, at: now) { $0.action = ToolDetail.line(tool, input["tool_input"]) }
             } else {
                 facts.work(.tool, detail: ToolDetail.line(tool, input["tool_input"]))
             }

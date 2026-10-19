@@ -469,8 +469,11 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     private func subagent(_ id: String, of parent: String, _ body: (inout PiSubagentState) -> Void) {
         guard var tracked = sessions[parent] else { return }
-        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: Date()) }
-        tracked.facts.updateSubagent(id, body)
+        let now = Date()
+        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
+        tracked.facts.updateSubagent(id, at: now, body)
+        // 执行中的子会话就是在飞的
+        tracked.facts.inFlight = Set(tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id))
         sessions[parent] = tracked
     }
 
