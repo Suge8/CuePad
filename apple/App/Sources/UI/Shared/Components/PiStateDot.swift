@@ -30,11 +30,10 @@ extension PiShown {
         isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
-    /// Agent 页卡片的底色：要你看的三种（等你确认、出错与没能送达、有新回复）是这种状态的淡底令牌，其余是纸（nil）。
-    /// 在跑的不铺：会动的心电线与靛青字已经够醒目，整屏都上色颜色就不再表示"要你看"。
+    /// Agent 页卡片的底色：出错与没能送达、有新回复是这种状态的淡底令牌，其余是纸（nil）。
+    /// 等你确认与待回复不铺：大块的赭黄压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
     func wash(_ palette: Palette) -> Color? {
         switch status {
-        case .asking, .awaitsReply: palette.waitingWash
         case .failed, .delivery(.failed): palette.failureWash
         case .unread: palette.repliedWash
         default: nil

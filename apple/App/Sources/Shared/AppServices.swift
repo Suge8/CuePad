@@ -344,7 +344,7 @@ final class AppServices {
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
-        sessionViewer = SessionViewerKeeper(store: store, sync: self.sync, device: mac.hostID, idle: SessionViewerKeeper.systemIdle)
+        sessionViewer = SessionViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
         pi = mac.pi
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
@@ -377,7 +377,7 @@ final class AppServices {
         self.timing = timing
         self.pasteboard = pasteboard
         sessionViewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
-            SessionViewerKeeper(store: store, sync: sync, device: $0.uuidString, idle: { 0 })
+            SessionViewerKeeper(store: store, sync: sync, device: $0.uuidString)
         }
     }
     #endif

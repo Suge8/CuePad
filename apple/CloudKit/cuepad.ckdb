@@ -283,7 +283,6 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         device        STRING,
         sessionID     STRING,
-        until         INT64,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

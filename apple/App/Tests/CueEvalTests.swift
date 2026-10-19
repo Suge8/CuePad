@@ -372,14 +372,14 @@ struct CueEvalTests {
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.recordViewing(device: "phone", sessionID: work.id, activeAt: .now)
+            try await rig.store.recordViewing(device: "phone", sessionID: work.id)
             try await eval.trigger {
                 try await rig.settleHisTurn(
                     work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
                     reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
             }
             let quiet = eval.calls("task", "say").isEmpty && eval.calls("task", "leave").isEmpty
-            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil, activeAt: .now) }
+            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
             return [
                 Check("他开着时没插嘴", quiet),
                 Check("他离开后再被叫醒（信封写着他已离开）", eval.round?.sent.contains { $0.contains("他已离开") } == true),
