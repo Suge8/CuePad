@@ -133,7 +133,7 @@ extension DebugScene {
                     ```
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
-                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), task: order?.id)
+                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main", shots: try await deployShots(store)), task: order?.id)
             // 第二张"等你"（答完第一张接着露出来）：在卡上另外说一句的演示
             if !cueFlows, let billing = task("清理旧的计费脚本") {
                 _ = try await store.addCueMessage(
@@ -187,6 +187,14 @@ extension DebugScene {
     /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
     /// 那一下的那段减去歇着那段是一次接力在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（库照样变、不飞），两者之差是飞的那一下。
     /// 不抢前台：窗口在后台、留在屏上（display link 照走）；动画本身在渲染服务里插值，渲染服务的开销不在这个进程里，量不到。
+    /// 推送那条"等你"点名要看的两份：部署会话发来的预发截图与测试报告（`seedDeliveries`）。
+    private static func deployShots(_ store: CueStore) async throws -> [CueShot] {
+        let sent = try await store.previews(of: "deploy")
+        return [("预发上的发言顺序", "预发上 6 人的发言顺序"), ("重连测试报告", "重连用例 4 个都过了")].compactMap { title, look in
+            sent.first { $0.title == title }.map { CueShot(preview: $0.id, look: look) }
+        }
+    }
+
     static func wakeIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         var round = 0

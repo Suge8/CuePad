@@ -150,7 +150,8 @@ struct CuePage: View {
                 ) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
-                            row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
+                            row: item, ref: item.taskID.flatMap { thread.tasks[$0] }, shots: thread.shots[item.id] ?? [],
+                            joined: thread.joined.contains(item.id), stamp: thread.stamps[item.id],
                             delivered: item.id == lastYou, live: live.flatMap { item.contains(round: $0.round) ? $0 : nil }, opened: $opened)
                     })
                     .equatable()
@@ -197,7 +198,7 @@ struct CuePage: View {
             let column = min(size.width, readingWidth) - 2 * inset
             var sum: CGFloat = 0, count = 0
             for row in rows[..<above].reversed() where sum < size.height {
-                sum += floor(row, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, column: column)
+                sum += floor(row, shots: thread.shots[row.id]?.count ?? 0, joined: thread.joined.contains(row.id), stamped: thread.stamps[row.id] != nil, column: column)
                 count += 1
             }
             return max(count, 1)
@@ -206,8 +207,9 @@ struct CuePage: View {
     }
 
     /// 一格至少多高（连同上面的间距与时间）：气泡里的字至少多高（`text`），结果卡另有交付物的一排（有的话；`strip`，比最矮的那种还矮）与下面那件活一行，
+    /// 带图的提问另有图的一排（`shots` 张，至少一行看什么），
     /// 旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）；数得越贴，打开时多排的越少。
-    private static func floor(_ row: CueThread.Row, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
+    private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12, strip: CGFloat = 60
         let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
         let bubble = CueBubble.padding.top + CueBubble.padding.bottom
@@ -220,7 +222,7 @@ struct CuePage: View {
             // 引用那一行至少一行小字，下面是回答
             bubble + note + 6 + text(question.answer ?? "", width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
         case .cue(let message, _):
-            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
+            bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + (shots == 0 ? 0 : strip + note)
         case .result(let message, _, let deliverables):
             bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil) + note + (deliverables.isEmpty ? 0 : strip)
         case .notes, .process, .renewed: note
@@ -289,7 +291,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, open: { opened = $0 }, moving: $docking)
+                CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
             }
             if !cue.canHear {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
@@ -322,6 +324,7 @@ private struct CueSegment: View, Equatable {
 private struct CueRow: View, Equatable {
     let row: CueThread.Row
     let ref: CueTaskRef?
+    let shots: [CueShown]
     let joined: Bool
     let stamp: Date?
     /// 你最后一句：下面写"已送达"。
@@ -333,10 +336,10 @@ private struct CueRow: View, Equatable {
 
     /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
-        let row: CueThread.Row, ref: CueTaskRef?, joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?
+        let row: CueThread.Row, ref: CueTaskRef?, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, live: CueLiveRound?
     }
 
-    nonisolated var key: Key { Key(row: row, ref: ref, joined: joined, stamp: stamp, delivered: delivered, live: live) }
+    nonisolated var key: Key { Key(row: row, ref: ref, shots: shots, joined: joined, stamp: stamp, delivered: delivered, live: live) }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 
@@ -355,7 +358,7 @@ private struct CueRow: View, Equatable {
         case .answer(let question):
             CueAnswer(question: question, ref: ref, joined: joined)
         case .cue(let message, _):
-            CueSays(message: message, task: ref, joined: joined, arrives: !swapsInPlace)
+            CueSays(message: message, task: ref, shots: shots, open: { opened = $0 }, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _, let deliverables):
             if let ref { CueResultCard(message: message, ref: ref, deliverables: deliverables) { opened = $0 } }
         case .notes(let notes):

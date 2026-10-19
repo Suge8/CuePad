@@ -230,6 +230,59 @@ struct CueEvalTests {
         }
     }
 
+    @Test func k挑图提问() async throws {
+        try await CueEval.run(
+            "k-挑图提问",
+            expect: "他交代过界面方案要给几个让他在卡上选；会话交回三个提问卡方案（每个方案手机浅色、深色、原样与 Mac 四张，还夹着先前别的改动的截图）："
+                + "tell 带 ask=rule 关联任务，doing 写推荐的那个，show 每个方案一张、同一种样子、推荐的在前，每张一句看什么；不带别的改动的图"
+        ) { eval in
+            let rig = eval.rig
+            try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
+            let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
+            func send(_ names: [String], title: String) async throws {
+                var files: [URL] = []
+                for name in names {
+                    files.append(rig.app.directory.appending(path: name))
+                    try await mockShot(name).write(to: files[files.count - 1])
+                }
+                _ = try await rig.store.addPreviews(filesAt: files, title: title, sessionID: work.id)
+            }
+            try await send(["1-01-改前-长按菜单.png", "1-02-改后-长按菜单.png", "2-01-改前-设置.png", "2-02-改后-设置.png"], title: "上一轮的改动")
+            for (slug, title) in Self.proposals {
+                try await send(["iphone", "iphone-dark", "iphone-original", "mac"].map { "\(slug)-\($0).png" }, title: title)
+            }
+            try await eval.trigger { try await rig.settle(work, reply: Self.proposalReply) }
+            let previews = try await rig.store.previews(of: work.id)
+            let asked = eval.calls("tell").filter { $0.args["ask"] as? String == "rule" && !$0.call.failed }
+            let shown = (asked.last?.args["show"] as? [[String: Any]] ?? []).compactMap { item -> PiPreview? in
+                guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
+                return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }
+            }
+            let variants = Set(shown.map { name in Self.proposals.map(\.slug).reduce(name.name) { $0.replacingOccurrences(of: $1, with: "") } })
+            return [
+                Check("请他选（tell 带 ask=rule、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
+                Check("doing 写推荐的方案", (asked.last?.args["doing"] as? String)?.contains(/方案|决定单|对话里问|郑重放行/) == true),
+                Check("show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
+                Check("同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
+                Check("每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
+                Check("没带别的改动的图", !shown.contains { $0.title == "上一轮的改动" }),
+            ]
+        }
+    }
+
+    private static let proposals = [
+        (slug: "decision-sheet", title: "提问卡方案 1：决定单"), (slug: "in-thread", title: "提问卡方案 2：对话里问"),
+        (slug: "slide-to-allow", title: "提问卡方案 3：郑重放行"),
+    ]
+
+    private static let proposalReply = """
+        三个提问卡方案做好了，效果图都发到手机了（每个方案手机浅色、深色、Mac 各一张，另附一张现在提问卡的原样作对比）：
+        1. 决定单：大按钮"这次可以"占满一行，下面依次是"以后不用问"和另外说的输入框。点一下就答完，最清楚。
+        2. 对话里问：卡片留在对话里，按钮贴在输入框上方，答完卡片原地变成回答。
+        3. 郑重放行：滑过去才算同意，"以后不用问"是个开关，适合推送、删除这类收不回的事。
+        我推荐 1：信息最集中、一步答完；3 的滑动在 Mac 上不顺手。
+        """
+
     private static let doneReply = """
         忘记密码做好了。
 
@@ -484,6 +537,77 @@ final class CueEval {
 }
 
 private func seconds(_ interval: TimeInterval) -> String { String(format: "%.1fs", interval) }
+
+/// 会话发来的一张效果图：按文件名画出那个方案的提问卡（决定单、对话里问、郑重放行；original 是现在的提问卡，作对比），手机或 Mac、浅色或深色；
+/// 别的改动的截图是一页设置。Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
+@MainActor
+private func mockShot(_ name: String) throws -> Data {
+    let dark = name.contains("dark"), mac = name.contains("mac")
+    let ink: Color = dark ? .white : .black, paper: Color = dark ? Color(white: 0.16) : .white, fill: Color = dark ? Color(white: 0.28) : Color(white: 0.92)
+    func button(_ text: String, primary: Bool = false) -> some View {
+        Text(text).font(.callout.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+            .background(primary ? Color.orange : fill, in: .rect(cornerRadius: 10)).foregroundStyle(primary ? .white : ink)
+    }
+    let question = Text("可以推送 scheduler 的重连修复吗？").font(.headline)
+    let why = Text("推上去别人就拉得到，撤不回来。").font(.caption).foregroundStyle(.secondary)
+    @ViewBuilder var card: some View {
+        if name.contains("original") {
+            // 改动前的原样：现在的提问卡，一行小字的问题与两个小选项
+            VStack(alignment: .leading, spacing: 8) {
+                Text("现在的样子").font(.caption2).foregroundStyle(.secondary)
+                Text("推送前要先问你：scheduler 的重连修复已提交到本地 main，要推送到 origin/main 吗？").font(.footnote)
+                HStack { Text("允许一次").font(.caption).padding(6).background(fill, in: .capsule); Text("我再看看").font(.caption).padding(6).background(fill, in: .capsule) }
+            }
+        } else if name.hasPrefix("decision-sheet") {
+            VStack(alignment: .leading, spacing: 10) {
+                question
+                why
+                button("这次可以", primary: true)
+                button("以后推送代码都不用问")
+                Text("另外说…").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(fill))
+            }
+        } else if name.hasPrefix("in-thread") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
+                Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
+                Spacer().frame(height: 30)
+                HStack { button("这次可以", primary: true); button("以后不用问") }
+                Text("对 Cue 说").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                    .background(fill, in: .capsule)
+            }
+        } else if name.hasPrefix("slide-to-allow") {
+            VStack(alignment: .leading, spacing: 12) {
+                question
+                why
+                HStack {
+                    Circle().fill(Color.orange).frame(width: 34, height: 34)
+                    Text("滑动以允许 →").font(.callout).foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(4).background(fill, in: .capsule)
+                HStack { Text("以后不用问").font(.callout); Spacer(); Capsule().fill(fill).frame(width: 44, height: 24) }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(name).font(.headline)
+                ForEach(0..<4) { _ in RoundedRectangle(cornerRadius: 8).fill(fill).frame(height: 36) }
+            }
+        }
+    }
+    let label = Text(name.replacingOccurrences(of: ".png", with: "")).font(.caption2).foregroundStyle(.secondary)
+    let shot = VStack(alignment: .leading, spacing: 14) {
+        label
+        Spacer()
+        card.padding(16).background(paper, in: .rect(cornerRadius: 18)).shadow(radius: 4)
+    }
+    .padding(20).frame(width: mac ? 520 : 300, height: mac ? 340 : 600)
+    .background(dark ? Color.black : Color(white: 0.96)).foregroundStyle(ink)
+    let renderer = ImageRenderer(content: shot)
+    renderer.scale = 2
+    let image = try #require(renderer.cgImage)
+    return try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+}
 
 /// 会话发到手机的那张截图：改前、改后的登录页与点了忘记密码之后的页面（Cue 用读文件工具打开看）。
 @MainActor

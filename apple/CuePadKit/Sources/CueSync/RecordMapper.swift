@@ -15,7 +15,7 @@ enum RecordMapper {
     .piMessages: ["text", "tools", "question"],
     .previews: ["name", "title"],
     .accountQuotas: ["windows"],
-    .cueMessages: ["text", "choices", "answer", "tools", "askAction", "askRule"],
+    .cueMessages: ["text", "choices", "answer", "tools", "askAction", "askRule", "askShots"],
     .cueLines: ["text"],
     .cueProfile: ["name", "model", "effort", "allows"],
     .cueState: ["detail"],

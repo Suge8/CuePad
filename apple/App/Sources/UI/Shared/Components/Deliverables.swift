@@ -30,7 +30,7 @@ struct DeliverableStrip: View {
             tile(previews[0], .hero(maxHeight: heroMaxHeight))
         case 2 where size != .mini:
             HStack(alignment: .top, spacing: Self.gap) {
-                ForEach(previews) { tile($0, .pair(maxHeight: heroMaxHeight)) }
+                ForEach(previews) { tile($0, .column(maxHeight: heroMaxHeight)) }
             }
         default:
             // 懒加载：一件活常常挂着几十上百份（真实库里一张结果卡 278 份），整排都建的话第一次打开 Cue 页光这一张就占 300ms 主线程。
@@ -105,12 +105,12 @@ extension EnvironmentValues {
 }
 
 /// 交付物的一张：画面（按比例）与下面一行字。
-private struct DeliverableTile: View {
+struct DeliverableTile: View {
     enum Shape {
         /// 整宽，比例夹在 4:3～16:9，不高过 `maxHeight`
         case hero(maxHeight: CGFloat)
-        /// 两份并排之一：各占一半宽，不高过 `maxHeight`
-        case pair(maxHeight: CGFloat)
+        /// 并排的几份之一：各占等宽的一份，不高过 `maxHeight`
+        case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
     }
@@ -202,7 +202,7 @@ private struct DeliverableTile: View {
         switch shape {
         case .hero(let maxHeight):
             picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
-        case .pair(let maxHeight):
+        case .column(let maxHeight):
             picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
         case .strip(let height):
             picture.frame(width: (height * aspect).rounded(), height: height)
@@ -266,7 +266,7 @@ private struct DeliverableTile: View {
         let pixels = { (points: CGFloat) in Int(points * scale) }
         return switch shape {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
-        case .pair(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
+        case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
         }
     }
