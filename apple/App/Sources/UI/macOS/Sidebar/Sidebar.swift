@@ -92,7 +92,7 @@ struct Sidebar: View {
                 }
                 Spacer()
                 let settings = SidebarOutline.Entry.settings
-                Button(settings.title, icon: settings.icon) { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                Button(settings.title, icon: settings.icon) { SettingsPane.open() }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .font(.system(size: 15))

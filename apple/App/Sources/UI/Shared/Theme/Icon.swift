@@ -37,7 +37,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case researcher, engineer, batchWorker, designer, sentinel, subagent
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, wakeReminder, wakeSettings, mail
-    case profile, name, autoApprove, hotkey, talkToCue, appearance, testConnection, updates
+    case name, autoApprove, hotkey, talkToCue, appearance, updates
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
     /// Mac 菜单栏里的 CuePad（单色模板图）。
@@ -180,12 +180,10 @@ nonisolated enum Icon: Hashable, Sendable {
         case .wakeReminder: .ink("alarm")
         case .wakeSettings: .ink("swap")
         case .mail: .ink("mail")
-        case .profile: .ink("face")
         case .name: .ink("tag")
         case .autoApprove: .ink("shield.tick")
         case .hotkey: .ink("keyboard")
         case .appearance: .ink("sun")
-        case .testConnection: .ink("signal")
         case .updates: .ink("badge.down")
         case .audio: .ink("wave")
         case .document: .ink("doc")

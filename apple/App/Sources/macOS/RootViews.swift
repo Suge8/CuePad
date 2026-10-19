@@ -9,9 +9,9 @@ enum RootViews {
         MainRoot(workspace: workspace).environment(services)
     }
 
-    /// 设置窗口（⌘, 与菜单"设置…"）的内容。
-    static func settings(_ services: AppServices, cueBar: CueBar) -> some View {
-        SettingsView()
+    /// 设置窗口（⌘, 与菜单"设置…"）的一页。
+    static func settings(_ pane: SettingsPane, _ services: AppServices, cueBar: CueBar) -> some View {
+        SettingsView(pane: pane)
             .environment(cueBar)
             .panelHost()
             .modifier(PaletteProvider())
