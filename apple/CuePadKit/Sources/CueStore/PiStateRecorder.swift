@@ -17,7 +17,7 @@ extension CueStore {
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
         context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
-      if let alert = notify, !alert.reaches(record, cueOnDuty: try cueOnDuty()) { record.notify = nil }
+      if let alert = notify, !alert.reaches(record, cue: try cueDuty()) { record.notify = nil }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()

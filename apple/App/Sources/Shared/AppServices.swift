@@ -94,6 +94,8 @@ final class AppServices {
     var isSyncingNow: Bool { syncing != nil }
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
+    /// 这台设备开着哪个会话的唯一写入口；手机拿不到 identifierForVendor 时没有。
+    @ObservationIgnored let sessionViewer: SessionViewerKeeper?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
@@ -342,6 +344,7 @@ final class AppServices {
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
+        sessionViewer = SessionViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
         pi = mac.pi
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
@@ -373,6 +376,9 @@ final class AppServices {
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         self.timing = timing
         self.pasteboard = pasteboard
+        sessionViewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
+            SessionViewerKeeper(store: store, sync: sync, device: $0.uuidString)
+        }
     }
     #endif
 

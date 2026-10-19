@@ -54,7 +54,7 @@ struct SubagentWakeTests {
         session.setState(["kind": "idle"])
         try await eventually("歇下写进库") { try await store.sessions(matching: session.sessionID).first?.state == .known(.settled) }
         try file.append(reply: "子代理做完：测试全过")
-        try await rig.message(.note, containing: "登录页那边歇下了")
+        try await rig.message(.cue, containing: "登录页那边歇下了")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
         let woke = keeper.rounds.filter { $0.wake == .sessionActivity }
         #expect(woke.count == 1)
@@ -78,7 +78,7 @@ struct SubagentWakeTests {
         try await PiStateRecorder(store: store, hostID: "mac-b")
             .update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
 
-        try await rig.message(.note, containing: "子代理那边停住了")
+        try await rig.message(.cue, containing: "子代理那边停住了")
         let keeper = try #require(rig.services.cue.keeper)
         let woke = keeper.rounds.filter { $0.wake == .sessionActivity }
         #expect(woke.count == 1)

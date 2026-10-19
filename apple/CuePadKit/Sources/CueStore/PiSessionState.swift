@@ -232,12 +232,19 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
   public static let detailSeparator = " · "
 
-  /// 等的是 Cue：在等回答，Cue 在值班（`CueProfile.onDuty`），这个问题 CuePad 也答得了（`answerableQuestion`）——Cue 去答或转问你。
-  public func waitsForCue(cueOnDuty: Bool) -> Bool { cueOnDuty && answerableQuestion != nil }
+  /// 等的是 Cue：在等回答，Cue 在值班（`cue`，`CueStore.cueDuty`）且没把它留给你（`CueDuty.leftToYou`），这个问题 CuePad 也答得了
+  /// （`answerableQuestion`）——Cue 去答或转问你。
+  public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
-  /// "等你"里会话那一半的唯一规则：在等回答，且等的不是 Cue（`waitsForCue`）。"等你 N"、Dock 角标、
-  /// "等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
-  public func asksYou(cueOnDuty: Bool) -> Bool { state == .known(.waitingForUser) && !waitsForCue(cueOnDuty: cueOnDuty) }
+  /// "等你"里会话那一半的唯一规则：在等回答且等的不是 Cue（`waitsForCue`），或 Cue 值班时把这次歇下留给了你回（会话行的"待回复"）。
+  /// "等你 N"、Dock 角标、"等你"的提示（Mac 的通知、手机的前台横幅与锁屏推送标志，`PiAlert.reaches`）都只认它。
+  public func asksYou(_ cue: CueDuty?) -> Bool {
+    switch state.known {
+    case .waitingForUser: !waitsForCue(cue)
+    case .settled: cue?.leftToYou(self) == true
+    default: false
+    }
+  }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }

@@ -280,7 +280,8 @@ struct SessionTaskTests {
                 now: .now, contextUsed: nil, projects: [], changes: changes, board: try await store.cueBoard(),
                 waiting: [], wake: .sessionActivity))
         }
-        #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的] 修登录"))
+        // 他刚在会话里说过话：同时标着他在场
+        #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的 · 他在场：刚在里面说过话] 修登录"))
 
         let mark = try await store.lastWrite()
         try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)  // 机器消息开的这一轮在跑
@@ -290,7 +291,7 @@ struct SessionTaskTests {
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint", "when": "now"]))
         #expect(!said.isError && said.text.contains("马上说"))
         let line = try await settledLine(after: mark)
-        #expect(line.contains("[歇下] 修登录") && !line.contains("他说的"))
+        #expect(line.contains("[歇下 · 他在场：刚在里面说过话] 修登录") && !line.contains("他说的"))
     }
 
     /// Cue 值班时，会话等的回答 CuePad 答得了就归 Cue：显示"等 Cue 回答"、不算进"等你 N"、不给手机推；答不了的照样等你。

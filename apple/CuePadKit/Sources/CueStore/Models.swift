@@ -11,7 +11,7 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
-  case cueMessages, cueLines, cueProfile, cueState, cueRead, cueSummaries, macPresence, macAgents
+  case cueMessages, cueLines, cueProfile, cueState, cueRead, cueSummaries, macPresence, macAgents, sessionViewers
   /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
   case writeCounter
 }
@@ -21,7 +21,7 @@ extension Table {
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
     .previews, .accountQuotas,
-    .cueMessages, .cueLines, .cueProfile, .cueState, .cueRead, .macPresence, .macAgents,
+    .cueMessages, .cueLines, .cueProfile, .cueState, .cueRead, .macPresence, .macAgents, .sessionViewers,
   ]
 
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
@@ -50,6 +50,7 @@ extension Table {
     case .cueRead: CueRead.columns
     case .macPresence: MacPresence.columns
     case .macAgents: MacAgents.columns
+    case .sessionViewers: SessionViewer.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     case .writeCounter: ["seq"]
     }
@@ -432,6 +433,8 @@ public enum CueStoreError: Error, Equatable {
   case sessionInUse(String)
   /// 会话不能从 CuePad 结束（参数是会话名）。
   case cannotEnd(String)
+  /// 会话没停着，没有可留给他回的停下（参数是会话名）。
+  case notStopped(String)
   /// 会话换不了模型（参数是会话名）。
   case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
@@ -444,6 +447,8 @@ public enum CueStoreError: Error, Equatable {
   case cueNotEnabled
   /// 这条提问已经结束了（答了或撤回了）。
   case questionEnded
+  /// 回答不是这条提问的选项（参数是那句话）：不选的话在对话里直接说。
+  case notAChoice(String)
   /// 允许清单里有这类事（参数是只管的那个项目的名字；不分项目的为 nil）。
   case alreadyAllowed(String?)
   /// 提问的动作或规矩短语缺了、超长或不止一行（`CueAsking`）。
@@ -495,11 +500,13 @@ extension CueStoreError: LocalizedError {
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类，或扩展是旧版）：要收掉就 tell 他在终端里退出"
+    case .notStopped(let title): "会话「\(title)」没停着（在跑、出错或已结束）：留给他回只用在它歇着或在等回答时"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
+    case .notAChoice(let answer): "「\(answer)」不是这条提问的选项"
     case .askPhrase(let field, let hint, let limit): "带 ask 要写 \(field)：\(hint)，一行、不超过 \(limit) 字"
     case .askShots(let limit): "show 至多 \(limit) 张、不重复：只挑回答这个问题必须看的"
     case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"

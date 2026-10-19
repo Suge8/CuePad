@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 侧栏收起时工具栏里的当前项目胶囊：点开是项目切换列表，前 9 个带 ⌘1–9 提示（与窗口快捷键同一顺序）。
+/// 侧栏收起时工具栏里的当前页胶囊：点开是项目切换列表，前 9 个带 ⌘1–9 提示（与窗口快捷键同一顺序），之后是侧栏里别的去处（Cue 在最前，同侧栏）。
 struct ProjectSwitcher: View {
     /// 侧栏收起时才写当前页：展开时标签是空的，切页不碰这个常驻的菜单（标签一变整份菜单跟着重建，一次切页约 7ms）。
     let collapsed: Bool
@@ -14,6 +14,8 @@ struct ProjectSwitcher: View {
     var body: some View {
         let projects = workspace.catalog?.projects ?? []
         Menu {
+            Button { workspace.show(.cue) } label: { Label(workspace.cue.name, icon: .cue).labelStyle(.titleAndIcon) }
+            Divider()
             ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                 let item = Button { workspace.show(.project(project.id)) } label: {
                     Label { Text(project.name) } icon: { Image(nsImage: Self.menuIcon(project)) }
@@ -73,13 +75,16 @@ struct ProjectSwitcher: View {
     }
 }
 
-/// 胶囊里的当前页：单独一个视图读 `workspace.page`，切页时只重算它，不重算上面那份包含全部项目的菜单。
+/// 胶囊里的当前页：单独一个视图读 `workspace.page`，切页时只重算它，不重算上面那份包含全部项目的菜单。Mac 的每一页都有一个写法（`MainWindow.pageView`），胶囊不空着只剩箭头。
 private struct CurrentPage: View {
     let projects: [Project]
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         switch workspace.page {
+        case .cue:
+            Image(.cue).accessibilityHidden(true)
+            Text(workspace.cue.name)
         case .project(let id):
             let project = projects.first { $0.id == id }
             ProjectGlyph(project: project, size: 12)

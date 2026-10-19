@@ -55,6 +55,19 @@ struct CueEvalTests {
         }
     }
 
+    @Test func r大事先对齐() async throws {
+        try await CueEval.run("r-大事先对齐", expect: "他要重新设计设置页（界面设计、没说清要做成什么样）：建任务但不开工，回复里一两句说清打算、等他点头") { eval in
+            try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
+            let reply = try await eval.reply()
+            return [
+                Check("建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
+                Check("没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
+                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check("回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+            ]
+        }
+    }
+
     @Test func b验收证据不足() async throws {
         try await CueEval.run("b-验收证据不足", expect: "会话只回一句「改好了」：不 done，say 要证据") { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
@@ -256,25 +269,140 @@ struct CueEvalTests {
         }
     }
 
-    @Test func l另外说选别的方案() async throws {
+    @Test func l底下直接回了卡上的事() async throws {
         try await CueEval.run(
-            "l-另外说选别的方案",
-            expect: "Cue 按他的规矩把三个方案放到卡上、推荐 1；他不选选项、另外说「用 2，按钮再小一点」："
-                + "照方案 2 加上按钮再小一点让会话去做，不当成拒绝（不撤回、不收掉、不叫会话停），不再为这件事发等你"
+            "l-底下直接回了卡上的事",
+            expect: "卡上问着按方案 1 改提问卡；他不点卡，在 Cue 页底下说「用 2，按钮再小一点」："
+                + "照方案 2 加上按钮再小一点让会话去做，撤回那张卡，不再为这件事发等你"
         ) { eval in
-            let work = try await Self.proposalsDelivered(eval)
-            let question = try #require(try await eval.rig.store.cueMessagesWaitingForYou().first { $0.taskID == work.task.id }, "Cue 先在卡上问了")
-            try await eval.trigger { try await Workspace(services: eval.rig.services).answerCueQuestion(question, "用 2，按钮再小一点") }
+            let (work, question) = try await Self.proposalsAsked(eval)
+            try await eval.trigger { try await eval.rig.say("用 2，按钮再小一点") }
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
+            let withdrawn = try await eval.rig.store.cueMessages().first { $0.id == question.id }
             return [
                 Check("让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
                 Check("带上按钮再小一点", said.contains { $0.contains(/小/) }),
-                Check("不当成拒绝（没 done、没撤回、没叫会话停）",
-                      eval.calls("task", "done").isEmpty && !eval.calls("tell").contains { $0.args["withdraw"] != nil }
-                        && !said.contains { $0.contains(/先别(改|做|动)|不做了|不用(改|做)了|停下手|停掉/) }),
+                Check("撤回了那张卡", withdrawn?.answeredAt != nil && withdrawn?.answer == nil),
                 Check("没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
+                Check("没收掉这件事（没 done）", eval.calls("task", "done").isEmpty && work.task.status != .done),
             ]
         }
+    }
+
+    @Test func m底下说的是别的事() async throws {
+        try await CueEval.run(
+            "m-底下说的是别的事",
+            expect: "卡上问着按方案 1 改提问卡；他在 Cue 页底下问的是另一件事（README 截图那件做到哪了）：答他问的，卡留着、不撤回"
+        ) { eval in
+            let (_, question) = try await Self.proposalsAsked(eval)
+            try await eval.trigger { try await eval.rig.say("README 截图那件做到哪了？") }
+            return [
+                Check("没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
+                Check("卡还在等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
+                Check("回了他", try await eval.reply() != nil),
+            ]
+        }
+    }
+
+    @Test func n他走开后的常规问题() async throws {
+        try await CueEval.run(
+            "n-他走开后的常规问题",
+            expect: "他 15 分钟前直接在会话里补了一句（不在场），会话做完那句停下来问一个常规的技术取舍：Cue 接着推进（say 作答），不留给他、不发等你"
+        ) { eval in
+            let work = try await eval.rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await eval.rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            return [
+                Check("对会话 say 作答（说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
+                Check("没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
+                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+            ]
+        }
+    }
+
+    @Test func o答他自己问的() async throws {
+        try await CueEval.run(
+            "o-答他自己问的",
+            expect: "他 15 分钟前在会话里自己问了个问题（不在场），会话答完停下：Cue 不替他接（不 say），task leave 留给他，会话显示待回复"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await rig.settleHisTurn(
+                    work, said: "等下，重置令牌为什么要存哈希而不是原文？", ago: 15 * 60,
+                    reply: "存哈希是为了库被拖走时令牌不能直接拿来用：令牌本身就等于一次性密码，原文落库的话，谁读到库谁就能重置任何人的密码。验证时把用户带来的令牌同样哈希再比对就行，代价只是一次 SHA-256。")
+            }
+            let session = try #require(try await rig.store.sessions(matching: work.id).first)
+            let duty = try await rig.store.cueDuty()
+            return [
+                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
+                Check("留给了他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check("会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
+                Check("没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+            ]
+        }
+    }
+
+    @Test func p他在场不插嘴() async throws {
+        try await CueEval.run(
+            "p-他在场不插嘴",
+            expect: "他 2 分钟前刚在会话里说过话（在场），会话停下问一个常规取舍：Cue 不插嘴（不 say、不 leave、不 tell）"
+        ) { eval in
+            let work = try await eval.rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await eval.rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 2 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            return [
+                Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
+                Check("没 leave", eval.calls("task", "leave").isEmpty),
+                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+            ]
+        }
+    }
+
+    @Test func q他离开后接着推进() async throws {
+        try await CueEval.run(
+            "q-他离开后接着推进",
+            expect: "会话停下问常规取舍时他正在手机上开着它（在场，Cue 不动）；他离开那一页后 Cue 被再叫醒（他已离开），接着推进（say 作答）"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.store.recordViewing(device: "phone", sessionID: work.id)
+            try await eval.trigger {
+                try await rig.settleHisTurn(
+                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
+                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
+            }
+            let quiet = eval.calls("task", "say").isEmpty && eval.calls("task", "leave").isEmpty
+            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionID: nil) }
+            return [
+                Check("他开着时没插嘴", quiet),
+                Check("他离开后再被叫醒（信封写着他已离开）", eval.round?.sent.contains { $0.contains("他已离开") } == true),
+                Check("接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
+            ]
+        }
+    }
+
+    /// 卡上已经问着（同 Cue 按他的规矩把三个方案交上来的那张：推荐 1，点名每个方案一张图）；会话还在、等他定。
+    private static func proposalsAsked(_ eval: CueEval) async throws -> (Working, CueMessage) {
+        let rig = eval.rig
+        let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图发到手机，他选定后再实现。")
+        var shots: [CueShot] = []
+        for (slug, title) in proposals {
+            let file = rig.app.directory.appending(path: "\(slug)-iphone.png")
+            try await mockShot(file.lastPathComponent).write(to: file)
+            let preview = try #require(try await rig.store.addPreviews(filesAt: [file], title: title, sessionID: work.id).first).preview
+            shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
+        }
+        let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: shots)
+        let question = try await rig.store.addCueMessage(
+            .cue, text: "三个提问卡方案做好了，我推荐 1 决定单：点一下就答完。", ask: asking, task: work.task.id)
+        return (work, question)
     }
 
     /// 他交代过界面方案要在卡上选；会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
@@ -305,7 +433,7 @@ struct CueEvalTests {
 
     private static let proposalReply = """
         三个提问卡方案做好了，效果图都发到手机了（每个方案手机浅色、深色、Mac 各一张，另附一张现在提问卡的原样作对比）：
-        1. 决定单：大按钮"这次可以"占满一行，下面依次是"以后不用问"和另外说的输入框。点一下就答完，最清楚。
+        1. 决定单：大按钮"可以"占满一行，下面是"以后不用问"。点一下就答完，最清楚。
         2. 对话里问：卡片留在对话里，按钮贴在输入框上方，答完卡片原地变成回答。
         3. 郑重放行：滑过去才算同意，"以后不用问"是个开关，适合推送、删除这类收不回的事。
         我推荐 1：信息最集中、一步答完；3 的滑动在 Mac 上不顺手。
@@ -430,6 +558,15 @@ extension CueHostTests.Rig {
     func settle(_ work: Working, reply text: String) async throws {
         work.session.setState(["kind": "idle"])
         try await answered(work.id, prompt: oneLine(work.prompt.text), reply: text, messages: [work.prompt, reply(work, text)])
+    }
+
+    /// 他 `ago` 秒前直接在会话里（终端里打的，不带 Cue 的发送记录）说了 `said`，会话做完他这一轮、回复 `reply` 后歇下。
+    func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
+        let first = reply(work, "后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。")
+        let his = PiChatMessage(sessionID: work.id, entryID: "u2", seq: 3, role: .user, text: said, at: .now - ago)
+        let answer = PiChatMessage(sessionID: work.id, entryID: "a2", seq: 4, role: .pi, text: text, at: .now)
+        work.session.setState(["kind": "idle"])
+        try await answered(work.id, prompt: said, reply: text, messages: [work.prompt, first, his, answer])
     }
 
     /// 会话这一轮说了 `said` 后停下来问一个选择题。
@@ -586,24 +723,22 @@ private func mockShot(_ name: String) throws -> Data {
                 Text("可以推送 scheduler 的重连修复吗？").font(.footnote)
                 HStack {
                     Text(CueAsk.once).font(.caption).padding(6).background(fill, in: .capsule)
-                    Text(CueAsk.otherwise).font(.caption).padding(6).background(fill, in: .capsule)
+                    Text("以后不用问").font(.caption).padding(6).background(fill, in: .capsule)
                 }
             }
         } else if name.hasPrefix("decision-sheet") {
             VStack(alignment: .leading, spacing: 10) {
                 question
                 why
-                button("这次可以", primary: true)
+                button("可以", primary: true)
                 button("以后推送代码都不用问")
-                Text("另外说…").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(fill))
             }
         } else if name.hasPrefix("in-thread") {
             VStack(alignment: .leading, spacing: 10) {
                 Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
                 Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
                 Spacer().frame(height: 30)
-                HStack { button("这次可以", primary: true); button("以后不用问") }
+                HStack { button("可以", primary: true); button("以后不用问") }
                 Text("对 Cue 说").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
                     .background(fill, in: .capsule)
             }

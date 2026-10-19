@@ -46,7 +46,7 @@ struct IOSRoot: View {
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project, created: $0.created) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
         }
-        // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
+        // 这一层还没有导航栏：上安全区就是状态栏
         .measuresStatusBar()
         // 窄屏（折成一层层的页）盖在整个窗口上；宽屏在右边那一栏里（`SplitRoot`）
         .overlay(alignment: .top) { if sizeClass != .regular { NoticeBanner() } }
@@ -64,6 +64,7 @@ struct IOSRoot: View {
         // 变宽后两栏都在：此后再变窄，折叠出来的是右边那一页（不停在列表上）
         .onChange(of: sizeClass) { _, size in if size == .regular { navigation.column = .detail } }
         .task { await workspace.follow() }
+        .modifier(SessionViewing(keeper: workspace.services.sessionViewer, navigation: navigation))
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
@@ -90,12 +91,11 @@ struct RouteView: View {
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏时间那一段的内容淡出（`fadesUnderBars`）。
+        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘遮罩、渐变或色带，状态栏下也不（`Bars`）。
         // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（搜索页、Cue 页头）
         // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
-            .fadesUnderBars()
             .containerBackground(background, for: .navigation)
             // 右边的页都不用大标题（推入页的标题在顶栏玻璃里，Cue、搜索自带顶上一排）：不随打开的第一页是谁而变
             .navigationBarTitleDisplayMode(.inline)

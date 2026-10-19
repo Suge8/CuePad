@@ -104,20 +104,24 @@ struct CueEnableCard: View {
 /// 一件活收成一行（对话里 Cue 的话下面、"等你"里关联的那件）：任务圈、标题、步骤数，点它打开任务。
 struct CueTaskLine: View {
     let ref: CueTaskRef
+    /// 可点的高（"等你"卡的末行撑满 44）
+    var height: CGFloat = 24
+    /// 标题至多几行（"等你"卡在辅助功能字号下两行）
+    var lines = 1
     @Environment(\.palette) private var palette
 
     var body: some View {
         CueTaskButton(task: ref.task.id) {
             HStack(spacing: 6) {
                 TaskRingView(status: ref.task.status, done: ref.done, size: 13)
-                Text(ref.task.title).lineLimit(1)
+                Text(ref.task.title).lineLimit(lines).fixedSize(horizontal: false, vertical: lines > 1)
                 if let progress = ref.progress, !ref.done {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().foregroundStyle(palette.ink3)
                 }
                 Image(.forward).font(.system(size: 9, weight: .semibold))
             }
             .font(Typography.meta).foregroundStyle(palette.ink2)
-            .frame(minHeight: 24)
+            .frame(minHeight: height).contentShape(.rect)
         }
         .accessibilityLabel("关于 \(ref.task.title)")
         .accessibilityHint("打开任务")
@@ -180,7 +184,7 @@ enum CueBubble {
     #endif
     /// 同一边连着说的两颗之间。
     static let joinedGap: CGFloat = 4
-    /// 气泡旁的旁注（经过、动态、送达情况，`NoteLine`）离那一边的距离：图标对着气泡里的字。
+    /// 气泡旁的旁注（经过、动态，`NoteLine`）离那一边的距离：图标对着气泡里的字。
     static let noteInset: CGFloat = padding.leading
     /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
     #if os(macOS)
@@ -230,7 +234,7 @@ struct CueSays: View {
             BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                 VStack(alignment: .leading, spacing: 8) {
                     MarkdownText(source: message.text).equatable()
-                    if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, open: open) }
+                    if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, reply: .cue, bleed: CueBubble.padding.leading, open: open) }
                     if let task { CueTaskLine(ref: task) }
                 }
                 .cueBubble(joined: joined)
@@ -248,7 +252,7 @@ struct CueSays: View {
 }
 
 /// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueMessage.headline`，
-/// 点它跳回问的那句），下面是选的那一项或另外写的话的全文。从刻度滑条跳过来时描一圈。
+/// 点它跳回问的那句），下面是选的那一项（更旧版本存下的另外一句照原文）。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
     var joined = false
@@ -281,93 +285,212 @@ private struct CueBubbleSurface: ViewModifier {
     }
 }
 
-/// "等你"那一句要你定什么：赭黄问号与代码写出的问题（`CueMessage.headline`），下面一行小字是为什么问你（`CueAsking.why`，规矩那一类是哪条规矩）。
-/// "等你"卡与全屏预览的底栏共用。
+/// "等你"那一句要你定什么：两列，左边赭黄问号（全卡唯一的状态色）、右边代码写出的问题（`CueMessage.headline`），规矩那一类下面再一行
+/// 引的规矩（`CueAsking.why`），两行同一条左缘、都不限行。"等你"卡与全屏预览的底栏共用。
 struct CueQuestionLine: View {
     let message: CueMessage
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let asking = message.asking
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            PiStateGlyph(status: .asking)
+        let headline = message.headline ?? "", why = message.asking?.why
+        HStack(alignment: .firstTextBaseline, spacing: 9) {
+            PiStateGlyph(status: .asking).font(Typography.title)
             VStack(alignment: .leading, spacing: 4) {
-                Text(message.headline ?? "")
-                    .font(Typography.title).foregroundStyle(palette.ink)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                if let why = asking?.why {
-                    Text(why).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+                Text(Self.keepingTail(headline)).font(Typography.title).foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let why {
+                    Text(Self.keepingTail(why)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([headline, why].compactMap(\.self).joined(separator: "，"))
     }
+
+    /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
+    /// 换行时不会只剩"我选」。"这样的尾巴挂在下一行。块与块之间插字连接符（U+2060，不占宽、不显示）；不插进单词里面：
+    /// 插在字母之间时排版反倒在那里断开（"ma / in"）。存储、通知、读屏、复制都用原文。
+    static func keepingTail(_ text: String) -> String {
+        func latin(_ character: Character) -> Bool { character.isASCII && (character.isLetter || character.isNumber) }
+        var rest = Substring(text), pieces: [Substring] = [], counted = 0
+        while counted < tailLength, let last = rest.last {
+            let length = latin(last) ? rest.reversed().prefix(while: latin).count : 1
+            pieces.insert(rest.suffix(length), at: 0)
+            rest = rest.dropLast(length)
+            if last.isLetter || last.isNumber { counted += 1 }
+        }
+        guard counted == tailLength else { return text }
+        return rest + pieces.joined(separator: "\u{2060}")
+    }
+
+    private static let tailLength = 4
 }
 
-/// "等你"的选项：推荐的答案（第一个）作主按钮、其余次按钮，一行放不下就竖排。"等你"卡与全屏预览的底栏共用。
+/// "等你"的选项：只有第一项"可以"是实底主按钮（全卡唯一的靛青）；第二项（"以后……不用问"）是无底色的文字按钮、宽按文字，在"可以"左边，
+/// 一行放不下（项目名长）或辅助功能字号时竖排在"可以"下面、居中。"等你"卡与全屏预览的底栏共用。
+/// 手机上"可以"伸满剩下的宽（只有它时占满一行）；Mac 上排在一行尾端，"可以"不窄过 `onceWidth`。
 struct CueChoices: View {
     let options: [String]
-    /// 其余选项的样子：铺在淡底的纸上（"等你"卡）用纸底，免得墨色的浅底叠在暖黄上发灰。
-    var secondary = ControlButtonStyle.Kind.secondary
     var disabled = false
     let pick: (String) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    #if os(macOS)
+    static let onceWidth: CGFloat = 96
+    private static let fills = false
+    private static let stackGap: CGFloat = 4
+    #else
+    static let onceWidth: CGFloat = 88
+    private static let fills = true
+    /// 文字按钮自带可点的高，竖排时与"可以"不另留间距
+    private static let stackGap: CGFloat = 0
+    #endif
+    /// 按钮左右的内边距（`ControlSurface`）：最小宽要扣掉它才是字的宽
+    private static let inset: CGFloat = 32
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { buttons }
-            VStack(alignment: .leading, spacing: 8) { buttons }
+        let once = options.first ?? CueAsk.once, others = Array(options.dropFirst())
+        let stacked = VStack(spacing: Self.stackGap) {
+            button(once, kind: .primary, fill: true)
+            ForEach(others, id: \.self) { button($0, kind: .quiet) }
+        }
+        // Mac 上竖排也按字宽收着（"可以"与文字按钮同宽），不铺满左栏
+        .fixedSize(horizontal: !Self.fills, vertical: false)
+        if others.isEmpty {
+            button(once, kind: .primary, fill: Self.fills)
+        } else if typeSize.isAccessibilitySize {
+            stacked
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(others, id: \.self) { button($0, kind: .quiet).lineLimit(1).fixedSize() }
+                    button(once, kind: .primary, fill: Self.fills, minWidth: Self.onceWidth).lineLimit(1)
+                }
+                stacked
+            }
         }
     }
 
-    @ViewBuilder private var buttons: some View {
-        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-            Button(option) { pick(option) }
-                .buttonStyle(ControlButtonStyle(kind: index == 0 ? .primary : secondary))
-                .lineLimit(2)
-                .disabled(disabled)
+    private func button(_ option: String, kind: ControlButtonStyle.Kind, fill: Bool = false, minWidth: CGFloat = 0) -> some View {
+        Button { pick(option) } label: {
+            Text(option).multilineTextAlignment(.center)
+                .frame(minWidth: max(0, minWidth - Self.inset), maxWidth: fill ? .infinity : nil)
         }
+        .buttonStyle(ControlButtonStyle(kind: kind))
+        .disabled(disabled)
     }
 }
 
-/// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张）：并排等宽，每张下面一句看什么（Cue 写的），按 Cue 给的先后。
+/// 提问点名要你看的图（`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一行等高、宽按原图比例、整张不裁，每张正下方一句看什么
+/// （与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明）。行高看有没有竖图（`rowHeight`）；一行放不下就横滑，
+/// 滑到纸边（`bleed`）、露出下一张的一角。手机上只有一张时说明在图右侧；辅助功能字号下一张一行、说明在右。
 /// 点一张全屏看，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（"等你"里是那几个选项）。
 struct CueShots: View {
     let shots: [CueShown]
     let group: String
     let reply: PreviewReply
+    var bleed: CGFloat = 16
     let open: (PreviewOpening) -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
+    private static let gap = DeliverableStrip.gap
+    private static let besideGap: CGFloat = 14
     #if os(macOS)
-    static let height: CGFloat = 120
+    /// Mac 上带图的卡图在右栏，只有一张也是说明在图下，右栏不因说明变宽
+    private static let besideOne = false
     #else
-    static let height: CGFloat = 96
+    private static let besideOne = true
     #endif
-    static let gap: CGFloat = 8
+
+    /// 一行多高：有竖图时按竖图（手机截图 240 高约 110 宽，三张正好排满；四张降到 220、第四张露一角），全是横图矮一些。
+    private var rowHeight: CGFloat {
+        let portrait = shots.contains(where: \.portrait)
+        #if os(macOS)
+        // Mac 上带图的卡问句在左、图在右（`CueWaitingDock`），图矮一些，卡不占去半个窗口
+        return portrait ? 200 : 120
+        #else
+        return portrait ? (shots.count > 3 ? 220 : 240) : 150
+        #endif
+    }
 
     var body: some View {
-        let batch = shots.map(\.preview), looks = Dictionary(uniqueKeysWithValues: shots.map { ($0.id, $0.look) })
-        HStack(alignment: .top, spacing: Self.gap) {
-            ForEach(shots) { shot in
-                VStack(alignment: .leading, spacing: 5) {
-                    DeliverableTile(
-                        preview: shot.preview, label: shot.look, shape: .column(maxHeight: Self.height), captioned: false,
-                        zoom: PreviewZoomKey(group: group, preview: shot.id)
-                    ) { open(PreviewOpening(preview: $0, batch: batch, group: group, reply: reply, looks: looks)) }
-                    Text(shot.look).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityHidden(true)
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(shots) { beside($0, height: $0.portrait ? 200 : 110) }
             }
+        } else if shots.count == 1, Self.besideOne {
+            beside(shots[0], height: rowHeight)
+        } else {
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: Self.gap) {
+                    ForEach(shots) { shot in
+                        Captioned(gap: 8) {
+                            tile(shot, height: rowHeight)
+                            caption(shot.look)
+                        }
+                    }
+                }
+                .padding(.horizontal, bleed)
+            }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .padding(.horizontal, -bleed)
         }
+    }
+
+    private func beside(_ shot: CueShown, height: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: Self.besideGap) {
+            tile(shot, height: height)
+            caption(shot.look).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func tile(_ shot: CueShown, height: CGFloat) -> some View {
+        let batch = shots.map(\.preview), looks = Dictionary(uniqueKeysWithValues: shots.map { ($0.id, $0.look) })
+        return DeliverableTile(
+            preview: shot.preview, label: shot.look, shape: .shot(height: height, aspect: shot.aspect), captioned: false,
+            zoom: PreviewZoomKey(group: group, preview: shot.id)
+        ) { open(PreviewOpening(preview: $0, batch: batch, group: group, reply: reply, looks: looks)) }
+    }
+
+    /// 看什么：读屏读图的标签（`DeliverableTile` 的 label），这里只给眼睛看。
+    private func caption(_ look: String) -> some View {
+        let parts = look.split(separator: "：", maxSplits: 1).map(String.init)
+        return VStack(alignment: .leading, spacing: 1) {
+            Text(parts.first ?? look).fontWeight(.semibold).foregroundStyle(palette.ink)
+            if parts.count > 1 { Text(parts[1]).foregroundStyle(palette.ink2) }
+        }
+        .font(Typography.meta)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityHidden(true)
+    }
+}
+
+/// 图与它下面的一句：句子与图同宽、向下换行（图的宽由它自己定，不由句子撑开）。
+private struct Captioned: Layout {
+    let gap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let image = subviews[0].sizeThatFits(.unspecified)
+        let caption = subviews[1].sizeThatFits(ProposedViewSize(width: image.width, height: nil))
+        return CGSize(width: image.width, height: image.height + gap + caption.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let image = subviews[0].sizeThatFits(.unspecified)
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(image))
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY + image.height + gap), proposal: ProposedViewSize(width: image.width, height: nil))
     }
 }
 
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
-/// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项、另外说的输入框（`CueAsk.otherwise`，回车交给 Cue），
-/// 末行是关联的任务、还有几条在等、原话的开关。没有关掉：卡片一直挂着，直到你回答或 Cue 撤回。
+/// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、选项（`CueChoices`），末行是关联的任务与原话的开关
+/// （Mac 上连同选项；辅助功能字号下各占一行）。Mac 带图时两栏：左栏问句、底部末行，右栏图，上下齐平，窄了上下排；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，Cue 判断是在答这张就照办并撤回它。
+/// 没有关掉：卡片一直挂着，直到你选一项或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
     let waiting: [CueMessage]
@@ -380,12 +503,11 @@ struct CueWaitingDock: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// 正在结束的那条（写成后它从 `waiting` 里消失，写不成就清掉）。
     @State private var ending: UUID?
     /// 展开了原话的那条：换下一条时自动收起。
     @State private var reading: UUID?
-    /// 不选选项、另外说的话。
-    @State private var otherwise = ""
     /// 露出的那条：在等的第一条；答完沉下去的这一段里还是它（那时它已不在 `waiting` 里）。
     @State private var shown: CueMessage?
     /// 露出了多少，0…1：升起的比例（`RiseBehind`，0 是全藏在输入框后面）；减弱动态效果时是不透明度。
@@ -393,10 +515,8 @@ struct CueWaitingDock: View {
 
     #if os(macOS)
     private static let originalHeight: CGFloat = 240
-    private static let fieldHeight: CGFloat = 36
     #else
     private static let originalHeight: CGFloat = 160
-    private static let fieldHeight: CGFloat = 40
     #endif
 
     /// 来了从输入框后面升起、答完沉回去（`RiseBehind`，露出的比例是状态、随曲线变：做成移除的过渡的话，沉回去那一下不动画，卡一帧就没了）；
@@ -459,41 +579,126 @@ struct CueWaitingDock: View {
 
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
-        return VStack(alignment: .leading, spacing: 12) {
+        let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
+        let question = VStack(alignment: .leading, spacing: 0) {
             CueQuestionLine(message: message)
-            if reading == message.id { original(message.text).transition(.opacity) }
-            if let shots = shots[message.id] {
-                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open)
-            }
-            CueChoices(options: message.choices ?? [], secondary: .paper, disabled: ending == message.id) { answer(message, $0) }
-            otherwiseField(message)
-            HStack(spacing: 10) {
-                if let ref { CueTaskLine(ref: ref) }
-                Spacer(minLength: 0)
-                let others = waiting.count - 1
-                if others > 0 { Text("还有 \(others) 条").font(Typography.meta).foregroundStyle(palette.ink3) }
-                originalToggle(message)
+            if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
+        }
+        let pictures = shots[message.id].map { shots in
+            { (bleed: CGFloat) in CueShots(shots: shots, group: "waiting", reply: .answer(message), bleed: bleed, open: open) }
+        }
+        #if os(macOS)
+        let content = Group {
+            if let pictures {
+                // 带图时两栏：左栏上面问句、底部选项与任务、原话（至少 `questionWidth`，可伸），右栏是图，两栏上下齐平，卡没有单独的末行；
+                // 窄得放不下就上下排。卡不至于占去半个窗口
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            question
+                            Spacer(minLength: 12)
+                            ViewThatFits(in: .horizontal) {
+                                footer(message, ref, choices, height: ControlMetrics.height)
+                                VStack(alignment: .trailing, spacing: 12) {
+                                    choices
+                                    footer(message, ref, nil, height: Self.footerHeight).padding(.vertical, -Self.footerSlack)
+                                }
+                            }
+                        }
+                        .frame(minWidth: Self.questionWidth, idealWidth: Self.questionWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        pictures(0).fixedSize(horizontal: true, vertical: false)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 10)
+                    VStack(alignment: .leading, spacing: 0) {
+                        question
+                        pictures(16).padding(.top, 16)
+                        footer(message, ref, choices, height: Self.footerHeight).padding(.top, 12)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    question
+                    footer(message, ref, choices, height: Self.footerHeight).padding(.top, 12)
+                }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: ComposerMetrics.radius, lifted: true, wash: PiShown(status: .asking).wash(palette))
+        #else
+        let content = VStack(alignment: .leading, spacing: 0) {
+            question
+            if let pictures { pictures(16).padding(.top, 16) }
+            choices.padding(.top, 16)
+            // 辅助功能字号下任务与原话各占一行（任务至多两行、不截断）
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let ref { CueTaskLine(ref: ref, height: Self.footerHeight, lines: 2) }
+                    originalToggle(message, height: Self.footerHeight)
+                }
+                .padding(.top, 4)
+            } else {
+                footer(message, ref, nil, height: Self.footerHeight).padding(.top, 4)
+            }
+        }
+        #endif
+        // 下边距小：末行自带可点的高，字离卡底看着与上边距差不多（Mac 两栏版的底行在上面补齐到 16）
+        let padded = content
+            .padding(EdgeInsets(top: 16, leading: 16, bottom: 6, trailing: 16))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        // 卡浮在输入框上方、不随对话滚：高过可视区（辅助功能字号带图）时卡里能滚，选项总够得着
+        return ViewThatFits(in: .vertical) {
+            padded
+            ScrollView { padded }.scrollBounceBehavior(.basedOnSize)
+        }
+        .paper(radius: ComposerMetrics.radius, lifted: true)
         .animation(Motion.quick, value: reading)
         .padding(.bottom, Self.below)
     }
+
+    /// 末行（任务、原话；Mac 上连同选项）可点的高。
+    private static let footerHeight: CGFloat = 44
+    /// Mac 两栏底部分两行时，任务与原话那一行只占 24 高，可点区上下各伸出这么多（凑足 `footerHeight`）。
+    private static let footerSlack: CGFloat = 10
+
+    /// 末行：任务在左；带选项时（Mac）原话紧跟任务（间距 20）、选项在尾端，不带时原话在右端。
+    /// Mac 的末行与两栏左栏的底部、手机的末行共用。
+    private func footer(_ message: CueMessage, _ ref: CueTaskRef?, _ choices: CueChoices?, height: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            if let ref { CueTaskLine(ref: ref, height: height).accessibilitySortPriority(1).padding(.trailing, choices == nil ? 10 : 20) }
+            if let choices {
+                originalToggle(message, height: height)
+                Spacer(minLength: 16)
+                choices.accessibilitySortPriority(2)
+            } else {
+                Spacer(minLength: 0)
+                originalToggle(message, height: height)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+    #if os(macOS)
+    /// 带图时左栏问句至少这么宽，再窄就上下排。
+    private static let questionWidth: CGFloat = 280
+    #endif
 
     /// Cue 的原话：放得下就整段，放不下在 `originalHeight` 里滚。
     private func original(_ text: String) -> some View {
         let body = MarkdownText(source: text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
             .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
-        return ViewThatFits(in: .vertical) {
-            body
-            ScrollView { body }
+        // 辅助功能字号下原话按内容长高、不另开滚动区（卡高过可视区时整张卡在卡里滚，见 `card`）
+        return Group {
+            if typeSize.isAccessibilitySize {
+                body
+            } else {
+                ViewThatFits(in: .vertical) {
+                    body
+                    ScrollView { body }
+                }
+                .frame(maxHeight: Self.originalHeight)
+            }
         }
-        .frame(maxHeight: Self.originalHeight)
     }
 
-    private func originalToggle(_ message: CueMessage) -> some View {
+    private func originalToggle(_ message: CueMessage, height: CGFloat) -> some View {
         let open = reading == message.id
         return Button { reading = open ? nil : message.id } label: {
             HStack(spacing: 4) {
@@ -501,44 +706,17 @@ struct CueWaitingDock: View {
                 Image(.expand).font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(open ? 180 : 0))
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            .frame(minHeight: 24).contentShape(.rect)
+            .frame(minHeight: height).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
     }
 
-    /// 另外说：回车或点发送交给 Cue。
-    private func otherwiseField(_ message: CueMessage) -> some View {
-        let empty = otherwise.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return HStack(spacing: 6) {
-            TextField(CueAsk.otherwise, text: $otherwise, palette: palette)
-                .textFieldStyle(.plain).font(Typography.secondary)
-                .submitLabel(.send)
-                .onSubmit { sayOtherwise(message) }
-            if !empty {
-                Button("发送", icon: .sendAnswer) { sayOtherwise(message) }
-                    .labelStyle(.iconOnly).font(.system(size: 18)).foregroundStyle(palette.signature)
-                    .buttonStyle(PressStyle(.button))
-            }
-        }
-        .padding(.horizontal, 12).frame(minHeight: Self.fieldHeight)
-        // 与卡的圆角同心（卡的内边距 16）
-        .background(palette.paper, in: .rect(cornerRadius: ComposerMetrics.radius - 16, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: ComposerMetrics.radius - 16, style: .continuous).strokeBorder(palette.hair) }
-        .disabled(ending == message.id)
-    }
-
-    private func sayOtherwise(_ message: CueMessage) {
-        let text = otherwise.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        answer(message, text)
-    }
-
-    private func answer(_ message: CueMessage, _ text: String) {
+    private func answer(_ message: CueMessage, _ choice: String) {
         ending = message.id
         workspace.attempt {
             defer { ending = nil }
-            try await workspace.answerCueQuestion(message, text)
+            try await workspace.answerCueQuestion(message, choice)
         }
     }
 }
@@ -584,14 +762,15 @@ private struct RiseLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        // 高按给的上限：卡高过可视区时（辅助功能字号带图）在给的高里滚，不顶出屏外
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: proposal.height))
         // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
         return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: proposal.height))
         let origin = floats ? CGPoint(x: bounds.minX, y: bounds.maxY - size.height) : bounds.origin
         child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
     }

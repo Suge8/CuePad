@@ -15,6 +15,9 @@ extension AppServices {
         startLiveSessions()
         startAccountQuotas()
         startSessionAlerts()
+        if let sessionViewer {
+            follow(reporting: { .syncUnavailable("这台手机开着的会话没能写下：\($0)") }) { try await sessionViewer.keep() }
+        }
         if !location.isIsolated { diagnostics.start() }
     }
 
@@ -28,7 +31,7 @@ extension AppServices {
         follow {
             var tracker = SessionAlertTracker()
             for await live in Observations({ self.liveSessions.live }) {
-                let alerts = tracker.alerts(for: live, cueOnDuty: self.liveSessions.cueOnDuty, since: active.date)
+                let alerts = tracker.alerts(for: live, cue: self.liveSessions.cue, since: active.date)
                 guard UIApplication.shared.applicationState == .active else { continue }
                 if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { self.post(alert) }
             }

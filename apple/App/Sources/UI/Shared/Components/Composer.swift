@@ -42,6 +42,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
     @State private var source: ComposerSource?
@@ -55,6 +56,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
     private var shrunk: Bool { form.isCapsule && !focused }
     private var showsTools: Bool { form == .open || focused }
+    /// 圆钮那一格的高：露出工具排时与工具排同一条中线（`slot`），否则与最后一行字同一条中线（字号大了跟着高）。
+    private var buttonHeight: CGFloat {
+        tooled && expanded && showsTools ? ComposerMetrics.slot : ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize))
+    }
     /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
@@ -180,7 +185,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 text
                     .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, shrunk ? 18 : 2)
                     .padding(.vertical, ComposerMetrics.textTop)
-                    .frame(minHeight: ComposerMetrics.slot)
+                    .frame(minHeight: buttonHeight)
                 // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
                 if tooled, expanded, showsTools {
                     tools()
@@ -211,13 +216,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     /// 提交钮的位置一直留着（收成短胶囊时除外）：有内容才放进来，输入框的宽度不随它变，文字不会因此重排——
     /// 宽度跟着钮进出变的话，动画的每一帧文字区（UITextView/NSTextView）都要重新排版，发出、送达、打第一个字各多一段主线程开销。
-    private var slotSpace: some View { Color.clear.frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot) }
+    private var slotSpace: some View { Color.clear.frame(width: ComposerMetrics.slot, height: buttonHeight) }
 
     private var sendSlot: some View {
         ZStack {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
-        .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+        .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
         .animation(Motion.quick, value: sendVisible)
     }
@@ -229,7 +234,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         } : []
         return MenuButton(sections: [ChoiceMenu.Section(choices: cards + images)], press: .button, accessibilityLabel: "添加") {
             CircleGlyph(fill: palette.fill) { Image(.add).font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
-                .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+                .frame(width: ComposerMetrics.slot, height: buttonHeight)
         }
         .fixedSize()
     }
@@ -304,7 +309,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 }
 
-/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
+/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`；字号大了是 `lineSlot`），圆角取一半成胶囊；圆钮一格 `slot`（`CircleGlyph` 的圆 + 四周的边距）、
 /// 离边 `inset`，与外框同心。一直展开时文字区下面只留 `textBottomOpen`，再下面是一格高的那一排；会展开收起的工具排在文字下面，
 /// 高是圆钮的圆（`slot - 2 * inset`），离底 `inset`，与两颗圆钮同一条中线。
 enum ComposerMetrics {
@@ -313,6 +318,9 @@ enum ComposerMetrics {
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
+
+    /// 一行字与上下边距合起来的高，至少 `slot`：没露出工具排时圆钮占这么高、居中，与最后一行字同一条中线。
+    static func lineSlot(line: CGFloat) -> CGFloat { max(slot, ceil(line + 2 * textTop)) }
 }
 
 /// 文字区要多高（两端的 `ComposerField` 各持一份）：最高只露出 `limit`，所以只排开头够撑满上限的那一段，不排整篇——
@@ -321,6 +329,8 @@ enum ComposerMetrics {
 /// SwiftUI 每次排版还会拿宽度 0 来探，那时几个字就竖着撑满了，不能一上来就排上千个字；横排里有别的圆钮（Agent 跑一轮时的停止钮）时
 /// 还会拿无穷宽来量它最宽能多宽，那时估不出字数，从最短的一段排起（无穷宽、极宽转整数会让 App 崩溃）。
 /// 量过的按宽度各记一份（一次排版里会按几种宽度轮流问）；文字变了时，撑满过上限的那段开头没动（接着往后写）就还是上限，不再排。
+/// 空着时按一行中文量：空串排出来的行高取决于排版器残留的打字样式（全 App 共用一个量尺，App 开着时改了字号，量出来还是旧字号的一行，
+/// 输入框被切掉下半截），也比打下第一个字后矮。
 struct ComposerHeight {
     private var fits: [Key: Fit] = [:]
     /// 文字第几版（`textChanged` 加一）：同一版里量过的直接用。
@@ -342,6 +352,7 @@ struct ComposerHeight {
 
     /// `measure` 是平台的排版：按这个宽度排这段字有多高。
     mutating func height(of text: NSString, width: CGFloat, em: CGFloat, limit: CGFloat, measure: (String) -> CGFloat) -> CGFloat {
+        let text = text.length == 0 ? "国" : text
         let key = Key(width: width, em: em, limit: limit)
         if let fit = fits[key] {
             if fit.version == version { return fit.height }

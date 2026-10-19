@@ -72,6 +72,16 @@ struct Palette {
     var onMedia: Color { .white }
     /// 照片上图标下面垫的暗底。
     var mediaScrim: Color { Color.black.opacity(0.55) }
+    /// 图的一道实色边（提问点名的图，`CueShots`）：墨或白叠一成的实色，不随图变——`hair` 是带透明度的墨，压在图边上透出图自己的颜色，
+    /// 亮图看不出框、深色截图在深色纸上糊成一片。增强对比度时对纸至少 3:1（浅 3.2、深 3.2）。
+    var mediaEdge: Color {
+        switch (dark, highContrast) {
+        case (false, false): Color(hex: 0xE3E2DF)
+        case (false, true): Color(hex: 0x8F8D88)
+        case (true, false): Color(hex: 0x3E3A36)
+        case (true, true): Color(hex: 0x77726B)
+        }
+    }
     /// 深色下给附图压暗一层，亮图不刺眼；浅色不压。
     var mediaDim: Color { dark ? Color.black.opacity(0.14) : .clear }
 
@@ -129,9 +139,7 @@ struct Palette {
     // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
     // 卡上的字（状态词、次要墨色）照纸上的对比度核过，下面写的是状态词的对比度；与纸、桌面靠色相分开。
 
-    /// 等你确认：暖黄（浅色像蜂蜜纸，深色是暗琥珀）。赭黄字 5.1，深色 6.8；第三档墨色 4.8，深色 4.6。
-    var waitingWash: Color { dark ? Color(hex: 0x433618) : Color(hex: 0xF9EBC0) }
-    /// 出错与没能送达：淡胭脂，比等你的暖黄再淡一档——出错常一屏好几张，不能压过要你拍板的等你。胭脂字 5.6，深色 5.1。
+    /// 出错与没能送达：淡胭脂，压得很淡——出错常一屏好几张，不能压过要你拍板的等你（等你不铺底，赭黄只上图标与状态字）。胭脂字 5.6，深色 5.1。
     var failureWash: Color { dark ? Color(hex: 0x382A2E) : Color(hex: 0xFBEDF0) }
     /// 有新回复：淡石绿。石绿字 5.2，深色 5.1。
     var repliedWash: Color { dark ? Color(hex: 0x26382D) : Color(hex: 0xE2F1E7) }

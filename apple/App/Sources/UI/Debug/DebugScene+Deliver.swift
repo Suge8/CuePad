@@ -114,7 +114,7 @@ extension DebugScene {
         return render(view)
     }
 
-    private static func render(_ view: some View) -> Data {
+    static func render(_ view: some View) -> Data {
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
         return renderer.cgImage.map { DemoLibrary.encode($0) } ?? Data()
