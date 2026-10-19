@@ -13,7 +13,7 @@ extension AppServices {
             var tracker = SessionAlertTracker()
             for await live in Observations({ self.liveSessions.live }) {
                 // 不等发完：第一次要征求权限时系统提示可能停很久，这期间的转换照样要认出来
-                for alert in tracker.alerts(for: live, cueOnDuty: self.liveSessions.cueOnDuty) { Task { await alerts.post(AlertMessage(alert)) } }
+                for alert in tracker.alerts(for: live, cue: self.liveSessions.cue) { Task { await alerts.post(AlertMessage(alert)) } }
             }
         }
         follow(reporting: { .syncUnavailable("Dock 角标没能读出等你的数：\($0)") }) {

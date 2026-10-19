@@ -64,6 +64,7 @@ struct IOSRoot: View {
         // 变宽后两栏都在：此后再变窄，折叠出来的是右边那一页（不停在列表上）
         .onChange(of: sizeClass) { _, size in if size == .regular { navigation.column = .detail } }
         .task { await workspace.follow() }
+        .modifier(SessionViewing(keeper: workspace.services.sessionViewer, navigation: navigation))
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }

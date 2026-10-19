@@ -410,11 +410,36 @@ extension CueStore {
   /// Cue 此刻在做什么；值班的 Mac 还没写过为 nil。
   public func cueState() throws -> CueState? { try find(CueState.self, CueState.recordID) }
 
-  /// Cue 在值班（`CueProfile.onDuty`，各端读同步来的设置、状态与它那台 Mac 的在线记录）。那台 Mac 的期限到了由订阅重读（`macOnline`），
-  /// "等你 N"、会话显示与手机推送标志到点自己变。
-  public func cueOnDuty() throws -> Bool {
-    guard let profile = try cueProfile(), let host = profile.activeHost else { return false }
-    return profile.onDuty(try cueState(), hostOnline: try macOnline(host))
+  /// Cue 在值班时的那一份（`CueDuty`：名字与留给你回的会话）；不在值班为 nil。值班按 `CueProfile.onDuty`（各端读同步来的设置、状态与它那台 Mac 的在线记录），
+  /// 那台 Mac 的期限到了由订阅重读（`macOnline`），"等你 N"、会话显示与手机推送标志到点自己变。
+  public func cueDuty() throws -> CueDuty? {
+    guard let profile = try cueProfile(), let host = profile.activeHost else { return nil }
+    let state = try cueState()
+    guard profile.onDuty(state, hostOnline: try macOnline(host)) else { return nil }
+    return CueDuty(name: profile.name, left: state?.left ?? [])
+  }
+
+  /// Cue 把会话此刻的这次停下留给你回（`CueLeft`）：会话行显示"待回复"（在等回答的回到等你确认），谁再对它说话就作废。
+  /// 会话没停着（在跑、出错、已结束）抛 `notStopped`。顺手去掉已作废的旧条目，表里只留此刻还成立的。返回记录 id（立即上传用）。
+  @discardableResult
+  public func leaveToYou(_ sessionID: String) throws -> UUID {
+    try write {
+      guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
+      guard session.state.known?.isStopped == true else { throw CueStoreError.notStopped(session.title) }
+      let current = try cueState()
+      let others = current?.left.filter { $0.sessionID != sessionID } ?? []
+      let sessions = try select(
+        PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
+      let left = others.filter { entry in sessions.contains(where: entry.holds) } + [CueLeft(sessionID: sessionID, since: session.stateSince)]
+      let next = CueState(state: current?.state ?? .known(.settled), detail: current?.detail, round: current?.round, woke: current?.woke,
+        context: current?.context, left: left, modifiedAt: Date.stamp)
+      try db.run(
+        """
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET leftToYou = excluded.leftToYou, modifiedAt = excluded.modifiedAt
+        """, next.bindings)
+      return CueState.recordID
+    }
   }
 
   /// 你最近一句对 Cue 说的话：写下的时刻与交给它的时刻；你还没说过为 nil。到哪了由读的人按此刻推（`Speech.trip`，
@@ -430,15 +455,17 @@ extension CueStore {
     _ state: PiWorkState, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil
   ) throws {
     try write {
-      let next = CueState(state: .known(state), detail: detail, round: round, woke: woke, context: context, modifiedAt: Date.stamp)
-      if let current = try cueState(),
+      let current = try cueState()
+      let next = CueState(
+        state: .known(state), detail: detail, round: round, woke: woke, context: context, left: current?.left ?? [], modifiedAt: Date.stamp)
+      if let current,
         (current.state, current.detail, current.round, current.woke, current.context) == (next.state, next.detail, next.round, next.woke, next.context)
       {
         return
       }
       try db.run(
         """
-        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO cueState (\(CueState.columns.joined(separator: ", "))) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET state = excluded.state, detail = excluded.detail, modifiedAt = excluded.modifiedAt, round = excluded.round,
           woke = excluded.woke, context = excluded.context
         """, next.bindings)

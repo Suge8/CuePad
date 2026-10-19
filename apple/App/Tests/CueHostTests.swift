@@ -765,7 +765,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("三步并行"), let board = text.firstMatch(of: /在做 \d+ 件：\n((?:[ -][^\n]*\n)+)/)?.1 {
             return say("看板：\n" + board)
         }
-        if text.contains("醒来：会话有动静"), let failed = text.firstMatch(of: /\n- (\[(?:出错|发送失败)\] [^\n]*)/)?.1 {
+        if text.contains("醒来：会话有动静"), let failed = text.firstMatch(of: /\n- (\[(?:出错|发送失败)[^\]]*\] [^\n]*)/)?.1 {
             return say("看到了：\(failed)")
         }
         if text.contains("醒来：会话有动静"), text.contains("半路断开"), once("midway") {

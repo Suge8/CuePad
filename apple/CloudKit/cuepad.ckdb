@@ -247,6 +247,7 @@ DEFINE SCHEMA
         round         STRING,
         woke          STRING,
         context       STRING,
+        leftToYou     STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -274,6 +275,16 @@ DEFINE SCHEMA
         problems      ENCRYPTED STRING,
         modifiedAt    INT64,
         name          ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE sessionViewers (
+        "___recordID" REFERENCE QUERYABLE,
+        device        STRING,
+        sessionID     STRING,
+        until         INT64,
+        modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

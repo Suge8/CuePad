@@ -118,11 +118,11 @@ struct SpeakTests {
         #expect(said.trip(at: Speech.Moment(now: late, reachableSince: nil)) == .failed(.offline))
         try backdate(message, by: Speech.receiptLimit + 1)
         #expect(try await presence() == .idle)
-        #expect(try await store.cueOnDuty())
+        #expect(try await store.cueDuty() != nil)
 
         try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
         #expect(try await presence() == .asleep)
-        #expect(try await !store.cueOnDuty())  // 值班与"在睡觉"同一条
+        #expect(try await store.cueDuty() == nil)  // 值班与"在睡觉"同一条
         #expect(CuePresence.asleep.line(name: "Cue") == "Cue 在睡觉：它运行的那台 Mac 好像没开")
         #expect(try await presence(reachable: false) == .idle)
 

@@ -56,6 +56,8 @@ nonisolated struct CueTiming: Sendable {
 /// 4. 提醒到点：醒来、清掉提醒。
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
 ///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。
+///    停下时他在场（`SessionPresence`）的那几次记下（`Progress.held`）：Cue 不插嘴；他离开时会话还停在那一次、也没留给他，就再报一次叫醒它
+///    （`CueStore.cueAwayChanges`）；还在场就按最早的离开时刻排一次对账，设备开着会话的记录一变也重对。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -155,6 +157,8 @@ final class CueKeeper {
         var patrolledIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
+        /// 报给 Cue 时他在场的那几次停下：会话 id → 那次停下的起点（`CueStore.cueAwayChanges`）
+        var held: [String: Date] = [:]
     }
 
     /// 在跑的一轮。
@@ -173,6 +177,8 @@ final class CueKeeper {
         var mark: Int?
         /// 会话的动静叫醒的这一轮：叫醒它的那几个会话（随此刻的状态写进库，各端画"叫醒"的那一下）
         var woke: CueWoke?
+        /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）
+        var held: [String: Date]?
 
         /// 这一轮是在回答你：你发起的、中途插进了你的话，或接着你发起的那一轮（换新后写成 cue 的）。不是的（Cue 自己醒来、
         /// 含刚启用）已经用 tell 对你说过话，最后的回复就不再写
@@ -203,6 +209,8 @@ final class CueKeeper {
         var active: Bool
         var memory: CueMemoryVersion
         var profile: CueProfile?
+        /// 各设备开着哪个会话（`SessionViewer`）：他离开了在场的会话，要再报给 Cue
+        var viewers: [SessionViewer]
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态、问答，卡片的完成与层级，投送请求的状态，对话里的新消息一变它就变
         /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）怎么变都不叫醒对账
         var written: Int
@@ -283,7 +291,7 @@ final class CueKeeper {
                     for try await _ in store.observe({ store in
                         Signal(
                             messages: try store.cueMessages(limit: 50), active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(),
-                            profile: try store.cueProfile(), written: try store.lastWrite())
+                            profile: try store.cueProfile(), viewers: try store.sessionViewers(), written: try store.lastWrite())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")
@@ -466,6 +474,7 @@ final class CueKeeper {
             } else {
                 setback = nil
                 await markTold(finished.round)
+                if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark)
             }
         case .exited(let reason):
@@ -611,6 +620,15 @@ final class CueKeeper {
             if latest != nil {
                 return _ = try await wakeUp(.sessionActivity)
             }
+            let away = try await store.cueAwayChanges(progress.held)
+            if !away.dropped.isEmpty {
+                progress.held = progress.held.filter { !away.dropped.contains($0.key) }
+                save()
+            }
+            if !away.changes.isEmpty {
+                return _ = try await wakeUp(.sessionActivity)
+            }
+            if let next = away.next { deadlines.append(next) }
 
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let idleSince = lastSpoke ?? profile.enabledAt ?? shift.startedAt
@@ -699,11 +717,17 @@ final class CueKeeper {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
             resume?.messages.removeAll { delivering.contains($0.id) }
         }
-        let changes = try await changes()
+        let recorded = try await changes()
+        let away = try await store.cueAwayChanges(progress.held)
+        let changes = recorded + away.changes.filter { change in !recorded.contains { $0.session?.sessionID == change.session?.sessionID } }
+        // 这一轮报了在场的，记下等他离开；他已离开的报过了、作废的不再记
+        let reported = Set(away.changes.compactMap(\.session?.sessionID))
+        var held = progress.held.filter { !away.dropped.contains($0.key) && !reported.contains($0.key) }
+        for change in changes where change.presence != nil { if let session = change.session { held[session.sessionID] = session.stateSince } }
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
-            changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,
-            resume: resume))
+            changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            wake: wake, resume: resume))
         var woke: CueWoke?
         if wake == .sessionActivity {
             var seen = Set<String>()
@@ -724,7 +748,8 @@ final class CueKeeper {
         updateShift {
             $0.resumed = true
             $0.turn = Turn(
-                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark, woke: woke)
+                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark, woke: woke,
+                held: held)
         }
         save()
         try await markDelivered(delivering)

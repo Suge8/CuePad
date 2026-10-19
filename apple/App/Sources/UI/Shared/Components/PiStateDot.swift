@@ -6,7 +6,7 @@ extension PiShown {
     /// 停着的（该你了、新会话、未知）灰，需要 /reload 次要墨色，已结束更淡的灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking: palette.waiting
+        case .asking, .awaitsReply: palette.waiting
         // 等 Cue 回答：不是要你管的，中性的墨色（赭黄只给等你确认的）
         case .cueAsking: palette.ink
         case .failed, .delivery(.failed): palette.failure
@@ -20,7 +20,7 @@ extension PiShown {
     /// 带色的状态（状态词与状态标同色）：要你管的、在跑的、有新回复。
     var isColored: Bool {
         switch status {
-        case .asking, .failed, .working, .delivery, .unread: true
+        case .asking, .awaitsReply, .failed, .working, .delivery, .unread: true
         case .cueAsking, .restart, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
         }
     }
@@ -34,7 +34,7 @@ extension PiShown {
     /// 在跑的不铺：会动的心电线与靛青字已经够醒目，整屏都上色颜色就不再表示"要你看"。
     func wash(_ palette: Palette) -> Color? {
         switch status {
-        case .asking: palette.waitingWash
+        case .asking, .awaitsReply: palette.waitingWash
         case .failed, .delivery(.failed): palette.failureWash
         case .unread: palette.repliedWash
         default: nil
@@ -46,7 +46,7 @@ extension PiShown {
     /// 自绘的循环动效，这里是减弱动态效果与菜单里的样子。要你看的三种是实心圆、记号刻在里面，其余没有实心的圆底；同为圆的几种靠颜色与里面的记号分开。
     var icon: Icon {
         switch status {
-        case .asking: .waiting
+        case .asking, .awaitsReply: .waiting
         // 等 Cue 回答：气泡里的问号，线条墨色（实心赭黄的问号圆只给等你确认的）
         case .cueAsking: .cueAsking
         // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的赭黄问号圆靠颜色与里面的字分开

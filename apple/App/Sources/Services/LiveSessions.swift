@@ -18,8 +18,9 @@ final class LiveSessions {
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
-    /// Cue 在值班（`CueStore.cueOnDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）：会话的显示与"等你"的提示据此分等你还是等 Cue。
-    private(set) var cueOnDuty = false
+    /// Cue 在值班时的那一份（`CueStore.cueDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）：会话的显示与"等你"的提示据此分等你还是等 Cue、
+    /// 哪几个是它留给你回的（"待回复"）。不在值班为 nil。
+    private(set) var cue: CueDuty?
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
     /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
     private(set) var recentlyEnded: [PiSessionState] = []
@@ -43,13 +44,13 @@ final class LiveSessions {
         var items: [PiSessionListItem]
         var total: Int
         var ended: [PiSessionState] = []
-        var cueOnDuty = false
+        var cue: CueDuty?
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
             Page(
                 items: try store.piSessionPage(.current).items, total: try store.piSessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cueOnDuty: try store.cueOnDuty())
+                cue: try store.cueDuty())
         }
     }
 
@@ -70,7 +71,7 @@ final class LiveSessions {
         set(\.deliveries, Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(live.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
-        set(\.cueOnDuty, page.cueOnDuty)
+        set(\.cue, page.cue)
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<LiveSessions, Value>, _ value: Value) {

@@ -393,7 +393,8 @@ extension DebugScene {
     }
 
     /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
+    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。
+    /// 停着的两个里 faq 是 Cue 留给你回的（"待回复"），README 那个归 Cue 接手（"歇着"），两相对照。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
     /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
     /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
@@ -426,6 +427,7 @@ extension DebugScene {
             let task = try await store.createTask(row.title, in: nil)
             try await store.linkCard(task.id, toSession: row.id)
         }
+        try await store.leaveToYou("cue-claude-short")
     }
 
     /// 会话发来一张截图：卡片与"等你"上的证据。

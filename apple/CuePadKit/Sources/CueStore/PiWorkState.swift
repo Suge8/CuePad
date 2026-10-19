@@ -47,6 +47,9 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 还有事没做完：这一轮在跑、在等你确认、或子代理还在跑。后台托管的 Pi 据此判断不能当空闲收掉；
   /// 与 `isTurnRunning` 的差别只有等子代理（这时指挥官自己没在跑一轮，但托管的进程还有活）。
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
+
+  /// 停下等人接手：这一轮做完歇着，或在等回答。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这两种。
+  public var isStopped: Bool { self == .settled || self == .waitingForUser }
 }
 
 extension PiWorkState {
@@ -88,13 +91,13 @@ public enum PiAlert: String, Sendable, CaseIterable {
 
 extension PiAlert {
   /// 这次转换要不要提示你：做完了照常；进入等回答只在会话真在等你时（`PiSessionState.asksYou`）。
-  public func reaches(_ state: PiSessionState, cueOnDuty: Bool) -> Bool { self != .waitingForUser || state.asksYou(cueOnDuty: cueOnDuty) }
+  public func reaches(_ state: PiSessionState, cue: CueDuty?) -> Bool { self != .waitingForUser || state.asksYou(cue) }
 }
 
 extension PiSessionState {
   /// 相对上一次读到的版本，要提示你的转换（`alert(since:)` 里只留 `PiAlert.reaches` 的）。
-  public func alert(since previous: PiSessionState?, cueOnDuty: Bool) -> PiAlert? {
-    alert(since: previous).flatMap { $0.reaches(self, cueOnDuty: cueOnDuty) ? $0 : nil }
+  public func alert(since previous: PiSessionState?, cue: CueDuty?) -> PiAlert? {
+    alert(since: previous).flatMap { $0.reaches(self, cue: cue) ? $0 : nil }
   }
 
   /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换。手机读到的是同步合并后的版本：状态没变而

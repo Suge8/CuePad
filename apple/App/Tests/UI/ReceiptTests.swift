@@ -64,7 +64,7 @@ struct ReceiptTests {
         try await eventually("此刻跟上") { services.speech.now >= target || clock.sleeperCount > 0 }
     }
 
-    private func cuePresence() async throws -> CuePresence {
+    private func sessionPresence() async throws -> CuePresence {
         let moment = services.speech
         return CuePresence.derive(try await CueDigest.read(from: store), at: moment)
     }
@@ -97,7 +97,7 @@ struct ReceiptTests {
         #expect(try await trips() == [.failed(.offline), .failed(.offline)])
         try await eventually("会话行是没能送达") { row("atlas")?.undelivered == .offline }
         #expect(services.liveSessions.undelivered["atlas"] == 1)
-        #expect(try await cuePresence() != .asleep)
+        #expect(try await sessionPresence() != .asleep)
 
         // 断网两分钟多：拉取的窗口走完（手机）；断网时没有在等的时限，说法不变
         try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
@@ -123,7 +123,7 @@ struct ReceiptTests {
         // 写下已过两个时限，但恢复才 59 秒：还在发送中
         clock.advance(.seconds(Speech.receiptLimit - 1))
         #expect(try await trips() == [.sending, .sending])
-        #expect(try await cuePresence() == .sending)
+        #expect(try await sessionPresence() == .sending)
     }
 
     /// 会话行与"N 句没送到"跟着同一个"此刻"：过了时限没回执，不用重开页面就翻成没能送达。

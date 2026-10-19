@@ -117,7 +117,7 @@ extension Workspace {
         let live: [PiSessionState] = []
         #endif
         let rows = PiSessionState.liveRows(
-            live: live, recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, cueOnDuty: sessions.cueOnDuty, at: services.speech)
+            live: live, recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
         return LiveWork(rows: rows) { session in
             if case .working = shown(session, delivery: sessions.deliveries[session.sessionID]).status { true } else { false }
         }
@@ -137,11 +137,11 @@ extension PiSessionState {
     /// "现在"的会话行：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）一起按要你注意的先后；
     /// 同一个会话只出现一次（本机实时优先）。已结束的不列，历史在 Agent 整页里。`recorded` 是会话列表查询的一页。
     static func liveRows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cueOnDuty: Bool = false,
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
         at moment: Speech.Moment
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) && $0.state != .known(.ended) }
-        return inListOrder(live + others, deliveries: deliveries, cueOnDuty: cueOnDuty, at: moment)
+        return inListOrder(live + others, deliveries: deliveries, cue: cue, at: moment)
     }
 }

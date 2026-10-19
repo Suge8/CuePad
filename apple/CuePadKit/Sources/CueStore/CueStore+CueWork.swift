@@ -100,6 +100,10 @@ public struct CueChange: Equatable, Sendable {
   public var session: PiSessionState?
   /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的、扩展投进来的机器消息开的都不算。
   public var byUser: Bool
+  /// 会话停着（歇下、等回答、出错）时他此刻在不在场（`CueStore.sessionPresence`）；不在场、不是这几种为 nil。
+  public var presence: SessionPresence?
+  /// 这次停下早先报给 Cue 时他在场，现在他离开了、会话还停在那一次（`CueStore.cueAwayChanges`）：再报一次，这回轮到 Cue 判断。
+  public var away = false
   /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
   /// 本机收到它的写入序号（`CueStore.lastWrite`）：越大越晚写进库
@@ -126,6 +130,21 @@ public struct CueChange: Equatable, Sendable {
     self.detail = detail
     self.recap = recap
   }
+}
+
+/// 会话停下时他在不在场：正开着这个会话（某台设备的 `SessionViewer`），或 `window` 内在里面说过话（在终端里打的与在 CuePad 里发的一样，
+/// Cue 发进去的不算）。他在场时 Cue 不插嘴；他离开时会话还停在那一次，管理器再叫醒 Cue（`CueChange.away`）。由事实现推，不另存。
+public struct SessionPresence: Equatable, Sendable {
+  /// 正开着它
+  public var viewing: Bool
+  /// 窗口内最近一次在里面说话的时刻；窗口内没说过为 nil
+  public var spokeAt: Date?
+  /// 到这一刻没有新的动静就算离开（开着时续期会把它往后推）
+  public var until: Date
+
+  /// 10 分钟：比读完一段回复、想一想再回的时间长，比 Agent 一轮常见的十几分钟短——他说完走开，这一轮做完时多半已经不算在场；
+  /// 与常见即时通讯"多久没动静算离开"同一个量级。开着会话时人在不在用（`SessionViewer.lifetime`）也按它。
+  public static let window: TimeInterval = 10 * 60
 }
 
 /// Cue 的变化从哪算起（本机写入序号，`CueStore.lastWrite`）：会话的动静从 `sessions` 之后，任务完成从 `tasks` 之后。
@@ -746,9 +765,67 @@ extension CueStore {
       default: (nil, nil)
       }
     guard let kind else { return nil }
-    return CueChange(
+    var change = CueChange(
       kind: kind, task: task, leaf: leaf, session: session, byUser: try turnOpener(session.sessionID) == .user, at: session.stateSince, seq: seq,
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
+    if kind != .settled || !change.interrupted { change.presence = try sessionPresence([session.sessionID])[session.sessionID] }
+    return change
+  }
+
+  /// 他此刻在场的会话（`SessionPresence`），按 Pi 的会话 id；不在场的不在其中。
+  public func sessionPresence(_ sessionIDs: [String]) throws -> [String: SessionPresence] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let now = timing.now(), ids = JSONColumn.encode(sessionIDs)
+    let viewing = Dictionary(try db.query(
+      "SELECT sessionID, MAX(until) FROM sessionViewers WHERE sessionID IN (SELECT value FROM json_each(?)) AND until > ? GROUP BY sessionID",
+      [ids, now]) { ($0.text(0), $0.date(1)) }) { first, _ in first }
+    // 他一方说的、窗口内的话（从晚到早），去掉 Cue 发进去的（`PiChatMessage.saidByCue`）
+    let said = try select(
+      PiChatMessage.self, where: "sessionID IN (SELECT value FROM json_each(?)) AND role = '\(PiChatRole.user.rawValue)' AND at > ?",
+      [ids, now - SessionPresence.window], orderBy: "at DESC")
+    let cueSent = try cueSentDeliveries(among: said.compactMap(\.deliveryID))
+    var spoke: [String: Date] = [:]
+    for message in said where !message.saidByCue(cueSent) && spoke[message.sessionID] == nil { spoke[message.sessionID] = message.at }
+    return Dictionary(uniqueKeysWithValues: Set(viewing.keys).union(spoke.keys).map { id in
+      let until = max(viewing[id] ?? .distantPast, spoke[id].map { $0 + SessionPresence.window } ?? .distantPast)
+      return (id, SessionPresence(viewing: viewing[id] != nil, spokeAt: spoke[id], until: until))
+    })
+  }
+
+  /// 管理器记着的、报给 Cue 时他在场的那几次停下（`held`：会话 id → 那次停下的起点 `stateSince`）此刻怎样了：
+  /// 他离开了、会话还停在那一次、Cue 也没留给他的，作为变化再报一次（`CueChange.away`）；还在场的给出最早的离开时刻（`next`，管理器到点再对账）；
+  /// 会话动了（谁说了话、结束了）或已留给他的作废（`dropped`）。
+  public func cueAwayChanges(_ held: [String: Date]) throws -> (changes: [CueChange], next: Date?, dropped: Set<String>) {
+    guard !held.isEmpty else { return ([], nil, []) }
+    let left = try cueState()?.left ?? []
+    let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
+    let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
+    let present = try sessionPresence(sessions.map(\.sessionID))
+    var changes: [CueChange] = [], next: Date?, dropped = Set(held.keys).subtracting(sessions.map(\.sessionID))
+    for session in sessions {
+      guard session.stateSince.stored == held[session.sessionID]?.stored, session.state.known?.isStopped == true, !left.contains(where: { $0.holds(for: session) }) else {
+        dropped.insert(session.sessionID)
+        continue
+      }
+      if let presence = present[session.sessionID] {
+        next = min(next ?? presence.until, presence.until)
+        continue
+      }
+      let (task, leaf) = try boundLeaf(of: session.sessionID)
+      guard var change = try sessionChange(session, seq: seqs[session.sessionID] ?? 0, task: task, leaf: leaf) else { continue }
+      change.away = true
+      changes.append(change)
+    }
+    return (changes, next, dropped)
+  }
+
+  /// 会话绑着的、没做完的事里最近绑上它的那个叶子与它的顶层任务；不归没做完的事为 (nil, nil)。
+  private func boundLeaf(of sessionID: String) throws -> (Card?, Card?) {
+    let leaves = try select(
+      Card.self, where: "piSessionID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL AND completedAt IS NULL", [sessionID],
+      orderBy: "modifiedAt DESC", limit: 1)
+    guard let leaf = leaves.first, let task = try find(Card.self, try topTask(of: leaf.id)) else { return (nil, nil) }
+    return (task, leaf)
   }
 
   /// 请求带着的叶子与它的顶层任务；卡不在了、不是任务（已删、改回灵感）为空。
@@ -759,7 +836,7 @@ extension CueStore {
     return [(task, leaf)]
   }
 
-  private func sessionState(_ sessionID: String) throws -> PiSessionState? {
+  func sessionState(_ sessionID: String) throws -> PiSessionState? {
     try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
   }
 
