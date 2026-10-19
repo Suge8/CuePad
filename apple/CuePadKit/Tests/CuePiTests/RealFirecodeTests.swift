@@ -49,6 +49,8 @@ struct RealFirecodeTests {
         let done = try #require(bridge.sessions.first?.subagents.first)
         #expect(done.phase == .known(.done) && !done.action.isEmpty)
         #expect(try #require(done.settledAt) >= #require(done.startedAt))
+        // 名册里它这一项变了，Mac 就记下这一刻有进展（等子代理太久没动静的兜底读它）
+        #expect(try #require(done.progressAt) > #require(ui.progressAt))
         let busy = log.changes.compactMap { change -> Date? in
             guard case .stateChanged(let session, _) = change else { return nil }
             return session.busySince

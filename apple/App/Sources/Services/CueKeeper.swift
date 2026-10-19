@@ -55,7 +55,8 @@ nonisolated struct CueTiming: Sendable {
 ///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。
 /// 4. 提醒到点：醒来、清掉提醒。
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：歇下的带着这一轮的回复，含会话等回答、Cue 自己发起的请求没能执行）：马上醒。
-///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。
+///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
+///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你很久没说话、不在打扰时段（`CueTiming.quietHours`），每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
@@ -182,9 +183,10 @@ final class CueKeeper {
         }
     }
 
-    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`）。
+    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（写入序号大于 `latest`，或在 `since` 之后才到的等子代理停住）。
     private struct Setback {
         var latest: Int?
+        var since: Date
         var retryAt: Date?
         var wake: CueWake
         var extra: String?
@@ -293,7 +295,7 @@ final class CueKeeper {
             await publish()
             if progress.marks == nil {
                 do {
-                    progress.marks = CueMarks(try await store.lastWrite())
+                    progress.marks = CueMarks(try await store.lastWrite(), stalls: .now)
                     save()
                 } catch {
                     Self.log.error("Cue 读写入序号失败：\(error.localizedDescription, privacy: .public)")
@@ -466,7 +468,7 @@ final class CueKeeper {
             } else {
                 setback = nil
                 await markTold(finished.round)
-                await advanceBaseline(from: finished.mark)
+                await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
             }
         case .exited(let reason):
             // 自己停的大脑不会走到这里（停之前已离开这个班次）：退出都是意外
@@ -500,17 +502,17 @@ final class CueKeeper {
         }
     }
 
-    /// 基线之后有会话的事里的变化。
-    private func changes() async throws -> [CueChange] {
-        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0))
+    /// 基线之后有会话的事里的变化（到 `now` 为止到了的停住）。
+    private func changes(at now: Date = .now) async throws -> [CueChange] {
+        try await setup.store.cueChanges(after: progress.marks ?? CueMarks(0), at: now)
     }
 
     /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
-    /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的）。
-    private func advanceBaseline(from mark: Int?) async {
+    /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的），等子代理停住从醒来的时刻（`seen`，信封里的变化读到那一刻为止）之后算。
+    private func advanceBaseline(from mark: Int?, seen: Date) async {
         do {
             let latest = try await setup.store.lastWrite()
-            progress.marks = CueMarks(sessions: mark ?? latest, tasks: latest)
+            progress.marks = CueMarks(sessions: mark ?? latest, tasks: latest, stalls: seen)
         } catch {
             Self.log.error("Cue 读变化失败：\(error.localizedDescription, privacy: .public)")
         }
@@ -522,7 +524,7 @@ final class CueKeeper {
         let latest = try? await changes().map(\.seq).max()
         let retry = setback == nil && Self.retryable(PiErrorSummary(failure))
         setback = Setback(
-            latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
+            latest: latest, since: .now, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra, author: author)
     }
 
     // MARK: 对账
@@ -594,12 +596,14 @@ final class CueKeeper {
             }
             var deadlines: [Date] = []
             if let next = try await store.nextCueReminder(after: now) { deadlines.append(next) }
+            // 等子代理停住不写库：到点由定时器叫醒对账
+            if let stall = try await store.nextCueStall(after: now) { deadlines.append(stall) }
 
             let timing = setup.timing
-            let latest = try await changes().map(\.seq).max()
+            let changes = try await changes(at: now)
             // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
             if let held = setback {
-                if let latest, latest > held.latest ?? Int.min {
+                if changes.contains(where: { $0.seq > held.latest ?? Int.min || ($0.kind == .stalled && $0.at > held.since) }) {
                     setback = nil
                 } else if let retryAt = held.retryAt, now >= retryAt {
                     setback?.retryAt = nil
@@ -608,7 +612,7 @@ final class CueKeeper {
                     return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
                 }
             }
-            if latest != nil {
+            if !changes.isEmpty {
                 return _ = try await wakeUp(.sessionActivity)
             }
 
@@ -699,7 +703,7 @@ final class CueKeeper {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
             resume?.messages.removeAll { delivering.contains($0.id) }
         }
-        let changes = try await changes()
+        let changes = try await changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
             changes: changes, board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake,

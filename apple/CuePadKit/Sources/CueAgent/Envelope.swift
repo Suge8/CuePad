@@ -132,6 +132,7 @@ public enum CueEnvelope {
       case .failed: "出错"
       case .undelivered: "发送失败"
       case .done: "完成"
+      case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
       }
     var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }

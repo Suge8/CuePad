@@ -133,7 +133,9 @@ enum PiWire {
             try field(.name, String.self) { $0.name = $1 }
             try field(.firstMessage, String.self) { $0.firstMessage = $1 }
             try field(.question, WireQuestion.self) { $0.question = $1?.question }
-            try field(.subagents, [WireSubagent].self) { $0.subagents = $1?.map(\.subagent) ?? [] }
+            try field(.subagents, [WireSubagent].self) { session, roster in
+                session.subagents = Self.stamped(roster?.map(\.subagent) ?? [], since: session.subagents, at: Date())
+            }
             try field(.model, PiModelOption.self) { $0.model = $1 }
             try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
             try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
@@ -143,6 +145,19 @@ enum PiWire {
 
         func apply(to session: inout PiSession) {
             for update in updates { update(&session) }
+        }
+
+        /// 名册不带进展时刻，Mac 收到时记（`PiSubagentState.progressAt`）：一项（按名字对上上一份）有任何变化——状态、动作文字、起止——就是此刻有进展，
+        /// 没变的沿用上一份的时刻，新出现的是此刻。FireCode 的名字在一个指挥官下唯一。
+        private static func stamped(_ roster: [PiSubagentState], since previous: [PiSubagentState], at now: Date) -> [PiSubagentState] {
+            roster.map { agent in
+                var agent = agent
+                let before = previous.first { $0.name == agent.name }
+                var unstamped = before
+                unstamped?.progressAt = nil
+                agent.progressAt = unstamped == agent ? before?.progressAt : now
+                return agent
+            }
         }
     }
 

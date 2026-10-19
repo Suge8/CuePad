@@ -257,3 +257,9 @@ extension PiSessionState: Record {
       agent: row.textOrNil(23).map(Open.init(rawValue:)) ?? .known(.pi), catalogID: row.uuidOrNil(24))
   }
 }
+
+extension PiSubagentState {
+  /// 在跑（只此一个定义：会话卡片的"2/8"、"在做"区头的子代理数、名册的排序与颜色、等子代理停住的兜底都读它）：状态是在跑。
+  /// 在被审查的不算：审查期间它自己是闲的，等的是审查它的那位。
+  public var isRunning: Bool { phase == .known(.running) }
+}

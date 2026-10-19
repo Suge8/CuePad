@@ -785,6 +785,7 @@ nonisolated final class FakeModel: Sendable {
             return call("task", ["action": "say", "task": "修好登录页 半路断开", "text": "继续"])
         }
         if text.contains("醒来：会话有动静"), text.contains("要作答") { return say("去作答了") }
+        if text.contains("醒来：会话有动静"), text.contains("[等子代理") { return say("子代理那边停住了") }
         if text.contains("醒来：会话有动静"), text.contains("请收一下") {
             return call("task", ["action": "done", "task": "修好登录页 请收一下", "evidence": ["登录测试全过"]])
         }
