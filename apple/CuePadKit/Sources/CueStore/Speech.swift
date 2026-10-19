@@ -36,7 +36,7 @@ public enum Speech {
   /// 晚到的回执照样拉回来、气泡自己变成已送达。与连接测试的等待（`AppServices.ping`）一样长。
   public static let receiptLimit: TimeInterval = 60
 
-  /// Cue 的说话工具（say、answer）写下请求后等结果多久。这一轮停在这里等，所以比 `receiptLimit` 短得多：Cue 多半住在会话所在的
+  /// Cue 的说话工具（say、answer）写下请求后等结果多久。这一轮停在这里等，所以比 `receiptLimit` 短得多：Cue 多半运行在会话所在的
   /// 那台 Mac 上，本机执行 1 秒内有结果，唤醒已结束的会话几秒，加上一次暂时性错误的重试（`retryDelay`）也在 10 秒内；
   /// 跨 Mac 的往返大多几秒。取 20 秒覆盖这些；没交到 Cue 手上的失败不丢，写进它下一轮的变化并立即叫醒它（`CueChange.Kind.undelivered`）。
   public static let cueWait: TimeInterval = 20
@@ -69,7 +69,7 @@ public enum Speech {
     }
   }
 
-  /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻，`host` 是 Cue 住的那台 Mac。
+  /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻，`host` 是 Cue 运行的那台 Mac。
   public static func trip(said: Date, delivered: Date?, host: String?, at moment: Moment) -> Trip {
     delivered != nil ? .delivered : waiting(since: said, host: host, at: moment)
   }

@@ -43,7 +43,7 @@ private struct ReplyNoteLayer: ViewModifier {
         content
             .environment(\.openURL, OpenURLAction { url in
                 guard let id = ReplyNote.id(of: url) else { return .systemAction }
-                edit = services.settings.replyNotes(for: session).first { $0.id == id }.map { ReplyNote.Edit(note: $0, fresh: false) }
+                edit = services.settings.editReplyNote(id, in: session)
                 return .handled
             })
             .environment(\.replyText, ReplyTextOpener(session: session) { opened = Opened(entry: $0, purpose: $1) })
@@ -80,7 +80,7 @@ struct ReplyTextSheet: View {
                 notes: SelectableText.Notes(
                     runs: runs, entry: message.id, marked: notes, fill: palette.selection, line: palette.signature,
                     annotate: { edit = services.settings.editReplyNote(at: $0, in: session) },
-                    open: { id in edit = notes.first { $0.id == id }.map { ReplyNote.Edit(note: $0, fresh: false) } }))
+                    open: { edit = services.settings.editReplyNote($0, in: session) }))
         }
         .noteDialog($edit, session: session, order: order)
     }

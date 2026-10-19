@@ -34,7 +34,7 @@ struct AnswerLineTests {
         else { Issue.record("最后是 Cue 后来那句与你的两条回答：\(thread.rows.map(\.id))"); return }
         #expect(later.text == "重连用例我也补上了。")
         #expect(first.id == push.id && first.answer == CueAsk.once && thread.rows.contains { $0.id == push.id })
-        #expect(first.asking?.question(task: "发言轮次乱序") == "可以把发言顺序的修复推送到 origin/main 吗？")
+        #expect(first.asking?.question == "可以把发言顺序的修复推送到 origin/main 吗？")
         #expect(second.id == delete.id && second.answer == long)
         #expect(!thread.rows.contains { if case .answer(let question) = $0 { question.id == gone.id } else { false } })
         #expect(thread.rows.last?.speaker == .trailing)

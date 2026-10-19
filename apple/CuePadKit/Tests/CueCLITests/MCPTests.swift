@@ -114,7 +114,7 @@ import Testing
     }
   }
 
-  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，住在哪台 Mac 还留着）。
+  /// 停用之后 Cue 的工具不能再派活（停用只清启用时刻，运行在哪台 Mac 还留着）。
   @Test(.timeLimit(.minutes(1))) func aDisabledCueCannotDispatchWork() async throws {
     let sandbox = try Sandbox()
     let store = sandbox.store
@@ -300,7 +300,7 @@ import Testing
         "tell", ["text": "要新建 password_resets 表。按你的规矩改库结构前先问；不建表后端做不下去。", "ask": "rule", "doing": "新建 password_resets 表",
                  "rule": "改数据库结构前先问我", "task": task.id.uuidString])
       let rule = try #require(try await store.cueMessagesWaitingForYou().last?.asking)
-      #expect(rule.question(task: nil) == "可以新建 password_resets 表吗？" && rule.why == "你说过「改数据库结构前先问我」。")
+      #expect(rule.question == "可以新建 password_resets 表吗？" && rule.why == "你说过「改数据库结构前先问我」。")
       #expect(try await store.cueMessagesWaitingForYou().last?.choices == [CueAsk.once])
     }
   }

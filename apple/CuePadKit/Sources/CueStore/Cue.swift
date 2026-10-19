@@ -33,7 +33,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var choices: [String]?
   /// 提问的类别与范围（明文、同步，写入时定下）：哪一类事，与关联任务当时所在的项目（不在项目里为 nil，是所有项目）。
   /// 选项里"以后……不用问"照它写，选了就把它原样记进允许清单（`CueStore.endCueQuestion`），所以字面范围与实际放行的一致。
-  /// 更旧版本写的提问没有。
+  /// 结构 56 之前写的提问由升级按当时的选项补上（`Schema.backfillAsked`）。
   public var asked: CueAllow?
   /// 提问要做的动作与依据的规矩（`CueAsking`；用户内容，加密同步）。
   public var askAction: String?
@@ -42,8 +42,8 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var askShots: [CueShot] = []
   /// 提问是哪一类事。
   public var ask: CueAsk? { asked?.ask.known }
-  /// 提问问的是什么；不是提问为 nil。认不出类别（更新的版本写的）按规矩那一类说。
-  public var asking: CueAsking? { choices.map { _ in CueAsking(stored: ask ?? .rule, action: askAction, rule: askRule, shots: askShots) } }
+  /// 提问问的是什么（`CueAsking.init(stored:)`）；不是提问，或是认不出类别、没有动作短语的提问为 nil。
+  public var asking: CueAsking? { CueAsking(stored: ask, action: askAction, rule: askRule, shots: askShots) }
   /// 要推送到手机。
   public var urgent: Bool
   /// 关联的卡片。
@@ -52,7 +52,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var answer: String?
   /// 提问结束的时刻。
   public var answeredAt: Date?
-  /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
+  /// 你的消息或回答被交给 Cue 的大脑的时刻（由 Cue 运行的那台 Mac 写）；回答晚于它时（别的设备同步来的另一个回答）要再交一次。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
@@ -179,7 +179,7 @@ public struct CueMemory: Equatable, Sendable {
 /// Cue 的设置（同步，只有一行）。
 public struct CueProfile: Equatable, Sendable {
   public var name: String
-  /// 住在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
+  /// 运行在哪台 Mac（`PiSessionState.hostID` 同一种标识）；没选为 nil。
   public var hostID: String?
   /// 大脑跑在哪家 Agent 里（`runtimes` 之一）
   public var runtime: Open<AgentKind>
@@ -197,8 +197,8 @@ public struct CueProfile: Equatable, Sendable {
   /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
-  /// Cue 在值班（唯一规则）：启用了，它住的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
-  /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它住的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
+  /// Cue 在值班（唯一规则）：启用了，它运行的那台 Mac 在线（`hostOnline`，那台的在线记录 `MacPresence`），大脑也没停在起不来（`state` 不是出错）。
+  /// 值班时会话等的回答 CuePad 答得了就归 Cue（`PiSessionState.asksYou`），不算等你；它运行的那台 Mac 的管理器是否在跑由那台的 `activeHost` 定，与这里同源。
   public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
@@ -380,7 +380,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .delete: "删了就找不回来。"
     case .outside: "要动项目文件夹以外的东西，超出这件事的范围。"
     case .budget: "要花的钱或额度会超过你定的上限。"
-    case .rule: rule.map { "你说过「\($0)」。" } ?? "你说过这类事要先问你。"
+    case .rule: "你说过「\(rule ?? "")」。"
     }
   }
 
@@ -400,28 +400,14 @@ public enum CueAsk: String, CaseIterable, Sendable {
 
   /// 提问的选项（写入时定下、照存）：这次可以，与"以后……不用问"（范围同上）。
   public func choices(in project: String?) -> [String] { [Self.once] + (always(in: project).map { [$0] } ?? []) }
-
-  /// 没有动作短语时（更旧版本写的提问）按类别与关联任务的标题（没有或空白时不写）拼出要做什么。
-  func question(task: String?) -> String {
-    let named = task.flatMap { $0.isEmpty ? nil : "「\($0)」" }
-    return switch self {
-    case .push: "可以推送\(named.map { "\($0)的" } ?? "")改动吗？"
-    case .merge: "可以把\(named ?? "改动")合并进共享分支吗？"
-    case .release: "可以发布\(named ?? "")吗？"
-    case .delete: "\(named ?? "")要删东西，可以吗？"
-    case .outside: "\(named ?? "")要动项目外的东西，可以吗？"
-    case .budget: "\(named ?? "")要超出预算，可以吗？"
-    case .rule: "\(named ?? "")这一步你说过要先问，可以吗？"
-    }
-  }
 }
 
 /// Cue 的一次提问问的是什么（`CueStore.addCueMessage`）：哪一类、要做的动作，规矩那一类还有是哪条规矩，以及要你看的那几张图。
 /// 动作、规矩与每张图看什么是 Cue 写的短语，卡片、侧栏与菜单栏的摘要、小组件、本机与手机通知都只露这些，不露 Cue 的原话。
 public struct CueAsking: Equatable, Sendable {
   public let ask: CueAsk
-  /// 要做的动作（"推送 scheduler 的重连修复"）；更旧版本写的提问没有。
-  public let action: String?
+  /// 要做的动作（"推送 scheduler 的重连修复"）。
+  public let action: String
   /// 规矩那一类依据的规矩（"改数据库结构前先问我"）；别的类没有。
   public let rule: String?
   /// 回答这个问题要看的图（Cue 点名、按它给的先后），卡片、通知与全屏预览只读它；没点名的没有图。
@@ -442,7 +428,10 @@ public struct CueAsking: Equatable, Sendable {
     }
   }
 
-  package init(stored ask: CueAsk, action: String?, rule: String?, shots: [CueShot] = []) {
+  /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（结构 56 之前写的，
+  /// 或规矩那一类没写规矩）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
+  package init?(stored ask: CueAsk?, action: String?, rule: String?, shots: [CueShot]) {
+    guard let ask, let action, ask != .rule || rule != nil else { return nil }
     self.ask = ask
     self.action = action
     self.rule = rule
@@ -457,9 +446,8 @@ public struct CueAsking: Equatable, Sendable {
     return trimmed
   }
 
-  /// 要你定什么（卡片第一句、摘要、通知同一句）：`task` 是关联任务的标题，只在没有动作短语时用来拼。
-  public func question(task: String?) -> String {
-    guard let action else { return ask.question(task: task) }
+  /// 要你定什么（卡片第一句、摘要、通知同一句）。
+  public var question: String {
     // 动作两头是字母或数字时与汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法
     func gap(_ character: Character?) -> String { character.map { $0.isASCII && ($0.isLetter || $0.isNumber) } == true ? " " : "" }
     return "可以\(gap(action.first))\(action)\(gap(action.last))吗？"
@@ -517,15 +505,15 @@ public enum CueReport {
 }
 
 /// Cue 通知的文案（Mac 本机通知与手机锁屏通知同一条规则）：标题是 Cue 的名字（空的用 `CueProfile.defaultName`）；
-/// "等你"的正文是要你定什么、为什么问你（`CueAsking`，`task` 是关联任务的标题）、要看的图各看什么，接选项，不露原话；其余是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
+/// "等你"的正文是要你定什么、为什么问你（`CueAsking`）、要看的图各看什么，接选项，不露原话；其余（读不出 `CueAsking` 的提问也是）是那条消息的文字（去掉图片，至多 `bodyLimit` 字）。
 public enum CueAlert {
   public static let bodyLimit = 300
 
-  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?, task: String?) -> (title: String, body: String) {
+  public static func content(name: String?, text: String, asking: CueAsking?, choices: [String]?) -> (title: String, body: String) {
     let body: String
     if let asking, let choices {
       let shots = asking.shots.isEmpty ? [] : ["看图：" + asking.shots.map(\.look).joined(separator: "；")]
-      body = ([asking.question(task: task), asking.why] + shots + [(choices + [CueAsk.otherwise]).joined(separator: " / ")]).joined(separator: "\n")
+      body = ([asking.question, asking.why] + shots + [(choices + [CueAsk.otherwise]).joined(separator: " / ")]).joined(separator: "\n")
     } else {
       body = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines).clipped(bodyLimit)
     }

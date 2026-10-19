@@ -5,8 +5,8 @@ import Synchronization
 import UserNotifications
 
 /// 通知服务扩展：Pi 与 Cue 的锁屏通知到达时，取回触发它的记录（同一 iCloud 容器，加密字段在设备上解密），
-/// 把通用句改写成"会话名 + 问题首句（或状态）"、"Cue 的名字 + 它说的话"（"等你"是要你定什么与选项，要先取回消息、再取它关联的任务）。
-/// 取不到（没网、超时、记录已删）就保持通用句；任务取不到只是问句里不写任务名。
+/// 把通用句改写成"会话名 + 问题首句（或状态）"、"Cue 的名字 + 它说的话"（"等你"是要你定什么与选项，消息与 Cue 的设置一次取回）。
+/// 取不到（没网、超时、记录已删）就保持通用句。
 /// 系统在任意线程调用 `didReceive` 与 `serviceExtensionTimeWillExpire`，取回记录的回调又在另一条线程：
 /// 手里的内容与交付回调放在一把锁里，只交付一次。
 @objc(NotificationService)
@@ -34,15 +34,8 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             database.fetch(withRecordIDs: [recordID, profile]) { result in
                 let records = (try? result.get()) ?? [:]
                 guard let message = try? records[recordID]?.get() else { return self.finish() }
-                let profile = try? records[profile]?.get()
-                guard let taskID = CueAlertText.task(of: message) else {
-                    if let text = CueAlertText.content(message: message, profile: profile, task: nil) { self.apply(text) }
-                    return self.finish()
-                }
-                database.fetch(withRecordID: taskID) { task, _ in
-                    if let text = CueAlertText.content(message: message, profile: profile, task: task) { self.apply(text) }
-                    self.finish()
-                }
+                if let text = CueAlertText.content(message: message, profile: try? records[profile]?.get()) { self.apply(text) }
+                self.finish()
             }
             return
         }

@@ -157,7 +157,6 @@ import Testing
     let questions = try await upgraded.cueMessagesWaitingForYou()
     #expect(questions.map(\.asked) == [CueAllow(.push, project: demo.id), CueAllow(.rule, project: nil)])
     #expect(questions.allSatisfy { $0.modifiedAt > Date(timeIntervalSince1970: 1) })
-    #expect(questions.map { $0.asking?.question(task: "修好登录页") } == ["可以推送「修好登录页」的改动吗？", "「修好登录页」这一步你说过要先问，可以吗？"])
     #expect(try await upgraded.directoryBindings().map(\.folder) == ["demo"])
   }
 

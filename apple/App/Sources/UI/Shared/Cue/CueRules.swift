@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// Cue 此刻在做什么（头像的表情与环、页头的一句、Cue 页对话末尾的进展、侧栏与菜单栏面板的一行）。各端（含它值班的这台 Mac）都由库推出（`derive`）：
-/// 没启用；它住的那台 Mac 不在线是在睡觉（那台的在线记录 `MacPresence`，与值班同一条，`CueStore.macOnline`；到期由订阅重读）——本机同步不通时
+/// 没启用；它运行的那台 Mac 不在线是在睡觉（那台的在线记录 `MacPresence`，与值班同一条，`CueStore.macOnline`；到期由订阅重读）——本机同步不通时
 /// 那条记录可能只是没同步来，说不准它在不在，不说它在睡觉、照它写下的状态（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）；
 /// 你最近一句还在等回执是话在路上（`Speech`，与气泡同一个事实，此刻由 `SpeechClock` 给）；
 /// 其余照值班的 Mac 写下的（`CueState`）：在想、在用工具是在做事，出错是起不来。
@@ -11,7 +11,7 @@ import Foundation
 nonisolated enum CuePresence: Equatable, Sendable {
     /// 还没启用（Cue 页的主按钮是启用）。
     case disabled
-    /// 启用了，但它住的那台 Mac 不在线。
+    /// 启用了，但它运行的那台 Mac 不在线。
     case asleep
     case idle
     /// 你最近一句还在路上。
@@ -101,7 +101,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var waiting: Int
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行：问你的是要你定什么（`CueAsking.question`，不露原话），其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
     /// 结束了的提问（你答了或它撤回）不算：那件事已经定了，摘要接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
@@ -134,7 +134,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
             waiting: try CueWaiting.count(in: store),
             unread: try store.cueUnread().count,
-            lastSaid: said.flatMap { $0.asking?.question(task: saidTask?.heading) ?? MarkdownBlock.firstPlainLine(CueFormat.plainText($0.text)) },
+            lastSaid: said?.headline,
             lastSaidDone: saidTask?.status == .done,
             hostOnline: try profile?.activeHost.map { try store.macOnline($0) } ?? false,
             lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered) },
@@ -142,6 +142,12 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     private static let recentWindow = 40
+}
+
+nonisolated extension CueMessage {
+    /// Cue 的一句在对话以外的那一行（侧栏与菜单栏的摘要、"等你"卡与全屏预览底栏的第一句、回答的引用）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
+    var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
@@ -190,7 +196,7 @@ nonisolated extension CueSnapshot {
 }
 
 /// "等你 N" 只有一处算：Cue 带选项问你、还没结束的（`cueMessagesWaitingForYou`），加上会话里在等你回答的
-/// （`PiSessionState.asksYou`：Cue 在值班时等它回答的由它去答或转问你，不重复算；它住的那台 Mac 不在线就不算值班，回到等你）。这个数只挂在 Cue 上（三端侧栏的 Cue 一行、Dock 角标）：
+/// （`PiSessionState.asksYou`：Cue 在值班时等它回答的由它去答或转问你，不重复算；它运行的那台 Mac 不在线就不算值班，回到等你）。这个数只挂在 Cue 上（三端侧栏的 Cue 一行、Dock 角标）：
 /// Cue 是总控，一处说清"有几件在等你"；会话那一份不在 Agent 入口上另挂一个数，免得同一件事报两遍。
 nonisolated enum CueWaiting {
     static func count(in store: isolated CueStore) throws -> Int {

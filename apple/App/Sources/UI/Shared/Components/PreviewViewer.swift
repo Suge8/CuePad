@@ -20,8 +20,7 @@ struct PreviewOpening: Identifiable, Equatable {
 enum PreviewReply: Equatable {
     case cue
     case session(PiSessionState)
-    /// `question` 是"等你"卡上那句要你定什么（`CueAsking.question`）
-    case answer(CueMessage, question: String)
+    case answer(CueMessage)
 }
 
 extension View {

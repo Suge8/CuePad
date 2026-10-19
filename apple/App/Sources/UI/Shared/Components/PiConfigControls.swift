@@ -2,11 +2,11 @@ import CueStore
 import SwiftUI
 
 
-/// 工具排里弹出的菜单：Mac 的 ⌘⇧M、⌘⇧E（`ReplyShortcut`）请弹出模型与思考强度；Agent 只由点胶囊弹出。
-enum PiConfigPick { case agent, model, thinking }
+/// Mac 的 ⌘⇧M、⌘⇧E（`ReplyShortcut`）请弹出的那个菜单。
+enum PiConfigPick { case model, thinking }
 
 
-/// Agent 胶囊的内容（新会话与 Cue，`AgentModelControls`）：能选的几家与当前那家；只有一家时胶囊只写它、不能点。
+/// Agent 胶囊的内容（新会话与 Cue，`PiConfigControls.init(choice:)`）：能选的几家与当前那家；只有一家且就是它时胶囊只写它、不能点。
 struct PiAgentPick {
     let kinds: [AgentKind]
     let current: AgentKind
@@ -63,8 +63,7 @@ extension PiModelOption {
 }
 
 
-/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`；新会话与 Cue 的 `AgentModelControls` 在最左再放一枚 Agent 胶囊，
-/// 产品标志 + 名字，点开选哪家）：模型胶囊（模型的标志 + 模型短名；
+/// 输入框工具排里的模型与思考强度（会话页回复框 `SessionConfigControls`；新会话与 Cue（`init(choice:)`）在最左再放一枚 Agent 胶囊 `PiAgentCapsule`）：模型胶囊（模型的标志 + 模型短名；
 /// 有订阅额度的提供方，标志外一圈细环是卡着的那个窗口还剩多少。点开是分好组的菜单，当前打勾），右边思考强度胶囊（"思考"的标 + 一组竖格：格数是可选的档位，一格比一格高，
 /// 当前档以下填满，关着时格全空、一道斜线；点在哪格或横着拖就调到哪档，每过一档轻触一下；按下就在上方浮出档位名，
 /// 松手后停一会儿再淡出，点"思考"的标只看现在是哪档；最高档填色有一道流光），再往右是调用方给的（会话页的上下文用量）。
@@ -87,7 +86,7 @@ struct PiConfigControls<Trailing: View>: View {
     @State private var available: CGFloat = 0
     #if os(macOS)
     /// 键盘弹出的菜单贴着哪枚胶囊。
-    @State var anchors = [PiConfigPick.agent: PopUpAnchor(), .model: PopUpAnchor(), .thinking: PopUpAnchor()]
+    @State var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
     #endif
 
     init(
@@ -128,7 +127,7 @@ struct PiConfigControls<Trailing: View>: View {
 
     private func row(wordy: Bool) -> some View {
         HStack(spacing: 6) {
-            if let agent { agentCapsule(agent) }
+            if let agent { PiAgentCapsule(pick: agent) }
             modelCapsule
             if let meter = PiThinkingMeter(levels: levels, current: shown.thinking) {
                 PiThinkingDial(meter: meter, pending: shown.pending, wordy: wordy, choose: chooseThinking)
@@ -139,23 +138,6 @@ struct PiConfigControls<Trailing: View>: View {
             trailing
         }
         .fixedSize()
-    }
-
-    @ViewBuilder private func agentCapsule(_ agent: PiAgentPick) -> some View {
-        let label = PiAgentLabel(kind: agent.current)
-        if !agent.choosable {
-            label.accessibilityElement(children: .ignore).accessibilityLabel("用 \(agent.current.name)")
-        } else {
-            #if os(macOS)
-            Button { open(.agent) } label: { label }
-                .buttonStyle(.plain)
-                .popUpAnchor(anchors[.agent])
-                .accessibilityLabel("Agent")
-                .accessibilityValue(agent.current.name)
-            #else
-            MenuButton(sections: agent.menu, accessibilityLabel: "Agent", value: agent.current.name) { label }
-            #endif
-        }
     }
 
     private var modelCapsule: some View {

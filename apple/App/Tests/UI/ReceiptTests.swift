@@ -7,7 +7,7 @@ import Testing
 @testable import CuePad
 
 /// 说出去的话等回执：到哪了只看记录、此刻与本机同步从什么时候起通着（`Speech`，App 一处刷新"此刻"，`SpeechClock`）。
-/// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 住在 mac-cue，都要经同步。
+/// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 运行在 mac-cue，都要经同步。
 @MainActor
 struct ReceiptTests {
     let clock = ManualTiming()

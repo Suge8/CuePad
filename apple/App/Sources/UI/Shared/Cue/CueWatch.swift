@@ -14,7 +14,7 @@ import Observation
 final class CueWatch {
     private(set) var name = CueDigest.empty.name
     private(set) var presence = CuePresence.derive(.empty, at: .always())
-    /// 能对它说话：启用了（住的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
+    /// 能对它说话：启用了（运行的那台 Mac 不在线也能说，开机后它会读到）。单列一项：输入框只看它，不随在想、用工具重算。
     private(set) var canHear = false
     /// 你最近一句还在路上（`CuePresence.sending`）：输入框的发送钮只看它，不随在想、用工具重算。
     private(set) var sending = false

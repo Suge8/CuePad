@@ -440,7 +440,7 @@ public enum CueStoreError: Error, Equatable {
   case memoryLineTooLong(Int)
   /// 摘要的区间不是记忆里对齐的 2 的幂区间。
   case invalidSummaryRange
-  /// Cue 没启用（没有 `cueProfile`、停用了或没选住在哪台 Mac）。
+  /// Cue 没启用（没有 `cueProfile`、停用了或没选运行在哪台 Mac）。
   case cueNotEnabled
   /// 这条提问已经结束了（答了或撤回了）。
   case questionEnded

@@ -72,13 +72,34 @@ struct PiModelCapsule: View {
 }
 
 
-/// Agent 胶囊的样子：产品标志 + 名字，与模型胶囊同一种底与高（`PiConfigControls`）。
-struct PiAgentLabel: View {
-    let kind: AgentKind
+/// Agent 胶囊：产品标志 + 名字，与模型胶囊同一种底与高（`PiConfigControls`）。能换（`PiAgentPick.choosable`）时点开选哪家：
+/// iOS 是系统菜单（`MenuButton`），Mac 同模型胶囊弹 AppKit 菜单（`ChoiceMenu`，SwiftUI 在 Mac 上丢掉菜单项里的产品标志）。
+struct PiAgentCapsule: View {
+    let pick: PiAgentPick
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    @State private var anchor = PopUpAnchor()
+    #endif
 
     var body: some View {
-        HStack(spacing: 5) {
+        if !pick.choosable {
+            label.accessibilityElement(children: .ignore).accessibilityLabel("用 \(pick.current.name)")
+        } else {
+            #if os(macOS)
+            Button { if let view = anchor.view { ChoiceMenu.popUp(pick.menu, below: view) } } label: { label }
+                .buttonStyle(.plain)
+                .popUpAnchor(anchor)
+                .accessibilityLabel("Agent")
+                .accessibilityValue(pick.current.name)
+            #else
+            MenuButton(sections: pick.menu, accessibilityLabel: "Agent", value: pick.current.name) { label }
+            #endif
+        }
+    }
+
+    private var label: some View {
+        let kind = pick.current
+        return HStack(spacing: 5) {
             ModelBadge(mark: kind.mark, binding: nil).accessibilityHidden(true)
             Text(kind.name).lineLimit(1).contentTransition(.opacity)
         }
