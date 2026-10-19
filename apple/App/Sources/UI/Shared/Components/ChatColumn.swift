@@ -3,7 +3,7 @@ import SwiftUI
 /// 对话页的对话区（会话页与 Cue 页、Mac 与 iPhone 同一个）：滚动区（`ChatScroll`）里只排最近几条（多少由 `paging` 按可见区的高定），
 /// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段。排开到哪按那一条记（`shown`），不按条数：新的在下面长出来、
 /// 读的范围丢掉了最早的几条（Cue 页只读最近 `CueThread.limit` 条）时，上面已经排着的不被挤掉——挤掉的话正在看的整段一下往上窜。
-/// 右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）。
+/// 右缘的刻度滑条（`ChatScrubber`）与内容里的 `chatJump` 跳到某一条，跳到后描一圈（`chatHighlight`）；从新消息读起的不描（`ChatFollow.Landing`）。
 /// 先描圈、排开（那条所在的地方排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
 /// 内容只管按 `ChatWindow` 排哪几条、它们长什么样；排开、跳转、描圈与刻度都在这里。`holding`：本机正在和 iCloud 对，见 `ChatScroll`。
 struct ChatColumn<Content: View, Key: Equatable>: View {
@@ -23,7 +23,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     /// 在同一次更新里就接上：等 `onChange` 改记已晚了一帧，那一帧缩回去又长回来，正在看的先被甩到最早那头再滑回来。
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
-    @State private var pendingJump: UUID?
+    @State private var pendingJump: ChatFollow.Target?
     /// 这个对话区的身份（`ChatJump` 按它比较）。
     @State private var column = UUID()
 
@@ -78,9 +78,10 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                     if follow.nearOldest, !follow.prepending { showEarlier(size) }
                 }
             }
-            .onChange(of: follow.seeking) { if let id = follow.seeking?.id { seek(id, size: size) } }
+            .onChange(of: follow.seeking) { if let target = follow.seeking { seek(target, size: size) } }
         }
         .environment(\.chatHighlight, highlight.id)
+        .environment(\.chatTarget, follow.seeking?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
         .overlay(alignment: .trailing) {
             if !marks.isEmpty {
@@ -89,9 +90,9 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             }
         }
         .onChange(of: pendingJump) {
-            guard let id = pendingJump else { return }
+            guard let target = pendingJump else { return }
             pendingJump = nil
-            follow.jump(to: id)
+            follow.jump(to: target)
         }
     }
 
@@ -102,11 +103,11 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     private static var scrollerWidth: CGFloat { 0 }
     #endif
 
-    /// 先描圈、排开到那一条（离屏远的地方排的是空白，描圈的那条所在的段排成真的），排好了再跳。
-    private func seek(_ id: UUID, size: CGSize) {
-        highlight.flash(id)
-        if let index = ids.firstIndex(of: id) { show(from: min(index, ids.count - window(size))) }
-        pendingJump = id
+    /// 先描圈、排开到那一条（离屏远的地方排的是空白，跳去的那条所在的段由内容钉成真的），排好了再跳。
+    private func seek(_ target: ChatFollow.Target, size: CGSize) {
+        if target.landing == .flash { highlight.flash(target.id) }
+        if let index = ids.firstIndex(of: target.id) { show(from: min(index, ids.count - window(size))) }
+        pendingJump = target
     }
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。

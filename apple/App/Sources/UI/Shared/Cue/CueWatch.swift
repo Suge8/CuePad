@@ -25,6 +25,8 @@ final class CueWatch {
     private(set) var expression = CueMood.sleeping
     /// "等你 N"（`CueDigest.waiting`）。
     private(set) var waiting = 0
+    /// 新消息有几条（`CueDigest.unread`）。
+    private(set) var unread = 0
     private(set) var lastSaid: String?
     /// 它运行的那台 Mac 与它的名字（`CueDigest.hostID`、`hostName`）。
     private(set) var hostID: String?
@@ -106,6 +108,7 @@ final class CueWatch {
         set(\.busy, presence.shown != nil)
         set(\.expression, CueMood.of(presence, waiting: digest.waiting, justDone: digest.lastSaidDone))
         set(\.waiting, digest.waiting)
+        set(\.unread, digest.unread)
         set(\.lastSaid, digest.lastSaid)
         set(\.hostID, digest.hostID)
         set(\.hostName, digest.hostName)

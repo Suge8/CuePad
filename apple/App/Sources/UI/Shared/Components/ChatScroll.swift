@@ -50,8 +50,16 @@ nonisolated struct ChatFollow: Equatable {
 
     struct Target: Equatable {
         let id: UUID
+        var landing = Landing.flash
         let request = UUID()
+
+        /// 跳到后它在可见区的哪里。
+        var anchor: UnitPoint { landing == .read ? .top : .center }
     }
+
+    /// 跳到的那一条停在哪：描一圈、停在可见区中间（刻度滑条、经过清单、批注），或从它读起、停在顶上（Cue 页的新消息，
+    /// 下面不到一屏时滚动区停在最新处）。从它读起是打开时就在那儿，不滑过去：不是你要跳的，看到一段滑动是多余的。
+    enum Landing { case flash, read }
 
     struct ToNewest: Equatable {
         /// 因为发出了一句：回复框随即收起，它让出的地方由滚动区留到这句到了再收（`ChatScroll`）。
@@ -100,14 +108,14 @@ nonisolated struct ChatFollow: Equatable {
     mutating func prepended() { prepending = false }
 
     /// 去读某一条（刻度滑条、回复框上的批注）：它可能还没排开，先由对话排开再 `jump(to:)`。
-    mutating func seek(_ id: UUID) { seeking = Target(id: id) }
+    mutating func seek(_ id: UUID, landing: Landing = .flash) { seeking = Target(id: id, landing: landing) }
 
     /// 跳到某一条去读：不再贴着最新。
-    mutating func jump(to id: UUID) {
+    mutating func jump(to target: Target) {
         atNewest = false
         revealed = false
         jumping = true
-        target = Target(id: id)
+        self.target = target
     }
 }
 
@@ -133,6 +141,8 @@ enum ChatLayout {
 extension EnvironmentValues {
     /// 刚跳到的那条你的话：短暂描一圈（刻度滑条）。
     @Entry var chatHighlight: UUID?
+    /// 最近一次请跳去的那一条（`ChatColumn` 给，描不描圈都算）：它所在的段排真的（`ChatSegments`），跳过去时找得到它。
+    @Entry var chatTarget: UUID?
     /// 跳到对话里的某一条去读（`ChatColumn` 给）：经过清单里"对你说"那一条点它回到原处。不在对话区里为 nil。
     @Entry var chatJump: ChatJump?
     /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的"等你"卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
@@ -176,6 +186,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var unheld = false
     /// 排到下一帧的那一次上滑（`slide`）：还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
     @State private var sliding: Task<Void, Never>?
+    /// 请跳去的那一条，你自己滚或回到最新处之前都在：跳之前、跳的那一帧上面排开了一段的话，按它重新对准（`prepending`）。
+    @State private var landing: ChatFollow.Target?
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, @ViewBuilder content: () -> Content
@@ -215,6 +227,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .scrollPosition($position)
                     .onScrollPhaseChange { _, phase in
                         let scrolling = phase == .interacting || phase == .decelerating
+                        if phase == .interacting { landing = nil }
                         if follow.wrappedValue.scrolling != scrolling { follow.wrappedValue.scrolling = scrolling }
                     }
                     .onScrollGeometryChange(for: Reading.self) { geometry in
@@ -237,6 +250,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                                 scroll(to: reading.end)
                                 settle(animated: false)
+                            } else if let landing {
+                                // 跳去某一条的途中（打开时排开更早的一段常与跳挤在相邻两帧）：按偏移补的话，晚一拍生效的偏移盖掉了跳，重新对准那一条
+                                reader.scrollTo(landing.id, anchor: landing.anchor)
                             } else { position.scrollTo(y: offset.read + grown) }
                             return
                         }
@@ -285,9 +301,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 对话分段排（`ChatSegments`），那里只有段）。等这一下顶栏让开、回复框收起排好了再滚：同一次更新里滚，滚动区不动
                     .onChange(of: follow.wrappedValue.target) { _, target in
                         guard let target else { return }
+                        landing = target
                         Task {
                             await NextFrame.wait()
-                            withAnimation(reduceMotion ? nil : Motion.quick) { reader.scrollTo(target.id, anchor: .center) }
+                            withAnimation(reduceMotion || target.landing == .read ? nil : Motion.quick) { reader.scrollTo(target.id, anchor: target.anchor) }
                         }
                     }
             }
@@ -388,6 +405,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     /// 回到最新（点圆钮、发出一句）。发出时记下回复框此刻的高（`bottomPadding`）。已经在最新处就不用滚。
     private func toNewest(sent: Bool) {
         held = sent ? bottomInset : nil
+        landing = nil
         if holding { unheld = true }
         // 对的期间报着"在最新处"，下面其实还压着没滑上来的
         guard !follow.wrappedValue.atNewest || deferred else { return }

@@ -57,9 +57,11 @@ struct NoteThread<Content: View>: View {
 
 /// 对话中间居中的一行小字。`ruled`：两边各一条细线（上下文从这里换了，线以上的它不再逐句看得到）；
 /// `highlighted`：从刻度滑条跳过来时垫一层选中色；给了 `action` 是一颗按钮（看交接备忘、排开更早的）。
+/// `tint`：字与线换成这种状态色（Cue 页的新消息是石绿），默认是只扫一眼的灰。
 struct ChatMarker<Label: View>: View {
     var ruled = false
     var highlighted = false
+    var tint: Color?
     var action: (() -> Void)?
     @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
@@ -74,11 +76,11 @@ struct ChatMarker<Label: View>: View {
         .transition(.entry)
     }
 
-    private var rule: some View { palette.hair.frame(height: 1) }
+    private var rule: some View { (tint ?? palette.hair).frame(height: 1) }
 
     @ViewBuilder private var marker: some View {
         let text = label
-            .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+            .font(Typography.caption.monospacedDigit()).foregroundStyle(tint ?? palette.ink3).lineLimit(1)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
             .animation(Motion.quick, value: highlighted)

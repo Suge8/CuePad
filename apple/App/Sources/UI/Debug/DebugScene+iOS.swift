@@ -14,6 +14,8 @@ import UIKit
 /// widgets：小组件的小号与中号（`DebugWidgetStage`）；share：分享扩展的表单（`DebugShareStage`）。两者都盖在最上层。
 /// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对住在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
+/// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、
+/// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
@@ -62,6 +64,11 @@ extension DebugScene {
             }
         case "cue", "cuememory", "cuesettings":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            // 一夜里来的话是看着 Cue 页时写进去的：先离开再回来，才是"回来时有新消息"的样子
+            if defaults.string(forKey: "CuePadCuePresence") == "away" {
+                navigation.show(.tasks)
+                await NextFrame.wait()
+            }
             navigation.show(.cue)
             navigation.sidebar = .all
             if scene == "cuememory" { workspace.cue.showsMemory = true }
@@ -133,6 +140,17 @@ extension DebugScene {
         case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed("iCloud 账号不可用"))
         default: nil
         }
+    }
+
+    /// `-CuePadAwayAfter <秒>`（配 cue 画面与 `-CuePadDemo YES`）：离开 Cue 页去任务页，Cue 说几句（`seedAway`，时刻挪成一夜里陆续说的），再回来。
+    static func awayIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
+        let delay = defaults.double(forKey: "CuePadAwayAfter")
+        guard delay > 0 else { return }
+        try? await Task.sleep(for: .seconds(delay))
+        navigation.show(.tasks)
+        try? await DebugScene.seedAway(workspace.services.store)
+        try? await Task.sleep(for: .seconds(1.5))
+        navigation.show(.cue)
     }
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。
