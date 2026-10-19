@@ -123,9 +123,7 @@ struct BubbleText: View {
             .padding(look.padding)
             .background(palette.bubble, in: shape)
             .overlay { edge(shape) }
-            // 在路上：整颗淡一些，还没落进对话；送达那一刻显出实色（左下角外转着圈，钮上是话在路上）。
-            // 淡到字仍够 4.5:1（浅色 5.4、深色 6.0）：没网时它会停很久，要读得清
-            .opacity(trip.inTransit ? 0.7 : 1)
+            .opacity(trip.opacity)
             .animation(Motion.quick, value: highlighted)
             .animation(Motion.quick, value: trip)
     }
@@ -209,17 +207,18 @@ private struct QuoteLine: View {
 }
 
 
-/// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`；nil 是"发送中"）、已送达（来回用时）、没能送达。
+/// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法，`PiDelivery.Transit`）、已送达（来回用时）、没能送达。
 /// 记号在气泡左下角外（`TripMark`）：路上只转圈（发送中、送达中你分不出也不用分，卡住了到点就是没能送达、写着原因），
 /// 唤醒已结束的会话要好几秒，带上说法，免得看着像卡住；已送达一架小纸飞机（用时给读屏与 Mac 的悬停说明）；没能送达胭脂叹号，点它是原因全文与重发、移除。
 /// 只有没能送达在气泡下面多一行"未送达 · 重发"（`SpeechBubble`），原因不常驻：Mac 写回的原文长短不定，常驻就得折叠。
 enum BubbleTrip: Hashable {
     case arrived
-    case sending(PiDelivery.Transit?)
+    case sending(PiDelivery.Transit)
     case delivered(String?)
     case failed(Undelivered)
 
-    var inTransit: Bool { if case .sending = self { true } else { false } }
+    /// 在路上的话（字与图）整块淡一些，还没落进对话；送达那一刻显出实色。淡到字仍够 4.5:1（浅色 5.4、深色 6.0）：没网时它会停很久，要读得清。
+    var opacity: CGFloat { if case .sending = self { 0.7 } else { 1 } }
 }
 
 /// 没能送达的这一句：原因全文与能做的事（叹号的菜单、气泡下那一行共用）。只按原因与能不能重发比较：动作随每次求值新建，比它们会让记号每次都重画。
@@ -259,7 +258,7 @@ private struct TripMark: View {
                     if transit == .waking { Text(PiDelivery.Transit.waking.label).fixedSize() }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(transit?.label ?? PiDelivery.Transit.sending.label)
+                .accessibilityLabel(transit.label)
             case .delivered(let roundTrip):
                 let said = Dotted("已送达", roundTrip)
                 Image(.delivered).accessibilityLabel(Text(said))
@@ -356,8 +355,8 @@ struct SpeechBubble<Menu: View>: View {
     let box: Binding<ComposerDraft>
     /// 已送达标不标：会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
-    /// 还在路上时的说法（会话：发送中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
-    var transit: PiDelivery.Transit?
+    /// 还在路上时的说法（会话：发送中、送达中、正在唤醒，`PiDelivery.Transit`）；Cue 页的话只有发送中。
+    var transit = PiDelivery.Transit.sending
     var fromCue = false
     let look: BubbleLook
     /// 长按菜单（消息菜单）；给的是此刻到哪了。

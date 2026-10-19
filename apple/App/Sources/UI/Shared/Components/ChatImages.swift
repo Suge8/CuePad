@@ -33,7 +33,7 @@ struct ChatImages: View {
             }
         }
         .quickLookPreview($opened)
-        .opacity(trip.inTransit ? 0.6 : 1)
+        .opacity(trip.opacity)
     }
 }
 
