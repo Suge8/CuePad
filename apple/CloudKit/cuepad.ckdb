@@ -159,6 +159,7 @@ DEFINE SCHEMA
         deliveryID     STRING,
         createdAt      INT64,
         modifiedAt     INT64,
+        question       ENCRYPTED STRING,
         toolCount      INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

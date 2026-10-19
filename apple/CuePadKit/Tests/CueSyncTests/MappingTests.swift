@@ -25,7 +25,11 @@ import Testing
     try await store.setDirectory("/work/p", for: project.id)
     try await store.publishDirectoryBindings(host: "mac")
     try await store.writePiTranscript(PiTranscript(
-      sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now)],
+      sessionID: "s1",
+      messages: [
+        PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now),
+        PiChatMessage(sessionID: "s1", entryID: "answer/1", seq: 1, role: .answer, text: "覆盖", at: .now, question: "要覆盖 public/feed.xml 吗？"),
+      ],
       recap: PiRecap(pendingPrompt: "修好登录")))
     let page = rig.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: page)
@@ -68,6 +72,9 @@ import Testing
     #expect(record["modifiedAt"] as? Int64 != nil && record.encryptedValues["modifiedAt"] == nil)
 
     let names = ["projects": "name", "sendRecords": "content"]
+    let answer = PiChatMessage.recordID(sessionID: "s1", entryID: "answer/1").uuidString.lowercased()
+    let asked = RecordMapper.record(from: try #require(try await store.syncRow(recordName: answer)), zoneID: testZone)
+    #expect(asked.encryptedValues["question"] as? String == "要覆盖 public/feed.xml 吗？" && asked["question"] == nil)
     for key in try await store.pendingSync().saves {
       guard let field = names[key.table.rawValue] else { continue }
       let other = RecordMapper.record(from: try #require(try await store.syncRow(recordName: key.id)), zoneID: testZone)

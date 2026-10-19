@@ -12,7 +12,7 @@ enum RecordMapper {
     .agentCatalogs: ["models", "commands"],
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
     .directoryBindings: ["folder"],
-    .piMessages: ["text", "tools"],
+    .piMessages: ["text", "tools", "question"],
     .previews: ["name", "title"],
     .accountQuotas: ["windows"],
     .cueMessages: ["text", "choices", "answer", "tools", "askAction", "askRule"],

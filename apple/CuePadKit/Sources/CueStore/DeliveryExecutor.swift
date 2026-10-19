@@ -215,6 +215,7 @@ extension CueStore {
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败；Agent 收下的话把方式改写成它实际收下的（`accepted`）。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
+  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let (status, detail, mode): (DeliveryStatus, String?, DeliveryMode?) =
       switch outcome {
@@ -228,6 +229,16 @@ extension CueStore {
         UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
         WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))
         """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
+      guard db.changes > 0, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
+        let answer = request.answer, let session = request.target.ref
+      else { return }
+      // 排在会话文件里此刻最后一条之后（作答时 Agent 停着等你，接下来的都在它之后）；对话按 `at` 把它插到答的那一刻
+      let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
+      _ = try insert(
+        PiChatMessage(
+          sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.label, at: completed,
+          deliveryID: id, question: answer.question),
+        ignoringExisting: true)
     }
   }
 

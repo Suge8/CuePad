@@ -354,14 +354,3 @@ nonisolated extension PiQuestion {
         ([text] + options.map { "· \($0)" }).joined(separator: "\n")
     }
 }
-
-nonisolated extension PiAnswerValue {
-    /// 答了什么，一句话："覆盖"、"是"。
-    var label: String {
-        switch self {
-        case .option(let option): option
-        case .confirmed(let confirmed): confirmed ? "是" : "否"
-        case .text(let text): text
-        }
-    }
-}

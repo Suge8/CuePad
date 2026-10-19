@@ -184,6 +184,15 @@ extension CueStore {
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
     try select(CueMessage.self, where: Self.openQuestion, orderBy: "createdAt, rowid")
   }
+
+  /// 早于 `time` 问的、在它之后你答了的提问（撤回的不算）：Cue 页只读最近的对话，问的那句掉出去了，你的回答还在读到的这段时间里。
+  public func cueQuestionsAnswered(since time: Date) throws -> [CueMessage] {
+    try select(
+      CueMessage.self, where: "\(Self.answered) AND answeredAt >= ?1 AND createdAt < ?1", [time], orderBy: "answeredAt, rowid")
+  }
+
+  /// 你答了的提问（撤回的 answer 为空）：也是它的部分索引（`Schema` 第 57 步）的条件，不一样就用不上。
+  static let answered = "choices IS NOT NULL AND answer IS NOT NULL"
 }
 
 // MARK: 记忆

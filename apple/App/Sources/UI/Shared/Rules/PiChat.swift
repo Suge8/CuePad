@@ -2,10 +2,11 @@ import CueStore
 import CueText
 import Foundation
 
-/// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一块这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
+/// 会话页对话里的一条：你说的（右侧气泡），你在 CuePad 里答了它的提问（右侧气泡，带一行答的是哪个问题），
+/// Pi 的一轮回答（左侧全宽，上面一块这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
 /// 扩展投进来的机器消息（FireCode 交回子代理结果、审查结论……，一块信封一张卡片），或 Agent 一次发到手机上看的几个文件（一张预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
-    enum Role: Equatable, Sendable { case user, pi, notice(PiNotice), machine, preview }
+    enum Role: Equatable, Sendable { case user, answer, pi, notice(PiNotice), machine, preview }
 
     let id: UUID
     let role: Role
@@ -17,6 +18,8 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     var tools: PiChatMessage.Tools?
     /// 预览卡：一次发来的几个文件，按发的先后
     var previews: [PiPreview] = []
+    /// 你的作答：答的是哪个问题（问题原文；更旧的版本写的没有）
+    var question: String?
     /// 用户一方的这句是 Cue 发进会话的（`PiChatMessage.saidByCue`，Cue 的 peek 同一条）：气泡上标出 Cue。
     var fromCue = false
 }
@@ -28,8 +31,22 @@ private nonisolated extension PiChatEntry.Role {
         case .user: self = .user
         case .pi: self = .pi
         case .machine: self = .machine
+        case .answer: self = .answer
         case .system: guard let notice = message.notice else { return nil }; self = .notice(notice)
         case nil: return nil
+        }
+    }
+}
+
+/// 按时刻插进对话的一条（`PiChat.entries`）。
+private nonisolated enum Timed {
+    case answer(PiChatMessage)
+    case preview(PiPreview)
+
+    var at: Date {
+        switch self {
+        case .answer(let message): message.at
+        case .preview(let preview): preview.createdAt
         }
     }
 }
@@ -37,21 +54,31 @@ private nonisolated extension PiChatEntry.Role {
 /// 会话页对话的规则（iOS 会话页、Mac 会话页共用）。
 nonisolated enum PiChat {
     /// 对话按先后（消息已按 seq 升序）：你的话与 Pi 的回答各成一条，回答带这一轮的经过。认不出说话人的不显示。
-    /// 对话只来自 Pi 的会话文件（唯一事实源），与终端里看到的一致。
-    /// 预览卡不是会话文件里的内容（文件在 Agent 的命令行里发出，不留对话条），按创建时间插进对话：排在它创建之前最近的那条之后，
-    /// 一轮里发的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。一批的创建时间相同（`CueStore.addPreviews`），是一张卡。
+    /// 对话来自 Pi 的会话文件，与终端里看到的一致；只有你在 CuePad 里的作答不在文件里，由作答的 Mac 写进对话（`PiChatRole.answer`）。
+    /// 不在会话文件里的两种按时刻插进对话：预览卡（文件在 Agent 的命令行里发出，不留对话条）按创建时间，你的作答（`PiChatRole.answer`）按答的那一刻。
+    /// 排在那一刻之前最近的那条之后：一轮里发的、答的在你的话之后、这一轮的回答之前，比最后一条还晚的接在末尾（所有来源同一条规则）。
+    /// 一批预览的创建时间相同（`CueStore.addPreviews`），是一张卡。
     /// `cueSent` 是 Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）：带着其中之一的用户消息标成 Cue 说的。
     static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = [], cueSent: Set<UUID> = []) -> [PiChatEntry] {
-        var waiting = previews.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }[...]
+        let answers = messages.filter { $0.role == .known(.answer) }.map { (at: $0.at, key: $0.id.uuidString, item: Timed.answer($0)) }
+        let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }
+        var waiting = (answers + batches).sorted { ($0.at, $0.key) < ($1.at, $1.key) }.map(\.item)[...]
         var entries: [PiChatEntry] = []
         func place(before time: Date?) {
-            while let next = waiting.first, time.map({ next.createdAt < $0 }) ?? true {
-                let batch = Array(waiting.prefix { $0.createdAt == next.createdAt })
-                entries.append(PiChatEntry(id: next.id, role: .preview, text: next.title, took: nil, previews: batch))
-                waiting.removeFirst(batch.count)
+            while let next = waiting.first, time.map({ next.at < $0 }) ?? true {
+                switch next {
+                case .answer(let message):
+                    entries.append(PiChatEntry(id: message.id, role: .answer, text: message.text, took: nil, question: message.question))
+                    waiting.removeFirst()
+                case .preview(let first):
+                    let batch = waiting.prefix { if case .preview(let preview) = $0 { preview.createdAt == first.createdAt } else { false } }
+                        .compactMap { if case .preview(let preview) = $0 { preview } else { nil } }
+                    entries.append(PiChatEntry(id: first.id, role: .preview, text: first.title, took: nil, previews: batch))
+                    waiting.removeFirst(batch.count)
+                }
             }
         }
-        for message in messages {
+        for message in messages where message.role != .known(.answer) {
             guard let role = PiChatEntry.Role(message) else { continue }
             place(before: message.at)
             entries.append(PiChatEntry(

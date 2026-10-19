@@ -217,7 +217,7 @@ final class AppServices {
             throw SendError.unanswerable
         }
         return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value), to: session.target,
+            PiAnswer(promptID: promptID, value: value, question: question.text), to: session.target,
             on: session.hostID))
     }
 

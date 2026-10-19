@@ -66,6 +66,8 @@ struct UserBubble<Menu: View>: View {
     var highlighted = false
     /// Cue 发进会话的话：气泡上面一行 Cue 的小头像与名字（`CueByline`）。
     var fromCue = false
+    /// 这句是你对一个提问的回答：气泡里字上面一行答的是哪个问题（`BubbleQuote`）。
+    var quote: BubbleQuote?
     @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
@@ -79,7 +81,7 @@ struct UserBubble<Menu: View>: View {
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
                         text: text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
-                        truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil)
+                        truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
                 }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
             }
@@ -111,6 +113,7 @@ struct BubbleText: View {
     var truncated: Binding<Bool>?
     /// 折起着时：最后一行末尾渐隐，接着是"展开"（在气泡里，就在被截断的地方）。
     var expand: (() -> Void)?
+    var quote: BubbleQuote?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -119,10 +122,13 @@ struct BubbleText: View {
             if trip == .failed {
                 PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
             }
-            Paragraphs(verbatim: text, lineLimit: lineLimit)
-                .font(Typography.reading).foregroundStyle(palette.ink)
-                .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
-                .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
+            VStack(alignment: .leading, spacing: 6) {
+                if let quote { QuoteLine(quote: quote) }
+                Paragraphs(verbatim: text, lineLimit: lineLimit)
+                    .font(Typography.reading).foregroundStyle(palette.ink)
+                    .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
+                    .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
+            }
                 .padding(look.padding)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
@@ -169,6 +175,45 @@ struct BubbleText: View {
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
         case .arrived, .inTransit:
             if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
+        }
+    }
+}
+
+
+/// 你对一个提问的回答（Cue 的提问与会话里的提问同一个组件）：你那一边的一颗气泡（`UserBubble`），字上面一行答的是哪个问题（`BubbleQuote`），
+/// 下面是选的那一项或另外写的话的全文。各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`PiChatRole.answer`）。
+struct AnswerBubble<Menu: View>: View {
+    let answer: String
+    let quote: BubbleQuote?
+    let look: BubbleLook
+    var highlighted = false
+    @ViewBuilder var menu: Menu
+
+    var body: some View {
+        UserBubble(stored: answer, look: look, highlighted: highlighted, quote: quote) { menu }
+    }
+}
+
+/// 你的一句答的是哪个问题：气泡里字上面一行，回复的箭头接问题。
+/// `target` 是对话里那个问题所在的一格，点引用跳回去（`chatJump`）；问题已不在对话里（会话的问题答完就没了，Cue 的掉出了读的范围）为 nil，不能点。
+nonisolated struct BubbleQuote: Equatable, Sendable {
+    let text: String
+    var target: UUID?
+}
+
+private struct QuoteLine: View {
+    let quote: BubbleQuote
+    @Environment(\.chatJump) private var jump
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let line = Label { Text(quote.text).lineLimit(2).multilineTextAlignment(.leading) } icon: { Image(.yourAnswer).imageScale(.small) }
+            .font(Typography.secondary).foregroundStyle(palette.ink2)
+            .accessibilityLabel("回答：\(quote.text)")
+        if let target = quote.target, let jump {
+            Button { jump(target) } label: { line }.buttonStyle(.plain).accessibilityHint("回到那个问题")
+        } else {
+            line
         }
     }
 }

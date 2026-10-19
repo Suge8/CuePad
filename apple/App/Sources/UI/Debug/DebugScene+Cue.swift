@@ -134,6 +134,12 @@ extension DebugScene {
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), task: order?.id)
+            // 第二张"等你"（答完第一张接着露出来）：在卡上另外说一句的演示
+            if !cueFlows, let billing = task("清理旧的计费脚本") {
+                _ = try await store.addCueMessage(
+                    .cue, text: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？",
+                    ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"), task: billing.id)
+            }
             try await store.seed(cueLines: demoMemory)
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)

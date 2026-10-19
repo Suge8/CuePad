@@ -209,7 +209,7 @@ enum CueBubble {
 
 
 /// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答）；它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`）。
-/// 问过你、你回答了的，下面靠右一颗你的小气泡写你的回答（`AnswerChip`；还在等的不在对话里，见 `CueThread.rows`；撤回的只剩这句话）。
+/// 问过你的，答完或撤回后回到问的位置，只有这句话；你的回答在答的那一刻另成一格（`CueAnswer`，还在等的不在对话里，见 `CueThread.rows`）。
 /// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡。
 struct CueSays: View {
     let message: CueMessage
@@ -235,12 +235,31 @@ struct CueSays: View {
                 #endif
                 .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
             }
-            if let answer = message.answer { AnswerChip(answer: answer) }
         }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
         .transition(arrives ? CueBubble.arrival(.leading, reduceMotion: reduceMotion) : .identity)
+    }
+}
+
+/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），字上面一行答的是哪张卡（`CueAsking.question`，
+/// 问的那句在对话里时点它跳回去），下面是选的那一项或另外写的话的全文。从刻度滑条跳过来时描一圈。
+struct CueAnswer: View {
+    let question: CueMessage
+    let asked: Bool
+    var ref: CueTaskRef?
+    var joined = false
+    @Environment(\.chatHighlight) private var highlight
+
+    var body: some View {
+        let id = CueThread.Row.answerID(of: question.id), answer = question.answer ?? ""
+        AnswerBubble(
+            answer: answer, quote: question.asking.map { BubbleQuote(text: $0.question(task: ref?.task.heading), target: asked ? question.id : nil) },
+            look: .cue(joined: joined), highlighted: highlight == id
+        ) {
+            MessageActions(text: answer, kind: .cue)
+        }
     }
 }
 
@@ -257,22 +276,6 @@ private struct CueBubbleSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content.padding(CueBubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
-    }
-}
-
-/// 你对 Cue 问的那一句的回答（选的那一项或另外说的话）：靠右一颗你的颜色的小气泡，前面一个回复的箭头。
-private struct AnswerChip: View {
-    let answer: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Label { Text(answer).lineLimit(2) } icon: { Image(.yourAnswer).imageScale(.small) }
-            .font(Typography.secondary).foregroundStyle(palette.ink)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(palette.bubble, in: .capsule)
-            .overlay { if let edge = palette.bubbleEdge { Capsule().strokeBorder(edge) } }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .accessibilityLabel("你回答：\(answer)")
     }
 }
 

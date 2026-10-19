@@ -72,6 +72,8 @@ enum Schema {
         """)
       try backfillAsked(db)
     },
+    // 57：会话里你在 CuePad 作答的那一句写进对话（`PiChatRole.answer`），带着当时问的问题；Cue 页按答的时刻找你答了的提问
+    "ALTER TABLE piMessages ADD COLUMN question TEXT; \(answeredIndex)",
   ]
 
   /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
@@ -111,6 +113,8 @@ enum Schema {
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
   private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
+  /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
+  private static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
   private static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
@@ -224,7 +228,7 @@ enum Schema {
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0, question TEXT
     ) STRICT;
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
     \(transcriptAgeIndex)
@@ -276,6 +280,7 @@ enum Schema {
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)
+    \(answeredIndex)
     CREATE TABLE cueLines (
       id TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, pinned INTEGER NOT NULL, source TEXT NOT NULL, remindAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, deletedAt INTEGER
