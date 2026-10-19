@@ -174,13 +174,13 @@ final class ClaudeTestbed {
         + "After launching both, reply only with the word launched and end your turn. Do not wait or poll. "
         + "Whenever a background task reports back later, reply only with the word it printed."
 
-    /// 子代理交回中途结果后，名下的后台命令做完时它以同一 id 再跑一次、再交回（调研的 B4）。
+    /// 子代理交回中途结果后，名下的后台命令做完时它以同一 id 再跑一次、再交回。
     static let earlyReport = "Launch one subagent with the Agent tool: subagent_type general-purpose, run_in_background true, description nested, "
         + "prompt: Run one Bash command with run_in_background true: `sleep 15; echo NESTED`. Then immediately reply with just WAITING and end your turn. "
         + "Do not wait, poll, sleep or use Monitor. When that command reports back later, reply only with NESTED_DONE. "
         + "After launching the subagent, reply only with the word launched and end your turn. Do not wait or poll. "
         + "Whenever the subagent reports back later, reply only with the last word it said."
-    /// 派一个要跑约一分钟的后台子代理，你再叫它停掉（调研的 B7）。
+    /// 派一个要跑约一分钟的后台子代理，你再叫它停掉。
     static let longSubagent = "Launch one subagent with the Agent tool: subagent_type general-purpose, run_in_background true, description victim, "
         + "prompt: Run the Bash command `for i in $(seq 1 12); do sleep 5; done; echo V` as one foreground Bash call (not run_in_background), then reply V. "
         + "After launching it, reply only with the word launched and end your turn. Do not wait or poll."
