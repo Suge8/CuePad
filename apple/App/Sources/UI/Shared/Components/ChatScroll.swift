@@ -242,11 +242,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 新内容、正在说的话在下面长出来：整段滑上去（滑到留白收起后的最新处）。回复框长高、键盘弹出、栏的高度第一次加进内容边距
                     // （这一下系统把偏移放回顶上），最新处变远了：直接补滚过去。在读数里补（布局定下来之后）。滚动区变矮时读数已报在底、
                     // 画面与点按却还停在原处（Mac 打开会话时回复框比占位高，最后一行压在回复框下、选不中），所以看最新处远没远，不看在不在底；
-                    // 浮着的那块变矮（"等你"卡沉下去）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，底下空着一截。
-                    // 只认它变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，按"越过了"补回的话对话先掉下去再滑上来
+                    // 内容或浮着的那块变矮（"等你"卡沉下去、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
+                    // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
+                    // 按"越过了"补回的话对话先掉下去再滑上来
+                    let shrank = grown < 0 || reading.floating < last.floating
                     if grown > 0, reading.inset == last.inset {
                         slide()
-                    } else if reading.end > last.end || reading.inset != last.inset || (reading.floating < last.floating && offset.read > reading.end) {
+                    } else if reading.end > last.end || reading.inset != last.inset || (shrank && offset.read > reading.end) {
                         scroll(to: reading.end)
                         settle()
                     }
