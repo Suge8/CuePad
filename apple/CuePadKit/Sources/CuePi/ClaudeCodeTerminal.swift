@@ -5,6 +5,10 @@ import Darwin
 import Foundation
 
 /// 终端里跑的一个 Claude Code 会话：状态由钩子推出（`ClaudeCodeRuntime` 把这个会话的每次钩子调用交给 `handle`），
+/// 一轮从 `UserPromptSubmit` 起到 `Stop` 止。在飞的工作只认 `Stop` 带的后台任务清单（`background_tasks`：后台子代理与后台命令，
+/// 做完了还没交回的也在）：后台任务做完时 Claude Code 自己开一轮交回结果（`UserPromptSubmit` 的正文是 `<task-notification>`），
+/// 所以清单只在一轮结束时换，其间等子代理照旧，直到交回结果的那一轮做完。`SubagentStart`/`SubagentStop` 只改名册：
+/// 被停下的子代理没有 `SubagentStop`，下一个 `Stop` 的清单里没有它就记成被停下。
 /// 说话经它的收件箱 socket，结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端），
 /// 改名经收件箱的 `rename`。做不到的（图片、停止这一轮、换模型与强度、斜杠命令）见 `AgentCapabilities`，桥先拒绝。
 /// 收件箱送到的话 Claude Code 一律当作"另一个会话发来的"（包上同伴消息的说明；行里没有能改这一点的字段，实测 2.1.299），
@@ -101,15 +105,17 @@ final class ClaudeTerminalSession: SessionLink {
             return elicit(input, call: call, agent: agent, at: now)
         case "Stop":
             facts.endTurn()
+            inFlight(input["background_tasks"], at: now)
         case "StopFailure":
             facts.endTurn(failure: ClaudeCode.failure(
                 code: input["error"]?.string ?? "unknown", details: input["error_details"]?.string, message: input["last_assistant_message"]?.string))
+            inFlight(input["background_tasks"], at: now)
         case "PreCompact":
             facts.compacting = true
         case "PostCompact":
             facts.compacting = false
         case "SubagentStart":
-            if let agent { facts.startSubagent(agent, name: "", role: input["agent_type"]?.string ?? "", at: now) }
+            if let agent { facts.runSubagent(agent, name: "", role: input["agent_type"]?.string ?? "", at: now) }
         case "SubagentStop":
             // 压缩上下文也会报一个没有开始的子代理，不在名册里
             if let agent { facts.settleSubagent(agent, .done, summary: input["last_assistant_message"]?.string, at: now) }
@@ -118,6 +124,15 @@ final class ClaudeTerminalSession: SessionLink {
         }
         call.finish()
         show(at: now)
+    }
+
+    /// 一轮结束时的后台任务清单就是在飞的工作；名册里还在跑却不在清单里的是被停下了。没带清单的（`StopFailure` 文档里没有这一项）不动。
+    private func inFlight(_ tasks: JSONValue?, at now: Date) {
+        guard let tasks = tasks?.array else { return }
+        facts.inFlight = Set(tasks.compactMap { $0["id"]?.string })
+        for (agent, state) in facts.subagents where state.phase == .known(.running) && !facts.inFlight.contains(agent) {
+            facts.settleSubagent(agent, .interrupted, summary: nil, at: now)
+        }
     }
 
     /// MCP 服务请求输入（`Elicitation`）：只有一个字段的表单（文字、选项、是否）能从 CuePad 答，其余（多个字段、要打开网址）只显示。

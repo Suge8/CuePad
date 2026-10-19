@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 /// 端到端：CuePad 在后台托管 Claude Code（真 `claude`，stream-json，没有终端界面）——开新会话、带图发话、作答、停止、换模型与强度、改名、
-/// 斜杠命令、结束、接着已结束的会话、空闲退出（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
+/// 斜杠命令、结束、接着已结束的会话、空闲退出、后台工作交回后才歇下（托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`）。托管进程自己也跑装好的钩子，桥上不多出一个会话。
 @MainActor
 @Suite(RealAgents.taped(.claudeCode), .agentTape(.claudeCode), RealAgents.serialWhenRecording(.claudeCode), RealAgents.timeLimit(.minutes(8)))
 struct RealClaudeHostTests {
@@ -178,6 +178,17 @@ struct RealClaudeHostTests {
             #expect(lastAnswer(in: file)?.model?.contains(claudeOtherModel) == true)
             let replies = transcript.messages.filter { $0.role == .known(.pi) }.map(\.text)
             #expect(!replies.contains("No response requested."), "\(replies)")
+        }
+    }
+
+    /// 后台子代理与后台命令都算在飞：这一轮歇下时是等子代理，交回结果的那一轮做完才歇下一次（叫醒 Cue、提示"完成了"都只这一次）。
+    @Test func backgroundWorkKeepsTheSessionBusyUntilItsResultIsReportedBack() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
+            try await testbed.expectSettledOnceAfterBackgroundWork(id, since: start)
         }
     }
 

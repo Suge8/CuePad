@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 /// 端到端：终端里的 Claude Code（真 `claude`，tmux 里跑）接进 CuePad——经钩子出现在桥上、经收件箱收到 CuePad 发的话、
-/// 等你确认时从 CuePad 作答、改名、结束。
+/// 等你确认时从 CuePad 作答、后台工作交回后才歇下、改名、结束。
 @MainActor
 @Suite(RealAgents.live(.claudeCode, "断言的是 tmux 里真终端界面的输出与按键"), .enabled(if: tmuxURL != nil, "要 tmux"), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeTerminalTests {
@@ -218,6 +218,18 @@ struct RealClaudeTerminalTests {
             await #expect(throws: PiBridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
             }
+        }
+    }
+
+    /// 终端会话同一规则：在飞的只认 Stop 钩子带的后台任务清单，交回结果的那一轮做完才歇下一次。
+    @Test func backgroundWorkKeepsATerminalSessionBusyUntilItsResultIsReportedBack() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            let start = Date()
+            try await terminal.type(ClaudeTestbed.backgroundWork)
+            try await testbed.expectSettledOnceAfterBackgroundWork(session.id, since: start)
         }
     }
 

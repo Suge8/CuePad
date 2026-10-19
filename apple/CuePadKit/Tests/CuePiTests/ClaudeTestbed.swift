@@ -166,6 +166,32 @@ final class ClaudeTestbed {
         return try await waitForQuestion(id, on: terminal)
     }
 
+    /// 叫它同时派出一个后台子代理（前台跑约 8 秒命令）与一条 20 秒的后台命令，然后歇下；做完的各自由 Claude Code 再跑一轮交回。
+    static let backgroundWork = "Do two things in one message, then stop. (1) Launch one subagent with the Agent tool: subagent_type general-purpose, "
+        + "run_in_background true, description ticker, prompt: Run the Bash command `for i in 1 2; do sleep 4; done; echo SUB_DONE` as one foreground "
+        + "Bash call (not run_in_background), then reply SUB_DONE. (2) Run a Bash command with run_in_background true: `sleep 20; echo BG_DONE`. "
+        + "After launching both, reply only with the word launched and end your turn. Do not wait or poll. "
+        + "Whenever a background task reports back later, reply only with the word it printed."
+    static let backgroundSettings = #"{"permissions": {"allow": ["Bash"]}}"#
+
+    /// `backgroundWork` 之后：后台子代理与后台命令都在飞时等子代理，最后一件交回结果的那一轮做完才歇下，只歇下一次；
+    /// 歇下时的回答是那一轮的（后台命令最后做完）。
+    func expectSettledOnceAfterBackgroundWork(_ id: PiSession.ID, since start: Date) async throws {
+        let session = { [bridge] in bridge.session(id: id) }
+        try await eventually("后台命令交回结果的那一轮做完", timeout: .seconds(240)) {
+            session()?.state == .settled && (try? transcript(session()?.sessionFile))?.recap.lastReply?.contains("BG_DONE") == true
+        }
+        try await waitForDraftLanded(id)
+        var states: [PiWorkState] = []
+        for case .stateChanged(let changed, _) in log.changes where changed.id == id && changed.stateSince > start && changed.state != states.last {
+            states.append(changed.state)
+        }
+        #expect(states.contains(.delegating), "\(states)")
+        #expect(states.filter { $0 == .settled } == [.settled] && states.last == .settled, "\(states)")
+        #expect(states.dropLast().last?.isWorking == true && states.dropLast().last != .delegating, "歇下前是交回结果的那一轮：\(states)")
+        #expect(session()?.subagents.map(\.phase) == [.known(.done)], "\(String(describing: session()?.subagents))")
+    }
+
     /// 会话文件此刻的对话（从头读）
     func transcript(_ file: URL?) throws -> PiHistoryUpdate {
         try PiHistory.index(file: try #require(file), agent: .claudeCode, from: nil, files: files)
