@@ -31,7 +31,6 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = alerts
-        AppearanceSettle.watch()
         return true
     }
 
