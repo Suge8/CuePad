@@ -12,6 +12,9 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   /// 扩展投进会话的机器消息（`PiEnvelope`：FireCode 交回子代理结果、审查结论、观察员的提醒……），正文是信封原文；
   /// 它开始一轮，但不是你说的话（不算提问、不是排队的话）
   case machine
+  /// 你在 CuePad 里答了会话的提问（`PiAnswer`）：不在会话文件里，由执行作答的那台 Mac 在作答成功时写下（`CueStore.finishDelivery`），
+  /// 是"你答了什么"的唯一记录。正文是答案（`PiAnswerValue.label`），`question` 是当时问的；`at` 是答的那一刻，对话按它插进去
+  case answer
 }
 
 /// 机器消息的一块信封：`<名字>\n正文\n</名字>`。扩展或 Agent 自己投进会话的机器消息（FireCode 的 `<firecode_master_event>`、
@@ -111,6 +114,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public var tools: Tools?
   /// Pi 消息：这一轮从哪一刻开始（你说话或机器消息到达）；与 `at` 之差是做了多久。你的消息为 nil
   public var roundStartedAt: Date?
+  /// 你的作答（`answer`）：当时问的是什么（问题原文）；别的为 nil
+  public var question: String?
   /// 你的消息：它是 CuePad 的哪条投送请求送进去的（扩展把请求 id 写进会话文件里那条消息）；在终端里直接打的为 nil。
   /// 界面据此把那条投送请求的气泡换成这条消息：对话里出现 `deliveryID == request.id` 的消息时不再显示请求气泡
   public var deliveryID: UUID?
@@ -123,7 +128,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
 
   public init(
     sessionID: String, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date, tools: Tools? = nil,
-    roundStartedAt: Date? = nil, deliveryID: UUID? = nil
+    roundStartedAt: Date? = nil, deliveryID: UUID? = nil, question: String? = nil
   ) {
     id = Self.recordID(sessionID: sessionID, entryID: entryID)
     self.sessionID = sessionID
@@ -134,6 +139,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     self.tools = tools
     self.roundStartedAt = roundStartedAt
     self.deliveryID = deliveryID
+    self.question = question
     createdAt = .stamp
     modifiedAt = createdAt
   }
@@ -174,10 +180,10 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
 extension PiChatMessage: Record {
   static let table = Table.piMessages
   static let columns = [
-    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt",
+    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt", "question",
   ]
   var bindings: [any SQLBindable] {
-    [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt]
+    [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt, question]
   }
   init(row: Row) {
     id = row.uuid(0)
@@ -191,6 +197,7 @@ extension PiChatMessage: Record {
     deliveryID = row.uuidOrNil(8)
     createdAt = row.date(9)
     modifiedAt = row.date(10)
+    question = row.textOrNil(11)
   }
 }
 

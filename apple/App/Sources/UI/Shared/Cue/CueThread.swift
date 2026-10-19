@@ -4,6 +4,8 @@ import SwiftUI
 /// Cue 页一次读到的：最近的对话、对话与"等你"里提到的每件活、在等你的那几条；对话排成的格子与刻度滑条的刻度在读的时候一起推好
 /// （不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
+    /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
+    /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
     /// 对话与"等你"提到的活（消息上收成一行的引用、结果卡与"等你"里的交付物）。
     let tasks: [UUID: CueTaskRef]
@@ -35,6 +37,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         marks = ChatMark.enough(rows.compactMap { row in
             switch row {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
+            case .answer(let question): ChatMark(id: row.id, kind: .said, preview: ChatMark.firstLine(question.answer ?? ""))
             case .renewed(let handoff):
                 ChatMark(id: handoff.id, kind: .boundary, preview: Dotted("换了新上下文", handoff.createdAt.formatted(date: .omitted, time: .shortened)).visible)
             case .cue, .result, .notes, .process: nil
@@ -43,7 +46,8 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 
     static func read(from store: isolated CueStore, showsSteps: Bool) throws -> CueThread {
-        let messages = try store.cueMessages(limit: limit)
+        let recent = try store.cueMessages(limit: limit)
+        let messages = try store.cueQuestionsAnswered(outside: recent) + recent
         let waiting = try store.cueMessagesWaitingForYou()
         let mentioned = Set((messages + waiting).compactMap(\.taskID))
         // 提到的一次取完交付物与步骤进度，不逐件读细节
@@ -60,10 +64,13 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 下面挂着交付物的是结果卡，见 `rows`），
     /// 连着的几条动态（含 Cue 自己醒来的那几轮的经过）收成一格，换新的地方一条分隔（点开是交接备忘）。
-    /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置（选了的带着你选的那一项）。
+    /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置；你答了的，答的那一刻另有一格你的回答（`answer`）。
     /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留它说的话；它在做的事只在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
+        /// 你对一条提问的回答（选的那一项或另外写的话，`CueMessage.answer`），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
+        /// Cue 撤回的没有这一格。问的那句总在对话里（`messages`），引用点了跳回去
+        case answer(CueMessage)
         case cue(CueMessage, task: UUID?)
         /// 挂着交付物的 Cue 的话（结果卡）：从早到晚
         case result(CueMessage, task: UUID, deliverables: [PiPreview])
@@ -76,6 +83,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         var id: UUID {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _, _), .renewed(let message), .process(let message): message.id
+            case .answer(let question): Self.answerID(of: question.id)
             case .notes(let group): group[0].id
             }
         }
@@ -83,15 +91,24 @@ nonisolated struct CueThread: Equatable, Sendable {
         var date: Date {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _, _), .renewed(let message), .process(let message): message.createdAt
+            case .answer(let question): question.answeredAt ?? question.createdAt
             case .notes(let group): group[0].createdAt
             }
         }
 
-        /// 这一格下面挂的那件活：Cue 第一次提到它的话、结果卡。
+        /// 回答那一格的 id：由提问的 id 推出（不另存），与提问那一格不同。
+        static func answerID(of question: UUID) -> UUID {
+            var bytes = question.uuid
+            bytes.0 ^= 0xA5
+            return UUID(uuid: bytes)
+        }
+
+        /// 这一格用到的那件活：Cue 第一次提到它的话、结果卡下面挂的那一件；回答引用的那张卡关联的那一件（拼问句用）。
         var taskID: UUID? {
             switch self {
             case .cue(_, let task): task
             case .result(_, let task, _): task
+            case .answer(let question): question.taskID
             case .you, .notes, .process, .renewed: nil
             }
         }
@@ -101,14 +118,14 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .process(let message): message.id == round
             case .notes(let notes): notes.contains { $0.id == round }
-            case .you, .cue, .result, .renewed: false
+            case .you, .answer, .cue, .result, .renewed: false
             }
         }
 
         /// 气泡在哪一边：你的话靠右，Cue 的话靠左；其余（结果卡、经过、动态、分隔）不是气泡，不与上下的气泡连成一串。
         var speaker: HorizontalEdge? {
             switch self {
-            case .you: .trailing
+            case .you, .answer: .trailing
             case .cue: .leading
             case .result, .notes, .process, .renewed: nil
             }
@@ -131,15 +148,28 @@ nonisolated struct CueThread: Equatable, Sendable {
         return stamps
     }
 
+    /// 回答按答的那一刻插进对话（`answer`）：排在那一刻之前最近的那格之后，与会话里的作答、预览卡同一条规则（`PiChat.entries`）。
     /// 交付物挂在哪句话下面（只此一处）：一件活的 Cue 的话（还在"等你"里的除外）挂上这件活从上一次挂出之后、到这句话为止新发来的交付物
     /// （按发来的时刻切），挂了的就是结果卡——Cue 做完时写下的"「X」做完了"自然是一张。还在"等你"里的不消耗：答完它回到对话里时才挂。
-    private static func rows(_ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool) -> [Row] {
+    private static func rows(
+        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], showsSteps: Bool
+    ) -> [Row] {
+        // 同一毫秒答的按问的先后（`messages` 的顺序）
+        var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
+            .sorted { ($0.element.answeredAt!, $0.offset) < ($1.element.answeredAt!, $1.offset) }.map(\.element)[...]
         let waiting = Set(waiting.map(\.id))
         var shown = Set<UUID>()
         /// 每件活上一次挂到的时刻
         var hung: [UUID: Date] = [:]
         var rows: [Row] = []
+        func placeAnswers(before time: Date?) {
+            while let next = answers.first, time.map({ next.answeredAt! < $0 }) ?? true {
+                rows.append(.answer(next))
+                answers.removeFirst()
+            }
+        }
         for message in messages {
+            placeAnswers(before: message.createdAt)
             switch message.author.known {
             case .you: rows.append(.you(message))
             case .cue:
@@ -164,6 +194,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             case nil: break
             }
         }
+        placeAnswers(before: nil)
         return rows
     }
 }

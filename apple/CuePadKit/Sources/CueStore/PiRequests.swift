@@ -10,26 +10,39 @@ public enum PiAnswerValue: Sendable, Equatable {
   case confirmed(Bool)
   /// 输入框填的文字
   case text(String)
+
+  /// 答了什么，一句话："覆盖"、"是"。
+  public var label: String {
+    switch self {
+    case .option(let option): option
+    case .confirmed(let confirmed): confirmed ? "是" : "否"
+    case .text(let text): text
+    }
+  }
 }
 
 /// 手机发给 Mac 的作答：哪次弹窗、答什么。存在投送请求（方式 `answer`）的正文里（JSON，答案按种类各占一个键）。
 public struct PiAnswer: Sendable, Equatable, StoredJSON {
   public var promptID: String
   public var value: PiAnswerValue
+  /// 你答的那个问题的原文（`PiQuestion.text`）：作答成功后随答案写进对话（`PiChatRole.answer`）；更旧的版本写的请求没有
+  public var question: String?
 
-  public init(promptID: String, value: PiAnswerValue) {
+  public init(promptID: String, value: PiAnswerValue, question: String? = nil) {
     self.promptID = promptID
     self.value = value
+    self.question = question
   }
 
   /// 作答请求的正文（App 的回复框作答经发消息的那条路写出）。
   public var stored: String { JSONColumn.encode(self) }
 
-  private enum CodingKeys: String, CodingKey { case promptID, option, confirmed, text }
+  private enum CodingKeys: String, CodingKey { case promptID, option, confirmed, text, question }
 
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     promptID = try c.decode(String.self, forKey: .promptID)
+    question = try c.decodeIfPresent(String.self, forKey: .question)
     if let option = try c.decodeIfPresent(String.self, forKey: .option) {
       value = .option(option)
     } else if let confirmed = try c.decodeIfPresent(Bool.self, forKey: .confirmed) {
@@ -44,6 +57,7 @@ public struct PiAnswer: Sendable, Equatable, StoredJSON {
   public func encode(to encoder: any Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(promptID, forKey: .promptID)
+    try c.encodeIfPresent(question, forKey: .question)
     switch value {
     case .option(let option): try c.encode(option, forKey: .option)
     case .confirmed(let confirmed): try c.encode(confirmed, forKey: .confirmed)

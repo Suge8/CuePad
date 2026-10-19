@@ -216,6 +216,9 @@ struct CuePage: View {
         let body: CGFloat = switch row {
         case .you(let message):
             bubble + text(message.text, width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
+        case .answer(let question):
+            // 引用那一行至少一行小字，下面是回答
+            bubble + note + 6 + text(question.answer ?? "", width: width(UserBubble<EmptyView>.widthFraction), spacing: 0, limit: UserBubble<EmptyView>.foldedLines)
         case .cue(let message, _):
             bubble + text(message.text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing, limit: nil)
         case .result(let message, _, let deliverables):
@@ -349,6 +352,8 @@ private struct CueRow: View, Equatable {
             SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
                 MessageActions(text: message.text, kind: .cue)
             }
+        case .answer(let question):
+            CueAnswer(question: question, ref: ref, joined: joined)
         case .cue(let message, _):
             CueSays(message: message, task: ref, joined: joined, arrives: !swapsInPlace)
         case .result(let message, _, let deliverables):

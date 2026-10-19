@@ -29,7 +29,7 @@ Cue 值班也是在等：2026-10-14 手机对 Cue 说的一句 21 秒才交给�
 - 执行器遇上暂时性错误（会话正在起、还没连上桥；哪些算由 Mac 的处理器归类，清单在 `MacExecutor.isTransient`）隔 `Speech.retryDelay` 重试一次，再失败才写失败（`DeliveryExecutor`，重试与写回只在这一处）；话可能已交出去的错误（没等到确认、等确认时断开）不算暂时性，免得说两遍。
 - 失败原因一律读 `DeliveryRequest.failure`，界面不另写兜底句。
 - 订阅额度（`AccountQuota`）只有 Mac 写。手机上的额度视图打开、数据陈旧时写一条 `quota` 请求给最近写过额度的那台 Mac，不等结果、失败不提示：新值随同步回来，查不到就照旧显示上次的值与更新时间。节流与 Mac 本机同一套（`AccountQuotas`）。
-- 方式（`DeliveryMode`）与各自的约定见 `DeliveryRequest.swift` 与 `MacExecutor.swift` 的注释；命令与设置类请求（斜杠命令、会话设置、作答、结束、停止、绑定文件夹）不是说的话，不写发送记录。
+- 方式（`DeliveryMode`）与各自的约定见 `DeliveryRequest.swift` 与 `MacExecutor.swift` 的注释；命令与设置类请求（斜杠命令、会话设置、作答、结束、停止、绑定文件夹）不是说的话，不写发送记录；作答成功时执行的 Mac 在同一个事务里把你答了什么写进那个会话的对话（`PiChatRole.answer`，带着当时的问题），作答请求清理后它还在。
 
 ## 说的话的链路
 

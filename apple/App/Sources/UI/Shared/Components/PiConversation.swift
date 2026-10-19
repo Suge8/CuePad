@@ -184,6 +184,11 @@ private struct ChatSegment: View, Equatable {
             }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
+        case .answer:
+            // 你答了它的提问：你那一边的一颗气泡，字上面一行答的是哪个问题（问题答完就不在对话里了，引用不能点）
+            AnswerBubble(answer: entry.text, quote: entry.question.map { BubbleQuote(text: $0) }, look: .session, highlighted: entry.id == highlight) {
+                MessageActions(text: entry.text, kind: .mine, session: session)
+            }
         case .pi:
             ReplyBlock(
                 id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id }, fadesIn: !swapsInPlace)
