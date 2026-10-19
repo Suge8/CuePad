@@ -37,7 +37,7 @@ struct PiChatTests {
         let answer = try await app.services.store.requestAnswer(
             PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
 
-        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)], at: .always())
+        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
 
         #expect(shown.map(\.id) == [waiting.id])
     }
@@ -51,7 +51,7 @@ struct PiChatTests {
         let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
         let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
-        #expect(PiChat.outgoing([said, command], messages: [], at: .always()).map(\.id) == [said.id])
+        #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
 
     /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，

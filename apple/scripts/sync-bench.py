@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """同步测量（CloudKit 开发环境）：同一台 Mac 上开两个隔离实例经 iCloud 同步，跑固定时长，按 PID 统计 CloudKit 操作（次数与字节，取自 CKOperationMetrics）与时延。
 A 是"有在线会话的 Mac"：这里起一个说桥协议的假扩展，几个会话不停切状态，收到的话一律受理；
-B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按手机那档）：每轮给 A 的一个会话"马上说"一句、对 Cue 说一句、立即同步一次（打点见 DebugScene+SyncBench.swift）。
+B 代替开着 Agent 页的手机（模拟器登不了 iCloud；拉取节奏按手机那档）：每轮对 A 的一个会话说一句、对 Cue 说一句、立即同步一次（打点见 DebugScene+SyncBench.swift）。
 
 用法：sync-bench.py [分钟=10]
 构建是本检出 apple/.derived 里开发环境签名的那份（CUEPAD_SIGN=development xc.sh build mac）；库、日志在 /tmp/sync-bench。
@@ -69,7 +69,7 @@ def fake_extension(directory):
                 for line in data.decode(errors="ignore").splitlines():
                     try: msg = json.loads(line)
                     except ValueError: continue
-                    if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True, "delivered": "steer"})
+                    if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True})
             if time.time() >= s["next"]:
                 state = dict(random.choice(STATES)); state["since"] = now()
                 busy = state["kind"] not in ("idle", "done")

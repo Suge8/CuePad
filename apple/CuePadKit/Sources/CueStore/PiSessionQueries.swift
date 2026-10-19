@@ -94,7 +94,7 @@ extension CueStore {
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
   }
 
-  /// 发给这些会话、可能没能送达的话，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里还没被领取的与失败的——
+  /// 发给这些会话、可能没能送达的话，按 Pi 的会话 id：说的话（`DeliveryMode.send`）里还没被领取的与失败的——
   /// 哪几句此刻算没能送达由说的话那条规则定（`PiSessionListItem.undelivered`）。失败的话不会进对话，一直留到你重发
   /// （新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
   func unsettledTalk(to sessionIDs: [String]) throws -> [String: [DeliveryRequest]] {
@@ -103,7 +103,7 @@ extension CueStore {
     let requests = try select(
       DeliveryRequest.self,
       where: """
-        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.talk)))
+        targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.send.rawValue)'
           AND status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.failed.rawValue)') AND targetRef IN (\(refs))
         """, sessionIDs, orderBy: "createdAt, rowid")
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }

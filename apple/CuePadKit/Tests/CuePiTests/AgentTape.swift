@@ -235,6 +235,10 @@ final class AgentTape: @unchecked Sendable {
         var listeners: [String: (source: DispatchSourceRead, path: String)] = [:]
         // 回放
         var replay: Replay?
+        /// 回放时钟（`expand`）：录下的时刻（相对 `t0` 的毫秒）→ 回放给出的时刻；`lag` 是回放比录制慢出的毫秒数，只增不减
+        var replayed: [Double: Double] = [:]
+        var lag = 0.0
+        var latest = -Double.infinity
     }
 
     fileprivate struct FileShot {
@@ -876,9 +880,27 @@ final class AgentTape: @unchecked Sendable {
     }
 
     /// 回放时：占位符换回此刻的值。
+    ///
+    /// 时刻按回放时钟给：录下的时刻加上回放比录制慢出的那段（`State.lag`）。CuePad 自己的时刻（如托管会话进入工作的 `Date.now`）是真实时钟，
+    /// 回放一慢（机器忙），只按 `t0` 加录下的间隔给出的回答时刻就会早于它，"回答落盘"之类的比较永远不成立。这一行里最晚的（不晚于此刻的）
+    /// 新时刻落后于此刻就把 `lag` 补上，所以 Agent 刚报出的时刻不早于 CuePad 此前看到的任何事。同一个录下的时刻总给出同一个值（`replayed`），
+    /// 录下时相等的（如压缩后退回的计时起点）回放时仍相等。
     fileprivate static func expand(_ text: String, _ state: inout State) -> String {
         guard text.contains("{") else { return text }
         let root = state.temporaryRoot, directories = state.temporaryDirectories, pids = state.stubPids, t0 = state.t0
+        // 晚于此刻的（如额度的重置时刻）不是这一行发生的时刻，不拿来对钟
+        let elapsed = Date().timeIntervalSince1970 * 1000 - t0
+        let recorded = matches(placeholder, in: text).compactMap { g in recordedDelta(g[1]!, g[2] ?? "", t0: t0) }.filter { $0 <= elapsed }
+        if let newest = recorded.max(), newest > state.latest {
+            state.latest = newest
+            state.lag = max(state.lag, elapsed - newest)
+        }
+        func at(_ delta: Double) -> Double {
+            if let known = state.replayed[delta] { return known }
+            let value = t0 + delta + state.lag
+            state.replayed[delta] = value
+            return value
+        }
         return replacing(placeholder, in: text) { g in
             let value = g[2] ?? ""
             switch g[1]! {
@@ -894,14 +916,34 @@ final class AgentTape: @unchecked Sendable {
             case "pwd": return workingDirectory
             case "home": return home
             case "pid": return pids[value].map { String($0) } ?? g[0]!
-            case "ms": return String(Int(t0) + (Int(value) ?? 0))
-            case "s": return String(Int((t0 / 1000).rounded(.down)) + (Int(value) ?? 0))
+            case "ms", "s":
+                guard let delta = recordedDelta(g[1]!, value, t0: t0) else { return g[0]! }
+                return g[1] == "ms" ? String(Int(at(delta))) : String(Int((at(delta) / 1000).rounded(.down)))
             case "iso":
                 let parts = value.split(separator: ":", maxSplits: 2).map(String.init)
                 guard parts.count == 3, let delta = Double(parts[0]), let digits = Int(parts[1]) else { return g[0]! }
-                return isoString(Date(timeIntervalSince1970: (t0 + delta) / 1000), digits: digits, zone: parts[2])
+                return isoString(Date(timeIntervalSince1970: at(delta) / 1000), digits: digits, zone: parts[2])
             default: return g[0]!
             }
+        }
+    }
+
+    /// 时间占位符录下的时刻，相对 `t0` 的毫秒（`{s:…}` 相对 `t0` 所在的那一秒）；不是时间占位符为 nil。
+    private static func recordedDelta(_ kind: String, _ value: String, t0: Double) -> Double? {
+        switch kind {
+        case "ms": return Double(value)
+        case "s": return Double(value).map { ((t0 / 1000).rounded(.down) + $0) * 1000 - t0 }
+        case "iso": return value.split(separator: ":", maxSplits: 2).first.flatMap { Double($0) }
+        default: return nil
+        }
+    }
+
+    /// 全部匹配的各组（没匹配上的组为 nil）。
+    private static func matches(_ pattern: String, in text: String) -> [[String?]] {
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let source = text as NSString
+        return regex.matches(in: text, range: NSRange(location: 0, length: source.length)).map { match in
+            (0..<match.numberOfRanges).map { match.range(at: $0).location == NSNotFound ? nil : source.substring(with: match.range(at: $0)) }
         }
     }
 

@@ -206,7 +206,7 @@ struct SpeakTests {
         let requests = try await store.deliveryRequests()
         #expect(requests.map(\.content) == ["把断言也改了"] && requests.first?.hostID == "mac-b")
         let request = try #require(requests.first)
-        #expect(PiChat.outgoing(requests, messages: [], at: .always()).map(\.id) == [request.id])
+        #expect(PiChat.outgoing(requests, messages: []).map(\.id) == [request.id])
         #expect(Said.request(request).trip(at: .always(at: .now)) == .sending)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .succeeded }

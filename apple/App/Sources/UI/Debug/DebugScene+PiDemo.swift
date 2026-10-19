@@ -609,7 +609,7 @@ extension DebugScene {
             try? await relayExecutor?.start()
         }
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.store.requestDelivery("改完再看看登录回调那个超时", to: atlas.target, on: atlas.hostID, mode: .followUp)
+            _ = try? await services.store.requestDelivery("改完再看看登录回调那个超时", to: atlas.target, on: atlas.hostID)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
@@ -622,9 +622,6 @@ extension DebugScene {
                 ReplyNote(entry: reply, run: 0, location: 5, quote: "完整页面可以直接点按钮试交互", note: "要能离线打开"),
                 ReplyNote(entry: reply, run: 0, location: 38, quote: "评审结论里有两处要你定", note: "这两处我来定，先列出来"),
             ]), for: notes.id)
-        }
-        if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
-            _ = try? await services.store.requestDelivery("超时后先重试一次，还失败再报错", to: cuepad.target, on: cuepad.hostID, mode: .steer)
         }
     }
 }

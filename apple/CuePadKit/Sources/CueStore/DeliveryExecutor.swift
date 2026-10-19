@@ -162,16 +162,6 @@ extension CueStore {
     }
   }
 
-  /// 把还没被领取的"等它做完再说"改成"马上说"；返回是否改成了（同 `withdrawDelivery`，已领取的改不了）。
-  public func promoteDelivery(_ id: UUID) throws -> Bool {
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET mode = ?, modifiedAt = ? WHERE id = ? AND status = 'pending' AND mode = ?",
-        [DeliveryMode.steer.rawValue, Date.stamp, id, DeliveryMode.followUp.rawValue])
-      return db.changes > 0
-    }
-  }
-
   // MARK: 执行器用
 
   fileprivate func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
@@ -196,39 +186,22 @@ extension CueStore {
     }
   }
 
-  /// 交出去之后才知道没送到：`host` 这台 Mac 受理了、Pi 会话却在读到这句之前关掉了（扩展在告别里报出：没来得及交给 Pi 的，或退出时还排在 Pi 队列里的），改记为失败，
-  /// 走"没能送达 + 重发"。执行到一半的也算（告别可能先于执行器写回结果，写回不覆盖已有的结果，不会把它改回成功）。返回改了的。
-  public func failAcceptedDeliveries(_ ids: [UUID], host: String, reason: String) throws -> [UUID] {
-    try write {
-      let now = Date.stamp
-      return try ids.filter { id in
-        try db.run(
-          """
-          UPDATE deliveryRequests SET status = 'failed', resultDetail = ?, completedAt = ?, modifiedAt = ?
-          WHERE id = ? AND handledBy = ? AND status IN ('executing', 'succeeded')
-          """, [reason, now, now, id, host])
-        return db.changes > 0
-      }
-    }
-  }
-
-  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败；Agent 收下的话把方式改写成它实际收下的（`accepted`）。
-  /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
+  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
+  /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
   /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
-    let (status, detail, mode): (DeliveryStatus, String?, DeliveryMode?) =
+    let (status, detail): (DeliveryStatus, String?) =
       switch outcome {
-      case .succeeded: (.succeeded, nil, nil)
-      case .accepted(let mode): (.succeeded, nil, mode)
-      case .failed(let reason), .transient(let reason): (.failed, reason, nil)
+      case .succeeded: (.succeeded, nil)
+      case .failed(let reason), .transient(let reason): (.failed, reason)
       }
     try write {
       try db.run(
         """
-        UPDATE deliveryRequests SET status = ?, resultDetail = ?, mode = COALESCE(?, mode), completedAt = ?, modifiedAt = ?
+        UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ?
         WHERE id = ? AND status IN (\(DeliveryStatus.openSQL))
-        """, [status.rawValue, detail, mode?.rawValue, completed, Date.stamp, id])
+        """, [status.rawValue, detail, completed, Date.stamp, id])
       guard db.changes > 0, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
         let answer = request.answer, let session = request.target.ref
       else { return }
@@ -256,30 +229,22 @@ extension CueStore {
   /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 排在 Agent 队列里的话（收下的方式是 steer / followUp）在被读到（对话里出现 `deliveryID` 等于它的消息）前、会话还忙着时留着：
-  /// 界面据它显示排队的话，删早了话会在被读到前消失；会话停下后队列要么已读完、要么随进程丢了（告别里报没送到），下一轮就带走。
-  /// 留着的都算"还剩"：清理一轮轮排下去，认领、读到或会话停下后的那一轮就带走它。
-  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
-  /// 两者都只在完成早于 `undeliveredCutoff` 时清理；排队的话也最多留到这时。
+  /// 没能送达的话（`send`）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
+  /// 两者都只在完成早于 `undeliveredCutoff` 时清理。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
     let undelivered = """
-      status = 'failed' AND (mode IN (\(sqlList(DeliveryMode.talk))) OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
+      status = 'failed' AND (mode = '\(DeliveryMode.send.rawValue)' OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
       """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?2
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
         AND \(Self.launchUnclaimed)
       """
-    let queued = """
-      status = 'succeeded' AND mode IN (\(sqlList([DeliveryMode.steer, .followUp]))) AND completedAt >= ?3
-        AND NOT EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = deliveryRequests.targetRef AND m.deliveryID = deliveryRequests.id)
-        AND EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = deliveryRequests.targetRef AND s.state IN (\(PiWorkState.pendingWorkSQL)))
-      """
     let arguments: [any SQLBindable] = [cutoff, claimCutoff, undeliveredCutoff]
     return try write {
       try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(undelivered)) AND NOT (\(queued))",
+        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(undelivered))",
         arguments)
       return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(undelivered))", arguments) { _ in true } != nil
     }

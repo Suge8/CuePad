@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 14
+    static let protocolVersion = 15
 
     struct State: Decodable {
         var kind: String
@@ -185,11 +185,10 @@ enum PiWire {
     struct Ack: Decodable {
         var id: String?
         var ok: Bool
-        var delivered: String?
         var error: String?
     }
 
-    struct Bye: Decodable { var reason: String; var undelivered: [String]? }
+    struct Bye: Decodable { var reason: String }
     struct StateMessage: Decodable { var state: State }
 
     /// 正在说的话：到目前为止的全文与开始出字的时刻（毫秒）；`text` 为 null 是清掉。
@@ -246,7 +245,6 @@ enum PiWire {
         var id: String
         var text: String
         var images: [Image]?
-        var deliverAs: String?
         var deliveryId: String?
     }
 
@@ -254,14 +252,12 @@ enum PiWire {
         try encode(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
-            deliverAs: message.whenBusy?.rawValue, deliveryId: message.deliveryID))
+            deliveryId: message.deliveryID))
     }
 
-    /// 斜杠命令：`text` 是以 / 开头的整行；`deliverAs` 只对会被展开成这一轮提示词的模板与 skill 在会话正忙时生效。
-    static func slashCommand(id: String, line: String, whenBusy: PiQueueMode?) throws -> Data {
-        var command = Command(t: "command", id: id, text: line)
-        command.deliverAs = whenBusy?.rawValue
-        return try encode(command)
+    /// 斜杠命令：`text` 是以 / 开头的整行。
+    static func slashCommand(id: String, line: String) throws -> Data {
+        try encode(Command(t: "command", id: id, text: line))
     }
 
     private struct ReloadCommand: Encodable {

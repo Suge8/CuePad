@@ -27,9 +27,8 @@ extension AppServices {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
-            case .ended(let session, let reason):
+            case .ended(let session, _):
                 live[session.id] = nil
-                if case .closed(_, let undelivered) = reason, !undelivered.isEmpty { try await failUndelivered(undelivered) }
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
                 } else {
@@ -39,13 +38,6 @@ extension AppServices {
             case .incompatible: break
             }
         }
-    }
-
-    /// 扩展受理了、没被读到会话就关掉了的话（手动压缩期间留着的，退出时还排在 Pi 队列里的）：记为没送到，立即上传给手机。
-    private func failUndelivered(_ ids: [String]) async throws {
-        let failed = try await store.failAcceptedDeliveries(
-            ids.compactMap(UUID.init(uuidString:)), host: hostID, reason: "会话在读到这句之前关掉了")
-        for id in failed { Task { await upload(id) } }
     }
 
     /// 标题：会话自己报了名字或首条消息就用它的，否则用会话索引里的（接上的老会话在第一句话之前就有标题，不必去读会话文件）。

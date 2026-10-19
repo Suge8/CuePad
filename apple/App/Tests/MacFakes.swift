@@ -76,9 +76,7 @@ final class RecordingHost: AgentRuntime {
         if busy { ext.setState(["kind": "thinking"]) }
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
-            // 与真扩展一样：正忙时说的话排进 Pi 的队列，回报按什么方式排的
-            let queued = busy && command["t"] as? String == "send"
-            return ["ok": true, "delivered": queued ? command["deliverAs"] as? String ?? "followUp" : "immediate"]
+            return ["ok": true]
         }
         try bridge.start()
         try ext.start()
@@ -98,9 +96,7 @@ extension FakeExtension {
             let images = (json["images"] as? [[String: String]] ?? []).map {
                 PiImage(mimeType: $0["mimeType"] ?? "", data: Data(base64Encoded: $0["data"] ?? "") ?? Data())
             }
-            return PiMessage(
-                text: json["text"] as? String ?? "", images: images,
-                whenBusy: (json["deliverAs"] as? String).flatMap(PiQueueMode.init(rawValue:)), deliveryID: json["deliveryId"] as? String)
+            return PiMessage(text: json["text"] as? String ?? "", images: images, deliveryID: json["deliveryId"] as? String)
         }
     }
 }

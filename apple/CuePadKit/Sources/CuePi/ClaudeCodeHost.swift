@@ -9,7 +9,7 @@ import Foundation
 /// - 状态来自它的输出：`session_state_changed`（要 `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`）、模型回答里的工具调用、`can_use_tool`、`result`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// - 发话的 `priority`：`next` 在这一轮跑完当前工具后插进去（马上说），`later` 等这一轮做完（等它做完再说）；`now` 会打断在跑的工具，不用。
+/// - 发话与斜杠命令一律 `priority: "now"`：在跑就中止这一轮（连同在跑的工具，原因 `interrupt`），再以这句开新一轮；歇着就直接开始。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
@@ -22,7 +22,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 在等的 `can_use_tool`（请求 id 与问题）
     private var permission: (request: String, permission: ClaudePermission)?
     private var commands: Set<String> = []
-    /// 停下这一轮后的 `result` 是被打断的，不算出错
+    /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
@@ -201,36 +201,34 @@ final class ClaudeHostedSession: SessionLink {
 
     private var busy: Bool { facts.running }
 
-    private func priority(_ mode: PiQueueMode) -> JSONValue { .string(!busy ? "next" : mode == .steer ? "next" : "later") }
+    /// 送进一句话（`priority: "now"`，见类注释）；在跑的这一轮随之被打断。
+    private func say(_ content: JSONValue, uuid: String) throws {
+        if busy { stopping = true }
+        try stream.write([
+            "type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null, "session_id": "",
+            "uuid": .string(uuid), "priority": "now",
+        ])
+    }
 
     // MARK: SessionLink
 
-    func send(_ message: PiMessage) async throws -> PiDelivery {
+    func send(_ message: PiMessage) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")
         }
-        let mode = message.whenBusy ?? .followUp
-        let delivered: PiDelivery = busy ? .queued(mode) : .immediate
-        try stream.write([
-            "type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: message.text, images: message.images)], "parent_tool_use_id": .null, "session_id": "",
-            "uuid": .string(message.deliveryID ?? UUID().uuidString), "priority": priority(mode),
-        ])
+        try say(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID ?? UUID().uuidString)
         // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
         }
-        return delivered
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String, whenBusy: PiQueueMode?) async throws {
+    func command(_ line: String) async throws {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
         guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
-        try stream.write([
-            "type": "user", "message": ["role": "user", "content": .string(line)], "parent_tool_use_id": .null, "session_id": "",
-            "uuid": .string(UUID().uuidString), "priority": priority(whenBusy ?? .followUp),
-        ])
+        try say(.string(line), uuid: UUID().uuidString)
     }
 
     func abort() async throws {

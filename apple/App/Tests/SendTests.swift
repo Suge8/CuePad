@@ -50,51 +50,36 @@ struct SendTests {
         let body = try await bodyWithImage()
         let task = try await services.store.createTask("do it", in: nil)
 
-        #expect(Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID, mode: .steer), card: task.id))
+        Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID), card: task.id)
 
         let request = try await settled()
         #expect(request.status == .known(.succeeded))
         #expect(request.hostID == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(ext.messages == [
-            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer, deliveryID: request.id.uuidString)
+            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
         ])
         #expect(try await services.store.deliveryRequests().count == 1)
         let records = try RawDB(services.location.databaseURL).rows("SELECT targetKind, targetName, targetRef, content, cardID FROM sendRecords")
         #expect(records == [["piSession", "work", "sess-1", body, task.id.uuidString.lowercased()]])
     }
 
-    @Test func Pi会话忙时_直接发送先问马上说还是等它做完再说_不写请求_选了按方式发送() async throws {
-        let ext = try await connectedSession(busy: true)
-        let workspace = Workspace(services: services)
-
-        #expect(!workspace.send("hi", to: AgentTarget(session: ext.sessionID)))
-        #expect(workspace.sendState.busy?.text == "hi")
-        #expect(try await services.store.deliveryRequests().isEmpty)
-
-        workspace.resolveBusySend(.steer)
-        let request = try await settled()
-        #expect(request.mode == .known(.steer))
-        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
-    }
-
-    /// 回复框看到会话歇着、写了直接发送，Mac 执行时会话已经开始了一轮（库里的记录过时）：不报错，按等它做完再说送达
-    /// （桥缺省就是等它做完再说），会话页那句是已送达。
-    @Test func 直接发送时会话刚忙起来_按等它做完再说送达() async throws {
+    /// 会话在跑时发话不先问、不排队：交给桥（打断这一轮由各家接入做），会话页那句是已送达。
+    @Test func 会话在跑时发话_直接交给它() async throws {
         let ext = try await connectedSession(busy: true)
         let session = try #require(services.pi.session(sessionID: ext.sessionID))
         _ = await Workspace(services: services).speak("hi", to: .session(session.sendTarget, host: TestApp.hostID, mode: .send, card: nil)).value
 
         let request = try await settled()
         #expect(Said.request(request).trip(at: .always(at: .now)) == .delivered)
-        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: nil, deliveryID: request.id.uuidString)])
+        #expect(ext.messages == [PiMessage(text: "hi", deliveryID: request.id.uuidString)])
     }
 
     /// 桥上没有、记录里也不在线的会话当作已结束：写给本机，由执行器去唤醒；这台 Mac 上没有它的会话文件就带原因没能送达，不记发送。
     @Test func 不在这台Mac上的会话_没能送达带原因且不记发送() async throws {
         try await services.executor.start()
 
-        #expect(Workspace(services: services).send("hi", to: AgentTarget(session: "nope")))
+        Workspace(services: services).send("hi", to: AgentTarget(session: "nope"))
 
         #expect(try await settled().failure != nil)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)

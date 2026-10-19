@@ -133,9 +133,8 @@ public enum PiSessionName {
 public enum PiSessionEndReason: Sendable, Equatable {
     /// 连接断开且没有告别：进程被强杀/崩溃
     case disconnected
-    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`。`undelivered` 是扩展受理了、却没被读到的话的投送请求 id：
-    /// 没来得及交给 Pi 的（手动压缩期间留着的，见 `send`），退出时还有排在 Pi 队列里、随进程丢掉的。它们没送到
-    case closed(reason: String, undelivered: [String] = [])
+    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`
+    case closed(reason: String)
 }
 
 public enum PiSessionChange: Sendable, Equatable {
@@ -150,13 +149,6 @@ public enum PiSessionChange: Sendable, Equatable {
     case quota(QuotaReport)
 }
 
-public enum PiQueueMode: String, Sendable, Equatable {
-    /// 当前轮工具执行完后、下一次模型调用前送达
-    case steer
-    /// 等 agent 完全停下后再处理
-    case followUp
-}
-
 public struct PiImage: Sendable, Equatable {
     public var mimeType: String
     public var data: Data
@@ -169,22 +161,13 @@ public struct PiImage: Sendable, Equatable {
 public struct PiMessage: Sendable, Equatable {
     public var text: String
     public var images: [PiImage]
-    /// 会话正忙时的入队方式；缺省 `followUp`。空闲时忽略。
-    public var whenBusy: PiQueueMode?
     /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的（扩展 v12 起）
     public var deliveryID: String?
-    public init(text: String, images: [PiImage] = [], whenBusy: PiQueueMode? = nil, deliveryID: String? = nil) {
+    public init(text: String, images: [PiImage] = [], deliveryID: String? = nil) {
         self.text = text
         self.images = images
-        self.whenBusy = whenBusy
         self.deliveryID = deliveryID
     }
-}
-
-/// 扩展受理消息时会话的状态。`ack` 只表示"已受理"，不代表模型成功。
-public enum PiDelivery: Sendable, Equatable {
-    case immediate
-    case queued(PiQueueMode)
 }
 
 public enum PiBridgeError: Error, Equatable {
@@ -227,7 +210,6 @@ extension PiBridgeError: LocalizedError {
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
-        case .rejected("compacting"): "Agent 正在压缩上下文，压完再发这个命令"
         // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
         case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): String(reason.dropFirst(Self.failedPrefix.count))
         case .rejected(let reason): "Agent 没有接受：\(reason)"

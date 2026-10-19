@@ -65,8 +65,6 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
 
   /// 发图片
   public static let images = AgentCapabilities(rawValue: 1 << 0)
-  /// 马上说：在这一轮的下一步之前插进去（不打断在跑的工具）
-  public static let steer = AgentCapabilities(rawValue: 1 << 1)
   /// 停止这一轮
   public static let abort = AgentCapabilities(rawValue: 1 << 2)
   /// 换模型与思考强度
@@ -80,7 +78,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   /// 结束会话
   public static let end = AgentCapabilities(rawValue: 1 << 7)
 
-  public static let all: AgentCapabilities = [.images, .steer, .abort, .model, .rename, .commands, .answer, .end]
+  public static let all: AgentCapabilities = [.images, .abort, .model, .rename, .commands, .answer, .end]
 
   /// `hosted`：会话在 CuePad 托管的进程里（没有终端界面），CuePad 掌握它的全部输入输出。
   /// 当前模型报了不能看图就不能发图片（没报的照 Agent 的能力）。
@@ -94,10 +92,10 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
     if hosted { return .all }
     switch agent {
     case .pi, .opencode: return .all
-    // 终端里的会话经它的收件箱插话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
-    case .claudeCode: return [.steer, .answer, .rename, .end]
+    // 终端里的会话经它的收件箱说话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
+    case .claudeCode: return [.answer, .rename, .end]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子
-    case .codex: return [.images, .steer, .abort, .model, .rename, .commands, .answer]
+    case .codex: return [.images, .abort, .model, .rename, .commands, .answer]
     }
   }
 }

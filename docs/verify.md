@@ -92,7 +92,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 ## 同步测量
 
-两台设备之间同步的开销与时延只有一个入口：`apple/scripts/sync-bench.py [分钟=10]`（参数见脚本头注释），前后对比跑同一套。它在这台 Mac 上开两个隔离实例连 CloudKit **开发环境**：A 是有在线会话的 Mac（脚本里的假扩展驱动几个会话不停切状态），B 代替手机，每轮给 A 的一个会话"马上说"一句、对 Cue 说一句、立即同步一次（打点见 `DebugScene+SyncBench.swift`）。
+两台设备之间同步的开销与时延只有一个入口：`apple/scripts/sync-bench.py [分钟=10]`（参数见脚本头注释），前后对比跑同一套。它在这台 Mac 上开两个隔离实例连 CloudKit **开发环境**：A 是有在线会话的 Mac（脚本里的假扩展驱动几个会话不停切状态），B 代替手机，每轮对 A 的一个会话说一句、对 Cue 说一句、立即同步一次（打点见 `DebugScene+SyncBench.swift`）。
 
 - 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。构建由脚本调 `CUEPAD_SIGN=development xc.sh build mac`。
 - 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、签名里写定 Development 三样都在（`DebugScene.syncsIsolatedLibrary`）。两个实例靠 `-CuePadHost` 当两台 Mac。

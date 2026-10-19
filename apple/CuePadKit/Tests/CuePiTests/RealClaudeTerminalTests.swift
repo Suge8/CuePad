@@ -43,8 +43,7 @@ struct RealClaudeTerminalTests {
 
             let delivery = UUID().uuidString
             let start = Date()
-            let delivered = try await testbed.bridge.send(PiMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
-            #expect(delivered == .immediate)
+            try await testbed.bridge.send(PiMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
             let said = try testbed.transcript(session.sessionFile).messages.filter { $0.role == .known(.user) }
             #expect(said.map(\.text) == ["只回复 PONG"])
@@ -61,7 +60,7 @@ struct RealClaudeTerminalTests {
             try testbed.runtime.start()
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
-            _ = try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
+            try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
             @MainActor func reply() throws -> String? { try testbed.transcript(session.sessionFile).messages.last { $0.role == .known(.pi) }?.text }
             try await eventually("这一轮出错、那句原话进了对话", timeout: .seconds(90)) {
                 try testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
@@ -184,7 +183,7 @@ struct RealClaudeTerminalTests {
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
-            _ = try await testbed.bridge.send(PiMessage(text: "INBOX-PROBE 只回复 OK"), to: session.id)
+            try await testbed.bridge.send(PiMessage(text: "INBOX-PROBE 只回复 OK"), to: session.id)
 
             let file = try #require(testbed.bridge.session(id: session.id)?.sessionFile)
             var sent: Substring?
@@ -197,6 +196,28 @@ struct RealClaudeTerminalTests {
             #expect(await !terminal.screen.contains("Held"))
             let said = try testbed.transcript(file).messages.filter { $0.role == .known(.user) }.map(\.text)
             #expect(said == ["INBOX-PROBE 只回复 OK"])
+        }
+    }
+
+    /// 在跑时从 CuePad 说话：收件箱的 `now` 让 Claude Code 中止这一轮（连同在跑的命令），再以这句开新一轮。
+    /// 命令比等的时限长：没被打断就等不到这句的回答。
+    @Test func aMessageWhileBusyStopsTheRunningTurnAndStartsANewOne() async throws {
+        try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
+            try testbed.runtime.start()
+            let terminal = try await testbed.terminal(mode: "bypassPermissions")
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+
+            try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 110 127.0.0.1`，然后只回复 ZEBRA"), to: session.id)
+            try await eventually("在跑命令", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 110") == true }
+            let delivery = UUID().uuidString
+            try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery), to: session.id)
+            try await eventually("这句开的新一轮答完", timeout: .seconds(60)) {
+                let said = try? testbed.transcript(session.sessionFile).messages
+                return testbed.bridge.session(id: session.id)?.state == .settled && said?.last { $0.role == .known(.pi) }?.text.contains("MANGO") == true
+            }
+            let said = try testbed.transcript(session.sessionFile).messages
+            let mango = try #require(said.firstIndex { $0.deliveryID == UUID(uuidString: delivery) })
+            #expect(said[..<mango].contains { $0.text == PiNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止：\(said.map(\.text))")
         }
     }
 
@@ -249,7 +270,7 @@ struct RealClaudeTerminalTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
             let start = Date()
-            _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
             let log = ChangeLog(testbed.bridge)
 
@@ -273,7 +294,7 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
             let delivery = UUID().uuidString
-            _ = try await testbed.bridge.send(PiMessage(text: "只回复 HELLO", deliveryID: delivery), to: session.id)
+            try await testbed.bridge.send(PiMessage(text: "只回复 HELLO", deliveryID: delivery), to: session.id)
             try await eventually("话送到了", timeout: .seconds(120)) {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == UUID(uuidString: delivery) }) == true
             }

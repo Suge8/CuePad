@@ -25,7 +25,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var submitsEmpty = false
     /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
     var showsSendEmpty = false
-    /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
+    /// 收成一行时头部也留着（会话回复框：批注在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
     /// 会收起的在聚焦时文字下面多一排。
@@ -78,7 +78,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     /// 此刻能用的快捷键：发送的两种要有内容。
     private func shortcut(_ key: ReplyShortcut) -> (() -> Void)? {
-        [.send, .sendHeld].contains(key) && !hasContent && !submitsEmpty ? nil : shortcuts[key]
+        key == .send && !hasContent && !submitsEmpty ? nil : shortcuts[key]
     }
 
     /// 文字区交来的按键：面板打开时归面板；空着时 ↑ 调回 `recall`。返回是否已处理（没处理的照常输入）。
@@ -157,7 +157,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
-        // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
+        // 思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
         .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
         .rowContainer(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded)

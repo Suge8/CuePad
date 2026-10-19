@@ -27,21 +27,25 @@ struct RealCodexTerminalTests {
 
             // 从 CuePad 说：空闲时马上开始，会话文件里认得出是这次投送
             let hello = UUID()
-            #expect(try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: id) == .immediate)
+            try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: id)
             try await eventually("回答了 CuePad 的话", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("PONG") == true }
             #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
             try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
 
-            // 马上说：插进在跑的这一轮
-            _ = try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 8`, then reply with the single word DONE."), to: id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 8") == true }
-            #expect(try await rig.bridge.send(PiMessage(text: "Also append the word STEERED to your final reply.", whenBusy: .steer), to: id) == .queued(.steer))
-            try await eventually("插话进了这一轮的回答", timeout: .seconds(120)) {
-                rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("STEERED") == true
+            // 在跑时说：停下这一轮（连同在跑的命令），以这句开新一轮。回答用生造的词：被停下那一轮说过的过程说明也算它的回答，可能提到要说的词
+            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)
+            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
+            let now = UUID()
+            try await rig.bridge.send(PiMessage(text: "Reply with the single word MANGO.", deliveryID: now.uuidString), to: id)
+            try await eventually("这句开的新一轮答完", timeout: .seconds(120)) {
+                rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("MANGO") == true
             }
+            let said = try rig.transcript(session).messages
+            let mango = try #require(said.firstIndex { $0.deliveryID == now })
+            #expect(said[..<mango].last { $0.role != .known(.pi) }?.text == PiNotice.stopped.rawValue, "被停下的那一轮留了一行已停止")
 
             // 停止这一轮
-            _ = try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
+            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             try await rig.bridge.abort(id)
             try await eventually("停下了", timeout: .seconds(20)) { rig.bridge.session(id: id)?.state == .settled }
@@ -54,12 +58,12 @@ struct RealCodexTerminalTests {
             #expect(rig.bridge.session(id: id)?.thinking == .known(.medium))
             try await rig.bridge.command("/compact", in: id)
             try await eventually("压缩了上下文", timeout: .seconds(120)) {
-                (try? rig.transcript(session).messages.contains { $0.role == .known(.system) }) == true
+                (try? rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == PiNotice.compacted.rawValue }) == true
             }
             try await eventually("压完歇下", timeout: .seconds(60)) { rig.bridge.session(id: id)?.state == .settled }
 
-            // CuePad 晚于终端里的会话启动、而它正在跑一轮：从常驻服务里认出它与名字，能插话、能停下这一轮
-            _ = try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
+            // CuePad 晚于终端里的会话启动、而它正在跑一轮：从常驻服务里认出它与名字，能停下这一轮说新的一句
+            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
             let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
@@ -71,9 +75,10 @@ struct RealCodexTerminalTests {
                 later.session(sessionID: session.sessionID).map { $0.displayName == "终端里的会话" && $0.state.isWorking } ?? false
             }
             let lateID = try #require(later.session(sessionID: session.sessionID)?.id)
-            #expect(try await later.send(PiMessage(text: "Also append the word LATER.", whenBusy: .steer), to: lateID) == .queued(.steer))
-            try await later.abort(lateID)
-            try await eventually("停下了", timeout: .seconds(20)) { later.session(id: lateID)?.state == .settled }
+            try await later.send(PiMessage(text: "Reply with the single word KIWI."), to: lateID)
+            try await eventually("停下那一轮、答了新的一句", timeout: .seconds(120)) {
+                later.session(id: lateID)?.state == .settled && rig.replies(session).last?.uppercased().contains("KIWI") == true
+            }
             await runtime.stop()()
             later.stop()
         }
@@ -107,7 +112,7 @@ struct RealCodexTerminalTests {
             let approval = "Yes, "
             @MainActor func fetch(_ file: String) async throws {
                 let text = "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o \(file) https://example.com"
-                _ = try await rig.bridge.send(PiMessage(text: text), to: id)
+                try await rig.bridge.send(PiMessage(text: text), to: id)
             }
             // 一条命令 Codex 可能先后要两次确认（提权、联网），每次都允许，直到这一轮做完
             // 在终端里答：确认框弹出来后（从 `since` 起找）按 y，界面偶尔吞掉刚弹出时的按键，还在等就每秒再按；在 CuePad 里答：每个问题答一次

@@ -134,12 +134,12 @@ struct HandOffInput: View {
             guard choice == nil else { return newSession() }
             return Self.startDefault(draft, card: outbox.card, plan: planned?.plan, opening: planned?.opening, workspace: workspace, navigation: navigation)
         }
-        let kinds = session.composerKinds, mode = session.deliveryModes[0], files = services.store.files
+        let kinds = session.composerKinds, files = services.store.files
         let saying: Dotted = "已交给 \(session.title)"
         let written = if let line = PiSlash.line(of: draft.accepting(kinds), in: commands) {
             workspace.speak(to: .session(session, mode: .command, card: outbox.card), from: box, saying: saying) { _ in line }
         } else {
-            workspace.speak(to: .session(session, mode: mode, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }
+            workspace.speak(to: .session(session, mode: .send, card: outbox.card), from: box, saying: saying) { try $0.accepting(kinds).stored(in: files) }
         }
         // 图片存不进图片库时什么都没发：浮框留着、草稿原样，只看到报错
         guard written != nil else { return }

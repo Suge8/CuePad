@@ -321,6 +321,7 @@ public enum PiHistory {
         var role: String
         var content: Content?
         var stopReason: String?
+        var errorMessage: String?
         var cuepadDelivery: String?
         /// 工具结果（role 为 toolResult）：快速路径认不出键序时由完整解码取这两项
         var toolCallId: String?
@@ -426,6 +427,8 @@ public enum PiHistory {
                 switch message.stopReason {
                 case "toolUse": cp.spoke(message.content?.reply ?? "", entry)
                 case "aborted": cp.interrupted(entry, said: message.content?.reply ?? "", into: &transcript)
+                case "error" where message.errorMessage.map(abortMessages.contains) == true:
+                    cp.interrupted(entry, said: message.content?.reply ?? "", into: &transcript)
                 default: cp.answered(message.content?.reply ?? "", entry, into: &transcript)
                 }
             case "toolResult":
@@ -436,6 +439,16 @@ public enum PiHistory {
             break
         }
     }
+
+    /// 中止信号触发的错误（`AbortError`）的原文：Pi 只在请求自己的中止信号触发时记 `aborted`，工具被停下后接着的那次请求、
+    /// 别的信号中止的请求失败时记成 `error`（Pi 1.3 实测：在跑时停下或发来新的一句，常是这样），这一轮其实是被停下的。
+    /// 原文按出处核对：Node 的 `AbortError` 与 Pi 的 `abortReason`（"The operation was aborted"）、undici 与 node-fetch
+    /// （带句号）、`DOMException` 缺省（"This operation was aborted"）、Pi 各提供方与 OpenAI / Anthropic SDK 的
+    /// `APIUserAbortError`（"Request was aborted"，SDK 带句号）、Pi 重试等待被中止（"Request aborted"）。
+    private static let abortMessages: Set<String> = [
+        "The operation was aborted", "The operation was aborted.", "This operation was aborted",
+        "Request was aborted", "Request was aborted.", "Request aborted",
+    ]
 
     private static let decoder = JSONDecoder()
 

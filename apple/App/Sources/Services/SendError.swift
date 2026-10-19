@@ -23,7 +23,7 @@ nonisolated enum SendError: Error, Equatable {
     case directoryMissing(String)
     /// 终端没能打开（附终端给的原因）。
     case terminalFailed(String)
-    /// 排队的话已被 Mac 领取、交给了 Pi：Pi 的扩展接口收不回，撤回与改为马上说都晚了。
+    /// 话已被 Mac 领取、交给了 Agent，撤不回。
     case alreadyHanded
     /// 对 Cue 说的话已交给了它，撤不回。
     case alreadyHeard

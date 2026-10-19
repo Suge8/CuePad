@@ -567,39 +567,40 @@ public final class OpenCodeRuntime: AgentRuntime {
         return (connection, tracked)
     }
 
-    fileprivate func send(_ message: PiMessage, to sessionID: String) async throws -> PiDelivery {
-        let (connection, tracked) = try live(sessionID)
+    /// 以这句开新一轮：先 `interrupt`（歇着时是空操作），再按缺省的 `steer` 收进收件箱。`interrupt` 受理即回、清掉这一轮已记下的唤醒，
+    /// 之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
+    /// 原生的 `interrupt?resume=true` 是"先收话再打断"：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
+    fileprivate func send(_ message: PiMessage, to sessionID: String) async throws {
+        let (connection, _) = try live(sessionID)
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
-        struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata?; var delivery: String }
-        let busy = tracked.facts.running || tracked.facts.compacting
-        let mode = message.whenBusy ?? .followUp
+        struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata? }
+        try await interrupt(sessionID, connection)
         let prompt = Prompt(
             text: message.text, files: message.images.map { File(uri: "data:\($0.mimeType);base64,\($0.data.base64EncodedString())") },
-            metadata: message.deliveryID.map(Metadata.init), delivery: mode == .steer ? "steer" : "queue")
+            metadata: message.deliveryID.map(Metadata.init))
         try await connection.client.call("POST", "/api/session/\(sessionID)/prompt", body: prompt)
-        return busy ? .queued(mode) : .immediate
     }
 
-    fileprivate func command(_ line: String, whenBusy: PiQueueMode?, in sessionID: String) async throws {
+    /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
+    fileprivate func command(_ line: String, in sessionID: String) async throws {
         let (connection, tracked) = try live(sessionID)
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         let name = parts.first.map(String.init) ?? ""
         let arguments = parts.count > 1 ? String(parts[1]) : ""
-        let delivery = whenBusy == .steer ? "steer" : "queue"
         if name == Self.compact {
-            struct Compact: Encodable { var delivery: String }
-            try await connection.client.call("POST", "/api/session/\(sessionID)/compact", body: Compact(delivery: delivery))
+            struct Compact: Encodable {}
+            try await connection.client.call("POST", "/api/session/\(sessionID)/compact", body: Compact())
             return
         }
         guard try await catalog(tracked.directory, connection.client).commands.contains(where: { $0.name == name }) else {
             throw PiBridgeError.rejected("unknown_command")
         }
-        struct Command: Encodable { var name: String; var text: String; var delivery: String }
+        struct Command: Encodable { var name: String; var text: String }
+        try await interrupt(sessionID, connection)
         do {
-            try await connection.client.call(
-                "POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments, delivery: delivery))
+            try await connection.client.call("POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments))
         } catch let error as OpenCodeAPIError {
             throw PiBridgeError.rejected(error.tag == "CommandNotFoundError" ? "unknown_command" : "failed: \(error.message)")
         }
@@ -607,6 +608,11 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     fileprivate func abort(_ sessionID: String) async throws {
         let (connection, _) = try live(sessionID)
+        try await interrupt(sessionID, connection)
+    }
+
+    /// 停下在跑的这一轮（含压缩）。在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
+    private func interrupt(_ sessionID: String, _ connection: Connection) async throws {
         try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt")
     }
 
@@ -890,8 +896,8 @@ final class OpenCodeLink: SessionLink {
         return runtime
     }
 
-    func send(_ message: PiMessage) async throws -> PiDelivery { try await use().send(message, to: sessionID) }
-    func command(_ line: String, whenBusy: PiQueueMode?) async throws { try await use().command(line, whenBusy: whenBusy, in: sessionID) }
+    func send(_ message: PiMessage) async throws { try await use().send(message, to: sessionID) }
+    func command(_ line: String) async throws { try await use().command(line, in: sessionID) }
     func end() async throws { try await use().endSession(sessionID) }
     func abort() async throws { try await use().abort(sessionID) }
     func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await use().answer(answer, to: promptID, in: sessionID) }

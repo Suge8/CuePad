@@ -90,7 +90,7 @@ struct RealTranscriptTests {
         let session = try #require(bridge.sessions.first)
 
         let delivery = UUID()
-        _ = try await bridge.send(PiMessage(text: "从手机发的", deliveryID: delivery.uuidString), to: session.id)
+        try await bridge.send(PiMessage(text: "从手机发的", deliveryID: delivery.uuidString), to: session.id)
         try await eventually("那一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("终端里打的")
         try await eventually("第二轮落盘") { try roundsDone(file, 2) }

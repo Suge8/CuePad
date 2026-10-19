@@ -27,7 +27,6 @@ final class AppSettings {
         static let replyDrafts = "replyDrafts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
-        static let holdSendLearned = "holdSendLearned"
         static let lastAgent = "lastAgent"
         static let showsCueSteps = "showsCueSteps"
     }
@@ -48,8 +47,6 @@ final class AppSettings {
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
 
-    /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
-    var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
 
     /// 新会话上次选的 Agent（两端的新会话在 Agent 胶囊上一选就记）：新会话默认用它（那台 Mac 上它不能用时退到第一个能用的，`MacAgents.preferred`）。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
@@ -171,7 +168,6 @@ final class AppSettings {
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
-        holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
         showsCueSteps = string(Key.showsCueSteps).map { ($0 as NSString).boolValue } ?? false
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]

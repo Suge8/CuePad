@@ -45,7 +45,7 @@ nonisolated enum Said: Equatable, Sendable {
     var listener: Listener {
         switch self {
         case .cue: .cue
-        case .request(let request): .session(request.target, host: request.hostID, mode: request.mode.known ?? .followUp, card: request.cardID)
+        case .request(let request): .session(request.target, host: request.hostID, mode: request.mode.known ?? .send, card: request.cardID)
         }
     }
 }

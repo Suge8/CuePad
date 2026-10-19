@@ -10,7 +10,7 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   /// 一行系统记录（`PiNotice`：压缩、这一轮被停下或被你拒绝）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
   case system
   /// 扩展投进会话的机器消息（`PiEnvelope`：FireCode 交回子代理结果、审查结论、观察员的提醒……），正文是信封原文；
-  /// 它开始一轮，但不是你说的话（不算提问、不是排队的话）
+  /// 它开始一轮，但不是你说的话（不算提问）
   case machine
   /// 你在 CuePad 里答了会话的提问（`PiAnswer`）：不在会话文件里，由执行作答的那台 Mac 在作答成功时写下（`CueStore.finishDelivery`），
   /// 是"你答了什么"的唯一记录。正文是答案（`PiAnswerValue.label`），`question` 是当时问的；`at` 是答的那一刻，对话按它插进去

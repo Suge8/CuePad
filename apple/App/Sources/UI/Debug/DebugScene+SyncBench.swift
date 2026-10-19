@@ -20,7 +20,7 @@ extension DebugScene {
 /// 打点给 `apple/scripts/sync-bench.py` 统计（跑法与口径见 docs/verify.md「同步测量」）。每个点是类别 `bench` 的一行 `<事件> 键=值…`。
 /// - host：有在线会话的 Mac（会话由脚本的假扩展给）。别的设备对 Cue 说的话一到库里就记 `cue-arrived lag=`（创建到本机库，同一台机器的时钟）。
 ///   Cue 不值班（隔离目录里没有登录的运行时），所以只量到达、不量 Cue 的回复。
-/// - remote：代替开着 Agent 页的手机，拉取节奏也换成手机那档（`DebugHooks.pollsLikePhone`）。等 host 的会话同步过来后，每 `-CuePadSyncBenchEvery` 秒（默认 30）一轮：给 host 的一个在线会话"马上说"一句，
+/// - remote：代替开着 Agent 页的手机，拉取节奏也换成手机那档（`DebugHooks.pollsLikePhone`）。等 host 的会话同步过来后，每 `-CuePadSyncBenchEvery` 秒（默认 30）一轮：对 host 的一个在线会话说一句，
 ///   与手机同一条路（写请求、立即上传），等结果回到本机记 `send total= upload= toMac= back=`（分段同 `AppServices.PingTiming`）；
 ///   对 Cue 说一句（`Workspace.sayToCue` 同一条路）；立即同步一次记 `syncNow took=`。
 enum SyncBench {
@@ -87,7 +87,7 @@ enum SyncBench {
         let started = ContinuousClock.now
         do {
             let request = try await services.store.requestDelivery(
-                "同步测量第 \(round) 句", to: session.target, on: session.hostID, mode: .steer)
+                "同步测量第 \(round) 句", to: session.target, on: session.hostID)
             let written = ContinuousClock.now
             async let done = services.result(of: request.id, within: timeout)
             await services.upload(request.id)

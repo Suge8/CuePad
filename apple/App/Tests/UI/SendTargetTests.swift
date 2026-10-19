@@ -183,19 +183,15 @@ struct SendTargetTests {
         #expect(try await store.card(task.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
     }
 
-    @Test func 会话正忙_先问马上说还是等它做完再说() async throws {
+    /// 会话在跑也不先问：直接写给它所在的 Mac，由那台执行时打断这一轮。
+    @Test func 会话正忙_不先问_直接交给它() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
         let task = try await leaf(in: project, session: "r")
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
 
         workspace.handOff(task)
-        try await eventually("workspace.sendState.busy?.session == r") { workspace.sendState.busy?.session == "r" }
-        #expect(try await store.deliveryRequests().isEmpty)
-
-        workspace.resolveBusySend(.steer)
-        _ = try await eventually(store, { try $0.deliveryRequests().count }) { $0 > 0 }
-        let request = try #require(try await store.deliveryRequests().first)
-        #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
+        let request = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
+        #expect(request.hostID == "mac-b" && request.mode == .known(.send) && request.target.ref == "r")
     }
 
     /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同样的一步，Mac 上"开始"与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。

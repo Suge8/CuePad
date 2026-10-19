@@ -117,7 +117,7 @@ struct HistoryRulesTests {
         try await expectResting(rig, sessionID)
 
         // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
-        #expect(Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID)))
+        Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID))
         try await eventually("本机发话得到回复", timeout: Self.piStep) { try await rig.replies(of: sessionID).last == "ECHO 本机来的话 IMAGES[]" }
         try await eventually("再次闲置退出", timeout: Self.piStep) { rig.bridge.session(sessionID: sessionID) == nil }
         let resting = try await expectResting(rig, sessionID)

@@ -124,49 +124,17 @@ nonisolated enum PiChat {
         [added.flatMap { $0 > 0 ? "+\($0)" : nil }, removed.flatMap { $0 > 0 ? "−\($0)" : nil }].compactMap { $0 }.joined(separator: " ")
     }
 
-    /// 你发出、Agent 还没读到、也不在排队的话（`queued` 之外的）：作为你的气泡接在末尾，写送达情况——直接说的还在路上、
-    /// Agent 当场开始读了而对话还没跟上的，与没能送达的（任何方式都是，在那里重发或移除）。同一句话只出现一处。
+    /// 你发出、Agent 还没读到的话：作为你的气泡接在末尾，写送达情况——还在路上、Agent 已经接过去而对话还没跟上的，
+    /// 与没能送达的（在那里重发或移除）。Agent 读到的那一刻对话里出现这句（`deliveryID`），气泡换成对话里的那条。
     /// 作答、斜杠命令、设置、开新会话、补写对话这些不是你说的话，不算（命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉）。
-    static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> [DeliveryRequest] {
-        unread(deliveries, messages: messages).filter { !isQueued($0, at: moment) }
+    static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
+        let arrived = Set(messages.compactMap(\.deliveryID))
+        return deliveries.filter { $0.mode == .known(.send) && !arrived.contains($0.id) }
     }
 
     /// 回复框空着时的发送中：接在末尾的你的话里还有在路上的（与那个气泡同一个事实）。
     static func sending(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> Bool {
-        outgoing(deliveries, messages: messages, at: moment).contains { Speech.trip($0, at: moment) == .sending }
-    }
-
-    /// 排队的话：Agent 在跑时"等它做完再说""马上说"发出、它还没读到的，按发出先后，在回复框上方一叠（`PiQueueStack`）。
-    /// 事实只有投送请求与对话两处：方式在执行前是你选的，送到后是 Agent 实际怎么收下的（`DeliveryMode`，排进它的队列才是这两种）；
-    /// 它读到的那一刻对话里出现这句（`deliveryID`），就从这一叠移进对话、落在被读到的位置。没能送达的不算（含超时）——它是对话末尾的气泡。
-    static func queued(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> [DeliveryRequest] {
-        unread(deliveries, messages: messages).filter { isQueued($0, at: moment) }
-    }
-
-    private static func isQueued(_ request: DeliveryRequest, at moment: Speech.Moment) -> Bool {
-        guard request.mode == .known(.followUp) || request.mode == .known(.steer) else { return false }
-        return Speech.trip(request, at: moment).failure == nil
-    }
-
-    /// 排队的一句此刻到哪了：还没交到 Agent 手上是发送中（Mac 没领取时还撤得回）；排进它的队列后说什么时候读到——
-    /// 马上说的在这一步（当前的工具调用）做完后读，等它做完再说的在这一轮做完后读。
-    static func queueNote(of request: DeliveryRequest, at moment: Speech.Moment) -> Dotted {
-        guard Speech.trip(request, at: moment) == .delivered else { return "发送中" }
-        return Dotted("排队中", request.mode == .known(.steer) ? "Agent 做完这一步就会读到" : "Agent 做完这一轮就会读到")
-    }
-
-    private static func unread(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
-        let arrived = Set(messages.compactMap(\.deliveryID))
-        return deliveries.filter { request in
-            guard let mode = request.mode.known, [.send, .steer, .followUp].contains(mode) else { return false }
-            return !arrived.contains(request.id)
-        }
-    }
-
-    /// 排队的一句话在一行里的写法：标题与图片数，不露存储格式（排队的话只占一行，图片数代替缩略图）。
-    static func shownText(of request: DeliveryRequest) -> Dotted {
-        let card = CardText(request.content)
-        return Dotted(card.title, card.images.isEmpty ? nil : "\(card.images.count) 张图片")
+        outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment) == .sending }
     }
 
     /// 你在这个会话里说过的最近一句（对话里最后一条你的消息，存储格式，文字与图片）：空回复框按 ↑ 调回它。

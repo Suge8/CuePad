@@ -11,14 +11,11 @@ extension DeliveryStatus {
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
 }
 
-/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。忙不忙以 Mac 执行时的会话为准：
-/// 直接发送遇上会话正在跑一轮，就按 followUp（等它做完再说）送达，不报错——写请求时看到的状态可能已经过时。
-/// 说话的三种（`talk`）在请求上有两层含义：执行前是请求的方式；成功后 Mac 改写成 Agent 实际收下的方式（`DeliveryOutcome.accepted`）——
-/// 当场开始读是 `send`，排进它的队列是 `steer` / `followUp`。没能送达的：执行中失败的仍是请求的方式，收下后才没送到的
-/// （`CueStore.failAcceptedDeliveries`）是收下的方式。
-/// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
+/// 投送请求的发送方式（唯一定义）。读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
-  case send, steer, followUp
+  /// 你说的话（唯一一种）：会话歇着就以它开新一轮；在跑就先打断这一轮，再以它开新一轮（忙不忙以 Mac 执行时的会话为准，
+  /// 写请求时看到的状态可能已经过时）。没有排队：话要么进了对话，要么没送到、留在对话末尾等你重发或移除
+  case send
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
   /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
@@ -37,7 +34,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
   case bind
   /// 斜杠命令：正文是以 / 开头的整行（命令加参数，可接着带上的卡片文字），由 Pi 派发——内置命令（压缩、命名、换模型……）、扩展命令照常执行，
-  /// 提示词模板与 skill 展开成一轮提示词（会话正忙时等它做完再说）。不是"你说的话"：不在对话里挂气泡、不写发送记录（与 config、answer 一样），
+  /// 提示词模板与 skill 展开成一轮提示词（会话在跑时同 `send`，先打断）。不是"你说的话"：不在对话里挂气泡、不写发送记录（与 config、answer 一样），
   /// 带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩、模板展开出的那条用户消息）对话里自然有
   case command
   /// 请 Mac 刷新订阅额度（手机上的额度视图打开、数据陈旧时）：由 Mac 上在线会话里的扩展查一次（`AccountQuota`），新值随同步回来；
@@ -46,10 +43,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
-  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .answer]
-
-  /// 你说的话的几种方式（直接说、马上说、等它做完再说）：没能送达时留着等你重发。
-  public static let talk: [DeliveryMode] = [.send, .steer, .followUp]
+  public static let toSession: Set<DeliveryMode> = [.send, .answer]
 }
 
 /// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
@@ -85,7 +79,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
-  /// 还没被 Mac 领取（仍是 pending）：撤得回、改得了说法。领取后它已交给 Pi，Pi 的扩展接口收不回进了 Pi 队列的话。
+  /// 还没被 Mac 领取（仍是 pending）：撤得回。领取后它已交给 Agent。
   public var isWithdrawable: Bool { status == .known(.pending) }
 
   /// 没能送达的原因；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
@@ -134,14 +128,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、Agent 收下了一句话（`accepted`，带它实际怎么收下的，写回请求的 `mode`）、
-/// 失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
+/// 执行一次的结果（`DeliveryExecutor` 的 handler 给）：成功、失败，或暂时没成——话还没交出去、过一会儿再试不会说两遍的错
 /// （会话正在起、还没连上桥，清单在 App 的执行器里）。暂时没成由 `DeliveryExecutor` 隔 `Speech.retryDelay` 再执行一次，
 /// 再不成就按失败写回；终态只由执行器写这一处。
 public enum DeliveryOutcome: Sendable {
   case succeeded
-  /// 说话类请求送到了：`send` 是 Agent 当场开始读，`steer` / `followUp` 是排进了它的队列
-  case accepted(DeliveryMode)
   case failed(String)
   case transient(String)
 }

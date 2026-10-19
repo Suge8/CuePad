@@ -59,7 +59,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             }
         }
 
-        /// `session` 是收话的会话；开新会话的请求没有。排进 Agent 队列之后怎么说在会话页的排队一叠（`PiChat.queueNote`），不在这里。
+        /// `session` 是收话的会话；开新会话的请求没有。
         static func of(_ request: DeliveryRequest, session: PiSessionState?) -> Transit {
             if session?.state == .known(.ended) { return .waking }
             return request.isWithdrawable ? .sending : .delivering
@@ -68,13 +68,13 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 送到了的请求过一会儿就被执行它的 Mac 清理（排在 Agent 队列里的留到被读到或会话停下，那时会话在忙，这里已让位），"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
+    /// 送到了的请求过一会儿就被执行它的 Mac 清理，"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
     /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil, at moment: Speech.Moment) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
         switch Speech.trip(request, at: moment) {
         case .sending:
-            // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还在排队）
+            // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还没打断它）
             if session.state.isWorking && session.stateSince > request.createdAt { return nil }
             return .inTransit(.of(request, session: session))
         case .delivered:

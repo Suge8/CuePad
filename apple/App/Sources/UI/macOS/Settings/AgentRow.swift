@@ -131,7 +131,7 @@ extension AgentKind {
     var limits: String? {
         let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false, model: nil))
         let names: [(AgentCapabilities, String)] = [
-            (.images, "发图片"), (.steer, "马上说"), (.abort, "停止"), (.model, "换模型"), (.rename, "改名"),
+            (.images, "发图片"), (.abort, "停止"), (.model, "换模型"), (.rename, "改名"),
             (.commands, "用斜杠命令"), (.answer, "作答"), (.end, "结束会话"),
         ]
         let lacking = names.filter { missing.contains($0.0) }.map(\.1)

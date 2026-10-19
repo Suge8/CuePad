@@ -9,6 +9,8 @@ import Foundation
 ///   它的文字就是 Claude Code 这一轮的回答。没有文字就做完的一轮（只调了工具）在 `stop_hook_summary` / `turn_duration` 收尾。
 /// - 你的话：`type: user` 的文字与图片（图片内嵌 base64，存进附件目录）；一轮正在跑时插进去的话不是 user 行，是
 ///   `queued_command` 附件。工具结果、斜杠命令的回显（`<command-name>`、`<local-command-…>`）、`isMeta` 的提醒不算。
+///   这一轮还没做完就来了 user 行的话，是这句（`priority: "now"`，CuePad 发话就是）打断了这一轮：Claude Code 不写中断标记，
+///   这里照停下处理，"已停止"排在这句之前。
 /// - CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）；
 ///   收件箱送来的会被包上"另一个 Claude 会话发来的"英文说明，这里剥掉。终端里直接打的（`origin.kind` 为 `human`）没有投送请求。
 /// - 会话名只认 `/rename`（及 CuePad 的改名）写下的 `custom-title`；自动生成的 `ai-title` 不算，与 Pi 的 `/name` 同一层意思。
@@ -89,19 +91,23 @@ enum ClaudeHistory {
         let peer = line.origin?.kind == "peer"
         guard line.isCompactSummary != true, line.isMeta != true || peer else { return }
         let delivery = peer || line.promptSource == "sdk" ? line.uuid : nil
-        try said(content, peer: peer, entry, deliveryID: delivery, into: &cp, transcript: &transcript)
+        try said(content, peer: peer, entry, deliveryID: delivery, cutsOpenRound: true, into: &cp, transcript: &transcript)
     }
 
-    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。
+    /// 你说的一句。命令回显不是你说的话；中断标记结束这一轮（没有回答，问答不变）。`cutsOpenRound`：这句是 user 行（不是插话的附件），
+    /// 来时这一轮还没做完就是它打断了这一轮（见类型注释），"已停止"用前一行的序号，排在这句之前。
     private static func said(
-        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint,
-        transcript: inout PiHistory.Transcript
+        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, cutsOpenRound: Bool = false,
+        into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript
     ) throws {
         var said = transcript.said()
         try content.said(into: &said, peer: peer)
         let trimmed = said.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix(interruptedMarker) { return cp.interrupted(entry, into: &transcript) }
         guard !commandEchoPrefixes.contains(where: trimmed.hasPrefix) else { return }
+        if cutsOpenRound, cp.round != nil {
+            cp.interrupted(PiHistory.Entry(id: entry.id + "#cut", seq: entry.seq - 1, at: entry.at), into: &transcript)
+        }
         cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
 

@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ draft（正在说的话）/ quota（订阅额度的一次观测）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ quota（查一次订阅额度）
+//   CuePad → 扩展  send（文字+图片，以这句开新一轮，在跑就先打断）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ quota（查一次订阅额度）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -15,8 +15,8 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 32;
-const PROTOCOL_VERSION = 14;
+const EXTENSION_VERSION = 33;
+const PROTOCOL_VERSION = 15;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
  * 见 `reloadWhenIdle` */
@@ -179,7 +179,6 @@ function codexAccount(token: string): string {
 type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
 type Model = NonNullable<ExtensionContext["model"]>;
 type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
-type DeliverAs = "steer" | "followUp";
 /** CuePad 发来的一行命令：字段来自 JSON，类型没有保证，逐处校验后才用 */
 type Command = Record<string, unknown>;
 type DialogMethod = (...args: unknown[]) => unknown;
@@ -196,10 +195,6 @@ function isModelRef(value: unknown): value is { provider: string; id: string } {
 
 function isImages(value: unknown): value is { mimeType: string; data: string }[] {
 	return Array.isArray(value) && value.every((i) => typeof i?.mimeType === "string" && typeof i?.data === "string");
-}
-
-function isDeliverAs(value: unknown): value is DeliverAs {
-	return value === "steer" || value === "followUp";
 }
 
 function reason(error: unknown): string {
@@ -520,8 +515,7 @@ export default function (pi: ExtensionAPI) {
 			...contextInfo(ctx),
 			...commandInfo(pi),
 		};
-		/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领）。
-		 * 进程退出时还在这里的（排在 Pi 队列里、留着的）随进程丢掉，告别里报没送到（`bye.undelivered`） */
+		/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
 		const deliveries: { text: string; id: string }[] = [];
 		/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
 		let asking: (Question & { settle?: (value: unknown) => void; dismiss?: () => void }) | null = null;
@@ -533,11 +527,13 @@ export default function (pi: ExtensionAPI) {
 		/** 压缩开始时的粗状态与计时：压缩完（或失败、取消）回到同一个粗状态时，计时也回到那时的起点——
 		 * 歇着时的手动压缩不是新的一轮，压完还是原来那次"做完了"，CuePad 不因此提示、也不算有新回复。 */
 		let beforeCompaction: { phase: Phase; since: number; busySince: number | null } | null = null;
-		/** 手动压缩期间 Pi 拒收新消息（"Cannot submit a prompt while compaction is in progress"），而扩展的 sendUserMessage
-		 * 不回报错误、话会悄悄丢掉：这期间 CuePad 送来的话先留着，压缩结束再按到达顺序交给 Pi；压完之前会话就关掉（退出、重新载入、
-		 * 换会话）时，告别里报出它们的投送请求 id（`bye.undelivered`），CuePad 记为没送到。自动压缩期间 Pi 照常排队，不经这里。 */
-		let manualCompaction = false;
-		const held: { deliveryId?: string; deliver: () => void }[] = [];
+		/**
+		 * 等着开新一轮的话（CuePad 送来的、会开一轮的命令），按到达先后。发给会话的话只有一条路：歇着就开新一轮，
+		 * 在跑（含压缩、等你确认）就先停下这一轮，等真正歇下（`agent_settled`、压缩结束）再交给 Pi。不用 Pi 的队列：
+		 * followUp 只在一轮正常做完时读出、steer 等在跑的工具做完才读，停止既不清也不读它们，排着的话会一直卡住。
+		 * 一次交一句：等着的还有下一句时，刚开始的这一轮（`agent_start`）照样先停下，每句都是新的一轮。
+		 */
+		const pending: { content: UserContent; expand: boolean }[] = [];
 
 		/**
 		 * 正在说的话（`draft`）：主会话当前这条助手消息到目前为止的正文，给 CuePad 逐字显示；思考与工具参数不算，FireCode 的子代理是别的会话、不经这里。
@@ -765,21 +761,47 @@ export default function (pi: ExtensionAPI) {
 		function handleSend(command: Command, ack: Ack, reject: Reject) {
 			const images = command.images ?? [];
 			const text = command.text ?? "";
-			const deliverAs = command.deliverAs ?? "followUp";
-			if (typeof text !== "string" || !isImages(images) || !isDeliverAs(deliverAs)) return reject("bad_request");
+			if (typeof text !== "string" || !isImages(images)) return reject("bad_request");
 			if (text.length === 0 && images.length === 0) return reject("empty");
 
 			const content: UserContent = images.length === 0
 				? text
 				: [{ type: "text", text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
-			const busy = !ctx.isIdle();
-			const deliveryId = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
-			if (deliveryId) deliveries.push({ text, id: deliveryId });
-			// deliverAs 只在会话正忙时生效；总是带上，避免"检查空闲"与"发送"之间 agent 恰好开始而抛错
-			const deliver = () => pi.sendUserMessage(content, { deliverAs });
-			if (manualCompaction) held.push({ deliveryId, deliver });
-			else deliver();
-			ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
+			if (typeof command.deliveryId === "string") deliveries.push({ text, id: command.deliveryId });
+			startRound(content, false);
+			ack({ ok: true });
+		}
+
+		/** 以这句开新一轮（见 `pending`）。`expand`：斜杠开头的模板与 skill 由 Pi 展开。 */
+		function startRound(content: UserContent, expand: boolean) {
+			if (pending.length === 0 && ctx.isIdle()) return submit(content, expand);
+			pending.push({ content, expand });
+			stopRound();
+		}
+
+		/** 不带 deliverAs：只在歇着时交（见 `pending`），Pi 直接开始这一轮。 */
+		function submit(content: UserContent, expand: boolean) {
+			pi.sendUserMessage(content, expand ? { expandPromptTemplates: true } : undefined);
+		}
+
+		/** 歇下了就交出等着的下一句。下一轮事件循环再看：压缩完成的事件在 Pi 收起压缩标记之前发出。 */
+		function submitPending() {
+			if (pending.length === 0) return;
+			later("等着的话", () => {
+				const next = ctx.isIdle() ? pending.shift() : undefined;
+				if (next) submit(next.content, next.expand);
+			});
+		}
+
+		/**
+		 * 停下这一轮：Pi 的 `ctx.abort()`，与在 Pi 里按 Esc 同一能力（也停手动压缩），只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下。
+		 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响。
+		 */
+		function stopRound() {
+			asking?.dismiss?.();
+			if (ctx.isIdle()) return;
+			tracker.stopped = true;
+			ctx.abort();
 		}
 
 		/**
@@ -799,9 +821,9 @@ export default function (pi: ExtensionAPI) {
 			runInternal("reload-session");
 		}
 
-		/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。会话正忙时按 followUp 排队（Pi 1.2 起不给就抛错）。 */
+		/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。扩展命令在 Pi 里先于"会话正忙"的检查执行，忙时也立即执行。 */
 		function runInternal(action: string) {
-			return later("会话操作", () => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { deliverAs: "followUp", expandPromptTemplates: true }));
+			return later("会话操作", () => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
 		}
 
 		/** 下一轮事件循环再交给 Pi（返回排好的这一次，可撤）。`sendUserMessage` 不返回结果：异步的失败 Pi 报在它自己的界面里；同步抛出的（本扩展实例已被换掉等）
@@ -818,14 +840,13 @@ export default function (pi: ExtensionAPI) {
 
 		/**
 		 * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
-		 * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行）、模板与 skill 展开成这一轮的提示词；
-		 * 不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
+		 * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行，不开轮）、模板与 skill
+		 * 展开成新一轮的提示词，与 `send` 同一规则（`startRound`）；不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
 		 * `ack` 表示已受理：扩展命令的执行结果与报错只出现在 Pi 自己的界面（`ctx.ui`），这里看不到。
 		 */
 		async function handleSlash(command: Command, ack: Ack, reject: Reject) {
 			const text = command.text;
-			const deliverAs = command.deliverAs ?? "followUp";
-			if (typeof text !== "string" || !text.startsWith("/") || !isDeliverAs(deliverAs)) return reject("bad_request");
+			if (typeof text !== "string" || !text.startsWith("/")) return reject("bad_request");
 			const space = text.search(/\s/);
 			const name = text.slice(1, space < 0 ? undefined : space);
 			const args = space < 0 ? "" : text.slice(space + 1).trim();
@@ -834,10 +855,10 @@ export default function (pi: ExtensionAPI) {
 				const error = await runBuiltin(builtin, args);
 				return error ? reject(error) : ack({ ok: true });
 			}
-			if (name === INTERNAL_COMMAND || !pi.getCommands().some((c) => c.name === name)) return reject("unknown_command");
-			// 命令没有投送请求 id，留着的话会话关掉时报不出来：手动压缩期间直接拒收，CuePad 照常显示没发出去
-			if (manualCompaction) return reject("compacting");
-			pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true });
+			const found = name === INTERNAL_COMMAND ? undefined : pi.getCommands().find((c) => c.name === name);
+			if (!found) return reject("unknown_command");
+			if (found.source === "extension") pi.sendUserMessage(text, { expandPromptTemplates: true });
+			else startRound(text, true);
 			ack({ ok: true });
 		}
 
@@ -897,17 +918,9 @@ export default function (pi: ExtensionAPI) {
 			ctx.shutdown();
 		}
 
-		/**
-		 * 停止这一轮：Pi 的 `ctx.abort()`，与用户在 Pi 里按 Esc 同一能力，只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下、等下一句。
-		 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响，
-		 * 它们落定后照常把结果投回来开始新的一轮。
-		 */
+		/** 停止这一轮（`stopRound`）；子代理落定后照常把结果投回来开始新的一轮。 */
 		function handleAbort(ack: Ack) {
-			asking?.dismiss?.();
-			if (!ctx.isIdle()) {
-				tracker.stopped = true;
-				ctx.abort();
-			}
+			stopRound();
 			ack({ ok: true });
 		}
 
@@ -990,12 +1003,8 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		function stop(reason: string) {
-			// 没被读到的话随之没了，报给 CuePad，不让它们在那边一直显示成已送达：总有留着还没交给 Pi 的；
-			// 进程退出时另有已交给 Pi、排在它队列里没被读到的（还没在 message_end 里认领）——Pi 的队列随进程丢掉
-			const kept = held.splice(0).flatMap((h) => h.deliveryId ? [h.deliveryId] : []);
-			const undelivered = reason === "quit" ? deliveries.splice(0).map((d) => d.id) : kept;
 			for (const client of clients) {
-				write(client, { t: "bye", reason, undelivered });
+				write(client, { t: "bye", reason });
 				client.end();
 			}
 			clients.clear();
@@ -1053,11 +1062,9 @@ export default function (pi: ExtensionAPI) {
 			if (!tracker.compacting) return;
 			const resume = beforeCompaction ?? undefined;
 			beforeCompaction = null;
-			manualCompaction = false;
 			tracker.compacting = false;
 			commit(resume);
-			// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
-			for (const { deliver } of held.splice(0)) later("留着的话", deliver);
+			submitPending();
 		}
 
 		const unsubscribe = [
@@ -1104,6 +1111,8 @@ export default function (pi: ExtensionAPI) {
 				tracker.stopped = false;
 				commit();
 				clearDraft();
+				// 还有话等着：这一轮（多半是上一句开的）先停下，让下一句开新一轮
+				if (pending.length > 0) stopRound();
 			}),
 			pi.on("message_update", (event) => {
 				const type = event.assistantMessageEvent.type;
@@ -1126,9 +1135,8 @@ export default function (pi: ExtensionAPI) {
 				updateInfo({ question: null });
 				commit();
 			}),
-			pi.on("session_before_compact", (event) => {
+			pi.on("session_before_compact", () => {
 				beforeCompaction = { phase, since, busySince };
-				manualCompaction = event.reason === "manual";
 				tracker.compacting = true;
 				commit();
 			}),
@@ -1157,6 +1165,7 @@ export default function (pi: ExtensionAPI) {
 				tracker.tools.clear();
 				tracker.settled = tracker.outcome;
 				commit();
+				submitPending();
 			}),
 		];
 
