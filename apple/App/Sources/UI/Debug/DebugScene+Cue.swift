@@ -5,7 +5,6 @@ import SwiftUI
 
 /// 演示库里的 Cue（`-CuePadScene cue`、`cuememory`，配 `-CuePadDemo YES`）：在演示 Mac 上值班，管着圆桌的"乱序"（步骤在 Agent 会话里跑，
 /// 部署那一步发来一张截图、在等你允许推送）与 CuePad 的"导入旧数据"（会话出错）；"README 截图换成 Swift 版"Cue 确认做完了（结果带证据与截图）。
-/// sync-why 会话答完你自己问的问题，Cue 留给你回（会话行"待回复"），与只说"歇着"的 notes 对照。
 /// 对话里有你的话（一句带图）、Cue 的话、折起的动态、一次换新（交接备忘）、一条结果与一条"等你"（正文带一段测试输出）；atlas 会话里有一句 Cue 发的话；
 /// 记忆有钉住的与其他，还有一条忘掉的；上下文用到换新线的七成（`CueContext`）。cuerun（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// `-CuePadCuePresence <answered|thinking|tool|sending|asleep|disabled>`：answered 是"等你"那一条你选了"可以"（回到对话里、带着你的回答），
@@ -65,8 +64,6 @@ extension DebugScene {
             if let importing { try await store.linkCard(importing.id, toSession: "billing") }
             // 截图是 notes 会话做的（歇着）：Cue 值班，侧栏与会话列表里它只说"歇着"
             if let panel { try await store.linkCard(panel.id, toSession: "notes") }
-            // sync-why 答的是你自己在会话里问的：Cue 留给你回，会话行写"待回复"（演示会话没写进库的画面里没有它）
-            _ = try? await store.leaveToYou("sync-why")
             await seedEvidence(store, session: "notes", title: "README 截图（浅色）")
             // Cue 发进 atlas 会话的一句（还在路上）：会话页的气泡上标着 Cue
             _ = try await store.requestDelivery(
@@ -388,7 +385,8 @@ extension DebugScene {
     }
 
     /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
+    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。
+    /// 停着的两个里 faq 是 Cue 留给你回的（"待回复"），README 那个归 Cue 接手（"歇着"），两相对照。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
     /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
     /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
@@ -421,6 +419,7 @@ extension DebugScene {
             let task = try await store.createTask(row.title, in: nil)
             try await store.linkCard(task.id, toSession: row.id)
         }
+        try await store.leaveToYou("cue-claude-short")
     }
 
     /// 会话发来一张截图：卡片与"等你"上的证据。
