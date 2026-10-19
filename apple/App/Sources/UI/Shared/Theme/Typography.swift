@@ -19,10 +19,11 @@ enum Typography {
     static let caption = Font.system(size: 12)
     static let caption2 = Font.system(size: 11)
     /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大两号：对话是 Cue 页与会话页的主角；标题与代码同属这一列。
-    static let readingSize: CGFloat = 16
+    nonisolated static let readingSize: CGFloat = 16
     static let reading = Font.system(size: readingSize)
     static let readingHeading = Font.system(size: 19, weight: .semibold)
-    static let code = Font.system(size: 14).monospaced()
+    nonisolated static let codeSize: CGFloat = 14
+    static let code = Font.system(size: codeSize).monospaced()
     /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。
     static let codeNote = Font.system(size: 12).monospaced()
     /// 回答正文里的行内代码：约是阅读正文的 0.9 倍（等宽字同字号下比中文显得大）。
@@ -30,7 +31,8 @@ enum Typography {
     /// 阅读列的行距：长回答是会话页的主角，行高放到约 1.6 倍。
     static let readingLineSpacing: CGFloat = 7
     /// 醒目的一句（等你确认的问题）。
-    static let title = Font.system(size: 18, weight: .semibold)
+    static let titleSize: CGFloat = 18
+    static let title = Font.system(size: titleSize, weight: .semibold)
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()

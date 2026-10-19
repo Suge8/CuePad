@@ -30,7 +30,8 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
         return nil
     }
 
-    private static func plainInline(_ text: String) -> String {
+    /// 一行里的行内记号（强调、代码、链接）只留显示的字。
+    static func plainInline(_ text: String) -> String {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             .map { String($0.characters) } ?? text
     }
