@@ -203,7 +203,7 @@ struct HistoryTests {
 
 // MARK: - 对话里每句你的话的回答（四家同一规则）
 
-/// 对话里每句你的话，回答是它之后、下一句你的话之前的最后一段助手文字。Codex 把"马上说"（插话）并进同一轮：
+/// 对话里每句你的话，回答是它之后、下一句你的话之前的最后一段助手文字。在 Codex 里插话（`turn/steer`）并进同一轮：
 /// 插话之前最后一段话归原来那句，之后最后一段归插话（取自真 Codex 0.162 会话文件的形状）。
 struct ConversationRuleTests {
     private func codexFile(_ events: [[String: Any]]) throws -> URL {

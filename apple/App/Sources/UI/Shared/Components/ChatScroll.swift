@@ -137,7 +137,7 @@ struct ChatJump: Equatable {
 }
 
 enum ChatLayout {
-    /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
+    /// 对话最新那头与最早那头的留白：最后一行离回复框（含问题卡）至少这么远。
     static let edge: CGFloat = 16
 
     /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。滚动区（`ChatScroll`）与叠在对话区上的空态（`BlankChat`）共用。

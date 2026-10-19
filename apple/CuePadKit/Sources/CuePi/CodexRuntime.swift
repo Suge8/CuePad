@@ -79,6 +79,9 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     /// 一个在线会话在这里的状态（快照在桥上，由 `facts` 推出）。
+    /// 以一句话开新一轮的进展：正在停下这一轮，或这一轮已经结束（被停下或恰好自己做完）、等这句开出新的一轮。
+    private enum Restart { case stopping, stopped }
+
     private final class Tracked {
         let id: PiSession.ID
         let threadID: String
@@ -92,8 +95,8 @@ public final class CodexRuntime: AgentRuntime {
         var lastWords: [String: String] = [:]
         /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
         var lastError: String?
-        /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮；`true` 是期间有一轮结束了
-        var restarting: Bool?
+        /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
+        var restarting: Restart?
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {
@@ -668,7 +671,7 @@ public final class CodexRuntime: AgentRuntime {
     /// 这一轮结束：挂着的钩子收回；CuePad 正以一句话开新一轮时只记下（见 `deliver`），不歇下。
     private func endTurn(_ session: Tracked, failure: String? = nil) {
         release(session)
-        guard session.restarting == nil else { session.restarting = true; return }
+        guard session.restarting == nil else { session.restarting = .stopped; return }
         session.facts.endTurn(failure: failure)
     }
 
@@ -855,17 +858,17 @@ public final class CodexRuntime: AgentRuntime {
     /// `interrupted` 同时到），所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
     /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起，没开成才歇下。
     private func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
-        session.restarting = false
+        session.restarting = .stopping
         defer { session.restarting = nil }
         do {
             try await interrupt(session)
             try await call(session, "turn/start", ["threadId": .string(session.threadID), "clientUserMessageId": .string(clientID), "input": .array(input)])
         } catch {
-            if session.restarting == true { session.facts.endTurn() }
+            if session.restarting == .stopped { session.facts.endTurn() }
             publish(session)
             throw error
         }
-        guard session.restarting == true else { return }
+        guard session.restarting == .stopped else { return }
         startTurn(session, at: .now)
         publish(session)
     }

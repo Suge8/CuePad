@@ -686,8 +686,8 @@ public final class OpenCodeRuntime: AgentRuntime {
 
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
     fileprivate func endSession(_ sessionID: String) async throws {
-        let (connection, tracked) = try live(sessionID)
-        if tracked.facts.running || tracked.facts.compacting { try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt") }
+        let (connection, _) = try live(sessionID)
+        try await interrupt(sessionID, connection)
         guard self.connection === connection, sessions[sessionID]?.online == true else { return }
         sessions[sessionID]?.online = false
         ended[sessionID] = Date()

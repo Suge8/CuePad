@@ -66,17 +66,17 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   /// 发图片
   public static let images = AgentCapabilities(rawValue: 1 << 0)
   /// 停止这一轮
-  public static let abort = AgentCapabilities(rawValue: 1 << 2)
+  public static let abort = AgentCapabilities(rawValue: 1 << 1)
   /// 换模型与思考强度
-  public static let model = AgentCapabilities(rawValue: 1 << 3)
+  public static let model = AgentCapabilities(rawValue: 1 << 2)
   /// 改会话名
-  public static let rename = AgentCapabilities(rawValue: 1 << 4)
+  public static let rename = AgentCapabilities(rawValue: 1 << 3)
   /// 斜杠命令
-  public static let commands = AgentCapabilities(rawValue: 1 << 5)
+  public static let commands = AgentCapabilities(rawValue: 1 << 4)
   /// 回答它弹出的问题与权限确认
-  public static let answer = AgentCapabilities(rawValue: 1 << 6)
+  public static let answer = AgentCapabilities(rawValue: 1 << 5)
   /// 结束会话
-  public static let end = AgentCapabilities(rawValue: 1 << 7)
+  public static let end = AgentCapabilities(rawValue: 1 << 6)
 
   public static let all: AgentCapabilities = [.images, .abort, .model, .rename, .commands, .answer, .end]
 
