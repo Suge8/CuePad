@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 一个 Pi 会话的对话（Agent 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
 /// 顶上与返回钮同排的一块玻璃：会话名，在跑或要你注意时下面一行小字写状态（`PiSessionSubtitle`，歇着时只有会话名）；中间是对话（`SessionChat`，与 Mac 同一个），打开停在最新；
-/// 底部是浮在对话上的回复框，等你确认时问题卡固定在它上方；对话滚到顶栏与回复框的玻璃后面都清楚可见。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
+/// 底部是浮在对话上的回复框，等你确认时问题卡固定在它上方，随下一句发出的批注在它上部（写批注见 `replyNotes`）；对话滚到顶栏与回复框的玻璃后面都清楚可见。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
 struct SessionScreen: View {
@@ -41,7 +41,7 @@ struct SessionScreen: View {
         } reply: {
             if let session {
                 // 在看历史时回复框收成短胶囊，点它展开（不挪正在读的内容）
-                SessionDock(session: session, digest: digest, compact: !follow.atNewest) { follow.sent() }
+                SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
                     .padding(.horizontal, 12).padding(.bottom, Self.barGap)
                     .frame(maxWidth: Self.readingWidth)
                     .animation(Motion.quick, value: session.question)
@@ -98,6 +98,7 @@ struct SessionScreen: View {
             if let digest {
                 if let session {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
+                        .replyNotes(session: session.id, messages: digest.messages)
                 } else {
                     EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                         .padding(.horizontal, 16)
