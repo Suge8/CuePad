@@ -465,7 +465,7 @@ private struct Captioned: Layout {
 /// "等你"：固定在输入框上方，最早的那一条，收得紧。第一句是要你定什么，由代码按 Cue 写的动作短语写出
 /// （`CueAsking.question`），不靠 Cue 的措辞；Cue 的原话默认收起，点"原话"再看（长了在里面滚）。下面是 Cue 点名要你看的图与各看什么
 /// （`CueShots`，没点名的没有图；点开全屏时底栏就是这几个选项，看完当场定）、推荐的答案（第一个选项）作主按钮与其余选项，
-/// 末行是关联的任务、还有几条在等、原话的开关。卡上只能选：别的话在 Cue 页底下的输入框说，Cue 判断是在答这张就照办并撤回它。
+/// 末行是关联的任务与原话的开关（Mac 上连同选项）；还有几条在等由页头与侧栏的"等你 N"说。卡上只能选：别的话在 Cue 页底下的输入框说，Cue 判断是在答这张就照办并撤回它。
 /// 没有关掉：卡片一直挂着，直到你选一项或 Cue 撤回。
 /// 列表与数量只来自 `cueMessagesWaitingForYou()`：回答后等库里那条结束才换下一条，写的时候按钮停用；没写成就报错、按钮恢复，可以再点。
 struct CueWaitingDock: View {
@@ -603,7 +603,7 @@ struct CueWaitingDock: View {
     private func original(_ text: String) -> some View {
         let body = MarkdownText(source: text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
             .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
-        // 辅助功能字号下卡按内容长高、不另开滚动区（卡高过可视区时整页随对话滚）
+        // 辅助功能字号下原话按内容长高、不另开滚动区（卡高过可视区时整张卡在卡里滚，见 `card`）
         return Group {
             if typeSize.isAccessibilitySize {
                 body
