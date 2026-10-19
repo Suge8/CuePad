@@ -43,7 +43,7 @@ public struct CueTools: Sendable {
           say 与接着用上一步会话的 start 等送达结果至多 \(Int(Speech.cueWait)) 秒：已送达、没送到（出错，带原因），或还没结果（之后没送到会作为 [发送失败] 叫醒你）；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
-          done{task,evidence?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence。
+          done{task|session,evidence?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
@@ -155,13 +155,21 @@ public struct CueTools: Sendable {
   }
 
   /// 做完：Cue 按证据确认过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence。已完成的只结束没人再用的会话。
+  /// 给 session 是收掉那个会话（`CueStore.endIdleSession`）。
   private func done(_ args: Args) async throws -> Result {
-    let card = try await task(args.required("task"))
     _ = try await host()  // 停用后不能再做完事
+    if args.string("task") == nil, let ref = args.string("session") {
+      let session = try await session(ref)
+      let ended = try await store.endIdleSession(session.sessionID) != nil
+      return .ok((ended ? "已请会话「\(session.title)」结束" : "会话「\(session.title)」早已结束") + "。（\(session.shortID)）")
+    }
+    let card = try await task(args.required("task"))
     let evidence = card.parentID == nil && card.status != .done ? try Self.evidence(args) : []
     let (report, ends) = try await store.finishTask(card.id, evidence: evidence)
     let ended = ends.isEmpty ? "" : "，已请 \(ends.count) 个会话结束"
-    if card.status == .done { return .ok("「\(card.heading)」（\(card.id.shortID)）早已完成\(ended)。") }
+    if card.status == .done {
+      return .ok("「\(card.heading)」（\(card.id.shortID)）早已完成" + (ends.isEmpty ? "，没有要结束的会话（还在用的、已结束的不动）。" : "\(ended)。"))
+    }
     let delivered = report == nil ? 0 : try await store.deliverables(of: [card.id])[card.id]?.count ?? 0
     return .ok(
       "「\(card.heading)」（\(card.id.shortID)）完成了" + ended

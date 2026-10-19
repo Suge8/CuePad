@@ -427,6 +427,10 @@ public enum CueStoreError: Error, Equatable {
   case invalidModel(String)
   /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
+  /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
+  case sessionInUse(String)
+  /// 会话不能从 CuePad 结束（参数是会话名）。
+  case cannotEnd(String)
   /// 会话换不了模型（参数是会话名）。
   case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
@@ -484,6 +488,8 @@ extension CueStoreError: LocalizedError {
     case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
+    case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
+    case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类，或扩展是旧版）：要收掉就 tell 他在终端里退出"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
     case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）：照记忆视图里待合并的块写"

@@ -429,6 +429,18 @@ extension CueStore {
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
+  /// Cue 收掉一个会话（done 给 session）：与做完一件事同一条规则（`endUnused`），只是不除外哪件事。做不到的抛 `cannotEnd`，
+  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束的不动、返回 nil，否则返回结束请求。
+  public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
+    try write {
+      guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
+      guard state.state != .known(.ended) else { return nil }
+      guard state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
+      guard let end = try endUnused([sessionID], outside: nil, cue: true).first else { throw CueStoreError.sessionInUse(state.title) }
+      return end
+    }
+  }
+
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
@@ -511,19 +523,24 @@ extension CueStore {
     {
       used.insert(continued.sessionID)
     }
-    return try sessions.compactMap { sessionID in
-      guard !used.contains(sessionID), try db.first(Self.usedElsewhere, [sessionID, top.id], { _ in true }) == nil,
-        let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID)), state.canEnd
+    return try endUnused(sessions.filter { !used.contains($0) }, outside: top.id, cue: cue)
+  }
+
+  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`；nil 是哪件事都不除外）、做得到的（`PiSessionState.canEnd`），
+  /// 请它所在的 Mac 结束；已结束的、记录还没到的不动。返回结束请求。必须在写事务内调用。
+  private func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
+    try sessions.compactMap { sessionID in
+      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID), state.canEnd
       else { return nil }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue)
     }
   }
 
-  /// 会话（?1）在这件事（以 ?2 为根）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
+  /// 会话（?1）在这件事（以 ?2 为根；NULL 是哪件事都不除外）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
   private static let usedElsewhere = """
     SELECT 1 WHERE EXISTS (
         SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
-          AND id NOT IN (\(subtree(from: "SELECT ?2"))))
+          AND (?2 IS NULL OR id NOT IN (\(subtree(from: "SELECT ?2")))))
       OR EXISTS (
         SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(sqlList(DeliveryMode.toSession))) AND status IN (\(DeliveryStatus.openSQL)))
     """
