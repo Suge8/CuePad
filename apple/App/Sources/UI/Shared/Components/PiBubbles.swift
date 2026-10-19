@@ -8,7 +8,7 @@ extension AnyTransition {
     /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 
-    /// 同一处先后换两句字（状态的一句、发送中与已送达）：旧的先淡掉、新的随后淡入——长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。
+    /// 同一处先后换两句字（状态的一句、你的话到哪了的记号）：旧的先淡掉、新的随后淡入——长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。
     static let handOff = AnyTransition.asymmetric(
         insertion: .opacity.animation(Motion.quick.delay(Motion.handOff)), removal: .opacity.animation(.easeOut(duration: Motion.handOff)))
 }
@@ -40,7 +40,7 @@ enum BubbleLook: Equatable {
         }
     }
 
-    /// 气泡下那一行（发送中、已送达、没能送达）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
+    /// 没能送达时气泡下那一行（原因与重发）离气泡多远、离右缘多远：Cue 页的旁注对着气泡里的字（`CueBubble.noteInset`）。
     var statusSpacing: CGFloat { self == .session ? 6 : 2 }
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.noteInset }
 
@@ -53,7 +53,7 @@ enum BubbleLook: Equatable {
 }
 
 
-/// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
+/// 你的一句话：右侧气泡（样子见 `BubbleLook`），最宽到所在一栏的 `widthFraction`；到哪了画在气泡左下角外（`BubbleTrip`）。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
 /// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
@@ -78,12 +78,14 @@ struct UserBubble<Menu: View>: View {
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: 6) {
                 if fromCue { CueByline() }
+                // 到哪了的记号挂在最下面那一块（文字气泡，带图时是图）的左边
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
                         text: text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
+                    .tripMark(images.isEmpty ? trip : .arrived, above: look.padding.bottom)
                 }
-                if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
+                if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(trip, above: 0) }
             }
             #if os(iOS)
             .contentShape(.contextMenuPreview, look.shape)
@@ -111,26 +113,21 @@ struct BubbleText: View {
 
     var body: some View {
         let shape = look.shape
-        HStack(alignment: .center, spacing: 8) {
-            if trip == .failed {
-                PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                if let quote { QuoteLine(quote: quote) }
-                Paragraphs(verbatim: text, lineLimit: lineLimit)
-                    .font(Typography.reading).foregroundStyle(palette.ink)
-                    .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
-                    .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
-            }
-                .padding(look.padding)
-                .background(palette.bubble, in: shape)
-                .overlay { edge(shape) }
-                // 在路上：整颗淡一些，还没落进对话；送达那一刻显出实色（下面一行写着发送中，钮上是话在路上）。
-                // 淡到字仍够 4.5:1（浅色 5.4、深色 6.0）：没网时它会停很久，要读得清
-                .opacity(trip == .inTransit ? 0.7 : 1)
+        VStack(alignment: .leading, spacing: 6) {
+            if let quote { QuoteLine(quote: quote) }
+            Paragraphs(verbatim: text, lineLimit: lineLimit)
+                .font(Typography.reading).foregroundStyle(palette.ink)
+                .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
+                .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
         }
-        .animation(Motion.quick, value: highlighted)
-        .animation(Motion.quick, value: trip)
+            .padding(look.padding)
+            .background(palette.bubble, in: shape)
+            .overlay { edge(shape) }
+            // 在路上：整颗淡一些，还没落进对话；送达那一刻显出实色（左下角外转着圈，钮上是话在路上）。
+            // 淡到字仍够 4.5:1（浅色 5.4、深色 6.0）：没网时它会停很久，要读得清
+            .opacity(trip.inTransit ? 0.7 : 1)
+            .animation(Motion.quick, value: highlighted)
+            .animation(Motion.quick, value: trip)
     }
 
     /// 折起着、而且长到可能被截：每个气泡多挂一份量全文高的视图（每个几何读数都是一次布局回调），所以短的话（绝大多数）不挂。
@@ -166,7 +163,7 @@ struct BubbleText: View {
     @ViewBuilder private func edge(_ shape: UnevenRoundedRectangle) -> some View {
         switch trip {
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
-        case .arrived, .inTransit:
+        case .arrived, .sending, .delivered:
             if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
         }
     }
@@ -212,8 +209,53 @@ private struct QuoteLine: View {
 }
 
 
-/// 你的话到哪了：进了对话、还在路上、没能送达。
-enum BubbleTrip { case arrived, inTransit, failed }
+/// 你的话到哪了（气泡自己画出来）：进了对话、在路上（会话这边的说法：发送中、送达中、正在唤醒）、已送达（来回用时）、没能送达。
+/// 记号在气泡左下角外（`TripMark`）：路上转圈带说法、已送达一架小纸飞机（不写字，用时给读屏与 Mac 的悬停说明）、没能送达胭脂叹号；
+/// 只有没能送达在气泡下面多一行原因与重发（`SpeechBubble`）——最常见的已送达不占一行。
+enum BubbleTrip: Hashable {
+    case arrived
+    case sending(String)
+    case delivered(String?)
+    case failed
+
+    var inTransit: Bool { if case .sending = self { true } else { false } }
+}
+
+private extension View {
+    /// 挂在左边、不占排版（右缘离它 8 点，下沿离它的下沿 `above`，对着最后一行字）：状态一变气泡不重排，对话不跳。
+    func tripMark(_ trip: BubbleTrip, above: CGFloat) -> some View {
+        overlay(alignment: .bottomLeading) {
+            TripMark(trip: trip).alignmentGuide(.leading) { $0[.trailing] + 8 }.padding(.bottom, above)
+        }
+    }
+}
+
+private struct TripMark: View {
+    let trip: BubbleTrip
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            switch trip {
+            case .arrived: EmptyView()
+            case .sending(let label):
+                HStack(spacing: 4) { Spinner(.mini); Text(label).fixedSize() }
+                    .accessibilityElement(children: .combine)
+            case .delivered(let roundTrip):
+                let said = Dotted("已送达", roundTrip)
+                Image(.delivered).accessibilityLabel(Text(said))
+                    #if os(macOS)
+                    .help(said.visible)
+                    #endif
+            case .failed: PiStateGlyph.undelivered.accessibilityHidden(false).accessibilityLabel("没能送达")
+            }
+        }
+        .font(Typography.caption).foregroundStyle(palette.ink3)
+        // 与气泡显出实色同一拍换记号（转圈 → 纸飞机），旧的先淡掉
+        .transition(.handOff)
+        .id(trip)
+    }
+}
 
 
 /// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
@@ -269,13 +311,13 @@ struct MessageActions: View {
 
 
 /// 你说出去的一句（会话页末尾还没进对话的话、Cue 页里你的话）：全 App 只此一个，状态只从记录推出（`Speech`）。
-/// 发送中整颗变淡、下面转圈；已送达下面写"已送达"（`showsDelivered` 时）；没能送达写原因，给"重发"与"移除"（长按菜单里也有）。
+/// 到哪了画在气泡上（`BubbleTrip`；已送达只在 `showsDelivered` 时）；没能送达时下面一行写原因，给"重发"与"移除"（长按菜单里也有）。
 /// 到点翻成没能送达靠全 App 一份的此刻（`AppServices.speech`）；超时后回执来了，记录一变就是已送达。
 struct SpeechBubble<Menu: View>: View {
     let said: Said
     /// 重发时撤回了旧的却写不进新的：原文放回这个去处的输入框。
     let box: Binding<ComposerDraft>
-    /// 已送达写不写：会话页每句都写（进了对话就不在这里），Cue 页只写你最后一句（旧的不写，免得满屏）。
+    /// 已送达标不标：会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
     /// 还在路上时的说法（会话：排队中、送达中、正在唤醒，`PiDelivery.Transit`）；nil 是"发送中"。
     var transit: PiDelivery.Transit?
@@ -293,41 +335,35 @@ struct SpeechBubble<Menu: View>: View {
     var body: some View {
         let trip = said.trip(at: services.speech)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
-            UserBubble(stored: said.content, look: look, trip: trip.bubble, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
-            // 与气泡显出实色同一拍换字（发送中 → 已送达，`handOff`）
-            status(trip).font(Typography.caption).padding(.trailing, look.statusInset)
+            UserBubble(stored: said.content, look: look, trip: bubble(trip), highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
+            if case .failed(let failure) = trip { failed(failure).font(Typography.caption).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .transition(look.arrival(reduceMotion: reduceMotion))
     }
 
-    @ViewBuilder private func status(_ trip: Speech.Trip) -> some View {
+    private func bubble(_ trip: Speech.Trip) -> BubbleTrip {
         switch trip {
-        case .sending:
-            NoteLine { Spinner(.mini) } label: { Text(transit?.label ?? "发送中") }
-                .accessibilityElement(children: .combine)
-                .transition(.handOff)
-        case .delivered:
-            if showsDelivered {
-                NoteLine(icon: .delivered) { Text(Dotted("已送达", said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) }
-                    .accessibilityElement(children: .combine)
-                    .transition(.handOff)
-            }
-        case .failed(let failure):
-            HStack(spacing: 10) {
-                Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure).lineLimit(2)
-                Button("移除", role: .destructive, action: remove)
-                    .foregroundStyle(palette.ink2).buttonStyle(.plain)
-                    .frame(minHeight: 44).contentShape(.rect)
-                // 送不到 Mac 时也露出来（停用），看得出能重发
-                Button("重发", icon: .retry, action: resend)
-                    .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
-                    .padding(.horizontal, 10).frame(minHeight: 28)
-                    .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
-                    .frame(minHeight: 44).contentShape(.rect)
-                    .buttonStyle(.plain)
-                    .disabled(!services.reachesPiHost)
-            }
+        case .sending: .sending(transit?.label ?? "发送中")
+        case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
+        case .failed: .failed
+        }
+    }
+
+    private func failed(_ failure: Speech.Failure) -> some View {
+        HStack(spacing: 10) {
+            Text(failure.text(sync: services.syncStatus)).foregroundStyle(palette.failure).lineLimit(2)
+            Button("移除", role: .destructive, action: remove)
+                .foregroundStyle(palette.ink2).buttonStyle(.plain)
+                .frame(minHeight: 44).contentShape(.rect)
+            // 送不到 Mac 时也露出来（停用），看得出能重发
+            Button("重发", icon: .retry, action: resend)
+                .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
+                .padding(.horizontal, 10).frame(minHeight: 28)
+                .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
+                .frame(minHeight: 44).contentShape(.rect)
+                .buttonStyle(.plain)
+                .disabled(!services.reachesPiHost)
         }
     }
 
@@ -335,16 +371,6 @@ struct SpeechBubble<Menu: View>: View {
     private func remove() { workspace.remove(said) }
 }
 
-
-extension Speech.Trip {
-    var bubble: BubbleTrip {
-        switch self {
-        case .sending: .inTransit
-        case .delivered: .arrived
-        case .failed: .failed
-        }
-    }
-}
 
 nonisolated extension Speech.Failure {
     /// 没能送达的原因：Mac 写回的原文；超时的只分本机同步不通与 Mac 一直没收下（只说这句话，不猜 Mac 在不在：那台 Mac 在不在线看它的在线记录）。

@@ -171,9 +171,6 @@ struct CuePage: View {
             .scrollTargetLayout()
             .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
             .animation(Motion.quick, value: cue.presence.progress)
-            // 发出一句时"已送达"从上一句挪到这一句：上一句收起那行字的高与对话上滑走同一条曲线（`ChatScroll.slide`），
-            // 不然下面各格一下顶上去，可见的整段先跳一截再滑
-            .animation(Motion.spatial(Motion.move, reduceMotion: reduceMotion), value: lastYou)
         }
     }
 
@@ -192,8 +189,11 @@ struct CuePage: View {
     /// `speaker`：这一格是谁的气泡（`CueThread.Row.speaker`），不是气泡为 nil。
     static func gap(before speaker: HorizontalEdge?, joined: Bool) -> CGFloat {
         if joined { return CueBubble.joinedGap }
-        return speaker == .trailing ? 32 : 16
+        return speaker == .trailing ? 24 : 16
     }
+
+    /// 隔了一阵写时间的那一格：时间上面空多少、时间与这一格之间空多少（`ChatTimeMarker`；排的与估高的同用这两个）。
+    static let stampAbove: CGFloat = 16, stampBelow: CGFloat = 4
 
     /// 打开与往上翻都铺一屏（`conversation`），按每格至少多高（`floor`）从下往上数，只算数到的那几格。
     private static func paging(_ thread: CueThread) -> ChatPaging {
@@ -216,7 +216,7 @@ struct CuePage: View {
     /// 旁注、经过与分隔至少一行小字（`note`）。只能数多、不能数少（数少了第一帧铺不满）；数得越贴，打开时多排的越少。
     private static func floor(_ row: CueThread.Row, shots: Int, joined: Bool, stamped: Bool, column: CGFloat) -> CGFloat {
         let note: CGFloat = 12, strip: CGFloat = 60
-        let above = stamped ? 28 + note + 10 : gap(before: row.speaker, joined: joined)
+        let above = stamped ? stampAbove + note + stampBelow : gap(before: row.speaker, joined: joined)
         let bubble = CueBubble.padding.top + CueBubble.padding.bottom
         // 气泡里字排开的宽：气泡最宽占阅读栏的那一份，去掉内边距（`BubbleWidth`）
         func width(_ fraction: CGFloat) -> CGFloat { column * fraction - CueBubble.padding.leading - CueBubble.padding.trailing }
@@ -332,7 +332,7 @@ private struct CueRow: View, Equatable {
     let shots: [CueShown]
     let joined: Bool
     let stamp: Date?
-    /// 你最后一句：下面写"已送达"。
+    /// 你最后一句：气泡旁标已送达（`BubbleTrip.delivered`）。
     let delivered: Bool
     let live: CueLiveRound?
     /// 新消息从这一格起：上面一条分隔线，写着有几条。
@@ -357,10 +357,10 @@ private struct CueRow: View, Equatable {
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
 
     var body: some View {
-        if let divider { CueNewMessages(count: divider).padding(.top, 28) }
-        if let stamp { ChatTimeMarker(date: stamp).padding(.top, divider != nil ? 4 : 28) }
+        if let divider { CueNewMessages(count: divider).padding(.top, CuePage.stampAbove) }
+        if let stamp { ChatTimeMarker(date: stamp).padding(.top, divider != nil ? 4 : CuePage.stampAbove) }
         content
-            .padding(.top, stamp != nil || divider != nil ? 10 : CuePage.gap(before: row.speaker, joined: joined))
+            .padding(.top, stamp != nil || divider != nil ? CuePage.stampBelow : CuePage.gap(before: row.speaker, joined: joined))
             .background(alignment: .bottom) {
                 if unread {
                     CueEndProbe { visible in seen[row.id] = visible ? row.date : nil }
