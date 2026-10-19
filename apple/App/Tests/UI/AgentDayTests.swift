@@ -7,7 +7,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// Agent 页上看到的会话，按它一天里的样子写：新会话、做完一轮没看、看过、有草稿；发话后发送中、排队、没能送达（留到看过为止）、
+/// Agent 页上看到的会话，按它一天里的样子写：新会话、做完一轮没看、看过、有草稿；发话后发送中、没能送达（留到看过为止）、
 /// 唤醒已结束的会话；改名与结束会话（手机请 Mac 做，Mac 写回结果）；列表的先后与筛选。行的文字与图形怎么拼不单独测，从这些状态里读。
 struct AgentDayTests {
     let app = TestApp()
@@ -27,9 +27,9 @@ struct AgentDayTests {
     }
 
     @discardableResult
-    private func say(_ text: String, to sessionID: String, mode: DeliveryMode = .send) async throws -> DeliveryRequest {
+    private func say(_ text: String, to sessionID: String) async throws -> DeliveryRequest {
         let state = try await item(sessionID).state
-        return try await store.requestDelivery(text, to: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, mode: mode)
+        return try await store.requestDelivery(text, to: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID)
     }
 
     /// 那台 Mac 的执行器领到请求后按 `outcome` 写回，等到这条请求有结果。
@@ -55,7 +55,7 @@ struct AgentDayTests {
         #expect(try await label("pick") == "等你确认")
     }
 
-    @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话_排队() async throws {
+    @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
         #expect(try await label("atlas") == "新会话")  // 终端里刚开、还没有任何一轮：不是"该你了"
@@ -73,16 +73,16 @@ struct AgentDayTests {
         settings.setReplyDraft(ComposerDraft(text: "  \n"), for: done.state.id)
         #expect(note(done) == nil)
 
-        // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时还在路上的话只是个小标记（排进 Agent 队列后怎么说在会话页）
+        // 发话：当场是"发送中"，会话进入处理中后让位给它自己的状态；它在跑时还在路上的话只是个小标记
         try await say("看看 scheduler", to: "atlas")
         #expect(try await label("atlas") == "发送中")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
         #expect(try await label("atlas") == "思考中")
         try await recorder.update(sessionID: "gamma", state: .tool, title: "gamma")
-        try await say("改完再看看登录回调", to: "gamma", mode: .followUp)
-        let queued = workspace.shown(try await item("gamma"))
-        #expect(queued.label == "运行工具")
-        #expect(queued.note == "你的话发送中")
+        try await say("改完再看看登录回调", to: "gamma")
+        let busy = workspace.shown(try await item("gamma"))
+        #expect(busy.label == "运行工具")
+        #expect(busy.note == "你的话发送中")
     }
 
     #if os(macOS)
@@ -127,7 +127,7 @@ struct AgentDayTests {
         }
 
         let request = try await app.services.rename(try await item("delta").state, to: "  排队调度\n")
-        #expect(request.config == PiConfig(name: "排队调度") && PiChat.outgoing([request], messages: [], at: .always()).isEmpty)  // 不算发给会话的话
+        #expect(request.config == PiConfig(name: "排队调度") && PiChat.outgoing([request], messages: []).isEmpty)  // 不算发给会话的话
         #expect(try await title() == "排队调度")
         #expect(try await item("delta").delivery == nil)
 

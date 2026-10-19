@@ -99,10 +99,10 @@ public enum Speech {
     return request.completedAt ?? deadline(request, at: moment) ?? moment.now
   }
 
-  /// 这些请求里此刻没能送达的话有几句：说的话（`DeliveryMode.talk`）里失败的与超时的（会话行与会话页顶栏的"N 句没送到"）。
+  /// 这些请求里此刻没能送达的话有几句：说的话（`DeliveryMode.send`）里失败的与超时的（会话行与会话页顶栏的"N 句没送到"）。
   public static func undelivered(_ requests: [DeliveryRequest], at moment: Moment) -> Int {
     requests.count { request in
-      guard let mode = request.mode.known, DeliveryMode.talk.contains(mode) else { return false }
+      guard request.mode == .known(.send) else { return false }
       if case .failed = trip(request, at: moment) { return true } else { return false }
     }
   }

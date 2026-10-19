@@ -159,7 +159,7 @@ final class AppServices {
         #endif
     }
 
-    /// 撤回一句说出去的话（排队的话、重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
+    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，没能送达的直接删；
     /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
     func withdraw(_ said: Said) async throws {
         switch said {
@@ -171,12 +171,6 @@ final class AppServices {
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
         Task { await upload(said.id, deleted: true) }
-    }
-
-    /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
-    func promote(_ request: DeliveryRequest) async throws {
-        guard try await store.promoteDelivery(request.id) else { throw SendError.alreadyHanded }
-        Task { await upload(request.id) }
     }
 
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。

@@ -763,7 +763,7 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {
-            return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)", "when": "now"])
+            return call("task", ["action": "say", "task": "修好登录页 转图", "text": "看这张\n\(image)"])
         }
         if sawImage { return say("看到图了") }
         if text.contains("请先查一下") { return .held }

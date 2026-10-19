@@ -20,8 +20,8 @@ import OSLog
 ///   这段时间它仍在线、能收话，这是 Codex 的语义。
 /// - 正在说的话（`PiDraft`）只有托管的会话有：增量只发给订阅了线程的连接（自己起的进程），`CodexRPC` 累积好（回答项说完换成全文）交给桥；
 ///   终端里的会话不订阅，也就没有。
-/// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/steer`（马上说，
-///   插进在跑的这一轮）与 `thread/queue/add`（等它做完再说，空闲时立刻开始），停止是 `turn/interrupt`，换模型与强度是
+/// - 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话是 `turn/start`，在跑就先
+///   `turn/interrupt`（`turn/steer` 要等在跑的工具做完才读到，不是打断），停止是 `turn/interrupt`，换模型与强度是
 ///   `thread/settings/update`，改名是 `thread/name/set`，斜杠命令只有映射得上的几个。常驻服务把 `thread/status/changed`、
 ///   `thread/name/updated`、`thread/closed` 广播给所有连接：钩子漏掉的歇下（出错时没有 `Stop`）与改名靠它们补上。
 ///   常驻服务的控制 socket 在哪由 `codex app-server daemon version` 告诉（服务在跑时才有），不自己拼路径。
@@ -84,8 +84,6 @@ public final class CodexRuntime: AgentRuntime {
         let threadID: String
         let pid: Int32
         var facts = SessionFacts()
-        /// 这一轮的 id（`turn/steer`、`turn/interrupt` 要它）
-        var turnID: String?
         /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
         var reply: Reply?
         /// 父线程歇着时落定、结果还没交给一轮的子代理（线程 id）：有没有交回结果（做完、出错交回；被停下的不交）
@@ -94,6 +92,8 @@ public final class CodexRuntime: AgentRuntime {
         var lastWords: [String: String] = [:]
         /// 这一轮报过的错误原文（`error` 通知），出错歇下时用
         var lastError: String?
+        /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮；`true` 是期间有一轮结束了
+        var restarting: Bool?
         var skills: [(name: String, path: String)] = []
 
         init(id: PiSession.ID, threadID: String, pid: Int32) {
@@ -275,13 +275,12 @@ public final class CodexRuntime: AgentRuntime {
         let threadID = thread["id"]?.string ?? ""
         let id = "\(threadID).\(rpc.pid)"
         if tracked[id] != nil { return id }
-        // 正在跑一轮：停止、插话要这一轮的 id，从最近一轮取（钩子要等下一个事件才带来）
+        // 正在跑一轮：接上时就是工作中（钩子要等下一个事件才来），从这一轮的开始算
         let last = try await Self.lastTurn(threadID, on: rpc)
-        let running = last?["status"]?.string == "inProgress" ? last?["id"]?.string : nil
+        let running = last?["status"]?.string == "inProgress"
         if tracked[id] != nil { return id }
         attach(makeSession(thread, pid: rpc.pid)) { session in
-            session.turnID = running
-            if running != nil { self.startTurn(session, at: Self.startedAt(last)) }
+            if running { self.startTurn(session, at: Self.startedAt(last)) }
         }
         return id
     }
@@ -407,7 +406,6 @@ public final class CodexRuntime: AgentRuntime {
         }
         let agent = input["agent_id"]?.string
         let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input, transcript: agent == nil)
-        if let turn = input["turn_id"]?.string, agent == nil { session.turnID = turn }
         let tool = input["tool_name"]?.string ?? ""
         let now = Date.now
         switch event {
@@ -445,8 +443,7 @@ public final class CodexRuntime: AgentRuntime {
         case "PostCompact":
             session.facts.compacting = false
         case "Stop", "Interrupt":
-            release(session)
-            session.facts.endTurn()
+            endTurn(session)
             refresh(id)
         default:
             break
@@ -570,7 +567,7 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程挡着这一轮的提问回给服务端请求，
-    /// 不挡着的提问把答案当你的下一句话说给它（在跑就插进这一轮）。
+    /// 不挡着的提问把答案当你的下一句话说给它（与发话同一规则）。
     fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
         guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
         guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
@@ -581,7 +578,7 @@ public final class CodexRuntime: AgentRuntime {
             case .text(let written) where question.acceptsText: text = written
             default: throw PiBridgeError.rejected("bad_answer")
             }
-            _ = try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: .steer, to: session)
+            try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             session.facts.standingQuestion = nil
             return publish(session)
         }
@@ -618,11 +615,9 @@ public final class CodexRuntime: AgentRuntime {
             switch params["status"]?["type"]?.string {
             // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（托管与终端实测）
             case "idle" where session.facts.running:
-                release(session)
-                session.facts.endTurn()
+                endTurn(session)
             case "systemError":
-                release(session)
-                session.facts.endTurn(failure: session.lastError ?? "Codex 出错了")
+                endTurn(session, failure: session.lastError ?? "Codex 出错了")
                 if session.lastError == nil { readFailure(session) }
             default: return
             }
@@ -632,18 +627,15 @@ public final class CodexRuntime: AgentRuntime {
             return
         // 以下只有开出这个线程的连接（托管的进程）收得到
         case "turn/started":
-            session.turnID = params["turn"]?["id"]?.string
             session.lastError = nil
             guard !session.facts.running else { return }
             startTurn(session, at: Self.startedAt(params["turn"]))
         case "turn/completed" where params["turn"]?["status"]?.string == "failed":
             // 失败的一轮没有 Stop 钩子，状态停在这里
-            release(session)
-            session.facts.endTurn(failure: session.lastError ?? CodexModel.failure(of: params["turn"]))
+            endTurn(session, failure: session.lastError ?? CodexModel.failure(of: params["turn"]))
         case "turn/completed":
             guard session.facts.running else { return }
-            release(session)
-            session.facts.endTurn()
+            endTurn(session)
         case "serverRequest/resolved":
             // 服务端请求被别处答了或收回了
             guard case .request = session.reply else { return }
@@ -671,6 +663,13 @@ public final class CodexRuntime: AgentRuntime {
             session.facts.failure = CodexModel.failure(of: turn)
             publish(session)
         }
+    }
+
+    /// 这一轮结束：挂着的钩子收回；CuePad 正以一句话开新一轮时只记下（见 `deliver`），不歇下。
+    private func endTurn(_ session: Tracked, failure: String? = nil) {
+        release(session)
+        guard session.restarting == nil else { session.restarting = true; return }
+        session.facts.endTurn(failure: failure)
     }
 
     // MARK: 子代理
@@ -820,7 +819,7 @@ public final class CodexRuntime: AgentRuntime {
     /// 最后一个在跑的子代理落定、父线程歇着：补一轮空输入，这一轮发出就算开始，它做完才歇下。空输入的一轮先把子代理的结果取进来再请求模型；
     /// 带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答"还没收到"。
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
-    /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮与你说的话同时到时并进你那一轮（`start_or_steer_turn`）。
+    /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。补的这一轮在跑时你说话，照常先停下它再开你那一轮（`deliver`）。
     private func wake(_ session: Tracked) {
         let batch = session.facts.inFlight
         guard !session.facts.running, batch == Set(session.unread.keys) else { return }
@@ -836,8 +835,7 @@ public final class CodexRuntime: AgentRuntime {
             startTurn(session, at: .now)
             publish(session)
             do {
-                let started = try await control(session).call("turn/start", ["threadId": .string(session.threadID), "input": []])
-                if let turn = started["turn"]?["id"]?.string { session.turnID = turn }
+                try await control(session).call("turn/start", ["threadId": .string(session.threadID), "input": []])
             } catch {
                 guard tracked[session.id] === session, session.facts.running else { return }
                 session.facts.endTurn(failure: error.localizedDescription)
@@ -848,39 +846,31 @@ public final class CodexRuntime: AgentRuntime {
 
     // MARK: 命令（`CodexLink` 转来）
 
-    fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws -> PiDelivery {
+    fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        return try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), whenBusy: message.whenBusy, to: session)
+        try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
     }
 
-    /// 马上说：插进在跑的这一轮；刚好歇下（没有这一轮了）就排进队列。等它做完再说、空闲时都进队列，空闲时再让队列里的这一条开始：
-    /// 停下一轮之后 Codex 不自动接着跑队列（终端里的界面会自己开始，外面送进来的要说一声）。
-    private func deliver(_ input: [JSONValue], clientID: String, whenBusy: PiQueueMode?, to session: Tracked) async throws -> PiDelivery {
-        let rpc = try await control(session)
-        let busy = session.facts.running
-        let thread = JSONValue.string(session.threadID), items = JSONValue.array(input), client = JSONValue.string(clientID)
-        if busy, whenBusy == .steer, let turn = session.turnID {
-            do {
-                try await rpc.call("turn/steer", ["threadId": thread, "expectedTurnId": .string(turn), "clientUserMessageId": client, "input": items])
-                return .queued(.steer)
-            } catch CodexRPCError.server(-32600, _) {}
-        }
-        let queued: JSONValue
+    /// 以这句开新一轮：在跑就先停下这一轮。`turn/interrupt` 等这一轮真的中止了才回（实测 0.162.1：回应与 `turn/completed` 的
+    /// `interrupted` 同时到），所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
+    /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起，没开成才歇下。
+    private func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
+        session.restarting = false
+        defer { session.restarting = nil }
         do {
-            queued = try await rpc.call("thread/queue/add", ["threadId": thread, "clientUserMessageId": client, "input": items])
-        } catch CodexRPCError.server(_, let message) {
-            throw PiBridgeError.rejected("failed: \(message)")
+            try await interrupt(session)
+            try await call(session, "turn/start", ["threadId": .string(session.threadID), "clientUserMessageId": .string(clientID), "input": .array(input)])
+        } catch {
+            if session.restarting == true { session.facts.endTurn() }
+            publish(session)
+            throw error
         }
-        guard !busy, let submission = queued["queuedSubmission"]?["id"] else { return .queued(.followUp) }
-        do {
-            try await rpc.call("thread/queue/start", ["threadId": thread, "queuedSubmissionId": submission])
-        } catch CodexRPCError.server(-32600, _) {
-            // 队列自己已经把它取走开始了（"not found"），或刚好有一轮开始（"active or pending turn"）：这一条随它走
-        }
-        return .immediate
+        guard session.restarting == true else { return }
+        startTurn(session, at: .now)
+        publish(session)
     }
 
-    fileprivate func command(_ line: String, whenBusy: PiQueueMode?, in id: PiSession.ID) async throws {
+    fileprivate func command(_ line: String, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
@@ -899,13 +889,13 @@ public final class CodexRuntime: AgentRuntime {
             guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
             try await collaborate(name == "plan" ? "plan" : "default", in: session)
             if !argument.isEmpty {
-                _ = try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
+                try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             }
         case _ where name.hasPrefix("skill:"):
             guard let skill = session.skills.first(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
             var input: [JSONValue] = [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]]
             input += CodexRPC.input(text: argument, images: [])
-            _ = try await deliver(input, clientID: CodexHistory.clientID(for: nil), whenBusy: whenBusy, to: session)
+            try await deliver(input, clientID: CodexHistory.clientID(for: nil), to: session)
         default:
             throw PiBridgeError.rejected("unknown_command")
         }
@@ -924,10 +914,23 @@ public final class CodexRuntime: AgentRuntime {
 
     fileprivate func abort(_ id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard session.facts.running else { return }
-        // 在跑的一轮总带着 id（钩子与接上时读到的都有）；没有就是状态坏了，不能当作停下了
-        guard let turn = session.turnID else { throw PiBridgeError.rejected("failed: 不知道正在跑的是哪一轮") }
-        try await call(session, "turn/interrupt", ["threadId": .string(session.threadID), "turnId": .string(turn)])
+        try await interrupt(session)
+    }
+
+    /// 停下 Codex 此刻在跑的那一轮（含压缩那一轮）；歇着什么都不做。在不在跑、是哪一轮只问 Codex（最近一轮），不另记这一轮的 id：
+    /// 钩子推出的忙闲只给界面看，不拿来判断要不要停。
+    private func interrupt(_ session: Tracked) async throws {
+        let thread = JSONValue.string(session.threadID)
+        do {
+            let rpc = try await control(session)
+            let latest = try await Self.lastTurn(session.threadID, on: rpc)
+            guard latest?["status"]?.string == "inProgress", let turn = latest?["id"] else { return }
+            try await rpc.call("turn/interrupt", ["threadId": thread, "turnId": turn])
+        } catch CodexRPCError.server(-32600, _) {
+            // 这一轮在问与停之间自己结束了（"no active turn to interrupt"）：要的就是它不在跑
+        } catch CodexRPCError.server(_, let message) {
+            throw PiBridgeError.rejected("failed: \(message)")
+        }
     }
 
     /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
@@ -983,8 +986,8 @@ private final class CodexLink: SessionLink {
         return runtime
     }
 
-    func send(_ message: PiMessage) async throws -> PiDelivery { try await live().send(message, in: id) }
-    func command(_ line: String, whenBusy: PiQueueMode?) async throws { try await live().command(line, whenBusy: whenBusy, in: id) }
+    func send(_ message: PiMessage) async throws { try await live().send(message, in: id) }
+    func command(_ line: String) async throws { try await live().command(line, in: id) }
     func end() async throws { try live().end(id) }
     func abort() async throws { try await live().abort(id) }
     func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await live().answer(answer, to: promptID, in: id) }

@@ -9,7 +9,7 @@ import Foundation
 /// - 状态来自它的输出：一轮从 `system/init` 起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// - 发话的 `priority`：`next` 在这一轮跑完当前工具后插进去（马上说），`later` 等这一轮做完（等它做完再说）；`now` 会打断在跑的工具，不用。
+/// - 发话与斜杠命令一律 `priority: "now"`：在跑就中止这一轮（连同在跑的工具，原因 `interrupt`），再以这句开新一轮，被中止的那一轮不算歇下；歇着就直接开始。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
@@ -23,8 +23,13 @@ final class ClaudeHostedSession: SessionLink {
     /// 在等的 `can_use_tool`（请求 id 与问题）
     private var permission: (request: String, permission: ClaudePermission)?
     private var commands: Set<String> = []
-    /// 停下这一轮后的 `result` 是被打断的，不算出错
+    /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
+    /// 在跑时发出了话：被它停下的这一轮的 `result` 不算歇下，接着就是它开的新一轮（从这一刻算）
+    private var restart = false
+    /// 发出的话开了一轮、还没等到它的 `system/init`（中间隔着钩子）：Claude Code 还没开始跑，这时收到的中断不起作用（实测 2.1.299）。
+    /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行
+    private var starting: [CheckedContinuation<Void, Never>]?
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     private var contextWindow: Int?
@@ -132,6 +137,12 @@ final class ClaudeHostedSession: SessionLink {
             let raw = (message["errors"]?.array?.compactMap(\.string) ?? []).joined(separator: "\n")
             facts.endTurn(failure: failed ? apiError ?? message["result"]?.string ?? raw : nil)
             apiError = nil
+            started()
+            if restart {
+                restart = false
+                facts.startTurn(at: now)
+                starting = []
+            }
         default:
             return
         }
@@ -149,6 +160,7 @@ final class ClaudeHostedSession: SessionLink {
         switch message["subtype"]?.string {
         case "init":
             beginTurn()
+            started()
             if let model = message["model"]?.string, let id {
                 bridge?.update(id) { session in session.model = self.option(model, current: session.model, in: session.availableModels) }
             }
@@ -203,52 +215,59 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 输出读完了（进程退出）：下桥（没答的请求 `ClaudeStream` 已以会话结束收尾）。
     private func ended() {
+        started()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
     private var busy: Bool { facts.running }
 
-    private func priority(_ mode: PiQueueMode) -> JSONValue { .string(!busy ? "next" : mode == .steer ? "next" : "later") }
+    /// 送进一句话（`priority: "now"`，见类注释）；在跑的这一轮随之被打断。
+    private func say(_ content: JSONValue, uuid: String) throws {
+        if busy, starting == nil { stopping = true; restart = true }
+        try stream.write([
+            "type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null, "session_id": "",
+            "uuid": .string(uuid), "priority": "now",
+        ])
+        began()
+    }
 
     // MARK: SessionLink
 
-    func send(_ message: PiMessage) async throws -> PiDelivery {
+    func send(_ message: PiMessage) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")
         }
-        let mode = message.whenBusy ?? .followUp
-        let delivered: PiDelivery = busy ? .queued(mode) : .immediate
-        try stream.write([
-            "type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: message.text, images: message.images)], "parent_tool_use_id": .null, "session_id": "",
-            "uuid": .string(message.deliveryID ?? UUID().uuidString), "priority": priority(mode),
-        ])
-        began()
+        try say(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID ?? UUID().uuidString)
         // 托管进程自己的钩子不登记（见类注释），首条消息由这里记，与终端会话的 UserPromptSubmit 同一规则
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
         }
-        return delivered
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String, whenBusy: PiQueueMode?) async throws {
+    func command(_ line: String) async throws {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
         guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
-        try stream.write([
-            "type": "user", "message": ["role": "user", "content": .string(line)], "parent_tool_use_id": .null, "session_id": "",
-            "uuid": .string(UUID().uuidString), "priority": priority(whenBusy ?? .followUp),
-        ])
-        began()
+        try say(.string(line), uuid: UUID().uuidString)
     }
 
-    /// 歇着时发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子，这段里再发的话已该排在这一轮后面）。
+    /// 歇着时发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）。在跑时发出的打断这一轮，
+    /// 新的一轮从被打断那一轮的 `result` 之后的 `system/init` 起算。
     private func began() {
+        if !facts.running { starting = [] }
         beginTurn()
         publish(at: .now)
     }
 
+    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
+    private func started() {
+        starting?.forEach { $0.resume() }
+        starting = nil
+    }
+
     func abort() async throws {
+        if starting != nil { await withCheckedContinuation { starting?.append($0) } }
         guard busy else { return }
         stopping = true
         _ = try await stream.request(["subtype": "interrupt"])

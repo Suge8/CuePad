@@ -28,7 +28,7 @@ struct RealCueStartTests {
 
             for line in ["Reply with exactly the word READY.", "Reply with exactly the word AGAIN."] {
                 let log = ChangeLog(bridge)
-                _ = try await bridge.send(PiMessage(text: line), to: id)
+                try await bridge.send(PiMessage(text: line), to: id)
                 try await eventually("这一轮做完歇下", timeout: .seconds(180)) {
                     log.states.contains { $0.hasPendingWork } && bridge.session(id: id)?.state == .settled
                 }

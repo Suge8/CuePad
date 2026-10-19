@@ -218,22 +218,17 @@ final class ClaudeTerminalSession: SessionLink {
 
     // MARK: SessionLink
 
-    func send(_ message: PiMessage) async throws -> PiDelivery {
+    /// 收件箱的 `priority: "now"`：在跑就中止这一轮（与在终端里按 Esc 同一个中止，连同在跑的工具），再以这句开新一轮；歇着就直接开始。
+    func send(_ message: PiMessage) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
-        guard let session = bridge?.session(id: id) else { throw PiBridgeError.sessionEnded }
-        let busy = session.state.isTurnRunning
-        let mode = message.whenBusy ?? .followUp
-        // 收件箱的 now 等在跑的工具做完、在这一轮里插进去（马上说），later 等这一轮做完（等它做完再说）
         var line: [String: JSONValue] = [
-            "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)],
-            "priority": .string(!busy ? "next" : mode == .steer ? "now" : "later"),
+            "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "now",
         ]
         if let delivery = message.deliveryID { line["uuid"] = .string(delivery) }
         try await post(.object(line))
-        return busy ? .queued(mode) : .immediate
     }
 
-    func command(_ line: String, whenBusy: PiQueueMode?) async throws { throw PiBridgeError.unsupported }
+    func command(_ line: String) async throws { throw PiBridgeError.unsupported }
     func abort() async throws { throw PiBridgeError.unsupported }
 
     func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {

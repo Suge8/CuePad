@@ -86,16 +86,7 @@ private struct WindowPanels: View {
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
             .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
-            .dialog(
-                "Agent 正在工作", isPresented: busy,
-                message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
-                buttons: [DeliveryMode.steer, .followUp].map { mode in DialogButton(title: mode.label) { workspace.resolveBusySend(mode) } }
-            )
             .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
-    }
-
-    private var busy: Binding<Bool> {
-        Binding(get: { workspace.sendState.busy != nil }, set: { if !$0 { workspace.sendState.busy = nil } })
     }
 }
 

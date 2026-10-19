@@ -431,6 +431,8 @@ public enum CueStoreError: Error, Equatable {
   case cannotStop(String)
   /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
   case sessionInUse(String)
+  /// 会话正在跑他发起的一轮，Cue 说话会打断它（参数是会话名）。
+  case userTurn(String)
   /// 会话不能从 CuePad 结束（参数是会话名）。
   case cannotEnd(String)
   /// 会话没停着，没有可留给他回的停下（参数是会话名）。
@@ -498,6 +500,7 @@ extension CueStoreError: LocalizedError {
     case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
+    case .userTurn(let title): "会话「\(title)」正在跑他发起的一轮，现在说会打断它：没说出去。等它歇下（会叫醒你）再说"
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
     case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类，或扩展是旧版）：要收掉就 tell 他在终端里退出"
     case .notStopped(let title): "会话「\(title)」没停着（在跑、出错或已结束）：留给他回只用在它歇着或在等回答时"

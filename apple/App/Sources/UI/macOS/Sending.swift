@@ -4,27 +4,18 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上交给 Agent 的是任务的正文（"开始"，`Workspace.handOff`）。
+/// 交给哪个 Agent 会话（会话在跑时发出就打断这一轮）。Mac 上交给 Agent 的是任务的正文（"开始"，`Workspace.handOff`）。
 /// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
     var session: String
-    var mode: DeliveryMode = .send
     /// 会话记录所在的 Mac（`CueStore.handOffPlan` 定下的）；nil 为本机。会话不在线时请那台 Mac 唤醒它。
     var host: String?
 }
 
-/// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
+/// 发给 Agent 会话的状态与规则：在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
 /// 发到哪只有一条规则（`CueStore.handOffPlan`，Mac 上经 `Workspace.handOff`）。不碰界面提示：成败由调用方（`Workspace.send`）说。
 @Observable
 final class SendState {
-    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
-    struct Busy {
-        var text: String
-        var session: String
-        var host: String?
-        var card: UUID?
-    }
-
     /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；不在线的会话（已结束的，或托管着、进程歇着的）：
     /// 发送时由它所在那台 Mac（`host`）的执行器在后台唤醒。
     enum Route {
@@ -33,7 +24,6 @@ final class SendState {
         case ended(host: String?)
     }
 
-    var busy: Busy?
     /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由 `Workspace.follow` 调用 `refreshSessionProjects` 重算。
     private(set) var projects: [String: UUID] = [:]
@@ -84,9 +74,9 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 交出后的提示：写出了、还没送达（到哪了看任务那一行），"已交给 Agent 会话「…」"，已结束的补一句它会先被唤醒，忙时的说法也写上。
+    /// 交出后的提示：写出了、还没送达（到哪了看任务那一行），"已交给 Agent 会话「…」"，已结束的补一句它会先被唤醒。
     func handed(_ target: AgentTarget) -> Dotted {
-        let note = isEnded(target) ? "唤醒后送达" : target.mode == .steer || target.mode == .followUp ? target.mode.label : nil
+        let note = isEnded(target) ? "唤醒后送达" : nil
         return Dotted("已交给 Agent 会话「\(sessionName(target.session))」", note)
     }
 
@@ -95,29 +85,14 @@ final class SendState {
         services.pi.session(sessionID: sessionID)
     }
 
-    /// 发给 Agent 写到哪（存储格式正文，收不了图片的会话去掉图片）。直接发送而会话正忙时不写，记下这次发送（`busy`）等用户选马上说
-    /// 还是等它做完再说，返回 nil；做不到马上说的会话不问，直接等它做完再说。本机在线的看桥上的状态，别的 Mac 上的看同步记录；
+    /// 发给 Agent 写到哪（存储格式正文，收不了图片的会话去掉图片）。本机在线的写给本机，别的 Mac 上的写给那台；
     /// 不在线的（已结束，或托管着、进程歇着）写给它所在的 Mac，由那台的执行器在后台唤醒后送达。
-    func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener)? {
+    func destination(of stored: String, to target: AgentTarget, card: UUID?) -> (content: String, listener: Listener) {
         // 收不了图片的会话只发文字（`AgentCapabilities.images`）
         let stored = capabilities(of: target.session).contains(.images) ? stored : CueFormat.plainText(stored)
-        let route = route(of: target.session, host: target.host)
-        let busy = switch route {
-        case .local(let live): live.state.isTurnRunning
-        case .remote(let session): session.state.known?.isTurnRunning == true
-        case .ended: false
-        }
-        if target.mode == .send, busy {
-            guard capabilities(of: target.session).contains(.steer) else {
-                return destination(of: stored, to: AgentTarget(session: target.session, mode: .followUp, host: target.host), card: card)
-            }
-            self.busy = Busy(text: stored, session: target.session, host: target.host, card: card)
-            return nil
-        }
-        let listener: Listener = switch route {
-        case .local(let live): .session(live.sendTarget, host: services.hostID, mode: target.mode, card: card)
-        case .remote(let session): .session(session, mode: target.mode, card: card)
-        // 会话已结束，没有正在跑的一轮："马上说""等它做完再说"都不适用
+        let listener: Listener = switch route(of: target.session, host: target.host) {
+        case .local(let live): .session(live.sendTarget, host: services.hostID, mode: .send, card: card)
+        case .remote(let session): .session(session, mode: .send, card: card)
         case .ended(let host):
             .session(
                 SendTarget(kind: .piSession, name: sessionName(target.session), ref: target.session), host: host ?? services.hostID, mode: .send,
@@ -126,7 +101,7 @@ final class SendState {
         return (stored, listener)
     }
 
-    /// 这个会话从 CuePad 能做什么（`AgentCapabilities`）：本机在线的看桥上的，别的 Mac 上的看同步记录；已结束的发话时会被唤醒、不会正忙。
+    /// 这个会话从 CuePad 能做什么（`AgentCapabilities`）：本机在线的看桥上的，别的 Mac 上的看同步记录；已结束的发话时会被唤醒。
     private func capabilities(of sessionID: String) -> AgentCapabilities {
         switch route(of: sessionID) {
         case .local(let live): live.capabilities
@@ -138,7 +113,7 @@ final class SendState {
 
 extension Workspace {
     /// 开始：把叶子任务的第一句（`CueStore.opening`，与 Cue 的开工同一个函数）发给 Agent，交到哪只由 `CueStore.handOffPlan` 定：
-    /// 接着用上一步的会话就经本机桥直接发，会话正忙时转为询问；要开新会话就开以任务命名的、开好后任务绑上它；
+    /// 接着用上一步的会话就发给它（在跑就打断这一轮）；要开新会话就开以任务命名的、开好后任务绑上它；
     /// 哪台 Mac 都没绑文件夹时就地弹选文件夹，取消就不开。正文发出后留在任务上。
     func handOff(_ leaf: Card) {
         let id = leaf.id
@@ -178,19 +153,11 @@ extension Workspace {
         }
     }
 
-    /// 发给 Agent（存储格式正文）：经 `speak` 写出就提示，不等送达（到哪了看任务那一行与会话页）；会话正忙时转为询问马上说还是等它做完再说。
-    /// 返回是否已写出。
+    /// 发给 Agent（存储格式正文）：经 `speak` 写出就提示，不等送达（到哪了看任务那一行与会话页）。返回写库与上传的那个任务（测试等它）。
     @discardableResult
-    func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Bool {
-        guard let (content, listener) = sendState.destination(of: stored, to: target, card: card) else { return false }
-        speak(content, to: listener, saying: sendState.handed(target))
-        return true
-    }
-
-    func resolveBusySend(_ mode: DeliveryMode) {
-        guard let pending = sendState.busy else { return }
-        sendState.busy = nil
-        send(pending.text, to: AgentTarget(session: pending.session, mode: mode, host: pending.host), card: pending.card)
+    func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Task<Void, Never> {
+        let (content, listener) = sendState.destination(of: stored, to: target, card: card)
+        return speak(content, to: listener, saying: sendState.handed(target))
     }
 }
 

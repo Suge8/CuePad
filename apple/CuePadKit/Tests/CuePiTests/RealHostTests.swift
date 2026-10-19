@@ -55,7 +55,7 @@ struct RealHostTests {
         let resumed = try await resume(host, file, in: pi, on: bridge)
 
         #expect(resumed.sessionID == sessionID && resumed.hosted)
-        _ = try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
+        try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
         try await eventually("后台进程回答了") { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
@@ -73,7 +73,7 @@ struct RealHostTests {
         let resumed = try await resume(host, file, in: pi, on: bridge)
         let seen = pi.cwd.appending(path: "hosted-env.txt")
 
-        _ = try await bridge.send(PiMessage(text: "[[tool:printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)']] 看环境"), to: resumed.id)
+        try await bridge.send(PiMessage(text: "[[tool:printf '%s' \"${CUEPAD_HOSTED-unset}\" > '\(seen.path)']] 看环境"), to: resumed.id)
         try await eventually("子进程写下了它看到的") { (try? String(contentsOf: seen, encoding: .utf8)) != nil }
         #expect(try String(contentsOf: seen, encoding: .utf8) == "unset")
 
@@ -97,7 +97,7 @@ struct RealHostTests {
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
         if !prompt.isEmpty {
-            _ = try await bridge.send(PiMessage(text: prompt), to: resumed.id)
+            try await bridge.send(PiMessage(text: prompt), to: resumed.id)
             try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
         }
         let log = ChangeLog(bridge)
@@ -121,7 +121,7 @@ struct RealHostTests {
         let opened = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-1", name: nil, model: nil, thinking: nil)))
 
         #expect(opened.launchToken == "tok-1" && opened.hosted)
-        _ = try await bridge.send(PiMessage(text: "开场的话"), to: opened.id)
+        try await bridge.send(PiMessage(text: "开场的话"), to: opened.id)
         try await eventually("回答了开场的话") {
             recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话 IMAGES[]"
         }
@@ -191,7 +191,7 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
-        _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let log = ChangeLog(bridge)
@@ -225,7 +225,7 @@ struct RealHostTests {
         host.start()
         defer { stopHostedProcesses(bridge) }
         let resumed = try await resume(host, file, in: pi, on: bridge)
-        _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
@@ -252,7 +252,7 @@ struct RealHostTests {
         host?.start()
         let openedID = try #require(try await host?.open(in: pi.cwd, launchToken: "tok-outlive", name: nil, model: nil, thinking: nil))
         let opened = try #require(first.session(id: openedID))
-        _ = try await first.send(PiMessage(text: "[[slow]] 跑到一半 CuePad 退出"), to: opened.id)
+        try await first.send(PiMessage(text: "[[slow]] 跑到一半 CuePad 退出"), to: opened.id)
         try await eventually("后台在忙") { busy(first.sessions.first { $0.id == opened.id }?.state) }
 
         host = nil
@@ -309,7 +309,7 @@ struct RealHostTests {
             target = try await resume(host, file, in: pi, on: bridge)
         }
         #expect(target.sessionID == sessionID && target.state != .incompatible)
-        _ = try await bridge.send(PiMessage(text: "换上新扩展之后"), to: target.id)
+        try await bridge.send(PiMessage(text: "换上新扩展之后"), to: target.id)
         try await eventually("话送达、有回答") { replies(in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
     }
 

@@ -30,7 +30,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
-    case send, save, checked, stop, endSession, handOff, delivered, steer, queued, retry, toLatest, fetching, compact, renew
+    case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     case declined, cannotSend, mac, yourAnswer, above, floated, earlier
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
@@ -136,8 +136,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .endSession: .ink("ring.stop")
         case .handOff: .ink("plane")
         case .delivered: .ink("plane.done")
-        case .steer: .ink("bolt")
-        case .queued: .ink("clock")
         case .retry: .ink("reload")
         case .toLatest: .ink("arrow.down")
         case .fetching: .ink("ring.down")

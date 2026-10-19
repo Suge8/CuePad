@@ -93,18 +93,9 @@ public final class PiBridge {
 
         var session: PiSession? { id.flatMap { bridge?.session(id: $0) } }
 
-        func send(_ message: PiMessage) async throws -> PiDelivery {
-            let ack = try await request { try PiWire.sendCommand(id: $0, message) }
-            switch ack.delivered {
-            case "steer": return .queued(.steer)
-            case "followUp": return .queued(.followUp)
-            default: return .immediate
-            }
-        }
+        func send(_ message: PiMessage) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
 
-        func command(_ line: String, whenBusy: PiQueueMode?) async throws {
-            _ = try await request { try PiWire.slashCommand(id: $0, line: line, whenBusy: whenBusy) }
-        }
+        func command(_ line: String) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
         func reload() async throws { _ = try await request { try PiWire.reloadCommand(id: $0) } }
 
@@ -201,19 +192,16 @@ public final class PiBridge {
 
     // MARK: 命令
 
-    /// 发消息（文字 + 图片）。返回会话受理时的投递方式；受理只表示已收下，不代表模型成功。
-    @discardableResult
-    public func send(_ message: PiMessage, to id: PiSession.ID) async throws -> PiDelivery {
-        var needs: AgentCapabilities = message.images.isEmpty ? [] : .images
-        if message.whenBusy == .steer { needs.insert(.steer) }
-        return try await control(id, needs: needs).send(message)
+    /// 发消息（文字 + 图片），以这句开新一轮：会话歇着就直接开始，在跑就先打断这一轮。受理即返回，不代表模型成功。
+    public func send(_ message: PiMessage, to id: PiSession.ID) async throws {
+        try await control(id, needs: message.images.isEmpty ? [] : .images).send(message)
     }
 
-    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发（模板与 skill 展开成这一轮的提示词，
-    /// 会话正忙时按 `whenBusy` 入队，缺省等它做完再说）。受理只表示已收下，命令自己的输出只出现在 Agent 的界面里；
+    /// 执行一条斜杠命令（整行，以 / 开头）：Pi 的内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发；会开一轮的
+    /// （模板与 skill 展开成这一轮的提示词）与 `send` 同一规则，在跑就先打断。受理只表示已收下，命令自己的输出只出现在 Agent 的界面里；
     /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
-    public func command(_ line: String, whenBusy: PiQueueMode? = nil, in id: PiSession.ID) async throws {
-        try await control(id, needs: .commands).command(line, whenBusy: whenBusy)
+    public func command(_ line: String, in id: PiSession.ID) async throws {
+        try await control(id, needs: .commands).command(line)
     }
 
     /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
@@ -505,7 +493,7 @@ public final class PiBridge {
             link.exitWatcher?.cancel()
         }
         if let id = link.id {
-            detach(id, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected)
+            detach(id, reason: link.bye.map { .closed(reason: $0.reason) } ?? .disconnected)
         }
         // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），
         // 之后不会再有事件，所以收尾时文件还在就当场连一次；还是旧文件（扩展还没删）时连不上，新文件的事件随后会到

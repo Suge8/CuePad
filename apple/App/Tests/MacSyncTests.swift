@@ -216,29 +216,6 @@ struct MacSyncTests {
         #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
     }
 
-    /// 会话关掉前没被读到的话（压缩时留着的、退出时还排在 Pi 队列里的）扩展在告别里报出：这台 Mac 已经写成"送到了"的那条改记为没送到，
-    /// 走"没能送达 + 重发"那条路（列表行与会话页的没送到计数里有它）；别的会话、别的请求不动。
-    @Test func 告别里报没送到的话_记为没能送达() async throws {
-        let store = services.store
-        try await services.consumePiChanges(changes([.appeared(session("s1"))]))
-        let target = SendTarget(kind: .piSession, name: "s1", ref: "s1")
-        let lost = try await store.requestDelivery("压缩时说的话", to: target, on: TestApp.hostID, mode: .send)
-        let kept = try await store.requestDelivery("早先说的话", to: target, on: TestApp.hostID, mode: .send)
-        let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, onIssue: { _ in }) { _ in .succeeded }
-        try await executor.start()
-        for id in [lost.id, kept.id] {
-            _ = try await eventually(store, { try $0.deliveryRequest(id)?.isOpen }) { $0 == false }
-        }
-        await executor.stop()
-
-        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
-
-        let failed = try #require(try await store.deliveryRequest(lost.id))
-        #expect(failed.status == .known(.failed) && failed.failure != nil)
-        #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
-        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered(at: .always()) == 1)
-    }
-
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")
         try await services.consumePiChanges(changes([.appeared(named)]))
@@ -314,16 +291,16 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .steer)
+            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
         // 带上请求 id：扩展写进会话文件里那条消息，对话据此把请求气泡换成它
-        #expect(ext.messages == [PiMessage(text: "做这件事", whenBusy: .steer, deliveryID: request.id.uuidString)])
+        #expect(ext.messages == [PiMessage(text: "做这件事", deliveryID: request.id.uuidString)])
         #expect(done.handledBy == TestApp.hostID)
     }
 
-    /// 斜杠命令走桥的命令通道（由 Pi 展开执行，不是当文字发出）；忙时按"等它做完再说"排队，和发出去的话一样记发送记录。
+    /// 斜杠命令走桥的命令通道（由 Pi 展开执行，不是当文字发出），不记发送记录。
     @Test func 手机的斜杠命令请求交给桥按命令执行() async throws {
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
         try await services.executor.start()
@@ -335,7 +312,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         let sent = try #require(ext.commands.last?.json)
-        #expect(ext.received == ["command"] && sent["text"] as? String == "/greet world" && sent["deliverAs"] as? String == "followUp")
+        #expect(ext.received == ["command"] && sent["text"] as? String == "/greet world")
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)  // 发送记录只记内容的投送，命令不记
     }
 

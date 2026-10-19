@@ -269,7 +269,7 @@ extension CueStore {
   }
 
   /// 开工：把叶子（没有步骤的任务）的正文（标题连同下面的话）作为第一句交到 `handOffPlan` 定下的地方（界面的"开始"与 Cue 的 start
-  /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时等它做完再说，开新会话时它是第一句。正文发出后留在任务上。
+  /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时是它的下一句（规则同 `speak`），开新会话时它是第一句。正文发出后留在任务上。
   /// 接着用上一步的会话时，话送到才绑上（同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
   /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
   /// `agent` 给了就只接着用这一家的会话；`agent`、`model`（这家的写法，`AgentKind.modelKey`）与 `thinking` 只用于开新会话，
@@ -285,7 +285,7 @@ extension CueStore {
     switch plan.destination {
     case .session(let sessionID, _, _):
       if try !sendingLeaves([plan.leaf]).isEmpty { throw CueStoreError.sending(card.heading) }
-      return try write { try say(content, to: try sessionTarget(sessionID, name: card.heading), mode: .followUp, card: card.id, host: host, cue: cue) }
+      return try write { try say(content, to: try sessionTarget(sessionID, name: card.heading), card: card.id, host: host, cue: cue) }
     case .launch(let project, let host):
       guard try launchingLeaves([plan.leaf]).isEmpty else { throw CueStoreError.launching(card.heading) }
       let kind = try launchAgent(agent, on: host)
@@ -338,12 +338,12 @@ extension CueStore {
 
   /// 对会话说一句（界面的回复框与 Cue 的 say 共用这一条）：
   /// 1. 会话在等 CuePad 能代答的提问（`PiSessionState.answerableQuestion`）时，这句就是答案（`answerValue`）；答不上抛 `invalidAnswer`，什么都不写。
-  /// 2. 否则按 `mode` 发出：`send` 直接发送、`followUp` 等它做完再说、`steer` 马上说（规则见 `say`）。
+  /// 2. 否则发出（规则见 `say`）。
   /// 带 `config`（模型、思考强度）时先请会话换上（与界面换模型同一种请求），两条按先后执行；换不了模型抛 `cannotChangeModel`，什么都不写。
   /// 会话已结束也照说：执行它的 Mac 先恢复它。说话不改任务的状态：已完成的事收到话仍是完成。`card` 是这句带着的卡，
   /// `name` 是会话记录还没到时对它的称呼，`host` 是记录还没到时由哪台 Mac 执行。
   public func speak(
-    _ content: String, to sessionID: String, name: String = "", mode: DeliveryMode = .send, card: UUID? = nil, config: PiConfig? = nil,
+    _ content: String, to sessionID: String, name: String = "", card: UUID? = nil, config: PiConfig? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
     try write {
@@ -357,7 +357,7 @@ extension CueStore {
       if let answer {
         return try insertDelivery(answer.stored, to: session.target, on: session.host(or: host), mode: .answer, card: card, cue: cue)
       }
-      return try say(content, to: session, mode: mode, card: card, host: host, cue: cue)
+      return try say(content, to: session, card: card, host: host, cue: cue)
     }
   }
 
@@ -380,18 +380,13 @@ extension CueStore {
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  /// 交给会话一句话：方式只按意图与这家做得到的写（`AgentCapabilities.steer`），会话忙不忙由 Mac 执行时定——
-  /// `steer` 马上说（会话歇着时就是直接说；做不到马上说的写等它做完再说），`followUp` 等它做完再说（歇着时也是直接说），`send` 直接发送。
-  /// Cue 说的话在用户发起的那一轮里（`inUserTurn`）不插嘴，一律等这一轮做完再说。
+  /// 交给会话一句话（`DeliveryMode.send`）：会话在跑这一轮时 Mac 执行时先打断它，以这句开新一轮；忙不忙由 Mac 执行时定。
+  /// Cue 不打断他发起的那一轮（`inUserTurn`）：抛 `userTurn`，什么都不写，它歇下时 Cue 被叫醒再说。
   /// 收不了图片的只发文字（`AgentCapabilities.images`）。必须在写事务内调用。
-  private func say(
-    _ content: String, to session: SessionTarget, mode: DeliveryMode, card: UUID?, host: String, cue: Bool
-  ) throws -> DeliveryRequest {
-    // 记录还没到时 Cue 不知道做不做得到马上说，按做不到写；界面只在做得到时给出马上说，照你选的写
-    let canSteer = session.state.map { $0.capabilities.contains(.steer) } ?? !cue
-    let mode = try mode == .steer && !(canSteer && !(cue && inUserTurn(session.target.ref))) ? .followUp : mode
+  private func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
+    if cue, try inUserTurn(session.target.ref) { throw CueStoreError.userTurn(session.target.name) }
     let content = session.state?.capabilities.contains(.images) == false ? CueFormat.plainText(content) : content
-    return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: mode, card: card, cue: cue)
+    return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
   }
 
   /// 会话正在跑的这一轮是他发起的（`turnOpener`）。
@@ -434,7 +429,7 @@ extension CueStore {
     return Set(try db.query(
       """
       SELECT cardID FROM deliveryRequests
-      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode IN (\(sqlList(DeliveryMode.talk))) AND status IN (\(DeliveryStatus.openSQL))
+      WHERE cardID IN (SELECT value FROM json_each(?)) AND mode = '\(DeliveryMode.send.rawValue)' AND status IN (\(DeliveryStatus.openSQL))
       """, [Self.idList(leaves)]) { $0.uuid(0) })
   }
 

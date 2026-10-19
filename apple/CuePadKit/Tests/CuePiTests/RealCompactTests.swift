@@ -46,7 +46,8 @@ struct RealCompactTests {
         }
     }
 
-    @Test func 手动压缩先报在压缩_做完回到原来的状态与计时_期间说的话压完再送进去() async throws {
+    /// 手动压缩期间说话与别的时候一样：先停下压缩（回到压缩前的歇下与计时，没压成），再以这句开新一轮。
+    @Test func 手动压缩期间说话_停下压缩_以这句开新一轮() async throws {
         try await withRig { pi, bridge, s in
             try await reply(pi, bridge, "第一轮 [[slow-compact]]")
             try await reply(pi, bridge, "第二轮")
@@ -58,43 +59,19 @@ struct RealCompactTests {
             let compacting = try #require(bridge.sessions.first)
             #expect(compacting.busySince != nil && compacting.stateSince > settled.stateSince)
             try await bridge.send(PiMessage(text: "压缩时说的话"), to: s.id)
-            let releasing = releaseWhileCompacting(pi, bridge)
-            defer { releasing.cancel() }
 
-            try await eventually("压完") { try self.compactions(in: s) == 1 }
-            try await eventually("压完的话送进去、答完") {
+            try await eventually("这句开的一轮答完") {
                 (try? PiHistory.index(file: #require(s.sessionFile), from: nil).checkpoint.recap.lastReply) == "ECHO 压缩时说的话 IMAGES[]"
             }
             try await eventually("那一轮的状态都到了桥上") { log.states.last == .settled && log.states.count >= 4 }
+            #expect(try compactions(in: s) == 0, "压缩被停下")
             let states = log.states
             let back = try #require(states.firstIndex(of: .compacting).map { states[($0 + 1)...] }?.first)
-            #expect(back == .settled, "压完先回到原来的歇下，再开始那句话的一轮")
+            #expect(back == .settled, "先回到压缩前的歇下，再开始那句话的一轮")
             let resumed = try #require(log.changes.compactMap { change -> PiSession? in
                 if case .stateChanged(let session, .compacting) = change { session } else { nil }
             }.first)
             #expect(resumed.stateSince == settled.stateSince && resumed.busySince == nil)
-        }
-    }
-
-    /// 压缩期间留着的话，会话在压完前退出或重新载入：告别时报出这些话没送到（投送请求 id），不悄悄丢掉；
-    /// 交给 Pi 派发的斜杠命令在手动压缩期间直接拒收（没有投送请求 id，留着就没法报）。
-    @Test(arguments: ["quit", "reload"])
-    func 压缩期间留着的话_会话压完前关掉_告别时报没送到(how: String) async throws {
-        AgentTape.variant(how)
-        try await withRig { pi, bridge, s in
-            try await reply(pi, bridge, "第一轮 [[slow-compact]]")
-            try await reply(pi, bridge, "第二轮")
-            let log = ChangeLog(bridge)
-
-            try await bridge.command("/compact", in: s.id)
-            try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
-            let delivery = UUID().uuidString
-            try await bridge.send(PiMessage(text: "压缩时说的话", deliveryID: delivery), to: s.id)
-            await #expect(throws: PiBridgeError.rejected("compacting")) { try await bridge.command("/ask", in: s.id) }
-            if how == "quit" { pi.kill(SIGTERM) } else { try await bridge.command("/reload", in: s.id) }
-
-            try await eventually("会话告别") { !log.ended.isEmpty }
-            try await eventually("日志记下了") { log.ended.first?.1 == .closed(reason: how, undelivered: [delivery]) }
         }
     }
 

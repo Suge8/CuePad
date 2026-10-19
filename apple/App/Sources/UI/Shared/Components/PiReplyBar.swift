@@ -3,13 +3,13 @@ import CueSync
 import SwiftUI
 
 /// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Agent 会话（＋ 选卡片与图片）。
-/// 这个会话做不到的不露出（`AgentCapabilities`）：图片、马上说、停止、模型与思考强度、斜杠命令、作答，规则同 `MacDelivery`。
-/// 右下角只有一颗主按钮，此刻是哪种只看 `MacDelivery.button`：空着而 Agent 自己在跑一轮是停止；写了字是发送——
-/// Pi 空闲时直接发，正忙时点按（⌘↩）等它做完再说、长按（⌘⇧↩）马上说，停止也在长按菜单里；文字型问题是作答。
+/// 这个会话做不到的不露出（`AgentCapabilities`）：图片、停止、模型与思考强度、斜杠命令、作答，规则同 `MacDelivery`。
+/// 右下角只有一颗主按钮，此刻是哪种只看 `MacDelivery.button`：空着而 Agent 自己在跑一轮是停止；写了字是发送（⌘↩）——
+/// Agent 在跑时发出就打断这一轮、以这句开新一轮（占位写明）；文字型问题是作答。
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 发出后空着、Agent 还没接过去时钮是发送中（`PiChat.sending`，同 Cue 页输入框）；停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
-/// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行；下面是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
+/// 玻璃上部是随下一句发出的批注（`ReplyNoteStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都经 `Workspace.speak` 写一条投送请求给会话所在的 Mac（本机的由本机执行器送达）：
 /// 按下就清空输入框，请求马上贴到对话末尾，不等上传。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
 /// 手机空着没聚焦时一行，有工具排的聚焦就展开，在看历史时收成短胶囊（停止钮在时不收）。
@@ -28,8 +28,6 @@ struct PiReplyBar: View {
     var commandProgress: MacDelivery.CommandProgress?
     /// 你的话还在路上（`PiChat.sending`，页面传进来）：空着而 Agent 没在跑时，发送钮是发送中（同 Cue 页输入框）。
     var sending = false
-    /// 排队的话（`PiChat.queued`，页面传进来）。
-    var queued: [DeliveryRequest] = []
     /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
     var recall: String?
     /// 点批注一叠里的一条：回到原文（会话页给）。
@@ -103,21 +101,15 @@ struct PiReplyBar: View {
                 if let commandProgress { progressLine(commandProgress) }
                 composer
             }
-            .animation(Motion.quick, value: queued.map(\.id))
         }
     }
 
     private var composer: some View {
             Composer(
                 draft: box, prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !queued.isEmpty || !draft.notes.isEmpty, tooled: hasTools,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
-                    if !compact, !queued.isEmpty {
-                        PiQueueStack(
-                            requests: queued, folded: Self.foldsQueue && focused, steers: session.capabilities.contains(.steer),
-                            box: box)
-                    }
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, reveal: revealNote, remove: removeNote) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if form == .open || focused, let failure = config?.failure {
@@ -151,28 +143,17 @@ struct PiReplyBar: View {
     }
 
     #if os(iOS)
-    /// 聚焦时排队的话收成一行：键盘已占了半屏，对话不能再被挤走（Mac 不收）。
-    private static let foldsQueue = true
     private static let unanswerable = "这个问题要在 Mac 上回答"
-    private static let hold = "长按"
-    /// 钮上方那一句：怎么用另一种说法。
-    private static let holdChip = "长按可"
     #else
-    private static let foldsQueue = false
     private static let unanswerable = "这个问题要在终端里的 Agent 那边回答"
-    private static let hold = "按住或 \(ReplyShortcut.sendHeld.symbols) "
-    /// Mac 的浮签只写快捷键：与"按住"并写会长到盖住输入的字
-    private static let holdChip = "\(ReplyShortcut.sendHeld.symbols) "
     #endif
 
-    /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮、⌘⇧↩ 同长按；⌘⇧M、⌘⇧E 在有工具排时打开模型、思考强度菜单（按键只在文字区聚焦时到这里）。
+    /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮；⌘⇧M、⌘⇧E 在有工具排时打开模型、思考强度菜单（按键只在文字区聚焦时到这里）。
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]
         switch button {
         case .answer: map[.send] = answer
-        case .send(let tap, let hold):
-            map[.send] = { send(tap) }
-            map[.sendHeld] = { send(hold, held: tap != hold) }
+        case .send(let mode): map[.send] = { send(mode) }
         case .stop, nil: break
         }
         #if os(macOS)
@@ -215,63 +196,27 @@ struct PiReplyBar: View {
                 .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
-        case .send(let tap, let hold) where hold != tap:
-            holdMenu(tap: tap, hold: hold)
-        case .send(let tap, _):
-            Button { send(tap) } label: { SendGlyph(glyph) }
+        case .send(let mode):
+            Button { send(mode) } label: { SendGlyph(glyph) }
                 .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
+                .accessibilityHint(interrupts ? Self.interruptNote : "")
+                .help(interrupts ? Self.interruptNote : "")
         case nil:
             EmptyView()
         }
     }
 
-    /// Agent 在跑时的发送钮：点按 `tap`（等它做完再说），长按出菜单选 `hold`（马上说）或停止。
-    private func holdMenu(tap: DeliveryMode, hold: DeliveryMode) -> some View {
-        let held = ChoiceMenu.Choice(title: hold.label, subtitle: hold.explanation, image: .icon(Self.icon(hold))) { send(hold, held: true) }
-        let stopSection = canStop && !stopping
-            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: DeliveryMode.stop.label, image: .icon(.endSession), destructive: true, choose: stop)])]
-            : []
-        return MenuButton(
-            sections: [ChoiceMenu.Section(choices: [held])] + stopSection, primary: { send(tap) }, press: .button,
-            accessibilityLabel: tap.label, hint: [tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；")
-        ) {
-            SendGlyph(glyph)
-        }
-        .fixedSize()
-        .disabled(!canSend)
-        // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次（菜单或 ⌘⇧↩）就不再出（`holdSendLearned`）。
-        // 浮层不占排版，出现时不挤动文字
-        .overlay(alignment: .bottomTrailing) {
-            // 斜杠命令不是说的话，"马上说"用不上：输入以 / 开头时不出
-            if canSend, !services.settings.holdSendLearned, !draft.text.hasPrefix("/") {
-                Text(Self.holdChip + hold.label).font(.caption2.weight(.medium)).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 8).frame(height: 22)
-                    .glass(in: .capsule)
-                    .fixedSize()
-                    .offset(y: -48)
-                    .transition(.opacity)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
-        .animation(Motion.quick, value: canSend)
-    }
+    /// 发出会打断 Agent 正在跑的这一轮（`MacDelivery`）：占位与发送钮的说明写明。
+    private var interrupts: Bool { session.state.known?.isTurnRunning == true }
+    private static let interruptNote = "会打断这一轮，以这句接着做"
 
-    /// 按住发送钮出来的其余说法的图标。
-    private static func icon(_ mode: DeliveryMode) -> Icon {
-        switch mode {
-        case .steer: .steer
-        default: .handOff
-        }
-    }
-
-    /// 占位只说这里写什么；忙时点发送与长按各是什么由发送钮自己说（读屏标签与长按菜单）。
+    /// 占位只说这里写什么；Agent 在跑时写明发出会打断它。
     private var placeholder: String {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
-        return replyPrompt
+        return interrupts ? "插话（会打断这一轮）" : replyPrompt
     }
 
     /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，
@@ -302,10 +247,9 @@ struct PiReplyBar: View {
 
     private func removeNote(_ note: ReplyNote) { services.settings.removeReplyNote(note.id, in: session.id) }
 
-    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行），不分马上说还是等它做完再说：是不是命令只在发出这一刻按草稿与会话报的清单认
-    /// （`commandLine`），不看按钮上次排版时带来的方式。`held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
-    private func send(_ mode: DeliveryMode, held: Bool = false) {
-        if held { services.settings.holdSendLearned = true }
+    /// 斜杠命令走投送方式 `command`（由 Agent 展开执行）：是不是命令只在发出这一刻按草稿与会话报的清单认
+    /// （`commandLine`），不看按钮上次排版时带来的方式。
+    private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
         let accepts = accepts, files = services.store.files
         let card = draft.attachments.first?.card, command = commandLine

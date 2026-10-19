@@ -133,8 +133,8 @@ struct RealPiTests {
         }
     }
 
-    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（Pi 1.2 在工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
-    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错。
+    /// 工具跑着时停止，而 Pi 把这一轮记成了 error（工具被中止后的那次请求因中止失败，见 fake-model 的 [[abort-as-error]]）：
+    /// 这一轮收到过停止，按被停下报，会话歇着、不显示出错；对话里是"已停止"，不是一轮出错的空回答。
     @Test func abortDuringAToolIsAStopEvenWhenPiRecordsAnError() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令")
@@ -142,6 +142,8 @@ struct RealPiTests {
             try await bridge.abort(s.id)
             try await eventually("这一轮结束", timeout: .seconds(30)) { [.settled, .error].contains(bridge.sessions.first?.state) }
             #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
+            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
+            #expect(messages.map(\.text) == ["[[tool:sleep 30]] [[abort-as-error]] 跑个慢命令", PiNotice.stopped.rawValue])
         }
     }
 
@@ -271,8 +273,7 @@ struct RealPiTests {
 
     @Test func sendDeliversTextAndImageIntoTheModelContext() async throws {
         try await withRig { _, bridge, s in
-            let delivery = try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
-            #expect(delivery == .immediate)
+            try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
             try await eventually("回复写入") { !self.replies(of: s).isEmpty }
             let prompt = try #require(messages(of: s).first { $0.role == "user" })
             #expect(prompt.text.hasPrefix("look") && prompt.images == 1)
@@ -281,20 +282,28 @@ struct RealPiTests {
         }
     }
 
-    @Test func steerAndFollowUpAreQueuedWhileBusyAndBothProcessedInOrder() async throws {
+    /// 会话正忙时发来的话先停下在跑的这一轮（连同跑着的工具），再作为新一轮开始；接连发两句，每句都是新的一轮——
+    /// 前一句开的那一轮也被下一句停下，只有最后一句得到回答。每句都带着自己的投送请求 id。
+    /// 前一句的那一轮停住（`[[slow]]`）：第二句到达时它不论已经开始还是还在等着，结果都一样。
+    @Test func aMessageSentWhileBusyStopsTheRunningTurnAndStartsANewOneWithIt() async throws {
         try await withRig { pi, bridge, s in
-            try pi.prompt("[[slow]] first")
-            try await eventually("进入忙碌") { bridge.sessions.first?.state != .settled }
+            try pi.prompt("[[tool:sleep 30]] 跑个慢命令")
+            try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
+            let first = UUID(), second = UUID(), log = ChangeLog(bridge)
+            try await bridge.send(PiMessage(text: "[[slow]] FIRST", deliveryID: first.uuidString), to: s.id)
+            try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
 
-            let steer = try await bridge.send(PiMessage(text: "STEER-ME", whenBusy: .steer), to: s.id)
-            let follow = try await bridge.send(PiMessage(text: "FOLLOW-ME"), to: s.id) // 缺省 followUp
-            #expect(steer == .queued(.steer))
-            #expect(follow == .queued(.followUp))
-            try pi.release()
-
-            try await eventually("三轮都回复") { self.replies(of: s).count == 3 }
-            let replies = replies(of: s)
-            #expect(replies[1].hasPrefix("ECHO STEER-ME") && replies[2].hasPrefix("ECHO FOLLOW-ME"))
+            try await eventually("最后一句答完", timeout: .seconds(20)) {
+                self.replies(of: s).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
+            }
+            #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")
+            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
+            let users = messages.filter { $0.role == .known(.user) }
+            #expect(users.map(\.text) == ["[[tool:sleep 30]] 跑个慢命令", "[[slow]] FIRST", "SECOND"])
+            #expect(users.map(\.deliveryID) == [nil, first, second])
+            #expect(!replies(of: s).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
+            // Pi 把这两轮记成 error（"The operation was aborted."）：对话里照停下处理，各留一行"已停止"
+            #expect(messages.map(\.text).filter { $0 == PiNotice.stopped.rawValue }.count == 2, "\(messages.map(\.text))")
         }
     }
 

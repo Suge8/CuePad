@@ -63,7 +63,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private var source: DispatchSourceRead?
     private let queue = DispatchQueue(label: "fake-extension")
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
-    var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true, "delivered": "immediate"] }
+    var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true] }
 
     /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
     /// 回 ack 与另一条线程上的告别关闭（`close(bye:)`）会交错，关闭后再写会落到已关掉的连接或被复用的描述符上，

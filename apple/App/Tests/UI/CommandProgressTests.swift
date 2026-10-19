@@ -18,7 +18,7 @@ struct CommandProgressTests {
         let services: AppServices = app.services
         let ext = try await app.host.connect("atlas", cwd: "/work/atlas")
         ext.onCommand = { _, command in
-            command["t"] as? String == "command" ? ["ok": false, "error": "failed: Nothing to compact (session too small)"] : ["ok": true, "delivered": "immediate"]
+            command["t"] as? String == "command" ? ["ok": false, "error": "failed: Nothing to compact (session too small)"] : ["ok": true]
         }
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }

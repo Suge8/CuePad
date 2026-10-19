@@ -6,8 +6,7 @@ import CuePi
 
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧一颗四角同圆的气泡（`BubbleLook.session`；对话气泡只在 Cue 页），Pi 的回答左侧全宽 Markdown（一直展开），
-/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到也不在排队的话接在末尾，气泡下写送达情况，失败的可重发
-/// （排队的在回复框上方，`PiQueueStack`）；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
+/// 每轮回答上方一块这一轮的经过（`RoundProcess`）；你发出、Agent 还没读到的话接在末尾，气泡下写送达情况，失败的可重发；Pi 在处理时末尾是这一轮到目前为止的经过与正在跑的那一步（`LiveStatus`；计时在顶上一行），
 /// 有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
 /// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 /// 减弱动态效果下也只有淡入淡出。
@@ -45,7 +44,7 @@ struct PiConversation: View {
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
-            ForEach(PiChat.outgoing(deliveries, messages: messages, at: services.speech)) { request in outgoing(request) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in outgoing(request) }
             ending
         }
         // 滚动目标（段与其余各行）：内容变了滚动位置跟着它走（`ChatScroll`）；跳到某一条按条的 id 找，不靠它
@@ -61,7 +60,7 @@ struct PiConversation: View {
         .debugOpensPreview(in: items, session: session, $opened)
     }
 
-    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（排队中、送达中；已结束的会话先唤醒）。
+    /// 你发出、还没进对话的一句：说的话的气泡，还在路上时写会话这边的说法（发送中、送达中；已结束的会话先唤醒）。
     private func outgoing(_ request: DeliveryRequest) -> some View {
         let session = session, said = Said.request(request)
         return SpeechBubble(
@@ -244,7 +243,7 @@ extension PiConversation {
     static func followKey(
         session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest], at moment: Speech.Moment
     ) -> FollowKey {
-        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages, at: moment).map { Speech.trip($0, at: moment) }, state: session?.state)
+        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map { Speech.trip($0, at: moment) }, state: session?.state)
     }
 }
 

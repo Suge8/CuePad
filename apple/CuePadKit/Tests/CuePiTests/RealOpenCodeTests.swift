@@ -188,8 +188,7 @@ struct RealOpenCodeTests {
             #expect(try await store.piSessions().contains { $0.id == live.sessionID && $0.agent == .opencode })
 
             let delivery = UUID()
-            let delivered = try await bridge.send(PiMessage(text: "Reply with exactly the word AGAIN.", deliveryID: delivery.uuidString), to: live.id)
-            #expect(delivered == .immediate)
+            try await bridge.send(PiMessage(text: "Reply with exactly the word AGAIN.", deliveryID: delivery.uuidString), to: live.id)
             try await eventually("CuePad 发的那句认得出来，回答也到了", timeout: .seconds(90)) {
                 let messages = try await store.piMessages(of: live.sessionID)
                 return messages.contains { $0.deliveryID == delivery } && messages.last { $0.role == .known(.pi) }?.text.contains("AGAIN") == true
@@ -212,7 +211,7 @@ struct RealOpenCodeTests {
             // 用户给这个会话定了规矩：跑命令要先问
             try await sandbox.api("PATCH", "/api/session/\(live.sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
             let marker = sandbox.work.appending(path: "approved.txt")
-            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch approved.txt  Then reply DONE."), to: live.id)
+            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch approved.txt  Then reply DONE."), to: live.id)
             try await eventually("在等你确认这条命令", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
             let question = try #require(session(bridge)?.question)
             #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch approved.txt"))
@@ -224,7 +223,7 @@ struct RealOpenCodeTests {
 
             try await bridge.command("/compact", in: live.id)
             try await eventually("压缩上下文留下一行", timeout: .seconds(90)) {
-                try await store.piMessages(of: live.sessionID).contains { $0.role == .known(.system) }
+                try await store.piMessages(of: live.sessionID).contains { $0.text == PiNotice.compacted.rawValue }
             }
 
             // 断开接入（App 停掉接入、删掉索引）再接入：会话先下线，再接入后重新上桥、索引从头写回
@@ -242,28 +241,26 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 忙的时候先排一句、再插一句：OpenCode 按送进对话的先后排（插的话先进），排队那句的消息 id 却在入队时就定了、比插话的早。
-    /// CuePad 的对话按对话里的位置读，三句话与两次回答一条不少、先后与终端里一致。
-    @Test func aQueuedAndASteeredMessageKeepTheirPlaceInTheConversation() async throws {
+    /// 忙的时候说一句：先停下在跑的这一轮（对话里留一行"已停止"），这句开新一轮并得到回答，认得出是这次投送。
+    @Test func aMessageWhileBusyStopsTheRoundAndStartsANewOne() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 20 . Then reply SLEPT."), to: id)
+            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 60 . Then reply SLEPT."), to: id)
             try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
-            _ = try await bridge.send(PiMessage(text: "Queued: reply LATER", whenBusy: .followUp), to: id)
-            _ = try await bridge.send(PiMessage(text: "Steer: what is 6+6", whenBusy: .steer), to: id)
+            let delivery = UUID()
+            try await bridge.send(PiMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
-            try await eventually("排队那句也答完", timeout: .seconds(180)) {
+            try await eventually("这句开的一轮答完", timeout: .seconds(180)) {
                 let messages = try await store.piMessages(of: sessionID)
                 return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
-                    && messages.contains { $0.role == .known(.user) && $0.text.contains("Queued") }
+                    && messages.contains { $0.deliveryID == delivery }
             }
             let messages = try await store.piMessages(of: sessionID)
-            let said = messages.filter { $0.role == .known(.user) }.map(\.text)
-            #expect(said.count == 3 && said[1].contains("Steer") && said[2].contains("Queued"), "\(said)")
-            let steer = try #require(messages.firstIndex { $0.text.contains("Steer") })
-            let queued = try #require(messages.firstIndex { $0.text.contains("Queued") })
-            #expect(messages[steer..<queued].contains { $0.role == .known(.pi) }, "插话的回答在排队那句之前")
+            #expect(messages.filter { $0.role == .known(.user) }.map(\.text).last?.contains("Now") == true)
+            let now = try #require(messages.firstIndex { $0.deliveryID == delivery })
+            #expect(messages[..<now].contains { $0.text == PiNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
+            #expect(!messages.contains { $0.role == .known(.pi) && $0.text.contains("SLEPT") })
             #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
         }
     }
@@ -273,7 +270,7 @@ struct RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
+            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
             // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
             try await eventually("在跑命令", timeout: .seconds(60)) { session(bridge)?.state == .tool }
             try await bridge.abort(id)
@@ -290,7 +287,7 @@ struct RealOpenCodeTests {
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
             try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
-            _ = try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch declined.txt . Then reply DONE."), to: id)
+            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: touch declined.txt . Then reply DONE."), to: id)
             try await eventually("在等你确认", timeout: .seconds(90)) { session(bridge)?.question?.isAnswerable == true }
             let question = try #require(session(bridge)?.question)
             try await bridge.answer(.confirmed(false), to: try #require(question.promptID), in: id)
@@ -361,7 +358,7 @@ struct RealOpenCodeTests {
             let opened = try #require(bridge.session(id: id))
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
             let image = pngData(width: 8, height: 8, shade: 0.9)
-            _ = try await bridge.send(PiMessage(text: "Reply with exactly the word SEEN.", images: [PiImage(mimeType: "image/png", data: image)]), to: id)
+            try await bridge.send(PiMessage(text: "Reply with exactly the word SEEN.", images: [PiImage(mimeType: "image/png", data: image)]), to: id)
             let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined()
             try await eventually("带图的那句与回答进了对话", timeout: .seconds(90)) {
                 let messages = try await store.piMessages(of: opened.sessionID)
@@ -371,7 +368,7 @@ struct RealOpenCodeTests {
             #expect(store.files.fileURL(for: hash) != nil)
 
             let answered = try await replies(store, opened.sessionID).count
-            _ = try await bridge.send(PiMessage(text: "Use the subagent tool with agent explore and description find-readme, prompt: list the files in the current directory. Wait for its result, then reply DONE."), to: id)
+            try await bridge.send(PiMessage(text: "Use the subagent tool with agent explore and description find-readme, prompt: list the files in the current directory. Wait for its result, then reply DONE."), to: id)
             @MainActor func explored() -> Bool {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
@@ -385,7 +382,7 @@ struct RealOpenCodeTests {
             #expect(explored(), "模型没派子代理：\(String(describing: reply))")
             try await eventually("这一轮做完", timeout: .seconds(180)) { session(bridge)?.state == .settled }
 
-            _ = try await bridge.send(PiMessage(text: "Use the question tool to ask me one question with header Color and question Which color? with options Red and Blue. After I answer, reply with exactly the color I chose."), to: id)
+            try await bridge.send(PiMessage(text: "Use the question tool to ask me one question with header Color and question Which color? with options Red and Blue. After I answer, reply with exactly the color I chose."), to: id)
             try await eventually("在等你回答", timeout: .seconds(90)) { session(bridge)?.question?.kind == .known(.select) }
             let question = try #require(session(bridge)?.question)
             #expect(question.options == ["Red", "Blue"])
@@ -396,7 +393,7 @@ struct RealOpenCodeTests {
             }
 
             // OpenCode 的选择题本身允许自己填：从 CuePad 写一个不在选项里的答案
-            _ = try await bridge.send(PiMessage(text: "Use the question tool once more: header Color, question Which color now? with options Red and Blue. After I answer, reply with exactly the color I gave."), to: id)
+            try await bridge.send(PiMessage(text: "Use the question tool once more: header Color, question Which color now? with options Red and Blue. After I answer, reply with exactly the color I gave."), to: id)
             try await eventually("又在等你回答", timeout: .seconds(90)) { session(bridge)?.question?.kind == .known(.select) }
             let open = try #require(session(bridge)?.question)
             #expect(open.allowsOther)
@@ -407,18 +404,17 @@ struct RealOpenCodeTests {
             }
 
             let long = PiMessage(text: "Write the numbers from 1 to 400, one per line, each with a long sentence about it.")
-            _ = try await bridge.send(PiMessage(text: "Write the numbers from 1 to 30, one per line, each with a short sentence about it."), to: id)
+            try await bridge.send(PiMessage(text: "Write the numbers from 1 to 30, one per line, each with a short sentence about it."), to: id)
             try await eventually("在忙", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
-            let steered = try await bridge.send(PiMessage(text: "Also reply with the word STEERED at the end.", whenBusy: .steer), to: id)
-            #expect(steered == .queued(.steer))
-            // 插的话在这一轮里送进去、这一轮接着它做完（模型怎么回不在验收里：免费模型不一定照说）
-            try await eventually("插的话进了这一轮，这一轮做完", timeout: .seconds(180)) {
+            try await bridge.send(PiMessage(text: "Reply with the word STEERED."), to: id)
+            // 这句停下在跑的一轮、开新一轮并做完（模型怎么回不在验收里：免费模型不一定照说）
+            try await eventually("这句开的一轮做完", timeout: .seconds(180)) {
                 let messages = try await store.piMessages(of: opened.sessionID)
                 let said = messages.lastIndex { $0.role == .known(.user) && $0.text.contains("STEERED") }
                 return said.map { messages[$0...].contains { $0.role == .known(.pi) } } == true && session(bridge)?.state == .settled
             }
 
-            _ = try await bridge.send(long, to: id)
+            try await bridge.send(long, to: id)
             try await eventually("又在忙", timeout: .seconds(60)) { session(bridge)?.state.isWorking == true }
             try await bridge.abort(id)
             try await eventually("停下了") { session(bridge)?.state == .settled }
@@ -432,7 +428,7 @@ struct RealOpenCodeTests {
             #expect(bridge.session(id: resumed)?.sessionID == opened.sessionID)
             let before = try await replies(store, opened.sessionID).count
             // 停得早时那句长的还没回答就留在上下文里：不说明作废，模型会把两句当一个矛盾的要求、用提问工具反问（实测 big-pickle）
-            _ = try await bridge.send(PiMessage(text: "The earlier unfinished request is cancelled, do not do it. Reply with exactly the word BACK."), to: resumed)
+            try await bridge.send(PiMessage(text: "The earlier unfinished request is cancelled, do not do it. Reply with exactly the word BACK."), to: resumed)
             try await eventually("接着说的回答到了", timeout: .seconds(90)) {
                 try await replies(store, opened.sessionID).count > before || session(bridge)?.question != nil
             }

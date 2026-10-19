@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 会话页底下浮着的那一叠（手机的会话页与 Mac 的会话页同一份）：等你确认时的问题卡、没能结束的原因（与 Agent 页同一条规则
-/// `DeliveryRequest.shownEnd`）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中、排队与调回的那一句都从这一页读到的会话摘要推出。
+/// `DeliveryRequest.shownEnd`）、回复框（`PiReplyBar`）；回复框的停止中、命令进度、发送中与调回的那一句都从这一页读到的会话摘要推出。
 /// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
     let session: PiSessionState
@@ -30,7 +30,6 @@ struct SessionDock: View {
                     stopping: MacDelivery.stopping(session, deliveries: deliveries, at: speech),
                     commandProgress: MacDelivery.commandProgress(deliveries, messages: messages, at: speech),
                     sending: PiChat.sending(deliveries, messages: messages, at: speech),
-                    queued: PiChat.queued(deliveries, messages: messages, at: speech),
                     recall: PiChat.lastSaid(messages),
                     revealNote: revealNote,
                     sent: sent)

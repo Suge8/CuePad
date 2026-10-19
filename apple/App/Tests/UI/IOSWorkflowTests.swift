@@ -30,13 +30,12 @@ struct IOSWorkflowTests {
         #expect(request.answer == PiAnswer(promptID: "p-7", value: .option("覆盖"), question: "覆盖吗？"))
     }
 
-    @Test(arguments: [DeliveryMode.send, .steer, .followUp])
-    func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac(mode: DeliveryMode) async throws {
+    @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话() async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
-        let request = try await Workspace(services: app.services).said(ComposerDraft(text: "正文"), to: target, mode: mode)
+        let request = try await Workspace(services: app.services).said(ComposerDraft(text: "正文"), to: target, mode: .send)
         #expect(request.hostID == "mac-b")
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
-        #expect(request.mode == .known(mode))
+        #expect(request.mode == .known(.send))
         #expect(request.status == .known(.pending))
     }
 

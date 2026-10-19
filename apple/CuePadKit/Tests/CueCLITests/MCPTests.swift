@@ -376,7 +376,7 @@ import Testing
       try await store.updateCard(second.id) { $0.body += "\n照调研结论改 release.sh" }
       #expect(try await server.call("task", ["action": "start", "task": second.id.uuidString]).contains("已发出，还没送达"))
       let sent = try await store.deliveryRequests()
-      #expect(sent.map(\.mode) == [.known(.followUp)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
+      #expect(sent.map(\.mode) == [.known(.send)] && sent.allSatisfy { $0.isFromCue && $0.target.ref == "s1" })
       #expect(sent.first?.content == "\(second.heading)\n照调研结论改 release.sh")
       // 送到前：还没绑上，看板写发送中，不能再开工或说话
       #expect(try await store.card(second.id)?.piSessionID == nil)
@@ -522,7 +522,7 @@ import Testing
       _ = try await server.call(
         "task", ["action": "say", "task": pi.id.uuidString, "text": "用 luna 重试", "model": "openai/gpt-6-luna", "effort": "high"])
       let requests = try await store.deliveryRequests(toSession: "s1")  // 执行器按这个先后执行
-      #expect(requests.map(\.mode) == [.known(.config), .known(.steer)] && requests.allSatisfy(\.isFromCue))
+      #expect(requests.map(\.mode) == [.known(.config), .known(.send)] && requests.allSatisfy(\.isFromCue))
       #expect(requests.first?.config == PiConfig(model: PiModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
       #expect(requests.last?.content == "用 luna 重试")
 

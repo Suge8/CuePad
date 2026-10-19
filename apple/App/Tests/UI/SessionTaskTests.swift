@@ -220,7 +220,7 @@ struct SessionTaskTests {
     }
 
     /// 会话里谁说的按来源认（会话页的气泡与 Cue 的 peek 同一条）：Cue 发进去的是"你"，在 CuePad 里发的与终端里打的都是"他"。
-    /// 他发起的那一轮还在跑时，Cue 要"马上说"也只排到这一轮做完再发；Cue 自己发起的那一轮里照常马上说。
+    /// 他发起的那一轮还在跑时，Cue 说话会打断他：不说、报错，等它歇下再说；Cue 自己发起的那一轮里照常打断插话。
     @Test func 会话消息按来源标注_他那一轮没完时Cue不插嘴() async throws {
         try await store.updateCueProfile {
             $0.hostID = "mac-b"
@@ -249,19 +249,20 @@ struct SessionTaskTests {
         let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
         #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
 
-        let waited = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动", "when": "now"]))
-        #expect(!waited.isError && waited.text.contains("等它做完再说"))
+        let refused = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动"]))
+        #expect(refused.isError && refused.text.contains("他发起的一轮"))
+        #expect(try await store.deliveryRequests().isEmpty)
 
-        // Cue 自己说的那句开的一轮：照常马上说
+        // Cue 自己说的那句开的一轮：照常插话
         try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
-        let steered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的", "when": "now"]))
-        #expect(!steered.isError && steered.text.contains("马上说"))
+        let interrupted = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的"]))
+        #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
     }
 
     /// 这一轮是谁开的只看会话里最近一条你一方或机器的消息：他说的那一轮，变化标"他说的"；FireCode 这类扩展投进来的机器消息开的一轮
-    /// 既不算他的也不算 Cue 的——不标"他说的"，Cue 用 now 说话照常马上插进去。
-    @Test func 机器消息开的一轮_不标他说的_Cue能马上说() async throws {
+    /// 既不算他的也不算 Cue 的——不标"他说的"，Cue 照常插话。
+    @Test func 机器消息开的一轮_不标他说的_Cue能插话() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录", in: nil)
         try await store.linkCard(task.id, toSession: "s1")
@@ -288,8 +289,8 @@ struct SessionTaskTests {
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
             PiChatMessage(sessionID: "s1", entryID: "m3", seq: 3, role: .machine, text: "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>", at: .now),
         ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "测试全过", answeredAt: .now)))
-        let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint", "when": "now"]))
-        #expect(!said.isError && said.text.contains("马上说"))
+        let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint"]))
+        #expect(!said.isError && said.text.contains("对「修登录」的会话说"))
         let line = try await settledLine(after: mark)
         #expect(line.contains("[歇下 · 他在场：刚在里面说过话] 修登录") && !line.contains("他说的"))
     }

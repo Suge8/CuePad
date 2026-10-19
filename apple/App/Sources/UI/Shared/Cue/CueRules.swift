@@ -152,7 +152,7 @@ nonisolated extension CueMessage {
 
 /// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
 /// 都不另存。两种的时刻都是 Cue 那台 Mac 的时钟，在同一条时间线上比新旧。
-/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话（直接说、马上说、等它做完再说）、答它在等的问题、开新会话。
+/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话、答它在等的问题、开新会话。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
@@ -169,7 +169,7 @@ nonisolated struct CueFlight: Equatable, Sendable {
     /// 接力的那几个会话，最新的在前。
     let ends: [RelayEnd]
 
-    static let relayModes: Set<DeliveryMode> = [.send, .steer, .followUp, .answer, .start]
+    static let relayModes: Set<DeliveryMode> = [.send, .answer, .start]
 
     /// 一条交给：写下的时刻与交给了谁。
     struct Handed: Equatable, Sendable {
