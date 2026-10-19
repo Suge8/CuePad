@@ -56,7 +56,8 @@ final class ClaudeTerminalSession: SessionLink {
         self.bridge = bridge
         self.gate = gate
         self.inbox = inbox
-        facts.running = busy || waiting
+        // 接上时已在跑：这一轮从此刻算（`SessionFacts.startTurn(at:)`）
+        if busy || waiting { facts.startTurn(at: .now) }
         if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: "在终端里等你")] }
     }
 

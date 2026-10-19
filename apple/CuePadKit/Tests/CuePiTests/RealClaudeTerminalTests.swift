@@ -233,6 +233,37 @@ struct RealClaudeTerminalTests {
         }
     }
 
+    /// CuePad 在一轮中途才启动（重启、更新都是这样）：接上的这一轮开始时刻不知道，从接上的此刻算，不沿用库里上一轮的——
+    /// 上一轮的回答早于它（歇下先到时 Cue 不会读到上一轮的回答），这一轮的回答不早于它（读到就算就绪，`PiSessionState.answered`）。
+    @Test func aRoundAlreadyRunningWhenCuePadStartsCountsFromWhenItWasSeen() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            testbed.hooks.stop()  // CuePad 没在跑：钩子连不上，Claude Code 照常往下走
+            let terminal = try await testbed.terminal()
+            // 等它起好（登记了会话）再打字：之前的回车会被吞掉
+            try await eventually("Claude Code 登记了这个会话", timeout: .seconds(60)) {
+                FileManager.default.fileExists(atPath: testbed.config.appending(path: "sessions/\(terminal.pid).json").path)
+            }
+            try await terminal.type("What is 6 times 7? Reply with only the number.")
+            try await eventually("上一轮答完", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""text":"42""#) } }
+            try await terminal.type("Run the shell command sleep 20 with the Bash tool, then reply with only the word FINISHED.")
+            try await eventually("这一轮在跑命令", timeout: .seconds(120)) { testbed.transcriptFiles.contains { $0.contains(#""command":"sleep 20""#) } }
+
+            try testbed.hooks.start()
+            try testbed.runtime.start()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            let turn = try #require(session.turnStartedAt)
+            let before = try #require(try testbed.transcript(session.sessionFile).recap.answeredAt)
+            #expect(session.state.isWorking && before < turn, "\(before) \(turn)")
+
+            try await eventually("这一轮答完歇下", timeout: .seconds(180)) {
+                testbed.bridge.session(id: session.id)?.state == .settled
+                    && (try? testbed.transcript(session.sessionFile))?.recap.lastReply?.contains("FINISHED") == true
+            }
+            let answered = try #require(try testbed.transcript(session.sessionFile).recap.answeredAt)
+            #expect(testbed.bridge.session(id: session.id)?.turnStartedAt == turn && turn <= answered, "\(turn) \(answered)")
+        }
+    }
+
     /// 改名经收件箱改到 Claude Code 自己（终端标题与会话列表里都是新名字）；结束是让它像在终端里按 Ctrl-C 那样退出。
     @Test func cuePadRenamesAndEndsATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in

@@ -35,6 +35,8 @@ struct SessionFacts {
     /// 开始新的一轮（你开的，或 Agent 自己为子代理的结果开的、接入补开的）。`start` 要早于这一轮可能在会话文件里收尾的任何时刻：
     /// 歇下就绪看收尾不早于它（`PiSessionState.answered`）。取 Agent 自己给的开始时刻；没有就取一个一定在它之前的时刻——
     /// 会挡住这一轮的钩子（收到 `UserPromptSubmit`）、CuePad 发出话或空输入的那一刻、收到 Agent 报这一轮开始（或开它的那件事）的那一刻。
+    /// 接上时已在跑的一轮（CuePad 晚启动、断线重连）开始时刻不知道：取接上的此刻——它还没收尾，之前每一轮都已收尾，不沿用旧的开始
+    /// （沿用的话上一轮的回答也算就绪，歇下先到时 Cue 会读到它）。
     mutating func startTurn(at start: Date) {
         turnStartedAt = start
         running = true
