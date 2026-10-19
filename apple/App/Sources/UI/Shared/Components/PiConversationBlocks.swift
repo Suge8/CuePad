@@ -41,9 +41,12 @@ struct BlankChat: View {
 }
 
 
-/// Pi 的一轮回答：上方一块这一轮的经过（`RoundProcess`），下面全宽 Markdown，长也直接全显，批注过的地方带高亮（`notes`）；长按（Mac 右键）是消息菜单（`MessageMenu`）。
+/// Pi 的一轮回答：上方一块这一轮的经过（`RoundProcess`），下面全宽 Markdown，长也直接全显，批注过的地方带高亮（`notes`）；长按（Mac 右键）是消息菜单（`MessageMenu`），
+/// 手机上菜单里的选择文本与批注打开会话页的可选文本页（`replyText`）。
 /// 新到的淡入；`fadesIn` 为 false 时（它原位换下正在说的话，见 `DraftReply`）直接出现。
 struct ReplyBlock: View {
+    /// 这条回答的消息 id（`ReplyNote.entry`）。
+    let id: UUID
     let text: String
     /// 这一轮做了多久；没有（读不出开始时间）时不画经过那一行
     let took: String?
@@ -51,7 +54,9 @@ struct ReplyBlock: View {
     let session: PiSessionState
     let notes: [ReplyNote]
     var fadesIn = true
-    @State private var selecting = false
+    #if os(iOS)
+    @Environment(\.replyText) private var replyText
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -61,11 +66,18 @@ struct ReplyBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // 整块都接长按（只靠字形判定时，按在行距、留白里会落空）
         .contentShape(.rect)
-        .contextMenu { MessageActions(text: text, kind: .reply, session: session, selectText: { selecting = true }) }
-        #if os(iOS)
-        .sheet(isPresented: $selecting) { SelectableTextSheet(text: text) }
-        #endif
+        .contextMenu { menu }
         .transition(fadesIn ? .entry : .identity)
+    }
+
+    private var menu: some View {
+        #if os(iOS)
+        MessageActions(
+            text: text, kind: .reply, session: session,
+            selectText: replyText.map { open in { open(id, .select) } }, annotate: replyText.map { open in { open(id, .annotate) } })
+        #else
+        MessageActions(text: text, kind: .reply, session: session)
+        #endif
     }
 }
 
