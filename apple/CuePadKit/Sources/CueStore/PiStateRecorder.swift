@@ -15,13 +15,15 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
-        context: content.context, agent: .known(content.agent), catalogID: catalog?.id)
+        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let alert = notify, !alert.reaches(record, cue: try cueDuty()) { record.notify = nil }
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
+      // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
-        .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+        .map { $0 == "turnStartedAt" ? "turnStartedAt = COALESCE(excluded.turnStartedAt, piSessionStates.turnStartedAt)" : "\($0) = excluded.\($0)" }
+        .joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
         """
@@ -164,6 +166,8 @@ struct PiStateContent: Equatable, Sendable {
   var projectID: UUID?
   var question: PiQuestion?
   var times: PiTimes
+  /// 最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
+  var turnStartedAt: Date?
   var launchToken: String?
   var hosted = false
   var subagents: [PiSubagentState] = []
@@ -187,13 +191,15 @@ struct PiStateContent: Equatable, Sendable {
     written.map { $0.modelState.models != modelState.models || $0.commands != commands } ?? true
   }
 
-  /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
+  /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、一轮的开始、认领标识）的样子：它变了才值得绕开写入节流。
+  /// 一轮的开始在工作中变了不急着写：歇下立即写，带着的就是最后一轮的。
   var steady: PiStateContent {
     var steady = self
     steady.state = .settled
     steady.detail = nil
     steady.launchToken = nil
     steady.context = nil
+    steady.turnStartedAt = nil
     steady.subagents = subagents.map(\.shape)
     return steady
   }
@@ -244,7 +250,7 @@ public actor PiStateRecorder {
   @discardableResult
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, directory: String? = nil,
-    projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
+    projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
     agent: AgentKind? = nil, process: PiProcess? = nil
   ) async throws -> PiAlert? {
@@ -263,6 +269,7 @@ public actor PiStateRecorder {
     if let directory { content.directory = directory }
     if let projectID { content.projectID = projectID }
     if let times { content.times = times }
+    if let turnStartedAt { content.turnStartedAt = turnStartedAt }
     if let launchToken { content.launchToken = launchToken }
     if let hosted { content.hosted = hosted }
     if let subagents { content.subagents = subagents }

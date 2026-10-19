@@ -416,6 +416,7 @@ public final class PiBridge {
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
                 extensionVersion: hello.extensionVersion, state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
+            session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             session.hosted = hello.hosted ?? false
@@ -439,6 +440,7 @@ public final class PiBridge {
                 session.errorMessage = wire.errorMessage
                 session.stateSince = wire.sinceDate
                 session.busySince = wire.busySinceDate
+                session.turnStartedAt = wire.turnSinceDate
             }
         case .info(let info):
             guard let id = link.id else { throw HandlingError.messageBeforeHello }

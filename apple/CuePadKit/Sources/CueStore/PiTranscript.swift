@@ -79,15 +79,21 @@ public struct PiRecap: Sendable, Equatable, Codable {
   /// 进行中这一轮到目前为止的经过：做完的工具调用与说过的话（还在跑的调用不算，它在会话状态的 `detail` 里）。会话页末尾实时列出
   /// 这一轮做到哪了；这一轮做完时随回答一起归进那条回答的 `PiChatMessage.tools`，这里清空。没在跑一轮、或还什么都没做时为 nil。
   public var pendingTools: PiChatMessage.Tools?
+  /// 最近一轮在会话文件里收尾的时刻（回答、收尾标记或"已停止"那一行的时间戳）：不早于会话记录上这一轮的开始
+  /// （`PiSessionState.turnStartedAt`），歇下才算读到了这一轮的回答（`PiSessionState.answered`）。还没有一轮收尾为 nil。
+  public var answeredAt: Date?
 
   public static let promptLimit = 500
   public static let replyLimit = 1_200
 
-  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil) {
+  public init(
+    lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, pendingTools: PiChatMessage.Tools? = nil, answeredAt: Date? = nil
+  ) {
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
     self.pendingPrompt = pendingPrompt
     self.pendingTools = pendingTools
+    self.answeredAt = answeredAt
   }
 }
 
@@ -324,11 +330,11 @@ extension CueStore {
     let recap = transcript.recap
     try db.run(
       """
-      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, pendingTools = ?4, modifiedAt = ?5
-      WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3 OR pendingTools IS NOT ?4)
+      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, pendingTools = ?4, answeredAt = ?7, modifiedAt = ?5
+      WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3 OR pendingTools IS NOT ?4 OR answeredAt IS NOT ?7)
       """,
       [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, recap.pendingTools?.stored, Date.stamp,
-       PiSessionState.recordID(sessionID: transcript.sessionID)])
+       PiSessionState.recordID(sessionID: transcript.sessionID), recap.answeredAt])
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、

@@ -809,7 +809,8 @@ final class AgentTape: @unchecked Sendable {
     fileprivate static func replaceNumber(_ number: Int32, with replacement: String, in text: String) -> String {
         let digits = String(number)
         guard text.contains(digits) else { return text }
-        return replacing("(?<![0-9])\(digits)(?![0-9])", in: text) { _ in replacement }
+        // 前后是字母的不算：进程号也会是哈希、十六进制串里的一段
+        return replacing("(?<![0-9A-Za-z])\(digits)(?![0-9A-Za-z])", in: text) { _ in replacement }
     }
 
     private static let home = FileManager.default.homeDirectoryForCurrentUser.path

@@ -8,6 +8,7 @@ import SwiftUI
 /// 跟着标题一起折行，不占旁注那一列（读屏念项目名，Mac 悬停写全名）。
 /// 步骤（`step`）比上级小一档：字小一号、圈小一号，缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
+/// `spelled`（手机任务页进行中的顶层叶子）："下一步"写成标题下的第二行，状态词或"开始"一直写出来（`TaskNextMark.spelled`）。
 /// 点圈完成（`TaskCheck`），点行的其余地方打开任务（手机推入任务页，Mac 弹出任务浮窗）。Mac 右键是 `CardActions`；
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，
 /// 往下面的组或项目段拖就做不到。菜单那几项各有入口：完成点圈、删除轻扫、归档在任务页的"⋯"。
@@ -20,6 +21,8 @@ struct TaskLine: View {
     var step = false
     /// 跨项目平铺时（进行中、最近完成）给出所在项目，标题末尾画它的小图标；分了段的地方不给。
     var project: Project?
+    /// "下一步"写成标题下的第二行（有步骤的上级不算：它的旁注是步骤数）。
+    var spelled = false
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
@@ -62,12 +65,13 @@ struct TaskLine: View {
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
         // 旁注不让：标题先折行、再截断，状态词总是完整的
-        let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done) }.fixedSize()
+        let below = spelled && subtasks == nil && next != nil && !done
+        let side = HStack(alignment: .firstTextBaseline, spacing: 8) { notes(next: next, done: done, spelled: below) }.fixedSize()
         // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
         return HStack(alignment: .firstTextBaseline, spacing: TaskMetrics.columnGap) {
             ring(next: next)
-            if stacked {
-                // 辅助字号：旁注换到标题下面，不与标题抢一行
+            if stacked || below {
+                // 辅助字号、写成第二行时：旁注换到标题下面，不与标题抢一行
                 VStack(alignment: .leading, spacing: 2) { title; side }
                     .padding(.vertical, Self.titlePadding)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,11 +108,11 @@ struct TaskLine: View {
     }
 
     /// 旁注：上级的步骤数与"下一步"；做完的不写。
-    @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
+    @ViewBuilder private func notes(next: TaskNext?, done: Bool, spelled: Bool) -> some View {
         if !done, let subtasks {
             Text("\(subtasks.done)/\(subtasks.total)").font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
         }
-        if !done, let next { TaskNextMark(next: next).transition(.opacity) }
+        if !done, let next { TaskNextMark(next: next, spelled: spelled).transition(.opacity) }
     }
 
     private func open() {
@@ -172,8 +176,10 @@ struct TaskLine: View {
 /// 会话那边的事是会话状态标（`PiStateDot`，在做时那条心电线自己会动），要你管的（等你确认、出错、没送到）旁边写状态词，点了打开会话；
 /// 还没交出去的叶子是一个"▶"，点了把任务的正文交给 Agent（Mac 直接交出，手机浮起发给 Agent 的输入框带着它）。
 /// Mac 上指针停在这一行时（`rowHovered`）"▶ 开始"以靛青露出来、状态标旁写出状态词；没停时"开始"不画（签名色只给焦点，ui.md）。
+/// `spelled`：写成标题下的第二行（`TaskLine.spelled`），状态词与"开始"一直写出来、贴着左边。
 struct TaskNextMark: View {
     let next: TaskNext
+    var spelled = false
     @Environment(\.rowHovered) private var lit
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -197,11 +203,13 @@ struct TaskNextMark: View {
             switch next {
             case .agent(let shown, let session):
                 PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID)
-                if shown.needsYou || lit { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
+                if shown.needsYou || lit || spelled { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)
                 #if os(macOS)
                 Text("开始").fontWeight(.semibold)
+                #else
+                if spelled { Text("开始") }
                 #endif
             }
         }
@@ -210,7 +218,7 @@ struct TaskNextMark: View {
         .foregroundStyle(starts ? (lit ? palette.signature : palette.ink3) : palette.ink2)
         .lineLimit(1).fixedSize()
         // 点按区比图形宽；图形贴着行的那一边（手机行尾的一列右缘对齐，紧跟标题时靠左），不在点按区里居中
-        .frame(minWidth: Self.target, minHeight: Self.target, alignment: edge)
+        .frame(minWidth: Self.target, minHeight: spelled ? nil : Self.target, alignment: spelled ? .leading : edge)
         .contentShape(.rect)
         .animation(Motion.quick, value: lit)
     }

@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块玻璃，平时是 64 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
-/// 点它从顶部长出面板（同一块玻璃长高、变宽；iPhone 上页头在导航栏那一排里，左边让着系统的返回）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
+/// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
 /// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
@@ -11,22 +11,22 @@ import SwiftUI
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
 /// 打开时只读大脑那一行（设置与那台 Mac 的 Agent，`CueConfigControls.read`，当场读）；其余都是已经在订阅的。
 struct CueHeader: View {
-    /// 页头在导航栏那一排里、左边让着系统的返回（iPhone，`inNavigationBarRow`）。
-    let inBar: Bool
+    /// 窄屏：提示横幅盖在页头这一排上（`NoticeBanner`），页头让开。
+    let underBanner: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.cuePanelOpen
 
-    static let height: CGFloat = 64
-    private static let radius: CGFloat = 32
+    static let height: CGFloat = 56
+    private static let radius: CGFloat = height / 2
     /// 面板里行与行之间的空（会话一列的行距），行的底上下各伸进一半。
     static let rowGap: CGFloat = 12
-    /// 离页面两侧与上安全区的距离（同 `RootBar`）。
-    private static let edge: CGFloat = 16
+    /// 离页面两侧（同底部那一排，`Dock.margin`）与上安全区的距离。
+    private static let edge = Dock.margin
     private static let top: CGFloat = 4
-    /// 对话在顶上让出的高度：页头一条加上下的空。页头在导航栏那一排里时只让出它比导航栏多出的那一点与下面的空。
-    static func reserve(inBar: Bool) -> CGFloat { inBar ? 18 : top + height + 10 }
+    /// 对话在顶上让出的高度：页头一条加上下的空。
+    static let reserve = top + height + 10
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -37,11 +37,10 @@ struct CueHeader: View {
                     .accessibilityHidden(true)
             }
             glass
-                // 提示横幅暂时盖住导航栏那一排（`NoticeBanner`，iPhone 上页头就在那一排里）：页头让开，不与横幅叠成两层玻璃、露出半个头像
-                .opacity(inBar && workspace.notice != nil && !expanded ? 0 : 1)
+                // 提示横幅暂时盖住这一排：页头让开，不与横幅叠成两层玻璃、露出半个头像
+                .opacity(underBanner && workspace.notice != nil && !expanded ? 0 : 1)
                 .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
-                .inNavigationBarRow(inBar, height: Self.height, tap: toggle)
-                .padding(.horizontal, Self.edge).padding(.top, inBar ? 0 : Self.top)
+                .padding(.horizontal, Self.edge).padding(.top, Self.top)
         }
         .frame(maxWidth: .infinity, maxHeight: expanded ? .infinity : nil, alignment: .top)
         .sensoryFeedback(.impact(weight: .light), trigger: expanded)
@@ -54,7 +53,7 @@ struct CueHeader: View {
             // 往上划收起只认页头那一条：面板里放不下时要往上划着滚
             Button(action: toggle) {
                 // 面板开着时横幅只盖住头那一排：这一排让开，面板照常
-                head.opacity(inBar && workspace.notice != nil ? 0 : 1).animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
+                head.opacity(underBanner && workspace.notice != nil ? 0 : 1).animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
             }
                 .buttonStyle(.plain)
                 .simultaneousGesture(DragGesture(minimumDistance: 16).onEnded { drag in

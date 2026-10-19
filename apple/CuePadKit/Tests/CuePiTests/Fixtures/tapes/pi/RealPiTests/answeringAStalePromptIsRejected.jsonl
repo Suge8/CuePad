@@ -4,31 +4,31 @@
 {"c":"p1","k":"exit","n":0}
 {"a":["--mode","rpc","--offline","--no-context-files","--no-skills","--no-prompt-templates","--no-themes","--model","fake/echo","--thinking","off","-e","{fixtures}/fake-model.ts","-e","{fixtures}/ui-confirm.ts"],"c":"p2","d":"pi","k":"spawn","p":"/private{tmp:1}/work"}
 {"k":"dir","p":"{tmp:1}/agent/sessions/--private{dtmp:1}-work--"}
-{"c":"s1","k":"listen","p":"{tmp:1}/s/01a15491-5a09-7186-897c-77074d1f2afb.{pid:p2}.sock"}
+{"c":"s1","k":"listen","p":"{tmp:1}/s/01a15536-3108-72f4-acce-b475cb280e93.{pid:p2}.sock"}
 {"c":"s1.1","k":"connect"}
-{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":15,\"extensionVersion\":33,\"sessionId\":\"01a15491-5a09-7186-897c-77074d1f2afb\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-19T14-29-34-345Z_01a15491-5a09-7186-897c-77074d1f2afb.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:189},\"busySince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"],\"images\":false}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/pick\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"67da65aa-8a2a-45b1-bf83-19c443de5b29\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"3505fa69-f729-4e5d-acd5-92c2f771541d\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:223},\"busySince\":{ms:223}}}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c1\",\"promptId\":\"67da65aa-8a2a-45b1-bf83-19c443de5b29\",\"value\":\"Alpha\"}","k":"send"}
+{"c":"s1.1","d":"{\"t\":\"hello\",\"protocol\":16,\"extensionVersion\":34,\"sessionId\":\"01a15536-3108-72f4-acce-b475cb280e93\",\"sessionFile\":\"{tmp:1}/agent/sessions/--private{dtmp:1}-work--/2026-10-19T17-29-37-289Z_01a15536-3108-72f4-acce-b475cb280e93.jsonl\",\"pid\":{pid:p2},\"cwd\":\"/private{tmp:1}/work\",\"mode\":\"rpc\",\"tty\":null,\"term\":{\"TERM_PROGRAM\":\"test-term\",\"__CFBundleIdentifier\":\"com.example.term\",\"TMUX\":\"/tmp/tmux-test/default,1,0\",\"TMUX_PANE\":\"%9\"},\"state\":{\"kind\":\"idle\",\"since\":{ms:187},\"busySince\":null,\"turnSince\":null},\"launchToken\":null,\"hosted\":false,\"name\":null,\"firstMessage\":null,\"question\":null,\"subagents\":[],\"model\":{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},\"thinking\":\"off\",\"models\":[{\"provider\":\"fake\",\"id\":\"echo\",\"name\":\"Echo\",\"thinking\":[\"off\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-think\",\"name\":\"Echo Think\",\"thinking\":[\"off\",\"minimal\",\"low\",\"medium\",\"high\"],\"images\":true},{\"provider\":\"fake\",\"id\":\"echo-b\",\"name\":\"Echo B\",\"thinking\":[\"off\"],\"images\":false}],\"context\":{\"tokens\":0,\"window\":100000},\"commands\":[{\"name\":\"compact\",\"description\":\"压缩当前上下文，可附上说明\",\"source\":\"builtin\",\"hint\":\"[说明]\"},{\"name\":\"name\",\"description\":\"设置会话名\",\"source\":\"builtin\",\"hint\":\"<名字>\"},{\"name\":\"model\",\"description\":\"换模型\",\"source\":\"builtin\",\"hint\":\"<提供方/模型>\"},{\"name\":\"thinking\",\"description\":\"设置思考强度\",\"source\":\"builtin\",\"hint\":\"<强度>\"},{\"name\":\"new\",\"description\":\"开一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"clone\",\"description\":\"在当前位置复制出一个新会话\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"reload\",\"description\":\"重新载入扩展、skill、提示词模板与上下文文件\",\"source\":\"builtin\",\"hint\":null},{\"name\":\"ask\",\"description\":\"test: open a confirm dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"pick\",\"description\":\"test: open a select dialog\",\"source\":\"extension\",\"hint\":null},{\"name\":\"llama\",\"description\":\"Manage llama.cpp router models\",\"source\":\"extension\",\"hint\":null},{\"name\":\"mcp\",\"description\":\"Manage MCP servers: sign in, reconnect, enable or disable, and change exposure\",\"source\":\"extension\",\"hint\":null}]}","k":"recv"}
+{"c":"p2","d":"{\"message\":\"/pick\",\"type\":\"prompt\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"e05e5100-2669-4927-95f3-cc787919f38a\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"f3c99a42-e049-4d26-8dc3-91fab13547c6\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:221},\"busySince\":{ms:221},\"turnSince\":null}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c1\",\"value\":\"Alpha\",\"promptId\":\"e05e5100-2669-4927-95f3-cc787919f38a\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c1\",\"ok\":true}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"e89ccddc-8ae5-435b-ad86-86d2ce94b30c\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"389fc841-aee4-4b1c-a7f3-7bf87aecec85\",\"method\":\"notify\",\"message\":\"picked:Alpha\",\"notifyType\":\"info\"}","k":"stdout"}
 {"c":"s1.1","d":"{\"t\":\"info\",\"question\":null}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:235},\"busySince\":null}}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c2\",\"promptId\":\"67da65aa-8a2a-45b1-bf83-19c443de5b29\",\"value\":\"Alpha\"}","k":"send"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"idle\",\"since\":{ms:233},\"busySince\":null,\"turnSince\":null}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c2\",\"value\":\"Alpha\",\"promptId\":\"e05e5100-2669-4927-95f3-cc787919f38a\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c2\",\"ok\":false,\"error\":\"no_prompt\"}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"prompt\",\"message\":\"/pick\"}","k":"stdin"}
-{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"dbd37ab3-9854-47b5-a87c-ebef75c76da4\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
-{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"22d5f7f5-26dc-44b7-8ba4-e6d03484da4f\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
-{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:248},\"busySince\":{ms:248}}}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c3\",\"promptId\":\"67da65aa-8a2a-45b1-bf83-19c443de5b29\",\"value\":\"Alpha\"}","k":"send"}
+{"c":"p2","d":"{\"message\":\"/pick\",\"type\":\"prompt\"}","k":"stdin"}
+{"c":"s1.1","d":"{\"t\":\"info\",\"question\":{\"id\":\"16864cb8-1364-4bd2-9b85-8b5be5bc3a6b\",\"kind\":\"select\",\"text\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}}","k":"recv"}
+{"c":"p2","d":"{\"type\":\"extension_ui_request\",\"id\":\"4c2bf744-7c7a-485f-a5f9-ace8a63dd5fa\",\"method\":\"select\",\"title\":\"Which one?\",\"options\":[\"Alpha\",\"Beta\"]}","k":"stdout"}
+{"c":"s1.1","d":"{\"t\":\"state\",\"state\":{\"kind\":\"waiting_user\",\"promptKind\":\"select\",\"title\":\"Which one?\",\"since\":{ms:249},\"busySince\":{ms:249},\"turnSince\":null}}","k":"recv"}
+{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c3\",\"value\":\"Alpha\",\"promptId\":\"e05e5100-2669-4927-95f3-cc787919f38a\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c3\",\"ok\":false,\"error\":\"stale_prompt\"}","k":"recv"}
-{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c4\",\"promptId\":\"dbd37ab3-9854-47b5-a87c-ebef75c76da4\",\"value\":\"Gamma\"}","k":"send"}
+{"c":"s1.1","d":"{\"t\":\"answer\",\"id\":\"c4\",\"value\":\"Gamma\",\"promptId\":\"16864cb8-1364-4bd2-9b85-8b5be5bc3a6b\"}","k":"send"}
 {"c":"s1.1","d":"{\"t\":\"ack\",\"id\":\"c4\",\"ok\":false,\"error\":\"bad_answer\"}","k":"recv"}
 {"c":"s1.1","k":"hangup"}
-{"c":"s1.2","k":"connect"}
 {"c":"p2","k":"signal","n":15}
+{"c":"s1.2","k":"connect"}
 {"c":"s1.1","k":"close"}
 {"c":"s1.2","k":"close"}
 {"c":"s1.2","k":"hangup"}
@@ -36,14 +36,4 @@
 {"c":"s1.3","k":"close"}
 {"c":"s1.4","k":"connect"}
 {"c":"s1.4","k":"close"}
-{"c":"s1.5","k":"connect"}
-{"c":"s1.5","k":"close"}
-{"c":"s1.6","k":"connect"}
-{"c":"s1.6","k":"close"}
-{"c":"s1.7","k":"connect"}
-{"c":"s1.7","k":"close"}
-{"c":"s1.8","k":"connect"}
-{"c":"s1.8","k":"close"}
 {"c":"p2","k":"exit","n":143}
-{"c":"s1.9","k":"connect"}
-{"c":"s1.9","k":"close"}

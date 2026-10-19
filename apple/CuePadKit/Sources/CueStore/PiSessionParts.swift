@@ -194,10 +194,12 @@ public struct PiSubagentState: Sendable, Equatable, Codable {
   public var settledAt: Date?
   /// 实际用的模型（FireCode 名册原文 `provider/model`）；旧扩展上报的没有。
   public var model: String?
+  /// Mac 上最后一次看到它有进展（名册里它这一项变了）的时刻：等子代理太久没动静的兜底只读它。
+  public var progressAt: Date?
 
   public init(
     name: String, role: String, phase: Open<PiSubagentPhase>, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil,
-    model: String? = nil
+    model: String? = nil, progressAt: Date? = nil
   ) {
     self.name = name
     self.role = role
@@ -206,17 +208,19 @@ public struct PiSubagentState: Sendable, Equatable, Codable {
     self.startedAt = startedAt
     self.settledAt = settledAt
     self.model = model
+    self.progressAt = progressAt
   }
 
-  /// 去掉"在做什么"的样子：谁在、什么角色、什么状态。动作文字随每次工具调用变，不算名册变了（记录器据此不为它绕开写入节流）。
+  /// 去掉"在做什么"的样子：谁在、什么角色、什么状态。动作文字与进展时刻随每次工具调用变，不算名册变了（记录器据此不为它绕开写入节流）。
   var shape: PiSubagentState {
     var shape = self
     shape.action = ""
+    shape.progressAt = nil
     return shape
   }
 
   private enum CodingKeys: String, CodingKey {
-    case name, role, action, startedAt, settledAt, model
+    case name, role, action, startedAt, settledAt, model, progressAt
     case phase = "state"
   }
 }

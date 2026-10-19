@@ -196,6 +196,48 @@ struct CueEvalTests {
         }
     }
 
+    @Test func s等子代理停住() async throws {
+        try await CueEval.run(
+            "s-等子代理停住",
+            expect: "会话派了子代理 e2e 跑端到端测试、自己在等，e2e 20 分钟没动静：Cue 对那个会话 say，点名 e2e 多久没动静、让它自己判断（卡住就停掉重派或接手，在正常跑就接着等）；不 tell 他、不停会话"
+        ) { eval in
+            let rig = eval.rig
+            let project = try #require(try await rig.store.projects().first { $0.name == "演示" })
+            let first = "\(Self.title)\n\(Self.body)", id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
+            let task = try await rig.store.createTask(first, in: project.id)
+            try await rig.store.linkCard(task.id, toSession: id)
+            try await rig.store.recordSend(first, to: SendTarget(kind: .piSession, name: Self.title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
+            let dispatched = "后端与登录页都改好了，单元测试 23 个全过。派了 e2e 去跑端到端测试（真浏览器走一遍忘记密码），等它交回再汇报。"
+            try await eval.trigger {
+                // 在另一台 Mac 上：e2e 最后一次进展再过 3 秒满 20 分钟
+                let due = Date.now.addingTimeInterval(3)
+                let e2e = PiSubagentState(
+                    name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
+                    progressAt: due - PiSessionState.stallAfter)
+                try await PiStateRecorder(store: rig.store, hostID: "mac-b")
+                    .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
+                let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
+                let reply = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
+                try await rig.store.writePiTranscript(PiTranscript(
+                    sessionID: id, messages: [prompt, reply], recap: PiRecap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
+            }
+            // 给的是这件任务（id 前缀或标题），或它的会话（id 前缀）
+            let toIt = eval.calls("task", "say").filter { call in
+                if let ref = (call.args["task"] as? String)?.lowercased(), !ref.isEmpty {
+                    return ref == Self.title || task.id.uuidString.lowercased().hasPrefix(ref)
+                }
+                return (call.args["session"] as? String).map { !$0.isEmpty && id.hasPrefix($0.lowercased()) } ?? false
+            }
+            let said = toIt.compactMap { $0.args["text"] as? String }
+            return [
+                Check("对这件任务的会话 say", !toIt.isEmpty),
+                Check("say 点名 e2e 与多久没动静", said.contains { $0.contains("e2e") && $0.contains(/20|二十/) }),
+                Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
+                Check("没停会话（没 stop、没 done）", eval.calls("task", "stop").isEmpty && eval.calls("task", "done").isEmpty),
+            ]
+        }
+    }
+
     @Test func g答问() async throws {
         try await CueEval.run("g-答问", expect: "用户问在做的那件做到哪了：直接回答进展，不派新活") { eval in
             let rig = eval.rig

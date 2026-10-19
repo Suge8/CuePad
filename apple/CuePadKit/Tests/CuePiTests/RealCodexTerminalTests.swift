@@ -35,11 +35,13 @@ struct RealCodexTerminalTests {
             // 在跑时说：停下这一轮（连同在跑的命令），以这句开新一轮。回答用生造的词：被停下那一轮说过的过程说明也算它的回答，可能提到要说的词
             try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
-            let now = UUID()
+            let now = UUID(), busy = ChangeLog(rig.bridge)
             try await rig.bridge.send(PiMessage(text: "Reply with the single word MANGO.", deliveryID: now.uuidString), to: id)
             try await eventually("这句开的新一轮答完", timeout: .seconds(120)) {
                 rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("MANGO") == true
+                    && busy.states.last == .settled
             }
+            #expect(busy.settles == 1, "被停下的那一轮不算歇下：\(busy.states)")
             let said = try rig.transcript(session).messages
             let mango = try #require(said.firstIndex { $0.deliveryID == now })
             #expect(said[..<mango].last { $0.role != .known(.pi) }?.text == PiNotice.stopped.rawValue, "被停下的那一轮留了一行已停止")
@@ -81,6 +83,48 @@ struct RealCodexTerminalTests {
             }
             await runtime.stop()()
             later.stop()
+        }
+    }
+
+    /// 终端里派完不等的子代理：这一轮结束时会话在等子代理；CuePad 这时才启动也从常驻服务补回它（名册里在跑、会话在等子代理）。
+    /// 它做完后 CuePad 经常驻服务补一轮，终端里接着答出结果，那一轮做完才歇下，只歇下一次；终端输入框里打了一半的话不受影响。
+    @Test func aSubagentLeftRunningInTheTerminalIsReadBackBeforeSettling() async throws {
+        try await withCodexRig { rig in
+            let terminal = try CodexTerminal(rig.codex)
+            defer { terminal.stop() }
+            try await eventually("终端界面起来了", timeout: .seconds(60)) { terminal.printed("OpenAI Codex") }
+            let log = ChangeLog(rig.bridge)
+
+            try terminal.type("Spawn exactly one subagent with task name fruit. Tell it: sleep 30 seconds with the sleep tool, then reply with exactly the word BANANA. Do not wait for it: end your turn right away, replying only DISPATCHED. When its result reaches you later, reply with exactly the word it sent you.")
+            try await eventually("这一轮结束、在等子代理", timeout: .seconds(120)) { rig.session?.state == .delegating }
+            let session = try #require(rig.session)
+
+            let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
+            try later.start()
+            let runtime = CodexRuntime(
+                bridge: later, paths: rig.codex.paths, hooks: AgentHookServer(path: rig.codex.root.appending(path: "s2/hooks.sock")),
+                codex: { [locator = rig.codex.locator] in locator.candidates("codex").first }, locate: { [locator = rig.codex.locator] in locator })
+            try runtime.start()
+            try await eventually("晚启动也认出在等子代理") {
+                later.session(sessionID: session.sessionID).map { $0.state == .delegating && $0.subagents.map(\.name) == ["fruit"] } ?? false
+            }
+            #expect(later.session(sessionID: session.sessionID)?.subagents.first?.phase == .known(.running))
+            await runtime.stop()()
+            later.stop()
+
+            try terminal.press("my half-typed draft")
+            try await eventually("读到结果后歇下", timeout: .seconds(120)) {
+                rig.session.map { $0.state == .settled && rig.replies($0).last?.uppercased().contains("BANANA") == true } ?? false
+                    && log.states.last == .settled
+            }
+            #expect(log.settles == 1, "\(log.states)")
+            #expect(rig.session?.subagents.first?.phase == .known(.done))
+            try await eventually("终端里也答出了结果") { terminal.printed("BANANA") }
+            // 打了一半的话还在输入框里：回车发出去
+            try terminal.press("\r")
+            try await eventually("打了一半的话照常发出", timeout: .seconds(60)) {
+                (try? rig.transcript(session).messages.contains { $0.role == .known(.user) && $0.text == "my half-typed draft" }) == true
+            }
         }
     }
 

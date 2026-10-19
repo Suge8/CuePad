@@ -48,7 +48,8 @@ extension AppServices {
             sessionID: session.sessionID, state: session.state, detail: session.detail, title: title,
             directory: session.cwd.path(percentEncoded: false),
             projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
-            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
+            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), turnStartedAt: session.turnStartedAt,
+            launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
             commands: session.commands, agent: session.agent, process: PiProcess.running(pid: session.pid))
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废

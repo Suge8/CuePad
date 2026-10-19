@@ -3,7 +3,7 @@ import Foundation
 /// Pi 会话的工作状态。工作中不调工具就是思考：正在出字（"输出中"）不是同步的状态，只是 Mac 上读正在说的话（`PiDraft`）的显示。
 public enum PiWorkState: String, Sendable, CaseIterable {
   case thinking, tool, waitingForUser, settled, error
-  /// 自己这轮已经歇下，还有子代理在跑：仍在处理
+  /// 自己这轮已经歇下，还有在飞的后台工作（没把结果交回的子代理，Claude Code 还有后台命令）：仍在处理
   case delegating
   /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档，Pi 忙着，停止会中止压缩
   case compacting

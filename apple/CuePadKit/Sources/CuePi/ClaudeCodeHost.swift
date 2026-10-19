@@ -6,10 +6,10 @@ import Foundation
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
 /// CuePad 掌握它的全部输入输出——发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束都能做。
 ///
-/// - 状态来自它的输出：`session_state_changed`（要 `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`）、模型回答里的工具调用、`can_use_tool`、`result`；
+/// - 状态来自它的输出：一轮从 `system/init` 起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
-/// - 发话与斜杠命令一律 `priority: "now"`：在跑就中止这一轮（连同在跑的工具，原因 `interrupt`），再以这句开新一轮；歇着就直接开始。
+/// - 发话与斜杠命令一律 `priority: "now"`：在跑就中止这一轮（连同在跑的工具，原因 `interrupt`），再以这句开新一轮，被中止的那一轮不算歇下；歇着就直接开始。
 /// - 退出靠关标准输入（读到 EOF 正常收尾）；结束、空闲满时限、让出（桥决定）都这样退，后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
@@ -19,11 +19,17 @@ final class ClaudeHostedSession: SessionLink {
     /// 上了桥之后的 id（`initialize` 回来之前为 nil）
     private(set) var id: PiSession.ID?
     private var facts = SessionFacts()
+    private var tasks = ClaudeHostedTasks()
     /// 在等的 `can_use_tool`（请求 id 与问题）
     private var permission: (request: String, permission: ClaudePermission)?
     private var commands: Set<String> = []
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     private var stopping = false
+    /// 在跑时发出了话：被它停下的这一轮的 `result` 不算歇下，接着就是它开的新一轮（从这一刻算）
+    private var restart = false
+    /// 发出的话开了一轮、还没等到它的 `system/init`（中间隔着钩子）：Claude Code 还没开始跑，这时收到的中断不起作用（实测 2.1.299）。
+    /// 等 `init` 的停止挂在这里，这一轮开跑或结束时放行
+    private var starting: [CheckedContinuation<Void, Never>]?
     /// 这一轮里 Claude Code 合成的出错回答（`ClaudeCode.failure` 的原文）；一轮结束时清掉
     private var apiError: String?
     private var contextWindow: Int?
@@ -38,7 +44,7 @@ final class ClaudeHostedSession: SessionLink {
         self.bridge = bridge
         stream = try ClaudeStream(
             executable: executable, arguments: ["--permission-prompt-tool", "stdio", "--permission-mode", "default"] + arguments,
-            directory: directory, environment: environment.merging(["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS": "1"]) { $1 })
+            directory: directory, environment: environment)
         stream.onMessage = { [weak self] in self?.received($0) }
         stream.onDraft = { [weak self] draft in
             guard let self, let id = self.id else { return }
@@ -131,6 +137,12 @@ final class ClaudeHostedSession: SessionLink {
             let raw = (message["errors"]?.array?.compactMap(\.string) ?? []).joined(separator: "\n")
             facts.endTurn(failure: failed ? apiError ?? message["result"]?.string ?? raw : nil)
             apiError = nil
+            started()
+            if restart {
+                restart = false
+                facts.startTurn(at: now)
+                starting = []
+            }
         default:
             return
         }
@@ -147,15 +159,14 @@ final class ClaudeHostedSession: SessionLink {
     private func system(_ message: JSONValue, at now: Date) {
         switch message["subtype"]?.string {
         case "init":
+            beginTurn()
+            started()
             if let model = message["model"]?.string, let id {
                 bridge?.update(id) { session in session.model = self.option(model, current: session.model, in: session.availableModels) }
             }
-        case "session_state_changed":
-            switch message["state"]?.string {
-            case "running": if !facts.running { facts.startTurn() }
-            case "idle": facts.running = false
-            default: break
-            }
+        case "background_tasks_changed":
+            tasks.list(message["tasks"]?.array ?? [])
+            facts.inFlight = tasks.inFlight
         case "status":
             facts.compacting = message["status"]?.string == "compacting"
         case "session_title_changed":
@@ -163,10 +174,10 @@ final class ClaudeHostedSession: SessionLink {
         case "task_started":
             // 后台跑的命令（`local_bash`）也报成任务，不是子代理
             guard let task = message["task_id"]?.string, message["task_type"]?.string == "local_agent" else { return }
-            facts.startSubagent(task, name: message["description"]?.string ?? "", role: message["subagent_type"]?.string ?? "", at: now)
+            facts.runSubagent(task, name: message["description"]?.string ?? "", role: message["subagent_type"]?.string ?? "", at: now)
         case "task_progress":
             if let task = message["task_id"]?.string, let action = message["description"]?.string {
-                facts.updateSubagent(task) { $0.action = action.clipped(ToolDetail.limit) }
+                facts.updateSubagent(task, at: now) { $0.action = action.clipped(ToolDetail.limit) }
             }
         case "task_notification":
             guard let task = message["task_id"]?.string else { return }
@@ -176,9 +187,17 @@ final class ClaudeHostedSession: SessionLink {
             default: .interrupted
             }
             facts.settleSubagent(task, phase, summary: message["summary"]?.string, at: now)
+            if tasks.settled(task, completed: phase == .done) { beginTurn() }
+            facts.inFlight = tasks.inFlight
         default:
             break
         }
+    }
+
+    /// 主会话开始一轮（已在跑的不算新的一轮：发出话、后台任务落定时先算开始，随后的 `system/init` 是同一轮）。
+    /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或 `system/init` 的那一刻，都早于这一轮的回答。
+    private func beginTurn() {
+        if !facts.running { facts.startTurn(at: .now) }
     }
 
     /// 已用上下文：最近一次模型调用的输入（含缓存）加输出；窗口从 `result` 的模型用量里来。
@@ -196,6 +215,7 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 输出读完了（进程退出）：下桥（没答的请求 `ClaudeStream` 已以会话结束收尾）。
     private func ended() {
+        started()
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
@@ -203,11 +223,12 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 送进一句话（`priority: "now"`，见类注释）；在跑的这一轮随之被打断。
     private func say(_ content: JSONValue, uuid: String) throws {
-        if busy { stopping = true }
+        if busy, starting == nil { stopping = true; restart = true }
         try stream.write([
             "type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null, "session_id": "",
             "uuid": .string(uuid), "priority": "now",
         ])
+        began()
     }
 
     // MARK: SessionLink
@@ -231,7 +252,22 @@ final class ClaudeHostedSession: SessionLink {
         try say(.string(line), uuid: UUID().uuidString)
     }
 
+    /// 歇着时发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）。在跑时发出的打断这一轮，
+    /// 新的一轮从被打断那一轮的 `result` 之后的 `system/init` 起算。
+    private func began() {
+        if !facts.running { starting = [] }
+        beginTurn()
+        publish(at: .now)
+    }
+
+    /// 这一轮开跑了（或没跑就结束了）：放行等着它的停止。
+    private func started() {
+        starting?.forEach { $0.resume() }
+        starting = nil
+    }
+
     func abort() async throws {
+        if starting != nil { await withCheckedContinuation { starting?.append($0) } }
         guard busy else { return }
         stopping = true
         _ = try await stream.request(["subtype": "interrupt"])
@@ -274,5 +310,42 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
     func end() async throws { stream.closeInput() }
+}
+/// 托管会话在飞的工作，只按 Claude Code 自己给的后台任务清单（`background_tasks_changed`，每次整份：后台子代理、后台命令、
+/// 子代理名下的后台命令带 `parent_task_id`；前台的不在里面）。任务落定（`task_notification`）本身不算交回：
+/// - 顶层任务落定后主会话一定为它再跑一轮（`system/init` … `result`，`origin.kind` 为 task-notification；主会话这一轮在跑时并进这一轮），
+///   所以落定即算主会话在跑，直到那一轮的 `result`——否则清单变空到那一轮开始之间会误报一次歇下；
+/// - 子代理交回中途结果（报 completed、名下还有后台命令）后，那条命令做完时它以同一 id 再跑：命令的通知先到、清单先变空、它才重新出现，
+///   这中间它仍算在飞。被停下的不会再跑。
+struct ClaudeHostedTasks {
+    /// 清单里此刻的任务
+    private var listed: Set<String> = []
+    /// 清单里出现过的顶层任务（没有 `parent_task_id`）
+    private var topLevel: Set<String> = []
+    /// 子任务 → 它所属的子代理
+    private var owner: [String: String] = [:]
+    /// 交回过中途结果、名下任务做完时会再跑的子代理
+    private var paused: Set<String> = []
+    /// 名下任务刚做完、还没重新出现在清单里的子代理
+    private var resuming: Set<String> = []
+
+    var inFlight: Set<String> { listed.union(resuming) }
+
+    mutating func list(_ tasks: [JSONValue]) {
+        listed = Set(tasks.compactMap { $0["task_id"]?.string })
+        for task in tasks {
+            guard let id = task["task_id"]?.string else { continue }
+            if let parent = task["parent_task_id"]?.string { owner[id] = parent } else { topLevel.insert(id) }
+        }
+        resuming.subtract(listed)
+        paused.subtract(listed)
+    }
+
+    /// 一个任务落定（`completed`：做完或交回了中途结果；否则被停下或失败）；返回主会话是否会为它跑一轮。
+    mutating func settled(_ id: String, completed: Bool) -> Bool {
+        if completed { paused.insert(id) } else { paused.remove(id) }
+        if let parent = owner[id], paused.remove(parent) != nil { resuming.insert(parent) }
+        return topLevel.contains(id)
+    }
 }
 #endif

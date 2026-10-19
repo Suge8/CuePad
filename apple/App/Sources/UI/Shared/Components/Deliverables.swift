@@ -27,10 +27,10 @@ struct DeliverableStrip: View {
         case 0:
             EmptyView()
         case 1 where size != .mini:
-            tile(previews[0], .hero(maxHeight: heroMaxHeight))
+            tile(previews[0], .hero(maxHeight: Self.heroMaxHeight(size)))
         case 2 where size != .mini:
             HStack(alignment: .top, spacing: Self.gap) {
-                ForEach(previews) { tile($0, .column(maxHeight: heroMaxHeight)) }
+                ForEach(previews) { tile($0, .column(maxHeight: Self.heroMaxHeight(size))) }
             }
         default:
             // 懒加载：一件活常常挂着几十上百份（真实库里一张结果卡 278 份），整排都建的话第一次打开 Cue 页光这一张就占 300ms 主线程。
@@ -57,22 +57,42 @@ struct DeliverableStrip: View {
 
     static let gap: CGFloat = 8
 
+    /// 在 `width` 宽里至少多高（Cue 页打开时数铺满一屏要排几格，`CuePage.floor`）：一份是主图，比例最扁到 16:9；两份各按真实比例，
+    /// 可能扁得几乎没有高；三份起是定高的一排。图下面那行字至少一行小字。
+    static func floor(count: Int, size: Size, width: CGFloat) -> CGFloat {
+        let caption: CGFloat = size == .mini ? 0 : DeliverableTile.captionGap + 12
+        switch count {
+        case 0: return 0
+        case 1 where size != .mini: return min(heroMaxHeight(size), width * 9 / 16) + caption
+        case 2 where size != .mini: return caption
+        default: return stripHeight(size, regular: false) + caption
+        }
+    }
+
     private var stripHeight: CGFloat {
+        #if os(macOS)
+        Self.stripHeight(size, regular: true)
+        #else
+        Self.stripHeight(size, regular: sizeClass == .regular)
+        #endif
+    }
+
+    /// 三份起那一排的高；`regular`：宽屏（iPad），卡宽得多，迷你一排与 Mac 同高。
+    private static func stripHeight(_ size: Size, regular: Bool) -> CGFloat {
         switch size {
         #if os(macOS)
         case .mini: 88
         case .result: 200
         case .chat: 176
         #else
-        // 宽屏（iPad）的卡宽得多，与 Mac 同高
-        case .mini: sizeClass == .regular ? 88 : 72
+        case .mini: regular ? 88 : 72
         case .result: 150
         case .chat: 132
         #endif
         }
     }
 
-    private var heroMaxHeight: CGFloat {
+    private static func heroMaxHeight(_ size: Size) -> CGFloat {
         #if os(macOS)
         size == .result ? 360 : 320
         #else
@@ -113,10 +133,13 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
-        /// 提问点名的图（`CueShots`）：同高、宽按比例、整张不裁，白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
-        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。`aspect` 是读到画面之前已知的比例（图片的像素尺寸，`CueShown.aspect`）。
-        case shot(height: CGFloat, aspect: CGFloat?)
+        /// 提问点名的图（`CueShots`）：方形、宽随给的（至多 `side`）、按显著区域裁切填满（`LookBox.salient`），白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。
+        case shot(side: CGFloat)
     }
+
+    /// 画面与下面那行字之间。
+    static let captionGap: CGFloat = 5
 
     let preview: PiPreview
     let label: String
@@ -151,7 +174,7 @@ struct DeliverableTile: View {
 
     var body: some View {
         Button { open(preview) } label: {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: Self.captionGap) {
                 framed
                 if captioned { caption }
             }
@@ -181,15 +204,11 @@ struct DeliverableTile: View {
 
     private var aspect: CGFloat {
         // 读到之前按类型猜：PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳
-        let raw = shown?.aspect ?? Self.guessedAspect(preview, known: shotAspect)
+        let raw = shown?.aspect ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3)
         guard case .hero = shape else { return raw }
         return min(max(raw, 4 / 3), 16 / 9)
     }
 
-    /// 读到画面之前的比例：已知的（图片的像素尺寸）照用，否则按类型猜——PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳。
-    nonisolated static func guessedAspect(_ preview: PiPreview, known: CGFloat?) -> CGFloat { known ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3) }
-
-    private var shotAspect: CGFloat? { if case .shot(_, let aspect) = shape { aspect } else { nil } }
     private var isShot: Bool { if case .shot = shape { true } else { false } }
 
     /// 放大的记号：图宽到这么多才放（再窄就挡住了图）。
@@ -222,10 +241,11 @@ struct DeliverableTile: View {
             picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
         case .strip(let height):
             picture.frame(width: (height * aspect).rounded(), height: height)
-        case .shot(let height, _):
-            let width = (height * aspect).rounded()
-            picture.frame(width: width, height: height)
-                .overlay(alignment: .topTrailing) { if width >= Self.enlargeMinWidth { enlarge } }
+        case .shot:
+            picture.aspectRatio(1, contentMode: .fit)
+                .overlay(alignment: .topTrailing) {
+                    GeometryReader { frame in if frame.size.width >= Self.enlargeMinWidth { enlarge.frame(maxWidth: .infinity, alignment: .trailing) } }
+                }
                 #if os(macOS)
                 .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
                 #endif
@@ -246,10 +266,10 @@ struct DeliverableTile: View {
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        // 裁的时候留上沿：截图与页面要紧的多在上面
+        // 裁的时候留上沿：截图与页面要紧的多在上面；提问的方形缩略图出画面时已按显著区域裁好（`LookBox.salient`），居中放
         // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
         return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
-            .overlay(alignment: .top) {
+            .overlay(alignment: isShot ? .center : .top) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
@@ -302,7 +322,8 @@ struct DeliverableTile: View {
         return switch shape {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
-        case .strip(let height), .shot(let height, _): LookBox(width: 0, height: pixels(height), fills: true)
+        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
+        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true, salient: true)
         }
     }
 }

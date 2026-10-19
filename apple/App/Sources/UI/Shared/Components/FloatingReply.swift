@@ -12,15 +12,19 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     @ViewBuilder let reply: Reply
     @Environment(\.palette) private var palette
     @State private var height: CGFloat = 0
+    @State private var area: CGFloat = .infinity
 
     var body: some View {
         ZStack(alignment: .bottom) {
             chat.environment(\.chatBottomInset, height)
             reply
+                .environment(\.chatHeight, area)
                 .frame(maxWidth: .infinity)
                 .background(backed ? palette.desk : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // 对话透到安全区里（页头、状态栏底下也是对话），可见的高连同安全区算
+        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: { area = $0 }
     }
 }

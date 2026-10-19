@@ -188,18 +188,16 @@ struct QuotaRing: View, Animatable {
         set { left = newValue }
     }
 
+    /// 两段描边（不用 Canvas：第一次进有它的页时一张画布就要几毫秒）。
     var body: some View {
-        let (track, fill, left) = (palette.track, level.ink(palette), left)
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = min(size.width, size.height) / 2 - Self.line / 2
-            let ring = Path { $0.addArc(center: center, radius: radius, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: false) }
-            context.stroke(ring, with: .color(track), lineWidth: Self.line)
-            guard left > 0 else { return }
-            let arc = Path {
-                $0.addArc(center: center, radius: radius, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(left, 1)), clockwise: false)
+        let ring = Circle().inset(by: Self.line / 2)
+        ZStack {
+            ring.stroke(palette.track, lineWidth: Self.line)
+            if left > 0 {
+                ring.trim(from: 0, to: min(left, 1))
+                    .stroke(level.ink(palette), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             }
-            context.stroke(arc, with: .color(fill), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
         }
     }
 }

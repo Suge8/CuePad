@@ -16,10 +16,6 @@ nonisolated extension [PiSubagentState] {
 }
 
 nonisolated extension PiSubagentState {
-    /// 在跑（全 App 只此一个定义：会话卡片的"2/8"、"在做"区头的子代理数、名册的排序与颜色都读它）：状态是在跑。
-    /// 在被审查的不算：审查期间它自己是闲的，等的是审查它的那位。
-    var isRunning: Bool { phase == .known(.running) }
-
     /// 状态标借会话的说法：在跑的是工作中，失败是出错，其余（审查中、交回、被中断、空闲）是停着；状态词另写（`label`）。
     var shown: PiShown {
         switch phase.known {

@@ -11,7 +11,7 @@ struct NoticeBanner: View {
 
     /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
     private static let sideClearance: CGFloat = 16 + FloatingHeaderLayout.height + 8
-    /// 顶上那一排离上安全区（状态栏下沿）的距离，与 `RootBar` 同。
+    /// 顶上那一排离上安全区（状态栏下沿）的距离，与 Cue 页头同。
     private static let rowTop: CGFloat = 4
     /// iPad 上也保持胶囊，不铺满整个窗口。
     private static let maxWidth: CGFloat = 440
@@ -33,7 +33,7 @@ struct NoticeBanner: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.sideClearance)
         .padding(.top, Self.rowTop)
-        // iPad 窄窗口：顶上那一排整排让开左上的窗口钮（`RootBar`），横幅在同一排里，按同一个窗口角让，不盖住被挪过去的圆钮
+        // iPad 窄窗口：按窗口给的角落让开左上的窗口钮，不盖住它
         .containerCornerOffset(.horizontal, sizeToFit: true)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in

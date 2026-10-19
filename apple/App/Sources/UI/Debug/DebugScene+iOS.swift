@@ -4,9 +4,9 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、unfiled、editor、tasks、agent（Agent 整页，侧栏的"会话"）、send、search、trash、archive、settings、sidebar（侧栏列表：iPad 展开侧栏，iPhone 回到列表）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、unfiled、editor、tasks（任务页，窄屏底部与宽屏侧栏的"任务"）、agent（会话页，窄屏底部与宽屏侧栏的"会话"）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
-/// task 打开"正在推进"第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条；`-CuePadBrief YES` 再弹出正文的编辑页）。
+/// task 打开进行中第一条的任务页（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条；`-CuePadBrief YES` 再弹出正文的编辑页）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
@@ -24,6 +24,7 @@ extension DebugScene {
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services) } }
+        if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         if defaults.string(forKey: "CuePadBench") == "interact" {
             Task { await IOSInteractionBench.run(workspace, navigation) }
             return
@@ -43,7 +44,6 @@ extension DebugScene {
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
-            if UIDevice.current.userInterfaceIdiom == .phone { navigation.showList() }
         case "unfiled": open(.unfiled)
         case "trash": open(.trash)
         case "archive": open(.archive)
@@ -140,6 +140,43 @@ extension DebugScene {
         case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed("iCloud 账号不可用"))
         default: nil
         }
+    }
+
+    /// `-CuePadDockTour YES`（iPhone，配 `-CuePadDemo YES`）：画面就绪后每一拍走一步，每步走点按调的那条路：Cue 页展开去处圆钮 → 去任务 →
+    /// 去会话 → 推入一个会话 → 返回 → 去项目 → 推入搜索 → 返回 → 推入一个会话再换去任务（推入的页清掉）→ 回 Cue → 聚焦输入框（去处圆钮让开）。
+    static func dockTourIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
+        guard defaults.bool(forKey: "CuePadDockTour") else { return }
+        let sessions = ((try? await workspace.services.store.piSessionPage(PiSessionQuery(limit: 2)))?.items ?? []).map(\.state)
+        // 节奏是要录的内容，不是在等别的事
+        func beat() async { try? await Task.sleep(for: .seconds(1.6)) }
+        func open(_ index: Int) {
+            guard sessions.indices.contains(index) else { return }
+            navigation.openSession(sessions[index].id, sessionID: sessions[index].sessionID, store: workspace.services.store)
+        }
+        await beat()
+        togglePlaces()
+        await beat()
+        navigation.select(.tasks)
+        await beat()
+        navigation.select(.agent)
+        await beat()
+        open(0)
+        await beat()
+        navigation.path.removeAll()
+        await beat()
+        navigation.select(.shelf)
+        await beat()
+        navigation.openSearch()
+        await beat()
+        navigation.closeSearch()
+        await beat()
+        open(1)
+        await beat()
+        navigation.select(.tasks)
+        await beat()
+        navigation.select(.cue)
+        await beat()
+        navigation.speakToCue()
     }
 
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。

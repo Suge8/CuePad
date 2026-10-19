@@ -204,7 +204,7 @@ struct ChipRow<Content: View>: View {
     }
 }
 
-/// 一颗筛选胶囊（搜索的筛选、Agent 页的项目）：生效的是墨色实心，其余是纸底细边。
+/// 一颗筛选胶囊（搜索的筛选、会话页的项目）：生效的是选中底（`selection`）与靛青字（选中一律用签名色），其余是纸底细边、墨色字。
 struct FilterChip<Label: View>: View {
     let on: Bool
     @ViewBuilder let label: Label
@@ -214,9 +214,8 @@ struct FilterChip<Label: View>: View {
         label
             .font(.subheadline)
             .fontWeight(on ? .semibold : nil)
-            .foregroundStyle(palette.ink)
+            .foregroundStyle(on ? palette.signature : palette.ink)
             .padding(.horizontal, 12).frame(minHeight: 36)
-            // 选中：靛青浅底 + 靛青描边（选中一律用签名色），字仍是墨
             .background(on ? palette.selection : palette.paper, in: .capsule)
             .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
             .padding(.vertical, 4)

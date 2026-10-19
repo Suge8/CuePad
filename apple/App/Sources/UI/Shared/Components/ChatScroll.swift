@@ -153,6 +153,8 @@ extension EnvironmentValues {
     @Entry var chatJump: ChatJump?
     /// 浮在对话底上的那一块占的高（`FloatingReply`：Mac 的回复框，手机 Cue 页的"等你"卡与输入框）：对话在底下让出这么高，最新一行停在它上方。
     @Entry var chatBottomInset: CGFloat = 0
+    /// 对话区可见的高（`FloatingReply` 给浮在底上的那一块）："等你"卡至多占它一半。
+    @Entry var chatHeight: CGFloat = .infinity
 }
 
 /// 聊天式的滚动区（会话页与 Cue 页、Mac 与 iPhone 共用，经 `ChatColumn`）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
@@ -265,6 +267,12 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                                 // 跳去了某一条、你还没滚过：打开时排开更早的一段常与跳挤在相邻两帧，按偏移补的话晚一拍生效的偏移会盖掉跳，重新对准那一条
                                 reader.scrollTo(target.id, anchor: target.anchor)
                             } else { position.scrollTo(y: offset.read + grown) }
+                            return
+                        }
+                        // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。
+                        // 变高矮常晚于跳的那一下：图的比例读到之前按猜的排
+                        if grown != 0, !follow.wrappedValue.scrolling, let target = follow.wrappedValue.target {
+                            reader.scrollTo(target.id, anchor: target.anchor)
                             return
                         }
                         // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环
