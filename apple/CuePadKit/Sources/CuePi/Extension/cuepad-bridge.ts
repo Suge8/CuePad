@@ -15,8 +15,8 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 32;
-const PROTOCOL_VERSION = 14;
+const EXTENSION_VERSION = 33;
+const PROTOCOL_VERSION = 15;
 
 /** 本文件在磁盘上的位置（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把它原子地换成新版本，
  * 见 `reloadWhenIdle` */
@@ -499,7 +499,10 @@ export default function (pi: ExtensionAPI) {
 		const clients = new Set<net.Socket>();
 		const state = () => tracker.derive(firecode.inFlight);
 		const initial = state();
-		let lastKey = JSON.stringify(initial);
+		/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：早于这一回合写进会话文件的回答，CuePad 据此认出歇下时这一轮的回答读到没有。
+		 * 取每个回合而不取 agent_start：一次运行里接着处理排队的话，最后的回答出自最后一个回合 */
+		let turnSince: number | null = null;
+		let lastKey = JSON.stringify([initial, turnSince]);
 		let phase: Phase = phaseOf(initial);
 		/** 进入当前粗状态的时间 */
 		let since = Date.now();
@@ -582,7 +585,7 @@ export default function (pi: ExtensionAPI) {
 		/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 		function commit(resume?: { phase: Phase; since: number; busySince: number | null }) {
 			const current = state();
-			const key = JSON.stringify(current);
+			const key = JSON.stringify([current, turnSince]);
 			if (key === lastKey) return;
 			lastKey = key;
 			const next = phaseOf(current);
@@ -595,7 +598,7 @@ export default function (pi: ExtensionAPI) {
 				reloadWhenIdle();
 			}
 			if (clients.size === 0) return;
-			const message = { t: "state", state: { ...current, since, busySince } };
+			const message = { t: "state", state: { ...current, since, busySince, turnSince } };
 			for (const client of clients) write(client, message);
 		}
 
@@ -736,7 +739,7 @@ export default function (pi: ExtensionAPI) {
 				mode: ctx.mode,
 				tty: await tty,
 				term: terminalEnv,
-				state: { ...state(), since, busySince },
+				state: { ...state(), since, busySince, turnSince },
 				launchToken,
 				hosted: IS_HOSTED,
 				...info,
@@ -1104,6 +1107,10 @@ export default function (pi: ExtensionAPI) {
 				tracker.stopped = false;
 				commit();
 				clearDraft();
+			}),
+			pi.on("turn_start", (event) => {
+				turnSince = event.timestamp;
+				commit();
 			}),
 			pi.on("message_update", (event) => {
 				const type = event.assistantMessageEvent.type;

@@ -5,7 +5,7 @@ import Foundation
 
 /// 一个会话此刻的事实：各家把自己的事件（钩子、stream-json、app-server 通知、服务事件）翻译成对它的修改，桥上的状态、那句说明、
 /// 要你回答的、子代理与出错原文都由它推出（`publish`）。状态的规则只在这一处：
-/// 要你回答的优先；在压缩；自己这一轮在跑就看在做什么；歇下了还有子代理在跑是等子代理；上一轮出错是出错；否则空闲。
+/// 要你回答的优先；在压缩；自己这一轮在跑就看在做什么；歇下了还有在飞的工作（`inFlight`）是等子代理；上一轮出错是出错；否则空闲。
 /// 计时与 Pi 扩展同一规则（`PiSession.enter`）；歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
 struct SessionFacts {
     /// 自己这一轮在跑（子代理不算）
@@ -21,13 +21,26 @@ struct SessionFacts {
     var compacting = false
     /// 上一轮出错的原文；开始新的一轮时清掉
     var failure: String?
+    /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
+    /// 各家整份写入自己的权威来源（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
+    /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
+    var inFlight: Set<String> = []
+    /// 主会话最后一轮开始的时刻（`PiSessionState.turnStartedAt`）
+    private(set) var turnStartedAt: Date?
     /// 子代理名册（按 Agent 给的 id），按出现先后
     private(set) var subagents: [(id: String, state: PiSubagentState)] = []
     /// 歇着时开始压缩那一刻的计时：压完回到它
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
-    /// 开始新的一轮。
-    mutating func startTurn() {
+    /// 开始新的一轮（你开的，或 Agent 自己为子代理的结果开的、接入补开的）。`start` 要早于这一轮可能在会话文件里收尾的任何时刻：
+    /// 歇下就绪看收尾不早于它（`PiSessionState.answered`）。取 Agent 自己给的开始时刻；没有就取一个一定在它之前的时刻——
+    /// 会挡住这一轮的钩子（收到 `UserPromptSubmit`）、CuePad 发出话或空输入的那一刻、收到 Agent 报这一轮开始（或开它的那件事）的那一刻。
+    /// 接上时已在跑的一轮（CuePad 晚启动、断线重连）：拿到列表或快照之后从会话记录里读它的开始（`PiHistoryCheckpoint.lastTurnStart`）。
+    /// CuePad 自己的时刻都分不清这期间换没换轮：接上的此刻可能晚于它的收尾（永远不算就绪），请求前的时刻可能早于上一轮的回答
+    /// （上一轮在请求途中收尾、这一轮紧接着开始时，上一轮的回答也算就绪），库里旧的更早。记录里一轮都读不到才取请求前的时刻：
+    /// 这时也没有上一轮的回答可比。
+    mutating func startTurn(at start: Date) {
+        turnStartedAt = start
         running = true
         work(.thinking)
         failure = nil
@@ -47,21 +60,30 @@ struct SessionFacts {
         activityDetail = detail
     }
 
-    var hasRunningSubagent: Bool { subagents.contains { $0.state.phase == .known(.running) } }
-
     mutating func startSubagent(_ id: String, name: String, role: String, at now: Date) {
-        subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now)))
+        subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
     }
 
-    /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）。
-    mutating func updateSubagent(_ id: String, _ change: (inout PiSubagentState) -> Void) {
+    /// 子代理开始一次运行：第一次是新的一项；同一 id 再跑（Claude Code 被自己名下的后台命令叫醒、Codex 的 followup）名册里还是那一项，
+    /// 回到在跑，从此刻重新算（同 FireCode 名册的"本次运行"）。
+    mutating func runSubagent(_ id: String, name: String, role: String, at now: Date) {
+        guard subagents.contains(where: { $0.id == id }) else { return startSubagent(id, name: name, role: role, at: now) }
+        updateSubagent(id, at: now) { agent in
+            (agent.phase, agent.action, agent.startedAt, agent.settledAt) = (.known(.running), "", now, nil)
+        }
+    }
+
+    /// 改一个子代理（不在名册里的不管：如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
+    mutating func updateSubagent(_ id: String, at now: Date, _ change: (inout PiSubagentState) -> Void) {
         guard let index = subagents.lastIndex(where: { $0.id == id }) else { return }
+        let before = subagents[index].state
         change(&subagents[index].state)
+        if subagents[index].state != before { subagents[index].state.progressAt = now }
     }
 
     /// 子代理歇下：那句说明是它最后的话的首行。
     mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
-        updateSubagent(id) { agent in
+        updateSubagent(id, at: now) { agent in
             agent.phase = .known(phase)
             agent.action = summary.flatMap(ToolDetail.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
             agent.settledAt = now
@@ -73,7 +95,7 @@ struct SessionFacts {
         if let question { return (.waitingForUser, ToolDetail.singleLine(question.text).clipped(ToolDetail.limit)) }
         if compacting { return (.compacting, nil) }
         if running { return (activity, activityDetail) }
-        if hasRunningSubagent { return (.delegating, nil) }
+        if !inFlight.isEmpty { return (.delegating, nil) }
         if let failure { return (.error, PiErrorSummary(failure).line) }
         return (.settled, nil)
     }
@@ -96,6 +118,7 @@ struct SessionFacts {
             }
         }
         if state == .error { session.errorMessage = failure }
+        session.turnStartedAt = turnStartedAt
         session.question = question
         let roster = subagents.map(\.state)
         if session.subagents != roster { session.subagents = roster }

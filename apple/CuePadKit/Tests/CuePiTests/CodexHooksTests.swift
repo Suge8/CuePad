@@ -21,7 +21,7 @@ struct CodexHooksTests {
         AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: cuepad ?? self.cuepad)
     }
 
-    /// 用户自己的钩子（格式随手写）已被信任；接入后 CuePad 的 12 个事件都被 Codex 信任、用户的照旧；
+    /// 用户自己的钩子（格式随手写）已被信任；接入后 CuePad 的 10 个事件都被 Codex 信任、用户的照旧；
     /// App 挪了位置是旧版、重装又是新的；关掉后 hooks.json 与 config.toml 和接入之前逐字节一致。
     @Test func installIsTrustedByCodexAndUninstallRestoresTheUsersFilesExactly() async throws {
         try await codex.using {
@@ -44,7 +44,7 @@ struct CodexHooksTests {
 
             #expect(await integration().status(of: .codex).files == .current)
             var hooks = try await codex.hookTrust()
-            #expect(hooks.filter { $0.command == command }.count == 12)
+            #expect(hooks.filter { $0.command == command }.count == 10)
             #expect(hooks.filter { $0.command == command }.allSatisfy { $0.trust == "trusted" })
             #expect(hooks.filter { $0.command.hasPrefix("echo") }.map(\.trust) == ["trusted", "trusted"])
 
@@ -89,7 +89,7 @@ struct CodexHooksTests {
     @Test func uninstallRemovesFilesCuePadCreated() async throws {
         try await codex.using {
             try await integration().install(.codex)
-            #expect(try await codex.hookTrust().filter { $0.command == command && $0.trust == "trusted" }.count == 12)
+            #expect(try await codex.hookTrust().filter { $0.command == command && $0.trust == "trusted" }.count == 10)
             try await integration().uninstall(.codex, executable: codex.locator.candidates("codex").first)
 
             #expect(!FileManager.default.fileExists(atPath: hooksFile.path))

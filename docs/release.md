@@ -70,6 +70,10 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 映射再改时重复"生成 → 导入开发环境 → 部署到生产"。发布带新字段或新记录类型的版本前先部署：生产容器里写未部署的字段或类型会让整条记录保存失败，这类记录就同步不上去。`release-mac.sh` 发布前回读生产结构与 `cuepad.ckdb` 对比，缺的先部署再发。
 
+待部署到生产（已导入开发环境，发版前按上面三步部署，部署完删掉对应条目）：
+
+- `piSessionStates.turnStartedAt`、`piSessionStates.answeredAt`（INT64）：歇下等最后一轮的回答读到才算（`PiSessionState.answered`）。
+
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。
 
 订阅也是 schema 的一部分，但不在 `.ckdb` 里，cktool 看不到也导不出：生产环境拒绝客户端创建没部署过的查询订阅（CKErrorDomain 12，底层 BadSyntax 2006），区域与数据库订阅不受限；订阅类型按通知形状匹配（换成 alertBody 的变体会被拒）。所以改订阅的定义要先让开发环境签名的构建在开发容器里保存同样的订阅，再在控制台 Deploy Schema Changes——确认页的 Record Types、Indexes、Security Roles 都显示 0、也不单独列出订阅，但部署照样生效。

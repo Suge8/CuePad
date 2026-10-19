@@ -30,6 +30,7 @@ struct RealFirecodeTests {
             recap(of: bridge.sessions.first)?.lastReply == "TOOL_DONE" && bridge.sessions.first?.state == .delegating
         }
         let start = try #require(bridge.sessions.first?.busySince)
+        let dispatched = try #require(recap(of: bridge.sessions.first)?.answeredAt)
 
         // 停止只停指挥官自己这一轮（Esc 的同一能力）：指挥官已歇下，停止成功但不动子代理，会话仍在等子代理
         try await bridge.abort(try #require(bridge.sessions.first?.id))
@@ -44,11 +45,17 @@ struct RealFirecodeTests {
         #expect(recap(of: bridge.sessions.first)?.lastPrompt == "[[subagent:ui]]")
         // 子代理结束、事件交给指挥官、指挥官回应完才歇下：中间计时一直是同一段
         try await eventually("全部歇下") { bridge.sessions.first?.state == .settled }
+        // 歇下就绪（`PiSessionState.answered`）：派活那一轮的收尾早于交回结果那一轮的开始，那一轮的收尾不早于它
+        let turn = try #require(bridge.sessions.first?.turnStartedAt)
+        let answered = try #require(recap(of: bridge.sessions.first)?.answeredAt)
+        #expect(dispatched < turn && turn <= answered, "\(dispatched) \(turn) \(answered)")
         #expect(bridge.sessions.first?.busySince == nil)
         // 子代理做完交回：状态停在"已交回"，带落定时刻与结果首句
         let done = try #require(bridge.sessions.first?.subagents.first)
         #expect(done.phase == .known(.done) && !done.action.isEmpty)
         #expect(try #require(done.settledAt) >= #require(done.startedAt))
+        // 名册里它这一项变了，Mac 就记下这一刻有进展（等子代理太久没动静的兜底读它）
+        #expect(try #require(done.progressAt) > #require(ui.progressAt))
         let busy = log.changes.compactMap { change -> Date? in
             guard case .stateChanged(let session, _) = change else { return nil }
             return session.busySince

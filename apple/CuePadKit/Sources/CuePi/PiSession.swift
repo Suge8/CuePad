@@ -55,6 +55,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var stateSince: Date
     /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；空闲、出错时为 nil
     public internal(set) var busySince: Date? = nil
+    /// 主会话最后一轮开始的时刻（同步记录的 `PiSessionState.turnStartedAt`）：Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
+    public internal(set) var turnStartedAt: Date? = nil
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
     /// 首条用户消息的开头

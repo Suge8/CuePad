@@ -476,6 +476,14 @@ public enum PiHistory {
 /// 下一句你的话（`said`，含一轮在跑时插进来的）或这一轮结束（`answered`）时，最后那段归给前一句。
 /// 没有回答就结束的一轮按现有规则：被停下留"已停止"（`interrupted`）。
 extension PiHistoryCheckpoint {
+    /// 看到会话在跑之后读到的最后一轮的开始（接上时已在跑的一轮，`SessionFacts.startTurn(at:)`）：与收尾的时刻（`PiRecap.answeredAt`）
+    /// 出自同一份记录、同一个时钟。还开着的一轮取它开始的那条；已收尾的（看到它在跑之后才答完）取收尾那条——它就是那一轮的回答。
+    /// 一轮都没读到为 nil。
+    var lastTurnStart: Date? {
+        if let round { return round.startedAt }
+        return recap.answeredAt
+    }
+
     /// 写到会话记录上的摘要：问答，加上进行中这一轮到目前为止的经过（`PiRecap.pendingTools`，由轮次推出、不另存）。
     var projectedRecap: PiRecap {
         var projected = recap
@@ -539,6 +547,7 @@ extension PiHistoryCheckpoint {
 
     /// 这一轮做完，`text` 是结束它的那段（可以为空——如只调了工具、出错）：最后说的那段成一条消息，带这一轮的工具活动，
     /// 问与答一起更新——提问是这一轮里你说的话，机器消息触发的轮沿用上一次的提问。什么都没说、也没有提问的（只压缩了上下文）只结束这一轮。
+    /// 收尾的时刻记在摘要上（`PiRecap.answeredAt`）：歇下就绪只看它。
     mutating func answered(_ text: String, _ entry: PiHistory.Entry, into transcript: inout PiHistory.Transcript) {
         spoke(text, entry)
         if reply != nil {
@@ -546,6 +555,7 @@ extension PiHistoryCheckpoint {
         } else if let prompt = recap.pendingPrompt {
             recap = PiRecap(lastPrompt: prompt, lastReply: "", pendingPrompt: nil)
         }
+        recap.answeredAt = entry.at
         round = nil
     }
 
@@ -560,6 +570,7 @@ extension PiHistoryCheckpoint {
         transcript.add(self, entry, role: .system, text: (current.declined ? PiNotice.declined : .stopped).rawValue)
         round = nil
         recap.pendingPrompt = nil
+        recap.answeredAt = entry.at
     }
 
     /// 压缩上下文：一行系统行，不动问答。
@@ -574,7 +585,9 @@ extension PiHistoryCheckpoint {
         transcript.add(
             self, PiHistory.Entry(id: reply.id, seq: reply.seq, at: reply.at), role: .pi, text: reply.text, tools: current.tools.summary(),
             roundStartedAt: current.startedAt)
-        recap = PiRecap(lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply.text, PiRecap.replyLimit), pendingPrompt: nil)
+        recap = PiRecap(
+            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: PiHistory.clip(reply.text, PiRecap.replyLimit), pendingPrompt: nil,
+            answeredAt: recap.answeredAt)
         self.reply = nil
     }
 }

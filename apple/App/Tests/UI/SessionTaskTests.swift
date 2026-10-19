@@ -104,8 +104,8 @@ struct SessionTaskTests {
         let workspace = Workspace(services: services)
         try await store.bindSession("s1", to: old.id)
         let mark = try await store.lastWrite()
-        try await recorder.update(sessionID: "s1", state: .thinking)
-        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修登录", lastReply: "修好了")))
+        try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
+        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
         try await workspace.toggle(old.id)
         #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
@@ -266,13 +266,13 @@ struct SessionTaskTests {
         let task = try await store.createTask("修登录", in: nil)
         try await store.linkCard(task.id, toSession: "s1")
         let recorder = PiStateRecorder(store: store, hostID: services.hostID)
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录")
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录", turnStartedAt: .now)
         let byPad = UUID()
         try await store.recordSend("别动登录页样式", to: SendTarget(kind: .piSession, name: "修登录", ref: "s1"), delivery: byPad)
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
             PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "别动登录页样式", at: .now, deliveryID: byPad),
             PiChatMessage(sessionID: "s1", entryID: "a1", seq: 2, role: .pi, text: "好", at: .now),
-        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "好")))
+        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "好", answeredAt: .now)))
         func settledLine(after mark: Int) async throws -> String {
             try await recorder.update(sessionID: "s1", state: .settled)
             let changes = try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }
@@ -284,10 +284,10 @@ struct SessionTaskTests {
         #expect(try await settledLine(after: try await store.lastWrite()).contains("[歇下 · 他说的 · 他在场：刚在里面说过话] 修登录"))
 
         let mark = try await store.lastWrite()
+        try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)  // 机器消息开的这一轮在跑
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
             PiChatMessage(sessionID: "s1", entryID: "m3", seq: 3, role: .machine, text: "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>", at: .now),
-        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "测试全过")))
-        try await recorder.update(sessionID: "s1", state: .thinking)  // 机器消息开的这一轮在跑
+        ], recap: PiRecap(lastPrompt: "别动登录页样式", lastReply: "测试全过", answeredAt: .now)))
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint", "when": "now"]))
         #expect(!said.isError && said.text.contains("马上说"))
         let line = try await settledLine(after: mark)

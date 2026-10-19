@@ -97,6 +97,8 @@ DEFINE SCHEMA
         agent         STRING,
         catalogID     STRING,
         pendingTools  ENCRYPTED STRING,
+        turnStartedAt INT64,
+        answeredAt    INT64,
         models        ENCRYPTED STRING,
         commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
