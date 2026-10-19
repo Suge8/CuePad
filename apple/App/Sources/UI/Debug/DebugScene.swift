@@ -37,7 +37,8 @@ enum ScrollAnchor {
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
 /// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开去处、去三页、推入与返回、搜索、换去处清掉推入的页、回 Cue，
-///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；
+///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；`-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页的去处圆钮一出现就展开（`debugExposesPlaces`）；
+///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
 /// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开整份清单（`RoundProcess`、`PiSubagentList`、`CueNotes`）；
@@ -78,6 +79,8 @@ enum DebugScene {
     static var toggleCuePanel: () -> Void = {}
     /// 点 Cue 页底部去处圆钮的那条路（`debugExposesPlaces`）。
     static var togglePlaces: () -> Void = {}
+    /// `-CuePadPlacesOpen` 已经展开过一次。
+    static var placesOpened = false
     #endif
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
@@ -216,6 +219,12 @@ enum DebugScene {
             work()
             pending -= 1
         }
+    }
+
+    /// `-CuePadNotice <文字>`：就绪前弹一条带去处的提示（点它去会话页），停一分钟：截图、录屏拍得到提示条。
+    static func noticeIfAsked(_ workspace: Workspace) {
+        guard let text = defaults.string(forKey: "CuePadNotice") else { return }
+        workspace.say(Dotted(text), status: .unread, link: .agent, duration: .seconds(60))
     }
 
     /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、

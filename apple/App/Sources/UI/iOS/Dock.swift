@@ -3,8 +3,8 @@ import SwiftUI
 
 /// 窄屏（iPhone 与窄窗口 iPad）的容器：以当前去处为根的导航栈（`HomePage`），推入的页照常由系统返回与左缘右滑回去。
 /// 根只有底部那一排的四个去处（Cue、任务、会话、项目，`Route.home`），其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
-/// 每个去处一个导航栈，换去处就换一个：导航栏的样子（Cue 页藏起、三页的大标题与搜索钮）在建出时就定好，不在同一个栈里换——
-/// 同一个栈里从藏起导航栏的 Cue 页换到大标题的页，新页的滚动位置停在没有大标题的位置，大标题一出来就是收起的。
+/// 每个去处一个导航栈，换去处就换一个：换去处是两页交叉淡入淡出、新页先排后动，两页要同时在屏上，一个栈同一时刻只有一个根；
+/// 导航栏藏不藏（Cue 页藏起，三页留着搜索钮与右边那颗圆钮）也随栈建出时定好，不在同一个栈里来回藏。
 /// 换去处的过渡先排后动（docs/ui.md 渲染性能）：新栈先垫在旧栈下面建好、画好、交出一帧，下一帧旧栈才淡出，新页底部那一排同时从旧的样子长成自己的
 /// （`Dock.Arrival`、`dockSettled`）；新页第一次建、画要上百毫秒，边建边动的话弹簧一开始就走完了大半。不透明度为 0 的新栈不画，所以垫在下面而不是透明着。
 /// 旧栈的淡出是改它的不透明度、淡完再拿掉：导航栈托管在 UIKit 里，拿掉时的过渡不播。减弱动态效果时只淡出旧栈。
@@ -56,7 +56,7 @@ struct DockRoot: View {
 }
 
 /// 导航栈的根：一个去处的页加底部一排。任务、会话、项目三页：底部是 `Dock`（推入的页上没有，它跟着根页滑走，它们有自己的底），
-/// 导航栏左边一颗搜索钮，系统大标题（`RouteView.home`）；Cue 页：导航栏藏起（根页不需要返回），底部的去处圆钮与输入框在它自己的页里
+/// 导航栏左边一颗搜索钮、右边这一页的那一个操作，不写标题（`homePage`：底部的选中格已经说了在哪一页）；Cue 页：导航栏藏起（根页不需要返回），底部的去处圆钮与输入框在它自己的页里
 /// （`CueDockRow`，输入框随键盘升起）。
 private struct HomePage: View {
     let route: Route
@@ -67,7 +67,8 @@ private struct HomePage: View {
     @State private var screen: CGFloat = 0
 
     var body: some View {
-        RouteView(route: route, home: route != .cue)
+        RouteView(route: route)
+            .environment(\.homePage, true)
             // 内容一直滚到 Dock 后面，最后一行停在 Dock 上面
             .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: keyboard))
             .overlay(alignment: .bottom) {
@@ -144,7 +145,7 @@ struct Dock: View {
     static let keyboardGap: CGFloat = 8
     /// 选中滴离胶囊的边。
     static let inset: CGFloat = 4
-    private static let cellWidth: CGFloat = 76
+    static let cellWidth: CGFloat = 76
     static let capsuleWidth = cellWidth * CGFloat(places.count) + inset * 2
     /// 三个去处，从左到右。
     static let places: [SidebarOutline.Entry] = [.tasks, .sessions, .allProjects]
@@ -185,7 +186,7 @@ struct Dock: View {
             .overlay(alignment: .leading) {
                 HStack(spacing: 0) {
                     ForEach(Self.places, id: \.self) { place in
-                        DockCell(place: place, selected: place.route == route, size: .bar) { navigation.select(place.route) }
+                        DockCell(place: place, selected: place.route == route) { navigation.select(place.route) }
                             .frame(width: Self.cellWidth)
                     }
                 }
@@ -206,22 +207,13 @@ private struct DockDrop: View {
     var body: some View { Capsule().fill(palette.fill) }
 }
 
-/// 一格去处：图标在上字在下（Cue 页展开的三格同一种，小一号）。选中时图标点睛与字是靛青。
+/// 一格去处：图标在上字在下（Cue 页展开的三格同一种）。选中时图标点睛与字是靛青。
 private struct DockCell: View {
-    enum Size {
-        /// 三页底部的 Dock。
-        case bar
-        /// Cue 页那颗圆钮展开的三格。
-        case inline
-
-        var icon: CGFloat { self == .bar ? 20 : 18 }
-        var label: CGFloat { self == .bar ? 11 : 10 }
-    }
-
     let place: SidebarOutline.Entry
     let selected: Bool
-    let size: Size
     let action: () -> Void
+    private static let icon: CGFloat = 20
+    private static let label: CGFloat = 11
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
 
@@ -229,10 +221,10 @@ private struct DockCell: View {
         Button(action: action) {
             VStack(spacing: 3) {
                 IconImage(place.dockIcon, accent: selected ? .lit : .none)
-                    .font(.system(size: size.icon, weight: selected ? .semibold : .medium))
-                    .frame(height: size.icon + 4)
+                    .font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
+                    .frame(height: Self.icon + 4)
                     .overlay(alignment: .topTrailing) { if place == .allProjects { syncDot } }
-                Text(place.dockTitle).font(.system(size: size.label, weight: selected ? .semibold : .medium)).lineLimit(1)
+                Text(place.dockTitle).font(.system(size: Self.label, weight: selected ? .semibold : .medium)).lineLimit(1)
             }
             .foregroundStyle(selected ? palette.signature : palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -295,6 +287,7 @@ private struct CueDockButton: View {
 }
 
 /// Cue 页底部那一排（窄屏）：左边去处圆钮（`DockPlaces`，输入框有焦点时让开，输入框占满整排），右边输入框。
+/// 去处展开时这一排就是三页上 Dock 的样子：左边三格带字，输入框收成右端一颗同 Cue 圆钮大小的圆（`FoldedComposer`），点它收回成输入框。
 /// 从三页来时第一帧是 Dock 的样子——圆钮还是三格胶囊那么宽、输入框还是右端那颗 Cue 圆钮——再长成自己的（`Dock.Arrival`）。
 struct CueDockRow<Composer: View>: View {
     @Binding var placesOpen: Bool
@@ -310,21 +303,27 @@ struct CueDockRow<Composer: View>: View {
     }
 
     var body: some View {
+        // 还是 Dock 的样子（刚从三页来，或去处展开着）：中间的空撑开，右端是一颗圆
+        let docked = arriving || placesOpen
         HStack(alignment: .bottom, spacing: 0) {
             if !composing {
                 DockPlaces(open: $placesOpen, docked: arriving).transition(.opacity)
-                // 中间的空只在还是 Dock 的样子时撑开（输入框还是右端那颗 Cue 圆钮）
-                Spacer(minLength: Dock.gap).frame(maxWidth: arriving ? .infinity : Dock.gap)
+                Spacer(minLength: Dock.gap).frame(maxWidth: docked ? .infinity : Dock.gap)
             }
-            composer.frame(maxWidth: arriving ? Dock.height : .infinity)
+            if placesOpen {
+                FoldedComposer(unfold: $placesOpen).transition(.opacity)
+            } else {
+                composer.frame(maxWidth: arriving ? Dock.height : .infinity).transition(.opacity)
+            }
         }
         .modifier(Arrive(arriving: $arriving))
         .onChange(of: composing) { if composing { placesOpen = false } }
     }
 }
 
-/// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是上次去的那一页（`Navigation.lastPlace`）。点它原地展开成三格带字（输入框临时变窄），
-/// 选一格就去那里；点别处或滚动收回（`CuePage` 在对话上铺一层接点按）。接力的落点之一（`relaySpot(dock: nil)`）。
+/// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是上次去的那一页（`Navigation.lastPlace`）。点它原地展开成 Dock 那样的三格胶囊
+/// （同宽同高，输入框收成右端一颗圆，`CueDockRow`），选一格就去那里；点别处、滚动或点那颗圆收回（`CuePage` 在对话上铺一层接点按）。
+/// 接力的落点之一（`relaySpot(dock: nil)`）。
 /// `docked`：还是 Dock 三格胶囊的样子（刚从三页来的第一帧）。
 struct DockPlaces: View {
     @Binding var open: Bool
@@ -333,8 +332,6 @@ struct DockPlaces: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let size = ComposerMetrics.slot
-    private static let inset: CGFloat = 3
-    private static let cellWidth: CGFloat = 56
 
     var body: some View {
         let last = Dock.places.first { $0.route == navigation.lastPlace } ?? .tasks
@@ -342,14 +339,14 @@ struct DockPlaces: View {
             if open {
                 HStack(spacing: 0) {
                     ForEach(Dock.places, id: \.self) { place in
-                        DockCell(place: place, selected: false, size: .inline) {
+                        DockCell(place: place, selected: false) {
                             open = false
                             navigation.select(place.route)
                         }
-                        .frame(width: Self.cellWidth)
+                        .frame(width: Dock.cellWidth)
                     }
                 }
-                .padding(.horizontal, Self.inset)
+                .padding(.horizontal, Dock.inset)
                 .transition(.opacity)
             } else {
                 Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { open = true } } label: {
@@ -366,13 +363,44 @@ struct DockPlaces: View {
                 .transition(.opacity)
             }
         }
-        .frame(width: width, height: docked ? Dock.height : Self.size)
+        .frame(width: docked || open ? Dock.capsuleWidth : Self.size, height: docked || open ? Dock.height : Self.size)
         .glass(in: .capsule, interactive: true, ink: .clear)
     }
+}
 
-    private var width: CGFloat {
-        if docked { return Dock.capsuleWidth }
-        return open ? Self.cellWidth * CGFloat(Dock.places.count) + Self.inset * 2 : Self.size
+/// 去处展开时收起的输入框：右端一颗同 Cue 圆钮大小的玻璃圆，里面是 Cue 的头像（表情、在跑的环），点它收回成输入框。
+/// 有草稿时头像是在听的表情，右上角挂一颗你的话那种牛皮纸色的小气泡（`Palette.bubble` 加 `Icon.said`，同你在对话里说的话）：
+/// 草稿是你还没说出口的话，不借状态色。
+private struct FoldedComposer: View {
+    @Binding var unfold: Bool
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let badge: CGFloat = 20
+
+    var body: some View {
+        let cue = workspace.cue
+        let drafted = !cue.draft.isEmpty(accepting: .images)
+        Button { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { unfold = false } } label: {
+            CueAvatar(mood: cue.mood(composing: drafted), presence: cue.presence, size: .header)
+                .frame(width: Dock.height, height: Dock.height)
+                .contentShape(.circle)
+        }
+        .buttonStyle(PressStyle(.button))
+        .glass(in: .circle, interactive: true, ink: .clear)
+        .overlay(alignment: .topTrailing) {
+            if drafted {
+                IconImage(.said).font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.ink)
+                    .frame(width: Self.badge, height: Self.badge)
+                    .background(palette.bubble, in: .circle)
+                    .offset(x: 2, y: -2)
+                    .transition(.opacity)
+            }
+        }
+        .accessibilityLabel(cue.canHear ? "对 \(cue.name) 说" : "记一条灵感")
+        .accessibilityValue(drafted ? "有草稿" : "")
+        .accessibilityHint("收起去处，回到输入框")
     }
 }
 

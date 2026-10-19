@@ -13,7 +13,7 @@ struct TrashScreen: View {
         List {
             if let data {
                 if data.isEmpty {
-                    EmptyState(mascot: .trash, title: "回收站是空的").listRowBackground(Color.clear)
+                    EmptyState(mascot: .trash, title: "没有删掉的东西").listRowBackground(Color.clear)
                 }
                 if !data.projects.isEmpty {
                     Section("项目") { ForEach(data.projects) { row($0) } }
@@ -24,7 +24,8 @@ struct TrashScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .floatingHeader("回收站", detail: data.map { $0.isEmpty ? "空的" : "\($0.count) 项" } ?? "") {
+        // 空的时不写那一行：下面的空态已经说了
+        .floatingHeader("回收站", detail: data.map { $0.isEmpty ? nil : Dotted("\($0.count) 项") } ?? "") {
             // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
             Button("清空", icon: .trash, role: .destructive) { confirmEmpty = true }
                 .disabled(data?.isEmpty ?? true)

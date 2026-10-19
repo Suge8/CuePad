@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、Mac 侧栏与手机项目页共用这一处规则）。
-/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
+/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因，本机同步不通只写"没能送达"；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
     enum Source: Hashable, Sendable {
@@ -80,9 +80,11 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     }
 
     /// 这件事的那一句：在问什么、出错或没送到的原因、在做什么、回复的第一句；说不出时是 nil。
-    static func gist(_ item: PiSessionListItem, _ shown: PiShown) -> String? {
+    /// 本机同步不通没有哪一句自己的原因（`Speech.Failure.reason`），只写"没能送达"（同会话列表的行）：它是全局的事，一屏的项目各写一遍就是同一件事说 N 遍，
+    /// 原因只在一处——设置那一行与底部的"项目"带点（`AppServices.macAlert`），点进会话看全文。
+    private static func gist(_ item: PiSessionListItem, _ shown: PiShown) -> String? {
         switch shown.status {
-        case .delivery(.failed(let failure)): failure.text(sync: nil)
+        case .delivery(.failed(let failure)): failure.reason
         case .delivery, .restart: nil
         default: PiProgress.line(of: item.state)
         }

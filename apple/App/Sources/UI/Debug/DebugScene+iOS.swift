@@ -64,6 +64,7 @@ extension DebugScene {
             }
         case "cue", "cuememory", "cuesettings":
             if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
+            if let draft = defaults.string(forKey: "CuePadCueDraft") { workspace.cue.draft.text = draft }
             // 一夜里来的话是看着 Cue 页时写进去的：先离开再回来，才是"回来时有新消息"的样子
             if defaults.string(forKey: "CuePadCuePresence") == "away" {
                 navigation.show(.tasks)

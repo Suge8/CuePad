@@ -88,23 +88,25 @@ struct IOSRoot: View {
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Route
-    /// 窄屏导航栈的根（底部那一排的去处）：任务、会话、项目用系统大标题（`FloatingHeader` 读 `largeTitle`）。
-    var home = false
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.statusBarBottom) private var statusBar
+    /// 这一页的上沿（全局坐标，顶栏下沿或状态栏下沿）：页面只画到状态栏下沿为止（`BelowStatusBar`）。
+    @State private var top: CGFloat = 0
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘遮罩、渐变或色带，状态栏下也不（`Bars`）。
+        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘遮罩、渐变或色带；只有状态栏那一条不进内容（`Bars`）。
         // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（搜索页、Cue 页头）
         // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.ownsTopBar ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, route.ownsTopBar ? 0 : Bars.contentGap)
+            .clipShape(BelowStatusBar(top: statusBar - top))
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top = $0 }
             .containerBackground(background, for: .navigation)
-            // 只有窄屏的去处用大标题；推入页的标题在顶栏玻璃里，Cue、搜索自带顶上一排
-            .navigationBarTitleDisplayMode(home ? .large : .inline)
-            .environment(\.largeTitle, home)
+            // 标题在顶栏玻璃里（推入页）或不写（窄屏的根，`homePage`），不用系统大标题
+            .navigationBarTitleDisplayMode(.inline)
             .scrollEdgeEffectHidden()
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
             .modifier(KeyboardHold())
@@ -138,6 +140,18 @@ struct RouteView: View {
                 CardEditorScreen(cardID: id)
             }
         }
+    }
+}
+
+/// 页面画到哪：状态栏下沿以下（`top` 是它在页里的纵坐标，页的上沿在顶栏下面时是负的），左右与底不收（内容照样滚到回复框、Dock 与
+/// Home 指示条后面）。是裁掉，不是盖一层：状态栏那一条露出的是页底色（铺在导航容器上，不在裁的范围里）。
+private nonisolated struct BelowStatusBar: Shape {
+    var top: CGFloat
+    /// 左右与底边往外放这么多：页的边框外（安全区里）的内容不收。
+    private static let reach: CGFloat = 4000
+
+    func path(in rect: CGRect) -> Path {
+        Path(CGRect(x: rect.minX - Self.reach, y: top, width: rect.width + 2 * Self.reach, height: rect.maxY - top + Self.reach))
     }
 }
 

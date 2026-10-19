@@ -5,7 +5,7 @@ import SwiftUI
 /// 手机上 Cue 的设置（从 Cue 面板的"设置"推入）：名字；在哪台 Mac 上运行——能运行的几台直接列成一组单选（每台下面写能当大脑的几家，
 /// 或为什么一家都不能用），选一台就是换到那台并启用，"不启用"是停用；选了哪台后是用哪个 Agent、模型与思考强度（`CueConfigControls`，
 /// 与新会话同一排，Cue 面板第一行也是它）；对话里显示不显示工具步骤（`CueStepsSetting`，存本机）；不用先问的事（允许清单：每类要先问的事一个"所有项目都不用问"的开关，只管一个项目的那几项各一行、可撤销）。
-/// 顶栏是它的名字与现状（在哪台上运行、用哪家；没写成时是原因）。读写都经两端同一份 `CueSettingsModel`（Mac 上是设置窗口里的 `CueSettingsSection`）。
+/// 顶栏是它的名字，那一行只在没写成时写原因（在哪台上运行、用哪家就是下面勾着的那台与那一行，不再说一遍）。读写都经两端同一份 `CueSettingsModel`（Mac 上是设置窗口里的 `CueSettingsSection`）。
 struct CueSettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -46,7 +46,7 @@ struct CueSettingsScreen: View {
         .frame(maxWidth: .infinity)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .floatingHeader(settings.profile.name, detail: model.failure.map { Dotted($0) } ?? settings.status(here: nil))
+        .floatingHeader(settings.profile.name, detail: model.failure.map { Dotted($0) })
         .onChange(of: editing) { left, _ in
             if left { model.rename(name, services) }
         }
