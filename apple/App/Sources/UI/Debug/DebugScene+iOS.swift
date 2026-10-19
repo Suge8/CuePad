@@ -142,17 +142,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadAwayAfter <秒>`（配 cue 画面与 `-CuePadDemo YES`）：离开 Cue 页去任务页，Cue 说几句（`seedAway`，时刻挪成一夜里陆续说的），再回来。
-    static func awayIfAsked(_ workspace: Workspace, _ navigation: Navigation) async {
-        let delay = defaults.double(forKey: "CuePadAwayAfter")
-        guard delay > 0 else { return }
-        try? await Task.sleep(for: .seconds(delay))
-        navigation.show(.tasks)
-        try? await DebugScene.seedAway(workspace.services.store)
-        try? await Task.sleep(for: .seconds(1.5))
-        navigation.show(.cue)
-    }
-
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效。
     private static func cyclePanel() async {
         try? await Task.sleep(for: .seconds(4))

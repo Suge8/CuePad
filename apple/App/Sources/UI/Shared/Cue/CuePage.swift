@@ -12,7 +12,7 @@ import CuePi
 /// 经过清单里"对你说"那一条点它回到对话里的原处。连着的动态（含 Cue 自己醒来那几轮的经过）折成一行旁注（`CueNotes`），
 /// 它换了新上下文的地方一条分隔（`CueRenewal`，点开是交接备忘），末尾是它此刻在做什么（`CueEnding`）；
 /// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是"等你"（`CueWaitingDock`）与输入框（`CueComposer`）。
-/// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从它们上面的分隔线读起（`CueReadingTracker`）。
+/// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从它们上面的分隔线读起（`CueViewing`）。
 /// Cue 住在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑到最新（`ChatColumn` 的 `holding`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
@@ -25,7 +25,6 @@ struct CuePage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.pageActive) private var active
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -37,7 +36,7 @@ struct CuePage: View {
     @State private var width: CGFloat = 0
     /// "等你"卡正在来去（`CueWaitingDock.moving`）：对话先不往上滑。
     @State private var docking = false
-    /// 新消息的分隔线（开始看这一页时记下）与末尾在屏上的新消息（`CueReadingTracker`）。
+    /// 新消息的分隔线（开始看这一页时记下）与末尾在屏上的新消息（`CueViewing`）。
     @State private var divider: CueDivider?
     @State private var seen: [UUID: Date] = [:]
 
@@ -60,8 +59,7 @@ struct CuePage: View {
             }
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
-            .modifier(CueViewing(active: active))
-            .modifier(CueReadingTracker(thread: thread, catchingUp: catchingUp, divider: $divider, seen: $seen, follow: $follow))
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, divider: $divider, seen: $seen, follow: $follow))
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
                 DebugHooks.mark("cue")
@@ -334,7 +332,7 @@ private struct CueRow: View, Equatable {
     let live: CueLiveRound?
     /// 新消息从这一格起：上面一条分隔线，写着有几条。
     let divider: Int?
-    /// 这一格是新消息：末尾进出滚动区时报给页面（`CueReadingTracker`）。
+    /// 这一格是新消息：末尾进出滚动区时报给页面（`CueViewing`）。
     let unread: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
@@ -466,21 +464,3 @@ private struct CueEnding: View {
     }
 }
 
-/// Cue 页在前台时算一个在看的（`AppServices.cueViewers`）。Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
-private struct CueViewing: ViewModifier {
-    let active: Bool
-    @Environment(AppServices.self) private var services
-    @State private var counted = false
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: active, initial: true) { count(active) }
-            .onDisappear { count(false) }
-    }
-
-    private func count(_ on: Bool) {
-        guard on != counted else { return }
-        counted = on
-        services.cueViewers += on ? 1 : -1
-    }
-}

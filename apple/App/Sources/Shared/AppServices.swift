@@ -82,7 +82,7 @@ final class AppServices {
     var hasOpenDeliveries = false
     /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
-    /// 在前台的 Cue 页数（各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `Workspace.presentation`，iOS 前台的系统横幅）；
+    /// 有人在看的 Cue 页数（`CueViewing`：页与 App 都在前台；各平台、各窗口同一个数）：Cue 的通知按它算你在不在看（Mac 见 `AlertPresentation`，iOS 前台的系统横幅）；
     /// 手机上大于 0 时按节奏拉（`pollingCadence`）。
     var cueViewers = 0
     /// 最近一拉（`pull`）：开拉的时刻与它的任务，拉完也留着（等它立即返回）。同步启动时先是那次启动（不是一拉，没有开拉时刻）。

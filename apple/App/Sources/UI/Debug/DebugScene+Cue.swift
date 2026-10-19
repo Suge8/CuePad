@@ -168,8 +168,8 @@ extension DebugScene {
             case "sending":
                 _ = try await store.addCueMessage(.you, text: "顺便看看登录回调那个超时")
             case "away":
-                _ = try await store.endCueQuestion(asked.id, .answered("允许一次"))
-                try await you("推吧。我去睡了，后面的你盯着，明早看")
+                _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
+                try await you(goingAway)
                 try await seedAway(store)
             case "asleep":
                 // 两分钟前说的、一直没交出去（之前的对话挪得更早）
@@ -241,17 +241,21 @@ extension DebugScene {
         }
     }
 
-    #if os(macOS)
-    /// `-CuePadAwayAfter <秒>`（Mac，两台设备同步读到哪时当写下新消息的那台）：就绪后这么久你说一句去睡了，Cue 接着说一夜的那几句（不挪早）。
-    /// 等这么久是让它先把 iCloud 里已有的对话拉完：之前的都在你这一句之前，不算新的。
-    static func awayIfAsked(_ services: AppServices) async {
+    private static let goingAway = "推吧。我去睡了，后面的你盯着，明早看"
+
+    /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页（`leave`），你说一句去睡了、Cue 接着说一夜的那几句，再回来（`back`）。
+    /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
+    /// 不挪早：连着 iCloud 时挪早会挪进别的设备写过的对话中间；等这么久是先把 iCloud 里已有的拉完，之前的都在你这一句之前，不算新的。
+    static func awayIfAsked(_ store: CueStore, leave: () -> Void = {}, back: () -> Void = {}) async {
         let delay = defaults.double(forKey: "CuePadAwayAfter")
         guard delay > 0 else { return }
         try? await Task.sleep(for: .seconds(delay))
-        _ = try? await services.store.addCueMessage(.you, text: "推吧。我去睡了，后面的你盯着，明早看")
-        try? await seedAway(services.store, aged: false)
+        leave()
+        _ = try? await store.addCueMessage(.you, text: goingAway)
+        try? await seedAway(store, aged: false)
+        try? await Task.sleep(for: .seconds(1.5))
+        back()
     }
-    #endif
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
     /// （同 Cue 的 say 与 start 写下的样子，`CueFlight`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
