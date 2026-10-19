@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 答完的提问在对话里留下你说的一句（Cue 页与会话页同一种：你那一边的气泡，一行引用答的是哪个问题，下面是选的那一项或另外写的话的全文），
+/// 答完的提问在对话里留下你说的一句（Cue 页与会话页同一种：你那一边的气泡，一行引用答的是哪个问题，下面是选的那一项；会话里自己写的答案是全文），
 /// 排在答的那一刻。各自只从自己的事实推出：Cue 的是那条提问的 answer / answeredAt，会话的是作答成功时写进对话的那一句。
 @MainActor
 struct AnswerLineTests {
@@ -13,7 +13,7 @@ struct AnswerLineTests {
     private func thread() async throws -> CueThread { try await CueThread.read(from: store, showsSteps: true) }
 
     /// Cue 问了、之后又说了别的，你才答：回答在 Cue 后来那句之后（答的那一刻），引用的是那张卡的问句，点了回到那条提问；
-    /// 另外写的长话一字不少；Cue 撤回的没有这一格；刻度滑条上有你的回答。
+    /// 选第二项的也一样；Cue 撤回的没有这一格；刻度滑条上有你的回答。
     @Test func Cue的提问_答完在答的那一刻留下你的回答() async throws {
         let workspace = Workspace(services: app.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -24,8 +24,8 @@ struct AnswerLineTests {
         _ = try await store.addCueMessage(.cue, text: "重连用例我也补上了。")
 
         try await workspace.answerCueQuestion(push, CueAsk.once)
-        let long = String(repeating: "先别删，等我确认计费迁移跑完一周、对账没有差额再说。", count: 4)
-        try await workspace.answerCueQuestion(delete, long)
+        let always = try #require(delete.choices?.last)
+        try await workspace.answerCueQuestion(delete, always)
         _ = try await store.endCueQuestion(gone.id, .withdrawn)
 
         let thread = try await thread()
@@ -35,10 +35,10 @@ struct AnswerLineTests {
         #expect(later.text == "重连用例我也补上了。")
         #expect(first.id == push.id && first.answer == CueAsk.once && thread.rows.contains { $0.id == push.id })
         #expect(first.asking?.question == "可以把发言顺序的修复推送到 origin/main 吗？")
-        #expect(second.id == delete.id && second.answer == long)
+        #expect(second.id == delete.id && second.answer == always)
         #expect(!thread.rows.contains { if case .answer(let question) = $0 { question.id == gone.id } else { false } })
         #expect(thread.rows.last?.speaker == .trailing)
-        #expect(thread.marks.map(\.preview).suffix(2) == [CueAsk.once, long].map { ChatMark.firstLine($0) })
+        #expect(thread.marks.map(\.preview).suffix(2) == [CueAsk.once, always].map { ChatMark.firstLine($0) })
         // "等你"里不再有它们，计数与摘要照旧只看还开着的提问
         #expect(thread.waiting.isEmpty)
     }

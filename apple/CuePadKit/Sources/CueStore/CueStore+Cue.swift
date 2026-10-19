@@ -68,17 +68,16 @@ extension CueStore {
     try select(CueMessage.self, where: "author = 'cue' AND text = ?", [text], orderBy: "createdAt DESC, rowid DESC", limit: 1).first
   }
 
-  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`。回答交给 Cue（`toDeliver`），撤回的不交。
+  /// 结束一条还开着的提问（`CueQuestionEnd`）；已经结束的抛 `questionEnded`，回答不是它的选项之一抛 `notAChoice`。回答交给 Cue（`toDeliver`），撤回的不交。
   /// 你选的是第二项（"以后……不用问"，`CueAsk.always(in:)`）时，同一个事务里把提问存的类别与范围（`CueMessage.asked`）记进允许清单；
   /// 清单改了返回真，调用方上传设置。
   @discardableResult
   public func endCueQuestion(_ id: UUID, _ end: CueQuestionEnd) throws -> Bool {
     try write {
-      guard try endQuestions(end, where: "id = ?", [id]) > 0 else {
-        throw try find(CueMessage.self, id) == nil ? CueStoreError.notFound : CueStoreError.questionEnded
-      }
-      guard case .answered(let answer) = end, let message = try find(CueMessage.self, id), let asked = message.asked,
-        let choices = message.choices, choices.count > 1, answer == choices[1]
+      guard let message = try find(CueMessage.self, id) else { throw CueStoreError.notFound }
+      if case .answered(let answer) = end, message.choices?.contains(answer) != true { throw CueStoreError.notAChoice(answer) }
+      guard try endQuestions(end, where: "id = ?", [id]) > 0 else { throw CueStoreError.questionEnded }
+      guard case .answered(let answer) = end, let asked = message.asked, let choices = message.choices, choices.count > 1, answer == choices[1]
       else { return false }
       return try changeAllows(asked, allowed: true)
     }

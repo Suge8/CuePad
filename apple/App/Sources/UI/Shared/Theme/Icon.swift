@@ -28,10 +28,10 @@ nonisolated enum Icon: Hashable, Sendable {
     case complete, reopen, restore, start, add, indent, outdent, link, unlink
     case folder, newProject, unbindFolder, folderMissing, resource, isResource, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
-    case forward, back, expand, collapse, choose, conflict
+    case forward, back, expand, collapse, choose, conflict, enlarge
     // 输入、发送与会话
     case send, save, checked, stop, endSession, handOff, delivered, steer, queued, retry, toLatest, fetching, compact, renew
-    case declined, cannotSend, mac, yourAnswer, sendAnswer, above, floated, earlier
+    case declined, cannotSend, mac, yourAnswer, above, floated, earlier
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, terminalWindow, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case researcher, engineer, batchWorker, designer, sentinel, subagent
@@ -74,6 +74,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .forward: .ink("chevron.right")
         case .back: .ink("chevron.left")
         case .expand: .ink("chevron.down")
+        case .enlarge: .ink("enlarge")
         case .collapse: .ink("chevron.up")
         case .send: .ink("plane")
         case .stop: .ink("stop")
@@ -145,7 +146,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .cannotSend: .ink("ended")
         case .mac: .ink("mac")
         case .yourAnswer: .ink("restore")
-        case .sendAnswer: .ink("badge.send")
         case .above, .floated, .earlier: .ink("arrow.up")
         case .photo: .ink("photo")
         case .photoLibrary: .ink("photos")

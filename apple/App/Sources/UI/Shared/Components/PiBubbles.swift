@@ -181,7 +181,7 @@ struct BubbleText: View {
 
 
 /// 你对一个提问的回答（Cue 的提问与会话里的提问同一个组件）：你那一边的一颗气泡（`UserBubble`），字上面一行答的是哪个问题（`BubbleQuote`），
-/// 下面是选的那一项或另外写的话的全文。各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`PiChatRole.answer`）。
+/// 下面是选的那一项（会话里自己写的答案是全文）。各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`PiChatRole.answer`）。
 struct AnswerBubble<Menu: View>: View {
     let answer: String
     let quote: BubbleQuote?

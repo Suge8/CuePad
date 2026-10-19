@@ -216,8 +216,7 @@ enum ControlMetrics {
 /// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
 /// 外形单拆成 `ControlSurface`：点开菜单的按钮（`MenuButton`）不是 `Button`，要同一个样子时直接挂它。
 struct ControlButtonStyle: ButtonStyle {
-    /// `paper`：纸色实底加发丝边的次按钮，铺在淡底的纸上（"等你"卡）用：墨色浅底叠在淡底上发灰。
-    enum Kind { case primary, highlight, secondary, paper, quiet, circular }
+    enum Kind { case primary, highlight, secondary, quiet, circular }
     var kind = Kind.secondary
     var compact = false
     @Environment(\.isEnabled) private var isEnabled
@@ -251,7 +250,7 @@ struct ControlSurface: ViewModifier {
                 .padding(.vertical, 6)
                 .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
                 .background(background, in: .capsule)
-                .overlay { Capsule().strokeBorder(kind == .secondary || kind == .paper ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
+                .overlay { Capsule().strokeBorder(kind == .secondary ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
                 #if os(iOS)
                 .frame(minHeight: ControlMetrics.height)
                 #endif
@@ -263,7 +262,6 @@ struct ControlSurface: ViewModifier {
         switch kind {
         case .primary: palette.signatureFill
         case .highlight: palette.selection
-        case .paper: palette.paper
         case .quiet: .clear
         case .secondary, .circular: palette.fill
         }

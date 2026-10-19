@@ -430,9 +430,9 @@ struct CueHostTests {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
         let question = try await rig.message(.cue, containing: "要推送吗？")
-        #expect(question.choices == ["这次可以", "以后推送代码都不用问"])
+        #expect(question.choices == ["可以", "以后推送代码都不用问"])
         try await eventually("推了通知") {
-            rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n推上去别人就拉得到，撤不回来。\n这次可以 / 以后推送代码都不用问 / 另外说…"]
+            rig.notifier.posted.map(\.body) == ["可以推送登录页的修复吗？\n推上去别人就拉得到，撤不回来。\n可以 / 以后推送代码都不用问"]
         }
         try await rig.message(.cue, containing: "办好了")
         try await Workspace(services: rig.services).answerCueQuestion(question, "以后推送代码都不用问")
@@ -440,18 +440,6 @@ struct CueHostTests {
         #expect(try await rig.store.cueProfile()?.allows == [CueAllow(.push, project: nil)])
         #expect(try await rig.store.cueMemory().lines.isEmpty)
         await #expect(throws: CueStoreError.alreadyAllowed(nil)) { try await rig.store.addCueMessage(.cue, text: "又要推送吗？", ask: try CueAsking(.push, action: "推送修复")) }
-        await rig.stop()
-    }
-
-    /// "等你"没有关掉：你不选就在卡片的输入框里另外说一句，它结束这条提问、叫醒 Cue，Cue 读到的是你没选、另外说的话。
-    @Test func 另外说一句_Cue被唤醒照办() async throws {
-        let rig = try await Rig()
-        try await rig.say("请问我一个问题")
-        let question = try await rig.message(.cue, containing: "要推送吗？")
-        try await rig.message(.cue, containing: "办好了")
-        try await Workspace(services: rig.services).answerCueQuestion(question, "先别推，等我看完截图")
-        #expect(try await rig.store.cueMessagesWaitingForYou().isEmpty)
-        try await rig.message(.cue, containing: "好，照你说的：先别推，等我看完截图")
         await rig.stop()
     }
 
@@ -760,7 +748,6 @@ nonisolated final class FakeModel: Sendable {
             return say("办好了")
         }
         if let answer = text.firstMatch(of: /他回答了「.*」：(.+)/)?.1 { return say("知道了：\(answer)") }
-        if let words = text.firstMatch(of: /他没选「.*」的选项，另外说：(.+)/)?.1 { return say("好，照你说的：\(words)") }
         if text.contains("醒来：换了新上下文"), let handoff = text.firstMatch(of: /(交接：.+)/)?.1 { return say("接上了：\(handoff)") }
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请把这张图转给登录页"), let image = text.firstMatch(of: /!\[\]\(cuepad:\/\/img\/[0-9a-f]+\)/)?.0 {

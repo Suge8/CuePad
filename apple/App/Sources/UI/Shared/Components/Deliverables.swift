@@ -113,6 +113,9 @@ struct DeliverableTile: View {
         case column(maxHeight: CGFloat)
         /// 横向滑的一排里：同高，宽按比例
         case strip(height: CGFloat)
+        /// 提问点名的图（`CueShots`）：同高、宽按比例、整张不裁，白底、实色边（`Palette.mediaEdge`）、深色下不压暗，
+        /// 右上角一颗放大的记号（太窄的不放，Mac 上悬停才出现）。`aspect` 是读到画面之前已知的比例（图片的像素尺寸，`CueShown.aspect`）。
+        case shot(height: CGFloat, aspect: CGFloat?)
     }
 
     let preview: PiPreview
@@ -129,6 +132,7 @@ struct DeliverableTile: View {
     @State private var arrived: Bool?
     @State private var look: DeliverableLook?
     @State private var located = Located()
+    @State private var hovering = false
 
     /// 本机的那份文件（`AttachmentFiles.url(of:)` 要查几次文件系统，第一次还要拷一份）：同一次"到没到"只找一次，
     /// 视图体里用到它的几处不再各找一遍。
@@ -177,10 +181,19 @@ struct DeliverableTile: View {
 
     private var aspect: CGFloat {
         // 读到之前按类型猜：PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳
-        let raw = shown?.aspect ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3)
+        let raw = shown?.aspect ?? Self.guessedAspect(preview, known: shotAspect)
         guard case .hero = shape else { return raw }
         return min(max(raw, 4 / 3), 16 / 9)
     }
+
+    /// 读到画面之前的比例：已知的（图片的像素尺寸）照用，否则按类型猜——PDF 多是竖着的一页，其余（网页、截图、文稿的首屏）多是横的；猜对了读到时不跳。
+    nonisolated static func guessedAspect(_ preview: PiPreview, known: CGFloat?) -> CGFloat { known ?? (preview.kind == .pdf ? 3 / 4 : 4 / 3) }
+
+    private var shotAspect: CGFloat? { if case .shot(_, let aspect) = shape { aspect } else { nil } }
+    private var isShot: Bool { if case .shot = shape { true } else { false } }
+
+    /// 放大的记号：图宽到这么多才放（再窄就挡住了图）。
+    static let enlargeMinWidth: CGFloat = 80
 
     /// 画面出来之前写它是什么：成页的（网页、文稿、表格、PDF…）一张纸，音频、视频、3D 各自的记号，其余是文件。
     private var kindIcon: Icon {
@@ -194,8 +207,11 @@ struct DeliverableTile: View {
     }
 
     private var radius: CGFloat {
-        if case .strip(let height) = shape, height < 80 { return 8 }
-        return 12
+        switch shape {
+        case .strip(let height) where height < 80: 8
+        case .shot: 10
+        default: 12
+        }
     }
 
     @ViewBuilder private var framed: some View {
@@ -206,19 +222,38 @@ struct DeliverableTile: View {
             picture.aspectRatio(aspect, contentMode: .fit).frame(maxWidth: .infinity, maxHeight: maxHeight, alignment: .leading)
         case .strip(let height):
             picture.frame(width: (height * aspect).rounded(), height: height)
+        case .shot(let height, _):
+            let width = (height * aspect).rounded()
+            picture.frame(width: width, height: height)
+                .overlay(alignment: .topTrailing) { if width >= Self.enlargeMinWidth { enlarge } }
+                #if os(macOS)
+                .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
+                #endif
         }
+    }
+
+    /// 右上角的放大记号：只是提示，整张图都可点。
+    private var enlarge: some View {
+        Image(.enlarge).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.onMedia)
+            .frame(width: 20, height: 20).background(palette.mediaScrim, in: .circle)
+            .padding(6)
+            #if os(macOS)
+            .opacity(hovering ? 1 : 0)
+            #endif
+            .accessibilityHidden(true)
     }
 
     /// 画面铺满给的框（比例夹过的多出来的裁掉）；没有画面的写类型。
     private var picture: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         // 裁的时候留上沿：截图与页面要紧的多在上面
-        return Rectangle().fill(palette.fill)
+        // 要你看清的图垫白（透明图）；画面出来之前同别处，写它是什么
+        return Rectangle().fill(isShot && shown?.image != nil ? Color.white : palette.fill)
             .overlay(alignment: .top) {
                 if let image = shown?.image {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
-                        // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）
-                        .overlay { if preview.kind != .video { palette.mediaDim } }
+                        // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
+                        .overlay { if preview.kind != .video, !isShot { palette.mediaDim } }
                 } else if file == nil {
                     // 还没到本机：迷你一排没有下面那行字，下载中写在画面上
                     VStack(spacing: 3) {
@@ -244,7 +279,7 @@ struct DeliverableTile: View {
                 }
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder(palette.hair))
+            .overlay(shape.strokeBorder(isShot ? palette.mediaEdge : palette.hair))
             .zoomSource(zoom, in: namespace)
     }
 
@@ -267,7 +302,7 @@ struct DeliverableTile: View {
         return switch shape {
         case .hero(let maxHeight): LookBox(width: pixels(maxHeight * 16 / 9), height: pixels(maxHeight), fills: true)
         case .column(let maxHeight): LookBox(width: pixels(380), height: pixels(maxHeight), fills: false)
-        case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true)
+        case .strip(let height), .shot(let height, _): LookBox(width: 0, height: pixels(height), fills: true)
         }
     }
 }

@@ -265,7 +265,7 @@ import Testing
       let reply = try await server.call("tell", ["text": "改好了，要推送到 origin/main 吗？", "ask": "push", "doing": "推送登录页的修复", "task": task.id.uuidString])
       let question = try #require(try await store.cueMessagesWaitingForYou().first)
       let asked = question.id
-      #expect(reply.contains(asked.shortID) && question.choices == ["这次可以", "以后「演示」里推送代码不用问"])
+      #expect(reply.contains(asked.shortID) && question.choices == ["可以", "以后「演示」里推送代码不用问"])
 
       _ = try await store.moveCard(task.id, to: .top(project: other.id), after: nil)
       #expect(try await store.endCueQuestion(asked, .answered("以后「演示」里推送代码不用问")))
@@ -287,7 +287,7 @@ import Testing
 
       _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送分支清理", "task": unfiled.id.uuidString])
       let global = try #require(try await store.cueMessagesWaitingForYou().last)
-      #expect(global.choices == ["这次可以", "以后推送代码都不用问"])
+      #expect(global.choices == ["可以", "以后推送代码都不用问"])
       #expect(try await store.endCueQuestion(global.id, .answered("以后推送代码都不用问")))
       #expect(try await store.cueProfile()?.allows == [CueAllow(.delete, project: nil), CueAllow(.push, project: nil)])
 

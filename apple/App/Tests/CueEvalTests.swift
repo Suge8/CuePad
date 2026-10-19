@@ -256,25 +256,56 @@ struct CueEvalTests {
         }
     }
 
-    @Test func l另外说选别的方案() async throws {
+    @Test func l底下直接回了卡上的事() async throws {
         try await CueEval.run(
-            "l-另外说选别的方案",
-            expect: "Cue 按他的规矩把三个方案放到卡上、推荐 1；他不选选项、另外说「用 2，按钮再小一点」："
-                + "照方案 2 加上按钮再小一点让会话去做，不当成拒绝（不撤回、不收掉、不叫会话停），不再为这件事发等你"
+            "l-底下直接回了卡上的事",
+            expect: "卡上问着按方案 1 改提问卡；他不点卡，在 Cue 页底下说「用 2，按钮再小一点」："
+                + "照方案 2 加上按钮再小一点让会话去做，撤回那张卡，不再为这件事发等你"
         ) { eval in
-            let work = try await Self.proposalsDelivered(eval)
-            let question = try #require(try await eval.rig.store.cueMessagesWaitingForYou().first { $0.taskID == work.task.id }, "Cue 先在卡上问了")
-            try await eval.trigger { try await Workspace(services: eval.rig.services).answerCueQuestion(question, "用 2，按钮再小一点") }
+            let (work, question) = try await Self.proposalsAsked(eval)
+            try await eval.trigger { try await eval.rig.say("用 2，按钮再小一点") }
             let said = eval.calls("task", "say").compactMap { $0.args["text"] as? String }
+            let withdrawn = try await eval.rig.store.cueMessages().first { $0.id == question.id }
             return [
                 Check("让会话照方案 2 做（说到 2 或对话里问）", said.contains { $0.contains(/2|二|对话里问/) }),
                 Check("带上按钮再小一点", said.contains { $0.contains(/小/) }),
-                Check("不当成拒绝（没 done、没撤回、没叫会话停）",
-                      eval.calls("task", "done").isEmpty && !eval.calls("tell").contains { $0.args["withdraw"] != nil }
-                        && !said.contains { $0.contains(/先别(改|做|动)|不做了|不用(改|做)了|停下手|停掉/) }),
+                Check("撤回了那张卡", withdrawn?.answeredAt != nil && withdrawn?.answer == nil),
                 Check("没再为这件事发等你", !eval.calls("tell").contains { $0.args["ask"] != nil }),
+                Check("没收掉这件事（没 done）", eval.calls("task", "done").isEmpty && work.task.status != .done),
             ]
         }
+    }
+
+    @Test func m底下说的是别的事() async throws {
+        try await CueEval.run(
+            "m-底下说的是别的事",
+            expect: "卡上问着按方案 1 改提问卡；他在 Cue 页底下问的是另一件事（README 截图那件做到哪了）：答他问的，卡留着、不撤回"
+        ) { eval in
+            let (_, question) = try await Self.proposalsAsked(eval)
+            try await eval.trigger { try await eval.rig.say("README 截图那件做到哪了？") }
+            return [
+                Check("没撤回", !eval.calls("tell").contains { $0.args["withdraw"] != nil }),
+                Check("卡还在等你", try await eval.rig.store.cueMessagesWaitingForYou().contains { $0.id == question.id }),
+                Check("回了他", try await eval.reply() != nil),
+            ]
+        }
+    }
+
+    /// 卡上已经问着（同 Cue 按他的规矩把三个方案交上来的那张：推荐 1，点名每个方案一张图）；会话还在、等他定。
+    private static func proposalsAsked(_ eval: CueEval) async throws -> (Working, CueMessage) {
+        let rig = eval.rig
+        let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图发到手机，他选定后再实现。")
+        var shots: [CueShot] = []
+        for (slug, title) in proposals {
+            let file = rig.app.directory.appending(path: "\(slug)-iphone.png")
+            try await mockShot(file.lastPathComponent).write(to: file)
+            let preview = try #require(try await rig.store.addPreviews(filesAt: [file], title: title, sessionID: work.id).first).preview
+            shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
+        }
+        let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选", shots: shots)
+        let question = try await rig.store.addCueMessage(
+            .cue, text: "三个提问卡方案做好了，我推荐 1 决定单：点一下就答完。", ask: asking, task: work.task.id)
+        return (work, question)
     }
 
     /// 他交代过界面方案要在卡上选；会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
@@ -305,7 +336,7 @@ struct CueEvalTests {
 
     private static let proposalReply = """
         三个提问卡方案做好了，效果图都发到手机了（每个方案手机浅色、深色、Mac 各一张，另附一张现在提问卡的原样作对比）：
-        1. 决定单：大按钮"这次可以"占满一行，下面依次是"以后不用问"和另外说的输入框。点一下就答完，最清楚。
+        1. 决定单：大按钮"可以"占满一行，下面是"以后不用问"。点一下就答完，最清楚。
         2. 对话里问：卡片留在对话里，按钮贴在输入框上方，答完卡片原地变成回答。
         3. 郑重放行：滑过去才算同意，"以后不用问"是个开关，适合推送、删除这类收不回的事。
         我推荐 1：信息最集中、一步答完；3 的滑动在 Mac 上不顺手。
@@ -586,24 +617,22 @@ private func mockShot(_ name: String) throws -> Data {
                 Text("可以推送 scheduler 的重连修复吗？").font(.footnote)
                 HStack {
                     Text(CueAsk.once).font(.caption).padding(6).background(fill, in: .capsule)
-                    Text(CueAsk.otherwise).font(.caption).padding(6).background(fill, in: .capsule)
+                    Text("以后不用问").font(.caption).padding(6).background(fill, in: .capsule)
                 }
             }
         } else if name.hasPrefix("decision-sheet") {
             VStack(alignment: .leading, spacing: 10) {
                 question
                 why
-                button("这次可以", primary: true)
+                button("可以", primary: true)
                 button("以后推送代码都不用问")
-                Text("另外说…").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(fill))
             }
         } else if name.hasPrefix("in-thread") {
             VStack(alignment: .leading, spacing: 10) {
                 Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
                 Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: 12))
                 Spacer().frame(height: 30)
-                HStack { button("这次可以", primary: true); button("以后不用问") }
+                HStack { button("可以", primary: true); button("以后不用问") }
                 Text("对 Cue 说").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
                     .background(fill, in: .capsule)
             }
