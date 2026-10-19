@@ -22,7 +22,7 @@ struct CueBarView: View {
 
 import SwiftUI
 
-/// 一行 Cue 的现状（侧栏最上面、菜单栏面板、输入条）：头像、名字、此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄）。
+/// 一行 Cue 的现状（侧栏最上面、菜单栏面板、输入条）：头像、名字、此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄），有新消息的写几条（石绿）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
     @ViewBuilder var trailing: Trailing
@@ -39,11 +39,33 @@ struct CueStatusRow<Trailing: View>: View {
             }
             Spacer(minLength: 6)
             WaitingCount(count: cue.waiting).font(Typography.meta)
+            UnreadCount(count: cue.unread).font(Typography.meta)
             trailing
         }
         .animation(Motion.quick, value: cue.waiting)
+        .animation(Motion.quick, value: cue.unread)
         .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
+    }
+}
+
+/// 新消息有几条（`CueWatch.unread`）：石绿的点与数（有新回复的颜色），没有新的不画。
+private struct UnreadCount: View {
+    let count: Int
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if count > 0 {
+            HStack(spacing: 5) {
+                Circle().fill(palette.replied).frame(width: 7, height: 7)
+                Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
+            }
+            .foregroundStyle(palette.replied)
+            .fixedSize()
+            .transition(.opacity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(count) 条新消息")
+        }
     }
 }
 

@@ -131,7 +131,7 @@ import Testing
     let task = try await store.createTask("修好登录页", in: demo.id)
     try await store.setDirectory("/work/demo", for: demo.id)
     try await store.publishDirectoryBindings(host: "mac")
-    // 退回 50：撤掉 52、54、56、57、58 加的列与 55、57 加的索引，放回 56 删掉的列（53 重建触发器、55 重建的类型索引，留着新的照样能升）
+    // 退回 50：撤掉 52、54、56、57、59 加的列、55、57 加的索引与 58 加的表，放回 56 删掉的列（53 重建触发器、55 重建的类型索引，留着新的照样能升）
     let added = try RawDB(fixture.url).rows(
       """
       SELECT name FROM sqlite_master WHERE name GLOB '*_modified' OR name IN
@@ -143,7 +143,7 @@ import Testing
       ALTER TABLE cueMessages DROP COLUMN ask; ALTER TABLE cueMessages DROP COLUMN askAction; ALTER TABLE cueMessages DROP COLUMN askRule; ALTER TABLE cueMessages DROP COLUMN askShots;
       ALTER TABLE piMessages DROP COLUMN question;
       ALTER TABLE directoryBindings ADD COLUMN hostName TEXT NOT NULL DEFAULT 'Studio';
-      \(added.map { "DROP INDEX \($0[0]);" }.joined()) PRAGMA user_version = 50;
+      \(added.map { "DROP INDEX \($0[0]);" }.joined()) DROP TABLE cueRead; PRAGMA user_version = 50;
       INSERT INTO cueMessages (id, author, text, choices, urgent, taskID, createdAt, modifiedAt) VALUES
         ('\(UUID().uuidString.lowercased())', 'cue', '要推送吗？', '["允许一次","以后推送都不用问"]', 0, '\(task.id.uuidString.lowercased())', 1, 1),
         ('\(UUID().uuidString.lowercased())', 'cue', '按规矩要先问', '["允许一次"]', 0, NULL, 2, 2);

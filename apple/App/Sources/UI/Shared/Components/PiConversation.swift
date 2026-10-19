@@ -41,7 +41,7 @@ struct PiConversation: View {
                 EarlierRow(count: Self.segment, action: showEarlier)
             }
             if all.isEmpty, let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, size: Self.segment, from: first, width: width, pinned: { $0.contains { $0.id == highlight } }) { items in
+            ChatSegments(items: all, size: Self.segment, from: first, width: width) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }

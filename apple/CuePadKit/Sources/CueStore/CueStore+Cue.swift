@@ -373,6 +373,38 @@ extension CueStore {
   }
 }
 
+// MARK: 读到哪
+
+extension CueStore {
+  /// Cue 页的新消息（唯一的规则），从早到晚：Cue 对你说的话里，晚于你读到的地方（`CueRead`）与你最近一句的
+  /// （答了的提问也算：它在对话里是你那边的一句）。
+  /// 带选项的不算：开着时在"等你"里，结束了是你答过的或它撤回的。它自己醒来的动态、一轮的经过、交接备忘不是对你说的话。
+  public func cueUnread() throws -> [UUID] {
+    try db.query(
+      """
+      SELECT id FROM cueMessages
+      WHERE author = 'cue' AND choices IS NULL
+        AND createdAt > MAX(
+          IFNULL((SELECT modifiedAt FROM cueRead WHERE id = ?1), 0),
+          IFNULL((SELECT createdAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC LIMIT 1), 0),
+          IFNULL((SELECT MAX(answeredAt) FROM cueMessages WHERE \(Self.answered)), 0))
+      ORDER BY createdAt, rowid
+      """, [CueRead.recordID]
+    ) { $0.uuid(0) }
+  }
+
+  /// 读到了写下于 `through` 的那条 Cue 的话：只往后挪，没挪（读过更远的）不写、不同步。
+  public func markCueRead(through: Date) throws {
+    try write {
+      try db.run(
+        """
+        INSERT INTO cueRead (id, modifiedAt) VALUES (?1, ?2)
+        ON CONFLICT(id) DO UPDATE SET modifiedAt = excluded.modifiedAt WHERE excluded.modifiedAt > cueRead.modifiedAt
+        """, [CueRead.recordID, through])
+    }
+  }
+}
+
 // MARK: 此刻
 
 extension CueStore {

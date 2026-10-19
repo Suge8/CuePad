@@ -5,7 +5,7 @@ import Foundation
 ///
 /// 同步表（由 CueSync 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、sendRecords、attachments、piSessionStates、agentCatalogs、deliveryRequests、directoryBindings、piMessages、previews、accountQuotas、
-/// cueMessages、cueLines、cueProfile、cueState、macPresence、macAgents。约束：
+/// cueMessages、cueLines、cueProfile、cueState、cueRead、macPresence、macAgents。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -61,7 +61,8 @@ enum Schema {
     // 54：手机上的 Cue 与 Mac 对齐：每台 Mac 写下自己的名字（Cue 能住哪几台、住在哪台都读它），Cue 的上下文随状态同步
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
     // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
-    "DROP INDEX syncRecords_recordType; \(pendingIndexes) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
+    // 后来加的同步表那时还没有，各在建它的那一步建自己的索引
+    "DROP INDEX syncRecords_recordType; \(pendingIndexes(Table.synced.filter { $0 != .cueRead })) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
     // 56：提问存下类别与范围（`CueMessage.asked`）、要做的动作与依据的规矩（`CueAsking`），不再按选项文字反认；
     // Mac 名只在 macAgents，目录绑定不再带名字
     Upgrade { db in
@@ -74,7 +75,9 @@ enum Schema {
     },
     // 57：会话里你在 CuePad 作答的那一句写进对话（`PiChatRole.answer`），带着当时问的问题；Cue 页按答的时刻找你答了的提问
     "ALTER TABLE piMessages ADD COLUMN question TEXT; \(answeredIndex)",
-    // 58：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
+    // 58：Cue 页读到哪（`CueRead`）
+    "\(cueRead) \(modifiedIndex(.cueRead))",
+    // 59：提问要你看的图由 Cue 点名、存在提问上（`CueAsking.shots`），不再挂关联任务的全部交付物
     "ALTER TABLE cueMessages ADD COLUMN askShots TEXT;",
   ]
 
@@ -99,11 +102,17 @@ enum Schema {
 
   /// 推导待推送（`CueStore.pendingSync`）只读每条记录的 id 与修改时间、同步元数据的记录名、类型与收下的修改时间：
   /// 覆盖索引让它不碰表本身——同步元数据每行带约 4KB 的系统字段，会话消息、会话记录的行也大，真实库一次推导因此从 3.3 亿条指令降到 1 亿。
-  private static let pendingIndexes = """
+  private static func pendingIndexes(_ tables: [Table]) -> String {
+    """
     CREATE INDEX syncRecords_recordType ON syncRecords(recordType, pushedModifiedAt, recordName);
     CREATE INDEX syncRecords_pushed ON syncRecords(recordName, pushedModifiedAt);
-    \(Table.synced.map { "CREATE INDEX \($0.rawValue)_modified ON \($0.rawValue)(id, modifiedAt);" }.joined(separator: "\n"))
+    \(tables.map(modifiedIndex).joined(separator: "\n"))
     """
+  }
+
+  private static func modifiedIndex(_ table: Table) -> String {
+    "CREATE INDEX \(table.rawValue)_modified ON \(table.rawValue)(id, modifiedAt);"
+  }
   /// 各台 Mac 跑过 Agent 的文件夹（`CueStore.sessionFolders`）：每次会话记录变化都重读，按 (Mac, 文件夹) 聚合只读这几列，
   /// 不碰带问答长文的会话记录本身（真实库四千多条，整表冷读约 75ms）。
   private static let folderIndex = """
@@ -114,6 +123,7 @@ enum Schema {
   private static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
   private static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
+  private static let cueRead = "CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
   private static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
@@ -298,6 +308,7 @@ enum Schema {
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
     CREATE TABLE cueState (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT, context TEXT) STRICT;
+    \(cueRead)
 
     \(writeSeq)
 
@@ -309,7 +320,7 @@ enum Schema {
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
     \(searchTriggers(table: "projects", column: "name", kind: "project"))
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
-    \(pendingIndexes)
+    \(pendingIndexes(Table.synced))
     """
 
   /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。

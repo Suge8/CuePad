@@ -21,17 +21,27 @@ nonisolated struct CueThread: Equatable, Sendable {
     let stamps: [UUID: Date]
     /// 刻度滑条：你的话与换新的地方（`ChatMark`），按 `rows` 的先后。
     let marks: [ChatMark]
+    /// 还没读的 Cue 的话（Kit 的 `cueUnread` 是唯一的规则）。
+    let unread: Set<UUID>
+    /// 新消息的分隔线此刻该在哪：对话里第一条新消息，与读到的这些里有几条；没有为 nil。
+    let divider: CueDivider?
 
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
     /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）。
-    init(messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]] = [:], showsSteps: Bool) {
+    init(
+        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool
+    ) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
         self.shots = shots
-        rows = Self.rows(messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
+        self.unread = unread
+        let rows = Self.rows(messages, tasks: tasks, waiting: waiting, showsSteps: showsSteps)
+        self.rows = rows
+        let fresh = rows.lazy.map(\.id).filter(unread.contains)
+        divider = fresh.first.map { CueDivider(id: $0, count: fresh.count) }
         let stamps = Self.stamps(rows)
         self.stamps = stamps
         joined = Set(zip(rows, rows.dropFirst()).compactMap { above, row in
@@ -68,7 +78,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             let shown = message.askShots.compactMap { shot in previews[shot.preview].map { CueShown(preview: $0, look: shot.look) } }
             if !shown.isEmpty { shots[message.id] = shown }
         }
-        return CueThread(messages: messages, tasks: tasks, waiting: waiting, shots: shots, showsSteps: showsSteps)
+        return CueThread(messages: messages, tasks: tasks, waiting: waiting, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps)
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；

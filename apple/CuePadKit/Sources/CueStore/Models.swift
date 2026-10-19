@@ -11,7 +11,7 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
-  case cueMessages, cueLines, cueProfile, cueState, cueSummaries, macPresence, macAgents
+  case cueMessages, cueLines, cueProfile, cueState, cueRead, cueSummaries, macPresence, macAgents
   /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
   case writeCounter
 }
@@ -21,7 +21,7 @@ extension Table {
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
     .previews, .accountQuotas,
-    .cueMessages, .cueLines, .cueProfile, .cueState, .macPresence, .macAgents,
+    .cueMessages, .cueLines, .cueProfile, .cueState, .cueRead, .macPresence, .macAgents,
   ]
 
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
@@ -47,6 +47,7 @@ extension Table {
     case .cueLines: CueMemoryLine.columns
     case .cueProfile: CueProfile.columns
     case .cueState: CueState.columns
+    case .cueRead: CueRead.columns
     case .macPresence: MacPresence.columns
     case .macAgents: MacAgents.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]

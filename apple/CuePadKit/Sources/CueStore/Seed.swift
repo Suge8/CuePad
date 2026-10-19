@@ -75,7 +75,15 @@ extension CueStore {
 
   /// 演示里说出去一会儿了的话（看没回执超时的样子）：把已有的对话整体往前挪 `seconds` 秒（先后不变）。
   public func seedAgeCueMessages(by seconds: TimeInterval) throws {
-    try write { try db.run("UPDATE cueMessages SET createdAt = createdAt - ?", [Int64(seconds * 1000)]) }
+    // 答的时刻（你的回答按它排在对话里）与读到哪（`CueRead`）都是对话里的时刻，跟着挪
+    let ms = Int64(seconds * 1000)
+    try write {
+      try db.exec(
+        """
+        UPDATE cueMessages SET createdAt = createdAt - \(ms), answeredAt = answeredAt - \(ms);
+        UPDATE cueRead SET modifiedAt = modifiedAt - \(ms);
+        """)
+    }
   }
 }
 #endif

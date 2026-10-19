@@ -251,6 +251,13 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE cueRead (
+        "___recordID" REFERENCE QUERYABLE,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE macPresence (
         "___recordID" REFERENCE QUERYABLE,
         hostID        STRING,
