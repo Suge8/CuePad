@@ -173,12 +173,46 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled)
         #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s1"])
 
+        print("再 done 前：任务 \(try await store.card(task.id)?.status.map { "\($0)" } ?? "-")，会话 \(try await state().map { "\($0)" } ?? "-")")
         let again = try #require(await cue.call("task", ["action": "done", "task": task.id.uuidString]))
         print("再 done：\(again.text)")
         #expect(!again.isError && again.text.contains("已请 1 个会话结束"))
         #expect(try await ended())
         #expect(try await store.cueBoard().sessions.isEmpty)
+        print("再 done 后：会话 \(try await state().map { "\($0)" } ?? "-")")
         #expect(try await store.cueMessages().count(where: { $0.taskID == task.id }) == 1)  // 结果只告诉一次
+    }
+
+    /// 没绑任务的会话（他开的）Cue 也收得掉：done 给 session 就结束它；没做完的事还在用的会话不收，报出原因。
+    @Test func 没绑任务的会话_done给session就结束_在做事的不收() async throws {
+        try await enableCue()
+        let task = try await store.createTask("修登录", in: nil)
+        let recorder = PiStateRecorder(store: store, hostID: services.hostID)
+        for id in ["s1", "s2"] { try await recorder.update(sessionID: id, state: .settled, title: id == "s1" ? "修登录" : "随便问问", hosted: true, agent: .pi) }
+        try await store.bindSession("s1", to: task.id)
+        let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request in
+            if request.mode == .known(.end), let id = request.target.ref { _ = try? await recorder.update(sessionID: id, state: .ended) }
+            return .succeeded
+        }
+        try await executor.start()
+        defer { Task { await executor.stop() } }
+        let cue = CueTools(store: store, wait: 5)
+        #expect(try await store.cueBoard().sessions.map(\.sessionID) == ["s2"])
+
+        let busy = try #require(await cue.call("task", ["action": "done", "session": "s1"]))
+        #expect(busy.isError && busy.text.contains("还在用"))
+        #expect(try await store.deliveryRequests(toSession: "s1").isEmpty)
+
+        let done = try #require(await cue.call("task", ["action": "done", "session": "随便问问"]))
+        print("done 给 session：\(done.text)")
+        #expect(!done.isError && done.text.contains("已请会话「随便问问」结束"))
+        let end = try #require(try await store.deliveryRequests(toSession: "s2").last { $0.mode == .known(.end) })
+        #expect(try await store.outcome(of: end.id).status == .known(.succeeded))
+        #expect(try await store.piSessions(sessionIDs: ["s2"])["s2"]?.state.state == .known(.ended))
+        #expect(try await store.cueBoard().sessions.isEmpty)
+
+        let again = try #require(await cue.call("task", ["action": "done", "session": "s2"]))
+        #expect(!again.isError && again.text.contains("早已结束"))
     }
 
     @Test func 只在会话文件里的历史会话_从头重读也不改写记录() async throws {

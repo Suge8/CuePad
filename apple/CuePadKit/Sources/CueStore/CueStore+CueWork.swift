@@ -428,6 +428,18 @@ extension CueStore {
     return try requestStop(of: session.target, on: session.host(or: host), cue: cue)
   }
 
+  /// Cue 收掉一个会话（done 给 session）：在用的不收，"在用"同 `endUnusedSessions` 的 `usedElsewhere`（没做完的叶子绑着它、或有话正送进去），
+  /// 抛 `sessionInUse`；做不到的（`PiSessionState.canEnd`）抛 `cannotEnd`。已结束的不动、返回 nil，否则返回结束请求。
+  public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
+    try write {
+      guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
+      guard state.state != .known(.ended) else { return nil }
+      guard try db.first(Self.usedElsewhere, [sessionID, UUID?.none], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
+      guard state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
+      return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)
+    }
+  }
+
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
   /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
@@ -518,11 +530,11 @@ extension CueStore {
     }
   }
 
-  /// 会话（?1）在这件事（以 ?2 为根）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
+  /// 会话（?1）在这件事（以 ?2 为根；NULL 是哪件事都不除外）之外还有用：别的事没做完的叶子绑着它，或有话正送进去。
   private static let usedElsewhere = """
     SELECT 1 WHERE EXISTS (
         SELECT 1 FROM cards WHERE piSessionID = ?1 AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL
-          AND id NOT IN (\(subtree(from: "SELECT ?2"))))
+          AND (?2 IS NULL OR id NOT IN (\(subtree(from: "SELECT ?2")))))
       OR EXISTS (
         SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(sqlList(DeliveryMode.toSession))) AND status IN (\(DeliveryStatus.openSQL)))
     """
