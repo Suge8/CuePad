@@ -240,13 +240,19 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。
+/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 一行看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("侧栏", icon: .sidebar) { workspace.pages.toggleSidebar() }
-            .help("显示或隐藏侧栏（⌃⌘S）")
+        // 点画在标签里：工具栏把"字 + 图标"的标签换成系统按钮，挂在按钮外面的会被丢掉
+        Button { workspace.pages.toggleSidebar() } label: {
+            Image(.sidebar).overlay(alignment: .topTrailing) {
+                if workspace.pages.sidebar == .detailOnly, workspace.page != .cue { CueDot().offset(x: 5, y: -4) }
+            }
+        }
+        .accessibilityLabel("侧栏")
+        .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
 

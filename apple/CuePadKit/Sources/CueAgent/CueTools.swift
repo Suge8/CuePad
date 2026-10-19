@@ -63,7 +63,7 @@ public struct CueTools: Sendable {
         "description": """
           对用户说一句（Cue 页里你的一行）。ask 是请他允许、等他回答（进"等你"），只能是这几类：\(CuePrompt.asks)。
           带 ask 必写 doing：一句说清要他定什么，动词开头写清对象，一行、≤\(CueAsking.phraseLimit) 字（如"推送 scheduler 的重连修复"；几个方案里挑时写你推荐的那个，如"按方案 1 决定单改提问卡"）；ask=rule 还必写 rule：依据他的哪条规矩，照他的原话（如"改数据库结构前先问我"）。
-          卡片、摘要与通知只显示"可以<doing>吗？"、为什么要问他（rule 那类就是这条规矩）、show 的图与选项，不显示 text。
+          卡片、摘要与通知只显示"可以<doing>吗？"、rule 那类的这条规矩、show 的图与选项，不显示 text。
           show 是回答这个问题必须看的图，至多 \(CueShot.limit) 张，按要他看的先后：file 写 task peek 里"发到手机的"那一份的 id，look 写这张看什么（一行、≤\(CueShot.lookLimit) 字，如"方案 1：大按钮占满一行"）。几个方案就每个方案一张、同一台设备同一种样子，推荐的在前；不用看图就能答的不带。只有 show 里的图上卡片。
           text 先一句要做的动作，再一句依据（rule 那类写哪条规矩）和不做会怎样；不写 push、rule 这类分类名。
           选项由 CuePad 给（如推送：\(CueAsk.push.choices(in: "项目名").joined(separator: " / "))；task 不在项目里时第二项是"\(CueAsk.push.always ?? "")"；rule 只有第一项），他选第二项就照字面记进允许清单。卡上只能选：他不选就会直接对你说，那句在答这张时照他说的办并 withdraw 它。允许清单里有的（task 所在的项目或所有项目）会被拒：直接做。

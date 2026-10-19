@@ -92,18 +92,18 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你的时带点（`WaitingDot`）。
+/// 右侧 Cue 面板的开关（和项目并排看 Cue）；有等你或新消息时带点（`CueDot`）。
 private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let waiting = workspace.cue.waiting
+        let waiting = workspace.cue.waiting, unread = workspace.cue.unread
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
             Label { Text(workspace.cue.name) } icon: { CueMark(selected: navigation.agentPanel) }
-                .overlay(alignment: .topTrailing) { WaitingDot(count: waiting) }
+                .overlay(alignment: .topTrailing) { CueDot().offset(x: 3, y: -2) }
         }
-        .accessibilityValue(waiting > 0 ? "等你 \(waiting)" : "")
+        .accessibilityValue(unread > 0 ? "\(unread) 条新消息" : waiting > 0 ? "等你 \(waiting)" : "")
     }
 }
 
