@@ -229,7 +229,7 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let start = Date()
             try await terminal.type(ClaudeTestbed.backgroundWork)
-            try await testbed.expectSettledOnceAfterBackgroundWork(session.id, since: start)
+            try await testbed.expectSettledOnce(session.id, since: start, reply: "BG_DONE", roster: .done)
         }
     }
 

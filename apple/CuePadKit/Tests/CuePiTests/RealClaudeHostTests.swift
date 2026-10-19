@@ -188,7 +188,31 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
-            try await testbed.expectSettledOnceAfterBackgroundWork(id, since: start)
+            try await testbed.expectSettledOnce(id, since: start, reply: "BG_DONE", roster: .done)
+        }
+    }
+
+    /// 子代理先交回中途结果、名下的后台命令做完后以同一 id 再跑：中间一直算在飞，交回最终结果的那一轮做完才歇下一次，名册里还是那一项。
+    @Test func aSubagentThatReportsEarlyAndRunsAgainSettlesTheSessionOnce() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.earlyReport), to: id)
+            try await testbed.expectSettledOnce(id, since: start, reply: "NESTED_DONE", roster: .done, waits: 2)
+        }
+    }
+
+    /// 等子代理时你叫它停掉子代理：被停下的不算在飞，这件事只歇下一次，名册里它记成被停下。
+    @Test func aStoppedSubagentSettlesTheSessionOnce() async throws {
+        try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
+            try testbed.runtime.start()
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
+            let start = Date()
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.longSubagent), to: id)
+            try await eventually("等子代理", timeout: .seconds(120)) { testbed.bridge.session(id: id)?.state == .delegating }
+            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.stopSubagent), to: id)
+            try await testbed.expectSettledOnce(id, since: start, reply: "STOPPED", roster: .interrupted)
         }
     }
 
