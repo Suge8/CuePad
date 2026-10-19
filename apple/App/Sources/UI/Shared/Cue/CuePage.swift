@@ -296,9 +296,7 @@ struct CuePage: View {
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
-                // 卡高过可视区时只有它让出高（在卡里滚），输入框不被挤
                 CueWaitingDock(waiting: thread.waiting, tasks: thread.tasks, shots: thread.shots, open: { opened = $0 }, moving: $docking)
-                    .layoutPriority(-1)
             }
             if !cue.canHear {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)

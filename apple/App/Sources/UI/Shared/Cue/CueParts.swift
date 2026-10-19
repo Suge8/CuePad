@@ -693,20 +693,20 @@ private struct RiseLayout: Layout {
     let floats: Bool
     let limit: CGFloat
 
-    /// 给孩子的高：`limit` 与给的高取小（给的更矮时也在给的高里滚，不顶出屏外）。孩子按它排：放不下的在卡里滚。
-    private func height(_ proposal: ProposedViewSize) -> CGFloat { min(proposal.height ?? limit, limit) }
-
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: height(proposal)))
+        // 孩子只按 `limit` 排，不看给的高：升起时外面按缩了的高（整高 × 露出的比例）回头再排一次，
+        // 照给的高排的话卡里那段就当成放不下、换成滚动的，尾段停下前截掉一截
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: limit))
         // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
         return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: height(proposal)))
+        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: limit))
         let origin = floats ? CGPoint(x: bounds.minX, y: bounds.maxY - size.height) : bounds.origin
-        child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: size.height))
+        child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: limit))
     }
 }
+
