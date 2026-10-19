@@ -36,6 +36,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var seq: Int64 = 0
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
+    /// 最近一次停下一轮的时刻（会话文件里那条中断标记）：终端里的 Claude Code 被停下时不跑钩子，它的接入凭这个收尾（`AgentRuntime.read`）
+    public internal(set) var stoppedAt: Date?
     /// 最近你说的那句之后、助手最后说的一段（还没归给那句：等下一句你的话或这一轮结束）
     var reply: Reply?
     var recap = PiRecap()
@@ -584,6 +586,7 @@ extension PiHistoryCheckpoint {
         round = nil
         recap.pendingPrompt = nil
         recap.answeredAt = entry.at
+        stoppedAt = entry.at
     }
 
     /// 压缩上下文：一行系统行，不动问答。

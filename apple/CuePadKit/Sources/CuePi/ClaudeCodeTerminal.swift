@@ -185,6 +185,15 @@ final class ClaudeTerminalSession: SessionLink {
         call?.onClose = { [weak self] in self?.withdraw(promptID) }
     }
 
+    /// 这一轮在会话文件里被停下了（中断标记，`PiHistoryCheckpoint.stoppedAt`）：终端里按 Esc（停下在跑的工具、拒绝确认）时
+    /// Claude Code 一个钩子都不跑（2.1.299 实测），只有会话文件说明这一轮结束了。与 `Stop` 同样收尾；停下之后才开的一轮不算。
+    func stopped(at date: Date) {
+        guard facts.running, let start = facts.turnStartedAt, start <= date else { return }
+        settlePending(agent: nil, when: "Stop")
+        facts.endTurn()
+        show(at: .now)
+    }
+
     /// 进程退出或会话结束：还挂着的钩子放掉（进程走了它们也就没了）。
     func close() {
         for item in pending {

@@ -73,6 +73,8 @@ public protocol AgentRuntime: AnyObject {
     func resume(_ session: IndexedSession) async throws -> PiSession.ID
     /// 一个会话从头到尾的对话与摘要（补写很久以前的会话时用）。
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript
+    /// 历史索引读到了这家的一个会话文件（开着的会话增量跟读）：会话状态有要从文件里得知的，由接入自己取。
+    func read(_ update: PiHistoryUpdate)
 }
 
 extension AgentRuntime {
@@ -90,6 +92,9 @@ extension AgentRuntime {
         }
         return id
     }
+
+    /// 状态全来自 Agent 自己报的，用不着会话文件。
+    public func read(_ update: PiHistoryUpdate) {}
 
     /// 会话文件里的：从头读一遍。
     public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript {

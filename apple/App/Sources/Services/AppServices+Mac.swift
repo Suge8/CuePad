@@ -199,7 +199,7 @@ extension AppServices {
     /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
     static let backfillBatch = 200
 
-    /// 消费一个 Agent 的历史索引事件：先落检查点再写会话行。
+    /// 消费一个 Agent 的历史索引事件：先落检查点再写会话行；读到的也交给这家的接入（会话状态有要从文件里得知的，`AgentRuntime.read`）。
     func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
         var pending: [PiHistoryUpdate] = []
@@ -214,6 +214,7 @@ extension AppServices {
         for await event in events {
             switch event {
             case .updated(let update):
+                runtimes[agent]?.read(update)
                 pending.append(update)
                 if !backfilling || pending.count >= Self.backfillBatch { await flush() }
             case .backfillFinished(let files):

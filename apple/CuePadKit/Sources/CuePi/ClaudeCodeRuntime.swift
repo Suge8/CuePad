@@ -89,6 +89,13 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
+    /// 终端里的会话被停下时不跑钩子，会话文件里的中断标记是这一轮结束的唯一消息（`ClaudeTerminalSession.stopped`）；
+    /// 托管的会话有 `result`，用不着。
+    public func read(_ update: PiHistoryUpdate) {
+        guard let stoppedAt = update.checkpoint.stoppedAt else { return }
+        for (id, terminal) in terminals where bridge.session(id: id)?.sessionID == update.sessionID { terminal.stopped(at: stoppedAt) }
+    }
+
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let running = hosted[session.id], let id = running.id { return id }
         if bridge.sessions.contains(where: { $0.agent == .claudeCode && $0.sessionID == session.id && !$0.hosted }) {

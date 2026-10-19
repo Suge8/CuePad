@@ -36,6 +36,8 @@ final class ClaudeTestbed {
     /// 桥上从测试台起来以后的全部变化
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
+    /// 终端会话的会话文件跟读（同 App：历史索引读到的交给接入，`AgentRuntime.read`）；开第一个终端时起
+    private var reading: Task<Void, Never>?
 
     var integration: AgentIntegration {
         AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
@@ -111,6 +113,11 @@ final class ClaudeTestbed {
 
     /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
+        if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
+            reading = Task { [runtime] in
+                for await case .updated(let update) in indexer.events() { runtime.read(update) }
+            }
+        }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
@@ -258,6 +265,7 @@ final class ClaudeTestbed {
     func stop() async {
         let pids = Set(terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid))
         for terminal in terminals { terminal.stop() }
+        reading?.cancel()
         await runtime.stop()()
         hooks.stop()
         bridge.stop()

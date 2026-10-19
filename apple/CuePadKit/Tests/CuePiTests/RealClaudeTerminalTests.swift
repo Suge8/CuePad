@@ -201,19 +201,28 @@ struct RealClaudeTerminalTests {
     }
 
     /// 在跑时从 CuePad 说话：CuePad 打断不了终端里的 Claude Code（`AgentCapabilities.speakBlocked`），拒收并说明原因，话不进会话。
+    /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照会话文件里的中断标记歇下（已停止），之后从 CuePad 说的话送得到。
     @Test func aMessageWhileBusyIsRefusedWithTheReason() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
             try testbed.runtime.start()
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
-            try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 20 127.0.0.1`，然后只回复 ZEBRA"), to: session.id)
-            try await eventually("在跑命令", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 20") == true }
+            try await testbed.bridge.send(PiMessage(text: "用 Bash 工具在前台执行 `ping -c 120 127.0.0.1`，然后只回复 ZEBRA"), to: session.id)
+            try await eventually("在跑命令", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.detail?.contains("ping -c 120") == true }
             await #expect(throws: PiBridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
                 try await testbed.bridge.send(PiMessage(text: "只回复 MANGO"), to: session.id)
             }
-            try await eventually("这一轮做完", timeout: .seconds(120)) { testbed.bridge.session(id: session.id)?.state == .settled }
             #expect(try !testbed.transcript(session.sessionFile).messages.contains { $0.text.contains("MANGO") })
+
+            try await terminal.keys("Escape")
+            try await eventually("按 Esc 后歇下", timeout: .seconds(30)) { testbed.bridge.session(id: session.id)?.state == .settled }
+            #expect(try testbed.transcript(session.sessionFile).messages.last?.text == PiNotice.stopped.rawValue)
+            let delivery = UUID()
+            try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
+            try await eventually("话送到了", timeout: .seconds(60)) {
+                (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == delivery }) == true
+            }
         }
     }
 
