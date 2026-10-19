@@ -220,7 +220,8 @@ struct SessionTaskTests {
     }
 
     /// 会话里谁说的按来源认（会话页的气泡与 Cue 的 peek 同一条）：Cue 发进去的是"你"，在 CuePad 里发的与终端里打的都是"他"。
-    /// 他发起的那一轮还在跑时，Cue 说话会打断他：不说、报错，等它歇下再说；Cue 自己发起的那一轮里照常打断插话。
+    /// 他发起的那一轮还在跑时，Cue 说话会打断他：不说、报错，等它歇下再说；Cue 自己发起的那一轮里照常打断插话；
+    /// 打断不了的会话（终端里的 Claude Code）在跑时也不说。
     @Test func 会话消息按来源标注_他那一轮没完时Cue不插嘴() async throws {
         try await store.updateCueProfile {
             $0.hostID = "mac-b"
@@ -258,6 +259,13 @@ struct SessionTaskTests {
         try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
         let interrupted = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的"]))
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
+
+        // 终端里的 Claude Code 在跑：CuePad 打断不了它，谁开的这一轮都不说
+        let terminal = try await store.createTask("修注册", in: nil)
+        try await store.linkCard(terminal.id, toSession: "s2")
+        try await recorder.update(sessionID: "s2", state: .tool, title: "修注册", agent: .claudeCode)
+        let blocked = try #require(await cue.call("task", ["action": "say", "task": terminal.id.uuidString, "text": "先停一下"]))
+        #expect(blocked.isError && blocked.text.contains("打断不了"))
     }
 
     /// 这一轮是谁开的只看会话里最近一条你一方或机器的消息：他说的那一轮，变化标"他说的"；FireCode 这类扩展投进来的机器消息开的一轮

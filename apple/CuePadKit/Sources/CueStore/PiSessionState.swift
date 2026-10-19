@@ -202,6 +202,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     capabilities.contains(.abort) && state.known?.isTurnRunning == true && state != .known(.waitingForUser)
   }
 
+  /// 现在说不了话的原因（nil 是能说，规则见 `AgentCapabilities.speakBlocked`）：回复框与 Cue 说话认它。
+  public var speakBlocked: String? { capabilities.speakBlocked(in: state.known, agent: agent.known) }
+
   /// 等你确认、且能从 CuePad 作答的问题（问题本身可答，这个会话也做得到）；其余只能在 Agent 那边答。
   public var answerableQuestion: PiQuestion? {
     guard state == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }

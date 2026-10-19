@@ -219,11 +219,11 @@ final class ClaudeTerminalSession: SessionLink {
 
     // MARK: SessionLink
 
-    /// 收件箱的 `priority: "now"`：在跑就中止这一轮（与在终端里按 Esc 同一个中止，连同在跑的工具），再以这句开新一轮；歇着就直接开始。
+    /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
     func send(_ message: PiMessage) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
         var line: [String: JSONValue] = [
-            "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "now",
+            "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "next",
         ]
         if let delivery = message.deliveryID { line["uuid"] = .string(delivery) }
         try await post(.object(line))

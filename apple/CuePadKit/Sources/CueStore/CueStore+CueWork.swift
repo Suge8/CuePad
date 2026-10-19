@@ -380,11 +380,14 @@ extension CueStore {
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  /// 交给会话一句话（`DeliveryMode.send`）：会话在跑这一轮时 Mac 执行时先打断它，以这句开新一轮；忙不忙由 Mac 执行时定。
-  /// Cue 不打断他发起的那一轮（`inUserTurn`）：抛 `userTurn`，什么都不写，它歇下时 Cue 被叫醒再说。
-  /// 收不了图片的只发文字（`AgentCapabilities.images`）。必须在写事务内调用。
+  /// 交给会话一句话（`DeliveryMode.send`）：会话在跑这一轮时 Mac 执行时先打断它，以这句开新一轮；忙不忙、打不打断得了由 Mac 执行时定。
+  /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：停不下这一轮（`speakBlocked`），
+  /// 或会打断他发起的那一轮（`inUserTurn`）。收不了图片的只发文字（`AgentCapabilities.images`）。必须在写事务内调用。
   private func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
-    if cue, try inUserTurn(session.target.ref) { throw CueStoreError.userTurn(session.target.name) }
+    if cue, session.state?.speakBlocked != nil {
+      throw CueStoreError.cannotSpeakNow(session.target.name, "在跑，CuePad 打断不了它（在终端里开的）")
+    }
+    if cue, try inUserTurn(session.target.ref) { throw CueStoreError.cannotSpeakNow(session.target.name, "正在跑他发起的一轮，现在说会打断它") }
     let content = session.state?.capabilities.contains(.images) == false ? CueFormat.plainText(content) : content
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
   }

@@ -80,6 +80,15 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
 
   public static let all: AgentCapabilities = [.images, .abort, .model, .rename, .commands, .answer, .end]
 
+  /// 这时说不了话的原因（nil 是能说）：在跑时（含等你确认）说话要先停下这一轮、再以这句开新一轮，停不下（没有 `.abort`）就说不了。
+  /// 只有终端里的 Claude Code 这样：CuePad 只能经它的收件箱说话，前台工具跑着时收件箱的话要等工具跑完才读到（`priority: "now"` 也一样），
+  /// 收件箱也没有停下这一轮的办法（Claude Code 2.1.299 实测与源码）。界面的回复框、Cue 说话（`PiSessionState.speakBlocked`）
+  /// 与 Mac 执行发话（桥的 `send`）都只认这里；不排队，歇下再说。
+  public func speakBlocked(in state: PiWorkState?, agent: AgentKind?) -> String? {
+    guard state?.isTurnRunning == true, !contains(.abort) else { return nil }
+    return "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
+  }
+
   /// `hosted`：会话在 CuePad 托管的进程里（没有终端界面），CuePad 掌握它的全部输入输出。
   /// 当前模型报了不能看图就不能发图片（没报的照 Agent 的能力）。
   public static func of(_ agent: AgentKind, hosted: Bool, model: PiModelOption?) -> AgentCapabilities {
