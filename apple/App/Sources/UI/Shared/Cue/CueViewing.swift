@@ -1,18 +1,20 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页的新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
+/// 有人在看 Cue 页：这一页在前台（Mac 页栈里的当前页；手机上没被推进的页盖住）、App 也在前台（Mac 是窗口活跃）。在看的期间——
+/// - 算一个在看的（`AppServices.cueViewers`）：Cue 的通知不发（Mac 见 `AlertPresentation`，iOS 前台的系统横幅），手机按节奏拉；
+/// - 读新消息（哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读）。
 /// 开始看这一页时（进来、App 回到前台、看着时和 iCloud 对完一次而还没有分隔线）记下分隔线的位置（`CueThread.divider`）：
 /// 第一条新消息上面一条石绿的"以下 N 条新消息"（`CueNewMessages`），这次看着的期间一直在，下次开始看时按那时的位置画（读完了就没有）；
 /// 有新消息就从它读起（`ChatFollow.Landing.read`：停在顶上，下面不到一屏时滚动区停在最新处）。
 /// 读没读按条算：一条新消息的末尾在滚动区里停够 `dwell` 就算读到了它（`CueRow` 报看见，这里取最晚的一条合并成一次写），
-/// 打开时先停在最新处那一下、甩过去的不算；不在这一页（Mac 切到别的页、手机上推进了别的页盖住它）、App 不在前台、正在和 iCloud 对时不算。
+/// 打开时先停在最新处那一下、甩过去的不算；没在看、正在和 iCloud 对时不算。
 nonisolated struct CueDivider: Equatable, Sendable {
     let id: UUID
     let count: Int
 }
 
-struct CueReadingTracker: ViewModifier {
+struct CueViewing: ViewModifier {
     let thread: CueThread?
     let catchingUp: Bool
     @Binding var divider: CueDivider?
@@ -32,6 +34,8 @@ struct CueReadingTracker: ViewModifier {
     #endif
     /// 页面在屏上（推进了别的页盖住它时不在）。
     @State private var appeared = false
+    /// 已算进 `cueViewers`。
+    @State private var counted = false
 
     /// 末尾在屏上停这么久才算读到：打开时先停在最新处、跳到分隔线之前的那一下，与一路甩过去的都不算。
     static let dwell: Duration = .seconds(1)
@@ -41,7 +45,12 @@ struct CueReadingTracker: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear { appeared = true }
-            .onDisappear { appeared = false }
+            // 页拆掉时 onChange 不再来：在这里收回
+            .onDisappear {
+                appeared = false
+                count(false)
+            }
+            .onChange(of: watching, initial: true) { _, on in count(on) }
             .onChange(of: watching && thread != nil, initial: true) { _, on in
                 guard on else { return }
                 divider = nil
@@ -56,6 +65,12 @@ struct CueReadingTracker: ViewModifier {
     private struct Reading: Equatable {
         let seen: Set<UUID>
         let counts: Bool
+    }
+
+    private func count(_ on: Bool) {
+        guard on != counted else { return }
+        counted = on
+        services.cueViewers += on ? 1 : -1
     }
 
     private func land() {

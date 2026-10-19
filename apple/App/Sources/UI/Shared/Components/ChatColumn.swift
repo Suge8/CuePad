@@ -81,7 +81,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             .onChange(of: follow.seeking) { if let target = follow.seeking { seek(target, size: size) } }
         }
         .environment(\.chatHighlight, highlight.id)
-        .environment(\.chatTarget, follow.seeking?.id)
+        .environment(\.chatTarget, follow.target?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
         .overlay(alignment: .trailing) {
             if !marks.isEmpty {
