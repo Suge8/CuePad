@@ -348,7 +348,6 @@ struct CueEvalTests {
                 Check("没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
                 Check("没 leave", eval.calls("task", "leave").isEmpty),
                 Check("没打扰他（没 tell）", eval.calls("tell").isEmpty),
-                Check("没写动态", try await eval.said().isEmpty),
             ]
         }
     }

@@ -452,10 +452,7 @@ final class CueKeeper {
         case .turnFinished:
             guard let finished = turn else { return }
             await recordRound()  // 中途插了你的话：这一轮成了回答你的
-            // 会话的动静叫醒、什么都没做的一轮（他在场不插嘴、看过没事）：最后那句不写——系统提示里"什么都没做就不写"落在这里
-            let idle = finished.selfStarted?.wake == .sessionActivity && !finished.answersYou
-                && finished.round.process?.items.contains(where: \.kind.acts) != true
-            if !idle, let reply = finished.speaking?.text, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let reply = finished.speaking?.text, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 lastFailure = nil
                 do {
                     try await setup.store.replyCueRound(

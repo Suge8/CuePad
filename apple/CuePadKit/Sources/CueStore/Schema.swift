@@ -62,7 +62,7 @@ enum Schema {
     "ALTER TABLE macAgents ADD COLUMN name TEXT; ALTER TABLE cueState ADD COLUMN context TEXT;",
     // 55：启动、推导待推送与每次会话、Cue 对话变化都要读的几处走覆盖或部分索引，不再整表读带长文的行（各自的理由见下面的定义）
     // 后来加的同步表那时还没有，各在建它的那一步建自己的索引
-    "DROP INDEX syncRecords_recordType; \(pendingIndexes(Table.synced.filter { $0 != .cueRead })) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
+    "DROP INDEX syncRecords_recordType; \(pendingIndexes(Table.synced.filter { ![.cueRead, .sessionViewers].contains($0) })) \(folderIndex) \(transcriptAgeIndex) \(agentIndex) \(openQuestionIndex)",
     // 56：提问存下类别与范围（`CueMessage.asked`）、要做的动作与依据的规矩（`CueAsking`），不再按选项文字反认；
     // Mac 名只在 macAgents，目录绑定不再带名字
     Upgrade { db in
