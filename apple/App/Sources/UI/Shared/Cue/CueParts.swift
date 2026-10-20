@@ -19,7 +19,7 @@ struct CueTaskButton<Label: View>: View {
     }
 }
 
-/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：一句说明，下面直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
+/// 还没启用时 Cue 页输入框上方的那一块，两端同一个：只放启用这一步，启用后怎么用由 Cue 页空态那一句说（同一屏不说两遍）。直接选一台 Mac 启用（能运行 Cue 的几台，`CueSettings.hosts`）——
 /// 一台就是一颗"在那台上启用"的主按钮；几台是点开选哪台的菜单（`MenuButton`，每台下面写能当大脑的几家或为什么不能用），
 /// Mac 上点按是在这台运行、长按选别的。没写成的原因就地写在下面（`CueSettingsModel`）。手机上还没有哪台 Mac 写下过自己时，
 /// 说先到 Mac 上打开 CuePad。没启用时输入框发出去是记下灵感。Mac 上默认项目还没有文件夹时写一句它第一次开工时建在哪（`Workspaces`）。
@@ -32,18 +32,15 @@ struct CueEnableCard: View {
     var body: some View {
         let hosts = (model.settings ?? .empty).hosts(here: here)
         VStack(alignment: .leading, spacing: 10) {
-            Text("启用后 \(workspace.cue.name) 在你选的一台 Mac 上运行，替你派活、跟进，只在要你拿主意时找你")
-                .font(Typography.secondary).foregroundStyle(palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
             #if os(macOS)
             if let home = workspace.catalog?.project(Project.defaultID), workspace.catalog?.directories[home.id] == nil {
-                let path = services.workspaces.directory(for: home.name).path(percentEncoded: false)
-                Label("第一次开工时建好 \((path as NSString).abbreviatingWithTildeInPath)", icon: .folder)
+                let workspaces = services.workspaces
+                Label("第一次开工时建好 \(workspaces.shown(workspaces.directory(for: home.name).path(percentEncoded: false)))", icon: .folder)
                     .font(Typography.meta).foregroundStyle(palette.ink3)
             }
             #endif
             if hosts.isEmpty {
-                Label("先到 Mac 上打开 CuePad，它会出现在这里", icon: .mac)
+                Label(CueSettings.noHost, icon: .mac)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else {
                 HStack(spacing: 8) {

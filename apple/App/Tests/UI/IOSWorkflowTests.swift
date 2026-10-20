@@ -76,8 +76,8 @@ struct IOSWorkflowTests {
     @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/table", for: project.id)
-        try await store.publishDirectoryBindings(host: "mac-z", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
-        try await store.publishDirectoryBindings(host: "mac-a", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+        try await store.publishDirectoryBindings(host: "mac-z")
+        try await store.publishDirectoryBindings(host: "mac-a")
         try await store.recordMacAgents(host: "mac-z", name: "Alpha", [])
         try await store.recordMacAgents(host: "mac-a", name: "Zulu", [])
         let (task, draft) = try await leaf(in: project.id)

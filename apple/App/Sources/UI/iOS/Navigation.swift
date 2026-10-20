@@ -50,8 +50,8 @@ final class Navigation {
         }
     }
 
-    /// 当前去处（宽屏右边那一栏、窄屏导航栈的根）：打开 App 先到 Cue。
-    private(set) var root: Route = .cue {
+    /// 当前去处（宽屏右边那一栏、窄屏导航栈的根）：打开 App 先到 `Route.first`。
+    private(set) var root: Route = .first {
         didSet {
             guard root != oldValue else { return }
             previousRoot = oldValue

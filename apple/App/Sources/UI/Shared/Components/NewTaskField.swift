@@ -29,7 +29,7 @@ struct NewTaskField: View {
                 .focused($focused)
                 .onSubmit(add)
             #if os(macOS)
-            if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
+            if choosesProject, let projects = workspace.catalog?.projects {
                 Menu {
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {

@@ -162,7 +162,7 @@ struct NewTaskLine: View {
                 .onSubmit(add)
                 .onAppear { if dismiss != nil { focused = true } }
                 .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { dismiss?() } }
-            if let projects, !projects.isEmpty {
+            if let projects {
                 Menu {
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {

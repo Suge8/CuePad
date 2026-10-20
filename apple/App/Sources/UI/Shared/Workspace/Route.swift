@@ -26,6 +26,9 @@ nonisolated enum Route: Hashable {
     /// 一个 Pi 会话的整页（近况与回复）。
     case session(SessionRoute)
 
+    /// 打开 App 没有要回去的项目时（第一次打开、上次的项目进了回收站）落在哪：Cue 页。两端只在这里定。
+    static let first: Route = .cue
+
     /// 会话页；`seed` 是推入前读好的这一页（iOS 的 `openSession`），通知跳转等只有记录 id 的入口不带。
     static func session(_ id: UUID, sessionID: String? = nil, seed: SessionDigest? = nil) -> Route {
         .session(SessionRoute(id: id, sessionID: sessionID, seed: seed))

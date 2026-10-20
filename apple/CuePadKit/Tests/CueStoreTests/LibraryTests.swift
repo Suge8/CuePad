@@ -130,7 +130,7 @@ import Testing
     let demo = try await store.createProject(name: "演示", color: "#111")
     let task = try await store.createTask("修好登录页", in: demo.id)
     try await store.setDirectory("/work/demo", for: demo.id)
-    try await store.publishDirectoryBindings(host: "mac", workspaces: Workspaces(root: URL(filePath: "/Users/me/CuePad")))
+    try await store.publishDirectoryBindings(host: "mac")
     // 退回 50：撤掉 52、54、56、57、59、60、61、62 加的列、55、57、60、64 加的索引与 58、60 加的表，放回 56 删掉的列（53、61 重建触发器、55 重建的类型索引，留着新的照样能升；
     // 61 加的列被触发器引用着，先换一个不引用它的）
     let added = try RawDB(fixture.url).rows(

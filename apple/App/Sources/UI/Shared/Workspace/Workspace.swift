@@ -117,14 +117,11 @@ final class Workspace {
     }
 
     #if os(macOS)
+    /// 此刻的页：切到的非项目页，否则上次打开的项目（`show` 记下），都没有是 `Route.first`。
     var page: Route {
         if let nonProjectPage { return nonProjectPage }
-        return .project(services.settings.currentProject ?? firstProject)
+        return services.settings.currentProject.map(Route.project) ?? .first
     }
-
-    /// 没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个（库里总有默认项目）：由目录当场推出、不写进"上次打开"，
-    /// 项目陆续同步进来时跟着目录走；只有用户切换项目才记下（`show`）。
-    private var firstProject: UUID { catalog?.projects.first?.id ?? Project.defaultID }
 
     /// 当前项目；不在项目页（回收站、会话页……）时没有。
     var currentProject: UUID? {

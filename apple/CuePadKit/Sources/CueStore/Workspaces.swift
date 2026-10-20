@@ -7,8 +7,8 @@ import Foundation
 /// 不在真实的家目录下建东西。
 public struct Workspaces: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_WORKSPACE_DIR"
-  /// 家目录下的根目录名；手机上还没绑的项目据此写"在 <Mac> 上：CuePad/<名>"。
-  public static let rootName = "CuePad"
+  /// 根目录的名字：家目录下的 `~/CuePad`，隔离运行时隔离库里的 `CuePad`。
+  private static let rootName = "CuePad"
 
   public let root: URL
 
@@ -19,8 +19,7 @@ public struct Workspaces: Equatable, Sendable {
     if let override = environment[environmentKey], override.hasPrefix("/") {
       return Workspaces(root: URL(filePath: override, directoryHint: .isDirectory))
     }
-    if let isolatedLibrary { return Workspaces(root: isolatedLibrary.appending(path: "Workspaces", directoryHint: .isDirectory)) }
-    return Workspaces(root: URL.homeDirectory.appending(path: rootName, directoryHint: .isDirectory))
+    return Workspaces(root: (isolatedLibrary ?? URL.homeDirectory).appending(path: rootName, directoryHint: .isDirectory))
   }
 
   /// 项目的工作区：根目录下以项目名命名的文件夹（`folderName`）；同名的两个项目共用一个（已存在就直接用）。
@@ -35,15 +34,13 @@ public struct Workspaces: Equatable, Sendable {
     return name.isEmpty ? Project.untitled : name
   }
 
-  /// 目录绑定记录里的文件夹名（手机上看得到的那一段）：工作区里的写上根目录名（"CuePad/默认"），别处的是末段名。
-  public func shownFolder(_ directory: String) -> String {
-    let url = URL(filePath: directory, directoryHint: .isDirectory)
-    let parent = url.deletingLastPathComponent().standardizedFileURL.path(percentEncoded: false)
-    let inside = parent.trimmingSuffix("/") == root.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
-    return inside ? "\(root.lastPathComponent)/\(url.lastPathComponent)" : url.lastPathComponent
+  /// 本机路径给人看的写法（Mac 项目页那一行、启用卡里"第一次开工时建好"同一个）：工作区里的从根目录名写起，根在家目录下时带 `~`
+  /// （`~/CuePad/默认`，隔离运行是 `CuePad/默认`）；别处家目录下的写成 `~/…`，其余照写全路径。
+  public func shown(_ path: String) -> String {
+    // 只比路径的各段，不经 standardizedFileURL / resolvingSymlinksInPath：它们对已存在与还没建的目录写法不同（/private/tmp 有时去掉 /private）
+    let target = URL(filePath: path).pathComponents, home = URL.homeDirectory.pathComponents, root = root.pathComponents
+    let (base, prefix) = target.starts(with: root) ? (Array(root.dropLast()), root.dropLast() == home[...] ? ["~"] : []) : (home, ["~"])
+    guard target.count > base.count, target.starts(with: base) else { return path }
+    return (prefix + target.dropFirst(base.count)).joined(separator: "/")
   }
-}
-
-extension String {
-  fileprivate func trimmingSuffix(_ suffix: String) -> String { hasSuffix(suffix) ? String(dropLast(suffix.count)) : self }
 }
