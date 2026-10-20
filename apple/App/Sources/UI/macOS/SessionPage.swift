@@ -45,14 +45,10 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
-/// 会话名与状态（`PiSessionSubtitle`，在跑或要你注意时才有）在窗口工具栏居中（与对话的阅读栏同一条中线），绑着任务时同一块玻璃里还有这件事与它的完成圈（`PageTitleSlot`），
-/// "⋯"（完成或绑定任务、重命名、跳到终端、结束会话）在工具栏右上——Mac 的窗口本来就有一条工具栏，页头全在它上面，内容区里不另起一行。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
-/// 看历史时标题让开（"⋯"不让开：工具栏本来就一直在，让开只留一格空位），回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
-/// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
-/// （`SessionChat`，与手机同一个：只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"；
-/// 底部是与手机同一个回复框（`PiReplyBar`，Mac 上一直是两层），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// 是一页（`Route.session`），左上不放返回：去别处靠侧栏。
+/// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），对话（`SessionChat`）、回复框（`PiReplyBar`，Mac 上一直是两层）
+/// 与顶栏规则（`ChatFollow.showsHeader`）与手机同一套。页头全在窗口工具栏上（会话名与状态 `PiSessionSubtitle` 居中、绑着的任务 `PageTitleSlot`、右上"⋯"），
+/// 内容区里不另起一行。看历史时标题让开，"⋯"不让开：工具栏一直在，让开只留一格空位；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出。
+/// 很久以前的会话没有对话时请它所在的 Mac 补写。是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace
@@ -182,7 +178,6 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap) ?? session
     }
 
-    /// 同 `withLiveState(_:)`，会话列表项的会话换上桥上的实时状态。
     func withLiveState(_ item: PiSessionListItem) -> PiSessionListItem {
         var item = item
         item.state = withLiveState(item.state)

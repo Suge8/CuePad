@@ -8,7 +8,6 @@ nonisolated enum DeepLink: Equatable, Sendable {
     case speak
     case project(UUID)
     case card(UUID)
-    /// 打开 Cue 页。
     case cue
     /// 打开一个会话（会话状态记录的 id，`PiSessionState.id`）：实时活动里会话在问的那件"打开"。
     case session(UUID)

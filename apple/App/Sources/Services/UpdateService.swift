@@ -46,7 +46,6 @@ final class UpdateService {
         }
     }
 
-    /// 更新那一行与菜单写的等待：等 N 个 Agent 做完再装。
     var waitingNote: String? { waitingFor.map { "等 \($0) 个 Agent 做完再装" } }
 
     func checkForUpdates() {

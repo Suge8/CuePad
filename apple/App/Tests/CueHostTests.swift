@@ -94,7 +94,6 @@ struct CueHostTests {
             try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: prompt, lastReply: reply, answeredAt: .now)))
         }
 
-        /// 你对 Cue 说一句。
         func say(_ text: String) async throws { try await store.addCueMessage(.you, text: text) }
 
         /// 存一张图进库，返回写进正文的引用。

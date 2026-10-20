@@ -19,7 +19,6 @@ nonisolated final class FakeModel: Sendable {
     private let usage: Int
     private let played = Mutex<[String: Int]>([:])
     private let errorCount = Mutex(0)
-    /// 回过几次错
     var errors: Int { errorCount.withLock { $0 } }
     private let failingOnce: [String]
     private let asksOnEnable: Bool

@@ -54,9 +54,7 @@ private struct CardFace: View {
     }
 }
 
-/// 墙上的一张卡。
 struct CardTile: View {
-    /// 卡片的圆角。
     static let radius: CGFloat = 16
 
     let card: Card

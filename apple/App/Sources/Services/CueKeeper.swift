@@ -78,7 +78,6 @@ final class CueKeeper {
     }
     private var store: CueStore { setup.recorder.store }
 
-    /// 值班的生命周期。
     private enum Phase {
         /// 正在起大脑；参数是此前连续失败了几次
         case starting(failures: Int)
@@ -138,7 +137,6 @@ final class CueKeeper {
         var held: [String: Date] = [:]
     }
 
-    /// 在跑的一轮。
     private struct Turn {
         /// 回复写成谁的
         var author: CueAuthor

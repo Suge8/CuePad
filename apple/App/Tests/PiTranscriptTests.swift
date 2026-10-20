@@ -159,7 +159,7 @@ struct PiTranscriptTests {
         #expect(reply.tools?.steps == 1 && reply.tools?.steps == reply.tools?.items.count)
     }
 
-    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它；会话结束后没有进行中的提问。
+    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它。
     @Test func 状态变化不改摘要_会话结束后没有进行中的提问() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         try FileManager.default.removeItem(at: file)

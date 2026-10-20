@@ -25,7 +25,6 @@ struct CardEditorPage: View {
     @State private var mounted = false
     /// 编辑页看得见（淡入、淡出的终点）。
     @State private var shown = false
-    /// 淡入走完了。
     @State private var settled = false
     /// 收起的淡出走完了（之后才卸下）。
     @State private var gone = false
