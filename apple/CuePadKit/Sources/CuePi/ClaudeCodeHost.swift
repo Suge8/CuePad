@@ -6,7 +6,7 @@ import Foundation
 /// CuePad 在后台托管的一个 Claude Code 会话：`claude` 以 stream-json 收发（与 Agent SDK 同一套线协议），没有终端界面，
 /// CuePad 掌握它的全部输入输出——发话（带图）、斜杠命令、停止、换模型与强度、改名、作答、结束都能做。
 ///
-/// - 状态来自它的输出：一轮从它开始请求模型（`system/status` 的 `requesting`）起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
+/// - 状态来自它的输出：一轮从它开始请求模型（`ClaudeStream.requestsModel`）起到 `result` 止，其间看模型回答里的工具调用与 `can_use_tool`；在飞的工作见 `ClaudeHostedTasks`；
 ///   正在说的话（`PiDraft`）由 `ClaudeStream` 得出（增量累积、块说完换成定稿），这里交给桥；
 ///   它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
 /// - 发话与斜杠命令：歇着就直接开始；在跑就先停下这一轮（`interrupt` 控制请求，连同在跑的工具），等它收尾（`result`）再送进去开新一轮，
@@ -177,9 +177,7 @@ final class ClaudeHostedSession: SessionLink {
             tasks.list(message["tasks"]?.array ?? [])
             facts.inFlight = tasks.inFlight
         case "status":
-            // 不在 `init` 算开始：子代理经 SubagentHandback 交回时同一份结果排进两条，第二条只空跑一轮（`init` 后直接 `result`，
-            // `num_turns` 为 0，不请求模型），算上就歇下两次（2.1.299 实测，auto 模式下子代理才走这条路）
-            if message["status"]?.string == "requesting" { beginTurn() }
+            if ClaudeStream.requestsModel(message) { beginTurn() }
             facts.compacting = message["status"]?.string == "compacting"
         case "session_title_changed":
             if let title = message["title"]?.string, let id { bridge?.update(id) { $0.name = title } }
@@ -232,8 +230,6 @@ final class ClaudeHostedSession: SessionLink {
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
     }
 
-    private var busy: Bool { facts.running }
-
     /// 送进一句话：在跑就先停下这一轮、等它收尾（见类注释）。写明 `next`：不写时缺省可能是 `later`，要等后台的工作做完才读（实测等到被停下时挪去后台的命令跑完）。
     private func say(_ content: JSONValue, uuid: String) async throws {
         try await stop(restarting: true)
@@ -247,7 +243,7 @@ final class ClaudeHostedSession: SessionLink {
     /// 停下在跑的这一轮并等它收尾；还没开跑的（`starting`）先等它开跑。歇着什么都不做。
     private func stop(restarting: Bool) async throws {
         if starting != nil { await withCheckedContinuation { starting?.append($0) } }
-        guard busy else { return }
+        guard facts.running else { return }
         stopping = true
         restart = restarting
         let turn = closed
