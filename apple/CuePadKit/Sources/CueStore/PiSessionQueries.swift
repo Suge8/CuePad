@@ -70,16 +70,16 @@ extension CueStore {
     }
   }
 
-  /// 在问你的会话数："等你"里会话那一半（规则在 `PiSessionState.asksYou`）。只读在等回答的与 Cue 留给你回的那几条，订阅也只依赖它们（`narrow`）：
-  /// Dock 角标与"等你 N"（Cue 的摘要）别的会话变状态时不重读。
-  public func sessionsAskingYou() throws -> Int {
+  /// 在问你的会话："等你"里会话那一半（规则在 `PiSessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的与 Cue 留给你回的那几条，订阅也只依赖它们（`narrow`）：
+  /// 别的会话变状态时"等你"不重读。
+  public func sessionsAskingYou() throws -> [PiSessionState] {
     let cue = try cueDuty()
     let waiting = PiWorkState.waitingForUser.rawValue, settled = PiWorkState.settled.rawValue
     let left = JSONColumn.encode(cue?.left.map(\.sessionID) ?? []).replacingOccurrences(of: "'", with: "''")
     let candidates = "state = '\(waiting)' OR (state = '\(settled)' AND sessionID IN (SELECT value FROM json_each('\(left)')))"
     return try narrow(.piSessionStates, column: "state", candidates: candidates, to: { $0 == waiting || $0 == settled }) { rows in
-      rows.isEmpty ? 0 : try select(PiSessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
-        .count { $0.asksYou(cue) }
+      rows.isEmpty ? [] : try select(PiSessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
+        .filter { $0.asksYou(cue) }
     }
   }
 
