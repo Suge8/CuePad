@@ -16,17 +16,17 @@
 
 ## 功能
 
-- **Cue，替你盯着 Agent**：用文字或在手机上告诉 Cue 你要什么，它把话变成任务、开好并命名 Agent 会话、催进度、核对证据、回答常规提问，自己验收、做完告诉你结果，只在推送、发布、删除这类收不回的事之前来问你：所有在等你的事汇成一个数字“等你 N”，点一下就答完。Cue 跑在你的 Mac 上，用你已经登录的 Agent（Pi、Codex 或 Claude Code）思考，把每件活交给合适的 Agent（Pi、Claude Code、Codex 或 OpenCode），照你定的规矩挑，比如“文档给 Claude Code，代码给 Codex”。它记得你给它定的规矩，名字也能改。
+- **Cue，替你盯着 Agent**：用文字或在手机上告诉 Cue 你要什么，它把话变成任务、开好并命名 Agent 会话、催进度、核对证据、回答常规提问，自己验收、做完告诉你结果，只附上证明它的最后几张截图、每张写明看哪里。每一轮它做了什么（找了谁、建了、开了或做完了哪些任务、问了你什么）在这一轮开头折成一行，后面是它的话与结果；展开看每一步，点一步跳到那件任务或回到它对你说的话。它只在推送、发布、删除这类收不回的事之前来问你：所有在等你的事汇成一个数字“等你 N”，点一下就答完。Cue 跑在你的 Mac 上，用你已经登录的 Agent（Pi、Codex 或 Claude Code）思考，把每件活交给合适的 Agent（Pi、Claude Code、Codex 或 OpenCode），照你定的规矩挑，比如“文档给 Claude Code，代码给 Codex”。它记得你给它定的规矩，名字也能改。
 - **灵感 → 任务 → Agent**：灵感是你的资料库，承载任意长的文字，含内联图片、`{{变量}}` 与分割线；要动手时把灵感设为任务：第一行是标题，下面是要交代给 Agent 的话；点“开始”就交给 Agent，看得到回没回复，任务里还可以列步骤当勾选清单。项目只是容器，带一句介绍；没指定项目记下的都进"默认"项目，每个库一开始就有它。逐键自动保存。
 - **发给 Agent**：任务的正文直达运行中的 Agent 会话（[Pi](https://pi.dev)、Claude Code、Codex 或 OpenCode；会话收得了图片就带图）。每次发送自动记录内容快照，可一键重发；随时也能复制正文。
 - **看见 Agent**：Agent 会话显示实时状态（思考中、跑工具、等你、完成）与历史，并按工作目录归入对应项目。Claude、Codex 的周额度重置前 12 小时发一条通知，告诉你还剩多少，记得用掉。
 - **批注回答（Mac）**：在 Agent 的回答里选中任意一段写一句批注，批注随你的下一句发出，只带简短摘录，不把长回答原样发回去。
-- **手机上看演示**：Agent 可以把页面、截图、PDF、报告、录音、视频或 Office 文稿发给你，每发一次在手机的会话里是一张卡片，点开全屏预览、左右切换。（CuePad 给每家 Agent 的技能都教它运行 `cuepad show <文件…>`。）
+- **手机上看演示**：Agent 可以把页面、截图、PDF、报告、录音、视频或 Office 文稿发给你，每发一次在手机的会话里是一张卡片，每个文件都写明是什么、看哪里，点开全屏预览、左右切换。（CuePad 给每家 Agent 的技能都教它运行 `cuepad show <文件…> --title <说明>…`。）
 - **懂代码的项目**：每个项目在 Mac 上都有一个文件夹：可以换成已有的代码目录，没换的第一次在这台 Mac 上开工时自动建好 `~/CuePad/<项目名>`。Agent 会话与 `cuepad` 命令行按所在目录自动选中项目。
 - **选区与变量**：把选中的几行转成任务；发送前集中填写 `{{变量}}`，每条记住上次的值。
 - **随处搜索**：`⌘K` 搜项目、灵感与任务，可按项目、含图片、是否交给过 Agent、时间筛选。
 - **Mac**：玻璃侧栏、随手记灵感的菜单栏小稿纸、全局快捷键（默认 `Option + Space`）随时唤回，`Option + Shift + Space` 对 Cue 说话。
-- **iPhone 与 iPad**：项目书架、随手记输入栏、分享扩展与小组件。手机上记的灵感稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Agent 会话。
+- **iPhone 与 iPad**：iPhone 打开就是 Cue，任务、会话、项目在底部一点即达；iPad 与 Mac 同一个侧栏。项目书架、随手记输入栏、分享扩展与小组件。手机上记的灵感稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Agent 会话。
 - **iCloud 同步**：按记录同步；同一条在两台设备离线并发编辑时，两个版本都保留，由你选择。
 
 ## `cuepad`：给 agent 的记忆
@@ -59,11 +59,9 @@ apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
 apple/scripts/xc.sh test kit     # 共用包的测试
 ```
 
-命令与开发约定见 [AGENTS.md](AGENTS.md) 与 [docs/](docs/)。
-
 ## 参与贡献
 
-欢迎贡献——参见 [CONTRIBUTING.md](.github/CONTRIBUTING.md)；安全问题请看 [SECURITY.md](.github/SECURITY.md)。
+欢迎贡献——参见 [CONTRIBUTING.md](.github/CONTRIBUTING.md)（开发约定在 [AGENTS.md](AGENTS.md)）；安全问题请看 [SECURITY.md](.github/SECURITY.md)。
 
 ## 许可证
 

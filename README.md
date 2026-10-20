@@ -59,11 +59,9 @@ apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
 apple/scripts/xc.sh test kit     # shared package tests
 ```
 
-Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).
-
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md), and [SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities.
+Contributions are welcome — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) (project conventions live in [AGENTS.md](AGENTS.md)), and [SECURITY.md](.github/SECURITY.md) for reporting vulnerabilities.
 
 ## License
 
