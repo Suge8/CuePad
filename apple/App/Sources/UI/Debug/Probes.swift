@@ -11,12 +11,15 @@ import UIKit
 /// 两端只在怎么起 display link 上不同（Mac 取窗口里视图的，iOS 取主屏的），其余一份。
 
 /// 进程已执行的指令数（百万）。别的进程抢 CPU 时 CPU 时间会被拉长，指令数几乎不受影响，前后对比以它为准。
-func instructionsMillions() -> Double {
+func instructionsMillions() -> Double { Double(processCounters().instructions) / 1_000_000 }
+
+/// 进程累计执行的指令数与 CPU 周期数（内核的性能计数器）。
+func processCounters() -> (instructions: UInt64, cycles: UInt64) {
     var usage = rusage_info_v4()
     _ = withUnsafeMutablePointer(to: &usage) {
         $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { pidRusage(getpid(), RUSAGE_INFO_V4, $0) }
     }
-    return Double(usage.ri_instructions) / 1_000_000
+    return (usage.ri_instructions, usage.ri_cycles)
 }
 
 /// 进程累计消耗的能量（毫焦，内核按 CPU 与 GPU 等的活动估算）。
@@ -96,11 +99,15 @@ final class TurnLog {
         var cpu: Double
         /// 这一圈醒来的时刻（`CACurrentMediaTime`）。
         var at: CFTimeInterval
+        /// 这一圈里进程执行的指令与周期（含别的线程，这一圈里主线程占大头）。
+        var instructions: UInt64
+        var cycles: UInt64
     }
 
     private let port = mach_thread_self()
     private var woke: CFTimeInterval = 0
     private var wokeCPU = 0.0
+    private var wokeCounters: (instructions: UInt64, cycles: UInt64) = (0, 0)
     private var since: CFTimeInterval = 0
     private var log: [Turn] = []
     private var recording = false
@@ -115,12 +122,16 @@ final class TurnLog {
             MainActor.assumeIsolated {
                 self.woke = CACurrentMediaTime()
                 self.wokeCPU = mainCPUSeconds(self.port)
+                self.wokeCounters = processCounters()
             }
         }
         let sleep = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, true, Int.max) { _, _ in
             MainActor.assumeIsolated {
                 guard self.recording else { return }
-                self.log.append(Turn(dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: mainCPUSeconds(self.port) - self.wokeCPU, at: max(self.woke, self.since)))
+                let counters = processCounters()
+                self.log.append(Turn(
+                    dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: mainCPUSeconds(self.port) - self.wokeCPU, at: max(self.woke, self.since),
+                    instructions: counters.instructions - self.wokeCounters.instructions, cycles: counters.cycles - self.wokeCounters.cycles))
                 // 这一圈的提交已做完：画面和动作发出时不一样了，这一圈就是第一次变（指纹的计算不在任何一圈的 CPU 里）
                 if self.changedAt == nil, let root = self.root, Self.fingerprint(root) != self.baseline { self.changedAt = self.log.count - 1 }
             }
@@ -137,6 +148,7 @@ final class TurnLog {
         baseline = root.map(Self.fingerprint) ?? 0
         changedAt = nil
         wokeCPU = mainCPUSeconds(port)
+        wokeCounters = processCounters()
         recording = true
     }
 
@@ -183,8 +195,15 @@ final class TurnLog {
     /// - clickMs：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈求和；挪到下一圈的活照样算进去，直到画面第一次变
     ///   （CPU 不会比墙钟长，每圈取两者小的）。画面在量的这段时间里一直没变时 `seen` 为 false，clickMs 是整段的合计。
     /// - visibleTurns：clickMs 里有几圈。
+    /// - clickInstructionsM、clickGHz：clickMs 那几圈里进程执行的指令（百万）与每 CPU 毫秒跑了多少周期：活一样多时 clickMs 翻倍而指令不变、
+    ///   GHz 减半，是这台机器那一刻跑得慢（空闲一会儿后的第一下，性能核常还没升频），不是多做了活。
     /// - totalMs、maxTurnMs：动作后量的这段时间里主线程 CPU 的总数与最重的一圈；heavy 是 ≥3ms 的各圈（几毫秒醒来、几毫秒 CPU）。
     /// - instructionsM：进程在这段时间里执行的指令数（百万）。
+    private static func ghz(_ turns: some Collection<Turn>) -> Double {
+        let cpu = turns.reduce(0) { $0 + $1.cpu }
+        return cpu > 0 ? (Double(turns.reduce(0) { $0 + $1.cycles }) / cpu / 1e7).rounded() / 100 : 0
+    }
+
     static func metrics(_ turns: (log: [Turn], changedAt: Int?, start: CFTimeInterval), instructions: Double, frames: FrameRecorder.Hitches) -> [String: Any] {
         func ms(_ value: Double) -> Double { (value * 10_000).rounded() / 10 }
         let log = turns.log
@@ -192,6 +211,8 @@ final class TurnLog {
         return [
             "clickMs": ms(visible.reduce(0) { $0 + min($1.cpu, $1.dur) }),
             "visibleTurns": visible.count,
+            "clickInstructionsM": (Double(visible.reduce(0) { $0 + $1.instructions }) / 100_000).rounded() / 10,
+            "clickGHz": ghz(visible),
             "seen": turns.changedAt != nil,
             "totalMs": ms(log.reduce(0) { $0 + min($1.cpu, $1.dur) }),
             "maxTurnMs": ms(log.map { min($0.cpu, $0.dur) }.max() ?? 0),

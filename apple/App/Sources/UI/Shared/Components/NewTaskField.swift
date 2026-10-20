@@ -11,6 +11,8 @@ struct NewTaskField: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var text = ""
+    /// 点过这一行：之前只画图标与提示字，不建系统输入框——这一行常常不用，而打开任务气泡那一帧不建它少 5%～9% 的指令（实测）。
+    @State private var writing = false
     @State private var chosen: UUID?
     @FocusState private var focused: Bool
 
@@ -20,14 +22,29 @@ struct NewTaskField: View {
 
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {
-            // 入口不用系统占位灰：那样看起来像不能点
-            Image(.add).font(Self.glyph).foregroundStyle(palette.ink2).accessibilityHidden(true)
-                .frame(width: TaskMetrics.ringColumn)
-            TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(parent == nil ? Typography.body : TaskMetrics.stepFont)
-                .submitLabel(.done)
+            if writing || autofocus {
+                glyph
+                TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(font)
+                    .submitLabel(.done)
+                    .accessibilityLabel(prompt)
+                    .focused($focused)
+                    .onSubmit(add)
+                    .task {
+                        // 换成输入框的那一帧还没进窗口的响应链：下一帧再接键盘
+                        await NextFrame.wait()
+                        focused = true
+                    }
+            } else {
+                Button { writing = true } label: {
+                    HStack(spacing: TaskMetrics.columnGap) {
+                        glyph
+                        Text(prompt).font(font).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
                 .accessibilityLabel(prompt)
-                .focused($focused)
-                .onSubmit(add)
+            }
             #if os(macOS)
             if choosesProject, let projects = workspace.catalog?.projects {
                 Menu {
@@ -49,8 +66,15 @@ struct NewTaskField: View {
             #endif
         }
         .frame(minHeight: TaskMetrics.rowHeight)
-        .onAppear { focused = autofocus }
     }
+
+    // 入口不用系统占位灰：那样看起来像不能点
+    private var glyph: some View {
+        Image(.add).font(Self.glyph).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            .frame(width: TaskMetrics.ringColumn)
+    }
+
+    private var font: Font { parent == nil ? Typography.body : TaskMetrics.stepFont }
 
     #if os(macOS)
     private static let glyph = Font.system(size: 12, weight: .semibold)

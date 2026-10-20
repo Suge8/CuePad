@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 用法：xc.sh perf mac [次数=3] [启动参数…]   启动参数原样传给 App，如只量几项：xc.sh perf mac 3 -CuePadInteractOnly 会话页,长文打字·回复框
 #   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
-#   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）、合计、最重一圈、指令数与掉帧，取各次的中位数，
+#   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与其中的指令数、每毫秒跑的周期（GHz：活一样多而回合翻倍时它减半，是机器那一刻慢），
+#   合计、最重一圈、指令数与掉帧，取各次的中位数，
 #   列成表。默认在后台量（不抢前台）：指令数照样前后对比，帧与掉帧偏乐观，不和预算比；
 #   要和交互预算（docs/verify.md「交互预算」）比就加 -CuePadForeground YES 在前台量（规则见 docs/verify.md「占前台」），有一项超了就以 1 退出。
 #   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
@@ -76,7 +77,7 @@ over = 0
 foreground = all(r.get("foreground") for r in rows)
 if not foreground:
     print("后台量的：帧与掉帧偏乐观，不和预算比（加 -CuePadForeground YES 在前台量才比）")
-print(f"{'库':6}{'交互':14}{'点击回合 ms':>12}{'预算':>7}{'合计 ms':>9}{'指令 M':>8}{'最重一圈':>9}{'掉帧':>6}{'预算':>6}{'最长帧 ms':>10}  结果")
+print(f"{'库':6}{'交互':14}{'点击回合 ms':>12}{'预算':>7}{'其中指令 M':>10}{'GHz':>6}{'合计 ms':>9}{'指令 M':>8}{'最重一圈':>9}{'掉帧':>6}{'预算':>6}{'最长帧 ms':>10}  结果")
 for key in order:
     samples = [r for r in rows if (r["库"], r["name"]) == key]
     click = st.median(r["clickMs"] for r in samples)
@@ -85,10 +86,12 @@ for key in order:
     total = st.median(r["totalMs"] for r in samples)
     instructions = st.median(r["instructionsM"] for r in samples)
     heaviest = st.median(r["maxTurnMs"] for r in samples)
+    click_instructions = st.median(r["clickInstructionsM"] for r in samples)
+    ghz = st.median(r["clickGHz"] for r in samples)
     budget_click, budget_hitches = samples[0]["budgetClickMs"], samples[0]["budgetHitches"]
     ok = click <= budget_click and hitches <= budget_hitches
     over += foreground and not ok
     unseen = '，未见变化' if not all(r["seen"] for r in samples) else ''
-    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{total:9.0f}{instructions:8.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {('ok' if ok else '超预算') if foreground else '-'}{unseen}")
+    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{click_instructions:10.0f}{ghz:6.2f}{total:9.0f}{instructions:8.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {('ok' if ok else '超预算') if foreground else '-'}{unseen}")
 sys.exit(1 if over else 0)
 PY

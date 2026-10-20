@@ -69,8 +69,8 @@ for line in open(sys.argv[1]):
     k = (r["name"], seen[key])
     if k not in rows: order.append(k)
     rows.setdefault(k, []).append(r)
-print("交互\t第几次\t点击回合ms\t合计ms\t最重一圈ms\t指令百万\t掉帧")
+print("交互\t第几次\t点击回合ms\t其中指令百万\tGHz\t合计ms\t最重一圈ms\t指令百万\t掉帧")
 for k in order:
     m = lambda f: statistics.median(r[f] for r in rows[k])
-    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('instructionsM'):.0f}\t{m('hitches'):.0f}")
+    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('clickInstructionsM'):.0f}\t{m('clickGHz'):.2f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('instructionsM'):.0f}\t{m('hitches'):.0f}")
 PY
