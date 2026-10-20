@@ -29,7 +29,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 
 开发与测试的自动化不抢前台：本机构建（Debug、测试宿主、perf 的 Release）不管怎么起都在后台，窗口排在所有窗口最后（`DebugHooks.present`）；Mac 截图、录屏按窗口拍，模拟器不开 Simulator.app，bcu、axe 按进程投递，都不动用户的前台和指针。
 
-非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去：
+非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去。系统的激活是协商式的，别的应用在前台时实例自己 activate 会被忽略（窗口照旧在后面、点一下只是激活，量出的帧偏乐观）：借着却没到前台时实例写请求，起它的 `app.py` 的看守经系统事件把它拉到前台（`front_keeper`）；单次交互的表里一行只有真在前台量的才记 `foreground`：
 
 - 和交互预算比的 `xc.sh perf mac`：前台才有玻璃合成与动画，后台量的帧与掉帧偏乐观。
 - `-CuePadClick`、`-CuePadRightClick` 截系统菜单、点一串录任务气泡的开合与翻页：后台 App 的菜单画成停用的灰，没激活的窗口里点一下只是激活。
@@ -90,7 +90,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 - `xc.sh perf mac` 默认在后台量，只比指令数；要和预算比加 `-CuePadForeground YES`（见「占前台」）。掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
-- Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 …`；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
+- Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 …`；单次交互同样给 `CUEPAD_TRACE`（`xc.sh perf mac 1 … -CuePadInteractOnly 项`，掉帧用 'Animation Hitches'），每一项在 trace 里是一段兴趣点区间，掉帧、采样按它对到是哪一项；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
 - `Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。
 - 会话页与 Cue 页滚动（Mac，可不碰指针、不抢焦点）：`-CuePadBench chatscroll`，跑法、指标与屏幕外量不到的部分见 `DebugScene+LongChat.swift` 里 `ChatScrollBench` 的注释。

@@ -13,8 +13,8 @@ nonisolated struct BubblePlacement: Equatable {
     var width: CGFloat
     var maxHeight: CGFloat
     var tail: BubbleTail?
-    /// 长出来的那个点（气泡自己的坐标）：尾巴尖。
-    var growth: UnitPoint = .top
+    /// 进出场从哪边来：朝着那一下（尾巴尖）那一侧，-1 是上面、1 是下面。
+    var side: CGFloat = -1
 
     /// `anchor`：那一下在容器里的位置；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
     init(anchor: CGPoint?, container: CGSize, insets: EdgeInsets) {
@@ -36,12 +36,11 @@ nonisolated struct BubblePlacement: Equatable {
             top = anchor.y + Self.gap
             maxHeight = below
             tail = BubbleTail(edge: .top, offset: along)
-            growth = UnitPoint(x: along / width, y: 0)
         } else {
             bottom = anchor.y - Self.gap
             maxHeight = above
             tail = BubbleTail(edge: .bottom, offset: along)
-            growth = UnitPoint(x: along / width, y: 1)
+            side = 1
         }
     }
 
@@ -51,16 +50,19 @@ nonisolated struct BubblePlacement: Equatable {
         x = (container.width - width) / 2
         bottom = container.height - insets.bottom
         maxHeight = container.height - insets.top - insets.bottom
-        growth = .bottom
+        side = 1
     }
 
-    /// 从尾巴尖长出来：缩放加淡入；减弱动态效果时只淡入淡出。挂在气泡自己（只有气泡那么大）上：
-    /// 缩放铺满整窗的一层时 AppKit 每帧重排整窗、重算鼠标跟踪区，开合各掉十来帧（实测）。
+    /// 从那一下那一侧浮出来：朝尾巴尖挪一小段加淡入；减弱动态效果时只淡入淡出。挂在气泡自己（只有气泡那么大）上。
+    /// 不缩放（实测，Instruments）：缩放时每一帧字都按新的大小重画一遍（字形重新栅格化），开合各约 400ms 里主线程三成在重画字，掉帧；
+    /// 平移不改字的大小，一次画好跟着走，开合的指令数降到原来的三成。缩放铺满整窗的一层更糟：AppKit 每帧重排整窗、重算鼠标跟踪区。
     func transition(reduceMotion: Bool) -> AnyTransition {
-        reduceMotion ? .opacity : .scale(scale: 0.86, anchor: growth).combined(with: .opacity)
+        reduceMotion ? .opacity : .offset(y: side * Self.rise).combined(with: .opacity)
     }
 
     static let width: CGFloat = 400
+    /// 进出场挪的那一小段。
+    static let rise: CGFloat = 8
     #if os(macOS)
     static let radius: CGFloat = 18
     #else

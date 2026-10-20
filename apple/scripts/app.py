@@ -17,6 +17,7 @@
 4. 不靠固定等待：Debug 构建摆好画面后写就绪文件（CUEPAD_SHOT_READY，DebugScene.signalReady），这里用 kqueue 等它出现或 App 退出。
    这里起的实例都带它（exec 没给就用本检出那一份），App 据此认出是脚本起的（DebugHooks.scripted），测试宿主不带。
    本机构建一律在后台跑、不抢前台（DebugHooks.present）；不进程序坞是包里声明的（xc.sh 的 LSUIElement）。
+   给了 -CuePadForeground YES 的实例要占前台时写 FRONT，front_keeper 经系统事件把它拉到前台（App 自己 activate 会被系统忽略）。
 5. Mac 截图、录屏按窗口拍（wincap.swift，尺寸对不上就失败）；启动参数没给窗口尺寸时用 WINDOW。
 iOS、iPadOS：模拟器里本就隔离，同一台上再 launch 就换掉旧的；状态栏固定成 9:41、满格满电，做完 terminate，run 留着。
 """
@@ -36,6 +37,9 @@ CHECKOUT = os.path.dirname(APPLE)
 BUNDLE_ID = "com.sugeh.cuepad"
 RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # 与 _lock.sh 同一处；模拟器的就绪文件放这里（按设备分）
 SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
+# 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略
+FRONT = f"{APPLE}/.derived/mac-front"
+FRONT_POLL = 0.3
 # 连接目录放 /tmp 下按检出分：socket 路径受 sun_path 104 字节限制，检出路径太长
 SOCKETS = f"/tmp/cuepad-app-{os.getuid()}-{hashlib.sha1(CHECKOUT.encode()).hexdigest()[:8]}"
 BUILD = re.compile(r".*/apple/\.derived[^/]*/Build/Products/[^/]+/CuePad\.app")
@@ -189,8 +193,9 @@ class Mac:
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
         if os.path.exists(self.ready):
             os.remove(self.ready)
-        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready),
+        self.proc = subprocess.Popen([f"{self.app}/Contents/MacOS/CuePad", *args], env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, CUEPAD_FRONT_REQUEST=FRONT),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
+        front_keeper(self.proc.pid)
         write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
         return wait_ready(self.ready, self.proc.pid, self.log)
 
@@ -263,7 +268,35 @@ def exec_mac(app, library, args):
     exe = f"{app}/Contents/MacOS/CuePad"
     env = isolated_env(os.path.abspath(library))
     env.setdefault("CUEPAD_SHOT_READY", READY)
+    env["CUEPAD_FRONT_REQUEST"] = FRONT
+    front_keeper(os.getpid())  # exec 不换 PID：看守的就是接下来的 CuePad
     os.execve(exe, [exe, *args], env)
+
+
+def front_keeper(pid):
+    """后台看守 pid 那个实例：它写了 FRONT（借着前台却没到前台）就经系统事件把它拉到前台，它退出就走。
+    只看文件不问系统谁在前台：前台的切换由实例自己报（到了前台就删、被抢走再写），量的时候这里不多花一次查询。"""
+    if os.path.exists(FRONT):
+        os.remove(FRONT)
+    if os.fork():
+        return
+    os.setsid()
+    null = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(null, fd)
+    os.closerange(3, 1024)  # 不带着本检出那一份的锁与调用方的管道
+    pull = f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true'
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        if os.path.exists(FRONT):
+            subprocess.run(["osascript", "-e", pull], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(FRONT_POLL)
+    if os.path.exists(FRONT):
+        os.remove(FRONT)
+    os._exit(0)
 
 
 def stop():
