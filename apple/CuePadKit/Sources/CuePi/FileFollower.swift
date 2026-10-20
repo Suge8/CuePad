@@ -86,8 +86,10 @@ final class FileFollower: Sendable {
             }
             let directory = Self.nearestDirectory(above: path)
             let watched = open(directory, O_EVTONLY)
-            guard watched >= 0 else { return false }
-            files[path] = source(watched, [.write]) { [self] _ in descend(path) }
+            guard watched >= 0 else { return arm(path) }  // 找到它与打开它之间被删了：往上再找
+            // 目录自己被删、被改名也要知道：删一棵目录时先删里面的文件（这里收到一次 write、重新盯上还在的这一层），
+            // 随后这一层也没了，只盯 write 就再也等不到
+            files[path] = source(watched, [.write, .delete, .rename]) { [self] _ in descend(path) }
             // 判断与开始盯之间下面已经建出来（目录或文件本身）：那一下变化盯不到了
             if FileManager.default.fileExists(atPath: path) || Self.nearestDirectory(above: path) != directory { descend(path) }
             return false
