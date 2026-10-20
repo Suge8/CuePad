@@ -4,7 +4,6 @@ import CueAgent
 import CueStore
 import SwiftUI
 
-/// 滚动定位锚点。
 enum ScrollAnchor {
     static let older = "older"
 }
@@ -20,23 +19,16 @@ enum ScrollAnchor {
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；`-CuePadSidebar hidden`（仅 Mac）：任何画面都先收起侧栏；
-/// - `-CuePadBench <interact|churn|chatdepth>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
-///   chatdepth（仅 iOS）是长对话从最新处一路往上翻到第 1 轮、每排开一段的开销（`ChatDepthBench`，见 `DebugScene+LongChat.swift`）；
-///   chatresize（仅 Mac，不退出）是长对话翻到深处后每次拖窗口边改宽的开销（`ChatResizeBench`，同一文件）；
-///   chatscroll（仅 Mac，量完退出）是长对话里滚动的每圈主线程 CPU、指令数与掉帧（`ChatScrollBench`，同一文件；`-CuePadScrollDriver`、`-CuePadScrollPointer` 与方法限制见它的注释）；
+/// - `-CuePadBench <interact|chatscroll|churn>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
+///   chatscroll（仅 Mac）是长对话里滚动的每圈主线程 CPU、指令数与掉帧（`ChatScrollBench`，见 `DebugScene+LongChat.swift`；`-CuePadScrollDriver`、`-CuePadScrollPointer` 与方法限制见它的注释）；
 ///   churn（仅 Mac）边加卡边逐点拉宽窗口，查布局反馈环（`layout-stress.sh`）；
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
-/// - `-CuePadCycle YES`：画面就绪后让演示会话 scratch 循环走过各种状态，录状态切换的动效（`cycleIfAsked`）；
-/// - `-CuePadWake <秒>`（配 `-CuePadDemo YES`）：画面就绪后每隔这么久 Cue 被在线会话叫醒一次，录"叫醒"的动效（`wakeIfAsked`，见 `DebugScene+Cue.swift`）；
-///   `-CuePadRelay <秒>`：每隔这么久 Cue 交给会话一次（轮流对在线会话说一句、给一件待办开新会话，`-CuePadRelayKind say|start` 只做一种），录"交给"的动效（`relayIfAsked`，同一处）；
-///   `-CuePadFlightLog <路径>` 另量每一下在 App 进程里的开销（同一处）；`-CuePadNoAsks YES`：等你回答的演示会话都歇着、Cue 的提问撤回，"等你"为 0（`settleAsks`）；`-CuePadCueSays <秒>`：过这么久 Cue 自己说一句，`-CuePadVisitCue <秒>` 说完这么久去 Cue 页读、再回原处（`saysIfAsked`，同一处）；
-/// - `-CuePadCueFlow YES`（配 cue 画面与 `-CuePadDemo YES`）：画面就绪后按固定节奏走一遍完整的一轮（发送、在想、用工具、回复、结果卡、等你、切页），录 Cue 页的流转；
-///   `-CuePadCueFlowLog <路径>` 另量静止与发送各一段（`cueFlowIfAsked`，见 `DebugScene+CueFlow.swift`）；
+/// - 录屏驱动（画面就绪后循环或走一遍，各自的注释写参数）：`-CuePadCycle`（`DebugScene+PiDemo.swift`）；`-CuePadWake`、`-CuePadRelay`、`-CuePadFlightLog`、`-CuePadNoAsks`、
+///   `-CuePadCueSays`、`-CuePadVisitCue`、`-CuePadClosed`、`-CuePadReopen`（`DebugScene+Cue.swift`）；`-CuePadCueFlow`、`-CuePadCueFlowLog`（`DebugScene+CueFlow.swift`）；
 /// - `-CuePadForeground YES`（仅 Mac）：允许占前台（本机构建默认在后台）；只有下面几项真占，规则见 `DebugForeground` 与 docs/verify.md「占前台」；
 /// - `-CuePadClick x,y[;x,y|esc|return…]`、`-CuePadRightClick x,y`（仅 Mac，要 `-CuePadForeground YES`）：就绪后在主窗口里按顺序左键点几下（`esc`、`return` 是按那个键）、或右键点一下，打开那里的系统菜单、任务气泡再截图、录屏（`openMenuIfAsked`，见 `DebugMenus+Mac.swift`）；
 /// - `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/verify.md「性能测量」）；
-/// - `-CuePadClosed <秒>`（仅 Mac）：画面就绪后这么久关上主窗口，`-CuePadReopen <秒>` 关上这么久再打开（`closeIfAsked`，见 `DebugScene+Cue.swift`）；
 /// - `-CuePadDockTour YES`（iPhone）：就绪后按固定节奏走一遍底部那一排，录换去处的过渡（`dockTourIfAsked`）；
 ///   `-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadQuiet YES`（iOS）：不弹演示会话的前台横幅；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页底部的"⋯"一打开就展开；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；

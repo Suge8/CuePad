@@ -10,6 +10,11 @@ import UIKit
 /// Mac 与 iOS 的 `-CuePadBench` 共用的两个探针：每一帧的时间戳（`FrameRecorder`）与每圈主线程 run loop 的墙钟与 CPU（`TurnLog`）。
 /// 两端只在怎么起 display link 上不同（Mac 取窗口里视图的，iOS 取主屏的），其余一份。
 
+/// 测量结果的一行：`标签 {json}`，键排序（脚本按标签认行）。
+func jsonLine(_ tag: String, _ row: [String: Any]) -> String {
+    tag + " " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self)
+}
+
 /// 进程已执行的指令数（百万）。别的进程抢 CPU 时 CPU 时间会被拉长，指令数几乎不受影响，前后对比以它为准。
 func instructionsMillions() -> Double { Double(processCounters().instructions) / 1_000_000 }
 
@@ -242,7 +247,6 @@ enum PerfProbe {
         for continuation in waiting.removeValue(forKey: event) ?? [] { continuation.resume() }
     }
 
-    /// 等到下一次 `event`。
     static func wait(for event: String) async {
         await withCheckedContinuation { waiting[event, default: []].append($0) }
     }

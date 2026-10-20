@@ -7,8 +7,6 @@ import Foundation
 ///   一句话、整页长段落、40 行代码块、宽表、长列表轮换，每 25 轮你贴进来一段长文；看打开即最新、往上翻、回到最新。
 /// - `-CuePadStream YES`（配 session 画面）：打开会话后像真的 Agent 那样一轮一轮追加（`stream`）：看新内容到达时跟随最新，
 ///   也查会话在跑时才有的界面（经过、子代理、回复框的停止钮）。
-/// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，每排开一段量一次开销与掉帧（`ChatDepthBench`）。
-/// - `-CuePadBench chatresize`（仅 Mac，配 session 画面打开 marathon）：测量脚本翻到深处后拖窗口边改宽，每次拖动量一次开销与掉帧（`ChatResizeBench`）。
 /// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon，或 cue 画面量 Cue 页的长对话）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
 extension DebugScene {
     static let longChat = "marathon"
@@ -84,119 +82,6 @@ extension DebugScene {
         case 4: return (1...12).map { "- 第 \($0) 项：" + ($0 % 2 == 0 ? "已完成" : "还差一点，等上游合并") }.joined(separator: "\n")
         default: return paragraph
         }
-    }
-}
-#endif
-
-#if os(iOS) && DEBUG
-import QuartzCore
-import UIKit
-
-/// 长对话一路往上翻到第 1 轮，每排开一段的开销：测量脚本在模拟器上真滑（程序改偏移不算用户滚动），对话每在上面排开一段
-/// （`DebugHooks.chatShowsEarlier`）就从那一刻起量 800ms：点击回合、合计、最重一圈（主线程 CPU 毫秒）、指令数（百万）、掉帧。
-/// `roundsBack` 是排开后最早一条离最新多少轮（按条目位置算，每轮是你的话与回答两条）；800ms 内又排开一段时上一段提前收（`windowMs`）。
-/// 每段一行 `DEPTH {json}` 写进隔离库目录下的 `chatdepth.jsonl`；排开到第 1 条写 `DONE` 退出。
-enum ChatDepthBench {
-    private static let turns = TurnLog()
-    private static var out: URL?
-    private static var running: Running?
-
-    private struct Running {
-        let recorder: FrameRecorder
-        let instructions: Double
-        let from: Int
-        let count: Int
-        let started: CFTimeInterval
-        let token = UUID()
-    }
-
-    static func run() async {
-        guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
-        let out = URL(filePath: dir).appending(path: "chatdepth.jsonl")
-        try? Data().write(to: out)
-        try? await Task.sleep(for: .seconds(4))
-        self.out = out
-        write("READY")
-    }
-
-    static func began(from item: Int, of count: Int) {
-        guard out != nil else { return }
-        finish()
-        let recorder = FrameRecorder()
-        recorder.start()
-        let running = Running(recorder: recorder, instructions: instructionsMillions(), from: item, count: count, started: CACurrentMediaTime())
-        self.running = running
-        turns.begin(running.started, root: nil)
-        Task {
-            try? await Task.sleep(for: .milliseconds(800))
-            if Self.running?.token == running.token { finish() }
-        }
-    }
-
-    private static func finish() {
-        guard let running else { return }
-        self.running = nil
-        var row = TurnLog.metrics(turns.finish(), instructions: running.instructions, frames: running.recorder.stop())
-        ["clickMs", "visibleTurns", "seen", "heavy"].forEach { row[$0] = nil }
-        row["roundsBack"] = (running.count - running.from + 1) / 2
-        row["windowMs"] = ((CACurrentMediaTime() - running.started) * 1000).rounded()
-        write("DEPTH " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
-        if running.from == 0 {
-            write("DONE")
-            exit(0)
-        }
-    }
-
-    private static func write(_ line: String) {
-        guard let out, let handle = try? FileHandle(forWritingTo: out) else { return }
-        handle.seekToEndOfFile()
-        handle.write(Data((line + "\n").utf8))
-        try? handle.close()
-    }
-}
-#endif
-
-#if os(macOS) && DEBUG
-import AppKit
-
-/// 长对话翻到深处后拖窗口边改宽的开销：从按住窗口边（开始拖动改大小）量到松手后 500ms：点击回合、合计、最重一圈（主线程 CPU 毫秒）、
-/// 指令数（百万）、掉帧。每次拖动一行 `RESIZE {json}` 写进隔离库目录下的 `chatresize.jsonl`。
-enum ChatResizeBench {
-    private static let turns = TurnLog()
-    private static var running: (recorder: FrameRecorder, instructions: Double, started: CFTimeInterval)?
-
-    static func run() async {
-        guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
-        let out = URL(filePath: dir).appending(path: "chatresize.jsonl")
-        try? Data("READY\n".utf8).write(to: out)
-        let center = NotificationCenter.default
-        for await note in center.notifications(named: NSWindow.willStartLiveResizeNotification) {
-            guard let view = (note.object as? NSWindow)?.contentView else { continue }
-            begin(view)
-            for await _ in center.notifications(named: NSWindow.didEndLiveResizeNotification).prefix(1).map({ _ in () }) {}
-            try? await Task.sleep(for: .milliseconds(500))
-            finish(out)
-        }
-    }
-
-    private static func begin(_ view: NSView) {
-        let recorder = FrameRecorder()
-        recorder.start(in: view)
-        let started = CACurrentMediaTime()
-        running = (recorder, instructionsMillions(), started)
-        turns.begin(started, root: nil)
-    }
-
-    private static func finish(_ out: URL) {
-        guard let running else { return }
-        self.running = nil
-        var row = TurnLog.metrics(turns.finish(), instructions: running.instructions, frames: running.recorder.stop())
-        ["clickMs", "visibleTurns", "seen", "heavy"].forEach { row[$0] = nil }
-        row["windowMs"] = ((CACurrentMediaTime() - running.started) * 1000).rounded()
-        guard let handle = try? FileHandle(forWritingTo: out) else { return }
-        handle.seekToEndOfFile()
-        handle.write(Data(("RESIZE " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self) + "\n").utf8))
-        try? handle.close()
     }
 }
 #endif
@@ -376,7 +261,7 @@ enum ChatScrollBench {
             row["driver"] = driver.rawValue
             row["pointerInWindow"] = pointerInWindow
             row["frontmostIsMe"] = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
-            print("CHATSCROLL " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            print(jsonLine("CHATSCROLL", row))
             fflush(stdout)
             try? await Task.sleep(for: .milliseconds(500))
         }
