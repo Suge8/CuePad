@@ -151,6 +151,15 @@ extension DebugScene {
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
+            // 对话末尾 Cue 自己又醒了三轮（一颗虚线气泡）：空闲时整理记忆，中间一件任务的子代理卡住了（名字长、只看了看）
+            for (wake, note, tools) in [
+                (CueWake.idle, "记忆整理：#86-87 合成一行", process(step(.other, "合并记忆 #86-87"))),
+                (.sessionActivity([CueStir(kind: .stalled, task: importing?.id)]), "", process(step(.read, "看「导入旧数据时保留回收站」的近况", importing))),
+                (.idle, "记忆整理：#40-43 合成一行", process(step(.other, "合并记忆 #40-43"))),
+            ] {
+                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
+                if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
+            }
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)
@@ -193,7 +202,7 @@ extension DebugScene {
 
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
     /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一节动态），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
+    /// 一次一个、一次两个交替（看几道光错开），两个的那次歇下前动手说一句（录动态那颗虚线气泡里这一节从在跑到做完）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
     /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
@@ -222,7 +231,17 @@ extension DebugScene {
             guard !woke.isEmpty, let row = try? await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake),
                 (try? await store.setCueState(.thinking, round: row)) != nil
             else { return nil }
-            return ("wake", { try? await store.setCueState(.settled) })
+            // 隔一次动手说一句再歇下（同真的一轮：醒来、动手、说话、歇下）
+            let acts = round % 2 == 0
+            return ("wake", {
+                if acts {
+                    var tools = PiChatMessage.Tools()
+                    tools.record(.init(kind: .talk, target: "对 \(woke[0]) 说：测试跑完把结果贴过来"))
+                    _ = try? await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
+                    _ = try? await store.addCueMessage(.note, text: "催了 \(woke[0])：测试跑完把结果贴过来")
+                }
+                try? await store.setCueState(.settled)
+            })
         }
     }
 
