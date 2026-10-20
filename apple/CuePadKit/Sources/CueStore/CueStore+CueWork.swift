@@ -43,6 +43,9 @@ public enum CueWork: Identifiable, Equatable, Sendable {
     case .session(let state): "session/\(state.sessionID)"
     }
   }
+
+  /// 在做的事的顶层任务；会话为 nil。
+  public var task: Card? { if case .task(let item) = self { item.task } else { nil } }
 }
 
 /// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。

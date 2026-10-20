@@ -29,7 +29,7 @@ struct SessionTaskTests {
         try await bridge(.appeared(session))
 
         let empty = try await TaskBoard.read(from: store)
-        #expect(empty.todo.isEmpty && empty.managing.map(\.id) == ["s1"])
+        #expect(empty.todo.isEmpty && empty.managing.map(\.id) == ["session/s1"])
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: .now, contextUsed: nil, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle))

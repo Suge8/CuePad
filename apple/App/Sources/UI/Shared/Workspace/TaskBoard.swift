@@ -33,25 +33,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var id: UUID { task.id }
     }
 
-    /// 在管的一件（`CueTally.managing`）：在做的任务，或没绑没做完的任务的活会话。
-    enum Work: Identifiable, Sendable, Equatable {
-        case task(Item)
-        case session(PiSessionState)
+    /// 在管的一件（`CueTally.managing`）：在做的任务带那件任务，没绑没做完的任务的活会话没有。
+    struct Work: Identifiable, Sendable, Equatable {
+        var work: CueWork
+        var item: Item?
+        var id: String { work.id }
 
-        var id: String {
-            switch self {
-            case .task(let item): item.id.uuidString
-            case .session(let session): session.sessionID
-            }
-        }
-
-        var item: Item? { if case .task(let item) = self { item } else { nil } }
-
-        /// 按项目筛时归哪个项目：任务的项目；会话的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
+        /// 按项目筛时归哪个项目：任务的项目，会话的归处（`home`）。
         var project: UUID {
-            switch self {
-            case .task(let item): item.task.projectID
-            case .session(let session): session.projectID ?? Project.defaultID
+            switch work {
+            case .task(let board): board.task.projectID
+            case .session(let session): TaskBoard.home(session)
             }
         }
     }
@@ -62,14 +54,16 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var item: Item?
         var id: String { wait.id }
 
-        /// 按项目筛时归哪个项目：落在的任务的项目，没落在任务上的会话看会话的项目（没有项目的归默认项目，同 `PiSessionListItem.home`）；
-        /// Cue 的一般提问不属于哪个项目。
+        /// 按项目筛时归哪个项目：落在的任务的项目，没落在任务上的会话看它的归处（`home`）；Cue 的一般提问不属于哪个项目。
         var project: UUID? {
             if let item { return item.task.projectID }
-            if case .session(let session, _) = wait { return session.projectID ?? Project.defaultID }
+            if case .session(let session, _) = wait { return TaskBoard.home(session) }
             return nil
         }
     }
+
+    /// 没绑任务的会话归哪个项目：它的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
+    private static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
 
     var todo: [Item]
     var managing: [Work]
@@ -123,18 +117,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
-        let managed = Set(tally.managing.compactMap { work in if case .task(let item) = work { item.id } else { nil } })
+        let managed = Set(tally.managing.compactMap(\.task?.id))
         let finished = tally.free(try store.tasksDone())
         let today = Calendar.current.startOfDay(for: now)
         let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
         return TaskBoard(
             todo: try tally.free(open.roots.compactMap(open.task).filter { !managed.contains($0.id) }).map(item),
-            managing: try tally.managing.map { work in
-                switch work {
-                case .task(let board): .task(try item(board.task))
-                case .session(let session): .session(session)
-                }
-            },
+            managing: try tally.managing.map { work in Work(work: work, item: try work.task.map(item)) },
             waiting: try tally.waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) },
             done: try finished[..<split].map(item),
             earlier: try finished[split...].map(item))
