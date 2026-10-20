@@ -86,10 +86,6 @@ extension CueTextView {
         insert(Result { try imageStore.store(data) })
     }
 
-    public func insertImage(fileAt url: URL) {
-        insert(Result { try imageStore.store(fileAt: url) })
-    }
-
     private func insert(_ result: Result<String, any Error>) {
         switch result {
         case .success(let id): replace(selectedRange, with: core.imageString(id: id), caret: selectedRange.location + 1)

@@ -18,6 +18,8 @@ final class ThumbnailLoader {
     private let rendered = NSCache<NSString, CueImage>()
     private var latest: [URL: CueImage] = [:]
 
+    nonisolated private static let maxPixel = 1600
+
     init(core: EditorCore) { self.core = core }
 
     func image(at url: URL?, size: CGSize) -> CueImage {
@@ -48,7 +50,7 @@ final class ThumbnailLoader {
     }
 
     @concurrent private static func pixels(at url: URL, size: CGSize, cornerRadius: CGFloat, scale: CGFloat) async -> CGImage? {
-        Thumbnails.image(at: url, maxPixel: ImageLoading.maxThumbnailPixel)
+        Thumbnails.image(at: url, maxPixel: Self.maxPixel)
             .flatMap { RoundedThumbnail.render($0, size: size, cornerRadius: cornerRadius, scale: scale) }
     }
 }

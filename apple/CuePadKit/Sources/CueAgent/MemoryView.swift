@@ -70,7 +70,6 @@ public struct CueMemoryView: Equatable, Sendable {
     self.merges = merges.sorted { ($0.hi - $0.lo, $0.lo) < ($1.hi - $1.lo, $1.lo) }
   }
 
-  /// 给 Cue 读的视图文字。
   public var text: String {
     var out: [String] = []
     if !pinned.isEmpty {
@@ -91,7 +90,6 @@ public struct CueMemoryView: Equatable, Sendable {
     return out.joined(separator: "\n")
   }
 
-  /// 请 Cue 合并一块的话。
   public static func mergePrompt(_ merge: Merge) -> String {
     """
     把记忆 #\(merge.lo)-\(merge.hi - 1) 合成一行（至多 \(CueMemoryLine.maxBytes) 字节），留下有长期影响的，不编造：
