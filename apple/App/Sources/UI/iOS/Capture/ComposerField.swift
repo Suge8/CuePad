@@ -41,6 +41,7 @@ struct ComposerField: UIViewRepresentable {
         view.showsHorizontalScrollIndicator = false
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.inputView = DebugHooks.inputView()
         return view
     }
 

@@ -62,15 +62,14 @@ private struct HomePage: View {
     let route: Route
     @Environment(Navigation.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 安全区底边离屏幕底边多远：随键盘（`keyboard`，键盘弹出时是键盘高）与不随键盘（`screen`，就是 Home 指示条那一段）。
-    @State private var keyboard: CGFloat = 0
-    @State private var screen: CGFloat = 0
+    /// 安全区底边离屏幕底边多远（键盘弹出时是键盘高）。
+    @State private var safeBottom: CGFloat = 0
 
     var body: some View {
         RouteView(route: route)
             .environment(\.homePage, true)
             // 内容一直滚到 Dock 后面，最后一行停在 Dock 上面
-            .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: keyboard))
+            .safeAreaPadding(.bottom, route == .cue ? 0 : Dock.reserve(above: safeBottom))
             .overlay(alignment: .bottom) {
                 // 不随键盘升起：键盘出来时盖住它
                 if route != .cue {
@@ -86,12 +85,7 @@ private struct HomePage: View {
                 }
             }
             .toolbarVisibility(route == .cue ? .hidden : .visible, for: .navigationBar)
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { keyboard = $0 }
-            .background {
-                Color.clear.ignoresSafeArea(.keyboard).onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { screen = $0 }
-            }
-            // Cue 页底部那一排离屏幕底边同 Dock；键盘弹出时贴着键盘（`CuePage`）
-            .environment(\.dockLift, keyboard > screen ? Dock.keyboardGap : Dock.margin - screen)
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
     }
 }
 
@@ -141,7 +135,7 @@ struct Dock: View {
     static let margin: CGFloat = 21
     /// 两块玻璃之间、Cue 页圆钮与输入框之间的空。
     static let gap: CGFloat = 8
-    /// 键盘弹出时 Cue 页那一排离键盘的距离。
+    /// Cue 页的输入框贴着安全区底边（键盘弹出时就是键盘顶）时离它的距离：窄屏输入框有焦点时、iPad 的 Cue 面板。
     static let keyboardGap: CGFloat = 8
     /// 选中滴离胶囊的边。
     static let inset: CGFloat = 4
@@ -433,7 +427,5 @@ extension EnvironmentValues {
     @Entry var dockSettled = true
     /// 这个栈是换去处时正在淡出的旧栈：它底部那一排当场隐去（`Arrive`）。
     @Entry var dockLeaving = false
-    /// Cue 页底部那一排离安全区底边的距离（负的是伸进 Home 指示条那一段，与 Dock 离屏幕底边一样远）。
-    @Entry var dockLift: CGFloat = Dock.keyboardGap
 }
 #endif

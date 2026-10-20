@@ -5,6 +5,7 @@ import SwiftUI
 /// 不上下排开（也不做成 iOS 底下那一栏）：那样回复框一变矮，对话的可见区就变高，贴着最新的整段对话跟着被拉下来——发出时回复框当下收起、
 /// 发出的话要等写进库才到，中间那一两帧就是一下闪动；它一变高（卡升起）系统当帧挪对话、滚动区下一帧才跟上。
 /// 浮着时可见区不变，边距由 `ChatScroll` 留到那句到了再一起收。
+/// 这一块贴着底：比可见区还高时（键盘很高、输入框撑到好几行）往上伸出去，不把输入框挤到键盘底下。
 /// `backed`：这一块铺页底色、盖住身后的对话（Mac）；手机上回复框是玻璃、卡是纸，对话在它们周围清楚可见，不铺。
 struct FloatingReply<Chat: View, Reply: View>: View {
     var backed = true
@@ -22,9 +23,10 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                 .frame(maxWidth: .infinity)
                 .background(backed ? palette.desk : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        // 对话透到安全区里（页头、状态栏底下也是对话），可见的高连同安全区算
-        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: { area = $0 }
+        // 对话透到上安全区里（页头、状态栏底下也是对话），可见的高连同它算；下安全区不算：键盘弹出时它是键盘，盖住的不可见
+        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top } action: { area = $0 }
     }
 }

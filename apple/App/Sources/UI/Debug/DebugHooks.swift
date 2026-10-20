@@ -91,6 +91,17 @@ enum DebugHooks {
         #endif
     }
 
+    #if os(iOS)
+    /// 输入框的键盘换成模拟的第三方键盘（`-CuePadKeyboard tall`，`DebugKeyboard`）。nil：系统键盘。
+    static func inputView() -> UIView? {
+        #if DEBUG
+        DebugKeyboard.make()
+        #else
+        nil
+        #endif
+    }
+    #endif
+
     /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
     static var hostID: String? {
         #if DEBUG
