@@ -18,8 +18,8 @@ extension URL {
 /// 递归监听目录，事件流里是变化路径。发生丢事件/需要重扫时，流里出现根路径本身。
 /// 目录可以还不存在（先装 CuePad、后装 Pi），也可以被删掉再建：不存在时盯着最近的已存在上层目录，等它出现再切过去，
 /// 切过去时给出一次根路径（整体重扫，切换前写进去的文件不会漏）；根目录被删掉再建也一样。
-/// 要及时看到追加的文件用 `follow` 另盯（kqueue）：FSEvents 对一直开着写的文件只在关闭时报内容变化，写完就关的也要晚到、并成一次。
-/// 平铺的一层目录不用它，用 `DirectoryWatcher`（kqueue，当场）。
+/// 要及时看到追加的文件用 `follow` 另盯（kqueue，当场）：fseventsd 转发的事件实测晚到 0.4 到 20 多秒、负载高时更久，几次写并成一次，
+/// 一直开着写的文件只在关闭时报内容变化。平铺的一层目录不用它，用 `DirectoryWatcher`（kqueue，当场）。
 final class FSEventsWatcher: Sendable {
     let paths: AsyncStream<[String]>
     private let core: Core
@@ -35,13 +35,10 @@ final class FSEventsWatcher: Sendable {
         core.queue.sync { core.stop() }
     }
 
-    /// 另盯一个文件的写入与追加（kqueue），变化时流里出现它的路径；已在盯的不重复。文件被删或换掉后不再盯，再调一次重新盯上。
-    func follow(_ path: String) {
-        core.queue.sync { core.follow(path) }
-    }
-
-    func unfollow(_ path: String) {
-        core.queue.sync { core.unfollow(path) }
+    /// 另盯的文件换成 `paths`（kqueue）：每次写入、追加时流里出现它的路径。还没建出来的盯最近的已存在上层目录，建出来时切过去并报一次；
+    /// 被删或换掉后盯同一路径上的新文件。
+    func follow(only paths: Set<String>) {
+        core.queue.sync { core.follow(only: paths) }
     }
 
     deinit { stop() }
@@ -53,6 +50,8 @@ final class FSEventsWatcher: Sendable {
         let queue = DispatchQueue(label: "cuepi.fsevents")
         private var stream: FSEventStreamRef?
         private var ancestor: DispatchSourceFileSystemObject?
+        /// 要另盯的文件，与盯着它的源：文件在时盯文件本身，还没建出来时盯最近的已存在上层目录
+        private var wanted: Set<String> = []
         private var files: [String: DispatchSourceFileSystemObject] = [:]
         private var stopped = false
 
@@ -80,27 +79,60 @@ final class FSEventsWatcher: Sendable {
         func stop() {
             stopped = true
             disarm()
-            for path in Array(files.keys) { unfollow(path) }
+            for source in files.values { source.cancel() }
+            files = [:]
             continuation.finish()
         }
 
-        func follow(_ path: String) {
-            guard !stopped, files[path] == nil else { return }
-            let descriptor = open(path, O_EVTONLY)
-            guard descriptor >= 0 else { return }
-            let source = DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: descriptor, eventMask: [.write, .extend, .delete, .rename], queue: queue)
-            source.setEventHandler { [self, unowned source] in
-                if !source.data.isDisjoint(with: [.delete, .rename]) { unfollow(path) }
-                continuation.yield([path])
-            }
-            source.setCancelHandler { close(descriptor) }
-            source.resume()
-            files[path] = source
+        func follow(only paths: Set<String>) {
+            guard !stopped else { return }
+            for path in wanted.subtracting(paths) { files.removeValue(forKey: path)?.cancel() }
+            wanted = paths
+            // 新盯上的已经在了：盯上之前写进去的也读一次（FSEvents 报它可能要晚到几分钟）
+            for path in paths where files[path] == nil { descend(path) }
         }
 
-        func unfollow(_ path: String) {
+        /// 盯上一个要另盯的文件，返回盯上的是不是文件本身：在就盯它的写入与追加；还没建出来（Pi 第一条回答落盘前不建文件）
+        /// 就盯最近的已存在上层目录，那里一变就再判断一次，一级级往下，文件出现时切过去并报一次。
+        @discardableResult
+        private func arm(file path: String) -> Bool {
             files.removeValue(forKey: path)?.cancel()
+            guard !stopped else { return false }
+            let descriptor = open(path, O_EVTONLY)
+            guard descriptor < 0 else {
+                files[path] = source(descriptor, [.write, .extend, .delete, .rename]) { [self] events in
+                    if !events.isDisjoint(with: [.delete, .rename]) { arm(file: path) }  // 被换掉：盯同一路径上的新文件
+                    continuation.yield([path])
+                }
+                return true
+            }
+            let directory = Self.nearestDirectory(above: path)
+            let watched = open(directory, O_EVTONLY)
+            guard watched >= 0 else { return false }
+            files[path] = source(watched, [.write]) { [self] _ in descend(path) }
+            // 判断与开始盯之间下面已经建出来（目录或文件本身）：那一下变化盯不到了
+            if FileManager.default.fileExists(atPath: path) || Self.nearestDirectory(above: path) != directory { descend(path) }
+            return false
+        }
+
+        private func descend(_ path: String) {
+            if arm(file: path) { continuation.yield([path]) }
+        }
+
+        private static func nearestDirectory(above path: String) -> String {
+            var directory = (path as NSString).deletingLastPathComponent
+            while !isDirectory(directory), directory != "/" { directory = (directory as NSString).deletingLastPathComponent }
+            return directory
+        }
+
+        private func source(
+            _ descriptor: Int32, _ mask: DispatchSource.FileSystemEvent, _ handle: @escaping (DispatchSource.FileSystemEvent) -> Void
+        ) -> DispatchSourceFileSystemObject {
+            let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: mask, queue: queue)
+            source.setEventHandler { [unowned source] in handle(source.data) }
+            source.setCancelHandler { close(descriptor) }
+            source.resume()
+            return source
         }
 
         private func disarm() {
