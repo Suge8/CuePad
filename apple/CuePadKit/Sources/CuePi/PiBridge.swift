@@ -128,7 +128,7 @@ public final class PiBridge {
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
             guard let session else { throw PiBridgeError.sessionEnded }
-            guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
+            guard session.state != .incompatible else { throw session.upgrading ? PiBridgeError.upgradingExtension : .incompatibleExtension }
             nextCommand += 1
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)
@@ -398,8 +398,11 @@ public final class PiBridge {
 
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
-            // 协议版本不同的会话：之后的消息格式不可知，只等连接断开
-            if link.session?.state == .incompatible { continue }
+            // 协议版本不同的会话：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
+            if link.session?.state == .incompatible {
+                link.bye = PiWire.otherProtocolBye(line) ?? link.bye
+                continue
+            }
             do {
                 try handle(try PiWire.decode(line), on: link, name: name)
             } catch {

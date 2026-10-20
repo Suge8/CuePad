@@ -110,7 +110,7 @@ extension Workspace {
     var liveWork: LiveWork {
         let sessions = services.liveSessions
         #if os(macOS)
-        let live = services.pi.sessions.map {
+        let live = services.pi.sessions.compactMap {
             PiSessionState.live($0, hostID: services.hostID, projectID: sendState.projects[$0.id], recap: sessions.recaps[$0.sessionID])
         }
         #else

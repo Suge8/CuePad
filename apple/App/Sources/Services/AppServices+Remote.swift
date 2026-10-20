@@ -27,11 +27,12 @@ extension AppServices {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
-            case .ended(let session, _):
+            case .ended(let session, let reason):
                 live[session.id] = nil
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
-                } else {
+                } else if reason != .reload {
+                    // 重载不是退出：同一进程马上以新扩展连回来接着写，不先把记录当成进程没了写成被打断或已结束
                     try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke)
                 }
             case .quota(let report): try await store.recordQuota(report, host: hostID)
@@ -41,7 +42,9 @@ extension AppServices {
     }
 
     /// 标题：会话自己报了名字或首条消息就用它的，否则用会话索引里的（接上的老会话在第一句话之前就有标题，不必去读会话文件）。
+    /// 正自己换上新扩展的（`upgrading`）读不到在做什么，不写：记录留着上一次读到的样子，退出时据此分清是不是做到一半被打断（`exited`）。
     private func recordPiState(of session: CuePi.PiSession) async throws {
+        guard !session.upgrading else { return }
         let title = session.name != nil || session.firstMessage != nil
             ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let alert = try await piStateRecorder.update(

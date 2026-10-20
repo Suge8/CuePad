@@ -6,8 +6,10 @@ import SwiftUI
 extension PiSessionState {
     /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
     /// 摘要（问与答、这一轮已做完的步骤）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
-    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
-        PiSessionState(
+    /// 正自己换上新扩展的（`upgrading`）桥上读不到状态，为 nil：界面照同步记录里最后一次读到的样子。
+    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState? {
+        guard !session.upgrading else { return nil }
+        return PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
             projectID: projectID, state: .known(session.state), detail: session.detail, folder: session.cwd.lastPathComponent,
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
@@ -31,10 +33,12 @@ extension SessionDigest {
 
     /// 会话在线时，状态、详情、名字、可换的模型与命令取桥上的实时值。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
-        guard let session else { return self }
+        guard let session,
+              let state = PiSessionState.live(
+                session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
+        else { return self }
         var digest = self
-        digest.session = .live(
-            session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
+        digest.session = state
         digest.catalog = AgentCatalog(host: hostID, models: session.availableModels, commands: session.commands, at: session.stateSince)
         if let project { digest.project = project }
         return digest
@@ -176,7 +180,7 @@ extension Workspace {
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
-        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap)
+        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap) ?? session
     }
 
     /// 同 `withLiveState(_:)`，会话列表项的会话换上桥上的实时状态。

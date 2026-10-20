@@ -44,7 +44,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public let cwd: URL
     /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
     public internal(set) var terminal: PiTerminal
-    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）：协议号不同的托管会话会不会自己重新载入看它（`PiBridge.selfReloadingExtension`）
+    /// 该会话加载的 Pi 扩展版本（其他 Agent 为 0）：协议号不同时会不会自己重新载入看它（`PiBridge.selfReloadingExtension`、`upgrading`）
     public let extensionVersion: Int
     public internal(set) var state: PiWorkState
     /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
@@ -82,6 +82,11 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
     /// 从 CuePad 能对它做什么（与同步记录上的 `PiSessionState.capabilities` 同一条规则）。
     public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
+
+    /// 协议号不同（`.incompatible`）、又不用人管：会自己换上新扩展（`PiBridge.selfReloadingExtension` 起），或是托管的
+    /// （更早的由桥让它退出、下次发话用新扩展恢复）。这段时间读不到它在做什么、也发不进命令：同步记录不写、界面不换上桥上的状态，
+    /// 都照它最后一次读到的样子。协议号不同又不是这种的，只有终端里的旧扩展：同步记录写成 `.incompatible`，提示在终端里 /reload。
+    public var upgrading: Bool { state == .incompatible && (hosted || extensionVersion >= PiBridge.selfReloadingExtension) }
 
     /// 留下了对话：会话文件已经落盘（第一条消息之前不建文件）；OpenCode 的会话一建就在它的数据库里。下线时据此决定进不进历史。
     public var spoke: Bool {
@@ -137,6 +142,9 @@ public enum PiSessionEndReason: Sendable, Equatable {
     case disconnected
     /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`
     case closed(reason: String)
+
+    /// 重新载入扩展（/reload、扩展自己换上新版本）：同一进程随即在同一路径以新扩展连回来，会话没有结束
+    public static let reload = PiSessionEndReason.closed(reason: "reload")
 }
 
 public enum PiSessionChange: Sendable, Equatable {
@@ -185,8 +193,10 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 这个 Agent 的模型表里没有要换的模型（Pi 扩展回 `unknown_model`，其余几家的接入自己判断）
     case unknownModel(AgentKind)
-    /// 会话的扩展协议版本与 CuePad 不同（见 `PiWorkState.incompatible`），不发命令
+    /// 会话的扩展协议版本与 CuePad 不同，不发命令：终端里的旧扩展（见 `PiWorkState.incompatible`）
     case incompatibleExtension
+    /// 同上，但它正自己换上新扩展（`PiSession.upgrading`）
+    case upgradingExtension
     /// 这个 Agent 的这类会话做不到（见 `AgentCapabilities`）
     case unsupported
     /// 请它结束后一直没下线（多半还卡在需要你在终端里处理的地方）
@@ -202,6 +212,7 @@ extension PiBridgeError: LocalizedError {
         case .socketDirectoryTooLong: "Agent 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
+        case .upgradingExtension: "这个会话正在换上新版扩展，这一轮做完后自动接上，到时再发"
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
