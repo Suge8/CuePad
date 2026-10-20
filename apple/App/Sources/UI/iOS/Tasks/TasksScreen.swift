@@ -117,7 +117,7 @@ private struct Header<Add: View>: ViewModifier {
                 .toolbar(removing: .title)
                 .toolbar { ToolbarItem(placement: .primaryAction) { add } }
         } else {
-            content.floatingHeader("任务") { add }
+            content.floatingHeader("任务", center: { ProjectScope().glass(in: .capsule) }) { add }
         }
     }
 }

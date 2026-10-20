@@ -11,24 +11,6 @@ extension CueStore {
     return PiSessionPage(items: try listItems(states), total: total)
   }
 
-  /// 按项目分组的会话（`PiSessionListItem.home`）：每组最近的 `each` 条与这一组一共几条，条件同 `piSessionPage`（`query.project`、分页不用）。
-  /// 会话页不按项目筛时的历史读它：几千条历史只按组各读开头几条，两条语句（排名取前几、按组计数）。
-  public func piSessionGroups(_ query: PiSessionQuery, each: Int) throws -> [UUID: PiSessionPage] {
-    let (condition, arguments) = Self.condition(query)
-    let group = Self.home
-    let states = try select(
-      PiSessionState.self,
-      where: """
-        id IN (SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY \(group) ORDER BY stateSince DESC, id) AS rank
-          FROM piSessionStates WHERE \(condition)) WHERE rank <= ?)
-        """, arguments + [each], orderBy: "stateSince DESC, id")
-    let totals = Dictionary(uniqueKeysWithValues: try db.query("SELECT \(group), count(*) FROM piSessionStates WHERE \(condition) GROUP BY 1", arguments) {
-      ($0.uuid(0), Int($0.int(1)))
-    })
-    let items = Dictionary(grouping: try listItems(states), by: \.home)
-    return totals.reduce(into: [:]) { groups, entry in groups[entry.key] = PiSessionPage(items: items[entry.key] ?? [], total: entry.value) }
-  }
-
   /// 会话归在哪个项目（同 `PiSessionListItem.home`）：没有项目或项目已删（列表项也不带它，`listItems`）的归默认项目。
   private static let home = """
     CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END

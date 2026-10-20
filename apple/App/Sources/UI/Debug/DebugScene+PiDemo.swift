@@ -345,7 +345,7 @@ extension DebugScene {
 
     /// `-CuePadCycle YES`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：scratch 一个会话依次走过各种状态，录状态切换的动效用（`xc.sh rec`）——
     /// 发出一句（发送中，演示 Mac 接手，见 `runDemoMac`）→ 思考中 → 做完（有新回复）→ 等你确认 → 出错，再从发出一句开始。
-    /// 会话换状态就换位置（按要你注意的先后排）：配 iOS 的 projectagent 与 `-CuePadProject CuePad`，列表只剩这个项目的几张卡，它不会出屏。
+    /// 会话换状态就换位置（按要你注意的先后排）：配 iOS 的 agent 与 `-CuePadProject CuePad`，列表只剩这个项目的几张卡，它不会出屏。
     static func cycleIfAsked(_ services: AppServices) async {
         guard defaults.bool(forKey: "CuePadCycle") else { return }
         let store = services.store
