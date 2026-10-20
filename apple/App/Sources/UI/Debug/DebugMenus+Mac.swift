@@ -16,10 +16,7 @@ extension DebugScene {
         else { return }
         let steps = defaults.string(forKey: key)!.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
         let gap = defaults.object(forKey: "CuePadClickGap") == nil ? 1.5 : defaults.double(forKey: "CuePadClickGap")
-        guard DebugForeground.borrow(window) else {
-            FileHandle.standardError.write(Data("\(key) 要占前台：加 -CuePadForeground YES（docs/verify.md「占前台」）\n".utf8))
-            exit(2)
-        }
+        DebugForeground.require(window, for: key)
         try? await Task.sleep(for: .milliseconds(500))
         for (index, step) in steps.enumerated() {
             if index > 0 { try? await Task.sleep(for: .seconds(gap)) }

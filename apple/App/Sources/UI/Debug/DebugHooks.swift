@@ -107,10 +107,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的验收实例（给了 `CUEPAD_SHOT_READY`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
     static var scripted: Bool {
         #if DEBUG
-        ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] != nil
+        DebugScene.readyFile != nil
         #else
         false
         #endif
@@ -205,16 +205,6 @@ enum DebugHooks {
     typealias MainWindowClass = MainShellWindow
     #endif
 
-    /// 本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的、怎么起的都在后台跑，窗口排在所有窗口最后：不抢前台和键盘，也不盖住正在用的窗口；
-    /// 按窗口截图截得到被挡住的窗口。非占前台不可的只经 `DebugForeground` 借。
-    static var staysInBackground: Bool {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
-    }
-
     /// 退出前把借走的前台与指针还回去（`DebugForeground`）。
     static func willTerminate() {
         #if DEBUG
@@ -238,11 +228,15 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示窗口：平时到最前并接过键盘（`activating` 时连 App 一起到前台）；本机构建排在最后（`staysInBackground`）。
+    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
+    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借。
     static func present(_ window: NSWindow, activating: Bool = false) {
-        if staysInBackground { return window.orderBack(nil) }
+        #if DEBUG
+        window.orderBack(nil)
+        #else
         if activating { NSApp.activate() }
         window.makeKeyAndOrderFront(nil)
+        #endif
     }
 
     /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
