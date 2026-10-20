@@ -23,6 +23,11 @@ LOCK_WAIT=${CUEPAD_LOCK_WAIT:-$((HOLD_LIMIT + 300))}
 
 xc_enter() {
   [ -z "${CUEPAD_SIM+set}" ] || return 0
+  # 独占期间所有检出的新任务都停在闸门外（实测有脚本借它录一批屏，挡了别人 15 分钟以上）：只给前台的交互测量
+  if [ "$1" = exclusive ] && [ "${2##*/}" != perf-mac.sh ]; then
+    echo "独占机器只给前台和预算比的交互测量（xc.sh perf mac … -CuePadForeground YES）；录屏、截图与别的测量照普通任务跑，前后对比看指令数" >&2
+    exit 2
+  fi
   mkdir -p "$APPLE_DIR/.derived"
   # 不用 "$(cat <<'PY' …)"：macOS 自带的 bash 3.2 解析命令替换里的这段时会把它重复成两个参数
   local script
