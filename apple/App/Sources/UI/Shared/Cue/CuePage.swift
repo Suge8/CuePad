@@ -315,7 +315,7 @@ struct CuePage: View {
 
     // MARK: 底部
 
-    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。
+    /// 浮在对话底上的一块："等你"卡、启用卡与输入框。输入框按自己的高、不被挤（`fixedSize`），地方不够时（键盘弹出、小屏、横屏、输入框写了好几行）卡用剩下的。
     private var bottom: some View {
         VStack(spacing: 0) {
             if let thread {
@@ -325,9 +325,9 @@ struct CuePage: View {
                 CueEnableCard().padding(.bottom, 8).transition(.opacity)
             }
             #if os(iOS)
-            if docked { dockRow } else { composer }
+            Group { if docked { dockRow } else { composer } }.fixedSize(horizontal: false, vertical: true)
             #else
-            CueComposer(style: .page) { follow.sent() }
+            CueComposer(style: .page) { follow.sent() }.fixedSize(horizontal: false, vertical: true)
             #endif
         }
         .animation(Motion.quick, value: cue.canHear)

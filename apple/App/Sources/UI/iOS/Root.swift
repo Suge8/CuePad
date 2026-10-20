@@ -6,8 +6,6 @@ import SwiftUI
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
-    /// 页面此刻不躲键盘（浮起的输入框开着，或刚收起、键盘还没落下）。
-    @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
     let alerts: AlertCenter
@@ -25,17 +23,6 @@ struct IOSRoot: View {
                 if sizeClass == .regular { SplitRoot() } else { DockRoot() }
             }
             .background { RootShortcuts() }
-            // 浮起的输入框（新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
-            // 否则键盘一出来、一收起，底下整页都要按新的安全区重排一遍
-            .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
-            .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
-            // 收起时等键盘落下再恢复躲键盘（收起的一刻键盘还在，马上恢复就是多排一遍）；页里自己的输入框要弹键盘时立刻恢复
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-                if !navigation.floating { pageIgnoresKeyboard = false }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                if !navigation.floating { pageIgnoresKeyboard = false }
-            }
             // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {

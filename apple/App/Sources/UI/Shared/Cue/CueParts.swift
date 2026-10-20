@@ -576,20 +576,14 @@ struct CueWaitingDock: View {
         level = 0
     }
 
-    /// 从上到下：问句（规矩那一类下面是规矩原话）、一排图、操作。卡至多占对话区可见高的一半（`RiseLayout`），放不下时上面那段在卡里滚，
-    /// 操作钉在卡底、一直露着。手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
+    /// 从上到下：问句（规矩那一类下面是规矩原话）、一排图、操作。卡至多占对话区可见高的一半，地方不够时只用剩下的（`RiseLayout`）。
+    /// 放不下时：Mac 上上面那段在卡里滚、操作钉在卡底；手机上（键盘弹出、小屏、横屏）收成紧凑的样子——去掉那排图，问句连同操作还放不下
+    /// 就整张在卡里滚（问句在前），图和问句都不会被卡边截成半截。滚动区里的按钮按下要晚一下才有反馈，所以放得下时不进滚动区（`ViewThatFits`）；
+    /// Mac 上不挑（挑的话两份都要建，第一次打开 Cue 页时卡多建一遍）。滚动区按内容高（`UpToHeight`）。
+    /// 手机上选项一行、任务与原话一行（辅助功能字号下各占一行）；Mac 上合成一行，右下角是"可以"。
     private func card(_ message: CueMessage) -> some View {
         let ref = message.taskID.flatMap { tasks[$0] }
         let choices = CueChoices(options: message.choices ?? [], disabled: ending == message.id) { answer(message, $0) }
-        let upper = VStack(alignment: .leading, spacing: 0) {
-            CueQuestionLine(message: message)
-            if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
-            if let shots = shots[message.id] {
-                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open).padding(.top, 16)
-            }
-        }
-        .padding(.top, Self.padding.top).padding(.horizontal, Self.padding.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
         #if os(macOS)
         let actions = footer(message, ref, choices).padding(.top, Self.footerGap)
         #else
@@ -607,27 +601,35 @@ struct CueWaitingDock: View {
             }
         }
         #endif
-        return VStack(spacing: 0) {
-            scrollingIfTall(upper)
-            actions.padding(.horizontal, Self.padding.leading).padding(.bottom, Self.padding.bottom).layoutPriority(1)
-        }
-        .paper(radius: ComposerMetrics.radius, lifted: true)
-        .animation(Motion.quick, value: reading)
-        .padding(.bottom, Self.below)
-    }
-
-    /// 卡里上面那段（问句、原话、图）放不下时在卡里滚，操作钉在卡底。
-    /// Mac 上是一个滚动区、按内容高（`UpToHeight`）：用 ViewThatFits 在内容与滚动区里的内容之间挑的话两份都要建，第一次打开 Cue 页时卡多建一遍；
-    /// 手机上仍是挑：滚动区里的按钮按下要晚一下才有反馈，放得下时不该这样。
-    @ViewBuilder private func scrollingIfTall(_ content: some View) -> some View {
+        let below = actions.padding(.horizontal, Self.padding.leading).padding(.bottom, Self.padding.bottom)
         #if os(macOS)
-        UpToHeight { ScrollView { content }.scrollBounceBehavior(.basedOnSize) }
+        let body = VStack(spacing: 0) {
+            UpToHeight { ScrollView { upper(message, shots: true) }.scrollBounceBehavior(.basedOnSize) }
+            below.layoutPriority(1)
+        }
         #else
-        ViewThatFits(in: .vertical) {
-            content
-            ScrollView { content }.scrollBounceBehavior(.basedOnSize)
+        let body = ViewThatFits(in: .vertical) {
+            VStack(spacing: 0) { upper(message, shots: true); below }
+            UpToHeight { ScrollView { VStack(spacing: 0) { upper(message, shots: false); below } }.scrollBounceBehavior(.basedOnSize) }
         }
         #endif
+        return body
+            .paper(radius: ComposerMetrics.radius, lifted: true)
+            .animation(Motion.quick, value: reading)
+            .padding(.bottom, Self.below)
+    }
+
+    /// 卡里上面那段：问句、展开的原话、一排图（`shots` 为 false 是紧凑的样子，不带图）。
+    private func upper(_ message: CueMessage, shots showsShots: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CueQuestionLine(message: message)
+            if reading == message.id { original(message.text).padding(.top, 12).transition(.opacity) }
+            if showsShots, let shots = shots[message.id] {
+                CueShots(shots: shots, group: "waiting", reply: .answer(message), open: open).padding(.top, 16)
+            }
+        }
+        .padding(.top, Self.padding.top).padding(.horizontal, Self.padding.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 末行（任务、原话；Mac 上连同选项）可点的高。
@@ -728,23 +730,29 @@ private struct RiseLayout: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        // 孩子只按 `limit` 排，不看给的高：升起时外面按缩了的高（整高 × 露出的比例）回头再排一次，
-        // 照给的高排的话卡里那段就当成放不下、换成滚动的，尾段停下前截掉一截
-        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: limit))
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: room(proposal.height)))
         // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
         return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard let child = subviews.first else { return }
-        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width, height: limit))
+        let fit = ProposedViewSize(width: bounds.width, height: room(proposal.height))
+        let size = child.sizeThatFits(fit)
         let origin = floats ? CGPoint(x: bounds.minX, y: bounds.maxY - size.height) : bounds.origin
-        child.place(at: origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: limit))
+        child.place(at: origin, anchor: .topLeading, proposal: fit)
+    }
+
+    /// 孩子按整高排：至多 `limit`，外面给的不够时（输入框先拿走它的高，剩下的不到 `limit`）只到给的。给的是露出的那截，
+    /// 除以露出的比例换回整高：升起时外面按缩了的高回头再排一次，照给的高直接排的话卡里那段就当成放不下、换成紧凑的。
+    /// 向上取整：除回来的小数比整高少一点点也会被当成放不下。
+    private func room(_ offered: CGFloat?) -> CGFloat {
+        guard let offered, shown > 0 else { return limit }
+        return min(limit, (offered / shown).rounded(.up))
     }
 }
 
-#if os(macOS)
-/// 按里面的理想高（滚动区是它内容的高）、最高到给的高：放得下时与内容一样高，放不下时只占给的高。
+/// 按里面的理想高（滚动区是它内容的高）、最高到给的高：放得下时与内容一样高，放不下时只占给的高（滚动区本身会占满给的高，留下一截空白）。
 private struct UpToHeight: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
@@ -755,4 +763,3 @@ private struct UpToHeight: Layout {
         subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
-#endif
