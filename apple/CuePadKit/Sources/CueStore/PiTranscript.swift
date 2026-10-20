@@ -262,6 +262,9 @@ extension PiChatMessage {
     /// 清单，按发生先后。落了结果的（`Kind.acts`）与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
+    /// 原型（`CueFresh`）：Cue 自己醒来的这一轮因何醒来（"会话「X」歇下"），进 Cue 的日志；别的为 nil（编码时省略，旧版本照常读）
+    public var woke: String?
+
     public static let itemLimit = 30
     /// 清单里一条调用的目标至多这么多字符
     public static let targetLimit = 120

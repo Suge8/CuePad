@@ -133,7 +133,7 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
 ```
 - 每个场景的资料库留在 `<场景>.library`：`CUEPAD_SHOT_LIBRARY=<它> apple/scripts/xc.sh shot mac out.png -- -CuePadScene cue` 看这一场在 Cue 页上的样子。
-- 原型对比（`CueFresh`，正式做时删）：加 `TEST_RUNNER_CUEPAD_CUE_FRESH=1` 跑混合做法：平时只往后加，换新（到 6 万，或过 3 万且缓存已过期）时开新会话、用对话视图接上，不写交接。
+- 原型对比（`CueFresh`，正式做时删）：加 `TEST_RUNNER_CUEPAD_CUE_FRESH=1` 跑混合做法：平时只往后加，换新（到 6 万，或缓存已过期）时开新会话、用日志的视图接上，不写交接；经过自动进日志，越早越粗地并成摘要，Cue 用 memory zoom 展开。
 - 场景与判定在 `CueEvalTests` 与 `CueEvalLongTests` 里；模型每次答得不完全一样，结论看两遍以上。
 
 ## 崩溃诊断
