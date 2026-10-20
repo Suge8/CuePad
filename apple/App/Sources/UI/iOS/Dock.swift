@@ -1,63 +1,75 @@
 #if os(iOS)
 import SwiftUI
 
-/// 窄屏（iPhone 与窄窗口 iPad）的容器：以当前去处为根的导航栈（`HomePage`），推入的页照常由系统返回与左缘右滑回去。
+/// 窄屏（iPhone 与窄窗口 iPad）的容器：一个导航栈，根是当前去处的页（`HomePage`），推入的页照常由系统返回与左缘右滑回去。
 /// 根只有底部那一排的四个去处（Cue、任务、会话、项目，`Route.home`），其余去处推在所属的那一页上（`Navigation.select`）；打开 App 落在 Cue。
-/// 每个去处一个导航栈，换去处就换一个：换去处是两页交叉淡入淡出、新页先排后动，两页要同时在屏上，一个栈同一时刻只有一个根；
-/// 导航栏藏不藏（Cue 页藏起，三页留着搜索钮与右边那颗圆钮）也随栈建出时定好，不在同一个栈里来回藏。
-/// 换去处的过渡先排后动（docs/ui.md 渲染性能）：新栈先垫在旧栈下面建好、画好、交出一帧，下一帧旧栈才淡出，新页底部那一排同时从旧的样子长成自己的
-/// （`Dock.Arrival`、`dockSettled`）；新页第一次建、画要上百毫秒，边建边动的话弹簧一开始就走完了大半。不透明度为 0 的新栈不画，所以垫在下面而不是透明着。
-/// 旧栈的淡出是改它的不透明度、淡完再拿掉：导航栈托管在 UIKit 里，拿掉时的过渡不播。减弱动态效果时只淡出旧栈。
+/// 四个根页都不用系统导航栏（藏起），顶上那一排是页自己画的（三页的搜索钮与右边那颗圆钮在 `floatingHeader` 里，Cue 页是页头）：
+/// 换去处时两页在栈的根里水平推移（按底部那一排从左到右的顺序，`Dock.order`），推的是 SwiftUI 自己画的内容，逐帧插值；
+/// 导航栈托管在 UIKit 里，挪整个栈（几个栈交替）时 SwiftUI 不逐帧挪它，旧页停着、最后一下才跳走，就是换去处时闪回旧页的那一下。
+/// 先排后动（docs/ui.md 渲染性能）：新页先在屏外那一侧建好、画好、交出一帧，下一帧两页一起推（`arrived`）；底部那一排不跟着推，
+/// 留在原处从旧的样子长成自己的（`Dock.Arrival`、`dockSettled`、`dockShift`）。推完才拿掉旧页，它这时已在屏外：
+/// 位置只由 `arrived` 推出，拿掉时不回到原处。减弱动态效果时不推，新页在原处淡入。
 /// 不用折叠的分栏：那个容器本身冷启动就多约 3000M 指令。
 struct DockRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 屏上已经交给用户的去处：换去处时新去处先垫在下面建好一帧，这期间它还是旧的（出现前为 nil）。
+    @Environment(\.palette) private var palette
+    /// 屏上已经交给用户的去处：换去处时推完之前它还是旧的（出现前为 nil）。
     @State private var shown: Route?
-    /// 换去处时旧栈推入的页，淡出时停在那一刻。
-    @State private var leavingPath: [Route] = []
-    /// 旧栈在淡出（新栈已建好一帧）。
-    @State private var fading = false
+    /// 推到了哪个去处：等于当前去处时新页在原处、旧页在屏外。
+    @State private var arrived: Route?
+    @State private var width: CGFloat = 0
 
     var body: some View {
+        @Bindable var navigation = navigation
         let root = navigation.root
         let leaving = shown.flatMap { $0 == root ? nil : $0 }
-        ZStack {
-            // 按去处认栈：换去处时旧栈挪到上面淡出，不重建
-            ForEach([root, leaving].compactMap(\.self), id: \.self) { route in
-                let current = route == root
-                NavigationStack(path: current ? Binding(get: { navigation.path }, set: { navigation.path = $0 }) : .constant(leavingPath)) {
-                    HomePage(route: route).navigationDestination(for: Route.self) { RouteView(route: $0) }
+        let settled = leaving == nil || arrived == root
+        // 新页从哪一侧进来：去处在右边就从右边推进来
+        let side: CGFloat = leaving.map { Dock.order($0) < Dock.order(root) ? 1 : -1 } ?? 0
+        NavigationStack(path: $navigation.path) {
+            ZStack {
+                // 按去处认页：换去处时旧页留着推走，不重建。新页在上：它底部那一排停在原处，旧页推过去时不盖住它
+                ForEach([leaving, root].compactMap(\.self), id: \.self) { route in
+                    let current = route == root
+                    let shift = reduceMotion ? 0 : (current ? (settled ? 0 : side) : (settled ? -side : 0)) * width
+                    HomePage(route: route)
+                        // 推着的两页各自铺满底色，不透出对方
+                        .background(palette.desk)
+                        .offset(x: shift)
+                        .opacity(reduceMotion && current && !settled ? 0 : 1)
+                        .allowsHitTesting(current)
+                        .accessibilityHidden(!current)
+                        .environment(\.dockLeaving, !current && settled)
+                        .environment(\.dockShift, shift)
                 }
-                .opacity(!current && fading ? 0 : 1)
-                .allowsHitTesting(current)
-                .environment(\.dockLeaving, !current && fading)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .toolbarVisibility(.hidden, for: .navigationBar)
+            .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
-        .onAppear { shown = root }
-        // 与新栈同一次更新里就是 false：新页底部那一排的第一帧停在旧的样子上
-        .environment(\.dockSettled, leaving == nil || fading)
-        // 看根连同推入的页：换去处时旧栈停在换走前那一刻
-        .onChange(of: [root] + navigation.path) { old, new in
-            guard let from = old.first, from != new.first else { return }
-            if shown == from { leavingPath = Array(old.dropFirst()) }
-            fading = false
+        .onAppear {
+            shown = root
+            arrived = root
+        }
+        // 与新页同一次更新里就是 false：新页底部那一排的第一帧停在旧的样子上
+        .environment(\.dockSettled, settled)
+        .onChange(of: root) {
             Task {
                 await NextFrame.wait()
-                withAnimation(reduceMotion ? Motion.crossfade : Motion.quick) {
-                    fading = true
+                withAnimation(reduceMotion ? Motion.crossfade : Motion.dock) {
+                    arrived = navigation.root
                 } completion: {
                     shown = navigation.root
-                    fading = false
                 }
             }
         }
     }
 }
 
-/// 导航栈的根：一个去处的页加底部一排。任务、会话、项目三页：底部是 `Dock`（推入的页上没有，它跟着根页滑走，它们有自己的底），
-/// 导航栏左边一颗搜索钮、右边这一页的那一个操作，不写标题（`homePage`：底部的选中格已经说了在哪一页）；Cue 页：导航栏藏起（根页不需要返回），底部的去处圆钮与输入框在它自己的页里
-/// （`CueDockRow`，输入框随键盘升起）。
+/// 栈的根上的一个去处：它的页加底部一排。任务、会话、项目三页：底部是 `Dock`（推入的页上没有，它们有自己的底），
+/// 顶上那一排左边一颗搜索钮、右边这一页的那一个操作，不写标题（`homePage`：底部的选中格已经说了在哪一页）；Cue 页：顶上是页头，
+/// 底部的去处圆钮与输入框在它自己的页里（`CueDockRow`，输入框随键盘升起）。
 private struct HomePage: View {
     let route: Route
     @Environment(Navigation.self) private var navigation
@@ -78,14 +90,6 @@ private struct HomePage: View {
                         .padding(.bottom, Dock.margin).ignoresSafeArea(edges: .bottom)
                 }
             }
-            .toolbar {
-                if route != .cue {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("搜索", icon: .search) { navigation.openSearch() }
-                    }
-                }
-            }
-            .toolbarVisibility(route == .cue ? .hidden : .visible, for: .navigationBar)
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { keyboard = $0 }
             .background {
                 Color.clear.ignoresSafeArea(.keyboard).onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { screen = $0 }
@@ -101,9 +105,9 @@ private struct HomePage: View {
 /// 字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器（同系统标签栏：栏高固定，字放大只会挤掉图标）。
 /// "项目"那一格在同步到不了 Mac 时带一个点（同设置那一行，`AppServices.macAlert`）。每格挂接力的落点（`relaySpot(dock:)`）。
 ///
-/// 换去处的过渡（`Arrival`）：两页交叉淡入淡出，新页底部那一排从旧页那一排的样子长成自己的——从 Cue 页来时三格胶囊从左边那颗圆钮长开、
-/// Cue 圆钮从输入框收回右端；去 Cue 页时反过来（`CueDockRow`）；三页之间换时滴从旧的那一格滑过来。新旧两排在两个导航栈里，
-/// 各自按对方的位置（都是这里的常量）摆出第一帧，再用无回弹弹簧长到自己的样子；减弱动态效果时只交叉淡入淡出。
+/// 换去处的过渡（`Arrival`）：两页水平推移（`DockRoot`），这一排不跟着推，新页底部那一排从旧页那一排的样子长成自己的——从 Cue 页来时三格胶囊从左边那颗圆钮长开、
+/// Cue 圆钮从输入框收回右端；去 Cue 页时反过来（`CueDockRow`）；三页之间换时滴从旧的那一格滑过来。新旧两排在两页里，
+/// 各自按对方的位置（都是这里的常量）摆出第一帧，再用无回弹弹簧长到自己的样子；减弱动态效果时不换形，新页淡入。
 struct Dock: View {
     /// 新去处的底部那一排从哪种样子长过来。
     enum Arrival {
@@ -124,7 +128,7 @@ struct Dock: View {
         }
     }
 
-    /// 这一排所在的去处（选中那一格）：读它而不读此刻的去处，换走时淡出中的旧页还是它原来的样子。
+    /// 这一排所在的去处（选中那一格）：读它而不读此刻的去处，换走时推走中的旧页还是它原来的样子。
     let route: Route
     let arrival: Arrival?
     @Environment(Navigation.self) private var navigation
@@ -149,6 +153,9 @@ struct Dock: View {
     static let capsuleWidth = cellWidth * CGFloat(places.count) + inset * 2
     /// 三个去处，从左到右。
     static let places: [SidebarOutline.Entry] = [.tasks, .sessions, .allProjects]
+
+    /// 四个去处在底部那一排里从左到右的位置（三格，Cue 在最右）：换去处时新页从它那一侧推进来（`DockRoot`）。
+    static func order(_ route: Route) -> Int { places.firstIndex { $0.route == route } ?? places.count }
 
     /// 内容在安全区之上还要给 Dock 让出的高度（栏顶到安全区底边）；键盘盖住 Dock 时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
@@ -410,15 +417,18 @@ extension SidebarOutline.Entry {
     var dockIcon: Icon { self == .allProjects ? .projects : icon }
 }
 
-/// 换去处时底部那一排的两头：新去处的栈建好、旧栈开始淡出时（`dockSettled`），新的那一排从旧的样子长成自己的（`Motion.dock`）；
-/// 旧的那一排同一刻当场隐去（`dockLeaving`），不随旧页慢慢淡：它盖在新的上面，淡着就把形变的前半段遮住了。
+/// 换去处时底部那一排的两头：新去处的栈建好、两页开始推时（`dockSettled`），新的那一排从旧的样子长成自己的（`Motion.dock`）；
+/// 旧的那一排同一刻当场隐去（`dockLeaving`），不随旧页推走。这一排不跟着页推：反着挪回页推出去的那一段（`dockShift`），
+/// 与页同一个动画，停在原处原地换形。
 private struct Arrive: ViewModifier {
     @Binding var arriving: Bool
     @Environment(\.dockSettled) private var settled
     @Environment(\.dockLeaving) private var leaving
+    @Environment(\.dockShift) private var shift
 
     func body(content: Content) -> some View {
         content
+            .offset(x: -shift)
             .opacity(leaving ? 0 : 1)
             .animation(nil, value: leaving)
             .onChange(of: settled, initial: true) {
@@ -429,10 +439,12 @@ private struct Arrive: ViewModifier {
 }
 
 extension EnvironmentValues {
-    /// 窄屏当前去处的栈已经建好、在显示（`DockRoot`）：换去处时新栈先不显示地建好一帧，这之后底部那一排才开始长。
+    /// 窄屏当前去处的页已经建好、开始推进来（`DockRoot`）：换去处时新页先在屏外建好一帧，这之后底部那一排才开始长。
     @Entry var dockSettled = true
-    /// 这个栈是换去处时正在淡出的旧栈：它底部那一排当场隐去（`Arrive`）。
+    /// 这一页是换去处时正在推走的旧页：它底部那一排当场隐去（`Arrive`）。
     @Entry var dockLeaving = false
+    /// 这一页此刻水平推出去多远（`DockRoot`）：底部那一排反着挪回来，留在原处。
+    @Entry var dockShift: CGFloat = 0
     /// Cue 页底部那一排离安全区底边的距离（负的是伸进 Home 指示条那一段，与 Dock 离屏幕底边一样远）。
     @Entry var dockLift: CGFloat = Dock.keyboardGap
 }
