@@ -19,7 +19,7 @@ enum PanelStyle {
     case sheet
     /// 大块内容（预览）：iOS 全屏覆盖，Mac 同 `sheet`。
     case fullScreen
-    /// Mac 右上角的面板（任务）：页面轻轻压暗、不拦点按，下面照常可用；Esc 关。
+    /// Mac 右上角的面板（任务）：页面轻轻压暗，同系统 popover——点外面任意处或 Esc 关，那一下照常落到下面。
     case side
 }
 
