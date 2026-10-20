@@ -52,37 +52,25 @@ struct CueSidebarCard: View {
     }
 }
 
-/// 名片里 Cue 最近说的那句：纸色气泡，左上尖角指向头像。
+/// 名片里 Cue 最近说的那句：纸色气泡（外形同对话气泡，`BubbleShape`），尾巴从上沿指向头像。
 private struct SaidBubble: View {
     let text: String
     let fresh: Bool
     let tailX: CGFloat
     @Environment(\.palette) private var palette
 
+    private static let radius: CGFloat = 20
+
     var body: some View {
         Text(text)
             .font(Typography.cueCardSaid).lineSpacing(2).lineLimit(3)
             .foregroundStyle(CueStatusLine.said(fresh: fresh, palette))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14).padding(.bottom, 11).padding(.top, 11 + BubbleShape.tail)
-            .background(palette.paper, in: BubbleShape(tailX: tailX))
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .background(palette.paper, in: BubbleShape(tail: BubbleTail(edge: .top, offset: tailX, fromEnd: false), radius: Self.radius))
+            // 尾巴长在矩形外面：让出它的长度，不压到上面的名字
+            .padding(.top, BubbleTail.length)
     }
 }
 
-nonisolated private struct BubbleShape: Shape {
-    let tailX: CGFloat
-    static let tail: CGFloat = 7
-    private static let radius: CGFloat = 20
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path(roundedRect: CGRect(x: rect.minX, y: rect.minY + Self.tail, width: rect.width, height: rect.height - Self.tail),
-                        cornerRadius: Self.radius, style: .continuous)
-        let apex = rect.minX + tailX
-        path.move(to: CGPoint(x: apex - Self.tail, y: rect.minY + Self.tail + 1))
-        path.addLine(to: CGPoint(x: apex, y: rect.minY))
-        path.addLine(to: CGPoint(x: apex + Self.tail, y: rect.minY + Self.tail + 1))
-        path.closeSubpath()
-        return path
-    }
-}
 #endif
