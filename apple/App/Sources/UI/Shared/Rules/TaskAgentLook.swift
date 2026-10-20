@@ -1,4 +1,4 @@
-/// 交给了会话的叶子任务，在任务页（手机）与任务浮窗（Mac）上此刻是什么样子：哪张吉祥物（Mac 画它）、一句标题、一句说明。
+/// 交给了会话的叶子任务，在任务气泡最下面那一条上此刻是什么样子：哪张吉祥物（在做时浮动）、一句标题、一句说明。
 /// 状态只经 `PiShown` 判定，两端同一份说法。
 struct TaskAgentLook: Equatable {
     var mascot: Mascot, floats = false, title: String, note: String?
@@ -6,6 +6,7 @@ struct TaskAgentLook: Equatable {
     /// `line`：会话此刻的进展或出错原因（`PiProgress.note`）。
     init(_ shown: PiShown, line: String?) {
         switch shown.status {
+        case .delivery(.failed): (mascot, title, note) = (.error, shown.label, line)
         case .working, .delivery, .cueAsking: (mascot, floats, title, note) = (.search, true, shown.status == .cueAsking ? shown.presence : "Agent 正在做", "做完会在这里告诉你")
         case .asking: (mascot, title, note) = (.error, "Agent 在等你\(shown.waitWord)", line)
         case .awaitsReply: (mascot, title, note) = (.error, shown.presence, "去会话里回它")

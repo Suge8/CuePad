@@ -93,7 +93,7 @@ final class Navigation {
         self.settings = settings
     }
 
-    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页、项目页进的任务页），否则没有（未分类）。iOS 上"在哪个项目"
+    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页），否则没有（未分类）。iOS 上"在哪个项目"
     /// 只有这一份——列表或书架点进项目只改路径；任务页新建任务、⌘N 的默认落点都读它。
     var currentProject: UUID? {
         for route in ([root] + path).reversed() {

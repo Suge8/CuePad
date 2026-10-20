@@ -35,7 +35,7 @@ final class PanelHost {
         let close: ClosePanel
         /// 常驻的浮层收起时仍在 `shown` 里（`open` 为 false）。
         var open = true
-        var modal: Bool { style != .side }
+        var modal: Bool { style.modal }
     }
 
     private(set) var shown: [Shown] = []
@@ -69,6 +69,11 @@ final class PanelHost {
                 window.makeFirstResponder(nil)
             }
             if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
+        } else if case .bubble = entry.style {
+            // 气泡在右上角的面板之上（从面板里的任务点开的也盖在它上面），外面那一下先关它。
+            // 焦点交出去、收起时不交还（同点在别处）：开着时打字不落进下面的输入栏；交还的话换一条时输入栏要先展开再收起，大库里一次多约 2000M 指令
+            window?.makeFirstResponder(nil)
+            withAnimation(Motion.snappy) { shown.append(entry) }
         } else {
             withAnimation(Motion.snappy) { shown.insert(entry, at: 0) }
         }
@@ -241,17 +246,23 @@ private struct WindowReader: NSViewRepresentable {
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let margin: CGFloat = 24
 
     var body: some View {
         ZStack {
-            if host.shown.contains(where: { !$0.modal }) {
+            if host.shown.contains(where: { $0.style == .side }) {
                 palette.backdrop.ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
             }
             ForEach(host.shown) { shown in
-                if shown.modal { modal(shown) } else { side(shown) }
+                switch shown.style {
+                case .sheet, .fullScreen: modal(shown)
+                case .side: side(shown)
+                case .bubble: EmptyView()
+                }
             }
+            bubbles
         }
     }
 
@@ -284,6 +295,24 @@ private struct PanelLayer: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .transition(.opacity)
     }
+
+    /// 气泡：量窗口的那一层一直在，气泡在它里面进出（进出场要挂在被插入、移除的那一层上）；顶上让出工具栏那一条。
+    private var bubbles: some View {
+        GeometryReader { proxy in
+            BubbleStage {
+                ForEach(host.shown) { shown in
+                    if case .bubble(let anchor) = shown.style {
+                        let placement = BubblePlacement(anchor: anchor, container: proxy.size, insets: Self.bubbleInsets)
+                        BubbleFrame(placement: placement) { shown.content } area: { area(shown.id) }
+                            .transition(placement.transition(reduceMotion: reduceMotion))
+                    }
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private static let bubbleInsets = EdgeInsets(top: 52, leading: 12, bottom: 12, trailing: 12)
 
     private func area(_ id: UUID) -> some View {
         AreaMark { [host] in host.bounds[id, default: Bounds()].panel.value = $0 }

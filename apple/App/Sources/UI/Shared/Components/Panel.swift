@@ -11,7 +11,7 @@ extension EnvironmentValues {
 }
 
 /// 弹层的摆法。
-enum PanelStyle {
+enum PanelStyle: Equatable {
     /// Mac 上居中浮层的圆角（内容自己画底时也用它，如 ⌘K 的玻璃）。
     static let radius: CGFloat = 16
 
@@ -21,6 +21,17 @@ enum PanelStyle {
     case fullScreen
     /// Mac 右上角的面板（任务）：页面轻轻压暗，同系统 popover——点外面任意处或 Esc 关，那一下照常落到下面；点在弹出它的视图上只是关。
     case side
+    /// 从那一下长出来的气泡（`BubbleFrame`，任务气泡）：不压暗，点外面或 Esc 关、那一下照常落到下面；两端同一个样子（iOS 不是系统 sheet）。
+    /// `anchor` 是窗口坐标里的那一下，nil 是没有落点。
+    case bubble(anchor: CGPoint?)
+
+    /// 模态：压暗、拦下外面的点按（居中的 sheet 与全屏）。
+    var modal: Bool {
+        switch self {
+        case .sheet, .fullScreen: true
+        case .side, .bubble: false
+        }
+    }
 }
 
 extension View {

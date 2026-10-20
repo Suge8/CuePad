@@ -64,15 +64,10 @@ extension AlertCenter: CueNotifying {
         await reaches(route) ? [.banner, .sound, .list] : []
     }
 
-    /// 这条提示此刻到不到你：这种提示开着，你也没在哪台 Mac 上开着它说的那一页（`CueStore.isWatched`，这台 Mac 开着哪页也记在那里）。
+    /// 这条提示此刻到不到你：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）。
     private func reaches(_ route: AlertRoute) async -> Bool {
         guard let services = workspace?.services, services.settings.alerts[route.kind].isOn else { return false }
-        do {
-            return try await !services.store.isWatched(route.subject)
-        } catch {
-            AppServices.log.error("没能读出你开着哪一页，照常提示：\(error.localizedDescription, privacy: .public)")
-            return true
-        }
+        return await services.reaches(route.subject)
     }
 
     /// 打开了这个会话：撤掉它那一组已送达的通知（每条标识不同，按路由认）。

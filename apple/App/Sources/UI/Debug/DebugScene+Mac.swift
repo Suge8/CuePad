@@ -42,10 +42,10 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
-            // 给了 -CuePadTask <标题开头> 打开那一条，否则本项目第一条没完成的顶层任务，在任务浮窗里打开
+            // 给了 -CuePadTask <标题开头> 打开那一条，否则本项目第一条没完成的顶层任务，打开它的气泡
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
+            if let task = named ?? tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.openTask(task) }
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
