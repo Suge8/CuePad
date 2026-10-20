@@ -23,9 +23,6 @@ extension View {
     /// 每个窗口的根视图挂一次：本窗口的浮层都画在这里，盖住整窗（含侧栏）。点浮层外面任意处（含工具栏）或按 Esc 关最上面那一层（`PanelHost`）；
     /// 模态的开着时按键不进下面那层界面，读屏只在浮层里（`isModal`）。环境要在它外面注入，浮层内容才拿得到。
     func panelHost() -> some View { modifier(PanelHostModifier()) }
-
-    /// 开合某个右上角面板的那一行（侧栏的"任务"）：面板开着时点它不算点在外面，由它自己的开合收起——否则按下时先收起、松开时又被它开回来。
-    func panelAnchor() -> some View { background { AnchorMark() } }
 }
 
 /// 本窗口此刻的浮层，后开的在上（右上角的面板总在模态浮层之下）。
@@ -45,11 +42,9 @@ final class PanelHost {
     /// 本窗口（`PanelHostModifier` 挂上时报来）。
     @ObservationIgnored fileprivate weak var window: NSWindow?
     /// 模态浮层弹出前的焦点，收起后交还（同系统 sheet）；弹出时先让窗口交出焦点，打字不会落进下面的编辑器。
-    @ObservationIgnored private var responders: [UUID: WeakResponder] = [:]
-    /// 各浮层占的地方（`PanelLayer` 垫在内容下面的视图），点在外面就关。
-    @ObservationIgnored fileprivate var areas: [UUID: WeakView] = [:]
-    /// 开合右上角面板的那几行（`panelAnchor`）。
-    @ObservationIgnored fileprivate var anchors: [ObjectIdentifier: WeakView] = [:]
+    @ObservationIgnored private var responders: [UUID: Weak<NSResponder>] = [:]
+    /// 各浮层占的地方与弹出它的视图（`takes`）。
+    @ObservationIgnored fileprivate var bounds: [UUID: Bounds] = [:]
     /// 有浮层时本窗口的按键与点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
 
@@ -70,7 +65,7 @@ final class PanelHost {
         let id = entry.id
         if entry.modal {
             if let window {
-                responders[id] = WeakResponder(window.firstResponder)
+                responders[id] = Weak(value: window.firstResponder)
                 window.makeFirstResponder(nil)
             }
             if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
@@ -91,7 +86,7 @@ final class PanelHost {
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
-        areas[id] = nil
+        bounds[id] = nil
         released(id)
     }
 
@@ -112,8 +107,9 @@ final class PanelHost {
         }
     }
 
-    /// 这个事件由浮层接下（不再交给窗口）则为真。关法同系统 popover，只有一套：Esc 或在最上面那一层外面按下鼠标（左右键、本窗口任意处，
-    /// 含工具栏），关它。模态的这一下就此接下（同系统 sheet 外点不穿透）；右上角的面板照常交给下面，点哪就是哪。
+    /// 这个事件由浮层接下（不再交给窗口）则为真。关法只有一套：Esc 或在最上面那一层外面按下鼠标（左右键、本窗口任意处，含工具栏），关它。
+    /// 这一下交不交给下面同系统：模态的接下（sheet 外点不穿透）；右上角的面板同 SwiftUI 的 popover（实测），照常落到下面，
+    /// 只有落在弹出它的视图（锚点，如侧栏的"任务"）上时接下——否则它松开时又把面板开回来。
     /// 模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的
     /// 输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），不问整个窗口。
     /// 不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
@@ -128,28 +124,31 @@ final class PanelHost {
             if NSApp.mainMenu?.performKeyEquivalent(with: event) != true { _ = (window.firstResponder as? NSView)?.performKeyEquivalent(with: event) }
             return true
         }
-        let inside = { (view: WeakView?) in view?.contains(event) == true }
-        if inside(areas[top.id]) || (!top.modal && anchors.values.contains(where: inside)) { return false }
+        let bounds = bounds[top.id]
+        if bounds?.panel.contains(event) == true { return false }
         top.close()
-        return top.modal
+        return top.modal || bounds?.anchor.contains(event) == true
     }
 
     private static let escape: UInt16 = 53
 }
 
-private struct WeakResponder {
-    weak var value: NSResponder?
-    init(_ value: NSResponder?) { self.value = value }
+private struct Weak<Object: AnyObject> {
+    weak var value: Object?
 }
 
-private struct WeakView {
-    weak var value: NSView?
-
+extension Weak<NSView> {
     /// 这一下鼠标落在它占的地方。
     func contains(_ event: NSEvent) -> Bool {
         guard let value else { return false }
         return value.bounds.contains(value.convert(event.locationInWindow, from: nil))
     }
+}
+
+/// 一个浮层占的地方（`PanelLayer` 垫在内容下面）与弹出它的视图（`WindowPanel` 垫在调用处下面，开着时才有）。
+private struct Bounds {
+    var panel = Weak<NSView>()
+    var anchor = Weak<NSView>()
 }
 
 /// 垫在一块界面下面、量它占的地方的空视图（不接点按）；建好时交给 `mark` 登记。
@@ -169,14 +168,6 @@ private struct AreaMark: NSViewRepresentable {
     }
 }
 
-private struct AnchorMark: View {
-    @Environment(PanelHost.self) private var host
-
-    var body: some View {
-        AreaMark { [host] in host.anchors[ObjectIdentifier($0)] = WeakView(value: $0) }
-    }
-}
-
 private struct WindowPanel<Panel: View>: ViewModifier {
     /// 浮层的身份；nil 是收起。换了身份（另一项）就换内容。
     let key: AnyHashable?
@@ -190,6 +181,9 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .background {
+                if key != nil { AreaMark { [host, token] in host.bounds[token, default: Bounds()].anchor.value = $0 } }
+            }
             .onChange(of: Mode(key: key, retained: retained), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
                     host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close, open: mode.key != nil)
@@ -292,7 +286,7 @@ private struct PanelLayer: View {
     }
 
     private func area(_ id: UUID) -> some View {
-        AreaMark { [host] in host.areas[id] = WeakView(value: $0) }
+        AreaMark { [host] in host.bounds[id, default: Bounds()].panel.value = $0 }
     }
 }
 
@@ -300,7 +294,6 @@ private struct PanelLayer: View {
 struct PanelHeader<Trailing: View>: View {
     let title: String
     @ViewBuilder var trailing: Trailing
-    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -311,14 +304,24 @@ struct PanelHeader<Trailing: View>: View {
             .overlay(alignment: .trailing) {
                 HStack(spacing: 10) {
                     trailing
-                    Button("关闭", icon: .close) { close() }
-                        .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-                        .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-                        .buttonStyle(PressStyle())
-                        .help("关闭（Esc）")
+                    PanelCloseButton()
                 }
                 .padding(.trailing, 16)
             }
+    }
+}
+
+/// Mac 浮层右上的关闭钮（Esc 同）。
+struct PanelCloseButton: View {
+    @Environment(\.closePanel) private var close
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button("关闭", icon: .close) { close() }
+            .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
+            .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
+            .buttonStyle(PressStyle())
+            .help("关闭（Esc）")
     }
 }
 
