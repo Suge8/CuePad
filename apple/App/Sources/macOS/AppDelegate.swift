@@ -178,6 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillTerminate(_ notification: Notification) {
         statusItem?.remove()
         cueBar?.hotkey.unregister()
+        DebugHooks.willTerminate()
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
@@ -194,8 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             window.center()
             failureWindow = window
         }
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        DebugHooks.present(window, activating: true)
     }
 
     /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。

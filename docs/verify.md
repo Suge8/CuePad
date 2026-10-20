@@ -13,7 +13,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 - Mac 窗口默认 1440×900，别的尺寸给 `-CuePadWindowSize`。按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏，Mac 图就是 1 倍像素。
 - 报窗口被缩小显示时，是调度中心或台前调度开着：请用户收起，Agent 不发系统按键。
 - 后台窗口里的网页截图不可信（过几秒就成了空白）：看网页预览用 `-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview`，载入完存成 PNG）。
-- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（会到前台），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 上的菜单没有从代码打开的公开接口，截菜单用 `xc.sh run` 起实例后 axe 点开。
+- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（占前台，见「占前台」），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 上的菜单没有从代码打开的公开接口，截菜单用 `xc.sh run` 起实例后 axe 点开。
 - iPhone 的系统返回（返回钮、左缘滑动）同样只能真操作：录屏时另起 axe 点左上的返回钮、从左缘滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
 - 图标：`-CuePadScene icons`（iPad）一屏看全部墨块符号（层级与单色各一个）和 全部项目图标 × 8 色，改了生成器先看它。
 - 交付物与预览：`-CuePadAllKinds`（配 scratch 会话）发每种文件类型各一份，`-CuePadOpenPreview <标题或文件名>` 直接打开那张预览。
@@ -24,6 +24,18 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 - 裁图、缩放用 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。
 - 验收用户装着的版本前，核对装着的 App 构建号（`defaults read ~/Applications/CuePad.app/Contents/Info CFBundleVersion`）与 `~/.pi/agent/extensions/cuepad-bridge.ts` 里的 `EXTENSION_VERSION` 是否就是要验的那一版。
+
+## 占前台
+
+开发与测试的自动化不抢前台：本机构建（Debug、测试宿主、perf 的 Release）不管怎么起都在后台，窗口排在所有窗口最后（`DebugHooks.staysInBackground`）；Mac 截图、录屏按窗口拍，模拟器不开 Simulator.app，bcu、axe 按进程投递，都不动用户的前台和指针。
+
+非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去：
+
+- 和交互预算比的 `xc.sh perf mac`：前台才有玻璃合成与动画，后台量的帧与掉帧偏乐观。
+- `-CuePadClick`、`-CuePadRightClick` 截系统菜单：后台 App 的菜单画成停用的灰。
+- `-CuePadBench chatscroll` 的 process、hid 驱动：经窗口服务器的真实滚轮与指针。
+
+只在用户说过这段时间不用电脑、或明确要这几样数字时给；用户在用电脑时用后台的数（指令数照样能前后对比）。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。新加的自动化要占前台，也只经 `DebugForeground`，并补进上面这张单子。
 
 ## 真实数据复现
 
@@ -76,8 +88,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 方法与坑：
 
-- 用户在用这台 Mac 时，给 `CUEPAD_SHOT_READY=<任意路径>` 让 interact 留在后台：指令数照样能做前后对比，帧与掉帧偏乐观、不和预算比。
-- 掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
+- `xc.sh perf mac` 默认在后台量，只比指令数；要和预算比加 `-CuePadForeground YES`（见「占前台」）。掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
 - 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
 - Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 …`；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
@@ -86,7 +97,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己�
 
 ### 交互预算
 
-预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数至少跑两遍取中位数。
+预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数在前台量（`-CuePadForeground YES`），至少跑两遍取中位数。
 
 冷启动进 Cue 页（iOS 第一项，`launchMs` 是进程启动到对话排出来）要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。Mac 的"Cue 页首访"带 `contentMs`（点下到对话排出来），大库里有一段 Cue 对话。项名带空格，整个参数要加引号。
 

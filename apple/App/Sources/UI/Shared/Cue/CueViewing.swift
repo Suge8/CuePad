@@ -28,9 +28,9 @@ struct CueViewing: ViewModifier {
     @Environment(\.scenePhase) private var phase
     private var foreground: Bool { phase == .active }
     #else
-    // Mac 的窗口由 AppKit 托管，场景阶段一直不是 active：看窗口是不是活跃的那一个。脚本截图时 App 在后台跑，当它在前台
+    // Mac 的窗口由 AppKit 托管，场景阶段一直不是 active：看窗口是不是活跃的那一个。脚本起的验收实例在后台跑，当它在前台
     @Environment(\.appearsActive) private var appearsActive
-    private var foreground: Bool { appearsActive || DebugHooks.staysInBackground }
+    private var foreground: Bool { appearsActive || DebugHooks.scripted }
     #endif
     /// 页面在屏上（推进了别的页盖住它时不在）。
     @State private var appeared = false
