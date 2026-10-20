@@ -225,20 +225,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         for conn in shared.withLock({ $0.connections }) { write(object, to: conn) }
     }
 
-    /// 发 `info`：只带变了的几项，没带的不变（hello 才带全部）；这里是模型配置那三项。
-    func setModel(_ model: WireModel?, thinking: String?, models: [WireModel]) {
-        broadcast(["t": "info", "model": model?.json ?? NSNull(), "thinking": thinking ?? NSNull(), "models": models.map(\.json)])
-    }
-
-    /// 发 `info`：上下文余量与命令清单。
-    func setUsage(context: (tokens: Int?, window: Int)?, commands: [WireCommand]) {
-        broadcast([
-            "t": "info", "context": Self.contextJSON(context),
-            "commands": commands.map(\.json),
-        ])
-    }
-
-    /// 发只带 `fields` 的 `info`。
+    /// 发只带 `fields` 的 `info`（只带变了的几项，没带的不变；hello 才带全部）。
     func sendInfo(_ fields: [String: Any]) {
         broadcast(["t": "info"].merging(fields) { $1 })
     }

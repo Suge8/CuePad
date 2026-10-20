@@ -147,8 +147,8 @@ extension AppServices {
             await pull()
             settle.finish()
         }
-        let deadline = Task {
-            try? await Task.sleep(for: Self.syncWaitLimit)
+        let deadline = Task { [timing] in
+            try? await timing.sleep(Self.syncWaitLimit)
             settle.finish()
         }
         for await _ in settled {}

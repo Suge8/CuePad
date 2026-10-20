@@ -69,14 +69,8 @@ struct LayoutTests {
             if i % 40 == 39 { stored += "![](cuepad://img/\(try h.store.store(makePNG(width: 1600, height: 1000, seed: i))))\n" }
         }
         h.load(stored)
-        // 高度稳定 = 半秒内不再变化（布局是分片推进的，每片间隔远小于此）
-        var last = -1.0, stableCount = 0
-        #expect(await h.wait {
-            let current = Double(h.textView.frame.height)
-            stableCount = current == last ? stableCount + 1 : 0
-            last = current
-            return stableCount >= 25
-        })
+        #expect(await h.wait { laidOutToTheEnd(h.textView.textLayoutManager!) })
+        h.layout()
         let settled = h.textView.frame.height
 
         let clip = h.editor.contentView

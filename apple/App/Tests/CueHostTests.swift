@@ -142,13 +142,11 @@ struct CueHostTests {
             }
         }
         defer { busy.cancel() }
-        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
-        let start = ContinuousClock.now
+        try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue", timeout: .milliseconds(500)) {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
         }
-        print("送进 Cue：\(ContinuousClock.now - start)")
         busy.cancel()
         await rig.stop()
     }

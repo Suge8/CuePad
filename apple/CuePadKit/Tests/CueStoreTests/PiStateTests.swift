@@ -83,7 +83,7 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.settled))
 
     clock.advance(.seconds(30))  // 被取代的挂起更新不会再落盘
-    await Task.yield()
+    await quietPeriod(.milliseconds(100))
     #expect(try await states()["s1"]?.state == .known(.settled))
   }
 
@@ -99,7 +99,7 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == "全部通过" && ended.lastPrompt == "跑测试" && ended.notify == nil)
 
     clock.advance(.seconds(30))  // 到点也不会把挂起的更新写回来
-    await Task.yield()
+    await quietPeriod(.milliseconds(100))
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
