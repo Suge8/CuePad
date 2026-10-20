@@ -31,8 +31,8 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
 
     var id: UUID { row?.id ?? said[0].id }
     var date: Date { row?.createdAt ?? said[0].createdAt }
-    /// 只看了看：没动手、没说话（写"没动手"，连着几次并成一行）
-    var quiet: Bool { said.isEmpty && !acted && header != nil }
+    /// 只看了看：做完了（不是在跑的 `live` 那一轮）、没动手、没说话（写"没动手"，连着几次并成一行）
+    func quiet(live: UUID?) -> Bool { said.isEmpty && !acted && header != nil && id != live }
     /// 什么都不显示：没有醒来原因、没说话、清单也不显示
     var isEmpty: Bool { header == nil && said.isEmpty && row?.tools == nil }
 
