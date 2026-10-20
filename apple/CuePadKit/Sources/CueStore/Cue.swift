@@ -11,7 +11,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
   case you
   /// Cue 对你说的；带选项的是"等你"
   case cue
-  /// Cue 自己醒来那一轮的动态（折叠显示）；没有正文的是那一轮的经过（`tools`）
+  /// Cue 自己醒来那一轮的动态（不推送，Cue 页收进一颗虚线气泡）：没有正文的是那一轮的经过，带着它为什么醒（`wake`）与做了什么（`tools`）
   case note
   /// Cue 请求换新上下文时写的交接备忘
   case handoff
@@ -21,7 +21,7 @@ public enum CueAuthor: String, Sendable, CaseIterable {
 }
 
 /// Cue 页的对话：Cue 对话唯一的事实源（不读运行时的会话文件）。写入后只有提问的结束（`answer`、`answeredAt`）与送达（`deliveredAt`）会变；
-/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单；"看过……，不打算行动"那一行动态并进紧接着的下一轮（`CueStore.noteCueGlance`）。
+/// 一轮的经过那一行（`round`，或没有正文的 `note`）随这一轮做到哪改它的清单。
 /// 带选项的是提问，只有一个状态：`answeredAt` 为空是开着，有值是结束了（`CueQuestionEnd`）；结束了不再变，只有你开口收起的 Cue 放得回。
 public struct CueMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -62,18 +62,14 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 一轮的经过那一行的清单（Cue 那一轮调过的工具，`CueActivity`），与回答注脚同一个样子；别的行没有。
   public var tools: PiChatMessage.Tools?
+  /// Cue 自己醒来的那一轮为什么醒（只在它的经过那一行上，起这一轮时写下、不再变）：Cue 页那一节的第一行与叫醒的接力都只读它。
+  public var wake: CueWake? = nil
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：写下时按 `alerts` 与他在不在 Mac 上开着 Cue 页置位（`CueStore.insertCueMessage`），
   /// 随那一次上传送出后清掉，远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 与 Cue 的通知」）。
   var notify: Bool = false
 
   /// 要提示你的 Cue 消息（手机推送与 Mac 通知同一条规则）：Cue 对你说的，带选项来问（"等你"）或 `urgent`。
   public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
-}
-
-/// Cue 看过会话、不打算行动的那一行动态（`CueStore.noteCueGlance`）：哪一行，与并进去的会话（Pi 的会话 id）。
-public struct CueGlance: Equatable, Sendable {
-  public var row: UUID
-  public var sessions: [String]
 }
 
 /// 新上下文接上的（`CueStore.cueResume`）：最近一份交接备忘与它之后的对话。
@@ -96,14 +92,14 @@ extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
     "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy",
+    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake",
   ]
   /// `notify` 的值（订阅的谓词按它）。
   package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
     [
       id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt,
-      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy,
+      notify ? Self.notifyFlag : nil, tools?.stored, asked?.stored, askAction, askRule, JSONColumn.encodeList(shots), setAsideBy, wake?.stored,
     ]
   }
   init(row: Row) {
@@ -112,7 +108,8 @@ extension CueMessage: Record {
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAllow.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), notify: row.textOrNil(11) != nil)
+      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
+      notify: row.textOrNil(11) != nil)
   }
 }
 
@@ -267,8 +264,6 @@ public struct CueState: Equatable, Sendable {
   public var detail: String?
   /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
   public var round: UUID?
-  /// 在跑的这一轮是会话的动静叫醒的（`CueWake.sessionActivity`）；别的原因醒来、歇着时没有
-  public var woke: CueWoke?
   /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
   /// 它留给你回的会话（`CueLeft`，只由 `CueStore.leaveToYou` 写，`setCueState` 不动它）
@@ -276,14 +271,12 @@ public struct CueState: Equatable, Sendable {
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, woke: CueWoke? = nil, context: CueContext? = nil, left: [CueLeft] = [],
-    modifiedAt: Date = .now
+    state: Open<PiWorkState>, detail: String? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [], modifiedAt: Date = .now
   ) {
     self.left = left
     self.state = state
     self.detail = detail
     self.round = round
-    self.woke = woke
     self.context = context
     self.modifiedAt = modifiedAt
   }
@@ -332,15 +325,41 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   }
 }
 
-/// 叫醒 Cue 这一轮的会话动静：醒来的时刻（一轮一个，接连几次叫醒各是各的）与带来变化的那几个会话（`CueChange.session`；
-/// 只有任务完成、不在会话上的变化时为空）。只在值班的 Mac 起这一轮时定下、随 `CueState` 同步，各端画"叫醒"的那一下只读它。
-public struct CueWoke: StoredJSON, Equatable, Sendable {
-  public var at: Date
-  public var sessions: [String]
+/// Cue 这一轮为什么醒（值班的管理器起一轮时定下）。交给大脑的信封照它写"醒来："；Cue 自己醒来的一轮把它记在这一轮的经过那一行上
+/// （`CueMessage.wake`，随那一行同步），Cue 页那一节的第一行照它写、点了去叫醒它的会话，叫醒的接力（`CueFlight`）也只读它。
+public enum CueWake: StoredJSON, Equatable, Sendable {
+  /// 刚启用：第一次醒来
+  case enabled
+  /// 你发来新消息
+  case message
+  /// 在做的事里有动静（`CueChange`）：哪几处，按事件时刻从早到晚
+  case sessionActivity([CueStir])
+  /// 空闲时的例行查看（含合并记忆）
+  case idle
+  /// 提醒到点：到点的那几条记忆
+  case reminder([UUID])
+  /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
+  case renewed
+  /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认）：先写交接
+  case settingsChanged
+}
 
-  public init(at: Date, sessions: [String]) {
-    self.at = at
-    self.sessions = sessions
+/// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。
+public struct CueStir: Codable, Equatable, Sendable {
+  public var kind: CueChange.Kind
+  /// Pi 的会话 id；任务完成这类不在会话上的为 nil
+  public var session: String?
+  /// 变化所在的那件（叶子，任务本身的变化是任务）
+  public var task: UUID?
+
+  public init(kind: CueChange.Kind, session: String? = nil, task: UUID? = nil) {
+    self.kind = kind
+    self.session = session
+    self.task = task
+  }
+
+  public init(_ change: CueChange) {
+    self.init(kind: change.kind, session: change.session?.sessionID, task: (change.leaf ?? change.task)?.id)
   }
 }
 
@@ -378,15 +397,14 @@ public struct CueDuty: Equatable, Sendable {
 
 extension CueState: Record {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "woke", "context", "leftToYou"]
+  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou"]
   var bindings: [any SQLBindable] {
-    [Self.recordID, state.rawValue, detail, modifiedAt, round, woke?.stored, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
+    [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left)]
   }
   init(row: Row) {
     self.init(
-      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), woke: row.textOrNil(5).flatMap(CueWoke.init(stored:)),
-      context: row.textOrNil(6).flatMap(CueContext.init(stored:)), left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(7)),
-      modifiedAt: row.date(3))
+      state: Open(rawValue: row.text(1)), detail: row.textOrNil(2), round: row.uuidOrNil(4), context: row.textOrNil(5).flatMap(CueContext.init(stored:)),
+      left: JSONColumn.decodeList(CueLeft.self, from: row.textOrNil(6)), modifiedAt: row.date(3))
   }
 }
 

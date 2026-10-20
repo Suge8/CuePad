@@ -73,6 +73,8 @@ extension DebugScene {
                 let message = try await store.addCueMessage(.you, text: text)
                 try await store.markCueMessagesDelivered([message.id])
             }
+            // 记忆先写：提醒到点的那一轮指着其中一条
+            try await store.seed(cueLines: demoMemory)
             if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
             try await you("圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发")
             // 每一轮的经过（同值班的管理器写下的样子，`CueRound.process`）：排在这一轮开始的位置，动到的任务带着 id，清单里点它打开
@@ -89,17 +91,23 @@ extension DebugScene {
                 step(.talk, "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序", order)))
             _ = try await store.addCueMessage(
                 .cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id)
-            for (note, tools) in [
-                ("看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
-                ("让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", process(
+            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、提醒到点，两次只看了看；
+            // 连着六轮，Cue 页里折起前面的、两次只看了看的并成一行
+            func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
+            let meeting = try await store.cueMemory().lines.first { $0.text.hasPrefix("周会") }
+            for (wake, note, tools) in [
+                (stirred(.settled, "atlas"), "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
+                (stirred(.settled, "atlas"), "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", process(
                     step(.read, "看「发言轮次乱序」的近况", order), step(.talk, "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍", order))),
-                ("CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", process(
+                (stirred(.failed, "billing"), "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", process(
                     step(.read, "看板"), step(.read, "看「导入旧数据」的近况", importing), step(.search, "导入旧数据 prompt 太长"))),
-                ("", process(
+                (CueWake.reminder(meeting.map { [$0.id] } ?? []), "", process(
                     step(.read, "看「README 截图」的近况", panel), step(.talk, "对「README 截图」说：深色那张也按参考图拍，拍完发给我", panel),
                     step(.other, "记下：README 截图要浅色深色各一张"))),
+                (stirred(.settled, "notes"), "", process(step(.read, "看「README 截图」的近况", panel))),
+                (.idle, "", process(step(.read, "看板"))),
             ] {
-                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools)
+                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
             // 上下文到了换新线：写下交接，从这里起换了新上下文（对话里一条分隔，点开是这份备忘）
@@ -141,7 +149,6 @@ extension DebugScene {
                     ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"), task: billing.id)
             }
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
-            try await store.seed(cueLines: demoMemory)
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
@@ -185,7 +192,7 @@ extension DebugScene {
     }
 
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
-    /// 带上叫醒它的会话（`CueState.woke`，同值班的 Mac 起一轮时写下的样子），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
+    /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一节动态），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
     /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
@@ -211,7 +218,10 @@ extension DebugScene {
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
             round += 1
-            guard !woke.isEmpty, (try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))) != nil else { return nil }
+            let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0) })
+            guard !woke.isEmpty, let row = try? await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake),
+                (try? await store.setCueState(.thinking, round: row)) != nil
+            else { return nil }
             return ("wake", { try? await store.setCueState(.settled) })
         }
     }

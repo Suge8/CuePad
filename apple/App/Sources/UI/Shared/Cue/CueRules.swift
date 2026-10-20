@@ -159,7 +159,7 @@ nonisolated extension CueMessage {
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
-/// 一次接力（`LiveSessions.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
+/// 一次接力（`LiveSessions.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是在跑那一轮为什么醒，`CueStore.cueWaking`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
 /// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
 /// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueOpenedSessions`：
 /// 写下请求时会话还不在，等它出现才飞到它那一行）。
@@ -197,12 +197,20 @@ nonisolated struct CueFlight: Equatable, Sendable {
 
     /// 接力读的事实：叫醒它的那一下与它交给的那几条。
     struct Facts: Equatable, Sendable {
-        var woke: CueWoke?
+        /// 在跑的这一轮是会话的动静叫醒的：醒的时刻与叫醒它的那几个会话
+        var woke: (at: Date, sessions: [String])?
         var handed: [Handed]
 
         static func read(from store: isolated CueStore) throws -> Facts {
-            Facts(woke: try store.cueState()?.woke, handed: try Handed.read(from: store))
+            var woke: (at: Date, sessions: [String])?
+            if let waking = try store.cueWaking(), case .sessionActivity(let stirs) = waking.wake {
+                var seen = Set<String>()
+                woke = (waking.at, stirs.compactMap(\.session).filter { seen.insert($0).inserted })
+            }
+            return Facts(woke: woke, handed: try Handed.read(from: store))
         }
+
+        static func == (a: Self, b: Self) -> Bool { a.woke?.at == b.woke?.at && a.woke?.sessions == b.woke?.sessions && a.handed == b.handed }
 
         /// 比 `seen` 新的那一次接力；没有为 nil。同一次读到两种都新时取更新的那种。
         func flight(after seen: Date?) -> CueFlight? {

@@ -27,16 +27,17 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
-    /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）。
+    /// `showsSteps`：对话里排不排每一轮的经过（`AppSettings.showsCueSteps`）；`names`：Cue 自己醒来的那几轮，叫醒它的会话、任务与提醒此刻叫什么。
     init(
-        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool
+        messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], unread: Set<UUID>, showsSteps: Bool,
+        names: CueWakeNames
     ) {
         self.messages = messages
         self.tasks = tasks
         self.waiting = waiting
         self.shots = shots
         self.unread = unread
-        let rows = Self.rows(messages, tasks: tasks, waiting: waiting, shots: shots, showsSteps: showsSteps)
+        let rows = Self.rows(messages, tasks: tasks, waiting: waiting, shots: shots, showsSteps: showsSteps, names: names)
         self.rows = rows
         let stamps = Self.stamps(rows)
         self.stamps = stamps
@@ -75,14 +76,16 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
             if !shown.isEmpty { shots[message.id] = shown }
         }
-        return CueThread(messages: messages, tasks: tasks, waiting: waiting, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps)
+        return CueThread(
+            messages: messages, tasks: tasks, waiting: waiting, shots: shots, unread: Set(try store.cueUnread()), showsSteps: showsSteps,
+            names: try CueWakeNames.read(messages.compactMap(\.wake), from: store))
     }
 
     /// 对话里的一格：你的话、你发起的一轮的经过（这一轮说的话与结果都在它之后）、Cue 的话（第一次提到一件活时下面一行这件活；
     /// 做完的结果点了名的图是结果卡，见 `rows`），
-    /// 连着的几条动态（含 Cue 自己醒来的那几轮的经过）收成一格，换新的地方一条分隔（点开是交接备忘）。
+    /// 连着的几轮 Cue 自己醒来（每轮是它的经过那一行与它说的话，`CueNoteRound`）收成一格，隔了 `ChatTime.gap` 以上或跨了天另起一格；换新的地方一条分隔（点开是交接备忘）。
     /// 还在等你的不在对话里（只在输入框上方的"等你"里，一处），结束了才回到它原来的位置；你答了的，答的那一刻另有一格你的回答（`answer`）。
-    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留它说的话；它在做的事只在末尾一行（`CueEnding`）。
+    /// 设置里关了工具步骤时（`AppSettings.showsCueSteps`）不排经过：没有你发起的一轮的经过，动态里只留为什么醒与它说的话；它在做的事只在末尾一行（`CueEnding`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
         /// 你对一条提问的回答（选的那一项，`CueMessage.answer`；更旧版本存下的另外一句照原文），排在答的那一刻（`answeredAt`）；数据就是那条提问本身，
@@ -91,7 +94,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         case cue(CueMessage, task: UUID?)
         /// 点名了图的结果（结果卡）：图在 `CueThread.shots`
         case result(CueMessage, task: UUID)
-        case notes([CueMessage])
+        case notes([CueNoteRound])
         /// 你发起的一轮的经过（`CueAuthor.round`）
         case process(CueMessage)
         /// Cue 从这里起换了新上下文：写下的那份交接备忘（`CueAuthor.handoff`）就是这里的全部数据。
@@ -101,7 +104,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .renewed(let message), .process(let message): message.id
             case .answer(let question): Self.answerID(of: question.id)
-            case .notes(let group): group[0].id
+            case .notes(let rounds): rounds[0].id
             }
         }
 
@@ -109,7 +112,7 @@ nonisolated struct CueThread: Equatable, Sendable {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .renewed(let message), .process(let message): message.createdAt
             case .answer(let question): question.answeredAt ?? question.createdAt
-            case .notes(let group): group[0].createdAt
+            case .notes(let rounds): rounds[0].date
             }
         }
 
@@ -129,11 +132,11 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 在跑的那一轮（`CueLiveRound.round`）在这一格里：它的经过，或收着它的那几条动态。
+        /// 在跑的那一轮（`CueLiveRound.round`）的经过在这一格里：你发起的一轮的经过，或动态里调过工具的那一节（还没调过、关了工具步骤时在末尾一行）。
         func contains(round: UUID) -> Bool {
             switch self {
             case .process(let message): message.id == round
-            case .notes(let notes): notes.contains { $0.id == round }
+            case .notes(let rounds): rounds.contains { $0.row?.id == round && $0.row?.tools != nil }
             case .you, .answer, .cue, .result, .renewed: false
             }
         }
@@ -168,7 +171,7 @@ nonisolated struct CueThread: Equatable, Sendable {
     /// 结果卡：关联一件活、不是提问、点名了图（`shots`，Cue 做完时挑的最终成果）的 Cue 的话；只挂点名的那几张，这件活发到手机的其余文件在它的会话里。
     /// 提问的图跟着提问那一格（`CueSays`）。
     private static func rows(
-        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], showsSteps: Bool
+        _ messages: [CueMessage], tasks: [UUID: CueTaskRef], waiting: [CueMessage], shots: [UUID: [CueShown]], showsSteps: Bool, names: CueWakeNames
     ) -> [Row] {
         // 同一毫秒答的按问的先后（`messages` 的顺序）
         var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
@@ -196,16 +199,32 @@ nonisolated struct CueThread: Equatable, Sendable {
                 let task = message.taskID.flatMap { tasks[$0] != nil && shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
-                // 有经过的那条就是它自己醒来那一轮的经过（正文是空的）
-                if !showsSteps, message.tools != nil { continue }
-                if case .notes(let group) = rows.last { rows[rows.count - 1] = .notes(group + [message]) } else { rows.append(.notes([message])) }
+                // 没有正文的是一轮的经过（为什么醒、做了什么），开一节；有正文的是这一轮说的话，接在最近那一节后面
+                var group: [CueNoteRound] = []
+                if case .notes(let open) = rows.last, let last = open.last, CueNoteRound.continues(last, at: message.createdAt) {
+                    group = open
+                    rows.removeLast()
+                }
+                if message.text.isEmpty {
+                    group.append(CueNoteRound(row: message, showsSteps: showsSteps, names: names))
+                } else if group.isEmpty {
+                    group = [CueNoteRound(said: message)]
+                } else {
+                    group[group.count - 1].said.append(message)
+                }
+                rows.append(.notes(group))
             case .handoff: rows.append(.renewed(message))
             case .round: if showsSteps { rows.append(.process(message)) }
             case nil: break
             }
         }
         placeAnswers(before: nil)
-        return rows
+        // 关了工具步骤时，旧版本写下的经过（没有醒来原因）又没说话的那一节什么都不剩
+        return rows.compactMap { row in
+            guard case .notes(let rounds) = row else { return row }
+            let shown = rounds.filter { !$0.isEmpty }
+            return shown.isEmpty ? nil : .notes(shown)
+        }
     }
 }
 
