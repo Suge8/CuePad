@@ -7,10 +7,13 @@ import Foundation
 /// - 不落会话（`--no-session-persistence`），不进 `claude --resume` 的列表；
 /// - 系统提示整份替换（`--system-prompt-file`）；不读 CLAUDE.md 与自动记忆（`CLAUDE_CODE_DISABLE_CLAUDE_MDS`、
 ///   `CLAUDE_CODE_DISABLE_AUTO_MEMORY`），不跑用户的钩子（`--settings` 里的 `disableAllHooks`，也就不会报给 CuePad 成一个会话），
-///   不加载 skill 与斜杠命令；
+///   不加载 skill 与斜杠命令（`--disable-slash-commands`；原型开关 `CueFresh` 开时不加，要用 `/clear` 开新会话）；
 /// - 原生工具只有 `Read,Grep,Glob`，MCP 只有 CuePad 的（`--strict-mcp-config`）；这些工具预先放行，其余需要批准的一律拒绝
 ///   （`--permission-prompts none`），不会停下来等人；
 /// - 正忙时写进标准输入的话由 Claude Code 并进当前这一轮；
+/// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
+/// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，
+///   这一下不报成一轮。斜杠命令因此开着，他的话以 `/` 开头时前面垫一个空格，不被当成命令；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求 `set_model` 与 `apply_flag_settings` 的 `effortLevel`
 ///   （与托管会话同一份，见 `ClaudeStream`）；
 /// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
@@ -23,6 +26,8 @@ final class ClaudeBrain: CueBrain {
     /// Claude 的模型都能看图
     let seesImages = true
     private var turn: Turn?
+    /// `/clear` 在做：它的 `result` 回来时结束等待
+    private var clearing: CheckedContinuation<Void, any Error>?
     private struct Turn {
         var used: Int?
         var aborted = false
@@ -37,11 +42,14 @@ final class ClaudeBrain: CueBrain {
             var arguments = [
                 "-p", "--no-session-persistence", "--system-prompt-file", prompt.path, "--tools", "Read,Grep,Glob",
                 "--allowedTools", "Read,Grep,Glob,\(CueMCPServer.toolPrefix)*", "--permission-prompts", "none", "--strict-mcp-config",
-                "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#, "--disable-slash-commands",
+                "--mcp-config", jsonString(mcp), "--settings", #"{"disableAllHooks":true}"#,
             ]
+            if !CueFresh.on { arguments.append("--disable-slash-commands") }
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--effort", ClaudeCode.effort(effort)] }
-            let environment = BrainSession.environment(config, ["CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"])
+            let environment = BrainSession.environment(config, [
+                "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "ENABLE_PROMPT_CACHING_1H": "1",
+            ])
             let stream = try ClaudeStream(
                 executable: config.executable, arguments: arguments, directory: config.workingDirectory, environment: environment)
             self.stream = stream
@@ -49,6 +57,8 @@ final class ClaudeBrain: CueBrain {
             stream.onDraft = { [weak self] in self?.session.emit(.speaking($0)) }
             let process = stream.process
             stream.onClose = { [weak self] in
+                self?.clearing?.resume(throwing: CueBrainError.notRunning)
+                self?.clearing = nil
                 Task { self?.session.exited(await process.exited()) }
             }
         } catch {
@@ -59,7 +69,21 @@ final class ClaudeBrain: CueBrain {
 
     func send(_ text: String, images: [PiImage]) async throws {
         guard let stream else { throw CueBrainError.notRunning }
+        let text = text.hasPrefix("/") ? " " + text : text
         try stream.write(["type": "user", "message": ["role": "user", "content": ClaudeStream.content(text: text, images: images)], "parent_tool_use_id": .null])
+    }
+
+    func newSession() async throws {
+        guard let stream else { throw CueBrainError.notRunning }
+        try await withCheckedThrowingContinuation { continuation in
+            clearing = continuation
+            do {
+                try stream.write(["type": "user", "message": ["role": "user", "content": "/clear"], "parent_tool_use_id": .null])
+            } catch {
+                clearing = nil
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     func configure(model: String?, effort: PiThinkingLevel?) async throws {
@@ -80,6 +104,11 @@ final class ClaudeBrain: CueBrain {
     }
 
     private func received(_ event: JSONValue) {
+        if let clearing {
+            guard event["type"]?.string == "result" else { return }
+            self.clearing = nil
+            return clearing.resume()
+        }
         switch event["type"]?.string {
         case "control_request":
             // Claude Code 问的事（批准工具……）一律不答应，回错误免得这一轮卡住

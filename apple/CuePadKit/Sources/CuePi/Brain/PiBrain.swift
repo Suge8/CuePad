@@ -13,6 +13,8 @@ import Foundation
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
+/// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
+/// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展、MCP 连接都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
 /// - 一轮从第一个 `agent_start` 到 `agent_settled`（重试、压缩、插话都在其中）；
 /// - 正在说的话（拼法见 `DraftParts`）：段号是 `contentIndex`，`message_update` 的 `text_delta` 追加（RPC 只发增量，见 Pi 的 docs/json.md
@@ -27,6 +29,8 @@ final class PiBrain: CueBrain {
     private var nextID = 0
     private var window: Int?
     private(set) var seesImages = false
+    /// 就地换过的模型与强度（`configure`）：开新会话后 Pi 回到启动参数，要再交一次
+    private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
     /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
     private var turn: Turn?
     private struct Turn {
@@ -53,7 +57,7 @@ final class PiBrain: CueBrain {
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try ChildProcess(
-                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config),
+                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, ["PI_CACHE_RETENTION": "long"]),
                 placement: .group, input: .pipe, output: .lines)
             self.process = process
             Task {
@@ -73,7 +77,21 @@ final class PiBrain: CueBrain {
         _ = try await command(["type": "prompt", "message": .string(text), "images": .array(images), "streamingBehavior": "steer"])
     }
 
+    func newSession() async throws {
+        _ = try await command(["type": "new_session"])
+        if configured.model != nil || configured.effort != nil {
+            try await apply(model: configured.model, effort: configured.effort)
+        } else {
+            adopt(try await command(["type": "get_state"])["data"]?["model"])
+        }
+    }
+
     func configure(model: String?, effort: PiThinkingLevel?) async throws {
+        try await apply(model: model, effort: effort)
+        configured = (model ?? configured.model, effort ?? configured.effort)
+    }
+
+    private func apply(model: String?, effort: PiThinkingLevel?) async throws {
         if let model {
             let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { throw CueBrainError.rejected("Pi 的模型要写成 提供方/模型：\(model)") }

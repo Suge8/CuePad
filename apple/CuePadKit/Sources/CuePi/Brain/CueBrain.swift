@@ -70,6 +70,8 @@ public protocol CueBrain: AnyObject {
     var seesImages: Bool { get }
     /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮
     func send(_ text: String, images: [PiImage]) async throws
+    /// 开新会话：清掉此前的对话，系统提示、工具、模型与强度不变，下一句从空白的对话说起。只在空闲时调
+    func newSession() async throws
     /// 就地换模型（运行时自己的写法，同 `CueBrainConfig.model`）与思考强度：进程与上下文不动，下一次请求模型起生效（`seesImages` 随新模型）。
     /// nil 的那项不动：运行时的默认取不回来，回到默认要换大脑。运行时不认（没有这个模型、没登录这家提供方……）时抛，在用的不变
     func configure(model: String?, effort: PiThinkingLevel?) async throws

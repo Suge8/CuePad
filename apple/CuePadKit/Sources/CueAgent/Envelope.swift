@@ -82,7 +82,7 @@ public enum CueEnvelope {
     if let resume = input.resume { lines += self.resume(resume, calendar) }
     lines.append("醒来：" + wake(input.wake))
     if case .reminder(let due) = input.wake { lines += due.map { "- #\($0.index) \($0.line.text)" } }
-    if input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
+    if !CueFresh.on, input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
   }
@@ -240,15 +240,15 @@ public enum CueEnvelope {
 
   private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
 
-  private static func stamp(_ date: Date, _ calendar: Calendar) -> String {
+  static func stamp(_ date: Date, _ calendar: Calendar) -> String {
     let c = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
     return "\(c.year!)-\(pad(c.month!))-\(pad(c.day!)) 周\(weekdays[c.weekday! - 1]) \(clock(date, calendar))"
   }
 
-  private static func clock(_ date: Date, _ calendar: Calendar) -> String {
+  static func clock(_ date: Date, _ calendar: Calendar) -> String {
     let c = calendar.dateComponents([.hour, .minute], from: date)
     return "\(pad(c.hour!)):\(pad(c.minute!))"
   }
 
-  private static func pad(_ value: Int) -> String { value < 10 ? "0\(value)" : "\(value)" }
+  static func pad(_ value: Int) -> String { value < 10 ? "0\(value)" : "\(value)" }
 }

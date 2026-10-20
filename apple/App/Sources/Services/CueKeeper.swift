@@ -77,6 +77,8 @@ nonisolated struct CueTiming: Sendable {
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 上下文用到换新线（`CueContext.renewAt`）后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
+/// 原型开关 `CueFresh` 开时换一种做法对比：每次醒来先让大脑开新会话（`CueBrain.newSession`），输入是对话视图（`CueView`，从 `Progress.viewFrom` 起）
+/// 加信封；不提示换新、不等交接、不带接上，要换大脑时直接换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：第一次调工具时写下，每做完一步改一次，
 /// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。
@@ -161,6 +163,8 @@ final class CueKeeper {
         var greeted: Date?
         /// 归他、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
+        /// 原型（`CueFresh`）：对话视图从哪起（`CueView.render`）
+        var viewFrom: Date?
     }
 
     /// 在跑的一轮。
@@ -585,14 +589,14 @@ final class CueKeeper {
             guard let shift, shift.turn == nil else { return }
 
             let messages = try await store.cueMessages(limit: 50)
-            if let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shift.startedAt }) {
+            if !CueFresh.on, let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shift.startedAt }) {
                 await shift.brain.stop()()
                 // 换新后的第一轮接着写下交接的那一轮：那一轮是你发起的，回复照样给你看
                 await startShift(wake: .renewed, author: lastTurnAuthor)
                 return
             }
             if brainSettings?.needsNewBrain(for: BrainSettings(profile)) == true {
-                if shift.handoffAsked {
+                if CueFresh.on || shift.handoffAsked {
                     await shift.brain.stop()()
                     await startShift()
                 } else {
@@ -727,7 +731,7 @@ final class CueKeeper {
         let mark = try await store.lastWrite()
         let board = try await store.cueBoard()
         var resume: CueResume?
-        if !shift.resumed {
+        if !CueFresh.on, !shift.resumed {
             resume = try await store.cueResume(limit: CueEnvelope.resumeMessages)
             resume?.messages.removeAll { delivering.contains($0.id) }
         }
@@ -742,6 +746,19 @@ final class CueKeeper {
             woke = CueWoke(at: now, sessions: changes.due.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
+        if CueFresh.on {
+            let view = CueView.render(try await store.cueMessages(limit: CueView.fetched), from: progress.viewFrom)
+            progress.viewFrom = view.from
+            if let text = view.text { parts.insert(text, at: 0) }
+            if shift.resumed {
+                do {
+                    try await shift.brain.newSession()
+                } catch {
+                    await broke("开不了新会话：\(error.localizedDescription)")
+                    return false
+                }
+            }
+        }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
