@@ -27,31 +27,21 @@ struct PiChatTests {
         #expect(entries.map(\.role) == [.user, .notice(.stopped), .user, .notice(.declined), .notice(.compacted)])
     }
 
-    @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {
+    /// 发出的话在对话里出现之前是气泡，出现之后不再显示。对话只来自会话文件：作答与斜杠命令不是"你发出的话"，不挂气泡
+    /// （/compact、/name、/reload 在会话文件里没有带请求 id 的用户消息，挂了就永远换不掉）。
+    @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示_作答与斜杠命令不是气泡() async throws {
         let app = TestApp()
-        let recorder = PiStateRecorder(store: app.services.store, hostID: "mac")
-        try await recorder.update(sessionID: "s", state: .settled, title: "s")
-        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let sent = try await app.services.store.requestDelivery("把断言也改了", to: session.target, on: session.hostID, mode: .send)
-        let waiting = try await app.services.store.requestDelivery("再跑一遍", to: session.target, on: session.hostID, mode: .send)
-        let answer = try await app.services.store.requestAnswer(
-            PiAnswer(promptID: "p", value: .confirmed(true)), to: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
+        let store = app.services.store
+        try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
+        let session = try #require(try await store.piSessionPage(.live).items.first?.state)
+        let sent = try await store.requestDelivery("把断言也改了", to: session.target, on: session.hostID, mode: .send)
+        let waiting = try await store.requestDelivery("再跑一遍", to: session.target, on: session.hostID, mode: .send)
+        let answer = try await store.requestAnswer(PiAnswer(promptID: "p", value: .confirmed(true)), to: session.target, on: "mac")
+        let command = try await store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
 
-        let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
+        let shown = PiChat.outgoing([sent, waiting, answer, command], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
 
         #expect(shown.map(\.id) == [waiting.id])
-    }
-
-    /// 对话只来自会话文件：斜杠命令不是"你发出的话"，在路上、没成功、成功之后都不在对话里挂气泡
-    /// （/compact、/name、/reload 在会话文件里没有带请求 id 的用户消息，挂了就永远换不掉）。
-    @Test func 斜杠命令不是气泡() async throws {
-        let app = TestApp()
-        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
-        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
-        let said = try await app.services.store.requestDelivery("先说一句", to: session.target, on: session.hostID, mode: .send)
-        let command = try await app.services.store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
-
-        #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
 
     /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，

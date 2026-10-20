@@ -130,34 +130,26 @@ struct TaskFlowTests {
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 
-    /// 灵感到 Agent 两下：灵感设为任务（第一行是标题，其余是正文），行尾那一格就是"开始"；点它把标题连同正文交出去，开一个以任务命名的会话。
-    @Test func 灵感设为任务_行尾是开始_点开始交给Agent() async throws {
+    /// 行尾那一格是"开始"；点它开一个会话，正在开时不再给"开始"，没开成不算交给过，重新给"开始"。
+    @Test func 点开始交给Agent_正在开时不再给开始_没开成重新给() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/tmp/roundtable", for: project.id)
-        let idea = try await store.createCard(in: project.id, body: "修发言乱序\n按首次加入时间排")
-        try await workspace.setTodo(idea.id, true)
+        let task = try await store.createTask("修发言乱序", in: project.id)
+        #expect(try await next(task) == .start(leaf: task))
 
-        let task = try #require(try await store.card(idea.id))
-        #expect(task.title == "修发言乱序" && task.rest == "按首次加入时间排")
-        let chip = try await next(task)
-        #expect(chip == .start(leaf: task))
-
-        guard case .start(let handed) = chip else { return }
-        workspace.handOff(handed)
+        workspace.handOff(task)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
-        let spec = try #require(launch?.launch)
-        #expect(spec.project == project.id && spec.prompt == "修发言乱序\n按首次加入时间排" && spec.name == "修发言乱序")
-        #expect(try await self.next(task) == nil)  // 正在开会话：不再给"开始"
-
-        // 没开成：不算交给过，行尾重新给"开始"
         let request = try #require(launch)
+        #expect(request.launch?.project == project.id)
+        #expect(try await next(task) == nil)
+
         let executor = DeliveryExecutor(store: store, hostID: request.hostID, onIssue: { Issue.record("\($0)") }) { _ in .failed("这台 Mac 上开不了会话") }
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()
-        #expect(try await self.next(task) == .start(leaf: task))
+        #expect(try await next(task) == .start(leaf: task))
     }
     #endif
 

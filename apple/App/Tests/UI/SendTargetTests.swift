@@ -6,7 +6,7 @@ import Testing
 @testable import CuePad
 
 /// Mac 上"开始"一件任务（`Workspace.handOff`）：标题连同正文作为第一句交出去——上一步绑着会话就接着发进那个会话，没有就在项目文件夹开一个以任务命名的新会话并绑上。
-/// 会话结束了在后台唤醒它，会话正忙先问怎么说，别的 Mac 上的会话写指定那台 Mac 的请求；送达后这一步绑上会话，正文留在任务上。
+/// 会话结束了在后台唤醒它，别的 Mac 上的会话（正忙也不先问）写指定那台 Mac 的请求；送达后这一步绑上会话，正文留在任务上。
 struct SendTargetTests {
     let rig = TestApp()
     let workspace: Workspace
@@ -83,10 +83,12 @@ struct SendTargetTests {
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.mode == .known(.start) && request.target.name == "修乱序" && request.launch?.prompt == Self.text)
 
-        // 会话开好、带着认领标识记下：任务绑上它
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "new", state: .thinking, title: "修乱序", launchToken: token)
+        // 会话开好、开场的话送进去：任务绑上它（等执行器做完这一步，不抢在它前面写会话记录）
+        let opened = "new-\(token)"
+        _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == opened }
+        #expect(rig.host.extensions[opened]?.messages.map(\.text) == [Self.text])
         let bound = try #require(try await store.card(task.id))
-        #expect(bound.piSessionID == "new" && bound.status == .inProgress && bound.body == Self.text)
+        #expect(bound.status == .inProgress && bound.body == Self.text)
     }
 
     /// 项目在这台 Mac 上没绑文件夹：开始时在工作区的根下建好以项目名命名的文件夹（文件系统不收的字符换掉）、绑上并在那里开会话；
@@ -184,30 +186,20 @@ struct SendTargetTests {
         #expect(rig.host.calls.isEmpty, "没有当成已结束的去唤醒")
     }
 
-    @Test func 上一步绑着别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
-        try await remoteSession("r", title: "atlas")
+    /// 会话在跑也不先问：直接写给它所在的 Mac，由那台执行时打断这一轮。
+    @Test(arguments: [PiWorkState.settled, .thinking])
+    func 上一步绑着别的Mac上的会话_正忙也不先问_写一条指定那台Mac的投送请求_本机不执行(state: PiWorkState) async throws {
+        try await remoteSession("r", title: "atlas", state: state)
         let task = try await leaf(in: project, session: "r")
         try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
 
         workspace.handOff(task)
 
-        _ = try await eventually(store, { try $0.deliveryRequests().count }) { $0 > 0 }
-        let request = try #require(try await store.deliveryRequests().first)
+        let request = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil })
         #expect(request.hostID == "mac-b" && request.mode == .known(.send))
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
         #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
         #expect(try await store.card(task.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
-    }
-
-    /// 会话在跑也不先问：直接写给它所在的 Mac，由那台执行时打断这一轮。
-    @Test func 会话正忙_不先问_直接交给它() async throws {
-        try await remoteSession("r", title: "atlas", state: .thinking)
-        let task = try await leaf(in: project, session: "r")
-        try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
-
-        workspace.handOff(task)
-        let request = try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil }!
-        #expect(request.hostID == "mac-b" && request.mode == .known(.send) && request.target.ref == "r")
     }
 
     /// 交到哪只有一份规则（`CueStore.handOffPlan`）：同样的一步，Mac 上"开始"与 Cue 开工落到同一个会话；开新会话时会话名、项目、哪台 Mac 都一样。
