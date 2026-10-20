@@ -35,7 +35,7 @@ import OSLog
 ///   - 挡着这一轮的（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
 ///     托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
 @MainActor
-public final class CodexRuntime: AgentRuntime {
+public final class CodexRuntime: AgentRuntime, SessionLink {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "codex")
     private let bridge: PiBridge
     private let paths: AgentPaths
@@ -329,7 +329,7 @@ public final class CodexRuntime: AgentRuntime {
         tracked[session.id] = entry
         var session = session
         entry.facts.publish(to: &session)
-        bridge.attach(session, via: CodexLink(runtime: self, id: session.id))
+        bridge.attach(session, via: self)
         watchExit(session.pid)
         refresh(session.id, skills: true)
     }
@@ -583,7 +583,7 @@ public final class CodexRuntime: AgentRuntime {
 
     /// 作答：权限确认写回钩子（允许或拒绝，附一句给模型看的原因），托管线程挡着这一轮的提问回给服务端请求，
     /// 不挡着的提问把答案当你的下一句话说给它（与发话同一规则）。
-    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
+    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
         guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
         guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
         guard let reply = session.reply else {
@@ -859,9 +859,9 @@ public final class CodexRuntime: AgentRuntime {
         }
     }
 
-    // MARK: 命令（`CodexLink` 转来）
+    // MARK: 命令（`SessionLink`）
 
-    fileprivate func send(_ message: PiMessage, in id: PiSession.ID) async throws {
+    public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         try await deliver(CodexRPC.input(text: message.text, images: message.images), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
     }
@@ -885,7 +885,7 @@ public final class CodexRuntime: AgentRuntime {
         publish(session)
     }
 
-    fileprivate func command(_ line: String, in id: PiSession.ID) async throws {
+    public func command(_ line: String, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
@@ -927,7 +927,7 @@ public final class CodexRuntime: AgentRuntime {
         ])
     }
 
-    fileprivate func abort(_ id: PiSession.ID) async throws {
+    public func abort(_ id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         try await interrupt(session)
     }
@@ -949,7 +949,7 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     /// 改名走 `thread/name/set`；模型与强度走 `thread/settings/update`，强度按新模型支持的范围夹取（`PiThinkingLevel.clamped`）。
-    fileprivate func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
         if let name {
             try await call(session, "thread/name/set", ["threadId": .string(session.threadID), "name": .string(name)])
@@ -971,7 +971,7 @@ public final class CodexRuntime: AgentRuntime {
     }
 
     /// 托管的会话关掉进程（app-server 读到 EOF 收尾退出）；终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。
-    fileprivate func end(_ id: PiSession.ID) throws {
+    public func end(_ id: PiSession.ID) throws {
         guard let session = tracked[id], let rpc = hosted[session.pid] else { throw PiBridgeError.unsupported }
         rpc.close()
     }
@@ -982,32 +982,6 @@ public final class CodexRuntime: AgentRuntime {
         } catch CodexRPCError.server(_, let message) {
             throw PiBridgeError.rejected("failed: \(message)")
         }
-    }
-}
-
-/// 一个 Codex 会话的控制通道：转给接入。
-@MainActor
-private final class CodexLink: SessionLink {
-    weak var runtime: CodexRuntime?
-    let id: PiSession.ID
-
-    init(runtime: CodexRuntime, id: PiSession.ID) {
-        self.runtime = runtime
-        self.id = id
-    }
-
-    private func live() throws -> CodexRuntime {
-        guard let runtime else { throw PiBridgeError.sessionEnded }
-        return runtime
-    }
-
-    func send(_ message: PiMessage) async throws { try await live().send(message, in: id) }
-    func command(_ line: String) async throws { try await live().command(line, in: id) }
-    func end() async throws { try live().end(id) }
-    func abort() async throws { try await live().abort(id) }
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await live().answer(answer, to: promptID, in: id) }
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
-        try await live().configure(model: model, thinking: thinking, name: name, in: id)
     }
 }
 

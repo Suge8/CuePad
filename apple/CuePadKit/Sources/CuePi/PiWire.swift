@@ -274,7 +274,7 @@ enum PiWire {
     }
 
     static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
-        try encode(Command(
+        try encodeLine(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
             deliveryId: message.deliveryID))
@@ -282,36 +282,16 @@ enum PiWire {
 
     /// 斜杠命令：`text` 是以 / 开头的整行。
     static func slashCommand(id: String, line: String) throws -> Data {
-        try encode(Command(t: "command", id: id, text: line))
+        try encodeLine(Command(t: "command", id: id, text: line))
     }
 
-    private struct ReloadCommand: Encodable {
-        var t = "reload"
+    private struct Bare: Encodable {
+        var t: String
         var id: String
     }
 
-    static func reloadCommand(id: String) throws -> Data { try encodeLine(ReloadCommand(id: id)) }
-
-    private struct EndCommand: Encodable {
-        var t = "end"
-        var id: String
-    }
-
-    static func endCommand(id: String) throws -> Data { try encodeLine(EndCommand(id: id)) }
-
-    private struct AbortCommand: Encodable {
-        var t = "abort"
-        var id: String
-    }
-
-    static func abortCommand(id: String) throws -> Data { try encodeLine(AbortCommand(id: id)) }
-
-    private struct QuotaCommand: Encodable {
-        var t = "quota"
-        var id: String
-    }
-
-    static func quotaCommand(id: String) throws -> Data { try encodeLine(QuotaCommand(id: id)) }
+    /// 只有种类的命令：`reload`、`end`、`abort`、`quota`。
+    static func bare(_ t: String, id: String) throws -> Data { try encodeLine(Bare(t: t, id: id)) }
 
     private struct ConfigCommand: Encodable {
         var t = "config"
@@ -342,7 +322,5 @@ enum PiWire {
     private static func encodeLine(_ command: some Encodable) throws -> Data {
         try JSONEncoder().encode(command) + Data([0x0A])
     }
-
-    private static func encode(_ command: Command) throws -> Data { try encodeLine(command) }
 }
 #endif

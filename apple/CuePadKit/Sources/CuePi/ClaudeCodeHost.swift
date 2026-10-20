@@ -263,7 +263,7 @@ final class ClaudeHostedSession: SessionLink {
 
     // MARK: SessionLink
 
-    func send(_ message: PiMessage) async throws {
+    func send(_ message: PiMessage, in _: PiSession.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw PiBridgeError.rejected("empty")
         }
@@ -275,7 +275,7 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String) async throws {
+    func command(_ line: String, in _: PiSession.ID) async throws {
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
         guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
@@ -295,11 +295,11 @@ final class ClaudeHostedSession: SessionLink {
         starting = nil
     }
 
-    func abort() async throws {
+    func abort(_: PiSession.ID) async throws {
         try await stop(restarting: false)
     }
 
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
+    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in _: PiSession.ID) async throws {
         guard let id else { throw PiBridgeError.sessionEnded }
         if let model {
             // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证、余额）照原话报。
@@ -325,7 +325,7 @@ final class ClaudeHostedSession: SessionLink {
         }
     }
 
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws {
+    func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
         guard let waiting = permission else { throw PiBridgeError.rejected("no_prompt") }
         let decision = try waiting.permission.decision(answer, to: promptID)
         permission = nil
@@ -335,7 +335,7 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     /// 关标准输入：它收完手上的就退出（在等确认时也立即退出）。
-    func end() async throws { stream.closeInput() }
+    func end(_: PiSession.ID) async throws { stream.closeInput() }
 }
 /// 托管会话在飞的工作，只按 Claude Code 自己给的后台任务清单（`background_tasks_changed`，每次整份：后台子代理、后台命令、
 /// 子代理名下的后台命令带 `parent_task_id`；前台的不在里面）。任务落定（`task_notification`）本身不算交回：

@@ -16,7 +16,7 @@ import OSLog
 ///   新会话显式带上工作目录建，接着已结束的会话就是对库里的会话接着说（同一个服务谁都能续）。
 /// - 正在说的话（`PiDraft`）：顶层会话的由 `OpenCodeDrafts` 从事件流累积，交给桥；终端里开的会话也一样（都在同一个服务里），子代理的不要。
 @MainActor
-public final class OpenCodeRuntime: AgentRuntime {
+public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "opencode")
     private static let sessionPage = 200
     /// 权限请求的三个选项（作答时按原文认）
@@ -517,7 +517,7 @@ public final class OpenCodeRuntime: AgentRuntime {
                 cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: 0,
                 state: .settled, stateSince: .now)
             fill(&session)
-            bridge.attach(session, via: OpenCodeLink(runtime: self, sessionID: sessionID))
+            bridge.attach(session, via: self)
         } else {
             bridge.update(id, fill)
         }
@@ -571,18 +571,20 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
     }
 
-    // MARK: 控制（经 `OpenCodeLink`）
+    // MARK: 控制（`SessionLink`）
 
-    private func live(_ sessionID: String) throws -> (Connection, Tracked) {
-        guard let connection, connection.ready, let tracked = sessions[sessionID], tracked.online else { throw PiBridgeError.sessionEnded }
-        return (connection, tracked)
+    private func live(_ id: PiSession.ID) throws -> (Connection, Tracked, String) {
+        guard let connection, connection.ready, let sessionID = bridge.session(id: id)?.sessionID, let tracked = sessions[sessionID], tracked.online else {
+            throw PiBridgeError.sessionEnded
+        }
+        return (connection, tracked, sessionID)
     }
 
     /// 以这句开新一轮：先 `interrupt`（歇着时是空操作），再按缺省的 `steer` 收进收件箱。`interrupt` 受理即回、清掉这一轮已记下的唤醒，
     /// 之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
     /// 原生的 `interrupt?resume=true` 是"先收话再打断"：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
-    fileprivate func send(_ message: PiMessage, to sessionID: String) async throws {
-        let (connection, _) = try live(sessionID)
+    public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
+        let (connection, _, sessionID) = try live(id)
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata? }
@@ -594,8 +596,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     }
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
-    fileprivate func command(_ line: String, in sessionID: String) async throws {
-        let (connection, tracked) = try live(sessionID)
+    public func command(_ line: String, in id: PiSession.ID) async throws {
+        let (connection, tracked, sessionID) = try live(id)
         guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         let name = parts.first.map(String.init) ?? ""
@@ -617,8 +619,8 @@ public final class OpenCodeRuntime: AgentRuntime {
         }
     }
 
-    fileprivate func abort(_ sessionID: String) async throws {
-        let (connection, _) = try live(sessionID)
+    public func abort(_ id: PiSession.ID) async throws {
+        let (connection, _, sessionID) = try live(id)
         try await interrupt(sessionID, connection)
     }
 
@@ -627,8 +629,8 @@ public final class OpenCodeRuntime: AgentRuntime {
         try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt")
     }
 
-    fileprivate func answer(_ answer: PiAnswerValue, to promptID: String, in sessionID: String) async throws {
-        let (connection, tracked) = try live(sessionID)
+    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
+        let (connection, tracked, _) = try live(id)
         guard let question = tracked.facts.questions.first(where: { $0.promptID == promptID }), let target = Self.parse(promptID) else {
             throw PiBridgeError.rejected("stale_prompt")
         }
@@ -660,8 +662,8 @@ public final class OpenCodeRuntime: AgentRuntime {
         try await connection.client.call("POST", "/api/session/\(target.sessionID)/form/\(target.id)/reply", body: Reply(answer: [field.key: value]))
     }
 
-    fileprivate func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in sessionID: String) async throws {
-        let (connection, tracked) = try live(sessionID)
+    public func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: PiSession.ID) async throws {
+        let (connection, tracked, sessionID) = try live(id)
         if let name {
             struct Update: Encodable { var title: String }
             try await connection.client.call("PATCH", "/api/session/\(sessionID)", body: Update(title: name))
@@ -686,8 +688,8 @@ public final class OpenCodeRuntime: AgentRuntime {
     }
 
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
-    fileprivate func endSession(_ sessionID: String) async throws {
-        let (connection, _) = try live(sessionID)
+    public func end(_ id: PiSession.ID) async throws {
+        let (connection, _, sessionID) = try live(id)
         try await interrupt(sessionID, connection)
         guard self.connection === connection, sessions[sessionID]?.online == true else { return }
         sessions[sessionID]?.online = false
@@ -888,32 +890,6 @@ enum OpenCodeAnswer: Encodable {
         case .string(let value): try container.encode(value)
         case .bool(let value): try container.encode(value)
         }
-    }
-}
-
-/// 一个 OpenCode 会话的控制通道：命令交给接入，经服务的接口做。没有"重新载入"（同一个服务里没有第二份会话）。
-@MainActor
-final class OpenCodeLink: SessionLink {
-    private weak var runtime: OpenCodeRuntime?
-    private let sessionID: String
-
-    init(runtime: OpenCodeRuntime, sessionID: String) {
-        self.runtime = runtime
-        self.sessionID = sessionID
-    }
-
-    private func use() throws -> OpenCodeRuntime {
-        guard let runtime else { throw PiBridgeError.sessionEnded }
-        return runtime
-    }
-
-    func send(_ message: PiMessage) async throws { try await use().send(message, to: sessionID) }
-    func command(_ line: String) async throws { try await use().command(line, in: sessionID) }
-    func end() async throws { try await use().endSession(sessionID) }
-    func abort() async throws { try await use().abort(sessionID) }
-    func answer(_ answer: PiAnswerValue, to promptID: String) async throws { try await use().answer(answer, to: promptID, in: sessionID) }
-    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) async throws {
-        try await use().configure(model: model, thinking: thinking, name: name, in: sessionID)
     }
 }
 #endif
