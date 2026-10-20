@@ -570,8 +570,11 @@ struct RelayFlight {
         private func streak(_ path: CGPath, head: Head, delay: Double, duration: Double, timing: CAMediaTimingFunction, fades: Bool = false, launches: Bool = false) {
             for (width, alpha, lag) in [(CGFloat(10), 0.12, 0.36), (4, 0.36, 0.25), (1.8, 0.95, 0.16)] {
                 let trail = CAShapeLayer()
-                trail.frame = canvas.bounds
-                trail.path = path
+                // 描边只占轨迹的包围盒，不让三层拖尾都保持整窗大小的合成边界。
+                let bounds = path.boundingBoxOfPath.insetBy(dx: -width, dy: -width)
+                trail.frame = bounds
+                var local = CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
+                trail.path = path.copy(using: &local)
                 trail.fillColor = nil
                 trail.strokeColor = color
                 trail.lineWidth = width
