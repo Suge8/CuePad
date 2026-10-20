@@ -54,7 +54,8 @@ enum ScrollAnchor {
 /// - `-CuePadSync <noAccount|decide|failed|syncing|restricted|conflicts>`：装上报这个状态的同步替身，设置里 iCloud 同步与 Mac 工具栏的同步提示按它显示（`DebugScene+Sync.swift`）；
 ///   `-CuePadSync stalled`：装上同步永不返回的替身，核对下拉刷新的圈有时限；`-CuePadSync arrive`：启动后的第一次拉取分几页带回别的设备写下的 Cue 的话（`ArrivingSync`），核对"同步中"与对完一次滑上来；
 /// - `-CuePadSampleCrash YES`：存一份样例崩溃诊断（配 `-CuePadCrashSheet YES` 直接打开摘要）；
-/// - `-CuePadNotifications YES`（仅 Mac）：隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」）；
+/// - `-CuePadNotifications YES`：Mac 隔离库下也发真实的系统通知（规则见 docs/verify.md「通知（Mac）」），iOS 没有同步也请求通知权限；
+///   `-CuePadQuotaRemindIn <秒>`：写一份额度观测，Claude 的本周这么多秒后到提醒时刻（`remindQuotaIfAsked`，核对周额度提醒）；
 ///   `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 请你允许推送的消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）；
 /// 设置项可在参数域覆盖：`-theme dark`。
 enum DebugScene {
@@ -108,6 +109,7 @@ enum DebugScene {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }
         if defaults.bool(forKey: "CuePadDemo") { await seedMacAgents(workspace.services) }
+        await remindQuotaIfAsked(store)
         await presetSync(workspace.services)
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
@@ -218,6 +220,29 @@ enum DebugScene {
             try? await Task.sleep(for: delay)
             work()
             pending -= 1
+        }
+    }
+
+    /// `-CuePadQuotaRemindIn <秒>`：写一份额度观测，Claude 的本周窗口这么多秒后到提醒时刻（`QuotaReminder`）；同一份里 Claude 的 5 小时
+    /// 一小时后重置（不是周窗口）、Codex 的本周 36 小时后重置（还远），都不该响。到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
+    private static func remindQuotaIfAsked(_ store: CueStore) async {
+        let remindIn = defaults.double(forKey: "CuePadQuotaRemindIn")
+        guard remindIn > 0 else { return }
+        let weekResets = Date.now.addingTimeInterval(QuotaReminder.lead + remindIn)
+        func observe(_ provider: String, _ windows: [QuotaWindow]) async {
+            _ = try? await store.recordQuota(QuotaReport(provider: provider, windows: windows, complete: true), host: "demo-mac")
+        }
+        func claude(used: Double) async {
+            await observe("anthropic", [
+                QuotaWindow(seconds: 5 * 3_600, used: 0.3, resetsAt: .now.addingTimeInterval(3_600)),
+                QuotaWindow(seconds: QuotaReminder.week, used: used, resetsAt: weekResets),
+            ])
+        }
+        await claude(used: 0.38)
+        await observe("openai-codex", [QuotaWindow(seconds: QuotaReminder.week, used: 0.2, resetsAt: .now.addingTimeInterval(36 * 3_600))])
+        Task {
+            try? await Task.sleep(for: .seconds(remindIn + 20))
+            await claude(used: 0.45)
         }
     }
 

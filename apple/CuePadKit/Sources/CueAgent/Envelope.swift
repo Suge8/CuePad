@@ -207,7 +207,8 @@ public enum CueEnvelope {
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
-    case .thinking, .tool, .delegating, .compacting: "工作中"
+    case .thinking, .tool, .compacting: "工作中"
+    case .delegating: "等子代理交回"
     case .waitingForUser: "等回答"
     case .settled: "歇着"
     case .error: "出错"

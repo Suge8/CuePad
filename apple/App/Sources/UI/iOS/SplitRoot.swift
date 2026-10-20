@@ -209,7 +209,7 @@ private struct SidebarSearchField: View {
     }
 }
 
-/// 侧栏最上面的 Cue：头像、名字、此刻在做什么、"等你 N"，点开 Cue 页。
+/// 侧栏最上面的 Cue：头像、名字、"在管 N · 等你 M"（`CueStatusRow`），点开 Cue 页。
 private struct CueSidebarItem: View {
     @Environment(Navigation.self) private var navigation
 

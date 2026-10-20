@@ -438,6 +438,7 @@ public struct CueTools: Sendable {
         head += leaf.sending ? " · 发送中（话正送进上一步的会话）" : " · 没有会话"
       }
       lines.append(head)
+      if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
       if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
       if let session = leaf.session { lines += Self.conversation(session) }
     }
@@ -453,6 +454,7 @@ public struct CueTools: Sendable {
     lines.append(
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
+    lines += Self.subagentLines(detail.session, now: Date())
     lines += Self.conversation(detail)
     lines += deliveredLines(try await store.previews(of: session.sessionID))
     return .ok(lines.joined(separator: "\n"))
@@ -480,6 +482,30 @@ public struct CueTools: Sendable {
       head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）")
     }
     return head
+  }
+
+  /// 会话带的子代理此刻怎样，每个一行、缩进两格：名册是 Agent 报给 Mac 的（FireCode 的名册、Claude Code 的后台任务……），
+  /// 主会话嘴上说在等的，照这里看是不是真在等。
+  private static func subagentLines(_ session: PiSessionState, now: Date) -> [String] {
+    guard !session.subagents.isEmpty else { return [] }
+    let running = session.subagents.count(where: \.isRunning)
+    return ["  子代理 \(session.subagents.count) 个，" + (running == 0 ? "都不在跑：" : "\(running) 个在跑：")]
+      + session.subagents.map { agent in
+        "  - \(agent.name)：\(subagentPhase(agent, now: now))" + (agent.action.isEmpty ? "" : "「\(CueEnvelope.clip(agent.action, 120))」")
+      }
+  }
+
+  private static func subagentPhase(_ agent: PiSubagentState, now: Date) -> String {
+    let settled = agent.settledAt.map { " \(clock($0))" } ?? ""
+    return switch agent.phase.known {
+    case .running: "在跑" + (agent.progressAt.map { now.timeIntervalSince($0) >= 60 ? "，\(CueEnvelope.duration(now.timeIntervalSince($0)))没动静" : "" } ?? "")
+    case .review: "在被审查"
+    case .done: "交回了" + settled
+    case .failed: "失败了" + settled
+    case .interrupted: "被停下" + settled
+    case .idle: "歇着"
+    case nil: agent.phase.rawValue
+    }
   }
 
   /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，更早的截短），每行缩进两格。

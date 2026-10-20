@@ -268,10 +268,10 @@ struct SessionTaskTests {
         #expect(blocked.isError && blocked.text.contains("打断不了"))
     }
 
-    /// 会话停下归谁接手看这一轮是谁开的（会话里最近一条你一方或机器的消息）与他在不在场（开着它，或 10 分钟内在里面说过话）：
-    /// Cue 说的那句开的归 Cue，他刚在里面说过话也照常报给它；他开的、FireCode 这类扩展投进来的机器消息开的，他在场就归他、不报给 Cue，
-    /// 不在场才报，他开的标"他说的"。机器消息开的一轮在跑时 Cue 照常能插话。
-    @Test func 停下归谁接手_Cue开的归Cue_他或机器开的他在场时归他() async throws {
+    /// 会话停下归谁接手看这一轮是谁开的（会话里最近一句你一方的话）与他在不在场（开着它，或 10 分钟内在里面说过话）：
+    /// Cue 说的那句开的归 Cue，他刚在里面说过话也照常报给它；他开的，他在场就归他、不报给 Cue，不在场才报，标"他说的"。
+    /// FireCode 这类扩展投进来的机器消息（子代理交回）开的轮跟着它之前那句：他的照样归他、在跑时 Cue 不插嘴，Cue 的照样报给 Cue。
+    @Test func 停下归谁接手_Cue开的归Cue_他开的他在场时归他_子代理交回跟着开它的那句() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
@@ -309,10 +309,11 @@ struct SessionTaskTests {
         stop = try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad))
         #expect(stop.line == nil && stop.his)
 
-        // 机器消息开的一轮：在跑时 Cue 照常能插话；停下时他在场，同样归他
-        let machine = try await open(.machine, "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>")
+        // 他那句派出的子代理交回、机器消息开的一轮：在跑时 Cue 不插嘴；停下时他在场，同样归他
+        let returned = "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>"
+        var machine = try await open(.machine, returned)
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint"]))
-        #expect(!said.isError && said.text.contains("对「修登录」的会话说"))
+        #expect(said.isError && said.text.contains("他发起的一轮"))
         stop = try await settle(after: machine)
         #expect(stop.line == nil && stop.his)
 
@@ -320,6 +321,11 @@ struct SessionTaskTests {
         let byCue = UUID()
         try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
         stop = try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))
+        #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
+
+        // Cue 那句派出的子代理交回、接着跑完的一轮：他在场也报给 Cue
+        machine = try await open(.machine, returned)
+        stop = try await settle(after: machine)
         #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
     }
 

@@ -114,7 +114,7 @@ final class TestApp {
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory)
-    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
+    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif

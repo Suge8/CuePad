@@ -28,13 +28,12 @@ nonisolated struct DefaultProjectSnapshot: Codable, Equatable, Sendable {
     var total: Int
 }
 
-/// Cue 的快照：主 App 写，小组件读（头像、"等你 N"、它最近一句）。
+/// Cue 的快照：主 App 写，小组件读（名字、在管与等你、头像）。
 nonisolated struct CueSnapshot: Codable, Equatable, Sendable {
     var name: String
-    /// "等你 N"（App 里 `CueStore.cueTally` 的同一个数）。
+    /// "在管 N"与"等你 M"（App 里 `CueStore.cueTally` 的同一份）。
+    var managing: Int
     var waiting: Int
-    /// Cue 最近对你说的一句（纯文字）。
-    var lastSaid: String?
     /// 头像的表情（`CueMood` 的原始值，图在小组件自己的资源里）。
     var mood: String
 }

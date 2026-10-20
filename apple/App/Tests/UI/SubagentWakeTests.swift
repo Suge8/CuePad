@@ -14,7 +14,8 @@ import Testing
 @MainActor
 struct SubagentWakeTests {
     /// 你请 Cue 开工；会话派出子代理、自己这一轮答完（等子代理）：Cue 不醒，你这时跟它说话，它看到的变化里也没有这个会话。
-    /// 子代理交回结果、会话为它跑完一轮：歇下先到、这一轮的回答随后才写进会话文件（回答晚到）——Cue 只醒一次，信封里是那一轮的回答。
+    /// 子代理交回结果、会话为它跑完一轮：歇下先到、这一轮的回答随后才写进会话文件（回答晚到）——Cue 只醒一次，信封里是那一轮的回答；
+    /// 你在手机上开着这个会话看着它停下也一样：这件事是 Cue 开的。
     /// 会话文件由 Mac 照常读（不经测试代写摘要）：会话是 FireCode 的指挥官，交回结果是一条机器消息开的轮。
     @Test func 等子代理不叫醒_结果交回那一轮回答晚到也只叫醒一次() async throws {
         let rig = try await CueHostTests.Rig()
@@ -50,6 +51,7 @@ struct SubagentWakeTests {
         #expect(!keeper.rounds.contains { $0.wake == .sessionActivity })
 
         // 子代理交回（在主会话为它跑完那一轮之前仍在飞）；FireCode 投回结果、指挥官再跑一轮：歇下先写进库，回答随后才落盘
+        try await store.recordViewing(device: "phone", sessionID: session.sessionID, cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
         try file.append(user: "<firecode_master_event>\nui 交回：测试全过\n</firecode_master_event>")
         session.setState(["kind": "thinking"])

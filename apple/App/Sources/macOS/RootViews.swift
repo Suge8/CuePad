@@ -41,7 +41,7 @@ private struct MainRoot: View {
                 switch link {
                 case .cue: workspace.show(.cue)
                 case .project(let id): workspace.show(.project(id))
-                case .card, .speak: break  // 小组件与分享扩展只在 iOS
+                case .card, .speak, .session: break  // 小组件、分享扩展与实时活动只在 iOS
                 }
             }
             // Cue 与会话之间接力的那一下画在整个窗口上（含工具栏）

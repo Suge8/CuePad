@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页的状态（iOS 与 Mac 同一份，iOS 的搜索页会话一栏也是它）：搜索词、翻到第几页、读到的会话列表，以及正在确认结束或改名的会话。
-/// 项目筛选不在这里：页面自己存（只留在那一页上），交给 `.agentList`；不筛时 Mac 的历史按项目分组（`grouped`），手机按时间分页。
-/// 换搜索词或筛选时回到第一页；历史按页读，滑到列表底再读下一页（`loadMore`）。
+/// 会话页的状态（iOS 与 Mac 同一份，iOS 的搜索页会话一栏也是它）：搜索词、翻到第几页、读到的会话列表，以及正在确认结束或改名的会话。
+/// 项目筛选不在这里：页面自己存（只留在那一页上），交给 `.agentList`；不筛时按项目分组，筛着时按时间分页（`PiSessionList.History`）。
+/// 换搜索词或筛选时回到第一页；分页的历史滑到列表底再读下一页（`loadMore`）。
 @Observable
 final class AgentListModel {
     var list: PiSessionList?
@@ -15,8 +15,8 @@ final class AgentListModel {
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// 还有没读的历史。
-    var hasMore: Bool { list.map { $0.loaded < $0.total } ?? false }
+    /// 还有没读的历史（只有按时间分页时）。
+    var hasMore: Bool { list?.hasMore ?? false }
 
     func resetPaging() { limit = PiSessionList.pageSize }
 
@@ -32,21 +32,23 @@ final class AgentListModel {
 
     enum Empty: Equatable {
         case noMatch(String)
-        case none(inProject: Bool)
+        /// 没有会话：全部（nil）或这个项目里。
+        case none(UUID?)
+
+        /// "没有会话"的标题（两端同一句；下面的说明与按钮各端自己给）。
+        var noneTitle: String {
+            if case .none(.some) = self { "这个项目还没有 Agent 会话" } else { "还没有 Agent 会话" }
+        }
     }
 
-    /// 列表空着时说什么；`project` 是此刻筛着的项目。
-    func empty(filtering project: Project?) -> Empty {
-        if searching { return .noMatch(query) }
-        return .none(inProject: project != nil)
+    /// 列表空着时说什么；`filter` 是此刻筛着的项目。
+    func empty(filter: UUID?) -> Empty {
+        searching ? .noMatch(query) : .none(filter)
     }
 }
 
 extension PiSessionList {
-    /// "现在"一段的行：两个以上需要 /reload 的会话合成一行。
-    var nowRows: [PiNowRow<PiSessionListItem>] { PiNowRow.rows(now, state: \.state) }
-
-    /// "历史"按结束时间分的段；正在唤醒的列在"现在"，这里不再列。
+    /// 按时间分页的"历史"按结束时间分的段；正在唤醒的列在"现在"，这里不再列。
     var historyRuns: [PiHistorySection.Run<PiSessionListItem>] {
         let current = Set(now.map(\.id))
         return PiHistorySection.split(ended.filter { !current.contains($0.id) }, date: \.state.stateSince, now: .now)
@@ -56,19 +58,14 @@ extension PiSessionList {
 extension View {
     /// 读 Agent 页的列表（`filter` 是此刻的项目筛选）：随会话、投送请求、项目与目录绑定的变化重读，换搜索词或筛选时重新订阅；
     /// 一并挂上改名与结束会话的确认、行里的搜索高亮。
-    func agentList(_ model: AgentListModel, filter: UUID?, grouped: Bool = false) -> some View {
-        modifier(AgentListReader(model: model, filter: filter, grouped: grouped))
-    }
+    func agentList(_ model: AgentListModel, filter: UUID?) -> some View { modifier(AgentListReader(model: model, filter: filter)) }
 }
 
 private struct AgentListReader: ViewModifier {
     @Bindable var model: AgentListModel
     let filter: UUID?
-    let grouped: Bool
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
-
-    private var history: PiSessionList.History { grouped && filter == nil ? .grouped : .paged(model.limit) }
 
     func body(content: Content) -> some View {
         content
@@ -77,10 +74,10 @@ private struct AgentListReader: ViewModifier {
             .endSession($model.confirmingEnd)
             .onChange(of: filter) { model.resetPaging() }
             .observing(
-                services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), history: history, moment: services.speech),
+                services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit, moment: services.speech),
                 into: $model.list, onError: workspace.fail
-            ) { [query = model.query, history, moment = services.speech] store in
-                try PiSessionList.read(text: query, project: filter, history: history, at: moment, from: store)
+            ) { [query = model.query, limit = model.limit, moment = services.speech] store in
+                try PiSessionList.read(text: query, project: filter, historyLimit: limit, at: moment, from: store)
             }
     }
 }

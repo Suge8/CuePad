@@ -162,7 +162,7 @@ final class Navigation {
         if root == gone { select(.shelf) }
     }
 
-    /// 小组件与分享扩展的链接：对 Cue 说、项目、卡片。
+    /// 小组件、分享扩展与实时活动的链接：对 Cue 说、项目、卡片、Cue 页、会话。
     func open(_ link: DeepLink) {
         switch link {
         case .speak:
@@ -173,6 +173,8 @@ final class Navigation {
             push(.card(id))
         case .cue:
             show(.cue)
+        case .session(let id):
+            show(.session(id))
         }
     }
 

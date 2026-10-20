@@ -1,11 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 会话页读到的会话："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
-/// "历史"是已结束的（"现在"里有的不再列），从新到旧。历史有两种读法（`History`）：按时间分页的前 `loaded` 条（分段见 `PiHistorySection`），
-/// 或按项目分组、每组最近几条（`groups`，Mac 会话页不按项目筛时）。两部分用同一个搜索词与项目筛选。
+/// 会话页读到的会话（Mac 与手机同一份）："现在"是全部在线的与正在唤醒的（`PiSessionListItem.isCurrent`；不多，不分页），按要你注意的先后；
+/// "历史"是已结束的（"现在"里有的不再列），从新到旧。不筛也不搜时整页按项目分组（`History.grouped`：每组它在线的与最近结束的几条），
+/// 按项目筛着、或在搜时按时间分页（`History.paged`，分段见 `PiHistorySection`）：搜到的要一条不落，按组截断就漏了。两部分用同一个搜索词与项目筛选。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
+    /// 分组时每组列出的最近结束的会话条数；更多的点组头的"全部"按这个项目筛。
+    static let groupHead = 3
 
     /// 搜索词与项目筛选：两部分共用。
     struct Filter: Hashable, Sendable {
@@ -13,72 +15,79 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         var project: UUID?
     }
 
-    /// 历史怎么读：按时间分页（读到前几条），或按项目分组、每组最近 `groupHead` 条。
-    enum History: Hashable, Sendable {
-        case paged(Int)
-        case grouped
-    }
-
-    /// 重读的条件：筛选、历史的读法与页数，与此刻（到点、同步通断时次序与"没能送达"随之变，`AppServices.speech`）。
+    /// 重读的条件：筛选、分页读到第几条，与此刻（到点、同步通断时次序与"没能送达"随之变，`AppServices.speech`）。
     struct Key: Equatable {
         var filter: Filter
-        var history: History
+        var limit: Int
         var moment: Speech.Moment
+    }
+
+    /// 历史的两种样子，由筛选与搜索词定：都没有时按项目分组，否则按时间分页（读到的前几条与一共几条）。
+    enum History: Sendable, Equatable {
+        case grouped([Group])
+        case paged([PiSessionListItem], total: Int)
     }
 
     /// 按项目分的一组（`PiSessionListItem.home`：没有项目的会话归默认项目）：它在线的会话（"现在"的次序）、最近结束的几条与一共结束了几条。
     struct Group: Identifiable, Sendable, Equatable {
         let id: UUID
-        var now: [PiSessionListItem]
-        var ended: [PiSessionListItem]
-        var endedTotal: Int
+        let now: [PiSessionListItem]
+        let ended: [PiSessionListItem]
+        let endedTotal: Int
+        /// 结束的还有没列出来的：组头写"全部 N 个"。
+        var hasMore: Bool { endedTotal > ended.count }
     }
-
-    /// 分组时每组列出的最近结束的会话条数；更多的点组头的"全部"按这个项目筛。
-    static let groupHead = 3
 
     var filter: Filter
     var now: [PiSessionListItem]
-    /// 按时间分页读到的历史（分组读法时为空）。
-    var ended: [PiSessionListItem]
-    var total: Int
-    /// 分组读法时的各组：有在线会话的在前，组内照项目在侧栏的次序；分页读法时为空。
-    var groups: [Group] = []
+    var history: History
     /// 能按它筛的项目：在 Mac 上绑了文件夹的（会话按工作目录归入项目，没绑的不会有会话）与收着其余会话的默认项目。
     var projects: Set<UUID>
     /// 在线会话此刻要显示的那次结束到哪了（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
     var ends: [UUID: Speech.Trip] = [:]
 
+    /// 按时间分页读到的历史（分组时为空）。
+    var ended: [PiSessionListItem] { if case .paged(let items, _) = history { items } else { [] } }
     var loaded: Int { ended.count }
-    var isEmpty: Bool { now.isEmpty && total == 0 && groups.isEmpty }
+    /// 分页时还有没读的历史。
+    var hasMore: Bool { if case .paged(let items, let total) = history { items.count < total } else { false } }
+    /// 一共几个会话（在线的加结束的）。
+    var count: Int {
+        switch history {
+        case .grouped(let groups): now.count + groups.reduce(0) { $0 + $1.endedTotal }
+        case .paged(_, let total): now.count + total
+        }
+    }
+    var isEmpty: Bool { count == 0 }
+    /// 卡上写所在（项目或文件夹）：按时间平铺、又不是只看一个项目时；分组时组头、筛着时筛选已经说了。
+    var showsPlace: Bool { if case .paged = history { filter.project == nil } else { false } }
 
     static func read(
-        text: String, project: UUID? = nil, history: History, at moment: Speech.Moment, from store: isolated CueStore
+        text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .current, text: text, project: project, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries, cue: try store.cueDuty(), at: moment).enumerated().map { ($1.id, $0) })
         let now = live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }
-        var list = PiSessionList(
-            filter: Filter(text: text, project: project), now: now, ended: [], total: 0,
+        let history: History
+        if project == nil, text.trimmingCharacters(in: .whitespaces).isEmpty {
+            let ended = try store.piSessionGroups(PiSessionQuery(scope: .ended, text: text), each: groupHead)
+            history = .grouped(groups(now: now, ended: ended, order: try store.projects().map(\.id)))
+        } else {
+            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
+            history = .paged(ended.items, total: ended.total)
+        }
+        return PiSessionList(
+            filter: Filter(text: text, project: project), now: now, history: history,
             projects: Set(try store.directoryBindings().map(\.projectID)).union([Project.defaultID]),
             ends: try live.reduce(into: [:]) { ends, item in
                 ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
-        switch history {
-        case .paged(let limit):
-            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: limit))
-            list.ended = ended.items
-            list.total = ended.total
-        case .grouped:
-            let ended = try store.piSessionGroups(PiSessionQuery(scope: .ended, text: text, project: project), each: groupHead)
-            list.groups = groups(now: now, ended: ended, order: try store.projects().map(\.id))
-        }
-        return list
     }
 
     /// 在线的按所在分组、接上各组最近结束的；正在唤醒的已列在"现在"，历史里不再列。
+    /// 组的次序：有在线会话的在前，各自照项目在侧栏的次序（`order`）。
     private static func groups(now: [PiSessionListItem], ended: [UUID: PiSessionPage], order: [UUID]) -> [Group] {
         let current = Set(now.map(\.id))
         let live = Dictionary(grouping: now, by: \.home)

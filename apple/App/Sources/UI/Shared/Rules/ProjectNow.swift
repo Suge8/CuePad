@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏与手机项目页共用这一处规则）。
+/// 项目的"此刻"一行：每个项目只挑一件最该知道的事（iPad 侧栏、手机项目页与 Mac 侧栏行尾的状态标共用这一处规则）。
 /// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因，本机同步不通只写"没能送达"；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
@@ -48,12 +48,12 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return intro.map { ProjectNow(source: .intro, text: $0) }
     }
 
-    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
+    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `PiSessionListItem.home` 归到项目（没有项目的归默认项目）。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
     static func byProject(
         _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
+        let byProject = Dictionary(grouping: sessions, by: \.home)
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
             result[project.id] = pick(byProject[project.id] ?? [], shown: shown, task: tasks[project.id]?.first?.title, intro: project.intro)

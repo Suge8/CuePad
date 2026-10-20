@@ -46,8 +46,8 @@ struct ProjectScreen: View {
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), history: .paged(0), moment: services.speech), into: $pi, onError: workspace.fail) {
-            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, history: .paged(0), at: moment, from: store)
+        .observing(services.store, id: PiSessionList.Key(filter: .init(text: "", project: projectID), limit: 0, moment: services.speech), into: $pi, onError: workspace.fail) {
+            [projectID, moment = services.speech] store in try PiSessionList.read(text: "", project: projectID, historyLimit: 0, at: moment, from: store)
         }
         .onChange(of: page?.data.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
@@ -237,10 +237,10 @@ private struct FocusCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Agent", icon: .session).padding(.bottom, 6)
                     ForEach(pi.now) { item in sessionLine(item) }
-                    if pi.total > 0 {
+                    if pi.count > pi.now.count {
                         Button { navigation.push(.projectSessions(project.id)) } label: {
                             HStack(spacing: 4) {
-                                Text("全部 \(pi.now.count + pi.total) 个会话")
+                                Text("全部 \(pi.count) 个会话")
                                 Image(.forward).font(.caption.weight(.semibold)).accessibilityHidden(true)
                             }
                             .font(Typography.secondary).foregroundStyle(palette.ink3)

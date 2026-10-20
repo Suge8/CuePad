@@ -38,8 +38,8 @@ extension AlertCenter: CueNotifying {
 
     /// 发一条提示：到不到你（`reaches`）不成立时什么都不做（不要权限、不装提示音）；第一次真要提示时才征求权限，没有权限就不发。
     func post(_ alert: AlertMessage) async {
-        guard let workspace, await reaches(alert.route) else { return }
-        let preference = workspace.services.settings.alerts[alert.route.kind]
+        guard let workspace, let kind = alert.route.kind, await reaches(alert.route) else { return }
+        let preference = workspace.services.settings.alerts[kind]
         guard delivers else {
             return AppServices.log.notice("通知（隔离库不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
         }
@@ -64,10 +64,11 @@ extension AlertCenter: CueNotifying {
         await reaches(route) ? [.banner, .sound, .list] : []
     }
 
-    /// 这条提示此刻到不到你：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）。
+    /// 这条提示此刻到不到你：这种提示开着，且 `AppServices.reaches`（这台 Mac 开着哪页也记在那里）；周额度提醒总是到。
     private func reaches(_ route: AlertRoute) async -> Bool {
-        guard let services = workspace?.services, services.settings.alerts[route.kind].isOn else { return false }
-        return await services.reaches(route.subject)
+        guard let kind = route.kind, let subject = route.subject else { return true }
+        guard let services = workspace?.services, services.settings.alerts[kind].isOn else { return false }
+        return await services.reaches(subject)
     }
 
     /// 打开了这个会话：撤掉它那一组已送达的通知（每条标识不同，按路由认）。

@@ -106,6 +106,7 @@ protocol SubscriptionStore: Sendable {
 
 /// CloudKit 服务端订阅（只有手机建）：同步区有变化时的静默推送（收到就拉一次），以及下面的可见通知。
 /// Pi 会话状态记录（等你确认、完成两个）与 Cue 消息（一个）的 `notify` 标志置位时，服务端直接生成可见通知。
+/// 等你类的两个（会话等你确认、Cue 的消息）另带 content-available：可见通知同时把 App 叫到后台拉一次，实时活动的等你随之更新（docs/sync.md「Agent 与 Cue 的通知」）。
 /// 不依赖静默推送与 App 在后台运行。通知文案只用本地化 key 的通用句：标题与详情是加密字段，不可能出现在通知里；
 /// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
 /// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
@@ -129,9 +130,9 @@ struct AlertSubscriptions {
 
   func desired() -> [CKSubscription] {
     [
-      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey),
+      make(.piSessionStates, id: Self.waitingID, flag: "waitingForUser", key: PiAlertRoute.waitingLocalizationKey, wakes: true),
       make(.piSessionStates, id: Self.settledID, flag: "settled", key: PiAlertRoute.settledLocalizationKey),
-      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: CueAlertRoute.localizationKey),
+      make(.cueMessages, id: Self.cueID, flag: CueMessage.notifyFlag, key: CueAlertRoute.localizationKey, wakes: true),
       changes(),
     ]
   }
@@ -164,7 +165,8 @@ struct AlertSubscriptions {
     }
   }
 
-  private func make(_ table: Table, id: String, flag: String, key: String) -> CKQuerySubscription {
+  /// `wakes`：同时叫醒 App 在后台拉一次（content-available）。
+  private func make(_ table: Table, id: String, flag: String, key: String, wakes: Bool = false) -> CKQuerySubscription {
     let subscription = CKQuerySubscription(
       recordType: table.rawValue, predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
       subscriptionID: id, options: [.firesOnRecordCreation, .firesOnRecordUpdate])
@@ -174,6 +176,7 @@ struct AlertSubscriptions {
     info.soundName = "default"
     // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题、Cue 说的话（加密字段只能在设备上读）
     info.shouldSendMutableContent = true
+    info.shouldSendContentAvailable = wakes
     subscription.notificationInfo = info
     return subscription
   }

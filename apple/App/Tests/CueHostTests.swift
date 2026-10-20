@@ -39,7 +39,7 @@ struct CueHostTests {
             let timing = CueTiming(
                 patrolAfter: patrolAfter, mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
-            let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+            let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let claudeLaunch = try claude.map { try $0.launch(in: TestLibraries.makeDirectory()) }
             app = TestApp(cue: CueDependencies(
                 launch: { agent, _ in agent == .pi ? launch : agent == .claudeCode ? claudeLaunch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
