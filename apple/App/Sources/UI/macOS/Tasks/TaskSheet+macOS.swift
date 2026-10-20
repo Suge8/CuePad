@@ -34,7 +34,7 @@ struct TaskSheet: View {
         ZStack(alignment: .topTrailing) {
             if let data {
                 if data.steps.isEmpty { single(data) } else { split(data) }
-                closeButton.padding(12)
+                PanelCloseButton().padding(12)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -105,14 +105,6 @@ struct TaskSheet: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .background(palette.sidebar, in: .rect)
-    }
-
-    private var closeButton: some View {
-        Button("关闭", icon: .close) { close() }
-            .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-            .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-            .buttonStyle(PressStyle())
-            .help("关闭（Esc）")
     }
 }
 
