@@ -87,7 +87,7 @@ struct CueEvalTests {
             let work = try await rig.working(Self.title, Self.body)
             let shot = rig.app.directory.appending(path: "登录页改前改后.png")
             try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews([shot].map { (url: $0, title: "登录页 忘记密码 改前改后") }, sessionID: work.id)
+            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
             try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
             let done = eval.calls("task", "done")
             let evidence = done.first { !$0.call.failed }?.args["evidence"] as? [String] ?? []
@@ -306,7 +306,7 @@ struct CueEvalTests {
                 Check("show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
                 Check("同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
                 Check("每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
-                Check("没带别的改动的图", !shown.contains { $0.title == "上一轮的改动" }),
+                Check("没带别的改动的图", !shown.contains { $0.title.hasPrefix("上一轮的改动") }),
             ]
         }
     }
@@ -439,7 +439,7 @@ struct CueEvalTests {
             let work = try await rig.working(Self.title, Self.body)
             let shot = rig.app.directory.appending(path: "登录页改前改后.png")
             try loginShot().write(to: shot)
-            _ = try await rig.store.addPreviews([shot].map { (url: $0, title: "登录页 忘记密码 改前改后") }, sessionID: work.id)
+            _ = try await rig.store.addPreviews([(shot, "登录页 忘记密码 改前改后")], sessionID: work.id)
             try await eval.trigger {
                 try await rig.settleCueTurn(
                     work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
@@ -483,7 +483,7 @@ struct CueEvalTests {
         for (slug, title) in proposals {
             let file = rig.app.directory.appending(path: "\(slug)-iphone.png")
             try await mockShot(file.lastPathComponent).write(to: file)
-            let preview = try #require(try await rig.store.addPreviews([file].map { (url: $0, title: title) }, sessionID: work.id).first).preview
+            let preview = try #require(try await rig.store.addPreviews([(file, title)], sessionID: work.id).first).preview
             shots.append(CueShot(preview: preview.id, look: title.replacingOccurrences(of: "提问卡", with: "")))
         }
         let asking = try CueAsking(.rule, action: "按方案 1 决定单改提问卡", rule: "重做界面设计要先给几个方案让我选")
@@ -497,17 +497,22 @@ struct CueEvalTests {
         let rig = eval.rig
         try await eval.trigger { try await rig.say("以后重做界面设计，先给我几个方案，交回时在卡上让我选") }
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
-        func send(_ names: [String], title: String) async throws {
-            var files: [URL] = []
-            for name in names {
-                files.append(rig.app.directory.appending(path: name))
-                try await mockShot(name).write(to: files[files.count - 1])
+        func send(_ files: [(name: String, title: String)]) async throws {
+            var sent: [(url: URL, title: String)] = []
+            for file in files {
+                let url = rig.app.directory.appending(path: file.name)
+                try await mockShot(file.name).write(to: url)
+                sent.append((url, file.title))
             }
-            _ = try await rig.store.addPreviews(files.map { (url: $0, title: title) }, sessionID: work.id)
+            _ = try await rig.store.addPreviews(sent, sessionID: work.id)
         }
-        try await send(["1-01-改前-长按菜单.png", "1-02-改后-长按菜单.png", "2-01-改前-设置.png", "2-02-改后-设置.png"], title: "上一轮的改动")
+        try await send([
+            ("1-01-改前-长按菜单.png", "上一轮的改动：改前长按菜单"), ("1-02-改后-长按菜单.png", "上一轮的改动：改后长按菜单"),
+            ("2-01-改前-设置.png", "上一轮的改动：改前设置"), ("2-02-改后-设置.png", "上一轮的改动：改后设置"),
+        ])
+        let looks = [("iphone", "手机浅色"), ("iphone-dark", "手机深色"), ("iphone-original", "现在的样子"), ("mac", "Mac")]
         for (slug, title) in proposals {
-            try await send(["iphone", "iphone-dark", "iphone-original", "mac"].map { "\(slug)-\($0).png" }, title: title)
+            try await send(looks.map { ("\(slug)-\($0.0).png", "\(title) · \($0.1)") })
         }
         try await eval.trigger { try await rig.settle(work, reply: proposalReply) }
         return work

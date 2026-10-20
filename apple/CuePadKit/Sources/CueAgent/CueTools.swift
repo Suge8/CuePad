@@ -44,7 +44,7 @@ public struct CueTools: Sendable {
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答全文、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
           leave{task|session}：会话停着（歇下或等回答）、这次该他接手时用，把它留给他回：会话列表显示"待回复"（等回答的回到等他确认）；不用另外 tell，他或你再对它说话就作废；
-          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（至多 \(CueShot.limit) 张，按要他看的先后，look 写这张看什么，如"最终版深色：分组标题"）：只挑能证明结论的最终成果（最终版浅色、深色各一张，关键的改前改后），中途稿、方案稿、旧版截图不挂；没有能看的成果就不带，不带就不挂图。没点名的仍在任务的会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
+          done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉用户。show 是结果上挂的图，写法同 tell 的 show（如 look 写"最终版深色：分组标题"）；不带就不挂图，没点名的仍在会话里。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
         "inputSchema": schema(
           [
@@ -444,7 +444,7 @@ public struct CueTools: Sendable {
       if let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
       if let session = leaf.session { lines += Self.conversation(session) }
     }
-    lines += deliveredLines(try await store.deliverables(of: [detail.task.id])[detail.task.id] ?? [])
+    lines += deliveredLines(try await store.deliverables(of: detail.task.id))
     return .ok(lines.joined(separator: "\n"))
   }
 

@@ -33,7 +33,7 @@ import Testing
       recap: PiRecap(pendingPrompt: "修好登录")))
     let page = rig.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: page)
-    _ = try await store.addPreviews([page].map { (url: $0, title: "登录页") }, sessionID: "s1")
+    _ = try await store.addPreviews([(page, "登录页")], sessionID: "s1")
     try await store.recordQuota(
       QuotaReport(provider: "anthropic", windows: [QuotaWindow(seconds: 18_000, used: 0.2, resetsAt: .now)], complete: true), host: "mac")
     try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4"), urgent: true, task: card.id)

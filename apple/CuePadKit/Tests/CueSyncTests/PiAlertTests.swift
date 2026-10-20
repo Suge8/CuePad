@@ -118,7 +118,7 @@ import Testing
     try await rig.store.updateCueProfile { $0.name = "小管家" }
     let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).png")
     try Data("png".utf8).write(to: file)
-    let shot = try #require(try await rig.store.addPreviews([file].map { (url: $0, title: "登录页") }, sessionID: "s1").first).preview
+    let shot = try #require(try await rig.store.addPreviews([(file, "登录页")], sessionID: "s1").first).preview
     let message = try await rig.store.addCueMessage(
       .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main"),
       shots: [CueShot(preview: shot.id, look: "改后的登录页")])

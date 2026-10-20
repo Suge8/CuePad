@@ -454,7 +454,7 @@ public struct CueAsking: Equatable, Sendable {
   /// 动作与规矩各至多这么多字。
   public static let phraseLimit = 30
 
-  /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `askPhrase`。
+  /// Cue 提问时给的：动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `phrase`。
   public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
     self.ask = ask
     self.action = try Self.phrase(action, "带 ask 要写 doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
@@ -470,11 +470,11 @@ public struct CueAsking: Equatable, Sendable {
     self.rule = rule
   }
 
-  /// Cue 写的短语：去掉首尾空白与句末标点，一行、不空、不超过 `limit` 字，不合要求抛 `askPhrase`（`field` 是报错的开头）。
+  /// Cue 写的短语：去掉首尾空白与句末标点，一行、不空、不超过 `limit` 字，不合要求抛 `phrase`（`field` 是报错的开头）。
   fileprivate static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
     let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
     guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
-      throw CueStoreError.askPhrase(field: field, hint: hint, limit: limit)
+      throw CueStoreError.phrase(field: field, hint: hint, limit: limit)
     }
     return trimmed
   }
@@ -505,7 +505,7 @@ public struct CueShot: Codable, Hashable, Sendable {
     self.look = look
   }
 
-  /// Cue 点名的一组：至多 `limit` 张、不重复，每张一句看什么（一行、`lookLimit` 字以内）；多了或重复抛 `shots`，看什么不合要求抛 `askPhrase`。
+  /// Cue 点名的一组：至多 `limit` 张、不重复，每张一句看什么（一行、`lookLimit` 字以内）；多了或重复抛 `shots`，看什么不合要求抛 `phrase`。
   public static func checked(_ shots: [CueShot]) throws -> [CueShot] {
     guard shots.count <= limit, Set(shots.map(\.preview)).count == shots.count else { throw CueStoreError.shots(limit: limit) }
     return try shots.map {

@@ -7,7 +7,7 @@ import Foundation
 extension CueStore {
   /// 写一条对话。正文不能为空。你说的一句同时收起还开着的提问（`CueQuestionEnd`）。带 `ask` 的是 Cue 请你允许的提问（"等你"）：问的是什么（类别、动作、规矩，`CueAsking`）、
   /// 范围（关联任务此刻所在的项目，`CueMessage.asked`）与按范围写出的选项（`CueAsk.choices`）一起存下；
-  /// 提问点名要你看的图（`shots`，`CueShot.checked` 过的）跟着写下。
+  /// 点名要你看的图（`shots`，`CueShot.checked` 过的）跟着写下。
   /// 允许清单里有这类事（`CueProfile.allowing`，按同一个项目）就抛 `alreadyAllowed`、点名的图不在发到手机的里抛 `shotMissing`，什么都不写。
   @discardableResult
   public func addCueMessage(
@@ -15,8 +15,9 @@ extension CueStore {
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
+      try checkShots(shots)
       guard let ask else {
-        let message = try insertCueMessage(author, text: text, urgent: urgent, task: task)
+        let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task)
         if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
         return message
       }
@@ -24,7 +25,6 @@ extension CueStore {
       if let allowed = try cueProfile()?.allowing(ask.ask, in: project?.id) {
         throw CueStoreError.alreadyAllowed(try allowed.project.flatMap { try find(Project.self, $0)?.name })
       }
-      try checkShots(shots)
       return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task)
     }
   }

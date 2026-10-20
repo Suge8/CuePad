@@ -942,26 +942,23 @@ extension CueStore {
   }
 
 
-  /// 一批顶层任务各自的交付物（唯一的规则）：任务与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
+  /// 一件顶层任务的交付物（唯一的规则）：它与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
   /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
-  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。没有的任务不在结果里。
-  public func deliverables(of tasks: [UUID]) throws -> [UUID: [PiPreview]] {
-    guard !tasks.isEmpty else { return [:] }
-    let rows = try db.query(
+  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。
+  public func deliverables(of task: UUID) throws -> [PiPreview] {
+    try db.query(
       """
-      WITH tops(id) AS (SELECT value FROM json_each(?1)),
-      used(task, session) AS (
-        SELECT COALESCE(c.parentID, c.id), c.piSessionID FROM cards c
-        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.piSessionID IS NOT NULL
-        UNION SELECT COALESCE(c.parentID, c.id), f.value FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
-      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", ")), u.task
-      FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = u.task
+      WITH used(session) AS (
+        SELECT piSessionID FROM cards
+        WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND deletedAt IS NULL AND piSessionID IS NOT NULL
+        UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
+        WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
+      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", "))
+      FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
       WHERE p.createdAt >= COALESCE(\(Card.startedSQL("t")), t.todoAt)
       ORDER BY p.createdAt, p.id
-      """, [Self.idList(tasks)]
-    ) { (task: $0.uuid(Int32(PiPreview.columns.count)), preview: PiPreview(row: $0)) }
-    return Dictionary(grouping: rows, by: \.task).mapValues { $0.map(\.preview) }
+      """, [task]
+    ) { PiPreview(row: $0) }
   }
 
   private func topTasks(
