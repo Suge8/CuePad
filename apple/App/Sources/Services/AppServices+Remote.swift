@@ -27,11 +27,12 @@ extension AppServices {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
-            case .ended(let session, _):
+            case .ended(let session, let reason):
                 live[session.id] = nil
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
-                } else {
+                } else if reason != .reload {
+                    // 重载不是退出：同一进程马上以新扩展连回来接着写，不先把记录当成进程没了写成被打断或已结束
                     try await piStateRecorder.exited(sessionID: session.sessionID, spoke: session.spoke)
                 }
             case .quota(let report): try await store.recordQuota(report, host: hostID)

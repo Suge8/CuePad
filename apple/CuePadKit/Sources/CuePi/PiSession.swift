@@ -142,6 +142,9 @@ public enum PiSessionEndReason: Sendable, Equatable {
     case disconnected
     /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`
     case closed(reason: String)
+
+    /// 重新载入扩展（/reload、扩展自己换上新版本）：同一进程随即在同一路径以新扩展连回来，会话没有结束
+    public static let reload = PiSessionEndReason.closed(reason: "reload")
 }
 
 public enum PiSessionChange: Sendable, Equatable {
