@@ -221,6 +221,7 @@ final class CodexRig {
             try hooks.start()
             try bridge.start()
             try runtime.start()
+            runtime.follow(.all)  // 装了钩子：同 App 检测出接入了
         } catch {
             await runtime.stop()()
             hooks.stop()

@@ -101,17 +101,22 @@ public enum PiHistoryEvent: Sendable {
     case backfillFinished(sessionFiles: [URL]?)
 }
 
-/// 回填哪些会话文件：接入了的 Agent 是整个会话目录；没接入的只有 CuePad 托管过的会话（`CueStore.hostedPiSessionIDs`）。
+/// 一家 Agent 的哪些会话归 CuePad 管：接入了的是全部（会话目录整个回填，终端里开的会话接上桥）；没接入的只有 CuePad 托管过的
+/// （`CueStore.hostedPiSessionIDs`），终端里开的不回填、不上桥。接入的含义只在这里：索引与各家接入（`AgentRuntime.follow`）都按它。
 public enum PiHistoryScope: Sendable, Equatable {
     case all
     case sessions(Set<String>)
 
-    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
-    func covers(_ file: URL) -> Bool {
+    public func covers(sessionID: String) -> Bool {
         switch self {
         case .all: true
-        case .sessions(let ids): ids.contains(String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)).lowercased())
+        case .sessions(let ids): ids.contains(sessionID.lowercased())
         }
+    }
+
+    /// 三家的会话文件名都以会话 id 结尾（Claude Code `<id>.jsonl`，Pi `<时刻>_<id>.jsonl`，Codex `rollout-<时刻>-<id>.jsonl`）。
+    func covers(_ file: URL) -> Bool {
+        covers(sessionID: String(file.deletingPathExtension().lastPathComponent.suffix(Self.idLength)))
     }
 
     private static let idLength = 36

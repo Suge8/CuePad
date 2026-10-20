@@ -145,9 +145,9 @@ extension AppServices {
         }
     }
 
-    /// 会话索引每家都建：CuePad 托管的会话没接入也开得出（`AgentProbe`），它的对话只在会话文件里。接入了的（`AgentStatus.isConnected`，
-    /// 与设置里的开关同一个含义）回填整个会话目录（终端里的会话与历史）；没接入的只回填这台 Mac 托管过的会话，检测出没接入（关掉开关，
-    /// 或 CuePad 的文件被删了）时先删掉其余会话的本机索引；两种都接着跟在线会话的文件。会话的同步记录与对话不动。
+    /// 每家哪些会话归 CuePad 管（`PiHistoryScope`），随接入（`AgentStatus.isConnected`，与设置里的开关同一个含义）换：接入了的是全部，
+    /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）。索引按它回填，各家的接入按它接终端里的会话；
+    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时先删掉范围外会话的本机索引。会话的同步记录与对话不动。
     private func indexAgents() async {
         var indexing: [AgentKind: (connected: Bool, task: Task<Void, Never>)] = [:]
         defer { for entry in indexing.values { entry.task.cancel() } }
@@ -189,6 +189,7 @@ extension AppServices {
             agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
+            runtimes[agent]?.follow(scope)
             return await consumePiHistory(indexer.events(following: pi.sessionFiles, scope: scope), agent: agent)
         }
         guard connected, let runtime = runtimes[agent] else { return }

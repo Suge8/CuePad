@@ -39,6 +39,12 @@ final class ClaudeTestbed {
     /// 终端会话的会话文件跟读（同 App：历史索引读到的交给接入，`AgentRuntime.read`）；开第一个终端时起
     private var reading: Task<Void, Never>?
 
+    /// 起接入并接终端里的会话：测试台装了钩子，同 App 检测出接入了（`follow(.all)`）。
+    func startConnected() throws {
+        try runtime.start()
+        runtime.follow(.all)
+    }
+
     var integration: AgentIntegration {
         AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
     }
