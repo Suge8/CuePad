@@ -27,6 +27,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     private func connect() {
         guard case .ready(let services) = launch else { return CueActivityAnswer.answer = nil }
         alerts.services = services
+        services.alerts = alerts
         CueActivityAnswer.answer = { try await services.answerCueQuestion($0, $1) }
     }
 

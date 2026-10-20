@@ -73,6 +73,8 @@ final class Workspace {
     var showsTasks = false
     /// 接入 Agent 的面板（`AgentSetupPanel`；首次打开由 `offerAgentSetup` 置起，主窗口弹出）。
     var showsAgentSetup = false
+    /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
+    var showsNewSession = false
     #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
@@ -108,7 +110,7 @@ final class Workspace {
     /// 项目目录与 Cue 的现状当场读（`CueStore.snapshot`）：第一帧就是读到的样子，没有"还没读到"这一态。
     init(services: AppServices) {
         self.services = services
-        let digest = try? services.store.snapshot { try CueWatch.Reading.read(from: $0) }
+        let digest = try? services.store.snapshot { try CueDigest.read(from: $0) }
         // 读不出来时目录也读不出来，失败页盖住页面，空摘要不会露面
         cue = CueWatch(digest, at: services.speech)
         #if os(macOS)

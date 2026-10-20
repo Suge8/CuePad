@@ -16,7 +16,7 @@ struct SceneRoot: View {
     var body: some View {
         IOSRoot(services: services, alerts: alerts)
             .environment(alerts)
-            .task { if services.sync != nil { await alerts.enable() } }
+            .task { if services.sync != nil || DebugHooks.deliversNotifications { await alerts.enable() } }
             .onOpenURL { services.handle(url: $0) }
             .modifier(ScenePhaseWork(services: services, alerts: alerts))
             .background { AppearanceSettle() }

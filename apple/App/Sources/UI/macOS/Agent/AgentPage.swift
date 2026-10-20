@@ -3,9 +3,9 @@ import CueStore
 import SwiftUI
 
 /// 会话页（侧栏的"会话"进来）：没有页标题（侧栏那块选中就说了在哪），最上面就是一排（按项目筛、搜索、新会话），下面是订阅额度的总览（`QuotaStrip`，没有额度记录时没有）。
-/// 不筛时按项目分组（`PiSessionList.Group`）：组头是项目图标与名字、几个在线，下面先是它在线的会话（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
+/// 不筛也不搜时按项目分组（`PiSessionList.Group`）：组头是项目图标与名字、几个在线，下面先是它在线的会话（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲），
 /// 再是最近结束的几条；结束的更多时组头右边"全部 N 个"按这个项目筛。没有项目的会话归"未分类"一组。一眼看出哪个项目在跑什么，不必读每张卡的所在。
-/// 按项目筛着时是这个项目的"现在"与按结束时间分段的"历史"（`PiHistorySection`），读到底再接一页。
+/// 按项目筛着或在搜时是"现在"与按结束时间分段的"历史"（`PiHistorySection`），读到底再接一页；只有搜索的平铺结果在卡上写所在。
 /// 行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 /// 这台 Mac 检测到 Agent 却一家都没接入时，最上面是接入小卡（`ConnectAgents`）：没接入时本机的会话在这里看不到。
 struct AgentPage: View {
@@ -14,7 +14,6 @@ struct AgentPage: View {
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
     @State private var filter: PiSessionProject?
-    @State private var starting = false
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -26,7 +25,7 @@ struct AgentPage: View {
             .onChange(of: filter) { proxy.scrollTo(Self.top, anchor: .top) }
         }
         .background(palette.desk)
-        .agentList(model, filter: filter, grouped: true)
+        .agentList(model, filter: filter)
         .refreshesQuota()
     }
 
@@ -59,7 +58,7 @@ struct AgentPage: View {
             .font(Typography.body)
             .padding(.horizontal, 14).frame(height: 36)
             .glass(in: .capsule)
-            NewSessionButton(showing: $starting)
+            NewSessionButton(showing: Bindable(workspace).showsNewSession)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 36, height: 36)
                 .glass(in: .circle, interactive: true, ink: .clear)
@@ -108,12 +107,12 @@ struct AgentPage: View {
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
         if list.isEmpty {
             if !ConnectAgents.needed(services) { empty.padding(.top, 60) }
-        } else if list.filter.project == nil {
-            ForEach(list.groups) { group in
+        } else if case .grouped(let groups) = list.history {
+            ForEach(groups) { group in
                 header(group)
                 cards {
                     nowRows(group.now, in: list)
-                    ForEach(group.ended) { row($0, end: nil) }
+                    ForEach(group.ended) { row($0, in: list, end: nil) }
                 }
             }
         } else {
@@ -125,7 +124,7 @@ struct AgentPage: View {
                 if index == 0 { title("历史") }
                 Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
-                cards { ForEach(run.items) { row($0, end: nil) } }
+                cards { ForEach(run.items) { row($0, in: list, end: nil) } }
             }
             if model.hasMore {
                 // 滑到这里才读下一页
@@ -139,11 +138,11 @@ struct AgentPage: View {
     @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
         ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
             switch nowRow {
-            case .session(let item): row(item, end: list.ends[item.id])
+            case .session(let item): row(item, in: list, end: list.ends[item.id])
             case .reload(let items):
                 PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
                     .sessionCard()
-                if model.reloadOpen { ForEach(items) { row($0, end: list.ends[$0.id]) } }
+                if model.reloadOpen { ForEach(items) { row($0, in: list, end: list.ends[$0.id]) } }
             }
         }
     }
@@ -157,7 +156,7 @@ struct AgentPage: View {
                 Text("\(group.now.count) 个在线").font(Typography.sectionCount).foregroundStyle(palette.ink3)
             }
             Spacer(minLength: 8)
-            if group.endedTotal > group.ended.count {
+            if group.hasMore {
                 Button { filter = group.place } label: {
                     HStack(spacing: 3) {
                         Text("全部 \(group.endedTotal) 个")
@@ -186,11 +185,11 @@ struct AgentPage: View {
         LazyVStack(spacing: 8) { rows() }
     }
 
-    /// 所在不写在卡上：组头或筛选已经说了（未分类的写文件夹，`PiSessionRow.place`）。
-    private func row(_ item: PiSessionListItem, end: Speech.Trip?) -> some View {
+    /// 所在只在搜索的平铺结果里写在卡上（`PiSessionList.showsPlace`）：分组时组头、筛着时筛选已经说了。
+    private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let session = item.state
         let endable = session.canEnd && end != .sending
-        return PiSessionRow(session: session, project: nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+        return PiSessionRow(session: session, project: list.showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
             .sessionLink(session.sessionID, press: .card)
             .contextMenu {
                 SessionMenu(session: session, rename: { model.renaming = session }, end: endable ? { model.confirmingEnd = session } : nil)
@@ -198,17 +197,17 @@ struct AgentPage: View {
     }
 
     @ViewBuilder private var empty: some View {
-        let project = workspace.catalog?.project(filter?.id)
-        switch model.empty(filtering: project, hasFolder: filter?.id.map(workspace.hasFolder) ?? true) {
+        let empty = model.empty(filter: filter, in: workspace)
+        switch empty {
         case .noMatch(let query):
             EmptyState.noMatch(query)
         case .needsFolder(let project):
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
                 ProjectFolderGuide(project: project, guide: workspace.folderGuide)
             }
-        case .none(let inProject):
-            EmptyState(mascot: .empty, title: filter == .unfiled ? "没有\(CaptureCopy.unfiled)的 Agent 会话" : inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
-                       message: "在终端里开一个 Agent，或点右上角开新会话", waitsForSync: true) { EmptyView() }
+        case .none:
+            EmptyState(mascot: .empty, title: empty.noneTitle,
+                       message: "在终端里开一个 Agent，或点右上角开新会话（⌥⌘N）", waitsForSync: true) { EmptyView() }
         }
     }
 }

@@ -129,7 +129,7 @@ extension CueStore {
 
   /// Cue 开出的新会话：Cue 写的开新会话请求（还在库里的）按认领标识对上的会话记录，时刻是那条记录写下的时候（开它的那台 Mac 的时钟）。
   /// 请求写下时会话还没有，对上记录才算开出来了。
-  public func cueLaunches() throws -> [CueLaunch] {
+  public func cueOpenedSessions() throws -> [CueOpenedSession] {
     try db.query(
       """
       SELECT s.sessionID, r.cardID, s.createdAt FROM deliveryRequests r
@@ -137,7 +137,7 @@ extension CueStore {
       WHERE r.origin = '\(DeliveryOrigin.cue.rawValue)' AND r.mode = '\(DeliveryMode.start.rawValue)'
       ORDER BY s.createdAt
       """
-    ) { CueLaunch(session: $0.text(0), card: $0.uuidOrNil(1), at: $0.date(2)) }
+    ) { CueOpenedSession(session: $0.text(0), card: $0.uuidOrNil(1), at: $0.date(2)) }
   }
 
   /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。

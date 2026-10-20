@@ -161,8 +161,9 @@ private struct SidebarPages {
     }
 }
 
-/// 名片下面并排的两块磁贴（`SidebarOutline.places`）：任务（没做完的数；开合任务面板，开着时选中，同 ⌘⇧T；面板从这一块弹出，它就是面板的锚点）、
-/// 会话（在线的数，有在跑的再写"N 在跑"、靛青，与区头"在跑"同一档 `LiveWork.running`；点进会话页）。
+/// 名片下面并排的两块磁贴（`SidebarOutline.places`，数是 `Entry.count`，iPad 侧栏同一个）：任务（没做完的；开合任务面板，开着时选中，同 ⌘⇧T；
+/// 面板从这一块弹出，它就是面板的锚点）、会话（在线的，有在跑的再写"N 在跑"、靛青，与菜单栏面板区头"在跑"同一档 `LiveWork.running`；点进会话页；
+/// 会话哪一行都不在屏上时接力落在这里，`relaySpot(dock:)`）。
 /// 单独读当前页、面板开合与在线会话，换页、开面板、会话状态变时侧栏别处不跟着重算。
 private struct PlaceTiles: View {
     let select: (Route) -> Void
@@ -178,8 +179,10 @@ private struct PlaceTiles: View {
                         .help("任务（⌘⇧T）")
                         .disabled(!workspace.isLibraryReady)
                 default:
-                    let work = workspace.liveWork
-                    PlaceTile(entry: entry, count: work.rows.count, running: work.running, selected: workspace.page == entry.route) { select(entry.route) }
+                    PlaceTile(entry: entry, count: entry.count(in: workspace), running: workspace.liveWork.running, selected: workspace.page == entry.route) {
+                        select(entry.route)
+                    }
+                    .relaySpot(dock: true)
                         .help("按项目查看、搜索全部会话")
                 }
             }
@@ -262,17 +265,14 @@ private struct ProjectRows: View {
         }
     }
 
-    /// 各项目行尾的状态标：项目在线会话里最该你看的那个——要你动手的（等你、出错、没能送达，`PiShown.needsYou`）与在跑的（`isRunning`），
-    /// 按会话列表的档取第一个（"在做"本来就按 `PiShown.rank` 排好）；都停着不画。
+    /// 各项目行尾的状态标：项目的"此刻"（`ProjectNow`，iPad 侧栏与手机书架同一条挑法）挑中的会话，只在要你动手（等你、出错、没能送达，
+    /// `PiShown.needsYou`）或在跑（`isRunning`）时画；有新回复、要重载与停着的不画（行上只有一颗标，只给要看的与在动的）。
     private func marks() -> [UUID: ProjectMark] {
-        let deliveries = workspace.services.liveSessions.deliveries
-        var marks: [UUID: ProjectMark] = [:]
-        for session in workspace.liveWork.rows {
-            guard let project = session.projectID, marks[project] == nil else { continue }
-            let shown = workspace.shown(session, delivery: deliveries[session.sessionID])
-            if shown.needsYou || shown.isRunning { marks[project] = ProjectMark(shown: shown, session: session.sessionID) }
+        let now = ProjectNow.byProject(pages.outline.projects, sessions: workspace.services.liveSessions.items, tasks: [:], shown: workspace.shown)
+        return now.compactMapValues { now in
+            guard case .agent(let shown, let session) = now.source, shown.needsYou || shown.isRunning else { return nil }
+            return ProjectMark(shown: shown, session: session)
         }
-        return marks
     }
 }
 
