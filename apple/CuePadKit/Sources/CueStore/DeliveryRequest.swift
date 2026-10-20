@@ -156,8 +156,8 @@ extension DeliveryRequest: Record {
   }
 }
 
-/// Cue 开出的一个新会话（`CueStore.cueLaunches`）：会话 id、开它时带着的卡、会话记录写下的时刻。
-public struct CueLaunch: Equatable, Sendable {
+/// Cue 开出的一个新会话（`CueStore.cueOpenedSessions`）：会话 id、开它时带着的卡、会话记录写下的时刻。
+public struct CueOpenedSession: Equatable, Sendable {
   public let session: String
   public let card: UUID?
   public let at: Date
