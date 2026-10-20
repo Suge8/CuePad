@@ -111,7 +111,7 @@ private struct PinnedShelfCard: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
+            // 渐变只铺在填充上（不用渐变描边，见 docs/ui.md「渲染性能约束」）
             .background(
                 LinearGradient(colors: [wash, wash.opacity(0)], startPoint: wide ? .leading : .top, endPoint: .center),
                 in: .rect(cornerRadius: Self.radius, style: .continuous))
