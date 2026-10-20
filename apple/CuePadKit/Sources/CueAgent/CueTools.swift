@@ -83,7 +83,7 @@ public struct CueTools: Sendable {
       [
         "name": "memory",
         "description": """
-          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话与任务；
+          你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），序号就是身份。note{text,pin?} 记一条，pin 一直记着（不 pin 的旧行会被并成摘要）；recall{query} 只读：全文找记忆、对话、任务，与你管过的会话里 Agent 的回复原话（带会话名与短 id，可接着 peek）；
           forget{line}；pin{line,pinned}；remind{text,at} 到点叫醒你（ISO 8601 或 yyyy-MM-dd HH:mm）；merge{lo,hi,text} 把待合并的块写成一行摘要；
           renew{handoff} 写交接备忘，然后换新上下文：只写你在管的事各自做到哪、下一步，和他之间没了结的事，至多 \(handoffLimit) 字；
           allow{ask,project?,allowed?} 改允许清单：ask 只能是 \(Self.allowable)，不带 project 是所有项目，allowed:false 去掉。
@@ -564,6 +564,19 @@ public struct CueTools: Sendable {
 
   // MARK: memory
 
+  /// 回复里命中的那一段：从第一个命中的词前面一点起，至多 `excerptLimit` 字（回复常有几千字，开头多半不是要找的）。
+  static func excerpt(_ text: String, around words: [String]) -> String {
+    let flat = CueEnvelope.clip(text, Int.max)
+    guard let hit = words.compactMap({ flat.range(of: $0, options: .caseInsensitive) }).min(by: { $0.lowerBound < $1.lowerBound }) else {
+      return flat.clipped(excerptLimit)
+    }
+    let start = flat.index(hit.lowerBound, offsetBy: -excerptLead, limitedBy: flat.startIndex) ?? flat.startIndex
+    return (start == flat.startIndex ? "" : "…") + String(flat[start...]).clipped(excerptLimit)
+  }
+
+  static let excerptLimit = 200
+  static let excerptLead = 40
+
   private func memory(_ args: Args) async throws -> Result {
     switch try args.required("action") {
     case "note":
@@ -574,6 +587,11 @@ public struct CueTools: Sendable {
       var lines = found.lines.map { "#\($0.index) \($0.line.text)" + ($0.line.deletedAt == nil ? "" : "（已忘掉）") }
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(CueEnvelope.clip(CueFormat.plainText($0.text), 160))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
+      let words = (try args.required("query")).split(whereSeparator: \.isWhitespace).map(String.init)
+      lines += found.replies.map { reply in
+        let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
+        return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
+      }
       return .ok(lines.isEmpty ? "没找到。" : lines.joined(separator: "\n"))
     case "forget":
       let (line, index) = try await line(args)

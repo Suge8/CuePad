@@ -13,6 +13,8 @@ import Foundation
 /// - 图随 `prompt` 的 `images` 交；模型能不能看图看 `get_state` 里模型的 `input`；
 /// - 思考强度原样交给 `--thinking`（Pi 自己按模型支持的档位夹取）；就地换走 `set_model`（`提供方/模型` 拆开）再 `set_thinking_level`
 ///   （换模型时 Pi 会按新模型重取强度，所以强度在后）；都只改这个进程，不写 Pi 的设置；
+/// - 用 Claude 订阅时把请求标成 Claude Code 的（随包的扩展 claude-subscription.ts，见它的头注释）：`-ne` 下用户自己装的同类扩展不加载，
+///   不带这些标识的订阅请求会扣额外用量；
 /// - 提示缓存用长的一档（`PI_CACHE_RETENTION=long`：Anthropic 1 小时，OpenAI 24 小时，提供方不支持的照常）；
 /// - 开新会话走 `new_session`：Pi 按启动参数重建整个运行时（扩展、MCP 连接都重起），所以就地换过的模型与强度随后再交一次；
 /// - 发话一律带 `streamingBehavior: steer`：正忙时 Pi 在当前回合的工具调用做完后、下一次请求模型前把它交给模型，空闲时照常开始一轮；
@@ -29,6 +31,14 @@ final class PiBrain: CueBrain {
     private var nextID = 0
     private var window: Int?
     private(set) var seesImages = false
+    static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
+
+    /// 本机的 Claude Code（`claude-subscription.ts` 取它的版本号）：先找大脑的 PATH，再找常见安装目录；没有就交 `claude`，扩展用保底版本号。
+    private static func claude(_ config: CueBrainConfig) -> String {
+        let path = (config.environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
+        let locator = ExecutableLocator(searchDirectories: path + ExecutableLocator.standard.searchDirectories)
+        return locator.candidates(AgentKind.claudeCode.command).first?.path ?? AgentKind.claudeCode.command
+    }
     /// 就地换过的模型与强度（`configure`）：开新会话后 Pi 回到启动参数，要再交一次
     private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
     /// 这一轮里的状况（`agent_start` 到 `agent_settled`）
@@ -51,13 +61,13 @@ final class PiBrain: CueBrain {
             try "export default function (pi: any) { pi.registerMcpServer(\"\(CueMCPServer.name)\", \(jsonString(server))); }\n"
                 .write(to: mcpExtension, atomically: true, encoding: .utf8)
             var arguments = [
-                "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", "builtin:mcp", "-e", mcpExtension.path,
+                "--mode", "rpc", "--no-session", "--offline", "-ne", "-na", "-e", "builtin:mcp", "-e", mcpExtension.path, "-e", Self.subscription.path,
                 "-ns", "-nc", "-np", "--no-themes", "--system-prompt", prompt.path, "--append-system-prompt", "", "--tools", "read,grep,find,ls,\(CueMCPServer.toolPrefix)*",
             ]
             if let model = config.model { arguments += ["--model", model] }
             if let effort = config.effort { arguments += ["--thinking", effort.rawValue] }
             let process = try ChildProcess(
-                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, ["PI_CACHE_RETENTION": "long"]),
+                config.executable, arguments, directory: config.workingDirectory, environment: BrainSession.environment(config, ["PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config)]),
                 placement: .group, input: .pipe, output: .lines)
             self.process = process
             Task {

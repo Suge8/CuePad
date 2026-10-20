@@ -521,11 +521,18 @@ extension CueStore {
 
 // MARK: 回想
 
-/// `CueStore.recallCue` 的结果：命中的记忆（带序号）、对话与灵感任务。
+/// `CueStore.recallCue` 的结果：命中的记忆（带序号）、对话、灵感任务，与 Cue 管过的会话里 Agent 的回复。
 public struct CueRecall: Equatable, Sendable {
   public var lines: [CueIndexedLine]
   public var messages: [CueMessage]
   public var cards: [Card]
+  public var replies: [Reply]
+
+  /// 会话里的一条回复与它所在的会话（记录已清掉的为 nil，只剩会话 id）。
+  public struct Reply: Equatable, Sendable {
+    public var message: PiChatMessage
+    public var session: PiSessionState?
+  }
 }
 
 /// 一条记忆与它的序号。
@@ -540,10 +547,18 @@ public struct CueIndexedLine: Equatable, Sendable {
 }
 
 extension CueStore {
-  /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（同 `search`）。每个词都要命中，不分大小写；每类至多 `limit` 条，最近的在前。
+  /// Cue 管过的会话（唯一定义）：绑过任务的（正在用的与换下来的），或 Cue 对它说过话的（发送记录是 Cue 的）。
+  static let cueSessions = """
+    SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL
+    UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
+    UNION SELECT targetRef FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND targetKind = '\(SendTargetKind.piSession.rawValue)'
+    """
+
+  /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（同 `search`），与 Cue 管过的会话（`cueSessions`）里 Agent 的回复原话（同步来的那份对话，
+  /// `PiChatMessage`）。每个词都要命中，不分大小写；每类至多 `limit` 条，最近的在前。
   public func recallCue(_ query: String, limit: Int = 20) throws -> CueRecall {
     let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
-    guard !words.isEmpty else { return CueRecall(lines: [], messages: [], cards: []) }
+    guard !words.isEmpty else { return CueRecall(lines: [], messages: [], cards: [], replies: []) }
     let like = words.map { _ in "text LIKE ? ESCAPE '\\'" }.joined(separator: " AND ")
     let patterns: [any SQLBindable] = words.map {
       "%" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
@@ -556,6 +571,12 @@ extension CueStore {
     ) { row in CueIndexedLine(index: Int(row.int(Int32(CueMemoryLine.columns.count))), line: CueMemoryLine(row: row)) }
     let messages = try select(CueMessage.self, where: like, patterns, orderBy: "createdAt DESC, rowid DESC", limit: limit)
     let cards = try search(SearchQuery(text: query), limit: limit).cards
-    return CueRecall(lines: lines, messages: messages, cards: cards)
+    let found = try select(
+      PiChatMessage.self, where: "role = '\(PiChatRole.pi.rawValue)' AND \(like) AND sessionID IN (\(Self.cueSessions))", patterns,
+      orderBy: "at DESC, id", limit: limit)
+    var sessions: [String: PiSessionState] = [:]
+    for id in Set(found.map(\.sessionID)) { sessions[id] = try sessionState(id) }
+    let replies = found.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }
+    return CueRecall(lines: lines, messages: messages, cards: cards, replies: replies)
   }
 }

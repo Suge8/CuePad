@@ -77,8 +77,9 @@ nonisolated struct CueTiming: Sendable {
 /// 出错写一条 Cue 消息告诉你：你发起的一轮、不重试的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
 /// 上下文用到换新线（`CueContext.renewAt`）后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
 /// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
-/// 原型开关 `CueFresh` 开时换一种做法对比：每次醒来先让大脑开新会话（`CueBrain.newSession`），输入是对话视图（`CueView`，从 `Progress.viewFrom` 起）
-/// 加信封；不提示换新、不等交接、不带接上，要换大脑时直接换。
+/// 原型开关 `CueFresh` 开时换一种做法对比：平时同样只往后加信封；换新改在一次醒来开始时判断（`CueFresh.renewDue`），满足就先让大脑开新会话
+/// （`CueBrain.newSession`），这一轮的第一条输入是对话视图（`CueView`）加信封——新班次的第一次醒来也这样接上。不提示换新、不写交接、不带接上，
+/// 要换大脑时直接换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
 /// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：第一次调工具时写下，每做完一步改一次，
 /// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。
@@ -145,6 +146,8 @@ final class CueKeeper {
         var turn: Turn?
         /// 最近一次模型请求的上下文用量与窗口（token）：随状态写进库（`CueState.context`），各端读那一份
         var context: CueContext?
+        /// 最近一次模型请求的时刻（报上下文用量的那一刻）：原型（`CueFresh`）据此判断提示缓存过没过期
+        var lastRequest: Date?
         /// 这个班次里请过合并的块（同一块只请一次）
         var mergesTried: Set<[Int]> = []
         /// 起好之前连续失败的次数：一轮做完清零
@@ -163,8 +166,6 @@ final class CueKeeper {
         var greeted: Date?
         /// 归他、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
         var held: [String: Date] = [:]
-        /// 原型（`CueFresh`）：对话视图从哪起（`CueView.render`）
-        var viewFrom: Date?
     }
 
     /// 在跑的一轮。
@@ -444,7 +445,10 @@ final class CueKeeper {
             updateShift { $0.turn?.speaking = draft }
             speech.offer(turn?.answersYou == true ? draft : nil)
         case .context(let used, let window):
-            updateShift { $0.context = CueContext(used: used, window: window ?? $0.context?.window, since: $0.startedAt) }
+            updateShift {
+                $0.context = CueContext(used: used, window: window ?? $0.context?.window, since: $0.startedAt)
+                $0.lastRequest = .now
+            }
         case .tool(let id, let name, let arguments):
             updateShift { $0.turn?.round.calls.append(CueToolCall(id: id, name: name, arguments: arguments, startedAt: .now)) }
             await recordRound()
@@ -746,10 +750,7 @@ final class CueKeeper {
             woke = CueWoke(at: now, sessions: changes.due.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
         }
         var parts = [envelope]
-        if CueFresh.on {
-            let view = CueView.render(try await store.cueMessages(limit: CueView.fetched), from: progress.viewFrom)
-            progress.viewFrom = view.from
-            if let text = view.text { parts.insert(text, at: 0) }
+        if CueFresh.on, !shift.resumed || CueFresh.renewDue(used: shift.context?.used, lastRequest: shift.lastRequest, now: now) {
             if shift.resumed {
                 do {
                     try await shift.brain.newSession()
@@ -757,7 +758,13 @@ final class CueKeeper {
                     await broke("开不了新会话：\(error.localizedDescription)")
                     return false
                 }
+                Self.log.notice("Cue 换新：开了新会话，用对话视图接上")
+                updateShift {
+                    $0.context = nil
+                    $0.lastRequest = nil
+                }
             }
+            if let view = CueView.render(try await store.cueMessages(limit: CueView.fetched)) { parts.insert(view, at: 0) }
         }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
