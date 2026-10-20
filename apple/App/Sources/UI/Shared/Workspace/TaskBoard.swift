@@ -2,9 +2,10 @@ import CueStore
 import Foundation
 
 /// 任务看板（Mac 任务页、手机任务页）的四列，按流水排：待办 → 在管 → 等你 → 做完（今天）。列只是任务状态与等你的投影，不另存状态：
-/// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，不论它的状态；其余按状态。
-/// - 待办：没开始的顶层任务，项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
-/// - 在管、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；等你每件一张，没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
+/// 一件任务只在一列：被等你占着的（`CueTally.held`）只在等你，Cue 在做的只在在管，不论它的状态；其余按状态。
+/// - 待办：没做完、Cue 也没在做的顶层任务（没开始的，和开始过而会话都结束了的），项目顺序、同级手动顺序（拖动排序只在同一项目的顶层里挪，`move`）。
+/// - 在管、等你：就是 `CueStore.cueTally`（Cue 那一行的同一份），"全部"下列头的数与它相等；没绑没做完的任务的活会话在在管里各一张，
+///   等你每件一张，没落在任务上的（Cue 的一般提问、没绑任务的会话）也在。
 /// - 做完：今天做完的顶层任务（`CueStore.tasksDone`），最近的在前；更早做完的收在列末（`earlier`），没进归档，所以就地展开，不跳去归档页。
 /// 步骤不单列，卡片写进度；会话此刻在做什么看任务此刻干活的叶子（`Item.leaf`）。顶层的口径同 `CueStore.taskCounts`（`TaskTree` 的顶层）。
 nonisolated struct TaskBoard: Sendable, Equatable {
@@ -27,9 +28,32 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var task: Card
         var project: Project?
         var steps: TaskProgress?
-        /// 此刻干活的叶子（`CueStore.workingLeaf`）：会话状态与"开始"看它。有步骤、还没开始的待办为 nil（开始时由交给的规则定）。
+        /// 此刻干活的叶子（`CueStore.workingLeaf`）：会话状态与"开始"看它。有步骤、不在进行中的为 nil（还没开始的由交给的规则定）。
         var leaf: Card?
         var id: UUID { task.id }
+    }
+
+    /// 在管的一件（`CueTally.managing`）：在做的任务，或没绑没做完的任务的活会话。
+    enum Work: Identifiable, Sendable, Equatable {
+        case task(Item)
+        case session(PiSessionState)
+
+        var id: String {
+            switch self {
+            case .task(let item): item.id.uuidString
+            case .session(let session): session.sessionID
+            }
+        }
+
+        var item: Item? { if case .task(let item) = self { item } else { nil } }
+
+        /// 按项目筛时归哪个项目：任务的项目；会话的项目，没有项目的归默认项目（同 `PiSessionListItem.home`）。
+        var project: UUID {
+            switch self {
+            case .task(let item): item.task.projectID
+            case .session(let session): session.projectID ?? Project.defaultID
+            }
+        }
     }
 
     /// 一件等你：落在任务上的带那件任务。
@@ -48,7 +72,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     }
 
     var todo: [Item]
-    var managing: [Item]
+    var managing: [Work]
     var waiting: [Wait]
     var done: [Item]
     /// 更早做完的顶层任务，最近的在前。
@@ -71,7 +95,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         guard let project else { return self }
         let mine = { (item: Item) in item.task.projectID == project }
         return TaskBoard(
-            todo: todo.filter(mine), managing: managing.filter(mine), waiting: waiting.filter { $0.project == project },
+            todo: todo.filter(mine), managing: managing.filter { $0.project == project }, waiting: waiting.filter { $0.project == project },
             done: done.filter(mine), earlier: earlier.filter(mine))
     }
 
@@ -92,23 +116,27 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
-        func item(_ task: Card, started: Bool) throws -> Item {
+        func item(_ task: Card) throws -> Item {
             let progress = steps[task.id]
-            let leaf = progress == nil ? task : started ? try store.workingLeaf(of: task.id) : nil
+            let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil
             return Item(task: task, project: projects[task.projectID], steps: progress, leaf: leaf)
         }
         let open = TaskTree(try store.tasks(.inProgress, .todo).flatMap(\.tasks))
         let tally = try store.cueTally()
+        let managed = Set(tally.managing.compactMap { work in if case .task(let item) = work { item.id } else { nil } })
         let finished = tally.free(try store.tasksDone())
         let today = Calendar.current.startOfDay(for: now)
         let split = finished.firstIndex { ($0.completedAt ?? .distantPast) < today } ?? finished.endIndex
         return TaskBoard(
-            todo: try tally.free(open.roots.compactMap(open.task).filter { $0.status == .todo }).map { try item($0, started: false) },
-            managing: try tally.managing.map { try item($0, started: true) },
-            waiting: try tally.waiting.map { wait in
-                Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map { try item($0, started: true) })
+            todo: try tally.free(open.roots.compactMap(open.task).filter { !managed.contains($0.id) }).map(item),
+            managing: try tally.managing.map { work in
+                switch work {
+                case .task(let board): .task(try item(board.task))
+                case .session(let session): .session(session)
+                }
             },
-            done: try finished[..<split].map { try item($0, started: false) },
-            earlier: try finished[split...].map { try item($0, started: false) })
+            waiting: try tally.waiting.map { wait in Wait(wait: wait, item: try wait.task.flatMap { try store.card($0) }.map(item)) },
+            done: try finished[..<split].map(item),
+            earlier: try finished[split...].map(item))
     }
 }

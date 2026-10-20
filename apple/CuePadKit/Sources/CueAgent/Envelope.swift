@@ -56,10 +56,14 @@ public enum CueEnvelope {
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
 
-    let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
-    lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
-    lines += active.map { "- \(boardLine($0, now: input.now, left: input.left))" }
-    lines += sessions.map { "- \(sessionLine($0, now: input.now, left: input.left))" }
+    let active = input.board.active
+    lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
+    lines += active.map { work in
+      switch work {
+      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left))"
+      case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left))"
+      }
+    }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }

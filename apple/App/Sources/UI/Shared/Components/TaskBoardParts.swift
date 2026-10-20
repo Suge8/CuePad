@@ -80,7 +80,7 @@ struct BoardColumn: View {
     private var ids: [String] {
         switch column {
         case .todo: board.todo.map(\.id.uuidString)
-        case .managing: board.managing.map(\.id.uuidString)
+        case .managing: board.managing.map(\.id)
         case .waiting: board.waiting.map(\.id)
         case .done: board.done.map(\.id.uuidString) + (showsEarlier ? board.earlier.map(\.id.uuidString) : [])
         }
@@ -97,7 +97,12 @@ struct BoardColumn: View {
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .managing:
-            ForEach(board.managing) { BoardTaskCard(item: $0).draggable($0.id.uuidString) }
+            ForEach(board.managing) { work in
+                switch work {
+                case .task(let item): BoardTaskCard(item: item).draggable(item.id.uuidString)
+                case .session(let session): BoardSessionCard(session: session)
+                }
+            }
             if board.managing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(board.waiting) { wait in
@@ -205,7 +210,7 @@ struct BoardColumn: View {
 extension TaskBoard {
     /// 看板上的这件任务（在哪一列都算）。
     func item(_ id: UUID) -> Item? {
-        todo.first { $0.id == id } ?? managing.first { $0.id == id } ?? waiting.lazy.compactMap(\.item).first { $0.id == id }
+        todo.first { $0.id == id } ?? managing.lazy.compactMap(\.item).first { $0.id == id } ?? waiting.lazy.compactMap(\.item).first { $0.id == id }
             ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
     }
 }
@@ -393,10 +398,6 @@ struct BoardWaitCard: View {
     let wait: TaskBoard.Wait
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
-    #endif
     /// 正在答的那条（写成后它从等你里消失，写不成就清掉）。
     @State private var ending = false
 
@@ -441,19 +442,7 @@ struct BoardWaitCard: View {
             .buttonStyle(PressStyle(.card))
             .accessibilityHint("打开任务")
         } else if case .session(let session, _) = wait.wait {
-            Button { open(session) } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Image(.session).foregroundStyle(palette.ink2)
-                        Text(session.title).font(TaskMetrics.lineFont.monospaced()).foregroundStyle(palette.ink).lineLimit(1)
-                    }
-                    Text(Dotted("会话", "没绑任务")).font(TaskMetrics.caption).foregroundStyle(palette.ink3)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle(.card))
-            .accessibilityHint("打开会话")
+            BoardSessionHeader(session: session)
         }
     }
 
@@ -477,8 +466,56 @@ struct BoardWaitCard: View {
     }
 
     private func open(_ task: Card) { workspace.openTask(task) }
+}
 
-    private func open(_ session: PiSessionState) {
+/// 在管列里一个没绑没做完的任务的活会话（终端里开的、"新会话"、只有已完成的事绑着的）：会话名与"没绑任务"，下面是它此刻的样子（`PiShown`）与进展（`PiProgress`）。
+private struct BoardSessionCard: View {
+    let session: PiSessionState
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            BoardSessionHeader(session: session)
+            HStack(spacing: 6) {
+                Text(workspace.shown(session, delivery: nil).label)
+                if let line = PiProgress.line(of: session) { Text(line).foregroundStyle(palette.ink3).lineLimit(1) }
+            }
+            .font(TaskMetrics.caption).foregroundStyle(palette.ink2)
+        }
+        .padding(TaskMetrics.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: TaskMetrics.cardRadius)
+    }
+}
+
+/// 看板上没绑任务的会话的抬头（在管、等你两列）：会话名与"会话 · 没绑任务"，点了打开会话。
+private struct BoardSessionHeader: View {
+    let session: PiSessionState
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
+    #endif
+
+    var body: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(.session).foregroundStyle(palette.ink2)
+                    Text(session.title).font(TaskMetrics.lineFont.monospaced()).foregroundStyle(palette.ink).lineLimit(1)
+                }
+                Text(Dotted("会话", "没绑任务")).font(TaskMetrics.caption).foregroundStyle(palette.ink3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.card))
+        .accessibilityHint("打开会话")
+    }
+
+    private func open() {
         #if os(macOS)
         workspace.show(.session(session.sessionID))
         #else
@@ -589,7 +626,7 @@ private struct BoardReading: ViewModifier {
 extension TaskBoard {
     /// 看板上有事的项目（筛选胶囊列它们），按项目目录的顺序。
     func projects(in catalog: ProjectCatalog?) -> [Project] {
-        let used = Set((todo + managing + done + earlier).compactMap(\.task.projectID) + waiting.compactMap(\.project))
+        let used = Set((todo + done + earlier).map(\.task.projectID) + managing.map(\.project) + waiting.compactMap(\.project))
         return catalog?.projects.filter { used.contains($0.id) } ?? []
     }
 }

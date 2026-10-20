@@ -250,12 +250,11 @@ extension CueStore {
   }
 
   /// 进行中的任务（开始过、没完成，`Card.startedAt`），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
-  /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：步骤跟着上级，上级也没完成时不单列）。
-  public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
+  public func startedTasks() throws -> [Card] {
     try db.query(
       """
       SELECT \(Card.selection(as: "t")) AS began \(Self.taskWithParent)
-      WHERE \(visibleTask) AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "") AND began IS NOT NULL
+      WHERE \(visibleTask) AND t.completedAt IS NULL AND began IS NOT NULL
       ORDER BY began DESC, \(Self.taskProjectOrder), t.sortKey, t.id
       """
     ) { Card(row: $0) }
