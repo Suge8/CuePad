@@ -32,7 +32,7 @@ apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去：
 
 - 和交互预算比的 `xc.sh perf mac`：前台才有玻璃合成与动画，后台量的帧与掉帧偏乐观。
-- `-CuePadClick`、`-CuePadRightClick` 截系统菜单：后台 App 的菜单画成停用的灰。
+- `-CuePadClick`、`-CuePadRightClick` 截系统菜单、点一串录任务气泡的开合与翻页：后台 App 的菜单画成停用的灰，没激活的窗口里点一下只是激活。
 - `-CuePadBench chatscroll` 的 process、hid 驱动：经窗口服务器的真实滚轮与指针。
 
 只在用户说过这段时间不用电脑、或明确要这几样数字时给；用户在用电脑时用后台的数（指令数照样能前后对比）。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。新加的自动化要占前台，也只经 `DebugForeground`，并补进上面这张单子。

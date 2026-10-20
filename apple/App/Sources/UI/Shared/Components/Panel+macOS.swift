@@ -71,8 +71,7 @@ final class PanelHost {
             if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
         } else if case .bubble = entry.style {
             // 气泡在右上角的面板之上（从面板里的任务点开的也盖在它上面），外面那一下先关它。
-            // 焦点交出去、收起时不交还（同点在别处）：开着时打字不落进下面的输入栏；交还的话换一条时输入栏要先展开再收起，大库里一次多约 2000M 指令
-            window?.makeFirstResponder(nil)
+            // 不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
             withAnimation(Motion.snappy) { shown.append(entry) }
         } else {
             withAnimation(Motion.snappy) { shown.insert(entry, at: 0) }
@@ -312,7 +311,9 @@ private struct PanelLayer: View {
         .ignoresSafeArea()
     }
 
-    private static let bubbleInsets = EdgeInsets(top: 52, leading: 12, bottom: 12, trailing: 12)
+    /// 顶上让出工具栏那一条。
+    private static let bubbleInsets = EdgeInsets(
+        top: 52, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
 
     private func area(_ id: UUID) -> some View {
         AreaMark { [host] in host.bounds[id, default: Bounds()].panel.value = $0 }
