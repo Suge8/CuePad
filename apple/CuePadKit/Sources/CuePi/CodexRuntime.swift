@@ -65,6 +65,8 @@ public final class CodexRuntime: AgentRuntime {
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     private var models: [CodexModel]?
     private var stopped = true
+    /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
+    private var scope = PiHistoryScope.sessions([])
 
     public init(
         bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
@@ -122,7 +124,12 @@ public final class CodexRuntime: AgentRuntime {
             guard let self, !self.stopped else { return call.finish() }
             self.hook(call)
         }
-        Task { await discover() }
+    }
+
+    public func follow(_ scope: PiHistoryScope) {
+        self.scope = scope
+        for session in tracked.values where hosted[session.pid] == nil && !scope.covers(sessionID: session.threadID) { detach(session.id) }
+        if scope != .sessions([]) { Task { await discover() } }
     }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
@@ -251,7 +258,11 @@ public final class CodexRuntime: AgentRuntime {
                 // Codex 自己起的临时线程（起标题等）不是会话
                 guard let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
                       thread["ephemeral"]?.bool != true else { continue }
-                if thread["parentThreadId"]?.string != nil { children.append(thread) } else { try await adopt(thread, on: rpc) }
+                if thread["parentThreadId"]?.string != nil {
+                    children.append(thread)
+                } else if scope.covers(sessionID: threadID) {
+                    try await adopt(thread, on: rpc)
+                }
             }
             for child in children {
                 guard let id = child["id"]?.string, threads["\(id).\(rpc.pid)"] == nil else { continue }
@@ -408,6 +419,7 @@ public final class CodexRuntime: AgentRuntime {
             return detach(id)
         }
         let agent = input["agent_id"]?.string
+        guard tracked[id] != nil || scope.covers(sessionID: threadID) else { return call.finish() }
         let session = tracked[id] ?? adoptFromHook(threadID, pid: pid, input, transcript: agent == nil)
         let tool = input["tool_name"]?.string ?? ""
         let now = Date.now
