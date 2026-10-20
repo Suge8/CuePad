@@ -14,6 +14,7 @@ if [ "${1:-}" = --staged ]; then
   cd "$staged"
 fi
 cd apple
+command -v rg >/dev/null || { echo "lint.sh 要 ripgrep：brew install ripgrep" >&2; exit 1; }
 
 status=0
 # forbid <原因与替代> <正则（PCRE2）> [白名单路径…]

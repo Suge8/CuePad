@@ -16,7 +16,7 @@
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限与任务时限见 _lock.sh；模拟器池见 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
-# 本机构建一律 ad-hoc 签名（不联网、不要账号）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
+# 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（docs/verify.md「同步测量」）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
 # Kit 的测试因此也走 xcodebuild：swift test（Swift 6.4）没有测试时限的参数，Swift Testing 的 .timeLimit 只取消测试任务、要等它自己结束，
 # 不响应取消的等待会让整个测试进程挂到任务时限。xcodebuild 只把 TEST_RUNNER_ 开头的环境变量交给测试进程（去掉前缀），测试进程的工作目录是 /private/tmp。
@@ -67,9 +67,9 @@ fi
 # perf 量的是 Release（带 DEBUG 条件，只为留下测量代码与调试场景）：数要和用户拿到的构建同一档优化
 if [ "$cmd" = perf ] || [ "$cmd" = build-perf ]; then
   DERIVED="$APPLE_DIR/.derived-perf"; configuration=Release
-  # 关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
+  # Release 配置在工程里指定了发布证书，换回 ad-hoc；关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
-  build_settings=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' ENABLE_HARDENED_RUNTIME=NO)
+  build_settings=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' CODE_SIGN_IDENTITY=- ENABLE_HARDENED_RUNTIME=NO)
 else
   DERIVED="$APPLE_DIR/.derived"; configuration=Debug; build_settings=()
 fi
@@ -84,12 +84,10 @@ case "$platform" in
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 
-# 本机 ad-hoc 签名：工程默认是团队 + 自动签名（给发布用），iCloud 这类受限能力在 ad-hoc 下无法启动，
-# 所以覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。
-local_build=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements)
-# 本机的 Mac 构建在包里声明成 UIElement：谁起的（测试宿主、截图、测量、会话自己写的脚本）、怎么结束的，都不进程序坞、不占菜单栏。
+# 这里的 Mac 构建在包里声明成 UIElement：谁起的（测试宿主、截图、测量、会话自己写的脚本）、怎么结束的，都不进程序坞、不占菜单栏。
 # 写在包里而不按启动时的环境切换：脚本直接起的实例不带那些环境变量，进了程序坞的图标退出后又可能撤不掉（曾攒下上百个）。
-# 正式版由 release-mac.sh 构建，不经这里
+# 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
+local_build=()
 if [ "$platform" = mac ]; then local_build+=(INFOPLIST_KEY_LSUIElement=YES); fi
 # 系统 SDK 的预编译模块（约 166 个，冷编前 10 秒都在生成它们）所有检出共用一份：Xcode 默认就放在各工程共用的 DerivedData 根下，
 # 这里的产物目录按检出分开，不指定就每个新检出从头编一遍。实测换检出路径照样命中，冷编约快 17%。删 .derived 不会清掉它
@@ -100,8 +98,8 @@ shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPreco
 # "error: the following command failed with exit code 0 but produced no further output"——不是失败，滤掉这一行免得误读。
 xcb() {
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
-    -destination "$destination" -derivedDataPath "$DERIVED" ${asc_auth[@]+"${asc_auth[@]}"} "$@" \
-    "${local_build[@]}" "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
+    -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
+    ${local_build[@]+"${local_build[@]}"} "${shared_modules[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
 

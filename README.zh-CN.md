@@ -50,13 +50,18 @@ Mac 版见 [GitHub Releases](https://github.com/Suge8/CuePad/releases/latest)（
 
 ## 从源码构建
 
-需要 Xcode 27。本机构建用 ad-hoc 签名，不需要开发者账号。
+需要 macOS 26 与 Xcode 27，不需要开发者账号，也不用配签名。
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
+open CuePad/apple/CuePad.xcodeproj    # 运行目标选 My Mac，按 ⌘R
+```
+
+自己编的版本用 ad-hoc 签名，资料库单独放在 `~/Library/Application Support/CuePad Dev`，和正式版的互不相干。命令行（`check` 要先 `brew install ripgrep`）：
+
+```bash
 cd CuePad
-apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
-apple/scripts/xc.sh test kit     # 共用包的测试
+apple/scripts/xc.sh build mac    # 还有 build ios、test mac、test kit、check
 ```
 
 ## 参与贡献
