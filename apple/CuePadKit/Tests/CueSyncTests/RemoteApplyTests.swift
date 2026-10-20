@@ -51,7 +51,7 @@ import Testing
     try await fetched(project, card)
 
     #expect(try await values.next() == ["from other device"])
-    #expect(try await store.projects().map(\.name) == ["Remote", "默认"])  // 没有项目的卡（更早的版本写的）收进默认项目
+    #expect(Set(try await store.projects().map(\.name)) == ["Remote", "默认"])  // 没有项目的卡（更早的版本写的）收进默认项目
     #expect(try await store.search("other device").cards.count == 1)  // 搜索索引跟随
     let delta = try await rig.reconcileDelta()
     #expect(delta.saves.isEmpty && delta.deletes.isEmpty)  // 刚收到的不会被当成本机改动推回去

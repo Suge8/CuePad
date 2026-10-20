@@ -48,7 +48,8 @@ struct HistoryRulesTests {
                 extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
             let mac = MacDependencies(
                 pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
-                hostID: TestApp.hostID, wakeNotifications: NotificationCenter(),
+                hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
+                wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),

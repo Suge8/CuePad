@@ -86,7 +86,7 @@ struct ComposerTests {
         #expect(CueFormat.imageHashes(in: request.content).count == 1 && !request.content.contains("\n"))
     }
 
-    @Test func 回答存为卡片_进会话所属项目_没有项目进未分类_提示落点并可点过去() async throws {
+    @Test func 回答存为卡片_进会话所属项目_没有项目进默认项目_提示落点并可点过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services)
 
@@ -99,7 +99,7 @@ struct ComposerTests {
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])
-        #expect(workspace.notice?.text == "已记到 未分类" && workspace.notice?.link == .unfiled)
+        #expect(workspace.notice?.text == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
     }
 }
 #endif

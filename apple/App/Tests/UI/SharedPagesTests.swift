@@ -47,7 +47,7 @@ struct SharedPagesTests {
         #expect(try await store.cards(in: project.id).isEmpty)
     }
 
-    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到未分类。
+    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到默认项目。
     @Test func 回收站恢复后提示落点_点它过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "项目里的一条")
@@ -65,8 +65,8 @@ struct SharedPagesTests {
         }
         let inProject = try await restored(try #require(summary.cards.first { $0.id == card.id }))
         #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
-        let unfiled = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
-        #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .unfiled)
+        let home = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
+        #expect(home?.text.visible == "已恢复到 默认" && home?.link == .project(Project.defaultID))
 
         try await store.trashProject(project.id)
         let whole = try await restored(try #require(try await TrashSummary.read(from: store).projects.first))

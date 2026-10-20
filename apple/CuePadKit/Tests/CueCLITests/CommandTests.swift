@@ -195,7 +195,7 @@ import Testing
     #expect(child.string("parentId") == parent.id.uuidString.lowercased())
     #expect(child.string("projectId") == alpha.id.uuidString.lowercased())
 
-    let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--global")
+    let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--project", "Alpha")
     #expect(conflicting.code == 2)
   }
 

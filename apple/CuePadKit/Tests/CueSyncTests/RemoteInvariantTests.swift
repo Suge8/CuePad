@@ -17,7 +17,7 @@ import Testing
   @Test func cardsArrivingBeforeTheirProjectAreKeptAndAppearOnceTheProjectArrives() async throws {
     let projectID = UUID()
     try await rig.coordinator.pulled([remoteRecord(.cards, cardFields(project: projectID, body: "early", modifiedAt: 5_000))], [])
-    #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])  // 原样保存，没有被改成未分类
+    #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])  // 原样保存，没有被挪进默认项目
     #expect(try await store.cards(in: Project.defaultID).isEmpty)
 
     try await rig.coordinator.pulled([remoteRecord(.projects, id: projectID, projectFields(name: "late", modifiedAt: 5_000))], [])

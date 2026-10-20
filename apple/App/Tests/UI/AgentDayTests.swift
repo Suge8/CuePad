@@ -164,7 +164,7 @@ struct AgentDayTests {
         let all = try await PiSessionList.read(text: "", history: .paged(PiSessionList.pageSize), at: .always(), from: store)
         #expect(all.now.map(\.state.sessionID) == ["ask", "broken", "busy", "idle"])
         #expect(all.ended.map(\.state.sessionID) == ["done"])
-        let inTable = try await PiSessionList.read(text: "", project: .project(table.id), history: .paged(PiSessionList.pageSize), at: .always(), from: store)
+        let inTable = try await PiSessionList.read(text: "", project: table.id, history: .paged(PiSessionList.pageSize), at: .always(), from: store)
         #expect(inTable.now.map(\.state.sessionID) == ["busy"])
         let found = try await PiSessionList.read(text: "bro", history: .paged(PiSessionList.pageSize), at: .always(), from: store)
         #expect(found.now.map(\.state.sessionID) == ["broken"])

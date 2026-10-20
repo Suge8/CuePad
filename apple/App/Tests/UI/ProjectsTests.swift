@@ -1,5 +1,6 @@
 import CueStore
 import Foundation
+import SwiftUI
 import Testing
 @testable import CuePad
 
@@ -15,6 +16,22 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
+    /// 新库第一次打开：没有"还没有项目"的空页，首屏就是默认项目（名字"默认"、房子图标、灰色）；只记下（⌘⇧N 同一个）不选项目，灵感进它。
+    @Test func 新库首屏是默认项目_只记下的灵感进它() async throws {
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { catalog.cancel() }
+        try await eventually("目录里只有默认项目") { workspace.catalog?.projects.map(\.id) == [Project.defaultID] }
+        let home = try #require(workspace.catalog?.project(Project.defaultID))
+        #expect(home.name == "默认" && home.icon == "house" && home.color == "#8A8A84")
+        #expect(workspace.page == .project(Project.defaultID))
+
+        workspace.cue.draft = ComposerDraft(text: "周末读完第三章")
+        await workspace.note(from: Bindable(workspace.cue).draft)?.value
+        #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["周末读完第三章"])
+        #expect(workspace.notice?.text == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
+    }
+
     @Test func 启动落在哪个项目_跟着侧栏顺序_数字键按当下顺序取_失效时回落() async throws {
         // 保存的项目不存在：首屏是侧栏第一个有效项目（置顶的在前），并清掉失效的设置
         _ = try await store.createProject(name: "A", color: "#000000")
@@ -24,7 +41,7 @@ struct ProjectsTests {
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
         defer { catalog.cancel() }
-        try await eventually("workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil") { workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil }
+        try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
         #expect(workspace.page == .project(pinned.id))
 
         // 没打开过项目：项目顺序变了首屏跟着变、不记成"上次打开"，用户切换才记下
@@ -48,22 +65,23 @@ struct ProjectsTests {
         fresh.showProject(number: 9)
         #expect(fresh.page == .project(third))
 
-        // 当前项目进了回收站：回落到未分类
+        // 当前项目进了回收站：回落到默认项目（它删不掉）
         services.settings.currentProject = third
-        for project in try await store.projects() { try await store.trashProject(project.id) }
+        for project in try await store.projects() where !project.isDefault { try await store.trashProject(project.id) }
+        await #expect(throws: CueStoreError.defaultProjectUndeletable) { try await store.trashProject(Project.defaultID) }
         let only = Workspace(services: services)
         await only.reconcileCurrentProject()
-        #expect(only.page == .unfiled && services.settings.currentProject == nil)
+        #expect(only.page == .project(Project.defaultID) && services.settings.currentProject == nil)
     }
 
-    @Test func 往失效项目存东西_落到未分类或全局_写入时被删则纠正并提示() async throws {
+    @Test func 往失效项目存东西_落到默认项目_写入时被删则纠正并提示() async throws {
         let trashed = try await store.createProject(name: "A", color: "#000000")
         try await store.trashProject(trashed.id)
         let workspace = Workspace(services: services)
 
-        for target in [UUID(), trashed.id] { #expect(try await workspace.createCard(body: "想法", in: target).projectID == nil) }
+        for target in [UUID(), trashed.id] { #expect(try await workspace.createCard(body: "想法", in: target).projectID == Project.defaultID) }
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["想法", "想法"])
-        #expect(try await workspace.createTask("跟进", in: UUID()).projectID == nil)
+        #expect(try await workspace.createTask("跟进", in: UUID()).projectID == Project.defaultID)
         let live = try await store.createProject(name: "B", color: "#000000")
         #expect(try await workspace.createCard(body: "想法", in: live.id).projectID == live.id)
 
@@ -71,13 +89,13 @@ struct ProjectsTests {
         services.settings.currentProject = live.id
         let target = workspace.currentProject
         try await store.trashProject(live.id)
-        let card = try await workspace.createCard(body: "晚了一步", in: target)
-        #expect(card.projectID == nil && services.settings.currentProject == nil && workspace.notice?.isError == true)
+        let card = try await workspace.createCard(body: "晚了一步", in: try #require(target))
+        #expect(card.projectID == Project.defaultID && services.settings.currentProject == nil && workspace.notice?.isError == true)
         workspace.notice = nil
         let doomed = try await store.createProject(name: "C", color: "#000000")
         try await store.trashProject(doomed.id)
         let task = try await workspace.createTask("跟进", in: doomed.id)
-        #expect(task.projectID == nil && workspace.notice?.isError == true)
+        #expect(task.projectID == Project.defaultID && workspace.notice?.isError == true)
     }
 }
 #endif
@@ -101,7 +119,7 @@ struct ProjectsNavigationTests {
         phone.select(.shelf)  // 侧栏的"全部项目"
         phone.push(.project(project.id))  // 书架上的项目卡
         phone.push(.tasks)  // 项目页的"已完成 N"
-        #expect(try await workspace.createTask("补重连用例", in: phone.currentProject).projectID == project.id)
+        #expect(try await workspace.createTask("补重连用例", in: try #require(phone.currentProject)).projectID == project.id)
         phone.select(.tasks)  // 侧栏的"任务"：不在哪个项目里
         #expect(phone.currentProject == nil)
         phone.open(DeepLink.project(project.id))
