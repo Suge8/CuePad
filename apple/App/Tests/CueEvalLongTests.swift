@@ -24,21 +24,15 @@ struct CueEvalLongTests {
     }
 }
 
-/// 一段值班的剧本与判定。
+/// 剧本的骨架：叫醒、接手 Cue 开出的会话、读每一步里的工具调用与回复。长程（`Duty`）与多日（`CueEvalDaysTests`）的剧本都从它派生。
 @MainActor
-private final class Duty {
-    static let expect = """
-        值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
-        他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
-        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），证书查完时照他要的说是哪家签发的
-        """
-
-    private let eval: CueEval
-    private var rig: CueHostTests.Rig { eval.rig }
-    private var sessions: [ScriptedSession] = []
-    private var steps: [Step] = []
+class EvalScript {
+    let eval: CueEval
+    var rig: CueHostTests.Rig { eval.rig }
+    var sessions: [ScriptedSession] = []
+    var steps: [Step] = []
     /// 剧本没按预想走的地方（Cue 没开工评测替它开、没叫醒）
-    private var notes: [String] = []
+    var notes: [String] = []
 
     /// 剧本的一步：叫醒的事、这次醒来的时段（没叫醒为 nil）、事出在哪个会话
     struct Step {
@@ -48,6 +42,173 @@ private final class Duty {
     }
 
     init(_ eval: CueEval) { self.eval = eval }
+
+    // MARK: 剧本的动作
+
+    /// 他对 Cue 说一句，等 Cue 做完这次醒来引起的。
+    @discardableResult
+    func say(_ label: String, _ text: String) async throws -> Step {
+        try await step(label, on: nil) { try await self.rig.say(text) }
+    }
+
+    /// 会话有动静，等 Cue 做完这次醒来引起的。
+    @discardableResult
+    func event(_ label: String, on session: ScriptedSession, _ act: () async throws -> Void) async throws -> Step {
+        try await step(label, on: session, act)
+    }
+
+    func step(_ label: String, on session: ScriptedSession?, _ act: () async throws -> Void) async throws -> Step {
+        let window = try await eval.settle(act)
+        if window == nil { notes.append("「\(label)」没叫醒 Cue") }
+        let step = Step(label: label, window: window, session: session)
+        steps.append(step)
+        return step
+    }
+
+    /// 他交代的事开出的会话：Cue 开工时执行器开出假扩展（new-<令牌>），开场白的发送记录把任务绑上它。
+    /// Cue 这一步没开工（先对齐、没建）就由评测替它开，记一笔：后面的剧本要有这个会话。
+    func adopt(_ topic: Regex<Substring>, after step: Step, title: String, in projectName: String) async throws -> ScriptedSession {
+        let started = calls(step, "task", ["start"]).contains { !$0.call.failed }
+        var found: ScriptedSession?
+        try? await eventually("Cue 开出的会话绑上任务", timeout: started ? .seconds(60) : .zero) {
+            found = try await self.opened(topic)
+            return found != nil
+        }
+        if let found {
+            sessions.append(found)
+            return found
+        }
+        notes.append("「\(title)」Cue 没开工，评测替它开了会话")
+        let project = try #require(try await rig.store.projects().first { $0.name == projectName })
+        var card = try await rig.store.cueBoard().tasks.map(\.task).last { task in step.window.map { $0.contains(task.createdAt) } == true && task.body.contains(topic) }
+        if card == nil { card = try await rig.store.createTask("\(title)\n照他的话做，做完把证据发到手机。", in: project.id) }
+        let task = try #require(card)
+        let folder = try #require(try await rig.store.directory(of: project.id))
+        let id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
+        try await rig.store.recordSend(task.body, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
+        let fake = try await rig.app.host.connect(id, cwd: folder, busy: true)
+        fake.sendInfo(["name": task.heading])
+        let session = ScriptedSession(session: fake, task: task, history: [PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery)])
+        sessions.append(session)
+        return session
+    }
+
+    /// 他在一件事上接着交代：Cue 可能对原来的会话说，也可能（那件已做完、会话已结束）另建任务开新会话。开了新会话就接着用新的。
+    func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
+        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
+        var found: ScriptedSession?
+        try? await eventually("Cue 开出的会话绑上任务", timeout: .seconds(60)) {
+            found = try await self.opened(topic)
+            return found != nil
+        }
+        guard let found else { return session }
+        sessions.append(found)
+        return found
+    }
+
+    func opened(_ topic: Regex<Substring>) async throws -> ScriptedSession? {
+        let extensions = rig.app.host.extensions
+        for (id, fake) in extensions where id.hasPrefix("new-") && !sessions.contains(where: { $0.id == id }) {
+            guard let leaf = try await rig.store.tasks(boundTo: id).first else { continue }
+            let top = leaf.parent ?? leaf.task
+            guard "\(top.body)\n\(leaf.task.body)".contains(topic) else { continue }
+            fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
+            return ScriptedSession(session: fake, task: top)
+        }
+        return nil
+    }
+
+    // MARK: 读这几步里的事
+
+    func rounds(_ step: Step) -> [CueRound] {
+        guard let window = step.window else { return [] }
+        return eval.rounds.filter { window.contains($0.startedAt) }
+    }
+
+    func rounds(after step: Step) -> [CueRound] {
+        guard let from = step.window?.lowerBound else { return [] }
+        return eval.rounds.filter { $0.startedAt >= from }
+    }
+
+    func calls(_ step: Step, _ tool: String, _ actions: Set<String> = []) -> [(call: CueToolCall, args: [String: Any])] {
+        CueEval.calls(in: rounds(step), tool, actions)
+    }
+
+    /// 这几步里成功对 `session` 说的话（say 的 text）
+    func says(_ steps: [Step], to session: ScriptedSession) -> [String] {
+        steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
+    }
+
+    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
+    /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
+    func recalled(_ label: String, _ step: Step, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool) async throws -> Check {
+        // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
+        let answers = try await replies(step)
+        if answers.contains(where: correct) { return Check(label, true) }
+        if answers.contains(where: { $0.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信|没有.{0,6}记录/) }) {
+            return Check(label + "（说不知道）", false)
+        }
+        let made = fabricated.map { answers.contains(where: $0) } ?? false
+        return Check(label + (made ? "（答错，编造）" : "（答错）"), false)
+    }
+
+    /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
+    func messages(_ step: Step) async throws -> [String] {
+        guard let window = step.window else { return [] }
+        return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)
+    }
+
+    /// 这一步里回他的话（Cue 回复他、不关联任务、不带选项的）
+    func replies(_ step: Step) async throws -> [String] {
+        guard let window = step.window else { return [] }
+        return try await eval.said(since: window.lowerBound)
+            .filter { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
+    }
+
+    /// 回答他的那句（这一步里）
+    func reply(_ step: Step) async throws -> String? {
+        guard let window = step.window else { return nil }
+        return try await eval.said(since: window.lowerBound).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }?.text
+    }
+
+    /// 工具参数里的 task（id 前缀或标题）或 session（id 前缀或会话名）指的是哪个会话
+    func target(_ args: [String: Any]) -> ScriptedSession? {
+        if let ref = (args["task"] as? String)?.lowercased(), !ref.isEmpty {
+            return sessions.first { $0.cards.contains { $0.id.uuidString.lowercased().hasPrefix(ref) || $0.heading.lowercased() == ref } }
+        }
+        if let ref = (args["session"] as? String)?.lowercased(), !ref.isEmpty {
+            return sessions.first { $0.id.lowercased().hasPrefix(ref) || $0.title.lowercased() == ref }
+        }
+        return nil
+    }
+
+    static func texts(_ args: [String: Any]) -> String {
+        (["title", "body", "text"].compactMap { args[$0] as? String } + (args["steps"] as? [String] ?? [])).joined(separator: "\n")
+    }
+
+    /// 两句话几乎一样：去掉空白与标点后，相邻两字的集合重合八成以上
+    static func similar(_ a: String, _ b: String) -> Bool {
+        func pairs(_ text: String) -> Set<String> {
+            let characters = Array(text.filter { !$0.isWhitespace && !$0.isPunctuation })
+            return Set(zip(characters, characters.dropFirst()).map { "\($0)\($1)" })
+        }
+        let x = pairs(a), y = pairs(b)
+        guard !x.isEmpty, !y.isEmpty else { return a == b }
+        return Double(x.intersection(y).count) / Double(x.union(y).count) >= 0.8
+    }
+
+}
+
+/// 一段值班的剧本与判定。
+@MainActor
+final class Duty: EvalScript {
+    static let expect = """
+        值一段班（三十来次醒来）：中后段记得他口头交代的（这件做完后升版本号记 CHANGELOG、这周不跑 e2e）、早先会话查清的事实（发信走 Postmark）、\
+        他否掉的方案（设置页不分标签页）；换新前后在做的事不重建、不重复说；\
+        换新之后答得出他顺口说的行程、已完成的调研里顺带的细节（退信里邮箱不存在的 13 封），证书查完时照他要的说是哪家签发的
+        """
+
+
 
     func play() async throws -> [Check] {
         do {
@@ -225,155 +386,6 @@ private final class Duty {
         ]
     }
 
-    // MARK: 剧本的动作
-
-    /// 他对 Cue 说一句，等 Cue 做完这次醒来引起的。
-    @discardableResult
-    private func say(_ label: String, _ text: String) async throws -> Step {
-        try await step(label, on: nil) { try await self.rig.say(text) }
-    }
-
-    /// 会话有动静，等 Cue 做完这次醒来引起的。
-    @discardableResult
-    private func event(_ label: String, on session: ScriptedSession, _ act: () async throws -> Void) async throws -> Step {
-        try await step(label, on: session, act)
-    }
-
-    private func step(_ label: String, on session: ScriptedSession?, _ act: () async throws -> Void) async throws -> Step {
-        let window = try await eval.settle(act)
-        if window == nil { notes.append("「\(label)」没叫醒 Cue") }
-        let step = Step(label: label, window: window, session: session)
-        steps.append(step)
-        return step
-    }
-
-    /// 他交代的事开出的会话：Cue 开工时执行器开出假扩展（new-<令牌>），开场白的发送记录把任务绑上它。
-    /// Cue 这一步没开工（先对齐、没建）就由评测替它开，记一笔：后面的剧本要有这个会话。
-    private func adopt(_ topic: Regex<Substring>, after step: Step, title: String, in projectName: String) async throws -> ScriptedSession {
-        let started = calls(step, "task", ["start"]).contains { !$0.call.failed }
-        var found: ScriptedSession?
-        try? await eventually("Cue 开出的会话绑上任务", timeout: started ? .seconds(60) : .zero) {
-            found = try await self.opened(topic)
-            return found != nil
-        }
-        if let found {
-            sessions.append(found)
-            return found
-        }
-        notes.append("「\(title)」Cue 没开工，评测替它开了会话")
-        let project = try #require(try await rig.store.projects().first { $0.name == projectName })
-        var card = try await rig.store.cueBoard().tasks.map(\.task).last { task in step.window.map { $0.contains(task.createdAt) } == true && task.body.contains(topic) }
-        if card == nil { card = try await rig.store.createTask("\(title)\n照他的话做，做完把证据发到手机。", in: project.id) }
-        let task = try #require(card)
-        let folder = try #require(try await rig.store.directory(of: project.id))
-        let id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
-        try await rig.store.recordSend(task.body, to: SendTarget(kind: .piSession, name: task.heading, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        let fake = try await rig.app.host.connect(id, cwd: folder, busy: true)
-        fake.sendInfo(["name": task.heading])
-        let session = ScriptedSession(session: fake, task: task, opening: PiChatMessage(sessionID: id, entryID: "e1", seq: 1, role: .user, text: task.body, at: .now, deliveryID: delivery))
-        sessions.append(session)
-        return session
-    }
-
-    /// 他在一件事上接着交代：Cue 可能对原来的会话说，也可能（那件已做完、会话已结束）另建任务开新会话。开了新会话就接着用新的。
-    private func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
-        guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else { return session }
-        var found: ScriptedSession?
-        try? await eventually("Cue 开出的会话绑上任务", timeout: .seconds(60)) {
-            found = try await self.opened(topic)
-            return found != nil
-        }
-        guard let found else { return session }
-        sessions.append(found)
-        return found
-    }
-
-    private func opened(_ topic: Regex<Substring>) async throws -> ScriptedSession? {
-        let extensions = rig.app.host.extensions
-        for (id, fake) in extensions where id.hasPrefix("new-") && !sessions.contains(where: { $0.id == id }) {
-            guard let leaf = try await rig.store.tasks(boundTo: id).first else { continue }
-            let top = leaf.parent ?? leaf.task
-            guard "\(top.body)\n\(leaf.task.body)".contains(topic) else { continue }
-            fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
-            return ScriptedSession(session: fake, task: top, opening: nil)
-        }
-        return nil
-    }
-
-    // MARK: 读这几步里的事
-
-    private func rounds(_ step: Step) -> [CueRound] {
-        guard let window = step.window else { return [] }
-        return eval.rounds.filter { window.contains($0.startedAt) }
-    }
-
-    private func rounds(after step: Step) -> [CueRound] {
-        guard let from = step.window?.lowerBound else { return [] }
-        return eval.rounds.filter { $0.startedAt >= from }
-    }
-
-    private func calls(_ step: Step, _ tool: String, _ actions: Set<String> = []) -> [(call: CueToolCall, args: [String: Any])] {
-        CueEval.calls(in: rounds(step), tool, actions)
-    }
-
-    /// 这几步里成功对 `session` 说的话（say 的 text）
-    private func says(_ steps: [Step], to session: ScriptedSession) -> [String] {
-        steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
-    }
-
-    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
-    private func recalled(_ label: String, _ step: Step, _ correct: (String) -> Bool) async throws -> Check {
-        // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
-        let answers = try await replies(step)
-        if answers.contains(where: correct) { return Check(label, true) }
-        return Check(label + (answers.contains { $0.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信/) } ? "（说不知道）" : "（答错）"), false)
-    }
-
-    /// 这一步里 Cue 写的消息（回复、tell、动态、完成的结果）
-    private func messages(_ step: Step) async throws -> [String] {
-        guard let window = step.window else { return [] }
-        return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)
-    }
-
-    /// 这一步里回他的话（Cue 回复他、不关联任务、不带选项的）
-    private func replies(_ step: Step) async throws -> [String] {
-        guard let window = step.window else { return [] }
-        return try await eval.said(since: window.lowerBound)
-            .filter { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
-    }
-
-    /// 回答他的那句（这一步里）
-    private func reply(_ step: Step) async throws -> String? {
-        guard let window = step.window else { return nil }
-        return try await eval.said(since: window.lowerBound).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }?.text
-    }
-
-    /// 工具参数里的 task（id 前缀或标题）或 session（id 前缀或会话名）指的是哪个会话
-    private func target(_ args: [String: Any]) -> ScriptedSession? {
-        if let ref = (args["task"] as? String)?.lowercased(), !ref.isEmpty {
-            return sessions.first { $0.cards.contains { $0.id.uuidString.lowercased().hasPrefix(ref) || $0.heading.lowercased() == ref } }
-        }
-        if let ref = (args["session"] as? String)?.lowercased(), !ref.isEmpty {
-            return sessions.first { $0.id.lowercased().hasPrefix(ref) || $0.title.lowercased() == ref }
-        }
-        return nil
-    }
-
-    private static func texts(_ args: [String: Any]) -> String {
-        (["title", "body", "text"].compactMap { args[$0] as? String } + (args["steps"] as? [String] ?? [])).joined(separator: "\n")
-    }
-
-    /// 两句话几乎一样：去掉空白与标点后，相邻两字的集合重合八成以上
-    private static func similar(_ a: String, _ b: String) -> Bool {
-        func pairs(_ text: String) -> Set<String> {
-            let characters = Array(text.filter { !$0.isWhitespace && !$0.isPunctuation })
-            return Set(zip(characters, characters.dropFirst()).map { "\($0)\($1)" })
-        }
-        let x = pairs(a), y = pairs(b)
-        guard !x.isEmpty, !y.isEmpty else { return a == b }
-        return Double(x.intersection(y).count) / Double(x.union(y).count) >= 0.8
-    }
-
     /// 说到分标签页、又不是在否定它（前面几个字里没有不、别、没、无）；"按标签定位"这类说的是别的标签
     private static func proposesTabs(_ text: String) -> Bool {
         text.ranges(of: /标签页|页签|tab ?页|tabs/.ignoresCase()).contains { range in
@@ -390,14 +402,14 @@ private final class Duty {
         let durations = rounds.compactMap { round in round.finishedAt.map { $0.timeIntervalSince(round.startedAt) } }.sorted()
         let median = durations.isEmpty ? "—" : seconds(durations.count.isMultiple(of: 2)
             ? (durations[durations.count / 2 - 1] + durations[durations.count / 2]) / 2 : durations[durations.count / 2])
-        let renewals = CueEval.renewals(eval.rounds)
+        let renewals = eval.renewals
         let renewedAt = renewals.compactMap { round in steps.firstIndex { $0.window?.contains(round.startedAt) == true }.map { "第 \($0 + 1) 步「\(steps[$0].label)」" } }
         let usage = rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []
         let total = usage.reduce(BrainUsage(), +)
         eval.overview = (rounds.reduce(0) { $0 + $1.calls.count }, "中位 \(median)")
         var lines = [
             "", "## 长程", "",
-            "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（上下文骤降的轮）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",
+            "- 醒来 \(rounds.count) 次（不含预热；剧本叫醒 \(steps.count) 次），换新 \(renewals.count) 次（大脑开了新的对话）\(renewedAt.isEmpty ? "" : "，在" + renewedAt.joined(separator: "、"))",
             "- 每轮用时中位 \(median)",
             "- 合计（含预热，大脑报了 \(usage.count) 轮）：\(BrainUsage.header.replacingOccurrences(of: " | ", with: "、")) = \(total.cells.replacingOccurrences(of: " | ", with: "、"))",
         ]
@@ -413,7 +425,7 @@ private final class Duty {
 
 /// 剧本里的一个会话：假扩展扮演，对话按 Cue 真送进来的话（带投送 id，认作 Cue 说的）与剧本的回复累积，像 Mac 读会话文件那样写进库。
 @MainActor
-private final class ScriptedSession {
+final class ScriptedSession {
     let session: FakeExtension
     let task: Card
     var id: String { session.sessionID }
@@ -423,11 +435,12 @@ private final class ScriptedSession {
     private var messages: [PiChatMessage] = []
     private var heard = 0
 
-    init(session: FakeExtension, task: Card, opening: PiChatMessage?) {
+    /// `history`：会话里此前的对话（多日剧本预置的，带当时的时刻）。
+    init(session: FakeExtension, task: Card, history: [PiChatMessage] = []) {
         self.session = session
         self.task = task
         cards = [task]
-        messages = opening.map { [$0] } ?? []
+        messages = history
         // 像真扩展那样：收到话开始干活，作答后收起提问、接着干
         let ack = session.onCommand
         session.onCommand = { [weak session] connection, command in
@@ -498,7 +511,7 @@ private final class ScriptedSession {
 
 /// 一张写着字的页面截图（README 新截图、Lighthouse 报告）：Cue 用读文件工具打开看。
 @MainActor
-private func pageShot(_ title: String, _ lines: [String]) throws -> Data {
+func pageShot(_ title: String, _ lines: [String]) throws -> Data {
     let page = VStack(alignment: .leading, spacing: 10) {
         Text(title).font(.title2.bold())
         ForEach(lines, id: \.self) { Text($0).font(.body.monospaced()) }

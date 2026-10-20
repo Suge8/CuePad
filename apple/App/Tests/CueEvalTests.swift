@@ -722,8 +722,11 @@ final class CueEval {
     }
 
     /// 起 Rig、等刚启用那一轮做完，跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
-    static func run(_ name: String, expect: String, output: URL = evalOutput, _ body: (CueEval) async throws -> [Check]) async throws {
-        let eval = CueEval(try await CueHostTests.Rig(brain: .current), output: output)
+    static func run(
+        _ name: String, expect: String, output: URL = evalOutput,
+        rig makeRig: () async throws -> CueHostTests.Rig = { try await CueHostTests.Rig(brain: .current) }, _ body: (CueEval) async throws -> [Check]
+    ) async throws {
+        let eval = CueEval(try await makeRig(), output: output)
         var checks: [Check] = [], failure: (any Error)?
         do {
             try await eventually("刚启用那一轮做完", timeout: .seconds(300)) { eval.rig.rounds.contains { $0.wake == .enabled && $0.finishedAt != nil } }
@@ -781,13 +784,11 @@ final class CueEval {
         return !(handoff.map { handoff in rounds.last.map { handoff.createdAt >= $0.startedAt } ?? false } ?? false)
     }
 
-    /// 换新后的第一轮：上下文比前一轮骤降（前一轮至少 2 万、这一轮不到它的一半）。两种做法都成立：现做法写交接后起新班次，
-    /// 混合做法在醒来开始时开新会话，都只看大脑报的上下文用量（`CueRound.context`），不靠哪种做法独有的记录。
-    static func renewals(_ rounds: [CueRound]) -> [CueRound] {
-        zip(rounds, rounds.dropFirst()).compactMap { previous, round in
-            guard let before = previous.context, let after = round.context, before >= 20_000, after * 2 < before else { return nil }
-            return round
-        }
+    /// 换新后的第一轮：大脑开了新的对话的那一轮（`BrainUsage.renewed`，从大脑的输出里数：现做法起新班次是新进程，混合做法是 Pi 的 new_session），
+    /// 两种做法都成立，不靠哪种做法独有的记录。大脑报的轮与记下的轮按先后对齐。
+    var renewals: [CueRound] {
+        let rounds = rounds
+        return (rig.brainDirectory.map(BrainUsage.renewed(in:)) ?? []).filter { $0 < rounds.count }.map { rounds[$0] }
     }
 
     /// 被叫醒的那一轮
@@ -954,6 +955,40 @@ nonisolated struct BrainUsage {
     /// 每个大脑进程一个文件，按起进程的先后；每轮一项
     static func rounds(in root: URL) -> [BrainUsage] { parsed(root).map(\.usage) }
 
+    /// 大脑在哪几轮开了新的对话（轮的序号同 `rounds`）：第一个进程之后每个进程的第一轮，和 Pi 回应过 new_session 之后的那一轮
+    static func renewed(in root: URL) -> [Int] {
+        var index = 0, out: [Int] = []
+        for (number, file) in files(root).enumerated() {
+            var fresh = number > 0
+            for event in events(file) {
+                switch event["type"] as? String {
+                case "response" where event["command"] as? String == "new_session": fresh = true
+                case "result", "agent_settled":
+                    if fresh { out.append(index) }
+                    fresh = false
+                    index += 1
+                default: break
+                }
+            }
+        }
+        return out
+    }
+
+    private static func files(_ root: URL) -> [URL] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory(in: root), includingPropertiesForKeys: [.creationDateKey])) ?? []
+        func created(_ file: URL) -> Date { (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
+        return files.sorted { created($0) < created($1) }
+    }
+
+    private static func events(_ file: URL) -> [[String: Any]] {
+        ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").compactMap { line -> [String: Any]? in
+            guard line.contains(#""type":"result""#) || line.contains(#""type":"agent_"#) || line.contains(#""type":"message_end""#)
+                || line.contains(#""command":"new_session""#)
+            else { return nil }
+            return (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any]
+        }
+    }
+
     /// Pi 的轮里，逐条累加与 `agent_end` 自报对不上的轮数（Claude Code 的轮不算）
     static func piMismatches(in root: URL) -> (pi: Int, mismatched: Int) {
         let pi = parsed(root).compactMap { round in round.reported.map { (round.usage, $0) } }
@@ -961,13 +996,8 @@ nonisolated struct BrainUsage {
     }
 
     private static func parsed(_ root: URL) -> [(usage: BrainUsage, reported: BrainUsage?)] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory(in: root), includingPropertiesForKeys: [.creationDateKey])) ?? []
-        func created(_ file: URL) -> Date { (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast }
-        return files.sorted { created($0) < created($1) }.flatMap { file in
-            let events = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").compactMap { line -> [String: Any]? in
-                guard line.contains(#""type":"result""#) || line.contains(#""type":"agent_"#) || line.contains(#""type":"message_end""#) else { return nil }
-                return (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any]
-            }
+        files(root).flatMap { file in
+            let events = events(file)
             return claude(events) + pi(events)
         }
     }
