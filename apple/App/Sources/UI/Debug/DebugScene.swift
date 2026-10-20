@@ -40,11 +40,12 @@ enum ScrollAnchor {
 /// - `-CuePadDockTour YES`（iPhone）：画面就绪后按固定节奏走一遍底部那一排：Cue 页展开去处、去三页、推入与返回、搜索、换去处清掉推入的页、回 Cue，
 ///   录换去处的过渡（`dockTourIfAsked`，见 `DebugScene+iOS.swift`）；`-CuePadNotice <文字>`：就绪前弹一条提示（`noticeIfAsked`）；`-CuePadPlacesOpen YES`（配 cue 画面）：Cue 页的去处圆钮一出现就展开（`debugExposesPlaces`）；
 ///   `-CuePadCueDraft <文字>`（配 cue 画面）：Cue 的输入框里先有这句草稿；
-/// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；
+/// - `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画（`PaletteProvider` 改窗口的环境；不碰系统设置，Mac 上那是用户这台机器的全局设置）；`-CuePadLargestType YES` 同理按最大的辅助字号画；
 /// - `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦；`-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘；`-CuePadLandscape YES`（iPhone）：转成横屏；
 /// - `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的动态一开始就全部展开（`RoundProcess`、`PiSubagentList`、`CueNoteBubble`）；
 /// - `-CuePadManyTasks <条数>`：给 `-CuePadProject` 那个项目再加这么多条待办（没做完的还不到这么多时），量任务多时的项目页（`perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad`）；
 /// - `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批（`seedAllKinds`）；
+/// - `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态；
 /// - `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开；
 /// - `-CuePadHover <正文开头>`（仅 Mac）：那张灵感卡、那条任务、那条记忆或那一行（"更早"、任务气泡的步骤；回收站按名字）一出现就画成指针停着的样子（"设为任务"、亮起的"开始"、记忆行尾的钉住与忘掉、行的淡底）；
 /// - `-CuePadShowsDone YES`：任务页做完列的"更早做完的"一开始就展开；
@@ -117,6 +118,9 @@ enum DebugScene {
         if many > 0, ((try? await store.taskCounts(in: project.id).open) ?? 0) < many {
             for index in 1...many { _ = try? await store.createTask("压力任务 \(index)：画布与节点的一段说明", in: project.id) }
         }
+        if defaults.bool(forKey: "CuePadNoIdeas") {
+            for card in (try? await store.cards(in: project.id)) ?? [] { try? await store.trashCard(card.id) }
+        }
         #if os(macOS)
         workspace.show(.project(project.id))
         #endif
@@ -187,6 +191,7 @@ enum DebugScene {
         preset.modelMenu = defaults.bool(forKey: "CuePadModelMenu")
         preset.cueFocus = defaults.bool(forKey: "CuePadCueFocus")
         preset.reducesMotion = defaults.bool(forKey: "CuePadReduceMotion")
+        preset.largestType = defaults.bool(forKey: "CuePadLargestType")
         if defaults.bool(forKey: "CuePadTasksOpen") { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         #if os(macOS)

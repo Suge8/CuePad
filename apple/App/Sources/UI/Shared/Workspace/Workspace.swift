@@ -67,8 +67,6 @@ final class Workspace {
     #if os(macOS)
     /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
     var projectForm: ProjectForm.Request?
-    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页的"全部 N 个会话"设成这个项目再切到会话页），nil 是全部项目。
-    var projectScope: UUID?
     /// ⌘K 搜索开着（`SearchPalette`）。
     var searching = false
     /// 接入 Agent 并启用 Cue 的面板（`SetupPanel`；首次打开由 `offerSetup` 置起，Cue 页的启用卡与会话页的"接入"也打开它，主窗口弹出）。
@@ -76,6 +74,8 @@ final class Workspace {
     /// 新会话的表单开着（`NewSessionForm`，从会话页的 + 弹出；菜单"文件 › 新会话"先去会话页再置起，`newSession`）。
     var showsNewSession = false
     #endif
+    /// 项目范围：任务页与会话页共用这一份（顶栏中间那颗显示它、点 ✕ 清掉；项目页"⋯"里的"看这个项目的会话"设成这个项目再切到会话页），nil 是全部项目。
+    var projectScope: UUID?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
