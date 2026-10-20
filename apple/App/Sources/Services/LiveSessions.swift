@@ -26,6 +26,11 @@ final class LiveSessions {
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
     /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
     private(set) var recentlyEnded: [PiSessionState] = []
+    /// 最近一次接力（`CueRelayStage` 画）：比已算过的更新的叫醒或交给（`CueFlight.Facts`），`at` 变成新的就播一次；打开资料库时已有的不算。
+    /// 与会话一起读：重排"在做"那一列的那次写入（话在路上、新会话出现）与这次接力同一份到达界面，量落点时那一列已经排好。
+    private(set) var flight: CueFlight?
+    /// 已经算过的最新时刻（叫醒与交给同一条时间线）。
+    @ObservationIgnored private var seen: Date?
     private let launchedAt = Date()
     /// 结束会话的那台 Mac（本机，见 `Page`）；iOS 为 nil。
     private let host: String?
@@ -35,11 +40,18 @@ final class LiveSessions {
     init(store: CueStore, endedOn host: String?, at moment: Speech.Moment) throws {
         self.host = host
         start = try store.snapshot { [since = launchedAt] in try Page.read(from: $0, endedOn: host, since: since) }
+        seen = start.value.relays.latest
         apply(start.value, at: moment)
     }
 
     /// 在线的会话（`items` 里没结束的）。
     var live: [PiSessionListItem] { items.filter { $0.state.state != .known(.ended) } }
+
+    /// `session` 在最近一次接力里：它的状态标挂锚（`relaySpot`）。
+    func relays(session: String) -> Bool { flight?.ends.contains { $0.session == session } == true }
+
+    /// 最近一次接力带着这件任务（开新会话、带着它说话）。
+    func relays(task: UUID) -> Bool { flight?.ends.contains { $0.task == task } == true }
 
     /// 一次读到的：`current` 一页与会话总数；给了 `host`（Mac）时再加上那台 Mac 上 `since` 之后结束的会话。
     nonisolated struct Page: Sendable, Equatable {
@@ -47,12 +59,13 @@ final class LiveSessions {
         var total: Int
         var ended: [PiSessionState] = []
         var cue: CueDuty?
+        var relays: CueFlight.Facts
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
             Page(
                 items: try store.piSessionPage(.current).items, total: try store.piSessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cue: try store.cueDuty())
+                cue: try store.cueDuty(), relays: try CueFlight.Facts.read(from: store))
         }
     }
 
@@ -75,6 +88,10 @@ final class LiveSessions {
         set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
         set(\.cue, page.cue)
+        if let next = page.relays.flight(after: seen) {
+            seen = page.relays.latest
+            flight = next
+        }
     }
 
     private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<LiveSessions, Value>, _ value: Value) {
