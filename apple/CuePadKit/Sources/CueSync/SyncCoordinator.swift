@@ -23,13 +23,16 @@ actor SyncCoordinator {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
+    /// 库里有同步区令牌（`token()`、`setToken` 读写时记下）
+    var reconciled = false
     var issues: [SyncIssue] = []
     var alerts = PiAlertSubscriptionStatus.off
 
     /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行。
     var state: SyncState {
       SyncState(
-        status: status == .idle && (sending || catchingUp) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp)
+        status: status == .idle && (sending || catchingUp) ? .syncing : status, issues: issues, alerts: alerts, catchingUp: catchingUp,
+        reconciled: reconciled)
     }
   }
 
@@ -86,6 +89,7 @@ actor SyncCoordinator {
     }
     unsendable = [:]
     drained = nil
+    facts.reconciled = false  // 两种处理都清掉了令牌
     facts.status = .idle
   }
 
@@ -161,6 +165,23 @@ actor SyncCoordinator {
   /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
 
+  /// 同步区令牌：只有库里一份（`ZonePuller.tokenKey`），读写都经这两处，顺带记下有没有（`SyncState.reconciled` 的唯一来源）。
+  func token() async throws -> Data? {
+    let token = try await store.syncState(ZonePuller.tokenKey)
+    facts.reconciled = token != nil
+    return token
+  }
+
+  func setToken(_ token: Data?) async throws {
+    try await store.setSyncState(ZonePuller.tokenKey, token)
+    facts.reconciled = token != nil
+  }
+
+  /// 同步开始时读一次令牌：还没拉过（离线、没登录）也说得出这台对没对过。
+  func loadToken() async {
+    do { _ = try await token() } catch { report(error, recordName: nil) }
+  }
+
   /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下来等你决定）时抛出，拉取器不前移令牌。
   /// 单条记录不合法只报告（见 `ZonePuller`）。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
@@ -226,10 +247,10 @@ actor SyncCoordinator {
   func zoneMissing(deletedByUser: Bool) async {
     guard needsDecision == nil else { return }
     do {
-      let hadToken = try await store.syncState(ZonePuller.tokenKey) != nil
+      let hadToken = try await token() != nil
       let pushedAny = try await !store.syncedRecords().isEmpty
       let synced = hadToken || pushedAny
-      try await store.setSyncState(ZonePuller.tokenKey, nil)
+      try await setToken(nil)
       if synced { facts.status = .needsDecision(deletedByUser ? .cloudDataDeleted : .cloudDataReset) }
     } catch {
       report(error, recordName: nil)
