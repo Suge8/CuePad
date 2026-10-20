@@ -28,7 +28,7 @@ struct CaptureTests {
         #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
     }
 
-    @Test func 没选项目或项目已删除时进未分类() async throws {
+    @Test func 没选项目或项目已删除时进默认项目() async throws {
         let gone = try await services.store.createProject(name: "Gone", color: "#000000")
         try await services.store.trashProject(gone.id)
         try CaptureQueue.enqueue(ShareContent(text: "a"), project: nil, into: queue)
@@ -37,7 +37,7 @@ struct CaptureTests {
 
         await services.drainCaptures()
 
-        #expect(Set(try await services.store.cards(in: nil).map(\.body)) == ["a", "b", "c"])
+        #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["a", "b", "c"])
     }
 
     @Test func 没写完的条目被跳过_不删除() async throws {
@@ -47,7 +47,7 @@ struct CaptureTests {
 
         await services.drainCaptures()
 
-        #expect(try await services.store.cards(in: nil).isEmpty)
+        #expect(try await services.store.cards(in: Project.defaultID).isEmpty)
         #expect(FileManager.default.fileExists(atPath: unfinished.path))
     }
 
@@ -59,7 +59,7 @@ struct CaptureTests {
 
         await services.drainCaptures()
 
-        #expect(try await services.store.cards(in: nil).map(\.body) == ["好的"])
+        #expect(try await services.store.cards(in: Project.defaultID).map(\.body) == ["好的"])
         #expect(CaptureQueue.pending(in: queue).map(\.capture.text) == ["坏图"])
         #expect(services.startupIssues.count == 1)
     }
@@ -71,7 +71,7 @@ struct CaptureTests {
 
         DarwinNotifications.post(CaptureQueue.notification)
 
-        let bodies = try await eventually(services.store, { try $0.cards(in: nil).map(\.body) }) { !$0.isEmpty }
+        let bodies = try await eventually(services.store, { try $0.cards(in: Project.defaultID).map(\.body) }) { !$0.isEmpty }
         #expect(bodies == ["来自扩展"])
     }
 }

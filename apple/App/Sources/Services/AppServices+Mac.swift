@@ -11,6 +11,7 @@ extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
         guard !tasks.isRunning else { return }
+        Self.raiseFileLimit()
         register(hotkey)
         if !location.isIsolated { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
@@ -58,14 +59,14 @@ extension AppServices {
         startAlerts()
     }
 
-    /// 起各家的接入：有会话文件的 Agent 的运行时现在起，没有的（OpenCode）随它的索引起（`index(_:)`）。
+    /// 起各家的接入：有会话文件的 Agent 的运行时现在起，没有的（OpenCode）随它的索引起（`index(_:connected:)`）。
     private func startRuntimes() {
         do {
             for (agent, runtime) in runtimes where !runtimeIndexes(agent) { try runtime.start() }
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        follow { await self.indexConnectedAgents() }
+        follow { await self.indexAgents() }
     }
 
     /// 读出各 Agent 的接入状态，装过而内容不同的静默升级；失败报告一次。
@@ -144,47 +145,54 @@ extension AppServices {
         }
     }
 
-    /// 会话索引只为接入了的 Agent 建（`AgentStatus.isConnected`，与设置里的开关同一个含义）：接入时起它的索引并回填，
-    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时停掉并删掉它的本机索引；会话的同步记录与对话不动。
-    private func indexConnectedAgents() async {
-        var indexing: [AgentKind: Task<Void, Never>] = [:]
-        var forgotten: Set<AgentKind> = []
-        defer { for task in indexing.values { task.cancel() } }
+    /// 每家哪些会话归 CuePad 管（`PiHistoryScope`），随接入（`AgentStatus.isConnected`，与设置里的开关同一个含义）换：接入了的是全部，
+    /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）。索引按它回填，各家的接入按它接终端里的会话；
+    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时先删掉范围外会话的本机索引。会话的同步记录与对话不动。
+    private func indexAgents() async {
+        var indexing: [AgentKind: (connected: Bool, task: Task<Void, Never>)] = [:]
+        defer { for entry in indexing.values { entry.task.cancel() } }
         let statuses = Observations { [agents] in AgentKind.allCases.map { agents.status($0)?.isConnected } }
         for await connected in statuses {
             for (agent, isConnected) in zip(AgentKind.allCases, connected) {
-                switch isConnected {
-                case true? where indexing[agent] == nil:
-                    forgotten.remove(agent)
-                    indexing[agent] = Task { await self.index(agent) }
-                case false? where !forgotten.contains(agent):
-                    forgotten.insert(agent)
-                    let task = indexing.removeValue(forKey: agent)
-                    task?.cancel()
-                    await task?.value
+                guard let isConnected, indexing[agent]?.connected != isConnected else { continue }
+                if let previous = indexing.removeValue(forKey: agent) {
+                    previous.task.cancel()
+                    await previous.task.value
+                }
+                if !isConnected {
                     do {
                         try await historyStore.forget(agent)
                     } catch {
                         reportIssue(.piHistoryUnavailable("删掉 \(agent.name) 的会话索引失败：\(error)"))
                     }
-                default:
-                    break
                 }
+                indexing[agent] = (isConnected, Task { await self.index(agent, connected: isConnected) })
             }
         }
+    }
+
+    /// 文件描述符的软上限放到这台 Mac 允许的最大：图形应用默认只有 256，在线会话每个占一条桥上的连接，
+    /// 会话文件再占一个（历史索引当场盯着它，`FileFollower`）。
+    private static func raiseFileLimit() {
+        var limit = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &limit) == 0, limit.rlim_cur < rlim_t(OPEN_MAX) else { return }
+        limit.rlim_cur = min(limit.rlim_max, rlim_t(OPEN_MAX))
+        setrlimit(RLIMIT_NOFILE, &limit)
     }
 
     /// 没有会话文件的 Agent（OpenCode）由它的运行时连着它的服务建索引。
     private func runtimeIndexes(_ agent: AgentKind) -> Bool { paths.sessionsDirectory(of: agent) == nil }
 
-    /// 建一家的索引，直到任务取消：有会话文件的读文件，其余起它的运行时、取消时停掉。
-    private func index(_ agent: AgentKind) async {
+    /// 建一家的索引，直到任务取消：有会话文件的读文件，其余接入期间起它的运行时、取消时停掉。
+    private func index(_ agent: AgentKind, connected: Bool) async {
         if let indexer = PiHistoryIndexer(
             agent: agent, paths: paths, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
-            return await consumePiHistory(indexer.events(), agent: agent)
+            let scope = connected ? .all : await hostedScope(of: agent)
+            runtimes[agent]?.follow(scope)
+            return await consumePiHistory(indexer.events(following: pi.sessionFiles, scope: scope), agent: agent)
         }
-        guard let runtime = runtimes[agent] else { return }
+        guard connected, let runtime = runtimes[agent] else { return }
         do {
             try runtime.start()
         } catch {
@@ -194,6 +202,16 @@ extension AppServices {
         for await _ in untilCancelled {}
         held.finish()
         await runtime.stop()()
+    }
+
+    /// 没接入的 Agent 回填的范围：这台 Mac 托管过的会话；读不出来就只跟在线的。
+    private func hostedScope(of agent: AgentKind) async -> PiHistoryScope {
+        do {
+            return try await historyStore.hostedScope(of: agent)
+        } catch {
+            reportIssue(.piHistoryUnavailable("读取 \(agent.name) 托管过的会话失败：\(error)"))
+            return .sessions([])
+        }
     }
 
     /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
@@ -221,7 +239,8 @@ extension AppServices {
                 await flush()
                 backfilling = false
                 do {
-                    try await historyStore.retain(files, of: agent)
+                    // 只回填了托管过的会话：不知道其余会话文件还在不在，不对账
+                    guard try await historyStore.backfillFinished(files, of: agent) else { continue }
                     try await piStateRecorder.dropUnindexedHosted(of: agent)
                 } catch {
                     reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))

@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、会话、项目，都在内容区整页切换，侧栏的"任务"开合任务面板；没有返回、前进与往上一层，
-/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
+/// 主窗口：玻璃侧栏 + 当前页（侧栏点 Cue、任务、会话、项目，都在内容区整页切换；没有返回、前进与往上一层，
+/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -20,6 +20,7 @@ struct MainWindow: View {
             detail
         }
         .background { WindowPanels(workspace: workspace) }
+        .background { TaskBubbleSlot() }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
@@ -50,13 +51,13 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页与 Cue 页的标题（`SessionHeader`、`CueTitle`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        // 会话页与 Cue 页（侧栏收起时）的标题（`SessionHeader`、`CueTitle`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容。.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { PageTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
-            // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
+            // 资料库读不出来时：搜索结果能打开卡片，是写入入口
             Button("搜索", icon: .search) { workspace.searching.toggle() }
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
@@ -83,9 +84,8 @@ private struct WindowPanels: View {
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
                 mountsPalette = true
             }
-            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
-            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project, created: $0.created) }
-            .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
+            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
+            .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
     }
 }
 
@@ -174,11 +174,11 @@ private struct PageStack: View {
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
-        case .unfiled: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .cue: CuePage()
         case .agent: AgentPage()
+        case .tasks: TaskBoardPage()
         case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
         default: EmptyView()  // 其余是 iOS 的页
         }
@@ -236,7 +236,7 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 一行看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
+/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。收起时侧栏的 Cue 名片看不见了：不在 Cue 页、Cue 有等你或新消息时钮角上带点（`CueDot`）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
@@ -316,7 +316,7 @@ private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
-        case .project, .unfiled, .archive: true
+        case .project, .archive: true
         default: false
         }
     }
@@ -350,18 +350,27 @@ extension Workspace {
         guard let projects = catalog?.projects, projects.indices.contains(number - 1) else { return }
         show(.project(projects[number - 1].id))
     }
+
+    /// ⌘N（"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它；不在项目页时记进默认项目。
+    func newCard() {
+        let project = currentProject ?? Project.defaultID
+        attempt { self.open(try await self.createCard(in: project)) }
+    }
+
+    /// ⌥⌘N（"文件 › 新会话"）：去会话页、从那一页的 + 弹出新会话的表单（表单只有这一个出处）。
+    func newSession() {
+        show(.agent)
+        showsNewSession = true
+    }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 任务页、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 
     var body: some View {
         ZStack {
-            if workspace.isLibraryReady {
-                Button("记一条灵感") { newCard() }.keyboardShortcut("n")
-            }
             ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
                 Button("项目 \(number)") { workspace.showProject(number: number) }
                     .keyboardShortcut(KeyEquivalent(Character("\(number)")))
@@ -372,12 +381,6 @@ private struct WorkspaceShortcuts: View {
         .accessibilityHidden(true)
     }
 
-    private func newCard() {
-        let project = workspace.currentProject
-        workspace.attempt {
-            workspace.open(try await workspace.createCard(in: project))
-        }
-    }
 }
 
 /// 提示里的动作（撤销、归档）：点了收起提示并做那件事；撤销另有 ⌘Z。

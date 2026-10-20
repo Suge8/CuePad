@@ -114,7 +114,7 @@ final class TestApp {
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
     lazy var pi = PiBridge(socketDirectory: socketDirectory)
-    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
+    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -174,6 +174,8 @@ final class TestApp {
     }
     /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
+    /// 项目工作区的根目录（没绑文件夹的项目开工时建在这里）：在临时目录里。
+    var workspaces: Workspaces { Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)) }
 
     /// 这台 Mac 写下自己能用 Pi（开新会话只从 macAgents 选 Agent）：探测本身起真 Agent，只在 Kit 的 Real* 测试里验，这里直接写下它的结果。
     func offersPi() async throws {
@@ -241,6 +243,7 @@ final class TestApp {
             agents: AgentIntegrations(agentIntegration),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
+            workspaces: workspaces,
             wakeNotifications: wakeCenter,
             timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),

@@ -3,9 +3,10 @@ import CueStore
 import Foundation
 
 /// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件，怎么认、怎么读见 `SessionFileFormat`）：先按修改时间倒序回填
-/// （最近的会话最先可用），发出 `backfillFinished` 后跟随文件变化，只读新增字节。FSEvents 盯整棵目录（新建的会话文件、丢事件重扫）；
-/// 最近写过的会话文件另用 kqueue 盯追加（`FSEventsWatcher.follow`，见 `Followed`）：FSEvents 对开着写的文件（Codex 的常驻服务）
-/// 只在关闭时报，写完就关的（Pi、Claude Code）也实测晚 0.1–1 秒、连着几次写并成一次，回答与歇下要跟着晚。
+/// `scope` 里的会话文件（最近的会话最先可用），发出 `backfillFinished` 后只跟着在线会话的文件（桥上的，`PiBridge.sessionFiles`；
+/// `FileFollower` 当场报），只读新增字节。会话的对话只从这里来：托管的会话没接入也开得出，所以没接入的 Agent 也要回填它托管过的那些。
+/// 整棵目录只在回填时列一次，没经接入的会话（如 Pi 关了扩展）下次启动时进历史。会话从开始到结束都在桥上（各家的接入上报），
+/// 下桥时最后读一次。歇下要等这一轮的回答从文件里读到才算（`PiSessionState.answered`），读晚一步 Cue 就晚一步被叫醒。
 ///
 /// 不持有全部检查点：从哪接着读由调用方通过 `start` 提供（App 层从 Store 读），每个 `updated` 里带回新检查点由调用方持久化。
 /// 索引器只对最近修改/最近被触碰的若干文件在内存里保留，这样调用方持久化滞后时增量也不会退化成重读。
@@ -21,8 +22,6 @@ public struct PiHistoryIndexer: Sendable {
     private let start: @Sendable (URL) async -> PiHistoryStart?
 
     private static let liveCacheLimit = 64
-    /// 每家同时另盯追加的文件数：每个占一个文件描述符，GUI 应用默认只有 256 个，三家合起来不超过 96 个
-    private static let followLimit = 32
 
     /// 会话不在文件里的 Agent（OpenCode）为 nil。`files` 是你的消息里的图片存进的附件目录。
     public init?(
@@ -38,22 +37,35 @@ public struct PiHistoryIndexer: Sendable {
         self.start = start
     }
 
-    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent）或被删再建，见 `FSEventsWatcher`。
-    public func events() -> AsyncStream<PiHistoryEvent> {
+    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Agent），见 `FileFollower`。
+    /// `liveFiles` 是此刻在线会话的文件（各家的都行，不在这家会话目录里的不管），每次变了给一份。
+    public func events(
+        following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable, scope: PiHistoryScope
+    ) -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
-            let task = Task(priority: .utility) { await run(continuation) }
+            let task = Task(priority: .utility) { await run(continuation, following: liveFiles, scope: scope) }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    @concurrent private func run(_ continuation: AsyncStream<PiHistoryEvent>.Continuation) async {
-        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致（目录还不存在时解析其上层）
+    @concurrent private func run(
+        _ continuation: AsyncStream<PiHistoryEvent>.Continuation, following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable,
+        scope: PiHistoryScope
+    ) async {
+        // 统一用真实路径，回填列出的与桥给的文件 URL 才一致（目录还不存在时解析其上层）
         let root = self.root.realPath
-        let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
-        defer { watcher.stop() }
+        let follower = FileFollower() // 先开始盯：回填期间的写入不会丢
+        defer { follower.stop() }
+        let following = Task { [format] in
+            var last: Set<URL>?
+            for await files in liveFiles where files != last {  // 会话的每次状态变化都会再给一份
+                last = files
+                follower.follow(only: Set(files.map(\.realPath.path).filter { Self.isSessionFile($0, under: root, depth: format.depth) }))
+            }
+        }
+        defer { following.cancel() }
         var live = LiveCache(limit: Self.liveCacheLimit)
         var excluded: Set<URL> = []
-        var followed = Followed(limit: Self.followLimit)
 
         /// `size`：列目录时取的文件大小（文件变化通知来的没有）；与修改时间一起认出没动过的文件，不打开它（`isCurrent`）。
         func index(_ file: URL, modified: Date?, size: UInt64? = nil, remember: Bool) async {
@@ -80,63 +92,24 @@ public struct PiHistoryIndexer: Sendable {
                 excluded.insert(file)
                 return
             }
-            if let written {
-                let change = followed.note(file.path, writtenAt: written)
-                if let dropped = change.dropped { watcher.unfollow(dropped) }
-                if change.follows { watcher.follow(file.path) }
-            }
             guard format.isSession(checkpoint) else { return }
             // 没读到新内容也要写的：第一次索引，与修改时间变了（记下它，下次启动才认得出没动过）
             guard let update, update.bytesRead > 0 || base?.checkpoint.map({ $0.modified != checkpoint.modified }) ?? true else { return }
             continuation.yield(.updated(update))
         }
 
-        // 回填时记住最近修改的那批文件（正在被 Agent 写入的最可能是它们）：之后的事件（包括 FSEvents
-        // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
-        let found = Self.sessionFiles(under: root, depth: format.depth)
+        // 回填时记住最近修改的那批文件（在线会话的就在其中）：之后盯到的写入落到缓存上，不会重读也不会重复发出
+        let found = Self.sessionFiles(under: root, depth: format.depth).filter { scope.covers($0.url) }
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
+        let sessionFiles = found.map(\.url).filter { !excluded.contains($0) }
+        continuation.yield(.backfillFinished(sessionFiles: scope == .all ? sessionFiles : nil))
 
-        for await paths in watcher.paths {
+        for await path in follower.paths {
             if Task.isCancelled { return }
-            if paths.contains(root.path) { // 丢事件：整体重扫
-                // 与回填一样只记住最近修改的那批：从新到旧全记住会让旧文件把新的挤出缓存
-                for (rank, file) in Self.sessionFiles(under: root, depth: format.depth).enumerated() {
-                    await index(file.url, modified: file.modified, size: file.size, remember: rank < Self.liveCacheLimit)
-                }
-                continue
-            }
-            for path in Set(paths) where Self.isSessionFile(path, under: root, depth: format.depth) {
-                await index(URL(filePath: path), modified: nil, remember: true)
-            }
-        }
-    }
-
-    /// 另盯追加的文件：按文件的修改时间留最近写过的 `limit` 个，满了换下最久没写的那个。
-    /// 不按被读到的先后：重扫、旧文件的迟到通知都会读到旧文件，它们不该把还在写的会话挤掉。
-    private struct Followed {
-        let limit: Int
-        private var writtenAt: [String: Date] = [:]
-
-        init(limit: Int) { self.limit = limit }
-
-        /// 读到一个文件时记下它的修改时间：返回要不要盯它、换下了哪个。
-        mutating func note(_ path: String, writtenAt date: Date) -> (follows: Bool, dropped: String?) {
-            if let known = writtenAt[path] {
-                writtenAt[path] = max(known, date)
-                return (true, nil)
-            }
-            guard writtenAt.count >= limit else {
-                writtenAt[path] = date
-                return (true, nil)
-            }
-            guard let oldest = writtenAt.min(by: { $0.value < $1.value }), oldest.value < date else { return (false, nil) }
-            writtenAt[oldest.key] = nil
-            writtenAt[path] = date
-            return (true, oldest.key)
+            await index(URL(filePath: path), modified: nil, remember: true)
         }
     }
 

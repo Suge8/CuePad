@@ -35,7 +35,7 @@ struct RealClaudeTerminalTests {
 
     @Test func aTerminalSessionAppearsAndReceivesCuePadsMessage() async throws {
         try await ClaudeTestbed.run(settings: Self.userSettings) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
 
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
@@ -57,7 +57,7 @@ struct RealClaudeTerminalTests {
     /// 一轮出错：按 Claude Code 报的错误类型归类成一句人话；它把错误也写成了对话里的最后一条回答，对话里只显示那一处。
     @Test func aFailedTurnIsClassifiedAndShownOnce() async throws {
         try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
             try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
@@ -75,7 +75,7 @@ struct RealClaudeTerminalTests {
     /// 权限确认与 AskUserQuestion 都弹在终端里，同时出现在 CuePad；从 CuePad 答了，终端里的这一问随之收起，工具照答案执行。
     @Test func cuePadAnswersThePermissionPromptAndTheQuestionOfATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "allowed.txt")
@@ -112,7 +112,7 @@ struct RealClaudeTerminalTests {
     /// 人在时直接在终端里问，CuePad 上只显示、不能答。
     @Test func aQuestionGoesToTheTerminalWhenTheUserIsAtTheMac() async throws {
         try await ClaudeTestbed.run() { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let prompt = "用 AskUserQuestion 工具问我喝什么（一个单选问题，选项是 茶、咖啡），然后只回复我选的选项词"
@@ -141,7 +141,7 @@ struct RealClaudeTerminalTests {
     /// 人在时终端里弹表单、CuePad 只显示，终端里答了（这里是取消）它就收起。没放行的 MCP 工具问权限，标题与终端一样写"服务 - 工具 (MCP)"。
     @Test func cuePadAnswersAnMCPFormWhileTheUserIsAway() async throws {
         try await ClaudeTestbed.run() { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let config = testbed.root.appending(path: "mcp.json")
             let server = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
             let node = try #require(ExecutableLocator.standard.candidates("node").first)
@@ -179,7 +179,7 @@ struct RealClaudeTerminalTests {
     /// 收件箱令牌（官方给脚本的认证行），话直接送到。只看话进没进会话，不等模型回答。
     @Test func aMessageReachesATerminalSessionThatBypassesPermissionsAsTheUsersOwn() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
@@ -204,7 +204,7 @@ struct RealClaudeTerminalTests {
     /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照会话文件里的中断标记歇下（已停止），之后从 CuePad 说的话送得到。
     @Test func aMessageWhileBusyIsRefusedWithTheReason() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
@@ -229,7 +229,7 @@ struct RealClaudeTerminalTests {
     /// 在终端里先答了：CuePad 上的这一问随之消失，之后再从 CuePad 答是"已经答过了"。
     @Test func answeringInTheTerminalFirstWithdrawsTheQuestionFromCuePad() async throws {
         try await ClaudeTestbed.run() { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let touched = testbed.work.appending(path: "here.txt")
@@ -250,7 +250,7 @@ struct RealClaudeTerminalTests {
     /// 终端会话同一规则：在飞的只认 Stop 钩子带的后台任务清单，交回结果的那一轮做完才歇下一次。
     @Test func backgroundWorkKeepsATerminalSessionBusyUntilItsResultIsReportedBack() async throws {
         try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let start = Date()
@@ -262,7 +262,7 @@ struct RealClaudeTerminalTests {
     /// 改名经收件箱改到 Claude Code 自己（终端标题与会话列表里都是新名字）；结束是让它像在终端里按 Ctrl-C 那样退出。
     @Test func cuePadRenamesAndEndsATerminalSession() async throws {
         try await ClaudeTestbed.run() { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let terminal = try await testbed.terminal()
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let log = ChangeLog(testbed.bridge)
@@ -283,7 +283,7 @@ struct RealClaudeTerminalTests {
     /// 用户在终端里打开了 CuePad 正托管着的会话：托管的进程让出（空闲就退），桥上换成终端里的那个。
     @Test func aHostedSessionYieldsWhenTheUserOpensItInTheTerminal() async throws {
         try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
             let start = Date()
@@ -307,7 +307,7 @@ struct RealClaudeTerminalTests {
                 FileManager.default.fileExists(atPath: testbed.config.appending(path: "sessions/\(terminal.pid).json").path)
             }
 
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
             let delivery = UUID().uuidString
@@ -336,7 +336,7 @@ struct ClaudeDiscoveryTests {
         #expect(mkfifo(release.path, 0o600) == 0)
         let wrapper = #"if [ "$1" = agents ]; then touch '\#(gate.path)/listed'; cat '\#(release.path)' >/dev/null; cat '\#(listing.path)'; else "$REAL" "$@"; fi"#
         try await ClaudeTestbed.run(installHooks: false, wrapper: wrapper) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let listed = gate.appending(path: "listed")
             try await eventually("列表请求发出") { FileManager.default.fileExists(atPath: listed.path) }
             // 都写在列表请求发出之后，相隔 1 毫秒（会话文件的时间戳精确到毫秒）

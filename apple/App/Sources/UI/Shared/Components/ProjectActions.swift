@@ -16,18 +16,21 @@ struct ProjectActions<Extra: View>: View {
         }
         Button("编辑名称与图标…", icon: .rename, action: edit)
         let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
-        Button(folders.bindTitle, icon: .folder) { workspace.chooseFolder(for: project) }
+        Button("换文件夹…", icon: .folder) { workspace.chooseFolder(for: project) }
         ForEach(folders.unbinds, id: \.binding.id) { unbind in
             Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(.unbindFolder) } }
         }
         extra
-        Divider()
-        Button("移到回收站", icon: .trash, role: .destructive) {
-            #if os(macOS)
-            // 正看着它：换到未分类（iOS 上项目页自己发现项目不在了就退回，见 `ProjectScreen`）
-            if workspace.currentProject == id { workspace.show(.unfiled) }
-            #endif
-            workspace.perform { try await $0.trashProject(id) }
+        // 默认项目不能删（`CueStore.trashProject` 也拒绝）
+        if !project.isDefault {
+            Divider()
+            Button("移到回收站", icon: .trash, role: .destructive) {
+                #if os(macOS)
+                // 正看着它：换到默认项目（iOS 上项目页自己发现项目不在了就退回，见 `ProjectScreen`）
+                if workspace.currentProject == id { workspace.show(.project(Project.defaultID)) }
+                #endif
+                workspace.perform { try await $0.trashProject(id) }
+            }
         }
     }
 }

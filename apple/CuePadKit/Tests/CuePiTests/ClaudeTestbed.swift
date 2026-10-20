@@ -39,6 +39,12 @@ final class ClaudeTestbed {
     /// 终端会话的会话文件跟读（同 App：历史索引读到的交给接入，`AgentRuntime.read`）；开第一个终端时起
     private var reading: Task<Void, Never>?
 
+    /// 起接入并接终端里的会话：测试台装了钩子，同 App 检测出接入了（`follow(.all)`）。
+    func startConnected() throws {
+        try runtime.start()
+        runtime.follow(.all)
+    }
+
     var integration: AgentIntegration {
         AgentIntegration(paths: paths, locate: { AgentTape.locator("claude") }, cuepad: PiProcess.cuepad)
     }
@@ -114,8 +120,8 @@ final class ClaudeTestbed {
     /// 在私有 tmux 里开一个终端里的 Claude Code（权限模式默认 default：要用工具就问）。
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
         if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
-            reading = Task { [runtime] in
-                for await case .updated(let update) in indexer.events() { runtime.read(update) }
+            reading = Task { [runtime, bridge] in
+                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) { runtime.read(update) }
             }
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)

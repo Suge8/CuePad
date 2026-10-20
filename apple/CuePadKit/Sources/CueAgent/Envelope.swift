@@ -2,24 +2,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 这次为什么醒来。
-public enum CueWake: Equatable, Sendable {
-  /// 刚启用：第一次醒来
-  case enabled
-  /// 你发来新消息
-  case message
-  /// 在做的事里的会话有动静
-  case sessionActivity
-  /// 空闲时的例行查看
-  case idle
-  /// 提醒到点（到点的那几条记忆）
-  case reminder([CueIndexedLine])
-  /// 写下交接、换了新上下文：接着做（交接在信封的"接上"里）
-  case renewed
-  /// 他改了要换大脑的设置（名字、Agent，或模型、强度回到默认，`CueKeeper.BrainSettings.needsNewBrain`）：先写交接
-  case settingsChanged
-}
-
 /// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。
 /// 块里第一行是时间，然后是项目、变化、在做的事（在做的任务与不归没做完的事的活会话，`CueBoard`）、等你、
 /// 接上的（新上下文第一次醒来才有）、醒来的原因；该换新上下文时（上下文用到 `CueContext.renewAt`，或 `CueWake.settingsChanged`）末尾一行要它先写交接：这一条只在这里判断。
@@ -34,8 +16,8 @@ public enum CueEnvelope {
     public var now: Date
     /// 上下文已用多少 token；不知道为 nil。
     public var contextUsed: Int?
-    /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
-    public var projects: [CueProject]
+    /// 所有项目（`CueStore.projects`）：Cue 据此把活放进项目。
+    public var projects: [Project]
     public var changes: [CueChange]
     /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
@@ -43,13 +25,16 @@ public enum CueEnvelope {
     /// 它留给他回的会话（`CueState.left`）：看板上这几个写"留给他回"。
     public var left: [CueLeft]
     public var wake: CueWake
+    /// 提醒到点（`CueWake.reminder`）时到点的那几条记忆，带序号
+    public var reminders: [CueIndexedLine]
     /// 新上下文第一次醒来：接上的交接与对话（不含这次交出去的话）；其余为 nil
     public var resume: CueResume?
 
     public init(
-      now: Date, contextUsed: Int?, projects: [CueProject], changes: [CueChange],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, resume: CueResume? = nil
+      now: Date, contextUsed: Int?, projects: [Project], changes: [CueChange],
+      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, reminders: [CueIndexedLine] = [], resume: CueResume? = nil
     ) {
+      self.reminders = reminders
       self.left = left
       self.resume = resume
       self.now = now
@@ -66,22 +51,26 @@ public enum CueEnvelope {
     let calendar = Calendar(identifier: .gregorian)
     var lines = ["<cue>", stamp(input.now, calendar)]
 
-    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
+    lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
     lines.append("变化（上次醒来之后）：" + (input.changes.isEmpty ? "无" : ""))
     lines += input.changes.map { "- \(change($0))" }
 
-    let active = input.board.tasks.filter(\.isActive), sessions = input.board.sessions
-    lines.append("在做 \(active.count + sessions.count) 件" + (active.isEmpty && sessions.isEmpty ? "" : "："))
-    lines += active.map { "- \(boardLine($0, now: input.now, left: input.left))" }
-    lines += sessions.map { "- \(sessionLine($0, now: input.now, left: input.left))" }
+    let active = input.board.active
+    lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
+    lines += active.map { work in
+      switch work {
+      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left))"
+      case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left))"
+      }
+    }
 
     lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
     lines += input.waiting.map { "- " + question($0) }
 
     if let resume = input.resume { lines += self.resume(resume, calendar) }
     lines.append("醒来：" + wake(input.wake))
-    if case .reminder(let due) = input.wake { lines += due.map { "- #\($0.index) \($0.line.text)" } }
+    if case .reminder = input.wake { lines += input.reminders.map { "- #\($0.index) \($0.line.text)" } }
     if !CueFresh.on, input.wake == .settingsChanged || (input.contextUsed ?? 0) >= CueContext.renewAt { lines.append(renew) }
     lines.append("</cue>")
     return lines.joined(separator: "\n")
@@ -207,7 +196,8 @@ public enum CueEnvelope {
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<PiWorkState>) -> String {
     switch state.known {
-    case .thinking, .tool, .delegating, .compacting: "工作中"
+    case .thinking, .tool, .compacting: "工作中"
+    case .delegating: "等子代理交回"
     case .waitingForUser: "等回答"
     case .settled: "歇着"
     case .error: "出错"

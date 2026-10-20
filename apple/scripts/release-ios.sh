@@ -21,7 +21,7 @@ case "$mode" in
     read -ra versions <<<"$(release_versions)"
     archive="$(release_archive ios "${versions[@]}")"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
-      -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}"
+      -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
     export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
       com.sugeh.cuepad="CuePad iOS AppStore" com.sugeh.cuepad.share="CuePad Share iOS AppStore" \
       com.sugeh.cuepad.widget="CuePad Widget iOS AppStore" com.sugeh.cuepad.notify="CuePad Notify iOS AppStore"
@@ -49,7 +49,7 @@ for d in devices:
     python3 "$provision" identity development
     python3 "$provision" profiles
     xcodebuild build -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Debug \
-      -destination "id=$udid" -derivedDataPath "$DERIVED"
+      -destination "id=$udid" -derivedDataPath "$DERIVED" "${team_signing[@]}"
     app="$DERIVED/Build/Products/Debug-iphoneos/CuePad.app"
     xcrun devicectl device install app --device "$device_id" "$app"
     xcrun devicectl device process launch --device "$device_id" com.sugeh.cuepad

@@ -86,6 +86,11 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
 
   public static let untitled = "未命名项目"
+
+  /// 默认项目：每个库都有、不能删（`trashProject` 拒绝），没指定项目记下的灵感与任务都进它。id 在所有设备上同一个，
+  /// 离线时两台各自建出来也合成一条；建出来的那版修改时间是 0（`Schema.defaultProject`），用户改过名、颜色的总比它新。
+  public static let defaultID = DeterministicID.uuid("project/default")
+  public var isDefault: Bool { id == Self.defaultID }
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
@@ -94,8 +99,8 @@ public struct Project: Identifiable, Equatable, Sendable {
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// nil 表示未分类。
-  public internal(set) var projectID: UUID?
+  /// 所在的项目；没指定的在默认项目（`Project.defaultID`）。
+  public internal(set) var projectID: UUID
   /// 正文：一段 Markdown（`CueFormat`），图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
   /// 资料：项目里长期参考的灵感（项目页任务区下面一组）。字段名沿用同步记录里的 isPinned。
@@ -147,9 +152,9 @@ public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
 
-/// 同一项目（nil = 未分类）里某一状态的任务（`CueStore.tasks(_:)`）。
+/// 同一项目里某一状态的任务（`CueStore.tasks(_:)`）。
 public struct TaskGroup: Equatable, Sendable {
-  public let projectID: UUID?
+  public let projectID: UUID
   public internal(set) var tasks: [Card]
 }
 
@@ -199,9 +204,9 @@ public enum AgentHandoff: Hashable, Sendable {
   case launching
 }
 
-/// 卡片挂在哪：某项目（nil = 未分类）的顶层，或某条任务下面（项目随它）。
+/// 卡片挂在哪：某项目的顶层，或某条任务下面（项目随它）。
 public enum CardSlot: Hashable, Sendable {
-  case top(project: UUID?)
+  case top(project: UUID)
   case under(UUID)
 }
 
@@ -308,8 +313,8 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文命中；项目名只用于单列的项目结果。
   /// 空表示不按文字过滤。
   public var text: String
-  /// 限定所属项目；nil 元素表示未分类；nil 表示不限；空集合无结果。
-  public var projects: Set<UUID?>?
+  /// 限定所属项目；nil 表示不限；空集合无结果。
+  public var projects: Set<UUID>?
   /// true 只要含图片的卡，false 只要不含图片的卡，nil 不限。
   public var hasImages: Bool?
   /// 发送条件：不限、从未发送过、或发送过（可限目标）。
@@ -320,7 +325,7 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   public var inTrash: Bool
 
   public init(
-    text: String = "", projects: Set<UUID?>? = nil, hasImages: Bool? = nil, sent: SendCondition = .any,
+    text: String = "", projects: Set<UUID>? = nil, hasImages: Bool? = nil, sent: SendCondition = .any,
     modifiedIn: ClosedRange<Date>? = nil, inTrash: Bool = false
   ) {
     self.text = text
@@ -366,9 +371,9 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
+/// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
 public struct ProjectSummary: Equatable, Sendable {
-  public var projectID: UUID?
+  public var projectID: UUID
   public var cardCount: Int
 }
 
@@ -377,8 +382,10 @@ public enum CueStoreError: Error, Equatable {
   case blankTaskContent
   case blankProjectName
   case notAnImage
-  /// 卡片或任务只能归属存在且未在回收站的项目（或不归属任何项目）。
+  /// 卡片或任务只能归属存在且未在回收站的项目。
   case invalidProject
+  /// 默认项目不能删除（`Project.defaultID`）。
+  case defaultProjectUndeletable
   /// `resolveConflict` 的目标不是冲突副本。
   case notAConflictCopy
   /// 下载的附件内容与其哈希不符。
@@ -406,8 +413,12 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(String, limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 发到手机的一份没有标题、标题不止一行、宽过 `limit` 或与同批重复（参数是文件名）。
+  case previewTitle(String, limit: Int)
   /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
   case readOnlyLibrary
+  /// 手机上要开新会话，而一台 Mac 都还没打开过 CuePad（没写过 `macAgents`、也没有目录绑定）。
+  case noMac
   // 以下除 memoryLineTooLong 外只有 Cue 经 MCP 会碰到：文案直接写给 Cue，说清该怎么办（Cue 的工具原样转给它）。
   /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
@@ -419,8 +430,6 @@ public enum CueStoreError: Error, Equatable {
   case stepsRemaining(Int)
   /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
   case launching(String)
-  /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
-  case noFolder(String)
   /// 开会话的那台 Mac 记着这家不能用（参数是"Agent 名 原因"）。
   case agentUnavailable(String)
   /// 开会话的那台 Mac 一家能用的都没有（参数是 `MacAgents.whyNone`）。
@@ -453,11 +462,11 @@ public enum CueStoreError: Error, Equatable {
   case notAChoice(String)
   /// 允许清单里有这类事（参数是只管的那个项目的名字；不分项目的为 nil）。
   case alreadyAllowed(String?)
-  /// 提问的动作或规矩短语缺了、超长或不止一行（`CueAsking`）。
-  case askPhrase(field: String, hint: String, limit: Int)
-  /// 提问的图多于 `limit` 张或有重复（`CueAsking`）。
-  case askShots(limit: Int)
-  /// 提问点名的那一份不在发到手机的里（参数是 id）。
+  /// Cue 写的短语（提问的动作、规矩，图看什么）缺了、超长或不止一行（`CueAsking`、`CueShot.checked`）。
+  case phrase(field: String, hint: String, limit: Int)
+  /// 点名的图多于 `limit` 张或有重复（`CueShot.checked`）。
+  case shots(limit: Int)
+  /// 点名的那一份不在发到手机的里（参数是 id）。
   case shotMissing(String)
   /// 规矩那一类不能放进允许清单。
   case cannotAllowRule
@@ -471,6 +480,7 @@ extension CueStoreError: LocalizedError {
     case .blankProjectName: "项目名不能为空"
     case .notAnImage: "不是可识别的图片"
     case .invalidProject: "目标项目已不存在或在回收站"
+    case .defaultProjectUndeletable: "默认项目不能删除"
     case .notAConflictCopy: "这条不是冲突副本"
     case .attachmentHashMismatch: "附件内容与其哈希不符"
     case .invalidAttachmentHash: "附件的哈希格式不对"
@@ -485,16 +495,15 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let path, let limit): "文件太大，单个不超过 \(limit / 1_000_000) MB：\(path)"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .previewTitle(let name, let limit):
+      "\(name) 的标题要一句说清这份是什么、看哪里，同一次发的各不相同（一行、宽不过 \(limit)，约 \(limit / 2) 个汉字，用和用户对话的语言），如“深色：会话列表的分组标题”"
     case .readOnlyLibrary: "资料库是只读的，写不进去"
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"
     case .stepsRemaining(let count): "还有 \(count) 个步骤没完成：先把它们做完并 done（不用做的，evidence 写明为什么不用做）"
     case .sending(let title): "「\(title)」的话正送进上一步的会话：送到后这一步就绑上它，再用 say 说话（peek 看状态）"
     case .launching(let title): "正在为「\(title)」开会话：等它开好（peek 看状态），再用 say 说话"
-    case .noFolder(let project):
-      project.isEmpty
-        ? "这件事在未分类，开不了会话：用 edit 的 project 放进一个绑了文件夹的项目"
-        : "项目「\(project)」没绑文件夹，开不了会话：用 tell 请用户在 CuePad 里给它绑一个"
+    case .noMac: "还没有 Mac 打开过 CuePad，开不了会话：先在 Mac 上打开它"
     case .agentUnavailable(let reason): "开不了会话：\(reason)。start 的 agent 换成系统提示里列着的那几家"
     case .noAgent(let why): "开会话的那台 Mac 上没有能用的 Agent（\(why)）：用 tell 告诉用户"
     case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
@@ -510,8 +519,8 @@ extension CueStoreError: LocalizedError {
     case .cueNotEnabled: "Cue 没有启用，不能派活：等用户在 CuePad 里重新启用"
     case .questionEnded: "这条提问已经结束了"
     case .notAChoice(let answer): "「\(answer)」不是这条提问的选项"
-    case .askPhrase(let field, let hint, let limit): "带 ask 要写 \(field)：\(hint)，一行、不超过 \(limit) 字"
-    case .askShots(let limit): "show 至多 \(limit) 张、不重复：只挑回答这个问题必须看的"
+    case .phrase(let field, let hint, let limit): "\(field)：\(hint)，一行、不超过 \(limit) 字"
+    case .shots(let limit): "show 至多 \(limit) 张、不重复：只挑回答问题必须看的、证明结论的最终成果"
     case .shotMissing(let id): "发到手机的里没有 \(id)：照 task peek 里列的 id 写"
     case .alreadyAllowed(let project): "这类事在允许清单里（\(project.map { "项目「\($0)」" } ?? "所有项目")不用问）：直接做，做完告诉他"
     case .cannotAllowRule: "规矩那一类不能放行：要他先问的就一直问"
@@ -564,7 +573,7 @@ extension Card: Record {
   }
   init(row: Row) {
     self.init(
-      id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2), isPinned: row.bool(3),
+      id: row.uuid(0), projectID: row.uuid(1), body: row.text(2), isPinned: row.bool(3),
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), ownStartedAt: row.dateOrNil(12), startedAt: row.dateOrNil(17),

@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 演示库里 Cue 页的结果卡（`seedCue` 里调）：三件活各有会话发来的交付物——"落地页深浅两版"做完了，挂着两份网页（同一组两份网页左右翻）；
-/// "修好登录页的键盘遮挡"做完了，挂着修复前与修复后两张截图；
-/// "重做定价区"中途 Cue 核对过一批，挂着网页、PDF、横图与 Markdown 四份（三份起横向滑）。README 那件挂着一张（`seedCue`），
+/// 演示库里 Cue 页的结果卡（`seedCue` 里调）：会话发来的不止最终成果，结果卡只挂 Cue 做完时点名的那几张——
+/// "落地页深浅两版"会话发了方案稿与最终版浅深两份网页，结果卡只挂最终版两份（左右翻）；
+/// "修好登录页的键盘遮挡"发了修复前、中途一版与修复后，结果卡只挂修复前与修复后；
+/// "重做定价区"中途 Cue 核对过一批（网页、PDF、横图与 Markdown 四份），那句话不挂图，四份在会话页里。README 那件做完没点名图（`seedCue`），
 /// "等你"里的推送点名了部署会话发来的截图与测试报告（`seedCue`）。
 extension DebugScene {
     static func seedDeliveries(_ store: CueStore) async throws {
@@ -16,38 +17,45 @@ extension DebugScene {
             return url
         }
 
-        let landing = try await store.createTask("落地页深浅两版", in: nil)
+        let landing = try await store.createTask("落地页深浅两版")
         try await store.linkCard(landing.id, toSession: "landing")
-        _ = try await store.addPreviews(filesAt: [
-            try file("浅色.html", Data(pricingPage.utf8)),
-            try file("深色.html", Data(pricingPage.replacing("</style>", with: darkPricing + "</style>").utf8)),
-        ], title: nil, sessionID: "landing")
-        _ = try await store.finishTask(landing.id, evidence: ["浅色深色各一版，按钮对比度都过了 4.5:1"])
+        _ = try await store.addPreviews([(try file("draft-hero.png", widePNG()), "方案稿：首屏三档并排")], sessionID: "landing")
+        let pages = try await store.addPreviews([
+            (try file("final-light.html", Data(pricingPage.utf8)), "最终版浅色：定价页首屏"),
+            (try file("final-dark.html", Data(pricingPage.replacing("</style>", with: darkPricing + "</style>").utf8)), "最终版深色：定价页首屏"),
+        ], sessionID: "landing").map(\.preview)
+        _ = try await store.finishTask(
+            landing.id, evidence: ["浅色深色各一版，按钮对比度都过了 4.5:1"],
+            shots: [CueShot(preview: pages[0].id, look: "浅色：专业档描边是推荐"), CueShot(preview: pages[1].id, look: "深色：按钮对比度够")])
 
-        let keyboard = try await store.createTask("修好登录页的键盘遮挡", in: nil)
+        let keyboard = try await store.createTask("修好登录页的键盘遮挡")
         try await store.linkCard(keyboard.id, toSession: "keyboard")
-        _ = try await store.addPreviews(filesAt: [
-            try file("修复前.png", phonePNG(covered: true)), try file("修复后.png", phonePNG(covered: false)),
-        ], title: nil, sessionID: "keyboard")
-        _ = try await store.finishTask(keyboard.id, evidence: ["小屏上键盘弹出后登录钮仍可见", "横竖屏切换不跳动"])
+        let fixes = try await store.addPreviews([
+            (try file("before.png", phonePNG(covered: true)), "修复前：键盘挡住登录钮"),
+            (try file("wip.png", phonePNG(covered: true) + Data("wip".utf8)), "中途一版：只改了滚动"),
+            (try file("after.png", phonePNG(covered: false)), "修复后：登录钮在键盘上方"),
+        ], sessionID: "keyboard").map(\.preview)
+        _ = try await store.finishTask(
+            keyboard.id, evidence: ["小屏上键盘弹出后登录钮仍可见", "横竖屏切换不跳动"],
+            shots: [CueShot(preview: fixes[0].id, look: "修复前：登录钮被键盘挡住"), CueShot(preview: fixes[2].id, look: "修复后：登录钮露在键盘上方")])
 
-        let pricing = try await store.createTask("重做定价区", in: nil)
+        let pricing = try await store.createTask("重做定价区")
         try await store.linkCard(pricing.id, toSession: "pricing")
-        _ = try await store.addPreviews(filesAt: [
-            try file("pricing.html", Data(pricingPage.utf8)), try file("定价对比.pdf", reportPDF()),
-            try file("宽屏.png", widePNG()), try file("改动说明.md", Data(pricingNotes.utf8)),
-        ], title: "定价区三种方案", sessionID: "pricing")
+        _ = try await store.addPreviews([
+            (try file("pricing.html", Data(pricingPage.utf8)), "定价页：三档在窄屏横滑"), (try file("定价对比.pdf", reportPDF()), "三档价格对比表"),
+            (try file("宽屏.png", widePNG()), "宽屏：三档并排"), (try file("改动说明.md", Data(pricingNotes.utf8)), "改了什么、还差什么"),
+        ], sessionID: "pricing")
         _ = try await store.addCueMessage(
             .cue, text: "定价区的会话发来了一批，我核对过：三档价格在窄屏下不再挤成两行，年付的折扣标在卡片右上角。还差深色模式，让它接着做。",
             task: pricing.id)
 
         // "等你"里推送的那件：部署会话发来预发上的截图与测试报告
-        _ = try await store.addPreviews(filesAt: [try file("预发.png", phonePNG(covered: false))], title: "预发上的发言顺序", sessionID: "deploy")
-        _ = try await store.addPreviews(filesAt: [try file("测试报告.pdf", reportPDF())], title: "重连测试报告", sessionID: "deploy")
+        _ = try await store.addPreviews([(try file("预发.png", phonePNG(covered: false)), "预发上的发言顺序")], sessionID: "deploy")
+        _ = try await store.addPreviews([(try file("测试报告.pdf", reportPDF()), "重连测试报告")], sessionID: "deploy")
     }
 
     /// `-CuePadAllKinds YES|<n>`：空着的 scratch 会话里发六批，每批两份并排：3D 模型与一张还没到本机的（附件文件删掉，卡片写"下载中"；
-    /// 标题"模型"），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
+    /// 标题同文件名），之后每种能发的类型各一份；`-CuePadOpenPreview <文件名>` 打开其中一份的预览页。给数字只发前 n 批：
     /// 会话页停在最新处，一屏看到的是最后两三批，换着 n 拍几张就每种都拍到了。
     /// 视频、音频、Office 与 3D 只要扩展名对，内容是占位的字节：系统给不出缩略图、时长时显示的正是类型图标。
     static func seedAllKinds(_ store: CueStore, upTo count: Int?) async {
@@ -60,16 +68,17 @@ extension DebugScene {
         let filler = Data("placeholder".utf8)
         // 字节与别处的截图不同：附件按内容存一份，同样的字节会被别的演示数据重新写回来
         let away = phonePNG(covered: true) + Data("away".utf8)
-        let batches: [(String, [URL?])] = [
-            ("模型", [file("模型.usdz", filler), file("还在路上.png", away)]),
-            ("录音与录屏", [file("录音.m4a", filler), file("录屏.mov", filler)]),
-            ("文稿与表格", [file("需求.docx", filler), file("数据.xlsx", filler)]),
-            ("汇报与报告", [file("汇报.pptx", filler), file("报告.pdf", reportPDF())]),
-            ("日志与说明", [file("日志.txt", Data("12:00 ok\n12:01 retry\n".utf8)), file("改动说明.md", Data(pricingNotes.utf8))]),
-            ("网页与截图", [file("定价页.html", Data(pricingPage.utf8)), file("预发.png", phonePNG(covered: false))]),
+        let batches: [[URL?]] = [
+            [file("模型.usdz", filler), file("还在路上.png", away)],
+            [file("录音.m4a", filler), file("录屏.mov", filler)],
+            [file("需求.docx", filler), file("数据.xlsx", filler)],
+            [file("汇报.pptx", filler), file("报告.pdf", reportPDF())],
+            [file("日志.txt", Data("12:00 ok\n12:01 retry\n".utf8)), file("改动说明.md", Data(pricingNotes.utf8))],
+            [file("定价页.html", Data(pricingPage.utf8)), file("预发.png", phonePNG(covered: false))],
         ]
-        for (title, files) in batches.prefix(count ?? batches.count) {
-            guard let added = try? await store.addPreviews(filesAt: files.compactMap { $0 }, title: title, sessionID: "scratch") else { continue }
+        for files in batches.prefix(count ?? batches.count) {
+            let named = files.compactMap { $0 }.map { (url: $0, title: $0.deletingPathExtension().lastPathComponent) }
+            guard let added = try? await store.addPreviews(named, sessionID: "scratch") else { continue }
             for entry in added where entry.preview.name == "还在路上.png" {
                 if let stored = store.files.fileURL(for: entry.preview.hash) { try? FileManager.default.removeItem(at: stored) }
             }

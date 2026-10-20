@@ -110,14 +110,16 @@ actor PiHistoryPersistence {
         } while (try? await timing.sleep(.seconds(86_400))) != nil
     }
 
-    /// 一个 Agent 的回填完成：它的索引只留下此刻的会话文件（别家的不动）。
-    func retain(_ files: [URL], of agent: AgentKind) async throws {
+    /// 一个 Agent 的回填完成：回填的是整个目录（`files` 不为 nil）时它的索引只留下此刻的会话文件（别家的不动），返回 true——
+    /// 调用方接着对账托管会话的记录。
+    func backfillFinished(_ files: [URL]?, of agent: AgentKind) async throws -> Bool {
         if let backfillStarted {
             Self.log.notice(
-                "回填完成：\(files.count) 个会话文件，其中 \(self.outdated) 个检查点格式已过期、从头重读，用时 \(ContinuousClock.now - backfillStarted, privacy: .public)")
+                "回填完成：\(agent.rawValue, privacy: .public) \(files.map { "\($0.count) 个会话文件" } ?? "托管过的会话", privacy: .public)，\(self.outdated) 个检查点格式已过期、从头重读，用时 \(ContinuousClock.now - backfillStarted, privacy: .public)")
             self.backfillStarted = nil
             outdated = 0
         }
+        guard let files else { return false }
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
         let removed = try await storage.retainPiSessions(paths: paths, agent: agent, host: host)
@@ -126,12 +128,19 @@ actor PiHistoryPersistence {
             starts = nil
             Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")
         }
+        return true
     }
 
-    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动），下次接入从头回填。
+    /// 一家 Agent 断开了接入：删掉它的本机会话索引（同步记录不动；这台 Mac 托管过的会话留着，见 `CueStore.deletePiSessions`），
+    /// 下次接入从头回填。
     func forget(_ agent: AgentKind) async throws {
-        try await storage.deletePiSessions(of: agent)
+        try await storage.deletePiSessions(of: agent, keepingHostedOn: host)
         starts = nil
+    }
+
+    /// 没接入的 Agent 回填的范围：这台 Mac 托管过的会话。
+    func hostedScope(of agent: AgentKind) async throws -> PiHistoryScope {
+        .sessions(try await storage.hostedPiSessionIDs(of: agent, host: host))
     }
 
     private func loadedStarts() async throws -> [String: IndexedSessionStart] {

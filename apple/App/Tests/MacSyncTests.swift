@@ -36,9 +36,9 @@ struct MacSyncTests {
     // MARK: 退出
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，
-    /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。
+    /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。收尾停掉同步与执行器：之后写给本机的请求没人领取。
     @Test(.timeLimit(.minutes(1)))
-    func 主线程被占住时退出收尾仍在上限内完成() async throws {
+    func 主线程被占住时退出收尾仍在上限内完成_停掉同步与执行器() async throws {
         services.startSync()
         try await services.executor.start()
         try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
@@ -51,6 +51,12 @@ struct MacSyncTests {
         }
         #expect(Self.blockCurrentThread(until: done, seconds: 30), "主线程被占住时收尾等不到")
         #expect(rig.sync.stopped == 1)
+
+        let request = try await services.store.requestDelivery(
+            "hi", to: SendTarget(kind: .mac, name: "CuePad"), on: TestApp.hostID)
+        // 停止后不再有观察者领取：给执行器足够的时间再确认仍未处理
+        await quietPeriod(.milliseconds(300))
+        #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
     }
 
     /// 同步地占住当前（主）线程，直到信号或超时。
@@ -94,21 +100,6 @@ struct MacSyncTests {
 
         #expect(await uploads.next() == record)
         #expect(try await !services.store.macOnline(host))
-    }
-
-    @Test func 退出时停止同步与远程投送执行器() async throws {
-        services.startSync()
-        try await services.executor.start()
-        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
-
-        _ = await services.beginShutdown()()
-
-        #expect(rig.sync.stopped == 1)
-        let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .mac, name: "CuePad"), on: TestApp.hostID)
-        // 停止后不再有观察者领取：给执行器足够的时间再确认仍未处理
-        await quietPeriod(.milliseconds(300))
-        #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
     }
 
     // MARK: 唤醒
@@ -285,41 +276,39 @@ struct MacSyncTests {
         var description: String { what }
     }
 
-    @Test func 手机的Pi直发请求在这台Mac执行并写回结果() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+    /// 手机对在线会话的斜杠命令、作答、改配置、结束、停止：各走桥的命令通道（命令由 Pi 展开执行，不当文字发出），按成功写回，
+    /// 不恢复会话、不写发送记录（发送记录只记内容的投送）。
+    @Test func 手机的控制请求交给桥按各自的通道执行_不写发送记录() async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        // 带上请求 id：扩展写进会话文件里那条消息，对话据此把请求气泡换成它
-        #expect(ext.messages == [PiMessage(text: "做这件事", deliveryID: request.id.uuidString)])
-        #expect(done.handledBy == TestApp.hostID)
-    }
-
-    /// 斜杠命令走桥的命令通道（由 Pi 展开执行，不是当文字发出），不记发送记录。
-    @Test func 手机的斜杠命令请求交给桥按命令执行() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "/greet world", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        let sent = try #require(ext.commands.last?.json)
-        #expect(ext.received == ["command"] && sent["text"] as? String == "/greet world")
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)  // 发送记录只记内容的投送，命令不记
+        let store = services.store, host = TestApp.hostID
+        func target(_ ref: String) -> SendTarget { SendTarget(kind: .piSession, name: "app", ref: ref) }
+        let cases: [(ref: String, received: String, request: () async throws -> DeliveryRequest, sent: ([String: Any]) -> Bool)] = [
+            ("command", "command", { try await store.requestDelivery("/greet world", to: target("command"), on: host, mode: .command) },
+             { $0["text"] as? String == "/greet world" }),
+            ("answer", "answer", { try await store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("覆盖")), to: target("answer"), on: host) },
+             { $0["promptId"] as? String == "p-1" && $0["value"] as? String == "覆盖" }),
+            ("config", "config", {
+                try await store.requestConfig(PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high), to: target("config"), on: host)
+            }, { $0["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"] && $0["thinking"] as? String == "high" }),
+            ("end", "end", { try await store.requestEnd(of: target("end"), on: host) }, { _ in true }),
+            ("stop", "abort", { try await store.requestStop(of: target("stop"), on: host) }, { _ in true }),
+        ]
+        for c in cases {
+            let ext = try await rig.host.connect(c.ref, cwd: "/work/app", busy: true)
+            let done = try await awaitFinished(try await c.request().id)
+            #expect(done.status == .known(.succeeded), "\(c.ref)")
+            #expect(ext.received == [c.received], "\(c.ref)")
+            #expect(ext.commands.last.map { c.sent($0.json) } == true, "\(c.ref)")
+        }
+        #expect(rig.host.calls.isEmpty)
+        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 发给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
     @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
         _ = try await rig.host.connect("sess-1", cwd: "/work/app")
-        let task = try await services.store.createTask("改登录", in: nil)
+        let task = try await services.store.createTask("改登录")
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
@@ -347,51 +336,6 @@ struct MacSyncTests {
         #expect(ext.commands.isEmpty)
     }
 
-    @Test func 手机的作答请求交给扩展作答_不写发送记录() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestAnswer(
-            PiAnswer(promptID: "p-1", value: .option("覆盖")), to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"),
-            on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        let sent = try #require(ext.commands.last?.json)
-        #expect(ext.received == ["answer"] && sent["promptId"] as? String == "p-1" && sent["value"] as? String == "覆盖")
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
-    @Test func 手机的配置请求交给桥改模型与思考强度_不写发送记录() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestConfig(
-            PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high),
-            to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        let sent = try #require(ext.commands.last?.json)
-        #expect(ext.received == ["config"] && sent["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"] && sent["thinking"] as? String == "high")
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
-    @Test func 手机的结束请求让会话收尾_不写发送记录() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        #expect(ext.received == ["end"] && rig.host.calls.isEmpty)
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
-    }
-
     /// 已经结束的会话（不在这台 Mac 的桥上）没有可结束的会话、也没有这一轮可停：目标达成，按成功写回，不恢复它、不碰桥。
     @Test(arguments: [DeliveryMode.end, .stop])
     func 结束或停止已经结束的会话直接成功_不恢复(mode: DeliveryMode) async throws {
@@ -406,19 +350,6 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls.isEmpty)
-    }
-
-    @Test func 手机的停止请求让桥中止这一轮_不写发送记录() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        #expect(ext.received == ["abort"])
-        #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
     /// 手机上停止、结束、改配置：请求都发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
@@ -578,21 +509,6 @@ struct MacSyncTests {
         return session
     }
 
-    @Test func 给已结束的会话发消息_后台恢复后送达() async throws {
-        let app = try folder("app")
-        let indexed = try await indexed("s1", cwd: app)
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
-        #expect(rig.host.extensions["s1"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
-    }
-
     /// 改名是会话设置（配置请求带名字）：发给已结束的会话时与发消息同一条路，先在后台恢复它再交给扩展改名；不写发送记录。
     @Test func 给已结束的会话改名_后台恢复后改_不写发送记录() async throws {
         let app = try folder("app")
@@ -691,7 +607,7 @@ struct MacSyncTests {
         ])
     }
 
-    @Test func 新会话_没有开场的话就不发_项目没有目录时失败() async throws {
+    @Test func 新会话_没有开场的话就不发_项目没绑文件夹时在工作区开() async throws {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
@@ -703,9 +619,11 @@ struct MacSyncTests {
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-2")])
         #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
 
-        let noDirectory = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
-        #expect(noDirectory.status == .known(.failed))
-        #expect(noDirectory.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+        let unbound = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
+        #expect(unbound.status == .known(.succeeded))
+        let workspace = rig.workspaces.directory(for: "无目录").path(percentEncoded: false)
+        #expect(try await services.store.directory(of: bare.id) == workspace)
+        #expect(FileManager.default.fileExists(atPath: workspace))
     }
 
     // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）
@@ -933,19 +851,6 @@ struct MacSyncTests {
         #expect(rig.host.calls.isEmpty)
     }
 
-    @Test func 目标会话已结束时请求失败并说明原因() async throws {
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .piSession, name: "gone", ref: "sess-gone"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.failed))
-        #expect(done.resultDetail?.contains("会话") == true)
-        #expect(rig.host.calls.isEmpty)
-    }
-
     /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。
     @Test func 旧版本写来的发到应用请求按失败写回() async throws {
         try await services.executor.start()
@@ -959,11 +864,9 @@ struct MacSyncTests {
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
+    /// 本机标识写在每条同步记录上：派生方式一变，这台 Mac 写过的记录就都不认了；也不带出硬件 UUID 原值。
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {
-        let first = HostIdentity.hostID(platformUUID: "A1B2C3D4-0000-4000-8000-000000000001")
-        #expect(first == HostIdentity.hostID(platformUUID: "A1B2C3D4-0000-4000-8000-000000000001"))
-        #expect(first != HostIdentity.hostID(platformUUID: "A1B2C3D4-0000-4000-8000-000000000002"))
-        #expect(first.hasPrefix("mac-") && !first.contains("A1B2C3D4"))
+        #expect(HostIdentity.hostID(platformUUID: "A1B2C3D4-0000-4000-8000-000000000001") == "mac-8644cc63caf7fc7a")
     }
 }
 #endif

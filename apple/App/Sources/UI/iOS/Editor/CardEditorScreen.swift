@@ -33,10 +33,10 @@ struct CardEditorScreen: View {
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .floatingHeader(data?.project?.name ?? (data == nil ? "" : CaptureCopy.unfiled), detail: data.map(detail) ?? "") { actions }
+            .floatingHeader(data?.project?.name ?? "", detail: data.map(detail) ?? "") { actions }
             .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-                return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
+                return EditorData(card: card, project: try store.project(card.projectID))
             }
             .onChange(of: data?.card.id, initial: true) {
                 guard editing == nil, let card = data?.card else { return }

@@ -16,7 +16,7 @@ import Foundation
 ///   这一下不报成一轮。斜杠命令因此开着，他的话以 `/` 开头时前面垫一个空格，不被当成命令；
 /// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求 `set_model` 与 `apply_flag_settings` 的 `effortLevel`
 ///   （与托管会话同一份，见 `ClaudeStream`）；
-/// - 一轮从 `system/init` 到 `result`；停下这一轮走控制请求 `interrupt`；
+/// - 一轮从开始请求模型（`ClaudeStream.requestsModel`）到 `result`；停下这一轮走控制请求 `interrupt`；
 /// - 正在说的话用 `ClaudeStream` 累积好的（`onDraft`）；被停下的一轮在 `turnFinished` 前清掉（它的 `result` 不一定标出错）。
 @MainActor
 final class ClaudeBrain: CueBrain {
@@ -115,7 +115,7 @@ final class ClaudeBrain: CueBrain {
             guard let id = event["request_id"]?.string else { return }
             try? stream?.write(["type": "control_response", "response": ["subtype": "error", "request_id": .string(id), "error": "CuePad does not handle this request"]])
         case "system":
-            guard event["subtype"]?.string == "init", turn == nil else { return }
+            guard ClaudeStream.requestsModel(event), turn == nil else { return }
             turn = Turn()
             session.emit(.turnStarted)
         case "assistant":

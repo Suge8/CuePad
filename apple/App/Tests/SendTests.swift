@@ -48,13 +48,13 @@ struct SendTests {
     func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
         let ext = try await connectedSession()
         let body = try await bodyWithImage()
-        let task = try await services.store.createTask("do it", in: nil)
+        let task = try await services.store.createTask("do it")
 
         Workspace(services: services).send(body, to: AgentTarget(session: ext.sessionID), card: task.id)
 
         let request = try await settled()
         #expect(request.status == .known(.succeeded))
-        #expect(request.hostID == TestApp.hostID)
+        #expect(request.hostID == TestApp.hostID && request.handledBy == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(ext.messages == [
             PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
@@ -82,13 +82,14 @@ struct SendTests {
         Workspace(services: services).send("hi", to: AgentTarget(session: "nope"))
 
         #expect(try await settled().failure != nil)
+        #expect(rig.host.calls.isEmpty)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
-    /// Cue 发进会话的话（投送请求 origin 是 cue）送达、请求清理之后，会话页里那条消息仍标着 Cue：认的是发送记录，不是请求。
+    /// Cue 发进会话的话（投送请求 origin 是 cue）进了对话，请求随之收走、气泡由对话里那条接替，那条仍标着 Cue：认的是发送记录，不是请求。
     @Test(.timeLimit(.minutes(1)))
     @MainActor
-    func Cue发进会话的话_请求清理之后会话页仍标着Cue() async throws {
+    func Cue发进会话的话_进了对话请求随之收走_会话页仍标着Cue() async throws {
         let ext = try await connectedSession()
         let store = services.store
         let request = try await store.requestDelivery(
@@ -96,7 +97,6 @@ struct SendTests {
         for try await status in store.observe({ try $0.deliveryRequest(request.id)?.status }) {
             if status == .known(.succeeded) { break }
         }
-        try await store.deleteDelivery(request.id)
         let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: "跑一遍测试", at: .now, deliveryID: request.id)
         try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
 

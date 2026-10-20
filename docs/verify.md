@@ -1,45 +1,38 @@
 # 验收与测量
 
+Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.swift`）的文档注释里；`xc.sh` 的用法在它的头注释里。这里只记代码里查不到的做法与坑。
+
 ## 视觉验收
 
-一条命令完成构建、装包、起隔离实例、等画面就绪、截图或录屏、退出（首次要给终端屏幕录制权限）；`--` 之后是 App 启动参数：
+`xc.sh shot|rec <平台> <文件> -- <启动参数…>` 一条命令构建、起隔离实例、等画面就绪、截图或录屏、退出（首次要给终端屏幕录制权限）：
 
 ```bash
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
 apple/scripts/xc.sh rec ios out.mov -- -CuePadDemo YES -CuePadCycle YES
 ```
 
-- Debug 认的启动参数只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里。调试键不写进偏好域：预填的搜索词只认启动参数。
-- Mac 窗口默认 1440×900，别的尺寸给 `-CuePadWindowSize`。按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏，Mac 图就是 1 倍像素。
-- 报窗口被缩小显示时，是调度中心或台前调度开着：请用户收起，Agent 不发系统按键。
-- 后台窗口里的网页截图不可信（过几秒就成了空白）：看网页预览用 `-CuePadWebSnapshot <PNG 路径>`（配 `-CuePadOpenPreview`，载入完存成 PNG）。
-- Mac 的系统菜单（项目切换、右键菜单）：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y`（或 `-CuePadRightClick`）让实例自己点开（占前台，见「占前台」），再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 上的菜单没有从代码打开的公开接口，截菜单用 `xc.sh run` 起实例后 axe 点开。
-- iPhone 的系统返回（返回钮、左缘滑动）同样只能真操作：录屏时另起 axe 点左上的返回钮、从左缘滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
-- 图标：`-CuePadScene icons`（iPad）一屏看全部墨块符号（层级与单色各一个）和 全部项目图标 × 8 色，改了生成器先看它。
-- 交付物与预览：`-CuePadAllKinds`（配 scratch 会话）发每种文件类型各一份，`-CuePadOpenPreview <标题或文件名>` 直接打开那张预览。
-- 展开的样子：`-CuePadToolsOpen YES` 让每轮经过、子代理名册与 Cue 的动态一出现就展开，截全清单用。
-- 发送：`-CuePadSpeech press` 在输入框出现后（`-CuePadPressAfter` 秒，默认 3）真按一次发送钮，录发送动效；配 `-CuePadFlightLog <路径>` 量这一下的 CPU 与掉帧（改前改后交替跑，口径见 `measureFlight`）；`-CuePadReduceMotion YES` 看减弱动态效果。
-- 小组件与分享扩展：`-CuePadScene widgets`、`share`（iOS）用它们自己的视图画在桌面色上，模拟器桌面上加小组件脚本不做。
-- 录屏：会话状态切换配 `-CuePadCycle YES`；冷启动首屏给 `CUEPAD_REC_LAUNCH=1`（ios、ipad，从启动前开录），配 `-CuePadSync arrive` 看启动后拉到一批别处写下的话。录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。
-- 裁图、缩放用 `sips`（`sips -c 高 宽 --cropOffset y x`、`sips -z 高 宽`），本机没装 ImageMagick。
-- 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。
-- 验收用户装着的版本前，核对装着的 App 构建号（`defaults read ~/Applications/CuePad.app/Contents/Info CFBundleVersion`）与 `~/.pi/agent/extensions/cuepad-bridge.ts` 里的 `EXTENSION_VERSION` 是否就是要验的那一版。
+- Mac 按窗口拍，图的像素是窗口在屏上的像素：这台 Mac 接的是 1x 屏。报窗口被缩小显示时是调度中心或台前调度开着：请用户收起，不发系统按键。
+- 后台窗口里的网页过几秒就成空白，截图不可信：用 `-CuePadWebSnapshot`。
+- Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后用 axe 点开。
+- iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
+- 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。
+- 灵动岛 `simctl io screenshot` 拍不到：录一小段取最后一帧。
+- 录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。裁图、缩放用 `sips`（本机没装 ImageMagick）。
+- 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 与 `~/.pi/agent/extensions/cuepad-bridge.ts` 的 `EXTENSION_VERSION` 就是要验的那一版（只读）。
 
 ## 占前台
 
-开发与测试的自动化不抢前台：本机构建（Debug、测试宿主、perf 的 Release）不管怎么起都在后台，窗口排在所有窗口最后（`DebugHooks.staysInBackground`）；Mac 截图、录屏按窗口拍，模拟器不开 Simulator.app，bcu、axe 按进程投递，都不动用户的前台和指针。
+本机构建（Debug、测试宿主、perf 的 Release）一律在后台、窗口排最后；截图按窗口拍、模拟器不开 Simulator.app、bcu 与 axe 按进程投递，都不动用户的前台和指针。借前台只经 `DebugForeground`（启动参数 `-CuePadForeground YES`，量完把前台与指针还回去），非占不可的只有：
 
-非占前台不可的只有下面几样，都要启动参数 `-CuePadForeground YES`，经 `DebugForeground` 借，量完或实例退出时把前台应用和指针还回去：
+- 和交互预算比的 `xc.sh perf mac`：后台没有玻璃合成与动画，帧与掉帧偏乐观。
+- `-CuePadClick`、`-CuePadRightClick`：后台 App 的菜单是停用的灰，没激活的窗口里点一下只是激活。
+- `-CuePadBench chatscroll` 的 process、hid 驱动：真实滚轮与指针。
 
-- 和交互预算比的 `xc.sh perf mac`：前台才有玻璃合成与动画，后台量的帧与掉帧偏乐观。
-- `-CuePadClick`、`-CuePadRightClick` 截系统菜单：后台 App 的菜单画成停用的灰。
-- `-CuePadBench chatscroll` 的 process、hid 驱动：经窗口服务器的真实滚轮与指针。
-
-只在用户说过这段时间不用电脑、或明确要这几样数字时给；用户在用电脑时用后台的数（指令数照样能前后对比）。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。新加的自动化要占前台，也只经 `DebugForeground`，并补进上面这张单子。
+只在用户说过这段时间不用电脑、或明确要这几样数字时给；平时用后台的数（指令数照样能前后对比）。新加的自动化要占前台也只经 `DebugForeground`，并补进这张单子。真实按键（⌘V、全局热键）与跨应用粘贴不自动化，只人工验证。
 
 ## 真实数据复现
 
-首帧、滚动、输入类问题，在演示库上好了不算修好，要在用户真实库的只读副本上复现并验证：演示库的条数、正文长短与图片都和真实库差得远。
+首帧、滚动、输入类问题，在演示库上好了不算修好：演示库的条数、正文长短与图片和真实库差得远。在真实库的只读副本上复现：
 
 ```bash
 mkdir -p /tmp/cuepad-copy
@@ -48,71 +41,58 @@ cp -R "<库目录>/Attachments" /tmp/cuepad-copy/   # 要看图时
 CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
 ```
 
-`.backup` 走 SQLite 的在线备份，正式版开着库也能拷出一致的一份；直接 `cp` 会漏掉 WAL 里还没落盘的写入。副本里有用户的私人内容，验完删掉 `/tmp/cuepad-copy`。
+`.backup` 在正式版开着库时也拷得出一致的一份；直接 `cp` 会漏掉 WAL 里没落盘的写入。副本里是用户的私人内容，验完删掉 `/tmp/cuepad-copy`。
 
-## 交互验收（Mac）
+## 交互验收
 
-点菜单、输入、看状态变化先读 better-computer-use skill，用 `bcu` 操作 `xc.sh run mac` 起的隔离实例：实例在后台，bcu 按无障碍和进程投递动作，不抢用户的前台和指针。改了菜单、输入框、浮窗、提示这类接线就走一遍：流程测试证明不了它们接上了。
+改了菜单、输入框、浮窗、提示这类接线就走一遍：流程测试证明不了它们接上了。Mac 先读 better-computer-use skill，用 `bcu` 操作 `xc.sh run mac` 起的隔离实例：
 
 ```bash
 pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene projectagent -CuePadProject 圆桌)
 bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
-apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己退出，不够就再 run 一次
+apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后也会自己退出
 ```
 
-- 机器上常开着用户的正式版和别的检出的调试实例：只按 PID 认根，按应用名找窗口会点到别人的。
-- `projectagent` 场景带演示会话（另一台 Mac 上在线的），任务、步骤与会话的绑定都有。
-- SwiftUI 输入框用 `setText` 只改了无障碍的值、进不了绑定（不保存）：先 `click` 再 `typeText`（状态要 `--image always`）。
-- 提示条 2.4 秒就收：要验提示，把 `expect` 写进同一组动作。
-- 让 Cue 真跑（看 Mac 的“运行情况”，`-CuePadScene cuerun` 直接开着）：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），点启用后在 Cue 页输入框的模型菜单里选 Claude Code 那一组：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
-- 任务行右键（`click` 带 `"button":"right"`）在后台弹得出菜单；墙上的灵感卡右键被当成点按（打开编辑页），它的操作从编辑页走。
-- iOS 没有 Simulator.app 窗口可给 bcu 操作：`xc.sh run ios|ipad -- …` 装包、起画面，打印 PID 与模拟器 UDID；点按用 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 截图换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器池是共用的，别的任务随时会在上面装包重跑，要连续操作就尽快做完。
-- 模拟器默认当作接了电脑键盘，聚焦也不弹软键盘：看键盘弹出时的样子加 `-CuePadSoftKeyboard YES`；键盘变高用键盘上的表情键（比拼音高），横屏加 `-CuePadLandscape YES`。
+- 机器上常开着正式版和别的检出的实例：只按 PID 认根。
+- SwiftUI 输入框用 `setText` 进不了绑定：先 `click` 再 `typeText`。
+- 提示条 2.4 秒就收：`expect` 写进同一组动作。
+- 任务行右键在后台弹得出菜单；墙上灵感卡的右键被当成点按，它的操作从编辑页走。
+- 让 Cue 真跑：隔离实例里没有登录的大脑，起实例前导出 Claude Code 走 DeepSeek 的变量（同 `ClaudeTestbed`：`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、空的 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL=deepseek-flash`），启用后在模型菜单里选 Claude Code 那一组：有这组变量时 Pi 也算登录了、会先被选上，一跑就 401。
+- iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；点按 `axe tap -x <x> -y <y> --udid <UDID>`（坐标是点，`xcrun simctl io <UDID> screenshot` 换算；`axe describe-ui` 读不到 SwiftUI 的元素）。模拟器池共用，别的任务随时会装包重跑，连续操作尽快做完。模拟器默认当作接了电脑键盘，看软键盘加 `-CuePadSoftKeyboard YES`；键盘变高用表情键。
 
-## 通知（Mac）
+## 通知
 
-- 隔离库默认不发系统通知（只记日志），也不要权限、不装提示音、不设角标：权限、提示音与角标按 bundle id 记，与正式版同一个。验收时给 Debug 启动参数 `-CuePadNotifications YES` 才真发，提示音这时装进真实的 ~/Library/Sounds。
-- 产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制成 `~/Applications/CuePad Notify.app`（别的名字，绝不覆盖 `CuePad.app`），改掉 `CFBundleIdentifier` 再 ad-hoc 重签名（不和正式版共用通知设置，点通知也不会激活正式版），用 `open -n -g --env …` 带上 `app.isolated_env` 那几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
-- 触发：本机会话在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）切它的状态；Cue 来问用 `-CuePadSampleCue <秒>`（隔离库里 Cue 不值班）。
-- 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，本机实测有时要 20 秒；横幅 5 秒就收，按横幅要边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
-- 实际播了哪个文件看 `systemsoundserverd` 日志里的 `mAudioToken`（通知中心那行 `Playing notification sound` 只有声音名，找不到文件时也照样打，实际播的是系统兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
+- 隔离库默认不发系统通知、不要权限、不装提示音、不设角标：这些按 bundle id 记，与正式版同一个，没人点的权限弹窗还会盖住之后的截图。验收给 `-CuePadNotifications YES`，Mac 的提示音这时装进真实的 ~/Library/Sounds。
+- 产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制成 `~/Applications/CuePad Notify.app`（别的名字，不覆盖 `CuePad.app`），改掉 `CFBundleIdentifier` 再 ad-hoc 重签名，用 `open -n -g --env …` 带上 `app.isolated_env` 那几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
+- 触发会话状态：在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CuePi README）。
+- 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，实测有时 20 秒；横幅 5 秒就收，边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
+- 实际播了哪个文件看 `systemsoundserverd` 日志的 `mAudioToken`（通知中心那行 `Playing notification sound` 找不到文件时也照打，实际播的是兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
 
 ## 性能测量
 
-测量只有两个入口，都是 Release 构建（带 DEBUG 条件留下测量代码，产物在 `apple/.derived-perf`）、每次全新进程、多次取中位。前后对比是旧新两个检出交替各跑同一条命令，以指令数（`instructionsM`）与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
+两个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`。前后对比是旧新两个检出交替跑同一条命令，以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。
 
-- 交互：`xc.sh perf mac|ios`，单次交互（`-CuePadBench interact`）的点击回合、指令、掉帧，构建完只在测量那段独占机器，口径见 `perf-mac.sh`、`perf-ios.sh` 头注释，场景与指标在 `InteractionBench.swift`。
-- 静置与常驻开销（CPU、指令、唤醒、能耗、内存、启动到就绪）：`xc.sh perf idle mac|ios [次数] [秒] [启动参数…]`，从进程外读内核记账，不独占机器；`CUEPAD_TRACE=<模板>` 同时录 xctrace（`perf-idle.sh`、`rusage.py` 头注释）。
-
-- Cue 值班时的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成替身 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`（每轮多久、记下每次交来的话见它的头注释）；会话的动静由 `CUEPAD_PI_SOCKET_DIR` 里说桥协议的假扩展给。
-
-方法与坑：
-
-- `xc.sh perf mac` 默认在后台量，只比指令数；要和预算比加 `-CuePadForeground YES`（见「占前台」）。掉帧与动画类指标在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观。窗口还得在屏幕上：屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
-- 掉帧数看的是主线程上 display link 的回调间隔，反映主线程跟不跟得上，不是画面实际交出的帧率；是否真的掉帧以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，iOS 端用 `xc.sh rec` 录屏逐帧或应用内每帧探针。
-- Instruments 录 Release 构建：`CUEPAD_TRACE='Time Profiler' xc.sh perf idle mac 1 10 …`；Debug 实例用 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
-- SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
-- `Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。
-- 会话页与 Cue 页滚动（Mac，可不碰指针、不抢焦点）：`-CuePadBench chatscroll`，跑法、指标与屏幕外量不到的部分见 `DebugScene+LongChat.swift` 里 `ChatScrollBench` 的注释。
+- 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
+- Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
+- SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
+- Cue 值班的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`，会话的动静同上由假扩展给。
 
 ### 交互预算
 
-预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数在前台量（`-CuePadForeground YES`），至少跑两遍取中位数。
+预算表在 `InteractionBench.budgets`，指标定义在它与 `Probes.swift` 的注释里。和预算比的数在前台量、至少跑两遍取中位。点击回合随机器那一刻的频率差到一倍（空闲后的第一下性能核常没升频）：同列的指令数不随它变，GHz 低的那几次就是慢在频率上。
 
-冷启动进 Cue 页（iOS 第一项，`launchMs` 是进程启动到对话排出来）要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。Mac 的"Cue 页首访"带 `contentMs`（点下到对话排出来），大库里有一段 Cue 对话。项名带空格，整个参数要加引号。
-
-`-CuePadInteractOnly 项,项`（两端，跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）。iOS 的长文打字（输入框里已有一大段时再敲一个字）配 `-CuePadPasteFile <路径>` 换成真的粘贴内容。
+- `-CuePadInteractOnly 项,项`（跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程；列的项之间要自己够得着（开编辑页配收编辑页）。
+- 冷启动进 Cue 页要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。项名带空格要加引号。
 
 ## 同步测量
 
-两台设备之间同步的开销与时延只有一个入口：`apple/scripts/sync-bench.py [分钟=10]`（参数见脚本头注释），前后对比跑同一套。它在这台 Mac 上开两个隔离实例连 CloudKit **开发环境**：A 是有在线会话的 Mac（脚本里的假扩展驱动几个会话不停切状态），B 代替手机，每轮对 A 的一个会话说一句、对 Cue 说一句、立即同步一次（打点见 `DebugScene+SyncBench.swift`）。
+两台设备间同步的开销与时延只用 `apple/scripts/sync-bench.py`（用法在头注释）：同一台 Mac 上两个隔离实例经 CloudKit **开发环境**同步。
 
-- 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。构建由脚本调 `CUEPAD_SIGN=development xc.sh build mac`。
-- 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、签名里写定 Development 三样都在（`DebugScene.syncsIsolatedLibrary`）。两个实例靠 `-CuePadHost` 当两台 Mac。
-- 模拟器没有 Apple 账号、登不了 iCloud，所以 B 是 Mac 进程，当作开着 Agent 页的手机：拉取节奏换成手机那档（`DebugHooks.pollsLikePhone`），界面与通知仍是 Mac 的。
-- Cue 不值班（隔离目录里没有登录的运行时）：只量对 Cue 说的话到 A 的库，不量回复。
-- 口径：预热（默认 90 秒，含冷启动翻整个同步区）之后的固定窗口。CloudKit 操作按进程统计，来源是 debug 日志里每个操作结束时的 `CKOperationMetrics`：次数按类型与操作组分，字节是 CloudKit 自己计的请求与响应体，不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。时延用同一台机器的时钟。
-- 两个实例共用这台 Mac 的 cloudd，CloudKit 操作在里面排同一个队：一个操作慢（服务端或网络，偶尔几十秒），两边排在后面的一起等，结束在同一刻（报告里的"排队"）。真机上手机有自己的 cloudd，所以尾部时延比真实的大；前后对比在同一网络、同一时段交替跑，主要看中位数。开发环境的同步区随每次运行积累会话记录，只影响冷启动。
+- 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。
+- 只碰开发环境：隔离库连 iCloud 要 Debug 构建、`-CuePadCloudKit YES`、Development 签名三样都在（`DebugScene.syncsIsolatedLibrary`）。
+- 模拟器登不了 iCloud，B 用 Mac 进程扮手机（拉取节奏换成手机那档）。隔离目录里 Cue 不值班：只量对 Cue 说的话到 A 的库，不量回复。
+- 口径：CloudKit 操作按进程统计，来源是 debug 日志里的 `CKOperationMetrics`，字节不含 TLS 与 HTTP 头。nettop 量不了：CloudKit 的流量都记在 cloudd 名下，和正式版的混在一起。
+- 两个实例共用这台 Mac 的 cloudd、排同一个队：一个操作慢（偶尔几十秒），两边排在后面的一起等（报告里的"排队"），尾部时延比真机大；前后对比在同一网络、同一时段交替跑，看中位数。
 
 ## Cue 评测
 
@@ -123,21 +103,18 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/afte
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
 ```
 
-- 大脑缺省是真的 Claude Code，用这台 Mac 上 Claude Code 自己的登录（`ClaudeLogin`，同 Kit 的真 Claude 用例），配置目录在临时目录；默认 opus · medium。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium），登录从 ~/.pi/agent/auth.json 只读地取访问令牌、不替它刷新，令牌过期就起不来，等用户自己的 Pi 续上。`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`TEST_RUNNER_CUEPAD_CUE_EVAL_EFFORT` 换模型与强度。xcodebuild 只把 `TEST_RUNNER_` 开头的变量交给测试进程。
-- 输出目录里每个场景一个 .md（信封、工具调用与结果、Cue 写的消息、判定、每一轮含预热的开销），`summary.md` 汇总（含各场景与全部的开销合计），`system-prompt.md` 是这次的系统提示。有场景没过时命令非零退出，输出照样写完。
-- 开销是大脑自报的输入、缓存读、缓存写、输出 token 与费用（Claude Code 每轮的 result 事件；Pi 每条助手消息的 usage，与 `agent_end` 对账）：起大脑的外壳把它的输出另存一份再读。提示缓存跨进程、跨场景命中（一小时），先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
-- 长程场景（`CueEvalLongTests`，一次十分钟左右）单独跑：三十来次醒来、上下文跨过换新线，判定只有记得前面才答得对的几处，统计醒来与换新次数、开销与每轮用时中位。`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍，第 n 遍写到"输出目录-n"：
+- 大脑缺省用这台 Mac 上 Claude Code 自己的登录（opus · medium）；`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（sonnet · medium，令牌从 ~/.pi/agent/auth.json 只读地取、不替它刷新，过期就起不来）；`TEST_RUNNER_CUEPAD_CUE_EVAL_MODEL`、`_EFFORT` 换模型与强度。
+- 输出目录每个场景一个 .md（含每一轮的开销），`summary.md` 汇总；有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 开销是大脑自报的 token 与费用；提示缓存跨场景命中一小时，先后跑的同一套场景缓存读写会不同，比开销看两遍以上。
+- 长程场景（`CueEvalLongTests`，十分钟左右，跨过换新）单独跑，`TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2` 同时跑两遍、第 n 遍写到"输出目录-n"：
 
 ```bash
 TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
   apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
 ```
-- 每个场景的资料库留在 `<场景>.library`：`CUEPAD_SHOT_LIBRARY=<它> apple/scripts/xc.sh shot mac out.png -- -CuePadScene cue` 看这一场在 Cue 页上的样子。
-- 原型对比（`CueFresh`，正式做时删）：加 `TEST_RUNNER_CUEPAD_CUE_FRESH=1` 跑混合做法：平时只往后加，换新（到 6 万，或过 3 万且缓存已过期）时开新会话、用对话视图接上，不写交接。
-- 场景与判定在 `CueEvalTests` 与 `CueEvalLongTests` 里；模型每次答得不完全一样，结论看两遍以上。
+- 模型每次答得不完全一样，结论看两遍以上。
 
 ## 崩溃诊断
 
-`Diagnostics` 把 MetricKit 交来的诊断存在资料库目录下（隔离库不订阅）。真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来（摘要未符号化，靠 dSYM 还原：每次发布的归档按构建号存在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`）。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）。
-
-先在模拟器里复现：`xc.sh shot`/`rec` 报"App 在画面就绪前退出了"就是崩了，报告带源码行，在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来（见 `DebugScene+LongChat.swift`）；真实数据用只读副本，改会话状态复现当时的样子。
+- 真机崩溃拿不到栈时，请用户从设置的"上次崩溃"里"导出诊断"发来：摘要未符号化，靠 dSYM 还原，每次发布的归档在 `~/Library/Developer/Xcode/Archives/<日期>/CuePad <ios|mac> <构建号>.xcarchive`。
+- 模拟器里 `xc.sh shot`/`rec` 报"App 在画面就绪前退出了"就是崩了，报告在 `~/Library/Logs/DiagnosticReports/CuePad-*.ips`。只在会话跑着时崩的，用 `-CuePadStream YES` 让它一轮一轮跑起来。

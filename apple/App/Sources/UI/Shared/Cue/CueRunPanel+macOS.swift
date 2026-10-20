@@ -77,7 +77,7 @@ private struct CueRoundRow: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
-                Image(CueRunFormat.icon(round.wake)).font(Typography.caption).foregroundStyle(palette.ink2)
+                Image(round.wake.icon).font(Typography.caption).foregroundStyle(palette.ink2)
                     .frame(width: 16).accessibilityHidden(true)
                 Text(CueRunFormat.reason(round.wake)).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                 if round.sent.count > 1 {
@@ -224,23 +224,11 @@ private enum CueRunFormat {
         switch wake {
         case .enabled: "刚启用"
         case .message: "你发来消息"
-        case .sessionActivity: "会话有动静"
+        case .sessionActivity(let stirs): "会话有动静（\(stirs.count) 处）"
         case .idle: "空闲巡视"
         case .reminder(let lines): "提醒到点（\(lines.count) 条）"
         case .renewed: "换新后接着做"
         case .settingsChanged: "换班次前写交接"
-        }
-    }
-
-    static func icon(_ wake: CueWake) -> Icon {
-        switch wake {
-        case .enabled: .wakeEnabled
-        case .message: .wakeMessage
-        case .sessionActivity: .wakeActivity
-        case .idle: .wakeIdle
-        case .reminder: .wakeReminder
-        case .renewed: .renew
-        case .settingsChanged: .wakeSettings
         }
     }
 

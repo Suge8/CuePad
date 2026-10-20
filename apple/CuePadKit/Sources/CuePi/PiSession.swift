@@ -103,18 +103,19 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
 /// `/name` 设的名字 → 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
+/// 用斜杠技能说的写你发的样子（`PiSkillCall`），不写 Pi 展开后的正文。
 public enum PiSessionName {
     /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
     public static let firstMessageLimit = 200
 
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
-        [name, firstMessage.map(withoutImageNotes)].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
+        [name, firstMessage.map { PiSkillCall.shown(withoutImageNotes($0)) }].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
     }
 
     /// 你的一句话当首条消息记下的样子：去掉首尾空白后的开头 `firstMessageLimit` 个字符；没有文字为 nil（接着看下一条）。
     /// 与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
     public static func firstMessage(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = PiSkillCall.shown(text).trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
     }
 
@@ -218,7 +219,7 @@ extension PiBridgeError: LocalizedError {
         case .unsupported: "这个 Agent 会话不支持这样操作"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .sessionEnded: "发送途中 Agent 会话结束了"
-        case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
+        case .ackTimeout: "Agent 没有及时确认：会话可能没在运行，或没接下这句（没登录、没有模型），到会话里看看"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "这台 Mac 上的 \(agent.name) 里找不到这个模型"

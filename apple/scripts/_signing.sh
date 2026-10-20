@@ -1,16 +1,16 @@
 # shellcheck shell=bash
-# 被 xc.sh 与发布脚本 source：读取 App Store Connect 凭据，产出 xcodebuild 的自动签名参数。
+# 被 xc.sh 与发布脚本 source：读取 App Store Connect 凭据与团队，产出发布与真机构建给 xcodebuild 的签名设置 team_signing。
 # 凭据文件（默认 ~/.appstoreconnect/cuepad.env，可用 CUEPAD_ASC_ENV 指定）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
-# 文件缺失时 asc_auth 为空：本机 ad-hoc 构建与测试照常，只有发布命令会报错。绝不回显凭据内容。
+# 文件缺失时 team_signing 为空：本机 ad-hoc 构建与测试照常，只有发布命令会报错（require_asc）。绝不回显凭据内容。
+# 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里。
 ASC_ENV="${CUEPAD_ASC_ENV:-$HOME/.appstoreconnect/cuepad.env}"
-asc_auth=()
+team_signing=()
 if [ -f "$ASC_ENV" ]; then
   set -a
   # shellcheck source=/dev/null
   . "$ASC_ENV"
   set +a
-  asc_auth=(-allowProvisioningUpdates
-    -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+  team_signing=(DEVELOPMENT_TEAM="$CUEPAD_TEAM_ID" CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS.entitlements)
 fi
 
 # 导出选项 plist：export_options <文件> <method> <证书> [bundleID=描述文件名…]；手动签名
@@ -48,6 +48,6 @@ release_archive() {
 }
 
 require_asc() {
-  [ "${#asc_auth[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 docs/release.md）" >&2; exit 1; }
+  [ "${#team_signing[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 apple/scripts/_signing.sh 头注释）" >&2; exit 1; }
   [ -f "$ASC_KEY_PATH" ] || { echo "ASC_KEY_PATH 指向的密钥文件不存在" >&2; exit 1; }
 }

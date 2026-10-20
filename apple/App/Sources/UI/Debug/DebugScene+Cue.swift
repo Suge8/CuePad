@@ -73,6 +73,8 @@ extension DebugScene {
                 let message = try await store.addCueMessage(.you, text: text)
                 try await store.markCueMessagesDelivered([message.id])
             }
+            // 记忆先写：提醒到点的那一轮指着其中一条
+            try await store.seed(cueLines: demoMemory)
             if defaults.bool(forKey: "CuePadLongChat") { try await seedLongCueChat(you: you, store: store) }
             try await you("圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发")
             // 每一轮的经过（同值班的管理器写下的样子，`CueRound.process`）：排在这一轮开始的位置，动到的任务带着 id，清单里点它打开
@@ -89,17 +91,23 @@ extension DebugScene {
                 step(.talk, "对「发言轮次乱序」说：先复现 5 人以上的乱序，再改成按首次加入时间排序", order)))
             _ = try await store.addCueMessage(
                 .cue, text: "好。拆成四步：复现、改成按首次加入时间排序、补 3 个重连用例、部署到预发。第一步已经复现了，现在在改排序。", task: order?.id)
-            for (note, tools) in [
-                ("看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
-                ("让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", process(
+            // Cue 自己醒来的几轮（同值班的管理器醒来时写下的经过那一行，带着为什么醒）：会话停下、出错、提醒到点，两次只看了看；
+            // 连着六轮，Cue 页里折起前面的、两次只看了看的并成一行
+            func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
+            let meeting = try await store.cueMemory().lines.first { $0.text.hasPrefix("周会") }
+            for (wake, note, tools) in [
+                (stirred(.settled, "atlas"), "看了圆桌：复现乱序完成，原因是重连的人拿到了新的加入时间", process(step(.read, "看「发言轮次乱序」的近况", order))),
+                (stirred(.settled, "atlas"), "让 atlas 改成按首次加入时间排序，正在跑 scheduler 的测试", process(
                     step(.read, "看「发言轮次乱序」的近况", order), step(.talk, "对「发言轮次乱序」说：按首次加入时间排序，改完把 scheduler 的测试全跑一遍", order))),
-                ("CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", process(
+                (stirred(.failed, "billing"), "CuePad 导入旧数据的会话出错了：模型拒绝了请求（prompt 太长），等你回来再说", process(
                     step(.read, "看板"), step(.read, "看「导入旧数据」的近况", importing), step(.search, "导入旧数据 prompt 太长"))),
-                ("", process(
+                (CueWake.reminder(meeting.map { [$0.id] } ?? []), "", process(
                     step(.read, "看「README 截图」的近况", panel), step(.talk, "对「README 截图」说：深色那张也按参考图拍，拍完发给我", panel),
                     step(.other, "记下：README 截图要浅色深色各一张"))),
+                (stirred(.settled, "notes"), "", process(step(.read, "看「README 截图」的近况", panel))),
+                (.idle, "", process(step(.read, "看板"))),
             ] {
-                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools)
+                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
                 if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
             }
             // 上下文到了换新线：写下交接，从这里起换了新上下文（对话里一条分隔，点开是这份备忘）
@@ -133,7 +141,7 @@ extension DebugScene {
                     ```
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
-                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main", shots: try await deployShots(store)), task: order?.id)
+                    """, ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), shots: try await deployShots(store), task: order?.id)
             // 第二张"等你"（答完第一张接着露出来）：还有几条在等的演示
             if !cueFlows, let billing = task("清理旧的计费脚本") {
                 _ = try await store.addCueMessage(
@@ -141,9 +149,17 @@ extension DebugScene {
                     ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"), task: billing.id)
             }
             if let variant = defaults.string(forKey: "CuePadCueAsk") { try await seedAsk(variant, store: store, task: order?.id) }
-            try await store.seed(cueLines: demoMemory)
             let forgotten = try await store.noteCueLine("旧的计费脚本还在用", source: .cue)
             try await store.forgetCueLine(forgotten.line.id)
+            // 对话末尾 Cue 自己又醒了三轮（一颗虚线气泡）：空闲时整理记忆，中间一件任务的子代理卡住了（名字长、只看了看）
+            for (wake, note, tools) in [
+                (CueWake.idle, "记忆整理：#86-87 合成一行", process(step(.other, "合并记忆 #86-87"))),
+                (.sessionActivity([CueStir(kind: .stalled, task: importing?.id)]), "", process(step(.read, "看「导入旧数据时保留回收站」的近况", importing))),
+                (.idle, "记忆整理：#40-43 合成一行", process(step(.other, "合并记忆 #40-43"))),
+            ] {
+                try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: tools, wake: wake)
+                if !note.isEmpty { _ = try await store.addCueMessage(.note, text: note) }
+            }
             // 这个班次两个半小时前起，用到换新线的七成（上下文用量那一块加深一档）
             let context = CueContext(used: 41_800, window: 200_000, since: .now.addingTimeInterval(-9_000))
             try await store.setCueState(.settled, context: context)
@@ -185,8 +201,8 @@ extension DebugScene {
     }
 
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
-    /// 带上叫醒它的会话（`CueState.woke`，同值班的 Mac 起一轮时写下的样子），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
+    /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一节动态），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
+    /// 一次一个、一次两个交替（看几道光错开），两个的那次歇下前动手说一句（录动态那颗虚线气泡里这一节从在跑到做完）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
     /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
     /// 主线程每帧的 display link 间隔（掉帧、最长一帧）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
@@ -211,8 +227,21 @@ extension DebugScene {
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
             if let opened { woke = [opened] + woke.prefix(count - 1) }
             round += 1
-            guard !woke.isEmpty, (try? await store.setCueState(.thinking, woke: CueWoke(at: .now, sessions: woke))) != nil else { return nil }
-            return ("wake", { try? await store.setCueState(.settled) })
+            let wake = CueWake.sessionActivity(woke.map { CueStir(kind: .settled, session: $0) })
+            guard !woke.isEmpty, let row = try? await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake),
+                (try? await store.setCueState(.thinking, round: row)) != nil
+            else { return nil }
+            // 隔一次动手说一句再歇下（同真的一轮：醒来、动手、说话、歇下）
+            let acts = round % 2 == 0
+            return ("wake", {
+                if acts {
+                    var tools = PiChatMessage.Tools()
+                    tools.record(.init(kind: .talk, target: "对 \(woke[0]) 说：测试跑完把结果贴过来"))
+                    _ = try? await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
+                    _ = try? await store.addCueMessage(.note, text: "催了 \(woke[0])：测试跑完把结果贴过来")
+                }
+                try? await store.setCueState(.settled)
+            })
         }
     }
 
@@ -285,17 +314,25 @@ extension DebugScene {
 
     /// `-CuePadRelay <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 交给会话一次——写一条 Cue 发起的投送请求
     /// （同 Cue 的 say 与 start 写下的样子，`CueFlight`），轮流两种：对一个在线会话说一句（给了 `-CuePadSession` 是它，否则在线会话的第一个），
-    /// 给一件还没交出去的待办开新会话（带着那张卡，还没有会话 id，落在它的任务行）；`-CuePadRelayKind say|start` 只做其中一种。
-    /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，会话与任务回到原样。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
+    /// 给一件还没交出去的待办开新会话（带着那张卡；演示 Mac 0.8 秒后开出会话、写下带认领标识的记录，光这时飞到新会话那一行）；`-CuePadRelayKind say|start` 只做其中一种。
+    /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，开出的会话结束。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         let kind = defaults.string(forKey: "CuePadRelayKind")
+        let launcher = PiStateRecorder(store: store, hostID: "demo-mac")
         var round = 0
         await everyIfAsked("CuePadRelay") {
             let starts = kind.map { $0 == "start" } ?? !round.isMultiple(of: 2)
             round += 1
-            guard let request = try? await (starts ? relayStart(store) : relaySay(workspace)) else { return nil }
-            return (starts ? "start" : "say", { try? await store.deleteDelivery(request.id) })
+            if starts {
+                guard let (request, session) = try? await relayStart(store, on: launcher) else { return nil }
+                return ("start", {
+                    try? await store.deleteDelivery(request.id)
+                    try? await launcher.end(sessionID: session)
+                })
+            }
+            guard let request = try? await relaySay(workspace) else { return nil }
+            return ("say", { try? await store.deleteDelivery(request.id) })
         }
     }
 
@@ -307,15 +344,19 @@ extension DebugScene {
             "看一下测试跑完没有，跑完把结果贴给我", to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
 
-    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡）。
-    private static func relayStart(_ store: CueStore) async throws -> DeliveryRequest? {
+    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡），演示 Mac 过一会儿开出它；返回请求与开出的会话 id。
+    private static func relayStart(_ store: CueStore, on launcher: PiStateRecorder) async throws -> (DeliveryRequest, String)? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
-        guard let task = tasks.first(where: { $0.piSessionID == nil && $0.projectID != nil && !parents.contains($0.id) }), let project = task.projectID else {
-            return nil
-        }
-        return try await store.requestLaunch(
-            PiLaunch(project: project, prompt: task.body, token: UUID().uuidString), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+        guard let task = tasks.first(where: { $0.piSessionID == nil && !parents.contains($0.id) }) else { return nil }
+        let token = UUID().uuidString
+        let request = try await store.requestLaunch(
+            PiLaunch(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+        // 演示节奏：Mac 开出会话要一会儿
+        try await Task.sleep(for: .seconds(0.8))
+        let session = "launched-\(token.prefix(8))"
+        try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: task.projectID, launchToken: token)
+        return (request, session)
     }
 
     /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
@@ -433,7 +474,7 @@ extension DebugScene {
                 modelState: row.model ? demoModels(for: row.agent) : nil,
                 context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
             try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: "好了")))
-            let task = try await store.createTask(row.title, in: nil)
+            let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }
         try await store.leaveToYou("cue-claude-short")
@@ -443,7 +484,7 @@ extension DebugScene {
     static func seedEvidence(_ store: CueStore, session: String, title: String) async {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try? swatchPNG().write(to: file)
-        _ = try? await store.addPreviews(filesAt: [file], title: title, sessionID: session)
+        _ = try? await store.addPreviews([(file, title)], sessionID: session)
     }
 
     /// 一张像截图的演示图：浅底上一列名单。

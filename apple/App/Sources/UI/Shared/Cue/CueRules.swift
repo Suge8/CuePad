@@ -89,7 +89,7 @@ nonisolated enum CueMood: String, Sendable {
     }
 }
 
-/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行、菜单栏面板、小组件都读它（一份规则）。
+/// Cue 的一页摘要：名字、在管与等你、它最近一句、你最近一句交没交出去、它此刻在做什么。三端侧栏的 Cue 一行与名片、菜单栏面板、小组件与实时活动都读它（一份规则）。
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     /// 启用了（`CueProfile.activeHost` 有值）。
@@ -99,14 +99,14 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var hostName: String?
     /// 在管与等你（`CueStore.cueTally`）。
     var tally: CueTally
-    /// "等你 N"。
+    /// "等你 M"。
     var waiting: Int { tally.waiting.count }
     /// "在管 N"。
     var managing: Int { tally.managing.count }
     /// 新消息有几条（`CueStore.cueUnread`）。
     var unread: Int
-    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`）。
-    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，摘要接着写它在那之前最近说的。
+    /// Cue 最近对你说的那条的摘要行（`CueMessage.headline`），只给 Mac 侧栏名片的气泡（Cue 那一行写在管与等你，不写它）。
+    /// 结束了的提问（`CueQuestionEnd`）不算：那件事已经定了，接着写它在那之前最近说的。
     var lastSaid: String?
     /// 它最近一句说的那件事已经做完了（头像露"做完"的表情）。
     var lastSaidDone: Bool
@@ -146,17 +146,23 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     private static let recentWindow = 40
+
+    /// 头像此刻的表情（不算你正在写）：Cue 那一行、小组件与实时活动同一个。
+    func mood(at moment: Speech.Moment) -> CueMood {
+        CueMood.of(CuePresence.derive(self, at: moment), waiting: waiting, justDone: lastSaidDone)
+    }
 }
 
 nonisolated extension CueMessage {
-    /// Cue 的一句在对话以外的那一行（侧栏与菜单栏的摘要、"等你"卡与全屏预览底栏的第一句、回答的引用）：提问是要你定什么（`CueAsking.question`，不露原话），
+    /// Cue 的一句在对话以外的那一行（Mac 侧栏名片的气泡、"等你"卡与全屏预览底栏的第一句、回答的引用、实时活动里第一件等你）：提问是要你定什么（`CueAsking.question`，不露原话），
     /// 其余是第一行纯文字（Markdown 的符号去掉，`MarkdownBlock.firstPlainLine`）。
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
-/// 一次接力（`CueWatch.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是 `CueState.woke`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
-/// 都不另存。两种的时刻都是 Cue 那台 Mac 的时钟，在同一条时间线上比新旧。
-/// 交给只飞把话或活交到会话手里的几种（`relayModes`）：说话、答它在等的问题、开新会话。
+/// 一次接力（`LiveSessions.flight`，`CueRelayStage` 画）：叫醒是会话 → Cue（事实是在跑那一轮为什么醒，`CueStore.cueWaking`），交给是 Cue → 会话（事实是 Cue 写的投送请求），
+/// 都不另存。时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
+/// 交给只飞把话或活交到会话手里的几种：说话、答它在等的问题（`spoken`，写下请求的时刻），开新会话（开出的会话有了记录的时刻，`CueStore.cueOpenedSessions`：
+/// 写下请求时会话还不在，等它出现才飞到它那一行）。
 /// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；
 /// 换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
@@ -173,29 +179,57 @@ nonisolated struct CueFlight: Equatable, Sendable {
     /// 接力的那几个会话，最新的在前。
     let ends: [RelayEnd]
 
-    static let relayModes: Set<DeliveryMode> = [.send, .answer, .start]
+    private static let spoken: Set<DeliveryMode> = [.send, .answer]
 
-    /// 一条交给：写下的时刻与交给了谁。
+    /// 一条交给：发生的时刻与交给了谁。
     struct Handed: Equatable, Sendable {
         let at: Date
         let end: RelayEnd
 
-        init?(_ request: DeliveryRequest) {
-            let session = request.target.kind == .known(.piSession) ? request.target.ref : nil
-            guard session != nil || request.cardID != nil else { return nil }
-            at = request.createdAt
-            end = RelayEnd(session: session, task: request.cardID)
+        static func read(from store: isolated CueStore) throws -> [Handed] {
+            let said = try store.cueRequests(spoken).compactMap { request in
+                request.target.ref.map { Handed(at: request.createdAt, end: RelayEnd(session: $0, task: request.cardID)) }
+            }
+            let opened = try store.cueOpenedSessions().map { Handed(at: $0.at, end: RelayEnd(session: $0.session, task: $0.card, opens: true)) }
+            return said + opened
+        }
+    }
+
+    /// 接力读的事实：叫醒它的那一下与它交给的那几条。
+    struct Facts: Equatable, Sendable {
+        /// 在跑的这一轮是会话的动静叫醒的：醒的时刻与叫醒它的那几个会话
+        var woke: (at: Date, sessions: [String])?
+        var handed: [Handed]
+
+        static func read(from store: isolated CueStore) throws -> Facts {
+            var woke: (at: Date, sessions: [String])?
+            if let waking = try store.cueWaking(), case .sessionActivity(let stirs) = waking.wake {
+                var seen = Set<String>()
+                woke = (waking.at, stirs.compactMap(\.session).filter { seen.insert($0).inserted })
+            }
+            return Facts(woke: woke, handed: try Handed.read(from: store))
         }
 
-        static func read(from store: isolated CueStore) throws -> [Handed] { try store.cueRequests(relayModes).compactMap(Handed.init) }
+        static func == (a: Self, b: Self) -> Bool { a.woke?.at == b.woke?.at && a.woke?.sessions == b.woke?.sessions && a.handed == b.handed }
+
+        /// 比 `seen` 新的那一次接力；没有为 nil。同一次读到两种都新时取更新的那种。
+        func flight(after seen: Date?) -> CueFlight? {
+            let since = seen ?? .distantPast
+            let woke = woke.flatMap { $0.at > since ? CueFlight(direction: .wake, at: $0.at, ends: $0.sessions.map { RelayEnd(session: $0) }) : nil }
+            let fresh = handed.filter { $0.at > since }.sorted { $0.at > $1.at }
+            let relay = fresh.first.map { CueFlight(direction: .relay, at: $0.at, ends: fresh.map(\.end)) }
+            return [woke, relay].compactMap { $0 }.max { $0.at < $1.at }
+        }
+
+        /// 读到的最新时刻。
+        var latest: Date? { ([woke?.at] + handed.map(\.at)).compactMap { $0 }.max() }
     }
 }
 
 nonisolated extension CueSnapshot {
     /// 小组件那一份：表情按写快照这一刻（`moment`）推出的状态定（快照随库与此刻重写）。
     init(digest: CueDigest, at moment: Speech.Moment) {
-        let mood = CueMood.of(CuePresence.derive(digest, at: moment), waiting: digest.waiting, justDone: digest.lastSaidDone)
-        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid, mood: mood.rawValue)
+        self.init(name: digest.name, managing: digest.managing, waiting: digest.waiting, mood: digest.mood(at: moment).rawValue)
     }
 }
 

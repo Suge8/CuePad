@@ -22,6 +22,8 @@ struct TaskBubble: View {
     }
 
     let request: Request
+    /// 翻到的那一步：跟着工作区里开着的这一次（翻页只改它）；这一次关了就停在最后一页，收起的那一下不跳回打开时的页。
+    @State private var step: UUID?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
@@ -49,15 +51,33 @@ struct TaskBubble: View {
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
         // 翻页、关气泡都先写下正文里没保存的字
         .onChange(of: step) { leaveEditing() }
+        .onChange(of: live, initial: true) { if let live { step = live.step } }
         .onDisappear(perform: leaveEditing)
     }
 
-    /// 翻到的那一步：开着的这一次以工作区里的为准（翻页只改它，不换这一次）。
-    private var step: UUID? { workspace.openTask?.id == request.id ? workspace.openTask?.step : request.step }
+    /// 工作区里开着的正是这一次时的它。
+    private var live: Request? { workspace.openTask?.id == request.id ? workspace.openTask : nil }
 
     private func leaveEditing() {
         editing?.leave()
         editing = nil
+    }
+}
+
+/// 任务气泡挂在窗口上的那一格（Mac 主窗口、手机根视图各挂一次）：只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。
+struct TaskBubbleSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        @Bindable var workspace = workspace
+        // Mac 上不占地方：浮层把弹出它的视图当锚，点在锚上只是关（`PanelHost`），整窗大的锚会吞掉换条的那一下；手机上铺满，气泡在这一层里摆
+        #if os(macOS)
+        let slot = Color.clear.frame(width: 0, height: 0)
+        #else
+        let slot = Color.clear
+        #endif
+        slot
+            .panel(item: $workspace.openTask, style: .bubble(anchor: workspace.openTask?.anchor)) { TaskBubble(request: $0) }
     }
 }
 
@@ -118,7 +138,7 @@ private struct BubblePage: View {
     private var meta: some View {
         HStack(spacing: 5) {
             ProjectGlyph(project: data.project, size: BubbleMetrics.glyph)
-            Text(data.project?.name ?? CaptureCopy.unfiled).lineLimit(1)
+            Text(data.project?.name ?? "").lineLimit(1)
             if let progress = data.progress {
                 Dot()
                 Text(TaskCopy.progress(progress)).monospacedDigit()
@@ -249,7 +269,7 @@ private struct AgentStrip: View {
             MascotFace(mascot: look.mascot, floats: look.floats && !reduceMotion)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session)
+                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session, row: .task)
                     Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
                 }
                 if let line = Dotted(caption, look.note).nonEmpty {
@@ -378,7 +398,7 @@ nonisolated struct BubbleData: Sendable, Equatable {
     static func read(_ id: UUID, from store: isolated CueStore) throws -> BubbleData {
         guard let goal = try store.card(id) else { throw CueStoreError.notFound }
         return BubbleData(
-            goal: goal, project: try goal.projectID.flatMap { try store.project($0) }, steps: try store.children(of: id).filter(\.isTask),
+            goal: goal, project: try store.project(goal.projectID), steps: try store.children(of: id).filter(\.isTask),
             progress: try store.subtaskProgress(of: [id])[id])
     }
 }

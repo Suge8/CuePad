@@ -41,7 +41,7 @@ struct CueHostTests {
             let timing = CueTiming(
                 patrolAfter: patrolAfter, mergeAfter: .seconds(1),
                 restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
-            let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+            let launch = CuePad.CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             let directory = brain.map { _ in TestLibraries.makeDirectory() }
             brainDirectory = directory
             let brainLaunch = try brain.map { try $0.launch(in: directory!) }, runtime = brain?.runtime
@@ -146,13 +146,11 @@ struct CueHostTests {
             }
         }
         defer { busy.cancel() }
-        try await Task.sleep(for: .milliseconds(300))  // 写入已经跑起来
-        let start = ContinuousClock.now
+        try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue", timeout: .milliseconds(500)) {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
         }
-        print("送进 Cue：\(ContinuousClock.now - start)")
         busy.cancel()
         await rig.stop()
     }
@@ -249,24 +247,35 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话，补一行灰色动态"看过「会话名」，不打算行动"；
-    /// 紧接着又这样看了同一个会话，并进那一行，不另起一行。
-    @Test func 会话歇下后Cue什么都没做_补一行看过() async throws {
+    /// 会话的动静叫醒 Cue，它看了看、什么都没做（没有落了结果的一步）：这一轮最后的话不写进对话；Cue 页的动态里那一节写叫醒它的会话停下了、没动手，
+    /// 点会话名去的就是那个会话。紧接着又这样看了同一个会话：同一颗气泡里再一节，两节都没动手（Cue 页并成一行"看了 2 次，都没动手"）。
+    @Test func 会话歇下后Cue什么都没做_写明谁叫醒的() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
-        func woke(_ count: Int) -> Bool { rig.rounds.filter { $0.wake == .sessionActivity && $0.finishedAt != nil }.count == count }
+        func woke(_ count: Int) -> Bool { rig.rounds.filter { $0.wake.isSessionActivity && $0.finishedAt != nil }.count == count }
         try await eventually("被叫醒的那一轮做完") { woke(1) }
         let session = try #require(rig.app.host.extensions.values.first)
         let title = try #require(try await rig.store.sessions(matching: session.sessionID).first?.title)
-        func notes() async throws -> [String] { try await rig.store.cueMessages().filter { $0.author == .known(.note) }.map(\.text) }
-        #expect(try await notes() == ["看过「\(title)」，不打算行动"])
+        func notes() async throws -> [CueNoteRound] {
+            let rows = try await CueThread.read(from: rig.store, showsSteps: true).rows
+            guard case .notes(let rounds)? = rows.last else { return [] }
+            return rounds
+        }
+        func glanced(_ round: CueNoteRound) -> Bool {
+            guard case .session(let target)? = round.header?.targets.first?.target else { return false }
+            return round.quiet(live: nil) && round.header?.name == title && round.header?.trail == "停下了" && target.sessionID == session.sessionID
+        }
+        let first = try await notes()
+        #expect(first.count == 1 && first.allSatisfy(glanced), "\(first)")
 
         session.setState(["kind": "thinking"])
         try await eventually("又在干活") { try await rig.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
         session.setState(["kind": "idle"])
         try await rig.answered(session.sessionID)
         try await eventually("又被叫醒的那一轮做完") { woke(2) }
-        #expect(try await notes() == ["看过「\(title)」，不打算行动"])
+        let both = try await notes()
+        #expect(both.count == 2 && both.allSatisfy(glanced), "\(both)")
+        #expect(try await rig.store.cueMessages().allSatisfy { $0.author != .known(.note) || $0.text.isEmpty })
         await rig.stop()
     }
 
@@ -822,5 +831,9 @@ nonisolated final class FakeModel: Sendable {
         }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }
+}
+
+extension CueWake {
+    var isSessionActivity: Bool { if case .sessionActivity = self { true } else { false } }
 }
 #endif

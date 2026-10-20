@@ -18,10 +18,13 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks":
-            // 任务面板：配 -CuePadDemo 时写入 Mac 同步来的演示会话，进行中的任务与步骤带会话状态（同 iOS 的 tasks）
-            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-            workspace.showsTasks = true
-        case "agentsetup": workspace.showsAgentSetup = true
+            // 任务页：配 -CuePadDemo 时写入 Mac 同步来的演示会话与 Cue 的等你，在管的任务带会话状态（同 iOS 的 tasks）
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
+            workspace.show(.tasks)
+        case "agentsetup": workspace.showsSetup = true
         case "connected":
             await connectAgents(workspace.services)
             await bindFolderIfAsked(workspace.services.store)
@@ -29,7 +32,7 @@ extension DebugScene {
         case "wallgap":
             // 卡片墙删卡后的排布：在当前项目（配 -CuePadProject Flow）新记两条，再删掉最早那条（它独占一列），看留下的几张怎么排
             try? await Task.sleep(for: .seconds(1))
-            let project = workspace.currentProject
+            let project = workspace.currentProject ?? Project.defaultID
             for body in ["报销\nbs 84.36 刀 claude github", "产品决策\nanti-slop 整理前端"] {
                 _ = try? await workspace.createCard(body: body, in: project)
                 try? await Task.sleep(for: .milliseconds(300))
@@ -55,12 +58,14 @@ extension DebugScene {
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，开了工的步骤带会话状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
         case "cue", "cuememory", "cuerun":
             // Cue 页（演示数据见 `DebugScene+Cue.swift`）；cuememory 再打开"Cue 记得什么"，cuerun 打开"运行情况"（Cue 在这台值班时才有）
             if defaults.bool(forKey: "CuePadDemo") {
                 await seedRemote(workspace.services)
                 await seedCue(workspace.services)
             }
+            if defaults.bool(forKey: "CuePadNoAsks") { await settleAsks(workspace.services.store) }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
             if scene == "cuerun" { workspace.cue.showsRun = true }
@@ -96,7 +101,7 @@ extension DebugScene {
         case "archive": workspace.show(.archive)
         case "editor":
             // 散放的灵感进编辑页
-            if let id = await card(in: workspace.currentProject, store: workspace.services.store),
+            if let id = await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
@@ -126,7 +131,7 @@ extension DebugScene {
         try? await Task.sleep(for: delay)
         guard let message = try? await services.store.addCueMessage(.cue, text: "登录页修好了，要推送到 origin/main 吗？", ask: try? CueAsking(.push, action: "把登录页的修复推送到 origin/main")),
               let alerts = services.alerts else { return }
-        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices)
+        let content = CueAlert.content(name: try? await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
         await alerts.post(title: content.title, body: content.body)
     }
 
@@ -170,7 +175,7 @@ extension DebugScene {
     private static func benchChurn(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(1))
         guard let window = mainWindow else { return }
-        let project = workspace.currentProject
+        let project = workspace.currentProject ?? Project.defaultID
         let widths = Array(stride(from: 900.0, through: 1500.0, by: 1))
         for (step, width) in widths.enumerated() {
             var frame = window.frame

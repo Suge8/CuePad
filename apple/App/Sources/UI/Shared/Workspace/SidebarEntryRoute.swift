@@ -1,5 +1,5 @@
 extension SidebarOutline.Entry {
-    /// 点这一行去的页（Mac 上"任务"开合任务面板，不去这一页）。
+    /// 点这一行去的页。
     var route: Route {
         switch self {
         case .tasks: .tasks
@@ -11,11 +11,11 @@ extension SidebarOutline.Entry {
         }
     }
 
-    /// 行尾的计数：任务是没做完的，会话是在线的；其余没有。
+    /// 行尾的计数：任务是没做完的，会话是在线的（"在做"列的，`Workspace.liveWork`）；其余没有。
     func count(in workspace: Workspace) -> Int {
         switch self {
         case .tasks: workspace.catalog?.allTasks.open ?? 0
-        case .sessions: workspace.services.liveSessions.total
+        case .sessions: workspace.liveWork.rows.count
         default: 0
         }
     }

@@ -84,24 +84,29 @@ import Testing
     await executor.stop()
   }
 
-  /// 没能送达的话在对话里留着，等用户重发或移除；到期清理不带走它（别的完成请求照常清理）。
+  /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它进了对话再随之收走，气泡不会两头都不在（别的完成请求照常清理）。
   @Test(.timeLimit(.minutes(1)))
-  func undeliveredMessagesStayUntilTheUserResendsOrRemovesThem() async throws {
+  func sentMessagesStayUntilTheyReachTheConversationOrTheUserRemovesThem() async throws {
     let handler = Handler()
     await handler.setOutcome(.failed("Pi 已经退出"))
     let executor = executor(handler, retention: .seconds(60))
     try await executor.start()
-    let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
-    _ = try await eventually(store, { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
+    let failed = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
+    _ = try await eventually(store, { try $0.deliveryRequest(failed.id)?.status }) { $0 == .known(.failed) }
     await handler.setOutcome(.succeeded)
+    let sent = try await store.requestDelivery("跑一遍测试", to: pi, on: "mac-a", mode: .send)
     _ = try await store.requestDelivery("quota", to: pi, on: "mac-a", mode: .quota)
-    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))
-    let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 }
+    let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 2 }
+    #expect(Set(remaining.map(\.id)) == [failed.id, sent.id])
 
-    #expect(remaining.map(\.id) == [message.id])
+    let said = PiChatMessage(sessionID: "s", entryID: "u0", seq: 0, role: .user, text: sent.content, at: .now, deliveryID: sent.id)
+    try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [said], recap: PiRecap()))
+    #expect(try await store.deliveryRequests().map(\.id) == [failed.id])
+    #expect(try await store.latest(of: sent)?.status == .known(.succeeded))
     await executor.stop()
   }
 
@@ -221,7 +226,6 @@ import Testing
     for (made, mode) in [(end, DeliveryMode.end), (stop, .stop)] {
       let stored = try #require(try await request(made.id))
       #expect(stored.mode == .known(mode) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
-      #expect(!DeliveryMode.toSession.contains(mode))
     }
     #expect(DeliveryMode.end.rawValue == "end" && DeliveryMode.stop.rawValue == "stop")
     #expect(try await store.requestStop(of: pi, on: "mac-a").id == stop.id)

@@ -91,7 +91,7 @@ struct RealFirecodeTests {
         try await eventually("a 被移除，b 还在跑") { delegating(after: "[[kill:a]]") && bridge.session(id: id)?.subagents.map(\.name) == ["b"] }
 
         // 等过几个空闲时限（回放时空闲的时长不占时间：之后的输出由放行的标记排先后）
-        if AgentTape.active.mode == .record { try await Task.sleep(for: .seconds(idleSeconds * 3)) }
+        if AgentTape.active.mode == .record { await quietPeriod(.seconds(idleSeconds * 3)) }
         try #require(bridge.session(id: id)?.state == .delegating, "b 还在跑，托管进程不该到点退出")
 
         let releasing = pi.releaseEveryHold()  // b 做完，结果投回指挥官；回应里带着假模型的停住标记，同样放行

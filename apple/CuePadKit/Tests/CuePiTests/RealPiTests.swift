@@ -22,10 +22,6 @@ struct RealPiTests {
         try await body(pi, bridge, bridge.sessions[0])
     }
 
-    private func history(of session: PiSession) throws -> PiSessionHistory {
-        try PiHistory.index(file: #require(session.sessionFile), from: nil).history
-    }
-
     /// 会话文件里的消息（文件顺序）：角色、文字、图片数。真实 Pi 写出的内容，作为投送是否到达模型的证据。
     private func messages(of session: PiSession) -> [(role: String, text: String, images: Int)] {
         guard let file = session.sessionFile, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
@@ -160,20 +156,6 @@ struct RealPiTests {
         }
     }
 
-    @Test func aPromptRunReportsStatesInOrderAndHistoryShowsTheTurn() async throws {
-        try await withRig { pi, bridge, s in
-            let log = ChangeLog(bridge)
-            try pi.prompt("hello")
-            try await eventually("一轮结束") { log.states.last == .settled }
-
-            let states = log.states
-            #expect(states.first == .thinking)
-
-            try await eventually("会话文件写入回复") { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
-            #expect(try history(of: s).displayName == "hello")
-        }
-    }
-
     /// 显示名与 Pi 自己的会话列表同一规则：`/name` 设的名字 → 首条用户消息（单行）→ 工作目录名。
     @Test func displayNameFollowsPisSessionListAndUpdatesOnRename() async throws {
         try await withRig { pi, bridge, s in
@@ -196,7 +178,7 @@ struct RealPiTests {
     @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
             let ended = ChangeLog(bridge)
-            let history = HistoryEventLog(PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!)
+            let history = HistoryEventLog(PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!, following: bridge.sessionFiles)
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")
@@ -230,16 +212,6 @@ struct RealPiTests {
             let idle = try #require(bridge.sessions.first)
             #expect(idle.busySince == nil && idle.stateSince > start)
         }
-    }
-
-    /// CuePad 开的新会话：Mac 经环境变量把发起方的认领标识交给 Pi，扩展在 hello 里带回。
-    @Test func aLaunchTokenFromTheEnvironmentComesBackInHello() async throws {
-        let pi = try await PiProcess(env: ["CUEPAD_LAUNCH_TOKEN": "tok-1"])
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
-        defer { bridge.stop(); pi.stop() }
-        try bridge.start()
-        try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
-        #expect(bridge.sessions.first?.launchToken == "tok-1")
     }
 
     /// 工具状态只带一句话摘要：bash 取命令首行，超长截到 120 字符（含省略号），不上报完整参数。

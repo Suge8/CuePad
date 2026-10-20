@@ -1,151 +1,98 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界面、记录器与投送执行器只认它；各家怎么发现会话、怎么说话由各自的接入（`AgentRuntime`）实现，见下文"其他 Agent"。依赖 Foundation/AppKit 与 CueStore：会话的值类型（状态 `PiWorkState`、弹窗 `PiQuestion`、模型 `PiModelOption`、上下文 `PiContextUsage`、斜杠命令 `PiSlashCommand`、子代理 `PiSubagentState`、对话 `PiChatMessage`、摘要 `PiRecap`）只在 CueStore 定义一份，线上消息与会话文件在这里直接解码成它们，App 不再转换。三块能力，App 层各接一处：
+Pi、Claude Code、Codex、OpenCode 的会话都登记在同一个桥上，界面、记录器与投送执行器只认它。规则写在各类型的头注释里，从这几处读起：
 
-| 能力 | 入口 | 说明 |
-| --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 全部 Agent 的在线会话的登记处：Pi 的由它经扩展 socket 发现并连接，其余由各家接入经 `attach` / `update` / `detach` 接上，每个会话一条控制通道（`SessionLink`，做不到的抛 `unsupported`）；`slots`（一个在线会话一格，格内的 `session` 原地更新；`draft` 是它此刻正在说的话 `PiDraft`，各家接入每个增量调一次 `setDraft`，桥在这一处把刷新合并到每 100ms 一次，只在内存、不进 `changes()`，会话下线随格子一起没了）直接给界面观察，`slot(sessionID:)` / `session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令；发话的规则见下）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）/ `refreshQuota`（查一次订阅额度，只有 Pi）；订阅额度的观测也经 `changes()` 报出（`.quota`）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
-| 各家接入 | `AgentRuntime`：`PiRuntime`、`ClaudeCodeRuntime`、`CodexRuntime`、`OpenCodeRuntime` | 发现会话并接上桥、后台开新会话（`open`：会话名、模型、思考强度一起生效，Pi 作为启动参数，其余开出后一次配好，配不上就结束它、整体失败）、接着已结束的会话（`resume`）、结束（`end`）、补写对话（`transcript`）；投送执行器按会话的 Agent 找到它。能做什么由 CueStore 的 `AgentCapabilities.of` 决定，界面只露出做得到的 |
-| 钩子转发 | `AgentHookServer` / `cuepad hook <agent>` | Claude Code、Codex 的钩子命令把这次调用（输入、环境、所在终端）发到 `PiPaths.hookSocket`，等 CuePad 回一行再写到标准输出；CuePad 没在运行时什么都不输出，Agent 照常往下走 |
-| 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（可执行文件经 `ExecutableLocator.system` 找；每家都问 `--version`，设置里接入了的写"已接入 · 名字 版本"；有最低版本的：Pi ≥ 0.84.4，OpenCode 只认 v2——报 1.x 的是 v1，服务接口不同、不做兼容，设置里说"需要 OpenCode 2"、给 v2 的安装方法、不给开关；报不出版本的照常算在，没有命令时除 Pi 外有配置目录也算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级；Claude Code、Codex 另把钩子合并进它们的配置（`HookFile`：按原文就地插入、删除，第一次装时把装之前有什么记在 CuePad 自己的技能目录里，卸载后与装之前逐字节一致；Codex 另经 `codex app-server` 写信任，`CodexHooks`），OpenCode 直连它的后台服务、不用装。技能很短（`AgentSkill`），写着 App 里 `cuepad` 的绝对路径、发到手机的用法与做 HTML 页的约定，其余看 `--help`；手机预览（`show`）四家都能用：会话从各家给命令带的环境变量认出，预览卡出现在这个会话的对话里；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。隔离运行（开发构建）只写配置目录经环境变量换走了的那几家（`isWritable`），其余只检测：缺省目录是正式版写过的。状态只有一份：任一个是别人的同名文件为 `foreign`（带它的位置，不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
-| 能不能用、模型 | `AgentIntegration.probe` | 由检测出的状态（`status(of:)`，不再检测一遍）得出各家能不能用：开得出会话的几家（装着；Pi 还要接入：托管的 Pi 经桥扩展上报，其余三家后台开的会话由 CuePad 直接托管，CuePad 写给它们的文件只管终端里的会话与历史）问出不指定模型时用哪个、能选哪些（`MacAgent`），问得出（登录了）才算能用；其余与问不出的给出原因（`MacAgentProblem`：没装、版本太旧、Pi 还没接入 CuePad、没登录、问不出模型）。每家起一个不落会话、不跑钩子、不连 CuePad 的进程问（Pi 用桥扩展的探测模式，Codex 用 `app-server`，Claude Code 用 stream-json 的控制请求），并发、各自有时限，取舍见 `AgentProbe` 的头注释。App 的 Mac 端只经 `MacAgentsRecorder` 写进同步表 macAgents（各家接入状态检测出来与变了、系统唤醒、Cue 启用前）；开新会话可选的 Agent、Cue 启用时能选的运行时与它系统提示里的 Agent 与模型清单都只读这张表 |
-| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只为接入了的 Agent 建（`AgentStatus.isConnected`，与设置里的开关同一个含义；App 跟着它起停）：接入时起索引并回填，检测出没接入时停掉、删掉这家的本机索引（`CueStore.deletePiSessions(of:)`），会话的同步记录与对话不动；OpenCode 的索引由它的接入连着服务时写，所以它的接入也只在接入期间运行。每家一个索引器（`PiHistoryIndexer(agent:paths:)`，OpenCode 没有：它的会话在它的数据库里、由它的接入写索引）；每家会话文件怎么认、怎么读只在 `SessionFileFormat`：Pi 与 Claude Code 是 `AgentPaths.sessionsDirectory` 下的 `<项目目录>/*.jsonl`（更深的子代理文件不算），Codex 是 `YYYY/MM/DD/rollout-*.jsonl`（带 `parent_thread_id` 的子代理文件由解码标为 `excluded`）；整棵会话目录由 FSEvents 盯，最近写过的会话文件（每家 32 个）另用 kqueue 盯追加——FSEvents 对开着写的文件（Codex 的常驻服务）只在关闭时报，写完就关的也实测晚 0.1–1 秒、几次写并成一次，Claude Code 的文件名就是会话 id。逐行解码按 Agent 分（`PiHistory`、`ClaudeHistory`、`CodexHistory`，OpenCode 的消息经 `OpenCodeHistory`），轮次与摘要的规则四家同一处（检查点上的 `said`、`answered`、`interrupted`、`compacted` 与工具活动），规则见下文"对话与摘要"；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（`PiSessionName.firstMessage`，与活动会话同一处）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`）。从哪接着读由调用方给（`PiHistoryStart`：检查点与本机是否已有它的对话，App 启动后一次读出）：`transcriptWindow` 内修改过的文件（按修改时间，不读内容）与本机已存着对话的要对话，要对话而本机还没有的从头读一遍补齐，一个文件一次更新只读一遍；不要对话的照样逐行读出检查点，只丢掉对话、不存图片（工具结果行不做 JSON 解码：600 MB 的 Pi 会话文件调试构建实测 0.9 秒，不另做只读摘要的快速路径——那是第二份轮次规则）；检查点（Codable，不含正文）由 App 存进 Store；路径一律是 `realpath` 后的真实路径（`URL.realPath`，FSEvents 报的就是它）；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Agent）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
-| 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
-| 后台托管 | `PiRuntime` | 以 RPC 模式在后台恢复已结束的会话、开新会话（会话名、模型与思考强度作为启动参数一起生效；没连上就退出时报 Pi 在标准错误里的最后一句，如模型不存在），连上桥后返回。进程一启动就脱离 App（新会话组，只继承列出的文件描述符，见"协议"一节的"托管"），自己管生死：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；这里不记进程，有哪些托管会话只看桥。空闲满时限由扩展自己退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退），退出后对接手的进程发 `reload`；协议号不同的托管会话等它空闲时自己重新载入（见"版本"）；让出由桥做；结束一个在线会话是 `PiBridge.end`（托管的给 hello 里的 pid 发 SIGTERM，终端里的走扩展的 `end` 命令），等它下线。让出与结束都只发 SIGTERM，Pi 收到后优雅收尾（扩展发 `bye quit`、删 socket） |
-| 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
+- 在线会话与控制：`PiBridge`；各家怎么发现会话、怎么说话：`AgentRuntime` 的四个实现（`PiRuntime`、`ClaudeCodeRuntime`、`CodexRuntime`、`OpenCodeRuntime`）。
+- 检测、安装、卸载与问模型：`AgentIntegration`、`AgentProbe`；钩子转发：`AgentHookServer` 与 `AgentHookEnvelope`。
+- 会话文件与对话：`PiHistoryIndexer`、`SessionFileFormat`、`PiHistory`；状态推导：`SessionFacts`；正在说的话：`DraftParts`、`PiDraftFeed`。
+- Cue 的大脑：`Brain/CueBrain.swift` 与各家实现的头注释。
+- 真 Agent 用例的回放与重录：`Tests/CuePiTests/RealAgents.swift` 的头注释。
+- 发话规则（在跑就先停下再以这句开新一轮；终端里的 Claude Code 在跑时说不了）：`AgentCapabilities.speakBlocked`，Pi 一侧见扩展里 `pending` 的注释。
 
-`AgentPaths` 是各家目录的唯一来源（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`、`XDG_*`），`PiPaths` 是 Pi、socket 目录（`CUEPAD_PI_SOCKET_DIR`；隔离运行没给时按资料库另起一个，见 `AgentHookEnvelope.socketDirectory`）与命令行链接目录（`CUEPAD_BIN_DIR`）那一部分。
+## 协议
 
-发话只有一条规则，四家一样（唯一的例外是终端里的 Claude Code，见下）：发给会话的话（`send`，以及会开一轮的斜杠命令）总是以这句开新一轮——会话歇着就直接开始，在跑（含压缩、等你确认）就先打断这一轮再开始；被打断的那一轮不报歇下，状态从它直接接到新的一轮（Pi 由扩展在有话等着时照报工作中；Claude Code 托管与 Codex 由接入在停下到开出之间压住那次结束；OpenCode 由服务自己接着开新一轮，两轮之间报不报空闲未实测）。没有排队、没有"马上说 / 等它做完再说"：各家的排队（Pi 的 followUp、Codex 的 `thread/queue`、OpenCode 的 `queue`）在一轮被停下时既不清也不读，排着的话会一直卡住；插话（Pi 的 steer、Codex 的 `turn/steer`、Claude Code 的 `next`）要等在跑的工具做完才读到，不是打断。原生做得到"打断并以这句开新一轮"的用原生，其余先停下这一轮再发，各家怎么做见下表"在跑时说话"。
+Pi 的桥扩展（`Extension/cuepad-bridge.ts`）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
 
-在跑时说话要先停下这一轮，停不下（会话没有 `AgentCapabilities.abort`）就说不了：只有终端里的 Claude Code。CuePad 只能经它的收件箱说话，收件箱没有停下这一轮的办法，前台工具跑着时收件箱的话（`priority: "now"` 也一样）要等工具跑完才读到，读进的是这一轮而不是新的一轮（2.1.299 实测与源码）。所以它在跑（含等你确认）时：回复框写明原因、发送钮不可用，Cue 说话报错等它歇下，桥上的 `send` 拒收带上原因（请求按失败写回，对话里挂"没送到"，歇下后可以重发），不排队；规则只在 `AgentCapabilities.speakBlocked`。歇着时照常经收件箱发，`priority: "next"`。
+- 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）。目录 0700、socket 0600；客户端还校验 socket 属主与对端 uid。扩展在 `.tmp` 名上 listen、收紧权限后才改名成 `.sock`。
+- 版本：`PROTOCOL_VERSION` 只认相等，不协商。每加一条命令或改线上格式就升一号；协议号不同的会话只读出身份，状态记为 `.incompatible`。`EXTENSION_VERSION` 是扩展版本的唯一来源（`PiExtensionBundle.version` 从文件解析）。
+- 结束 = 连接断开。有 `bye` 是正常退出，没有就是进程被强杀。
+- 扩展只在 `tui`、`rpc` 模式启用；`print`/`json`（`pi -p`、FireCode 子代理的同进程子会话）不开 socket。
 
-## 其他 Agent
+环境变量（CuePad → 扩展）：
 
-| | Claude Code | Codex | OpenCode |
-| --- | --- | --- | --- |
-| 终端会话的上报 | 钩子（`<配置目录>/settings.json` 的 `hooks`，事件表在 `HookFile.claudeCode`：要人作答的权限确认、AskUserQuestion 的 PreToolUse、MCP 表单 Elicitation 挡住等 CuePad，其余当场放行）；在终端里按 Esc 停下一轮（停下在跑的工具、拒绝确认）时 Claude Code 一个钩子都不跑，这一轮的收尾取自会话文件里的中断标记：历史索引本就增量跟读开着的会话，读到的交给接入（`AgentRuntime.read`、检查点的 `stoppedAt`），与 `Stop` 同样收尾；CuePad 启动前已在跑的用 `claude agents --json` 补上 | 钩子（`<CODEX_HOME>/hooks.json`，信任经 `codex app-server` 写进 `config.toml` 的 `[hooks.state]`）；子代理不挂钩子，托管与终端会话都只认 app-server 的子线程推送（终端的经常驻服务，CuePad 启动时从它已载入的线程补回名册）。父线程歇着时子代理做完，Codex 不自己接着跑：最后一个落定时 CuePad 补一轮空输入让它读到结果，那一轮做完才歇下（父线程上一轮被停下、在 Plan 模式、这一批都被停下的不补），规则在 `CodexRuntime` 头注释 | 直连后台服务：`service.json` 找服务，`GET /api/event` 事件流，断线重连后重拉快照 |
-| 终端会话的说话 | 它的收件箱 socket，只收文字 | 常驻服务的控制 socket，能带图 | 服务的 `POST /prompt`，能带图 |
-| 在跑时说话 | 托管停下再发：`interrupt` 控制请求（连同在跑的工具），等这一轮的 `result` 再送进去；托管的斜杠命令同样处理（初始化给的命令表分不出哪些命令开轮，一律按开轮处理）。不用 `priority: "now"`：前台工具跑着时它不中止，话等工具跑完并进这一轮（2.1.299 实测，托管与终端、default / auto / bypassPermissions 都是）。终端只有收件箱、停不下这一轮：在跑时说不了（见上），歇着时发 `next` | 停下再发：`turn/interrupt` 等这一轮真的中止了才回（0.162.1 实测：回应与 `turn/completed` 的 `interrupted` 同时到），随后 `turn/start`；`turn/start` 碰上还在跑的一轮会变成插话，所以不能先发 | 停下再发：`POST /interrupt` 受理即回、清掉这一轮已记下的唤醒，随后 `POST /prompt`（缺省 `steer`）：被停下的这一轮收尾时按新收进的话开新一轮（服务的 `SessionRunCoordinator`）。原生的 `interrupt?resume=true` 要先收话再打断，两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。`/compact` 不开轮，照它的缺省 |
-| 远程作答 | 权限：阻塞的 PermissionRequest 钩子，终端里同时弹出，哪边先答算哪边。提问（AskUserQuestion 的 PreToolUse 钩子）与 MCP 要你填的表单（Elicitation 钩子，只有一个字段时能答）：挂住时终端不弹，所以与 Codex 的权限一样按人在不在分 | PermissionRequest 钩子，按人在不在这台 Mac 前（`UserPresence`：2 分钟内有操作且没锁屏）分：人在就放行、终端弹框，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了放行、终端补弹；托管的会话总是挂住。Plan 模式（托管会话在 CuePad 里用斜杠命令 `/plan [话]` 进、`/default` 回默认模式）的提问：不挡着这一轮的（`request_user_input_async`，0.162 起的默认）终端与托管会话都能从 CuePad 答，答案作为你的下一句话交给它；挡着这一轮的（`request_user_input`）终端会话的只能在终端里答，托管会话的经 `item/tool/requestUserInput`、只有一个问题时能从 CuePad 答 | 权限与单个问题的表单 |
-| 后台托管 | `claude --input-format stream-json --output-format stream-json`，全部能力；会话开在终端里时拒绝接着（两边会各写各的） | `codex app-server --listen stdio://`；线程被常驻服务持有时改走控制 socket | 在它的服务里开会话，服务没开时 `opencode service start` |
-| 正在说的话（`PiDraft`） | 托管的与大脑：`--include-partial-messages` 的 `stream_event` 里主会话的 `text_delta`，每个文字块说完时换成那一行完整 `assistant` 里的定稿（文字块换行连接），`tool_use` 块、`message_start`、`system/init`、`is_error` 的 `result` 清掉；`since` 取第一段定稿那一行的 `timestamp`（与会话文件相同；之前先用收到 `message_start` 的时刻） | 托管的与大脑：`item/agentMessage/delta`，回答项说完（`item/completed`）时换成它的全文，过程中的说明（commentary）说完、下一项开始（`item/started`）、`turn/started`、没有正常完成的 `turn/completed` 清掉；`since` 取回答项 `item/started` 的 `emittedAtMs`（Codex 的时钟） | 服务里的会话都有：`OpenCodeDrafts` 把 `session.text.delta` 按回答累积（几段按段号换行连接）、`session.text.ended` 换成那段的全文，工具调用开始、执行开始、停下或失败清掉；`since` 取这一步开始的时刻（对话里这条回答的时刻就是它，晚于它的第一个字认不出已落库） |
-| 在飞（等子代理） | 只认它自己给的后台任务清单（后台子代理与后台命令，子代理名下的命令也在）：终端会话取 `Stop` 钩子的 `background_tasks`，托管的取 `background_tasks_changed`。一轮的起止：终端 `UserPromptSubmit`/`Stop`，托管 `system/init`/`result`。后台任务做完后它自己再跑一轮交回结果（钩子里是正文为 `<task-notification>` 的 `UserPromptSubmit`），那一轮做完才歇下；托管的顶层任务落定（`task_notification`）即算在跑，子代理交回中途结果后名下命令做完、它以同一 id 再跑之前仍算在飞。`SubagentStart`/`SubagentStop`、`task_*` 只改名册；被停下的没有 `SubagentStop`，下一个 `Stop` 的清单里没有它就记成被停下 | 只认 app-server 的子线程推送（托管的是自己的进程，终端的经常驻服务）：子线程的一轮开始就在飞；落定时父线程这一轮在跑，结果并进这一轮、随即不在飞，父线程歇着就等这一批都落定，由 CuePad 补一轮空输入（`turn/start`，`input` 为空），这一轮开始时才不在飞，做完才歇下（父线程上一轮被停下、在 Plan 模式、这一批都被停下的不补，直接不在飞）。出错、被停、卸载都算落定，`followup_task` 再跑回到在飞（`SessionFacts.runSubagent`）。CuePad 晚启动时从常驻服务已载入的线程补回：最近一轮还在跑的算在飞 | 执行中的子会话（子会话的 `session.execution.*` 事件，连上时按快照里在跑的执行补齐）；子会话一落定就不在飞 |
-| 最后一轮的开始（`turnStartedAt`） | 终端：收到 `UserPromptSubmit` 的时刻（钩子挡着这一句），CuePad 启动时它已在跑的取列出它之后读到的会话文件里最后一轮的开始（已收尾的取收尾那一行）；托管：CuePad 发出话或命令的时刻，它自己开的一轮是收到 `task_notification`（或 `system/init`）的时刻 | 托管：`turn/started` 的 `turn.startedAt`（向下取整到秒）；终端：收到 `UserPromptSubmit` 的时刻；补的空输入：发出的时刻；晚启动接上的：最近一轮的 `startedAt` | 收到 `session.execution.started` 的时刻；连上（含断线重连）时快照里在跑的取快照之后读到的对话里最后一轮的开始（已收尾的取收尾那条） |
-| 终端会话做不到 | 图片、停止、换模型与强度、斜杠命令、正在说的话（钩子不带增量） | 结束会话、上下文余量、正在说的话（订阅线程会抢走终端的审批） | 跳到终端（服务不知道终端） |
-| 认出 CuePad 发的话 | 消息的 uuid 就是投送请求 id | `clientUserMessageId` = `cuepad-<投送请求 id>` | 消息的 `metadata` |
-
-CuePad 起的子进程只经 `ChildProcess`：同组、自成一组（Cue 的大脑、后台托管的 Claude Code 与 Codex：退出后不留子进程）或脱离 App（托管的 Pi），只继承列出的描述符，信号处置恢复默认，一行一条收发；等对端回应只经 `PendingReplies`（都有时限、响应取消）。协议层各家一份，托管会话与大脑共用：Codex 是 `CodexRPC`，Claude Code 是 `ClaudeStream`；正在说的话也在这一层得出（`onDraft`；OpenCode 是事件流旁的 `OpenCodeDrafts`；Pi 大脑在 `PiBrain`），拼法只有 `DraftParts` 一份：几段正文换行连接，增量追加、说完换成运行时给的定稿（不发增量也有全文），各家只把事件映射到它的几个动作，去重只在 `PiDraftFeed`，接入只把它交给桥，大脑把它报成 `CueBrainEvent.speaking`；给界面看的刷新节奏只在 `PiDraftFeed`（桥的格子与 Cue 共用）。找可执行文件与给子进程的 PATH 只经 `ExecutableLocator`；挑哪一个只由检测定（`AgentStatus.executable`），各家接入、Cue 的大脑与问模型都用检测挑中的那个。模型的提供方：Claude Code、Codex 的模型名在它们自己的命名空间里，提供方写成这家（`AgentKind.modelProvider`）；思考强度一律按 `PiThinkingLevel.clamped` 夹到模型支持的档位（取最近的一档，一样近取低的）。Codex 托管会话一轮失败（`turn/completed` 的 `status` 为 failed，没有 Stop 钩子）记成出错，原因取自这一轮的 `error`。
-
-已知边界（2026-10 按官方文档核对，Claude Code 2.1.299、Codex 0.162.1、OpenCode 2.0.25 实测）：
-
-- Claude Code 的收件箱 socket、认证行与 `CLAUDE_CODE_MESSAGING_SOCKET` / `CLAUDE_CODE_MESSAGING_TOKEN` 已在官方文档（cross-session-messaging），消息体格式与控制消息（改名）没有，来自实测；会话登记文件 `<配置目录>/sessions/<pid>.json` 也不在文档里，只用来给 CuePad 启动前就在跑的会话补上收件箱地址。经收件箱发进去的话 Claude Code 一律包成"另一个会话发来的"（收件箱行里没有能改这一点的字段，"宿主注入"只对托管进程的标准输入），CuePad 在正文前加一句"这是用户本人从 CuePad 发的、直接回答、不必回传"：模型多半照做，但仍被告知这不是用户亲手打的、不能当作对待确认的批准，偶尔仍会试着回传。接收方在 bypassPermissions 模式下默认挂起它；CuePad 带上会话的收件箱令牌（认证行）后直接收下（令牌只在钩子到过之后才有）。
-- AskUserQuestion 的官方作答路径是它的 PreToolUse（`permissionDecision: allow` 加带答案的 `updatedInput`），CuePad 走这条；PermissionRequest 会不会为它触发文档没写，CuePad 不在那里答它。
-- Pi（1.2 起，1.3 实测）在工具跑着时被停下（停止，或在跑时发来新的一句），常把这一轮记成 `stopReason: error`（"The operation was aborted." 等中止信号的错误原文）：工具被中止后接着的那次请求、或别的信号中止的请求失败时，Pi 只看请求自己的中止信号。扩展按"这一轮收到过停止或中止信号已触发"报成被中止，会话歇着、不显示出错；对话与摘要按错误原文认出它（`PiHistory` 的 `abortMessages`，原文按出处核对过），照停下处理，留"已停止"那一行。
-- Codex 终端会话在终端退出后由常驻服务再挂约 30 分钟（实测，文档里没有这个数），期间仍在线、能收话；历史会话没有名字（会话名只在它的 `session_index.jsonl`）。常驻服务把子线程的推送广播给没订阅的连接是实测行为，文档里没有；补的空输入那一轮在终端里显示为一段没有提问的回答，不触发 UserPromptSubmit，输入框里打了一半的话不受影响（实测）。Codex 的 `wake_on_agent_messages`（openai/codex#54961）发布并默认开启后改用它、删掉补的这一轮。
-- OpenCode 只认 v2：官方 v2 已发布，brew 与官方安装脚本装的就是它（npm 上是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x）；v1 的服务接口不同，不做兼容。它的服务登记文件 `service.json` 不在文档里。会话在线规则"服务活着期间有过活动"是 CuePad 定的。从没取过模型表的头一次启动（实测 2.0.25），它先用随包的旧表、同时联网取新表（约 1～2 秒）：这期间说的话，配置的默认模型不在旧表里时它改用旧表第一个（它自己的终端界面也一样）；CuePad 不补，会话页显示的就是实际用的模型。
-
-## Cue 的大脑（`Brain/`）
-
-常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 带文字与图，空闲时开始一轮、正忙时插进当前这一轮，图按各家原生的图片输入交，与托管会话同一份写法；`seesImages` 是模型能不能看图；`configure` 就地换模型与思考强度，进程与上下文不动、下一次请求模型起生效（Pi 是 RPC 的 `set_model` / `set_thinking_level`，Claude Code 是控制请求 `set_model` 与 `apply_flag_settings`，Codex 是每轮随 `turn/start` 给），回到运行时默认做不到，要换大脑；`abort`；`stop` 返回不需要主线程的等待，等进程连同子进程退出），进程与协议用接入里的同一份（Pi 的 RPC 模式直接经 `ChildProcess`）与同形的事件 `CueBrainEvent`（规则在类型的头注释里；一轮的回答就是做完时还留着的正在说的话，Pi 的从 RPC 的逐字增量累积）。系统提示整份替换，用户的 skill 清单、上下文文件（AGENTS.md、CLAUDE.md）与追加提示都不进来（Codex 的 `<CODEX_HOME>/AGENTS.md` 没有开关，是例外），原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
-
-端到端测试 `RealBrainTests` 录的是真实运行时用用户自己的账号跑出来的输出；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。启动握手失败与不肯退出的运行时由 `BrainLifecycleTests` 用假运行时脚本守着。Cue 用各家开工（带名字、模型、强度开会话，说两句、各自歇下，核对会话文件里实际用的模型）由 `RealCueStartTests` 守着，各家用自己的隔离测试台，登录只用这家自己已有的、不刷新（Codex 复制的登录，见 `copyCodexAuth`；Claude Code 钥匙串里的那条，见 `ClaudeLogin`）。
-
-真 Agent 的用例（真 Pi、各家托管、Codex 钩子、大脑、开工）默认回放录好的 Agent 输出，不起真 Agent；`TEST_RUNNER_CUEPAD_AGENT_TESTS=<家,…> apple/scripts/xc.sh test kit -only-testing:CuePiTests` 连真 Agent 跑并重录这几家。录在哪些边界、哪些用例只连真 Agent 跑，只在 `Tests/CuePiTests/RealAgents.swift` 的头注释里。
-
-
-## 协议（v16）
-
-传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
+| 变量 | 含义 |
+| --- | --- |
+| `CUEPAD_PI_SOCKET_DIR` | 换 socket 目录 |
+| `CUEPAD_LAUNCH_TOKEN` | CuePad 开的新会话的认领标识，在 hello 的 `launchToken` 里带回；只给进程里的第一个会话 |
+| `CUEPAD_HOSTED` | 后台托管：正整数，空闲多少秒后自己退出；缺省或不是正数就不是托管。扩展读出后从环境里删掉 |
+| `CUEPAD_PROBE` | 探测模式：不开 socket，`session_start` 时往描述符 1 写一行 `{"cuepadProbe": {model, models}}` |
 
 扩展 → CuePad：
 
-| `t` | 内容 |
+| `t` | 字段 |
 | --- | --- |
-| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，`--no-session` 没有；路径在第一条消息落盘前就给出，文件要等第一条消息落盘才存在——没有文件的会话结束时不进历史）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（进程由 CuePad 在后台托管，见下"托管"），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
-| `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), turnSince(ms 或 null), …}`；`turnSince` 是主会话最后一次模型回合开始（`turn_start`）的时刻，每个回合开始都发一次 |
-| `info` | 变化时只带变了的那几项（没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`、上下文余量 `context` 与命令清单 `commands`（见下）；都可空 |
-| `ack` | 命令回应：`id`、`ok` 或 `error`（`empty`/`bad_request`/`failed: …`） |
-| `draft` | 正在说的话（`PiDraft`）：`text` 是主会话当前这条助手消息到目前为止的正文（文字块按换行连接，同下"对话与摘要"取回答的规则；不含思考、工具参数与子代理），`since` 是它开始出字的时刻（ms）。增量在扩展里合并到约每 100ms 一条，这条说完（`message_end`）时立即补发全文；它转成工具调用（`toolcall_start`）、被停下或出错（`message_end` 的 `stopReason` 为 `aborted`/`error`）、下一条助手消息开始（`message_start`）或新一轮开始（`agent_start`）时发 `text: null` 清掉。正常说完的不清：说完的那条以会话文件为准，CuePad 在对话里出现它之后自己换下 |
-| `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
-| `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
+| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
+| `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
+| `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images}`、`thinking`、`models`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
+| `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
+| `quota` | 订阅额度的一次观测：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
+| `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
+| `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`state.kind`：`idle`、`thinking`（工作中没在调工具，正在出字也是它；"输出中"只是 Mac 读 `draft` 的显示，见 `PiShown.speaking`）、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（自己这轮已歇下，还有子代理在飞）、`compacting`（在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
-
-解码时一处落成 `PiSession.state`（`PiWorkState`）与一句话说明 `PiSession.detail`：`idle` 与 `done` 都是 `settled`（`tools` 全集、`aborted`、`promptKind` 没有人读，不解码）；`tool` 的说明是"工具名 · 调用摘要"（没有摘要只有工具名），`waiting_user` 是 `title`，`error` 是 `PiErrorSummary.line`（原文留在 `PiSession.errorMessage`，悬停看）。"忙"的规则只在 `PiWorkState` 上：`isTurnRunning`（指挥官这一轮在跑，含等你确认）、`isWorking`（含等子代理）、`hasPendingWork`（工作中或等你确认；后台托管的 Pi 让出读它）。
-
-计时：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、工具、等子代理、压缩）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。`turnSince` 不跟粗状态：每次 `turn_start` 取它带的时刻（等子代理到 FireCode 的跟进轮之间 `since`、`busySince` 不变，它要变）。取回合而不取 `agent_start`：一次运行里接着处理排队的话时，最后的回答出自最后一个回合。它与会话文件里回答的时间戳出自同一进程的同一时钟，早于这一回合写下的任何一条。
-
-压缩：压缩期间 `kind` 是 `compacting`（等你确认的弹窗仍在它之前）。自动压缩发生在一轮里（回答之后、`agent_settled` 之前；溢出时压完重试这一轮），粗状态一直是工作中，计时不断，压完歇下照常是这一轮做完。手动 /compact 先停掉在跑的一轮，压缩本身发生在歇着的时候：结束、失败或被停止后会话回到压缩前的状态，`since`、`busySince` 也回到压缩开始时的值——压缩不是新的一轮，CuePad 据"起点退回"不提示"做完了"、也不算有新回复（`PiAlert.entering`）。压缩期间（手动或自动）来的话与别的时候一样先停下（`ctx.abort()` 也停压缩：手动的没压成、回到压缩前的状态），歇下后再开新一轮（见 `send`）。
-
-会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`info` 的任一字段变化时 `changes()` 给出 `.infoChanged`。
-
-对话与摘要来自会话文件（你在 CuePad 里的作答例外：执行作答的 Mac 作答成功时写进对话，见 `PiChatRole.answer`；扩展不上报问答近况；说完之前的正文只经 `draft` 给 Mac 逐字显示，不入库、不同步）：`PiHistory` 按文件里的先后读出，一行一个序号（`seq`，文件只追加，重读不变）。
-
-- 你的消息：`role == "user"` 的消息，写成 CuePad 正文格式（`CueFormat`，与投送请求的 content 同一种）：文字块与图片块按原顺序、换行连接，文字块末尾 Pi 附给模型的图片说明行（`[Image: original …]`、`[Image converted …]`）去掉（规则只有 `PiSessionName.withoutImageNotes` 一处，会话名、对话、摘要都经它），图片块在读的时候存进附件目录（按内容哈希，已有的不重写；CuePad 发出的图片就是附件目录里那份原字节，终端里直接贴的图附件目录里原本没有）、正文里留 `![](cuepad://img/<哈希>)`；不是图片的块跳过。摘要（`recap`）、机器消息判断用去掉图片后的纯文字。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（`PiEnvelope`，四家同一处；如 FireCode 的子代理事件、观察员、审查结果信封），原样进对话（说话人 `machine`，会话页画成卡片），开始一轮但不是提问；块与块之间夹着真人文字就不是机器消息。扩展经 `sendMessage` 投进来、在 Pi 里显示的消息（会话文件里的 `custom_message`，`display` 为真；FireCode 交回结果就是这样）同样是机器消息；不显示的只给模型看，不进对话。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
-- 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字固定是"已压缩上下文"（不写压缩前的 token 数：这里不知道窗口多大，一个孤零零的数用户读不懂）；被停下的一轮在停下的地方留一行"已停止"，因你拒绝了它要用的工具而停的写"已拒绝"（四家同一规则，见下"摘要"；Claude Code 拒绝与停下写进会话文件的一样，只写"已停止"）；三种文字在 `PiNotice` 一处，只有压缩在对话里画成换上下文的分隔、在刻度滑条上打点，停下与拒绝是回答下面一行小字。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。
-- Pi 消息：对话里每句你的话，回答是它之后、下一句你的话之前助手说的最后一段（四家同一规则）：Pi 的每条助手消息的文字块都是说的一段（中途调工具前说的也是，被停下的 `aborted` 那条里说了一半的也是），一轮在跑时插进来的话把这之前的最后一段归给前一句；思考不算，工具输出不进对话，回答带着到它为止的开始时间和这一轮的经过（`PiChatMessage.Tools`）：之前说的每段话按先后夹在工具调用之间（`said`，每段至多 `saidLimit` 个字符，不计步数），最后那段是回答、不在经过里；调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），调用数（`steps`，失败的也算，清单每条自己标成败）——读、改文件按文件算，同一个文件成功地读两次、改两次只算一步；清单按发生先后，落了结果的（`Kind.acts`：改了的文件）总列上（展开的清单不漏它们），其余列到清单满 `PiChatMessage.Tools.itemLimit` 条为止，每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。还在跑的这一轮已做完的调用（等到了结果的）与说过的话同样汇成一份，写在会话记录的摘要上（`PiRecap.pendingTools`），会话页末尾据此实时列出这一轮做到哪了；这一轮做完时它随回答归进那条消息、摘要上清空。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
-- 摘要：`pendingPrompt` 是你说了、这一轮还没做完的那句；一轮结束时它移进 `lastPrompt`，`lastReply` 换成这一轮的回答，问与答一起更新。机器消息触发的轮没有新的提问：回答照常更新、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）。没做完的一轮——被停下（Pi 的 `aborted` 或中止信号原文的 `error`、Claude Code 的中断标记、Codex 的 `turn_aborted`、OpenCode 带 `aborted` 错误的那一步或 `interrupted` 的 `idle`）或上次中途退出——已经说出的照样是回答（被停下的那条里说了一半的也算：Pi 的 `aborted` 消息、OpenCode 被停下的那一步带着的文字），没说的不改问答，这一轮的提问也不再算进行中；被停下的另在回答下面留一行系统行"已停止"（与说了一半的话出自同一条时序号相同，库里按说话人排在它后面），这一轮里你拒绝过它要用的工具（Codex 的 `declined`、OpenCode 的"declined this tool call"）就写"已拒绝"。什么都没说就结束的一轮以空回答结束（出错时），没有提问的（只压缩了上下文）不动问答。四家同一处规则（检查点上的 `said`、`spoke`、`answered`、`interrupted`）。`answeredAt` 是最后一轮在会话文件里收尾那一行（回答、收尾标记、"已停止"）的时间戳。`lastPrompt`、`pendingPrompt` 单行（空白与控制字符折成一个空格）≤500 字符，`lastReply` 保留换行 ≤1200 字符，超出以省略号结尾。
-
-歇下什么时候算做完（Cue 的变化、`PiSessionState.answered`）：状态由 Agent 报、问答由 Mac 读会话文件写，两路先后不定（Claude Code 的轮末标记写在 `Stop` 钩子之后，Codex 的 `task_complete` 写在钩子返回之后）。所以会话记录带上最后一轮的开始（`turnStartedAt`，Pi 是扩展的 `turnSince`，其余见上表），摘要带上收尾的时刻（`answeredAt`）；收尾不早于开始，歇下才算读到了这一轮的回答。你开的一轮与 Agent 自己开的一轮（FireCode 交回结果、Claude Code 的任务通知、Codex 补的空输入）同一条规则；一轮都没开过（刚开出来就歇着）没有开始时刻，不算。开始时刻怎么取见 `SessionFacts.startTurn(at:)`。
-
-- `question`：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。
-
-模型配置：`model` 是当前模型 `{provider, id, name, thinking, images}`（`thinking` 是它支持的思考强度，规则同 pi-ai 的 `getSupportedThinkingLevels`：不支持思考的只有 `off`，`xhigh`/`max` 要模型显式声明；`images` 是它能不能看图，即 `input` 里有没有 `image`，不能的会话不收图片），没选模型为 null；`thinking` 是当前强度（`pi.getThinkingLevel()`）；`models` 是可换的模型，与 Pi 的 `/model` 一致——配了范围（`--models`、`enabledModels`，即 `ctx.scopedModels`）就是范围内的，否则是已配好密钥的全部（`ctx.modelRegistry.getAvailable()`，可能几百个），当前模型总在其中。Pi 里换了模型或强度（`model_select`、`thinking_level_select` 事件）时重新上报。同一份模型配置也是探测模式的输出：带 `CUEPAD_PROBE` 起的 Pi（`AgentIntegration.probe`）在 `session_start` 把 `{model, models}`（没有配好密钥的模型时都空）写成一行 `{"cuepadProbe": …}` 到标准输出，不开 socket、不做别的。`PiSession.model`/`thinking`/`availableModels`，换用 `PiBridge.configure`。可换的模型与命令清单不随会话状态同步：报的一样的会话共用一条按内容定 id 的目录记录（`AgentCatalog`），会话报的变了才写。
-
-上下文余量：`context` 是 `{tokens, window}`——`ctx.getContextUsage()` 的已用 token（Pi 的估算）与当前模型的上下文窗口；压缩后到下一次回答前 Pi 不知道已用多少，`tokens` 为 null（窗口仍在）；没有模型为 null。上报时机：会话载入（`session_start`，含新会话、重载、恢复）、每个回合结束（`turn_end`）、一轮彻底歇下（`agent_settled`）、压缩后（`session_compact`）、换模型（`model_select`）、切换树分支（`session_tree`），内容没变不发。
-
-命令清单：`commands` 是 `[{name, description, source, hint}]`，名字不带斜杠（skill 是 `skill:名字`），`source` 是 `builtin` / `extension` / `prompt`（提示词模板）/ `skill`，说明截到 120 字符，`hint` 是内置命令的参数提示。内置之外的来自 `pi.getCommands()`，与载入的资源一致，只在会取到不同结果的时机取：会话载入（`session_start`，含重载，重载会重新载入扩展，等于重新上报）和每次提交消息前（`before_agent_start`；其他扩展经 `resources_discover` 追加的 skill 与提示词模板在 `session_start` 之后才载入、没有事件，这是它们之后的第一个可靠时机），不随每个回合取；内置只列能在非 TUI 下执行的：
-
-| 内置命令 | 怎么做 |
-| --- | --- |
-| `/compact [说明]` | `ctx.compact`，受理后 1.5 秒内失败（没有可压缩的内容、没有模型）按拒绝报给发起方，之后的失败只提示在 Pi 里 |
-| `/name <名字>` | 与 `config` 的 `name` 同一条路（`pi.setSessionName`） |
-| `/model <提供方/模型>` | 与 `config` 同一条路（`pi.setModel`）；模型 id 在可选模型里唯一时可省提供方 |
-| `/thinking <强度>` | `pi.setThinkingLevel` |
-| `/new`、`/clone`、`/reload` | 需要命令上下文，经扩展自己注册的内部命令 `/cuepad <动作>`（`newSession` / `fork(叶子, at)` / `reload`）；这三个照常列在清单里，只有内部命令 `cuepad` 本身不列 |
-
-做不到、不列的内置命令：`/settings`、`/scoped-models`、`/login`、`/logout`、`/resume`、`/tree`、`/fork`、`/trust`、`/llama`、`/bug`（终端里的选择器或弹窗，没有对应接口）；`/session`、`/hotkeys`、`/changelog`、`/copy`（只往终端打印或写 Mac 剪贴板，手机看不到）；`/export`、`/share`、`/import`（没有扩展接口，且涉及 Mac 上的文件与外发）；`/quit`（已有"结束会话"；RPC 模式空闲时不检查退出请求，托管进程靠它退不掉）。
-
-子代理：FireCode 的子代理是同进程里的 `print` 模式子会话。扩展只服务终端与 RPC 会话（会话开始时建、关闭时整体拆掉），子会话里什么都不做：不开 socket、不作为独立会话出现，也不碰托管进程的空闲自退——子会话歇下或被移除都不算进程空闲。父会话的 `info.subagents` 原样转述 FireCode 发布在 `firecode:subagents` 频道的名册（发布方是 FireCode 的 `master/roster.ts`，装在 `~/.pi/agent/extensions/firecode/source/`；整份、内容变了才发，停用发空名册；扩展不读它的档案、会话文件或 `subagents/` 目录，没装带名册的 FireCode 就没有子代理）：`[{name, role, state, action, startedAt, settledAt, model}]`，按启动序。`state` 是 FireCode 活动列表的分组原文——`running`、`review`（审查中）、`done`（已交回结果）、`failed`、`interrupted`（被中断）、`idle`（空闲）；`action` 是在做什么的一句话（FireCode 的界面语言，≤120 字符：当前工具、审查进度，落定后是结果首句或失败原因，空闲为空串）；`startedAt` 是本次运行的开始、`settledAt` 是落定时刻（毫秒，可空），界面自己算时长；`model` 是实际用的模型原子 `provider/model`（可空）。`PiSession.subagents` 给界面，同步记录里是结构化的子代理列表（`PiSubagentState`，状态读成可扩展的 `Open<PiSubagentPhase>`）；名册不带进展时刻：桥收到名册时按名字对上上一份，某一项有任何变化（状态、动作、起止）就把它的 `progressAt` 记成 Mac 收到的此刻，没变的沿用（`PiWire.Info`）；值班的 Cue 等子代理太久没动静的兜底只读它（`PiSessionState.stallsAt`）。动作文字与进展时刻随每次工具调用变，记录器把它们和会话状态的细节一起合并写入，名册的人员、角色或状态变了才立即写。
-
-`detail`（可空）：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。
+`state.kind`：`idle`、`thinking`、`tool`（`tool`、`tools`、`detail`）、`waiting_user`（`promptKind`、`title`）、`delegating`（自己歇下、子代理在飞）、`compacting`、`done`（`aborted`）、`error`（`error`）。
 
 CuePad → 扩展（都带 `id`）：
 
-- `{"t":"send","id","text","images":[{"mimeType","data(base64)"}],"deliveryId"}`：以这句开新一轮。会话歇着（`ctx.isIdle()`）且没有等着的话，直接 `sendUserMessage`（不带 `deliverAs`）；否则先记下这句、停下这一轮（同 `abort`：取消等你回答的弹窗、`ctx.abort()`，也停压缩），等真正歇下（`agent_settled`、压缩结束，下一轮事件循环再看 `ctx.isIdle()`）再交给 Pi。不用 Pi 的队列：followUp 只在一轮正常做完时读出、steer 等在跑的工具做完才读，`abort` 既不清也不读它们。等着的话按到达先后一次交一句；还有下一句等着时，刚开始的这一轮在 `agent_start` 就被停下，每句都是新的一轮（被停下的那几句照样进会话文件、带着投送请求 id）。`ack` 在受理时就回，不等这一轮开始。图片发原图，Pi 自行缩放。`deliveryId`（可选）是 CuePad 投送请求的 id：扩展按文字先进先出认领，在这条用户消息的 `message_end` 里写到消息对象上（`cuepadDelivery`）——扩展先收到 `message_end`、Pi 再把同一个对象写进会话文件，所以 id 随消息落盘。
-- `{"t":"command","id","text"}`：斜杠命令，`text` 是以 `/` 开头的整行（命令加参数）。内置命令（先于扩展命令匹配，与 Pi 的终端一致）由扩展调上表的接口做；其余必须是 `pi.getCommands()` 里有的名字，经 `pi.sendUserMessage(text, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令（`source` 为 `extension`）不开轮、照常执行（Pi 先于"会话正忙"的检查执行它们，会话正忙也立即执行）；模板与 skill 展开成新一轮的提示词，与 `send` 同一规则（在跑就先停下，歇下再交）。**不带 `expandPromptTemplates` 的 `sendUserMessage` 只把斜杠开头的话当普通文字发给模型**（`send` 就是这样），所以斜杠命令必须走 `command`。`ack` 只表示受理：扩展命令自己的输出（`ctx.ui.notify` 等）只出现在 Pi 的界面里，桥看不到；拒绝：`bad_request`（不是斜杠开头）、`unknown_command`（清单里没有，含纯终端交互的内置命令与内部命令）、`missing_argument`（必填参数没给）、`unknown_model` / `no_auth`（`/model`，同 `config`）、`failed: …`。
-- `{"t":"reload","id"}`：同一会话的另一个进程（CuePad 后台托管、让出前做完一轮）刚写过会话文件，这个进程看不到那些内容。从载入起没写过、且空闲时，经 `sendUserMessage("/cuepad reload-session", {expandPromptTemplates: true})` 触发本扩展注册的内部命令，命令里 `switchSession(当前会话文件)` 重新载入（Pi 只在命令上下文给切换会话的能力），`ack` 带 `reloaded: true`；文件没有多出内容就什么都不做；写过了（会话已分出支线）就不动，`ctx.ui.notify` 提示一句。重新载入时扩展照常收到 `session_shutdown`/`session_start`，同一 pid 的会话先结束再出现。
-- `{"t":"config","id","model":{"provider","id"},"thinking","name"}`：改该会话的设置，三者至少给一项。`name` 是会话名（去掉首尾空白后不能为空），走 Pi 设置会话名的接口 `pi.setSessionName`（同 `/name`），改后 `info` 的 `name` 随即上报；CuePad 的"重命名"走这里，不当成发给会话的话。先 `pi.setModel`（模型取自 `ctx.modelRegistry.find`）再 `pi.setThinkingLevel`，所以强度按新模型支持的范围由 Pi 夹取；只作用于这个会话，不改 Pi 的默认设置。成功后 `info` 里的模型配置已是新值。拒绝：`bad_request`（缺项、名字为空、强度不在 `off`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max` 里）、`unknown_model`（模型表里没有）、`no_auth`（该提供方没配好密钥，`setModel` 返回 false）。
-- `{"t":"abort","id"}`：停止这一轮，走 Pi 的 `ctx.abort()`（与用户在 Pi 里按 Esc 同一能力）。先取消正在等的弹窗（否则这一轮卡在等你），再中止指挥官正在跑的回合，`ack` 立即回（`ok` 只表示已受理，不等歇下）；随后会话以"被中止"歇下（`state` 为 `done`、`aborted: true`），不退出，能接着说。这一轮收到过 `abort`、或这一轮的中止信号已触发（终端里按 Esc）时，Pi 把它记成 `error` 也按被中止报（见已知边界）。已经空闲就什么都不做，也 `ack ok`。**只停指挥官自己这一轮**：FireCode 的子代理是独立会话，不受影响，指挥官已歇下、在等子代理（`delegating`）时没有这一轮可停，成功但状态不变；子代理落定后照常把结果投回来开始新的一轮。要连子代理一起停得在 Pi 里让指挥官 `interrupt`（FireCode 的 subagents 工具），CuePad 不做。
-- `{"t":"end","id"}`：结束会话，走用户在 Pi 里退出的同一条路（`ctx.shutdown()`）：先 `ack`，再取消正在等的弹窗、中止正在跑的一轮（否则 Pi 要等它们结束才退出），然后 TUI 恢复终端、提示怎么恢复这个会话，扩展发 `bye quit` 后连接断开。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，所以后台托管的进程不靠它，`PiBridge.end` 给它的 pid 发 SIGTERM（Pi 中止这一轮、清理后台子进程后照常收尾，不论这一轮在不在跑）。`PiBridge.end` 等到会话下线（超时抛 `PiBridgeError.notEnded`，多半是非托管的 RPC 进程或卡在别处）。
-- `{"t":"answer","id","promptId","value"}`：回答正在等的弹窗。`value` 在 `confirm` 是布尔，`select` 是选项原文之一，`text` 是字符串。扩展先记下答案再 abort 自己接上的 signal：Pi 的界面随之收起（TUI 隐藏选择器与确认框，RPC 删掉待答请求并按"取消"结束），原调用的结果被换成这个答案交回发起弹窗的扩展，随后 `ui_prompt_end` 清空 `question`、状态回到工作中。拒绝：`no_prompt`（没有在等、或已经答过）、`stale_prompt`（`promptId` 不是正在等的那个）、`bad_answer`（类型不对或选项不在列表里）。
+| `t` | 字段 | 拒绝 |
+| --- | --- | --- |
+| `send` | `text`、`images[{mimeType, data}]`（base64 原图）、`deliveryId`（可选，落盘为消息上的 `cuepadDelivery`） | `empty`、`bad_request` |
+| `command` | `text`：`/` 开头的整行 | `bad_request`、`unknown_command`、`missing_argument`、`unknown_model`、`no_auth` |
+| `config` | `model{provider, id}`、`thinking`、`name`，至少一项 | `bad_request`、`unknown_model`、`no_auth` |
+| `answer` | `promptId`、`value`（`confirm` 为布尔，`select` 为选项原文，`text` 为字符串） | `no_prompt`、`stale_prompt`、`bad_answer` |
+| `abort` | — | — |
+| `end` | — | — |
+| `reload` | — | — |
+| `quota` | — | — |
 
-- `{"t":"quota","id"}`：查一次所有 OAuth 订阅的额度（见下"订阅额度"）：查到的先以 `quota` 消息发给所有客户端，再 `ack`；有一家没查到时拒绝 `failed: …`（带各家的原因，查到的照常发出）。同时来的几条共用一次查询。
+任何命令都可能以 `failed: <原因>` 拒绝。`ack` 只回给发命令的连接；多个客户端同连一个会话时各自收到全部状态，扩展不仲裁。
 
-订阅额度：只有 Pi 用 OAuth 订阅登录的 Claude（`anthropic`）与 Codex（`openai-codex`）有额度窗口，其余提供方是按量的 API 密钥，不报。窗口 `seconds` 是长度，`used` 是已用比例（0..1，到顶后可能略超 1），`resetsAt` 是重置时刻（Unix 秒），`model` 是只算某个模型的窗口的显示名（Claude 按模型的周额度，如 `Fable`），算整个账号的为 null。两个来源，都发给所有客户端：
+FireCode 经两个频道把事实交给扩展：`firecode:workers`（`{inFlight}`，在飞子代理数）与 `firecode:subagents`（`{workers}`，名册原文）。扩展不读 FireCode 的档案与会话文件。
 
-- 回复里带回的（零额外请求）：Claude 每次回复的响应头（`after_provider_response`，当前模型的提供方是 `anthropic` 且带 `anthropic-ratelimit-unified-5h/7d-utilization` 与 `-reset`；API 密钥的回复没有这些头）只有 5 小时与本周，没有按模型的周额度，`complete` 为 false；`anthropic-ratelimit-unified-representative-claim`（`five_hour` / `seven_day`）指的那个窗口带 `binding: true`（提供方说此刻卡着的就是它，CuePad 模型胶囊的环据此选窗口；其余窗口不带这个键）。Codex 流里的 `codex.rate_limits` 事件（`provider_stream_event`，`rate_limits.primary`/`secondary` 的 `used_percent`、`window_minutes`、`reset_at`）是全部窗口，`complete` 为 true，没有 `binding`。每次观测都发、不去重：值没变的观测也说明刚观测过，写不写库与"更新于"由 CuePad 定（`CueStore.recordQuota`）。
-- 查用量接口（`quota` 命令）：Claude `GET https://api.anthropic.com/api/oauth/usage`（头 `anthropic-beta: oauth-2025-04-20`，取 `limits[]` 里 `session`、`weekly_all`、`weekly_scoped`），Codex `GET https://chatgpt.com/backend-api/wham/usage`（头 `ChatGPT-Account-Id` 取自令牌，取 `rate_limit.primary_window`/`secondary_window`），都只读、不耗额度，单个请求 3 秒超时；令牌经 `ctx.modelRegistry.getProviderAuth` 取（Pi 负责刷新），CuePad 不碰 Pi 的登录文件。结果 `complete` 为 true，没有 `binding`（CuePad 沿用上次响应头的判定）。
+## 接入 Agent
 
-扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。
+2026-10 按官方文档核对、实测版本：Claude Code 2.1.299、Codex 0.162.1、OpenCode 2.0.25。下面只记代码里查不到的外部事实。
 
-会话结束 = 连接断开（无心跳、无轮询）。有 `bye` 是正常退出；没有就是进程被强杀，此时 socket 文件会残留，由进程退出通知（kqueue）触发删除，启动扫描遇到 `ECONNREFUSED` 且文件名里的 pid 已不存在也会删。pid 还活着不删、也不重试：扩展在临时名（`.tmp`）上 listen、收紧成 0600 后才改名成 `.sock`（客户端只连 0600 的），活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
+终端里的会话少几样能力（`AgentCapabilities.of`），出处：
 
-托管：CuePad 启动后台 Pi 时带环境变量 `CUEPAD_HOSTED`，值是正整数，表示空闲多少秒后自己退出（`PiRuntime` 默认 1800，测试给几秒）；没有这个变量或值不是正数就不是托管。扩展读出后存在进程内（/reload 重新载入扩展后仍认得）并从环境里删掉，所以 Agent 起的子进程（命令、里面再起的 pi）看不到它、不会也自认托管；扩展据此在 hello 里报 `hosted: true`，并在它服务的会话空闲（不在工作、没有等你回答的弹窗、子代理也都歇下）满这么久时给自己发 SIGTERM；期间状态一变就重新计时。托管进程的标准输入是它自己握着两端的管道，永远读不到 EOF；它不随 CuePad 退出，只因空闲满时限、SIGTERM（结束、让出）或自身崩溃而退出。读不懂这个约定的扩展（协议号不同，或把值当别的格式）起出的进程既不自退、也不被认作托管，所以 `PiRuntime` 启动后核对连上的会话报了 `hosted` 且协议号相同，不然让它退出并抛 `PiHostError.extensionMismatch`。
+- Claude Code：CuePad 只有收件箱（只收文字）与钩子。没有图片、停止、换模型与强度、斜杠命令；钩子不带增量，也没有正在说的话。
+- Codex：CuePad 不订阅终端的线程（订阅会抢走终端的审批），所以没有结束会话、上下文余量与正在说的话。
+- OpenCode：服务不知道会话在哪个终端，跳不到终端。
 
-## 多客户端
+Claude Code：
 
-同一会话可被多个客户端（含多个 `PiBridge`）同时连接：每个客户端都先收 hello 快照，再收全部状态切换；命令走各自的连接，`ack` 只回给发送方；扩展不仲裁，命令按到达顺序交给 Pi（两个客户端同时 `send` 就是两条用户消息）。
+- 收件箱 socket、认证行与 `CLAUDE_CODE_MESSAGING_SOCKET`/`CLAUDE_CODE_MESSAGING_TOKEN` 在官方文档（cross-session-messaging）里；消息体格式与改名的控制消息没有，来自实测。
+- 经收件箱送进去的话模型仍可能当作同伴请求：不当作对待确认的批准，偶尔会试着回传。
+- AskUserQuestion 的官方作答路径是 PreToolUse；PermissionRequest 会不会为它触发，文档没写。
 
-## 版本
+Codex：
 
-扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`AgentIntegration.status(of: .pi).files` 报告已安装的扩展与技能是否过期；升级文件后，已在运行的会话自己重新载入：扩展用 `fs.watch` 盯着自己所在的目录（升级是写临时文件再改名，盯文件本身会跟丢），看到本文件的 `EXTENSION_VERSION` 与自己的不同，就等到空闲（这一轮做完、没有等你回答的弹窗、子代理都歇下、不在压缩；在跑的一轮与子代理都不打断，进入空闲时再看）经内部命令 `/cuepad reload-if-idle` 再核对空闲后调 `ctx.reload()`——Pi 清掉扩展缓存、从磁盘载入新版本，同一会话、同一进程以新协议重连。终端与托管的会话一样。只能是 `ctx.reload()`：重新载入会话（`switchSession`，`reload` 命令走的那条）在同一工作目录下复用 Pi 缓存里的旧模块，载入的还是旧代码。扩展版本 29 之前没有这段，升级后要在终端里执行一次 /reload。**协议号只认等于**，不做版本协商（不向下兼容旧协议）：每加一条命令或改线上格式就升一号，hello 里协议号不同的会话只读出会话 id、会话文件、进程、工作目录与名字（格式可能已变，其余不解析；会话文件决定进程退出时它算不算说过话，读不到就会被当成没说话、删掉记录与摘要），以状态 `.incompatible` 出现在 `sessions` 里——进程在、会话没死，所以不是"已结束"，也不会被后台唤醒；之后它的消息一概不读，命令一概不发，进程退出（连接断开）才结束。会自己重新载入的扩展（`PiSession.upgrading`）不用人管：同步记录不写、界面不换上桥上的状态，照它最后一次读到的样子，命令抛 `PiBridgeError.upgradingExtension`，空闲后就以新协议重新出现；更早的扩展记成 `.incompatible`、提示在终端里对这个会话执行 `/reload`，命令抛 `PiBridgeError.incompatibleExtension`。`.incompatible` 变化事件只留给 hello 之后消息损坏的连接（已断开，不在 `sessions` 里）。
+- 终端会话在终端退出后由常驻服务再挂约 30 分钟（实测，文档没写），期间仍在线、能收话。
+- 常驻服务把子线程推送广播给没订阅的连接，是实测行为，文档没写。
+- CuePad 补的空输入那一轮，在终端里显示为一段没有提问的回答；不触发 `UserPromptSubmit`，输入框里打了一半的话不受影响（实测）。
+
+OpenCode：
+
+- 只认 v2。Homebrew 与官方安装脚本装的是 v2；npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x。
+- 服务登记文件 `service.json` 不在文档里；"服务活着期间有过活动就在线"是 CuePad 定的规则。
+- 从没取过模型表的第一次启动：先用随包的旧表，同时联网取新表（约 1～2 秒）。这期间配置的默认模型不在旧表里时，它改用旧表第一个（它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
+
+Pi：
+
+- 停下这一轮到真正歇下之间（通常不到一秒）会话被关掉（退出、重新载入、换会话）时，扩展里等着的话随扩展实例丢掉，`bye` 不报它们。
+- 交给 Pi 的那一刻若恰好有别的东西开了一轮（Pi 在处理 `input` 与"正忙"检查之间有一次异步等待），Pi 拒收，只在它自己的界面里报错。
 
 ## 已知边界
 
-- 只有 macOS 可用（`Process`、AppKit）：全部源文件与测试都在 `#if os(macOS)` 里，iOS 上编译为空模块。
-- 客户端用 kqueue 盯 socket 目录本身（`DirectoryWatcher`），在启动与目录每次变化时全量重扫，扫描跳过已有连接的名字。不用 FSEvents：fseventsd 转发的事件实测晚到 0.4 到 20 多秒，后台唤醒的会话要等它才上桥。/reload 在同一路径重建 socket（名字不变），新文件的事件可能在旧连接还挂着时就被扫过，所以一条连接断开时文件还在就当场再连一次；它的告别照常报结束（`PiSessionEndReason.reload`，协议号不同的连接也只读出这一条告别），App 不当进程退出写记录，等它连回来接着写；连回来时粗状态没变就沿用原来的起点（新载入的扩展报的是此刻，否则歇着的会话每次重载都像刚歇下），协议号不同的读不到，沿用的是 CuePad 重开前记下的；被判为不兼容的按文件本身（inode 与创建时间）记，同一路径的新 socket 照常去连。
-- 终端跳转：tmux、Terminal.app（按 tty）、Ghostty（按工作目录，唯一匹配才聚焦）；其他终端只激活应用。herdr 等再套一层的复用器无法定位到 pane。
-- 会话冻结（SIGSTOP）或机器休眠造成的假死不会被发现——既定取舍：不做心跳。
-- Pi：停下这一轮到它真正歇下之间（通常不到一秒）会话就关掉（退出、重新载入、换会话）时，扩展里等着的话随扩展实例丢掉，`bye` 不报它们。交给 Pi 的那一刻（`sendUserMessage` 不带 `deliverAs`）若恰好有别的东西开了一轮（Pi 在 `input` 处理与"正忙"检查之间有一次异步等待），Pi 拒收并只在它自己的界面里报错。
+- 会话冻结（SIGSTOP）或机器休眠造成的假死发现不了：既定取舍，不做心跳。
+- 跳到终端定位不到 herdr 这类再套一层的复用器里的 pane。
+- 不用 FSEvents（延迟实测数据见 `FileFollower`、`DirectoryWatcher` 的头注释）。

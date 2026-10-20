@@ -4,34 +4,36 @@ import Foundation
 /// 项目与文件夹的规则（iOS 与 Mac 共用）。绑定是 Mac 本机的事（`CueStore.setDirectory`，路径因设备而异）；
 /// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`：文件夹名，读出时带上那台 Mac 报的名字），要绑时经投送请求（`PiBind`）让那台 Mac 解析成完整路径。
 nonisolated enum ProjectFolders {
-    /// 新会话可以开在哪：每个项目一项，按项目的顺序（`ProjectCatalog.projects`）；没绑文件夹的也列（`binding` 为 nil，选中时就地引导去绑）；
-    /// 同一项目绑在几台 Mac 上时每台一项（手机选发给哪台 Mac，`detail` 写 Mac 名）。
+    /// 新会话可以开在哪：每个项目一项，按项目的顺序（`ProjectCatalog.projects`）；同一项目绑在几台 Mac 上时每台一项
+    /// （手机选发给哪台 Mac，`detail` 写 Mac 名）。没绑文件夹的也直接开：交给 `host`（开工时那台 Mac 建工作区并绑定）。
     struct LaunchPlace: Identifiable, Equatable, Sendable {
         let id: String
         let project: Project
-        let binding: DirectoryBinding?
+        /// 由哪台 Mac 开：绑着文件夹的那台；没绑的是建工作区的那台（Mac 上是本机，手机上是 `CueStore.workMac`）。手机上一台 Mac 都没有为 nil。
+        let host: String?
         let detail: String?
     }
 
-    /// `host` 是 Mac 上本机的标识：新会话只在本机开，只认本机的绑定；手机传 nil，看全部。
-    static func launchPlaces(projects: [Project], bindings: [DirectoryBinding], host: String?) -> [LaunchPlace] {
+    /// `host` 是 Mac 上本机的标识：新会话只在本机开，只认本机的绑定；手机传 nil，看全部，没绑的交给 `workMac`。
+    static func launchPlaces(projects: [Project], bindings: [DirectoryBinding], host: String?, workMac: String?) -> [LaunchPlace] {
         projects.flatMap { project -> [LaunchPlace] in
             let own = bindings.filter { $0.projectID == project.id && (host == nil || $0.hostID == host) }
-            guard !own.isEmpty else { return [LaunchPlace(id: project.id.uuidString, project: project, binding: nil, detail: nil)] }
+            guard !own.isEmpty else { return [LaunchPlace(id: project.id.uuidString, project: project, host: host ?? workMac, detail: nil)] }
             return own.map { binding in
-                LaunchPlace(
-                    id: binding.id.uuidString, project: project, binding: binding, detail: own.count > 1 ? binding.macName : nil)
+                LaunchPlace(id: binding.id.uuidString, project: project, host: binding.hostID, detail: own.count > 1 ? binding.macName : nil)
             }
         }
     }
 
-    /// 项目绑着的文件夹名，给人看的那一行用（手机项目页顶栏）：各台 Mac 绑的同名文件夹是同一个仓库，只写一次；按绑定的先后。
-    static func names(of project: UUID, bindings: [DirectoryBinding]) -> [String] {
-        var seen = Set<String>()
-        return bindings.filter { $0.projectID == project }.map(\.folder).filter { seen.insert($0).inserted }
+    /// 项目的文件夹在哪，给人看的那一行（手机项目页顶栏）："在 MacBook Pro 上：默认"，绑在几台 Mac 上各写一段。只写文件夹名：
+    /// 同步来的绑定只有末段（完整路径不出那台 Mac）。哪台都没绑时写 `workMac` 开工时会建的那个（`Workspaces.folderName`）；一台 Mac 都没有为空。
+    static func places(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> [String] {
+        let own = bindings.filter { $0.projectID == project.id }
+        guard own.isEmpty else { return own.map { "在 \($0.macName) 上：\($0.folder)" } }
+        return workMac.map { ["在 \($0.shownName) 上：\(Workspaces.folderName(for: project.name))（开工时建好）"] } ?? []
     }
 
-    /// 项目操作菜单里的绑定项（`ProjectActions`）：没绑是"绑定文件夹…"，绑了是"换文件夹…"加解除；
+    /// 项目操作菜单里的绑定项（`ProjectActions`）："换文件夹…"之外，绑着的每处一项解除（解除后下次开工回到工作区）；
     /// Mac 上只管本机的绑定，手机上管全部，绑在几台 Mac 上时解除按 Mac 分开。
     struct Menu: Equatable {
         struct Unbind: Equatable {
@@ -39,15 +41,12 @@ nonisolated enum ProjectFolders {
             let binding: DirectoryBinding
         }
 
-        let bindTitle: String
         let unbinds: [Unbind]
     }
 
     static func menu(for project: UUID, bindings: [DirectoryBinding], host: String?) -> Menu {
         let own = bindings.filter { $0.projectID == project && (host == nil || $0.hostID == host) }
-        return Menu(
-            bindTitle: own.isEmpty ? "绑定文件夹…" : "换文件夹…",
-            unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.macName : nil), binding: $0) })
+        return Menu(unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.macName : nil), binding: $0) })
     }
 
     /// 手机上给项目选文件夹的一个候选：Mac 上已知的一个文件夹（只有名字）与"让那台 Mac 从哪里取"。
@@ -88,38 +87,5 @@ nonisolated enum ProjectFolders {
             add(host: binding.hostID, macName: binding.macName, folder: binding.folder, target: .project(binding.projectID), usedBy: nil, sessions: 0)
         }
         return result
-    }
-
-    /// 同名建议：文件夹名与项目名相同（忽略大小写）的候选，会话多的在前。项目还没绑文件夹时，Agent 的空态就直接给"绑定 <文件夹>（N 个会话）"，
-    /// 一键走同一条 `bind` 通路；有几个就列几个让人选，没有就只引导去选。
-    static func suggestions(for project: Project, in candidates: [Candidate]) -> [Candidate] {
-        let name = project.name.lowercased()
-        return candidates.filter { $0.folder.lowercased() == name }.sorted { $0.sessions > $1.sessions }
-    }
-
-    /// 建议按钮上的字："绑定 cuepad 文件夹（312 个会话）"；建议来自几台 Mac 时写上 Mac 名。
-    static func suggestionTitle(_ candidate: Candidate, showsMac: Bool) -> Dotted {
-        Dotted("绑定 \(candidate.folder)", "\(candidate.sessions) 个会话", showsMac ? candidate.macName : nil)
-    }
-
-    /// 项目已经绑着文件夹（Mac 上只看本机）。
-    static func isBound(_ project: UUID, bindings: [DirectoryBinding], host: String?) -> Bool {
-        bindings.contains { $0.projectID == project && (host == nil || $0.hostID == host) }
-    }
-
-    /// 手机请 Mac 给项目绑文件夹的进度（读投送请求，不另存）：最近一次带文件夹的请求——还在路上，或已送到而绑定还没同步回来（请求在 Mac 上留一阵）是
-    /// 正在绑，没成功是原因；解除绑定的请求不算。
-    enum BindProgress: Equatable {
-        case binding
-        case failed(Speech.Failure)
-    }
-
-    static func bindProgress(of project: UUID, in requests: [DeliveryRequest], at moment: Speech.Moment) -> BindProgress? {
-        latestBind(of: project, in: requests).map { Speech.trip($0, at: moment).failure.map(BindProgress.failed) ?? .binding }
-    }
-
-    /// 最近一次给这个项目带文件夹的绑定请求。
-    static func latestBind(of project: UUID, in requests: [DeliveryRequest]) -> DeliveryRequest? {
-        requests.filter { $0.bind?.project == project && $0.bind?.folder != nil }.max { $0.createdAt < $1.createdAt }
     }
 }

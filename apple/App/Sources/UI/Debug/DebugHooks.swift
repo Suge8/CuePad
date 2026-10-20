@@ -36,9 +36,9 @@ enum DebugHooks {
         /// 合成的鼠标移动事件也不触发不在前台的应用的悬停。
         var hovered: String?
         #endif
-        #if os(iOS)
-        /// 任务页的"最近完成"展开并滚到底（`-CuePadShowsDone`）。
+        /// 任务页做完列的"更早做完的"一开始就展开（`-CuePadShowsDone`）。
         var showsDone = false
+        #if os(iOS)
         /// 设置页通知那一行显示的状态（`-CuePadAlertStatus`；演示模式没有同步，真实状态出不来）。
         var alertStatus: PiAlertStatus?
         /// 搜索页一打开在哪个范围（`-CuePadSearchScope sessions`）。
@@ -107,21 +107,21 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的验收实例（给了 `CUEPAD_SHOT_READY`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
-    static var scripted: Bool {
+    /// 隔离库下这台 Mac 上一家 Agent 都找不到（`-CuePadNoAgents YES`）：看一家都没装时的接入面板，不用真去卸。
+    static var findsNoAgents: Bool {
         #if DEBUG
-        ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] != nil
+        DebugScene.defaults.bool(forKey: "CuePadNoAgents")
         #else
         false
         #endif
     }
 
-    /// 不请求通知权限：演示与脚本起的实例（`-CuePadDemo` 或 `scripted`）里系统弹窗会盖住画面，没人去点。
-    static var asksNotificationPermission: Bool {
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）。
+    static var scripted: Bool {
         #if DEBUG
-        !DebugScene.defaults.bool(forKey: "CuePadDemo") && !scripted
+        DebugScene.readyFile != nil
         #else
-        true
+        false
         #endif
     }
 
@@ -191,6 +191,24 @@ enum DebugHooks {
     }
 
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
+    /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
+    static var deliversNotifications: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadNotifications")
+        #else
+        false
+        #endif
+    }
+
+    /// 隔离库下也开实时活动（`-CuePadLiveActivity YES`，见 `AppServices.cueActivity`）：验收锁屏与灵动岛时用，用完结束掉。
+    static var opensLiveActivity: Bool {
+        #if DEBUG
+        DebugScene.defaults.bool(forKey: "CuePadLiveActivity")
+        #else
+        false
+        #endif
+    }
+
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
         try DebugScene.injectCatalogFailure(attempt: attempt)
@@ -204,16 +222,6 @@ enum DebugHooks {
     #else
     typealias MainWindowClass = MainShellWindow
     #endif
-
-    /// 本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的、怎么起的都在后台跑，窗口排在所有窗口最后：不抢前台和键盘，也不盖住正在用的窗口；
-    /// 按窗口截图截得到被挡住的窗口。非占前台不可的只经 `DebugForeground` 借。
-    static var staysInBackground: Bool {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
-    }
 
     /// 退出前把借走的前台与指针还回去（`DebugForeground`）。
     static func willTerminate() {
@@ -238,19 +246,14 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示窗口：平时到最前并接过键盘（`activating` 时连 App 一起到前台）；本机构建排在最后（`staysInBackground`）。
+    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
+    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借。
     static func present(_ window: NSWindow, activating: Bool = false) {
-        if staysInBackground { return window.orderBack(nil) }
+        #if DEBUG
+        window.orderBack(nil)
+        #else
         if activating { NSApp.activate() }
         window.makeKeyAndOrderFront(nil)
-    }
-
-    /// 隔离库下也发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
-    static var deliversNotifications: Bool {
-        #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadNotifications")
-        #else
-        false
         #endif
     }
 
@@ -277,6 +280,21 @@ enum DebugHooks {
 }
 
 extension View {
+    #if os(macOS)
+    /// 单次交互（`-CuePadBench interact`）时记下这条任务行在窗口里的位置，前台量的"任务气泡开"用真实点击点它（`InteractionBench`）；平时什么都不挂。
+    @ViewBuilder func benchSpot(_ task: UUID) -> some View {
+        #if DEBUG
+        if InteractionBench.locatesRows {
+            onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { InteractionBench.rows[task] = $0 }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+    #endif
+
     #if os(iOS)
     /// 点 Cue 页头开合面板的那条路交给测量（`IOSInteractionBench` 的"开合 Cue 面板"）。
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
@@ -312,7 +330,7 @@ extension View {
         #endif
     }
 
-    /// 会话页直接打开 `-CuePadOpenPreview <批的标题或文件名>` 那张预览（对话里的交付物到了再找）。
+    /// 会话页直接打开 `-CuePadOpenPreview <标题或文件名>` 那张预览（对话里的交付物到了再找）。
     func debugOpensPreview(in items: [PiChatEntry], session: PiSessionState, _ opened: Binding<PreviewOpening?>) -> some View {
         #if DEBUG
         task(id: items.count) {
@@ -381,6 +399,7 @@ extension View {
                 case "style": StyleBoard()
                 case "icons": IconSheet()
                 case "widgets": DebugWidgetStage()
+                case "activity": DebugActivityStage()
                 case "share": DebugShareStage(location: workspace.services.location)
                 default: EmptyView()
                 }

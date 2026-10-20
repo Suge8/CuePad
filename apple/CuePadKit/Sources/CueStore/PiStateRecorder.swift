@@ -318,7 +318,7 @@ public actor PiStateRecorder {
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
   /// 它们的记录由状态变化自己写，对账与写入在这里排在同一条任务链上，不会删掉刚建立的会话。
-  /// 只对账这一家（它的索引刚回填完）：别家的索引此刻可能不在（没接入的不建索引），它们的记录不动。
+  /// 只对账这一家（它的索引刚回填完）：别家的索引此刻可能不全（没接入的不回填），它们的记录不动。
   public func dropUnindexedHosted(of agent: AgentKind) async throws {
     let live = Set(sessions.keys)
     try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, agent: agent, except: live) }

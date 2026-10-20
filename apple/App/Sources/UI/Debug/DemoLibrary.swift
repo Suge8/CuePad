@@ -51,18 +51,28 @@ enum DemoLibrary {
 
     /// 订阅额度：Claude 的 5 小时用得比匀速快（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用（总览里不列）；Codex 本周已过九成（胭脂）。
     /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对总览在那一刻变成已重置）。
+    /// `-CuePadQuotaRemindIn <秒>`：Claude 的本周这么多秒后到提醒时刻（`QuotaReminder`），该响；5 小时（不是周窗口）、按模型的本周与 Codex 的本周（还远）不该响。
+    /// 到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
     private static func seedQuotas(_ store: CueStore) async throws {
         let now = Date.now
         let resetIn = DebugScene.defaults.double(forKey: "CuePadQuotaResetIn")
         if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
+        let remindIn = DebugScene.defaults.double(forKey: "CuePadQuotaRemindIn")
         func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
             QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)
         }
-        let (hours5, week) = (5 * 3_600, 7 * 86_400)
+        let (hours5, week) = (5 * 3_600, QuotaWindow.week)
+        let weekLeft = remindIn > 0 ? QuotaReminder.lead + remindIn : 4 * 86_400 + 3 * 3_600
         try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [
-            window(hours5, used: 0.68, left: resetIn > 0 ? resetIn : 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: 4 * 86_400 + 3 * 3_600),
-            window(week, used: 0.12, left: 4 * 86_400 + 3 * 3_600, model: "Fable"),
+            window(hours5, used: 0.68, left: resetIn > 0 ? resetIn : 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: weekLeft),
+            window(week, used: 0.12, left: weekLeft, model: "Fable"),
         ], complete: true), host: "demo-mac")
+        if remindIn > 0 {
+            Task {
+                try? await Task.sleep(for: .seconds(remindIn + 20))
+                _ = try? await store.recordQuota(QuotaReport(provider: "anthropic", windows: [window(week, used: 0.45, left: weekLeft)], complete: false), host: "demo-mac")
+            }
+        }
         try await store.recordQuota(QuotaReport(provider: "openai-codex", windows: [
             window(week, used: 0.91, left: 36 * 3_600),
         ], complete: true), host: "demo-mac")
@@ -172,7 +182,7 @@ enum DemoLibrary {
         }
     }
 
-    /// 把项目分组与任务写进库；名称为空的一组是未分类的灵感。
+    /// 把项目分组与任务写进库；名称为空的一组进默认项目。
     static func seed(_ store: CueStore, groups: [DemoProject], tasks: [DemoTask]) async throws {
         let named = groups.filter { !$0.name.isEmpty }
         func index(of name: String?) -> Int? { name.flatMap { name in named.firstIndex { $0.name == name } } }

@@ -6,10 +6,10 @@ extension Command {
     Command(
       path: ["card", "list"], summary: "列出灵感（散放的，不含任务与挂在任务下的；默认所有项目，项目内按手动顺序）",
       options: [
-        .project("只列该项目"), .unfiled, .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
+        .project("只列该项目"), .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
         Opt("archived", "列归档的灵感与任务"), Opt("trash", "列回收站里单独删除的灵感与任务"),
       ],
-      notes: Schema.defaultProject(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)
+      notes: Schema.defaultScope(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)
     ) { call in
       try call.args.expect()
       let scope = try await call.scope()
@@ -31,8 +31,8 @@ extension Command {
     },
     Command(
       path: ["card", "add"], summary: "新建灵感（放在项目最前）",
-      options: [.project("放进该项目"), .unfiled, .body],
-      notes: Schema.defaultProject(otherwise: "进未分类") + "\n"
+      options: [.project("放进该项目"), .body],
+      notes: Schema.defaultScope(otherwise: Schema.defaultTarget) + "\n"
         + "正文是 Markdown，图片是 ![](cuepad://img/<哈希>)。例：printf '第一段\\n---\\n第二段' | cuepad card add\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
@@ -53,15 +53,15 @@ extension Command {
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "move"], summary: "把灵感或任务移到另一个项目或未分类", arguments: "<灵感或任务>",
+      path: ["card", "move"], summary: "把灵感或任务移到另一个项目", arguments: "<灵感或任务>",
       options: [
-        .project("目标项目"), .unfiled, Opt("after", "放在这一条之后（须在目标项目里）；省略则放最前", value: "灵感或任务"),
+        .project("目标项目"), Opt("after", "放在这一条之后（须在目标项目里）；省略则放最前", value: "灵感或任务"),
       ],
-      notes: "--project 与 --unfiled 必须给一个（移动不会猜目标）。\n" + Schema.output("移动后的 Card", Schema.card)
+      notes: "--project 必须给（移动不会猜目标）。\n" + Schema.output("移动后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
       let scope = try await call.scope(implicit: false)
-      if case .any = scope { throw CLIError.usage("需要 --project <项目> 或 --unfiled") }
+      if case .any = scope { throw CLIError.usage("需要 --project <项目>") }
       let card = try await call.card(call.args.positionals[0])
       var previous: UUID?
       if let after = call.args.value("after") { previous = try await call.card(after).id }
@@ -98,7 +98,7 @@ extension Command {
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "restore"], summary: "从回收站恢复（原项目仍在回收站时回到未分类）", arguments: "<灵感或任务>",
+      path: ["card", "restore"], summary: "从回收站恢复（原项目仍在回收站时回到默认项目）", arguments: "<灵感或任务>",
       notes: Schema.output("恢复后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
@@ -108,17 +108,16 @@ extension Command {
     },
   ]
 
-  /// 范围限定到一个项目或未分类时只读那一处，不读全库再过滤。
+  /// 范围限定到一个项目时只读那一处，不读全库再过滤。
   private static func listedCards(_ call: Call, in scope: Scope) async throws -> [Card] {
     if call.args.has("trash") { return try await call.store.trashedCards() }
     if call.args.has("archived") { return try await call.store.archived() }
     switch scope {
     case .project(let project): return try await call.store.cards(in: project.id)
-    case .unfiled: return try await call.store.cards(in: nil)
     case .any:
       var cards: [Card] = []
       for project in try await call.store.projects() { cards += try await call.store.cards(in: project.id) }
-      return cards + (try await call.store.cards(in: nil))
+      return cards
     }
   }
 

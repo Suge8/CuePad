@@ -67,11 +67,10 @@ nonisolated struct CueTiming: Sendable {
 /// 回复是这一轮做完时大脑还留着的正在说的话（`CueBrainEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
 /// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
 /// Cue 自己醒来的一轮最后的话可能被当复述不写，显示了就落不了库。
-/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`（回答你的那一轮的推送提示你），其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送），
+/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`（回答你的那一轮的推送提示你），其余 Cue 自己醒来的写成 `note`（动态、不推送），
 /// 换新后的第一轮跟写下交接的那一轮一样；
 /// Cue 自己醒来的一轮（含刚启用）里已经用 tell 对你说过话的，最后的回复不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
-/// （`CueStore.replyCueRound`）。Cue 被会话的动静叫醒、这一轮没动过手（`CueRound.acted`），补一行动态"看过「会话名」，不打算行动"，
-/// 连着的几轮并成一行（`CueStore.noteCueGlance`）。
+/// （`CueStore.replyCueRound`）。
 /// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就不交，并对你说一声。
 /// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
 /// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
@@ -83,8 +82,9 @@ nonisolated struct CueTiming: Sendable {
 /// （`CueBrain.newSession`），这一轮的第一条输入是对话视图（`CueView`）加信封——新班次的第一次醒来也这样接上。不提示换新、不写交接、不带接上，
 /// 要换大脑时直接换。
 /// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮；Mac 的"运行情况"读它；上下文随状态写进库，各端读 `CueState.context`。
-/// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：第一次调工具时写下，每做完一步改一次，
-/// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。
+/// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：Cue 自己醒来的一轮醒来时就写下、带着为什么醒
+/// （`CueMessage.wake`：Cue 页那一节的第一行，各端画"叫醒"的那一下也读它），你发起的第一次调工具时写下；每做完一步改一次，
+/// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。只看了看、没动手的一轮也留着这一行：Cue 页写"没动手"，连着几次并成一行。
 @Observable
 final class CueKeeper {
     nonisolated static let patrolsPerDay = 3
@@ -184,8 +184,6 @@ final class CueKeeper {
         var speaking: PiDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
-        /// 会话的动静叫醒的这一轮：叫醒它的那几个会话（随此刻的状态写进库，各端画"叫醒"的那一下）
-        var woke: CueWoke?
         /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）：这一轮报了的不再记，没做完下次照样报
         var held: [String: Date]?
 
@@ -244,8 +242,6 @@ final class CueKeeper {
     /// 上一轮的回复写成谁的（换新时接着用）
     private var lastTurnAuthor: CueAuthor = .note
     private var lastFailure: String?
-    /// 最近补的那一行"看过……，不打算行动"：下一轮也没动过手就并进它
-    private var glance: CueGlance?
     private var setback: Setback?
     private var timer: Task<Void, Never>?
     /// 做完的几轮，旧的在前，至多 `roundsKept`
@@ -265,14 +261,14 @@ final class CueKeeper {
     let speech = PiDraftFeed()
 
     /// Cue 此刻在做什么：一轮里在想或在用工具（连同这一轮的经过在对话里的那一行），起不来是出错（原因），其余（含起大脑、等着重起的那一下）歇着。
-    private var work: (state: PiWorkState, detail: String?, row: UUID?, woke: CueWoke?) {
+    private var work: (state: PiWorkState, detail: String?, row: UUID?) {
         switch phase {
-        case .starting, .restarting: return (.settled, nil, nil, nil)
-        case .stuck(let reason): return (.error, reason, nil, nil)
+        case .starting, .restarting: return (.settled, nil, nil)
+        case .stuck(let reason): return (.error, reason, nil)
         case .running(let shift):
-            guard let turn = shift.turn else { return (.settled, nil, nil, nil) }
+            guard let turn = shift.turn else { return (.settled, nil, nil) }
             let detail = turn.round.running.map { CueActivity.detail(tool: $0.name, arguments: $0.arguments) }
-            return (detail == nil ? .thinking : .tool, detail, turn.round.row, turn.woke)
+            return (detail == nil ? .thinking : .tool, detail, turn.round.row)
         }
     }
 
@@ -292,7 +288,7 @@ final class CueKeeper {
     private func publish() async {
         do {
             let work = work
-            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, woke: work.woke, context: shift?.context)
+            try await setup.store.setCueState(work.state, detail: work.detail, round: work.row, context: shift?.context)
         } catch {
             Self.log.error("Cue 此刻的样子没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
@@ -489,7 +485,6 @@ final class CueKeeper {
             } else {
                 setback = nil
                 await markTold(finished.round)
-                await noteGlance(finished)
                 if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
             }
@@ -499,11 +494,10 @@ final class CueKeeper {
         }
     }
 
-    /// 把在跑这一轮的经过写进对话里它那一行（`CueStore.recordCueRound`）：第一次调工具时在这一轮开始的位置写下，之后每做完一步改它。
-    /// Cue 自己醒来的一轮动过手（`CueRound.acted`）才写下：只看了看的每次醒来都有，写下来满是噪声，在跑时由对话末尾那一行（`CueEnding`）显示。
+    /// 把在跑这一轮的经过写进对话里它那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来时已写下（`wakeUp`），你发起的第一次调工具时写下，
+    /// 之后每做完一步改它。
     private func recordRound() async {
         guard let turn, !turn.round.calls.isEmpty else { return }
-        guard turn.round.row != nil || turn.answersYou || turn.round.acted else { return }
         do {
             let row = try await setup.store.recordCueRound(
                 turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.process)
@@ -521,16 +515,6 @@ final class CueKeeper {
             try await setup.store.markCueTold(told)
         } catch {
             Self.log.error("Cue 记下已知道的失败没写成，下一轮会再报一次：\(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// 被会话的动静叫醒、这一轮没动过手（对话里因此什么都没写）：补一行"看过……，不打算行动"（`CueStore.noteCueGlance`）。
-    private func noteGlance(_ turn: Turn) async {
-        guard !turn.answersYou, !turn.round.acted, let sessions = turn.woke?.sessions, !sessions.isEmpty else { return }
-        do {
-            glance = try await setup.store.noteCueGlance(sessions, after: glance)
-        } catch {
-            Self.log.error("Cue 看过会话的那一行动态没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -620,9 +604,7 @@ final class CueKeeper {
 
             let due = try await store.dueCueReminders(at: now)
             if !due.isEmpty {
-                var lines: [CueIndexedLine] = []
-                for line in due { if let index = try await store.cueLineIndex(line.id) { lines.append(CueIndexedLine(index: index, line: line)) } }
-                guard try await wakeUp(.reminder(lines)) else { return }
+                guard try await wakeUp(.reminder(due.map(\.id))) else { return }
                 for line in due { try await store.clearCueReminder(line.id) }
                 return
             }
@@ -645,7 +627,7 @@ final class CueKeeper {
                 }
             }
             if !changes.due.isEmpty {
-                return _ = try await wakeUp(.sessionActivity)
+                return _ = try await wakeUp(.sessionActivity(changes.due.map(CueStir.init)))
             }
             // 没叫醒 Cue：新归他的记下，不再归他的划掉（叫醒的一轮做完才换）
             if changes.held != progress.held {
@@ -743,14 +725,9 @@ final class CueKeeper {
         }
         let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: shift.context?.used, projects: try await store.cueProjects(),
+            now: now, contextUsed: shift.context?.used, projects: try await store.projects(),
             changes: changes.due, board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, resume: resume))
-        var woke: CueWoke?
-        if wake == .sessionActivity {
-            var seen = Set<String>()
-            woke = CueWoke(at: now, sessions: changes.due.compactMap(\.session?.sessionID).filter { seen.insert($0).inserted })
-        }
+            wake: wake, reminders: try await reminders(of: wake), resume: resume))
         var parts = [envelope]
         if CueFresh.on, !shift.resumed || CueFresh.renewDue(used: shift.context?.used, lastRequest: shift.lastRequest, now: now, cacheLifetime: setup.timing.cacheLifetime.seconds) {
             if shift.resumed {
@@ -778,16 +755,30 @@ final class CueKeeper {
             await broke("发不进去：\(error.localizedDescription)")  // 这一轮还没开，交出去的话也还没记送达
             return false
         }
-        let round = beginRound(wake, sent: [sent], at: now)
+        var turn = Turn(
+            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering,
+            mark: mark, held: changes.held)
+        // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
+        if !turn.answersYou {
+            do {
+                turn.round.row = try await store.recordCueRound(nil, startedAt: now, answersYou: false, tools: nil, wake: wake)
+            } catch {
+                Self.log.error("Cue 这一轮的经过没能写进资料库：\(error.localizedDescription, privacy: .public)")
+            }
+        }
         updateShift {
             $0.resumed = true
-            $0.turn = Turn(
-                author: author, round: round, selfStarted: wake == .message ? nil : (wake, extra), delivered: delivering, mark: mark, woke: woke,
-                held: changes.held)
+            $0.turn = turn
         }
         save()
         try await markDelivered(delivering)
         return true
+    }
+
+    /// 提醒到点的一轮要列给它的那几条记忆（带序号）；别的原因醒来没有。
+    private func reminders(of wake: CueWake) async throws -> [CueIndexedLine] {
+        guard case .reminder(let ids) = wake else { return [] }
+        return try await setup.store.cueLines(ids)
     }
 
     /// 记下送达并立即上传（不等上传完就接着对账）。

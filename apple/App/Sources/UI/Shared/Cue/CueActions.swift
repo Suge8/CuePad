@@ -24,7 +24,7 @@ extension Workspace {
         return speak(to: .cue, from: box) { try $0.stored(in: files) }
     }
 
-    /// 只记下（"对 Cue 说"长按发送）：这句不交给 Cue，记成一条灵感落在未分类（不选项目，之后在灵感里归进项目或设为任务），
+    /// 只记下（"对 Cue 说"长按发送）：这句不交给 Cue，记成一条灵感落在默认项目（不选项目，之后在灵感里挪到别的项目或设为任务），
     /// 提示落点；按下输入框立刻空，写不进库时文字与图片放回输入框（期间新打的接在后面）。
     @discardableResult
     func note(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
@@ -34,7 +34,7 @@ extension Workspace {
         box.wrappedValue = ComposerDraft()
         return Task {
             do {
-                try await note.save(in: nil, workspace: self)
+                try await note.save(in: Project.defaultID, workspace: self)
             } catch {
                 box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: ComposerDraft())
                 fail(error)
@@ -42,11 +42,9 @@ extension Workspace {
         }
     }
 
-    /// 回答 Cue 的一条"等你"：选一项（不选的话在 Cue 页直接说，见 `CueQuestionEnd`）。选"以后……不用问"时 Store 同时按提问存的范围把它记进允许清单（Cue 的设置），一起上传。
+    /// 回答 Cue 的一条"等你"（卡上、全屏预览底栏，`AppServices.answerCueQuestion`）。
     func answerCueQuestion(_ message: CueMessage, _ choice: String) async throws {
-        let allowed = try await services.store.endCueQuestion(message.id, .answered(choice))
-        await services.upload(message.id)
-        if allowed { await services.upload(CueProfile.recordID) }
+        try await services.answerCueQuestion(message.id, choice)
     }
 
     // MARK: 记忆
@@ -70,5 +68,15 @@ extension Workspace {
             try await store.pinCueLine(id, pinned)
             await services.upload(id)
         }
+    }
+}
+
+extension AppServices {
+    /// 回答 Cue 的一条"等你"：选一项（不选的话在 Cue 页直接说，见 `CueQuestionEnd`）。Cue 页的卡与实时活动的"允许一次"（`AllowOnceIntent`，可能没有窗口）同走这里。
+    /// 选"以后……不用问"时 Store 同时按提问存的范围把它记进允许清单（Cue 的设置），一起上传。
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
+        let allowed = try await store.endCueQuestion(message, .answered(choice))
+        await upload(message)
+        if allowed { await upload(CueProfile.recordID) }
     }
 }

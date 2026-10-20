@@ -58,19 +58,7 @@ struct TaskCheckButton: View {
         trigger
         .accessibilityLabel(check.phase == .pending ? "撤销完成" : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
-        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
-        .dialog(
-            "Agent 还在做这件事", isPresented: asking(.agent), message: "完成会把它的会话一起结束。",
-            buttons: [DialogButton(title: "完成并结束会话") { check.phase = .pending }])
-        .task(id: check.phase) {
-            guard check.phase == .pending else { return }
-            try? await Task.sleep(for: TaskCheck.linger)
-            guard !Task.isCancelled else { return }
-            commit()
-        }
-        // 停留时就离开了页面（列表收起、换页）：照样写入，不丢这次勾选
-        .onDisappear { if check.phase == .pending { commit() } }
-        .onChange(of: task.completedAt) { check.phase = .idle }
+        .taskCheck(task, subtasks: subtasks, check: $check)
     }
 
     private var ring: some View {
@@ -87,6 +75,38 @@ struct TaskCheckButton: View {
     #endif
 
     private func tap() { workspace.tap($check, task: task, subtasks: subtasks, agentBusy: agentBusy) }
+}
+
+extension View {
+    /// 完成这一下的后半程（完成圈、看板上拖到做完同一份）：`Workspace.tap` 定下要问的就弹确认（`TaskCheck.Ask`），
+    /// 进了停留就停 `linger` 再写入，写不成恢复、照常报错。`task` 为 nil 时什么都不做。
+    func taskCheck(_ task: Card?, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
+        modifier(TaskCheckFlow(task: task, subtasks: subtasks, check: check))
+    }
+}
+
+private struct TaskCheckFlow: ViewModifier {
+    let task: Card?
+    let subtasks: TaskProgress?
+    @Binding var check: TaskCheck
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        content
+        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
+        .dialog(
+            "Agent 还在做这件事", isPresented: asking(.agent), message: "完成会把它的会话一起结束。",
+            buttons: [DialogButton(title: "完成并结束会话") { check.phase = .pending }])
+        .task(id: check.phase) {
+            guard check.phase == .pending else { return }
+            try? await Task.sleep(for: TaskCheck.linger)
+            guard !Task.isCancelled else { return }
+            commit()
+        }
+        // 停留时就离开了页面（列表收起、换页）：照样写入，不丢这次勾选
+        .onDisappear { if check.phase == .pending { commit() } }
+        .onChange(of: task?.completedAt) { check.phase = .idle }
+    }
 
     private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
         Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })
@@ -94,8 +114,9 @@ struct TaskCheckButton: View {
 
     /// 写入失败时这一行恢复为未完成，错误照常提示。
     private func commit() {
+        guard let id = task?.id else { return }
         check.phase = .committed
-        let id = task.id, workspace = workspace, check = $check
+        let workspace = workspace, check = $check
         Task {
             do {
                 try await workspace.toggle(id)

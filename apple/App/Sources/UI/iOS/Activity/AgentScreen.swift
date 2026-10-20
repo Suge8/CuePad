@@ -4,7 +4,8 @@ import SwiftUI
 
 /// 会话页（iPhone 底部一排与宽屏侧栏的"会话"；也从 Cue 页头面板的"全部会话"、项目页的"全部 N 个会话"推入）：只回答"每个会话在做什么、
 /// 现在到哪了、结果或卡点是什么"。会话列表是 `SessionList`；标题是"会话"（下面一行会话数；窄屏的根不写标题与那一行，`homePage`），右边新会话，
-/// 列表最上面一排项目胶囊按项目筛（选中的那颗是选中底与靛青字，`FilterChip`）（只有在 Mac 上绑了文件夹的项目能筛：会话按工作目录归入项目），筛选只留在这一页上、不记。
+/// 列表最上面一排项目胶囊按项目筛（选中的那颗是选中底与靛青字，`FilterChip`）（只有在 Mac 上绑了文件夹的项目与默认项目能筛：会话按工作目录归入项目，没有项目的归默认项目），
+/// 筛选只留在这一页上、不记；不筛时列表按项目分组，组头的"全部 N 个"就是筛这个项目。
 /// 搜会话在搜索页（iPhone 顶栏左边的搜索钮、iPad 侧栏顶上的搜索框），这里不另放搜索框；订阅额度在 Cue 页头的面板里。
 struct AgentScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -16,16 +17,16 @@ struct AgentScreen: View {
         _chosen = State(initialValue: project)
     }
 
-    private var filter: UUID? { chosen.flatMap { workspace.catalog?.project($0)?.id } }
+    private var filter: UUID? { workspace.catalog?.project(chosen)?.id }
 
     var body: some View {
-        SessionList(model: model, filter: filter) { chips }
-            .floatingHeader(SidebarOutline.Entry.sessions.title, detail: model.list.map { "\($0.now.count + $0.total) 个会话" }) {
+        SessionList(model: model, filter: filter, choose: { chosen = $0 }) { chips }
+            .floatingHeader(SidebarOutline.Entry.sessions.title, detail: model.list.map { "\($0.count) 个会话" }) {
                 NewSessionButton(project: filter)
             }
     }
 
-    /// 项目胶囊：全部 + 在 Mac 上绑了文件夹的项目（项目目录的顺序）；一个能筛的项目都没有时不占这一行。
+    /// 项目胶囊：全部、在 Mac 上绑了文件夹的项目与默认项目（项目目录的顺序）；一个能筛的项目都没有时不占这一行。
     @ViewBuilder private var chips: some View {
         let projects = model.filterable(in: workspace.catalog, current: filter)
         if !projects.isEmpty {
@@ -47,75 +48,82 @@ struct AgentScreen: View {
         }
     }
 
-    private func chip(_ project: UUID?, @ViewBuilder label: () -> some View) -> some View {
-        let on = filter == project
-        return Button { chosen = project } label: { FilterChip(on: on, label: label) }
+    private func chip(_ place: UUID?, @ViewBuilder label: () -> some View) -> some View {
+        let on = filter == place
+        return Button { chosen = place } label: { FilterChip(on: on, label: label) }
             .buttonStyle(.plain)
             .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
-/// 会话列表（Agent 整页、搜索页的会话一栏同一个）："现在"是没结束的会话，按要你注意的先后排（等你确认 → 出错 → 工作中 → 空闲）；
-/// "历史"是所有已结束的，按结束时间分段（今天、昨天……），滑到底才读下一页。搜索词在 `model.query` 里（搜索页给），命中的字高亮。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
-/// `top` 是列表最上面一行（Agent 页的项目胶囊），跟着列表一起滚走。
+/// 会话列表（会话页、搜索页的会话一栏同一个，数据是两端共用的 `PiSessionList`）：不筛也不搜时按项目分组——组头是项目与几个在线，
+/// 先列它在线的（按要你注意的先后：等你确认 → 出错 → 工作中 → 空闲）、再列最近结束的几条，结束的更多时组头右边"全部 N 个"按这个项目筛（`choose`；搜索页不给，不显示），
+/// 没有项目的归默认项目那一组。筛着或在搜时"现在"是没结束的，"历史"是已结束的、按结束时间分段（今天、昨天……），滑到底才读下一页；只有搜索的平铺结果在卡上写所在。
+/// 搜索词在 `model.query` 里（搜索页给），命中的字高亮。点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。
+/// 在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。`top` 是列表最上面一行（会话页的项目胶囊），跟着列表一起滚走；换筛选时回到它。
 struct SessionList<Top: View>: View {
     @Bindable var model: AgentListModel
     let filter: UUID?
+    var choose: ((UUID) -> Void)?
     @ViewBuilder var top: Top
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
+    /// 最上面那一行的 id：换筛选时滚回它（泛型类型里不能有静态存储属性）。
+    private var topID: String { "top" }
+
     var body: some View {
-        List {
-            top.listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-            if let list = model.list { sessions(list) }
+        ScrollViewReader { proxy in
+            List {
+                top.listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden).id(topID)
+                if let list = model.list { sessions(list) }
+            }
+            // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .contentMargins(.top, Bars.contentGap, for: .scrollContent)
+            .scrollDismissesKeyboard(.immediately)
+            .refreshable { await services.syncNow() }
+            // 组头的"全部"在页中间换筛选：换完回到顶上，从这个项目的第一条看起
+            .onChange(of: filter) { proxy.scrollTo(topID, anchor: .top) }
         }
-        // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
-        .contentMargins(.top, Bars.contentGap, for: .scrollContent)
-        .scrollDismissesKeyboard(.immediately)
-        .refreshable { await services.syncNow() }
-        .agentList(model, filter: filter.map(PiSessionProject.project))
+        .agentList(model, filter: filter)
     }
 
     /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
     @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
-        let filtered = list.filter.project != nil
         if list.isEmpty {
             empty.listRowBackground(Color.clear)
         } else {
             Group {
-                if !list.now.isEmpty {
-                    header { SectionTitle(text: "现在") }
-                    ForEach(list.nowRows) { nowRow in
-                        switch nowRow {
-                        case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
-                        case .reload(let items):
-                            PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                .sessionCard()
-                                .cardRow()
-                            if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
-                        }
+                if case .grouped(let groups) = list.history {
+                    ForEach(groups) { group in
+                        header { GroupTitle(group: group, choose: choose) }
+                        nowRows(group.now, in: list)
+                        ForEach(group.ended) { row($0, in: list, end: nil) }
                     }
-                }
-                ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
-                    header {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if index == 0 { SectionTitle(text: "历史") }
-                            Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
-                        }
+                } else {
+                    if !list.now.isEmpty {
+                        header { SectionTitle(text: "现在") }
+                        nowRows(list.now, in: list)
                     }
-                    ForEach(run.items) { row($0, filtered: filtered, end: list.ends[$0.id]) }
-                }
-                if model.hasMore {
-                    // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
-                    Spinner(.regular).frame(maxWidth: .infinity).listRowBackground(Color.clear)
-                        .task(id: list.loaded) { model.loadMore() }
+                    ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
+                        header {
+                            VStack(alignment: .leading, spacing: 10) {
+                                if index == 0 { SectionTitle(text: "历史") }
+                                Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3).padding(.horizontal, 4)
+                            }
+                        }
+                        ForEach(run.items) { row($0, in: list, end: list.ends[$0.id]) }
+                    }
+                    if model.hasMore {
+                        // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
+                        Spinner(.regular).frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                            .task(id: list.loaded) { model.loadMore() }
+                    }
                 }
             }
             .transaction(value: list.filter) { $0.animation = nil }
@@ -123,6 +131,20 @@ struct SessionList<Top: View>: View {
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
             .animation(Motion.quick, value: list.ends)
+        }
+    }
+
+    /// 在线的会话，两个以上需要 /reload 的合成一行（`PiNowRow`）。
+    @ViewBuilder private func nowRows(_ items: [PiSessionListItem], in list: PiSessionList) -> some View {
+        ForEach(PiNowRow.rows(items, state: \.state)) { nowRow in
+            switch nowRow {
+            case .session(let item): row(item, in: list, end: list.ends[item.id])
+            case .reload(let items):
+                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
+                    .sessionCard()
+                    .cardRow()
+                if model.reloadOpen { ForEach(items) { row($0, in: list, end: list.ends[$0.id]) } }
+            }
         }
     }
 
@@ -135,13 +157,13 @@ struct SessionList<Top: View>: View {
     }
 
     /// 一张卡片：长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
-    private func row(_ item: PiSessionListItem, filtered: Bool, end: Speech.Trip?) -> some View {
+    private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
         let endable = item.state.canEnd && end != .sending
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", icon: .endSession) { model.confirmingEnd = item.state }] : [])
             + (renamable ? [RowAction("重命名", icon: .rename, tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
-        return SessionRow(item: item, filtered: filtered, end: end)
+        return SessionRow(item: item, showsPlace: list.showsPlace, end: end)
             .cardRow()
             .listSwipes(RowSwipes(trailing: trailing))
             .contextMenu {
@@ -151,30 +173,18 @@ struct SessionList<Top: View>: View {
     }
 
     @ViewBuilder private var empty: some View {
-        let project = filter.flatMap { workspace.catalog?.project($0) }
-        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        let empty = model.empty(filter: filter)
+        switch empty {
         case .noMatch(let query):
             EmptyState.noMatch(query).padding(.top, 40)
-        case .needsFolder(let project):
-            EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                ProjectFolderGuide(project: project, guide: workspace.folderGuide)
-            }
-            .padding(.top, 40)
-        case .none(inProject: true):
-            EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话", waitsForSync: true) {
+        case .none(.some):
+            EmptyState(mascot: .empty, title: empty.noneTitle, waitsForSync: true) {
                 EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
-        case .none(inProject: false):
-            let hasProjects = workspace.catalog?.projects.isEmpty == false
-            EmptyState(
-                mascot: .empty, title: "还没有 Agent 会话",
-                message: hasProjects ? "在 Mac 的终端里开一个 Agent，或在这里开新会话" : "在 Mac 的终端里开一个 Agent，或新建项目后在这里开会话",
-                waitsForSync: true
-            ) {
-                EmptyStateButton(
-                    title: hasProjects ? "新会话" : "新建项目", icon: hasProjects ? .add : .newProject,
-                    action: { navigation.startNewSession(hasProjects: hasProjects) })
+        case .none(nil):
+            EmptyState(mascot: .empty, title: empty.noneTitle, message: "在 Mac 的终端里开一个 Agent，或在这里开新会话", waitsForSync: true) {
+                EmptyStateButton(title: "新会话", icon: .add, action: { navigation.newSession = .init() })
             }
             .padding(.top, 40)
         }
@@ -189,13 +199,44 @@ extension SessionList where Top == EmptyView {
 private struct NewSessionButton: View {
     let project: UUID?
     @Environment(Navigation.self) private var navigation
-    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新会话", icon: .add) {
-            navigation.startNewSession(.init(project: project), hasProjects: workspace.catalog?.projects.isEmpty == false)
-        }
+        Button("新会话", icon: .add) { navigation.newSession = .init(project: project) }
             .accessibilityHint("让 Mac 开一个 Agent 会话")
+    }
+}
+
+/// 分组时一组的组头：项目图标与名字、几个在线；结束的还有没列出来的、又给了 `choose` 时右边"全部 N 个"按这个项目筛。
+private struct GroupTitle: View {
+    let group: PiSessionList.Group
+    let choose: ((UUID) -> Void)?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let project = workspace.catalog?.project(group.id)
+        let name = project?.name ?? ""
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            ProjectGlyph(project: project, size: 15)
+            Text(name).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            if !group.now.isEmpty {
+                Text("\(group.now.count) 个在线").font(.subheadline).monospacedDigit().foregroundStyle(palette.ink3)
+            }
+            Spacer(minLength: 8)
+            if group.hasMore, let choose {
+                Button { choose(group.id) } label: {
+                    HStack(spacing: 3) {
+                        Text("全部 \(group.endedTotal) 个")
+                        Image(.forward).font(.footnote.weight(.semibold)).accessibilityHidden(true)
+                    }
+                    .font(.subheadline).foregroundStyle(palette.ink2).contentShape(.rect)
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityHint("只看\(name)的会话")
+            }
+        }
+        .padding(.horizontal, 4)
     }
 }
 
@@ -214,7 +255,7 @@ private struct SectionTitle: View {
 /// 一个会话（`PiSessionRow`）点开它的会话页；已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
-    let filtered: Bool
+    let showsPlace: Bool
     /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     var end: Speech.Trip?
     @Environment(Navigation.self) private var navigation
@@ -223,7 +264,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: SessionCard.radius))
         }
         .buttonStyle(PressStyle(.card))

@@ -14,7 +14,7 @@ import Testing
     try await sb.store.updateProject(alpha.id) { $0.isPinned = true }  // 置顶的在前
 
     let projects = try array(try await sb.json("project", "list"))
-    #expect(projects.compactMap { $0.string("name") } == ["Alpha", "Beta"])
+    #expect(projects.compactMap { $0.string("name") } == ["Alpha", "Beta", "默认"])
     #expect(projects[0].string("id") == alpha.id.uuidString.lowercased())
     #expect(projects[0]["cardCount"] as? Int == 1)
     #expect(projects[1]["cardCount"] as? Int == 0)
@@ -46,9 +46,9 @@ import Testing
   /// 引用写 id 或至少 4 位的唯一前缀：不分大小写，回收站里的也找得到，同前缀多条时列出来让人写长一点。
   @Test func cardReferencesResolveByUniquePrefix() async throws {
     let sb = try Sandbox()
-    let first = try await sb.store.createCard(in: nil, body: "一号")
-    let second = try await sb.store.createCard(in: nil, body: "二号")
-    let trashed = try await sb.store.createCard(in: nil, body: "已删")
+    let first = try await sb.store.createCard(body: "一号")
+    let second = try await sb.store.createCard(body: "二号")
+    let trashed = try await sb.store.createCard(body: "已删")
     try sb.assignID(first.id, "abcd1111-0000-4000-8000-000000000001")
     try sb.assignID(second.id, "abcd2222-0000-4000-8000-000000000002")
     try sb.assignID(trashed.id, "beef3333-0000-4000-8000-000000000003")
@@ -65,19 +65,19 @@ import Testing
     #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
   }
 
-  /// 不在绑定了目录的项目里：列所有项目与未分类；--pinned 只列资料。指定项目与未分类见 `DefaultProjectTests`。
+  /// 不在绑定了目录的项目里：列所有项目；--pinned 只列资料。指定项目见 `DefaultProjectTests`。
   @Test func cardListOutsideABoundDirectoryListsEverything() async throws {
     let sb = try Sandbox()
     let a = try await sb.store.createCard(in: try await sb.project("Alpha").id, body: "a")
     let b = try await sb.store.createCard(in: try await sb.project("Beta").id, body: "b")
-    let unfiled = try await sb.store.createCard(in: nil, body: "i")
+    let home = try await sb.store.createCard(body: "i")
 
     func ids(_ args: String...) async throws -> Set<String> {
       let items = try array(try await sb.jsonValue(["card", "list"] + args))
       return Set(items.compactMap { $0.string("id") })
     }
     func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
-    #expect(try await ids() == [id(a), id(b), id(unfiled)])
+    #expect(try await ids() == [id(a), id(b), id(home)])
     try await sb.store.updateCard(b.id) { $0.isPinned = true }
     #expect(try await ids("--pinned") == [id(b)])
   }
@@ -91,18 +91,18 @@ import Testing
 
     let moved = try await sb.object("card", "move", id, "--project", "Beta")
     #expect(moved.string("projectId") == beta.id.uuidString.lowercased())
-    let toUnfiled = try await sb.object("card", "move", id, "--unfiled")
-    #expect(toUnfiled["projectId"] is NSNull)
+    let home = try await sb.object("card", "move", id, "--project", "默认")
+    #expect(home.string("projectId") == Project.defaultID.uuidString.lowercased())
 
     let trashed = try await sb.object("card", "trash", id)
     #expect(trashed.string("deletedAt") != nil)
-    #expect(try await sb.store.cards(in: nil).isEmpty)
+    #expect(try await sb.store.cards(in: Project.defaultID).isEmpty)
     let inTrash = try array(try await sb.json("card", "list", "--trash"))
     #expect(inTrash.compactMap { $0.string("id") } == [id.lowercased()])
 
     let restored = try await sb.object("card", "restore", id)
     #expect(restored["deletedAt"] is NSNull)
-    #expect(try await sb.store.cards(in: nil).map(\.id) == [card.id])
+    #expect(try await sb.store.cards(in: Project.defaultID).map(\.id) == [card.id])
   }
 
   @Test func projectReferenceErrorsAreActionable() async throws {
@@ -125,7 +125,7 @@ import Testing
       (JSONSerialization.jsonObject(with: Data(json.err.utf8)) as? [String: Any])?["error"] as? [String: Any])
     #expect(error.string("code") == "not_found")
     #expect(error.string("message")?.contains("nope") == true)
-    #expect(try await sb.store.cards(in: nil).isEmpty)
+    #expect(try await sb.store.cards(in: Project.defaultID).isEmpty)
 
     try await sb.store.trashProject(first.id)
     let trashed = await sb.run("card", "add", "--project", first.id.uuidString, "--body", "x")
@@ -173,7 +173,7 @@ import Testing
 
   @Test func ideaBecomesATaskAndBack() async throws {
     let sb = try Sandbox()
-    let idea = try await sb.object("card", "add", "--unfiled", "--body", "修重连")
+    let idea = try await sb.object("card", "add", "--body", "修重连")
     let id = try #require(idea.string("id"))
     #expect(idea.string("kind") == "idea" && idea["status"] is NSNull)
 
@@ -195,7 +195,7 @@ import Testing
     #expect(child.string("parentId") == parent.id.uuidString.lowercased())
     #expect(child.string("projectId") == alpha.id.uuidString.lowercased())
 
-    let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--global")
+    let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--project", "Alpha")
     #expect(conflicting.code == 2)
   }
 
@@ -238,8 +238,8 @@ import Testing
 
   @Test func conflictsListAndResolve() async throws {
     let sb = try Sandbox()
-    let original = try await sb.store.createCard(in: nil, body: "新版本")
-    let copy = try await sb.store.createCard(in: nil, body: "旧版本")
+    let original = try await sb.store.createCard(body: "新版本")
+    let copy = try await sb.store.createCard(body: "旧版本")
     try sb.markConflict(copy: copy.id, of: original.id)
 
     let listed = try array(try await sb.json("conflicts", "list"))
@@ -282,7 +282,7 @@ import Testing
     let project = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: project.id, body: "x")
     let task = try await sb.store.createTask("t", in: project.id)
-    let copy = try await sb.store.createCard(in: nil, body: "旧")
+    let copy = try await sb.store.createCard(body: "旧")
     try sb.markConflict(copy: copy.id, of: card.id)
 
     func documented(_ type: String, in command: [String]) async throws -> Set<String> {

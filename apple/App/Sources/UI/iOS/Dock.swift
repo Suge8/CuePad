@@ -44,6 +44,8 @@ struct DockRoot: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // 推移是 SwiftUI 逐帧插值的位移，图层上看不出在动：截图要等旧页拿掉（推完）再拍，不然拍到两页各露一截
+            .debugSettling(leaving != nil)
             .toolbarVisibility(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
@@ -94,7 +96,7 @@ private struct HomePage: View {
 /// 右边一颗 Cue 圆钮（`CueDockButton`）。离屏幕左右与底边都是 21、高 62（与屏幕圆角同心，同系统悬浮标签栏），只是玻璃：
 /// 栏后面不垫渐变或模糊，内容一直滚到它后面。选中那一格是一层中性淡墨的滴加靛青的图标与字（选中是一块底，docs/ui.md）。
 /// 字号固定、不随动态字体放大，辅助字号下长按弹出大内容查看器（同系统标签栏：栏高固定，字放大只会挤掉图标）。
-/// "项目"那一格在同步到不了 Mac 时带一个点（同设置那一行，`AppServices.macAlert`）。每格挂接力的落点（`relaySpot(dock:)`）。
+/// "项目"那一格在同步到不了 Mac 时带一个点（同设置那一行，`AppServices.macAlert`）。"会话"那一格是接力的落点（`relaySpot(dock:)`）。
 ///
 /// 换去处的过渡（`Arrival`）：两页水平推移（`DockRoot`），这一排不跟着推，新页底部那一排从旧页那一排的样子长成自己的——从 Cue 页来时三格胶囊从左边那颗圆钮长开、
 /// Cue 圆钮从输入框收回右端；去 Cue 页时反过来（`CueDockRow`）；三页之间换时滴从旧的那一格滑过来。新旧两排在两页里，
@@ -229,7 +231,7 @@ private struct DockCell: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(.button))
-        .relaySpot(dock: place)
+        .relaySpot(dock: place == .sessions)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(place.dockTitle)
         .accessibilityValue(services.macAlert.flatMap { place == .allProjects ? $0.title : nil } ?? "")
@@ -247,7 +249,7 @@ private struct DockCell: View {
 /// Dock 右边的 Cue：玻璃圆钮里是它的头像（表情、在跑的环、等你的赭黄环，`CueAvatar`）；点它去 Cue 页。iPhone 上 Cue 的新消息只提示在这里
 /// （推入的页没有 Dock、不另提示，回到根页就看见）：又来一句时头像外漾一圈（`CueArrival`，同侧栏的 Cue 一行），右上角等你时是"等你"的数
 /// （`WaitingBadge`），没有等你、有新消息时是石绿的点（`CueDot`）；读屏先说新消息。事实只读 `CueWatch.unread`、`waiting`。
-/// 接力里它就是 Cue 那一头（`relaySpot(cue: .entry)`）：三页上没有页头，叫醒的光落在这里。
+/// 接力里它就是 Cue 那一头（`CueSpot.dock`）：三页上没有页头，光落在这里。
 /// `stretched`：还是 Cue 页输入框的样子（刚从 Cue 页来的第一帧），头像在右端。
 private struct CueDockButton: View {
     let stretched: Bool
@@ -260,7 +262,7 @@ private struct CueDockButton: View {
         Button { navigation.select(.cue) } label: {
             CueAvatar(mood: cue.mood(composing: false), presence: cue.presence, size: .header)
                 .background { CueArrival(color: palette.replied, reach: 1.5) }
-                .relaySpot(cue: .entry)
+                .relaySpot(cue: .dock)
                 .frame(width: Dock.height, height: Dock.height)
                 .contentShape(.circle)
         }
@@ -321,7 +323,7 @@ struct CueDockRow<Composer: View>: View {
 
 /// Cue 页底部左边那颗玻璃圆钮（与输入框同高）：图标是"⋯"（更多去处，不随上次去了哪页变）。点它原地展开成 Dock 那样的三格胶囊
 /// （同宽同高，输入框收成右端一颗圆，`CueDockRow`），选一格就去那里；点别处、滚动或点那颗圆收回（`CuePage` 在对话上铺一层接点按）。
-/// 接力的落点之一（`relaySpot(dock: nil)`）。
+/// 收起时它代替"会话"那一格做接力的落点（`relaySpot(dock:)`）。
 /// `docked`：还是 Dock 三格胶囊的样子（刚从三页来的第一帧）。
 /// 圆钮与三格一直都在、只换不透明度，靠左叠着（玻璃往右长，三格不跟着挪）：先后换、不叠着交叉淡（`Motion.handOff`）——
 /// 换出去的那样先淡完，换进来的晚这么久再出；插入、移除的过渡里被移除的那个随弹簧慢慢淡，"⋯"会叠在"任务"上停一阵。
@@ -361,7 +363,7 @@ struct DockPlaces: View {
                     .contentShape(.circle)
             }
             .buttonStyle(PressStyle(.button))
-            .relaySpot(dock: nil)
+            .relaySpot(dock: true)
             .accessibilityLabel("去处")
             .accessibilityHint("展开任务、会话、项目")
             .opacity(open || docked ? 0 : 1)

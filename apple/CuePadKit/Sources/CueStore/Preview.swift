@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 import UniformTypeIdentifiers
 
@@ -84,7 +85,7 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   public var hash: String
   /// 原文件名（含扩展名，类型由它定）
   public var name: String
-  /// 一句标题（一次发几个时是那张卡的标题，几个共用）；没给时是不带扩展名的文件名
+  /// 一句标题：这份是什么、看哪里（Agent 发时每份一句、同批各不相同，宽不过 `titleLimit`），缩略图下、全屏页顶上与 Cue 的清单里都写它
   public var title: String
   public var byteCount: Int
   public var createdAt: Date
@@ -92,6 +93,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
 
   /// 单个文件上限：手机上经 iCloud 同步，演示与验收用的页面和截图远小于它。
   public static let maxBytes = 20_000_000
+  /// 标题宽不过这么多（`CueName.width`，约 20 个汉字）：缩略图下至多两行写得下。
+  public static let titleLimit = 40
 
   /// 这台设备不认识的类型（别的版本发来的）为 nil
   public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
@@ -146,9 +149,19 @@ extension CueStore {
   /// 把一次发来的几个文件（一批）放进某个 Agent 会话的预览：按内容哈希存进附件目录（同内容共用一份），在同一事务里登记附件记录与预览记录（同步给手机）。
   /// 同一批 = 同一创建时间，对话里据此收成一张卡（`PiChat.entries`），不为"一批"另加同步字段。所以一个会话里每批的创建时间各不相同：
   /// 不晚于这个会话已有最后一条预览时（两次调用落在同一毫秒、或时钟往回调过）取它之后 1 毫秒；查与写在同一个写事务里，并发的命令行也排得开。
-  /// 批内 id 按参数顺序从小到大，同一时刻里按 id 排出的就是参数顺序。任一个文件不存在、不是文件、太大或类型不支持时抛 `CueStoreError.preview…`，一个都不留下。
+  /// 批内 id 按参数顺序从小到大，同一时刻里按 id 排出的就是参数顺序。每份带自己的一句标题（`PiPreview.title`），同一批里各不相同：用户分得清哪张是哪张，不靠文件名。
+  /// 任一个标题空着、太长或与同批重复，文件不存在、不是文件、太大或类型不支持时抛 `CueStoreError.preview…`，一个都不留下。
   /// HTML 引用的外部资源只列出来让 Agent 改成单文件，不在这里替它内联：样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
-  public func addPreviews(filesAt urls: [URL], title: String?, sessionID: String) throws -> [PiPreviewAdded] {
+  public func addPreviews(_ sent: [(url: URL, title: String)], sessionID: String) throws -> [PiPreviewAdded] {
+    var titles: [String] = []
+    for file in sent {
+      let title = file.title.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !title.isEmpty, !title.contains(where: \.isNewline), CueName.width(title) <= PiPreview.titleLimit, !titles.contains(title) else {
+        throw CueStoreError.previewTitle(file.url.lastPathComponent, limit: PiPreview.titleLimit)
+      }
+      titles.append(title)
+    }
+    let urls = sent.map(\.url)
     let checked = try urls.map { url in
       let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
       guard attributes?[.type] as? FileAttributeType == .typeRegular, let size = attributes?[.size] as? Int else {
@@ -158,7 +171,6 @@ extension CueStore {
       guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, limit: PiPreview.maxBytes) }
       return (url: url, kind: kind, size: size)
     }
-    let given = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let hashes = try checked.map { file in
       guard let hash = try? files.storeFile(at: file.url) else { throw CueStoreError.previewUnreadable(file.url.path) }
       return hash
@@ -167,11 +179,10 @@ extension CueStore {
     let previews = try write {
       let latest = try db.query("SELECT max(createdAt) FROM previews WHERE sessionID = ?", [sessionID]) { $0.dateOrNil(0) }.first ?? nil
       let createdAt = latest.map { max(Date.stamp, $0.addingTimeInterval(0.001)) } ?? Date.stamp
-      let previews = zip(ids, zip(hashes, checked)).map { id, stored in
-        let (hash, file) = stored
-        return PiPreview(
-          id: id, sessionID: sessionID, hash: hash, name: file.url.lastPathComponent,
-          title: given.isEmpty ? file.url.deletingPathExtension().lastPathComponent : given, byteCount: file.size, createdAt: createdAt)
+      let previews = checked.indices.map { index in
+        PiPreview(
+          id: ids[index], sessionID: sessionID, hash: hashes[index], name: checked[index].url.lastPathComponent, title: titles[index],
+          byteCount: checked[index].size, createdAt: createdAt)
       }
       for preview in previews {
         try registerAttachment(hash: preview.hash)
@@ -189,7 +200,7 @@ extension CueStore {
     try select(PiPreview.self, where: "sessionID = ?", [sessionID], orderBy: "createdAt, id")
   }
 
-  /// 按 id 取几份预览（提问点名的图，`CueAsking.shots`）；不在了的不在结果里。
+  /// 按 id 取几份预览（Cue 点名的图，`CueMessage.shots`）；不在了的不在结果里。
   public func previews(_ ids: some Collection<UUID>) throws -> [UUID: PiPreview] {
     guard !ids.isEmpty else { return [:] }
     let found = try select(PiPreview.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])

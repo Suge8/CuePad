@@ -8,7 +8,7 @@ import Foundation
 struct CardLinks {
   struct Link: Equatable {
     var parent: UUID?
-    var project: UUID?
+    var project: UUID
     var isTask: Bool
     var isDone = false
     var hasSession = false
@@ -42,7 +42,7 @@ struct CardLinks {
     (
       row.uuid(0),
       Link(
-        parent: row.uuidOrNil(1), project: row.uuidOrNil(2), isTask: row.bool(3), isDone: row.bool(4), hasSession: row.bool(5),
+        parent: row.uuidOrNil(1), project: row.uuid(2), isTask: row.bool(3), isDone: row.bool(4), hasSession: row.bool(5),
         hasStart: row.bool(6))
     )
   }
@@ -115,8 +115,7 @@ extension CardLinks {
     var repairs = Repairs()
     fixed.settleHandoffs(in: region, &repairs)
     for id in region where fixed.links[id] != nil {
-      guard let root = ([id] + fixed.ancestors(of: id)).last, root != id else { continue }
-      let project = fixed.links[root]?.project
+      guard let root = ([id] + fixed.ancestors(of: id)).last, root != id, let project = fixed.links[root]?.project else { continue }
       fixed.links[id]?.project = project
     }
     repairs.links = Dictionary(uniqueKeysWithValues: region.compactMap { id in

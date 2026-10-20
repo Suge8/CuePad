@@ -39,6 +39,8 @@ extension DebugScene {
     /// 两台 Mac 的项目目录绑定（名字是各自报的，`seedMacAgents`）：Mac Studio 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
     /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {
+        // 只用来写绑定记录里的文件夹名，不建目录
+        let workspaces = Workspaces.resolve(isolatedLibrary: nil)
         try? await store.publishDirectoryBindings(host: "demo-mac")
         guard let directories = try? await store.projectDirectories() else { return }
         let others = projects.filter { $0.name != "CuePad" }.map(\.id)
@@ -103,8 +105,8 @@ extension DebugScene {
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
         var created: [Date] = []
-        for (files, title) in [([page], "登录页 v2：可点的完整页面"), ([shot, report], "截图与评审结论")] {
-            if let added = try? await store.addPreviews(filesAt: files, title: title, sessionID: "notes") { created.append(added[0].preview.createdAt) }
+        for batch in [[(page, "登录页 v2：可点的完整页面")], [(shot, "手机截图：登录钮在键盘上方"), (report, "评审结论：还有三处要改")]] {
+            if let added = try? await store.addPreviews(batch.map { (url: $0.0, title: $0.1) }, sessionID: "notes") { created.append(added[0].preview.createdAt) }
         }
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
@@ -197,7 +199,7 @@ extension DebugScene {
     }
 
     /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
-    /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
+    /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条已送达还没进对话、一条没能送达）。
     private static func seedChats(_ store: CueStore) async {
         let now = Date.now
         func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async {
@@ -256,8 +258,24 @@ extension DebugScene {
         ], startedMinutesAgo: 3)
         await chat("relay", [
             ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(steps: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
+            (Self.skillSaid, "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。", nil, 0.3),
         ], startedMinutesAgo: 10)
     }
+
+    /// "/skill:eli5 为什么在等锁" 经 Pi 展开后进会话文件的样子（`PiSkillCall`）。
+    private static let skillSaid = """
+        <skill name="eli5" location="/Users/demo/.agents/skills/eli5/SKILL.md">
+        References are relative to /Users/demo/.agents/skills/eli5.
+
+        # 用大白话讲
+
+        - 先给一句结论，再打一个生活里的比方
+        - 不用术语；非用不可时当场解释
+        - 三句话以内讲完
+        </skill>
+
+        为什么在等锁
+        """
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
     /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
@@ -533,7 +551,7 @@ extension DebugScene {
             ("landing-copy", "旅行", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
         ]
-        // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
+        // 文件夹名与还没绑文件夹的项目同名（Flow）：手机给项目换文件夹时的候选里有它
         for index in 1...3 {
             let id = "flow-\(index)"
             _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
@@ -555,9 +573,9 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try? await recorder.end(sessionID: "piwork")
-        // 没归类的想法：书架末尾"未分类"那一行带条数
+        // 没指定项目的想法：进默认项目
         for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
-            _ = try? await store.createCard(in: nil, body: body)
+            _ = try? await store.createCard(body: body)
         }
         // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)

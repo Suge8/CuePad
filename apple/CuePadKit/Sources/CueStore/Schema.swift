@@ -93,7 +93,25 @@ enum Schema {
     "ALTER TABLE sessionViewers ADD COLUMN cue INTEGER;",
     // 64：你开口收起的提问走部分索引（每次把你的话交给 Cue 都读）
     "\(setAsideIndex)",
+    // 65：未分类取消，每张卡都在一个项目里：建默认项目，没有项目的灵感与任务挪进去（modifiedAt 变大，改动才会同步出去）。
+    // 别的设备上更早的版本删过同 id 的（不会有：它们不认得默认项目）也取回
+    Upgrade { db in
+      try db.exec(defaultProject)
+      try db.run("UPDATE projects SET deletedAt = NULL, modifiedAt = MAX(modifiedAt + 1, ?1) WHERE id = ?2 AND deletedAt IS NOT NULL", [Date.stamp, Project.defaultID])
+      try db.run("UPDATE cards SET projectID = ?1, modifiedAt = MAX(modifiedAt + 1, ?2) WHERE projectID IS NULL", [Project.defaultID, Date.stamp])
+    },
+    // 66：Cue 自己醒来的一轮为什么醒记在它的经过那一行上（`CueMessage.wake`，Cue 页那一节的第一行、叫醒的接力都读它），
+    // 此刻状态里的那一份（52 加的 `cueState.woke`）去掉
+    "ALTER TABLE cueMessages ADD COLUMN wake TEXT; ALTER TABLE cueState DROP COLUMN woke;",
   ]
+
+  /// 默认项目（`Project.defaultID`）的那一条：新库建好就有，升级时补上。修改时间是 0：各台设备离线各自建出的是同一版，
+  /// 合并时用户改过的（名字、颜色、图标）总比它新，不会被一台新装的设备盖回"默认"。
+  static let defaultProject = """
+    INSERT INTO projects (id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro)
+    VALUES ('\(Project.defaultID.uuidString.lowercased())', '默认', 'house', '#8A8A84', 0, NULL, 0, 0, NULL)
+    ON CONFLICT(id) DO NOTHING;
+    """
 
   /// 已有的提问照当时的写法认出类别：带"以后<当时的叫法>都不用问"的是那一类，都不带的是规矩那一类；范围是关联任务此刻所在的项目
   /// （原先选第二项时就按它记）。没有动作短语，卡片按类别与任务标题拼。modifiedAt 变大，改动才会同步出去，新装的设备拿到的也有。
@@ -303,11 +321,11 @@ enum Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule、askShots 是它要做的动作、依据的规矩与要你看的图，setAsideBy 是你开口收起它的那句话）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话，wake 是 Cue 自己醒来的那一轮为什么醒）、记忆、设置（allows 是允许清单）与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)
@@ -328,7 +346,7 @@ enum Schema {
       lo INTEGER NOT NULL, hi INTEGER NOT NULL, text TEXT NOT NULL, lineIDs TEXT NOT NULL, createdAt INTEGER NOT NULL, PRIMARY KEY (lo, hi)
     ) STRICT;
     CREATE TABLE cueState (
-      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, woke TEXT, context TEXT, leftToYou TEXT
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT
     ) STRICT;
     \(cueRead)
 
@@ -345,6 +363,7 @@ enum Schema {
     \(searchTriggers(table: "projects", column: "name", kind: "project"))
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
     \(pendingIndexes(Table.synced))
+    \(defaultProject)
     """
 
   /// 触发器对本地写入与将来同步的写入一视同仁，索引始终跟随数据。

@@ -5,8 +5,7 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 端到端：会话的对话从 Pi 的会话文件读出——一轮一条 Pi 消息（只取最后的回答，工具只成摘要），你的消息带着
-/// CuePad 送进去时的投送请求 id；会话记录上的摘要是对话的投影。
+/// 端到端：会话的对话从 Pi 的会话文件读出——一轮一条 Pi 消息（只取最后的回答，工具只成摘要）；会话记录上的摘要是对话的投影。
 @MainActor
 @Suite(RealAgents.taped(.pi), .agentTape(.pi), RealAgents.serialWhenRecording(.pi), RealAgents.timeLimit(.minutes(2)))
 struct RealTranscriptTests {
@@ -81,23 +80,6 @@ struct RealTranscriptTests {
         }
         let update = try PiHistory.index(file: file, from: nil)
         #expect(update.recap.pendingPrompt == "[[slow]] 慢慢来" && update.recap.lastReply == nil)
-    }
-
-    /// CuePad 送进去的消息带着投送请求 id：扩展写进会话文件里那条你的消息，对话据此把请求气泡换成这条消息。
-    @Test func aMessageSentThroughCuePadCarriesItsDeliveryID() async throws {
-        let (pi, bridge, file) = try await rig()
-        defer { bridge.stop(); pi.stop() }
-        let session = try #require(bridge.sessions.first)
-
-        let delivery = UUID()
-        try await bridge.send(PiMessage(text: "从手机发的", deliveryID: delivery.uuidString), to: session.id)
-        try await eventually("那一轮落盘") { try roundsDone(file, 1) }
-        try pi.prompt("终端里打的")
-        try await eventually("第二轮落盘") { try roundsDone(file, 2) }
-
-        let users = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.user) }
-        #expect(users.map(\.text) == ["从手机发的", "终端里打的"])
-        #expect(users.map(\.deliveryID) == [delivery, nil])
     }
 }
 #endif

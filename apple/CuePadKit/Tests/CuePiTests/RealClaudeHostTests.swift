@@ -14,7 +14,7 @@ struct RealClaudeHostTests {
     /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
     @Test func aWrappedClaudeIsNotSeenTwice() async throws {
         try await ClaudeTestbed.run(wrapper: ClaudeTestbed.passThrough) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)?.sessionID)
@@ -30,7 +30,7 @@ struct RealClaudeHostTests {
     /// 新会话带着发起方的认领标识上桥；发的话带图，会话文件里认得出是哪条投送请求、图存进了附件目录。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
         try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
             let session = try #require(testbed.bridge.session(id: id))
             #expect(session.hosted && session.launchToken == "token-1" && session.agent == .claudeCode)
@@ -53,13 +53,23 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 等你确认（托管进程问 CuePad 能不能用工具）从 CuePad 作答；跑着的一轮能停，停了上下文用量不归零，还能接着说。
+    /// 托管会话以 auto 模式跑：只读命令与工作目录里的改动不问人；用户的 ask 规则仍要确认，从 CuePad 作答。
+    /// 跑着的一轮能停，停了上下文用量不归零，还能接着说。
     @Test func cuePadAnswersAPermissionAndStopsARunningTurn() async throws {
-        try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+        try await ClaudeTestbed.run(settings: #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let touched = testbed.work.appending(path: "hosted.txt")
+            try "hello cuepad\n".write(to: testbed.work.appending(path: "seed.txt"), atomically: true, encoding: .utf8)
+            let edited = testbed.work.appending(path: "edited.txt")
 
+            let routine = Date()
+            try await testbed.bridge.send(
+                PiMessage(text: "用 Bash 工具依次执行 ls、cat seed.txt、rg hello（各一条命令），再用 Write 工具写 \(edited.path)，内容是 EDITED，然后只回复 DONE"), to: id)
+            try await testbed.waitForTurn(id, since: routine)
+            #expect(FileManager.default.fileExists(atPath: edited.path))
+            #expect(!testbed.log.states.contains(.waitingForUser), "\(testbed.log.details)")
+
+            let touched = testbed.work.appending(path: "hosted.txt")
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "用 Bash 工具执行 touch \(touched.path) ，然后只回复 DONE"), to: id)
             let permission = try await testbed.waitForQuestion(id)
@@ -97,8 +107,8 @@ struct RealClaudeHostTests {
     /// 等你确认的问题收起，对话里在这句之前留一行"已停止"。命令比等的时限长：没被打断就等不到这句的回答。
     @Test(arguments: [false, true]) func aMessageWhileBusyStopsTheTurnAndStartsANewOne(toolRunning: Bool) async throws {
         AgentTape.variant(toolRunning ? "tool" : "asking")
-        try await ClaudeTestbed.run(settings: toolRunning ? #"{"permissions": {"allow": ["Bash"]}}"# : nil) { testbed in
-            try testbed.runtime.start()
+        try await ClaudeTestbed.run(settings: toolRunning ? nil : #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let never = testbed.work.appending(path: "never.txt")
 
@@ -128,7 +138,7 @@ struct RealClaudeHostTests {
     /// 换模型与强度、改名（设置与斜杠命令两条路）都改到 Claude Code 自己身上：之后的回答是新模型、新强度答的（看会话文件里它记下的），名字写进了会话文件。
     @Test func cuePadChangesModelEffortAndNameOfAHostedSession() async throws {
         try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
             let first = Date()
@@ -172,7 +182,7 @@ struct RealClaudeHostTests {
     /// 结束前停下的那一轮，Claude Code 接着时补写的助手消息（"No response requested."）不算它的回答。
     @Test func anEndedHostedSessionIsResumedWithItsHistory() async throws {
         try await ClaudeTestbed.run { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let first = try #require(testbed.bridge.session(id: id))
             let start = Date()
@@ -215,7 +225,7 @@ struct RealClaudeHostTests {
     /// 后台子代理与后台命令都算在飞：这一轮歇下时是等子代理，交回结果的那一轮做完才歇下一次（叫醒 Cue、提示"完成了"都只这一次）。
     @Test func backgroundWorkKeepsTheSessionBusyUntilItsResultIsReportedBack() async throws {
         try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
@@ -226,7 +236,7 @@ struct RealClaudeHostTests {
     /// 子代理先交回中途结果、名下的后台命令做完后以同一 id 再跑：中间一直算在飞，交回最终结果的那一轮做完才歇下一次，名册里还是那一项。
     @Test func aSubagentThatReportsEarlyAndRunsAgainSettlesTheSessionOnce() async throws {
         try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.earlyReport), to: id)
@@ -237,7 +247,7 @@ struct RealClaudeHostTests {
     /// 等子代理时你叫它停掉子代理：被停下的不算在飞，这件事只歇下一次，名册里它记成被停下。
     @Test func aStoppedSubagentSettlesTheSessionOnce() async throws {
         try await ClaudeTestbed.run(settings: ClaudeTestbed.backgroundSettings) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.longSubagent), to: id)
@@ -251,7 +261,7 @@ struct RealClaudeHostTests {
     @Test func anIdleHostedSessionExits() async throws {
         // 空闲计时在 CuePad 这边：回放时不必真等 2 秒
         try await ClaudeTestbed.run(idleLimit: AgentTape.active.mode == .replay ? .milliseconds(50) : .seconds(2)) { testbed in
-            try testbed.runtime.start()
+            try testbed.startConnected()
             let log = ChangeLog(testbed.bridge)
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
 

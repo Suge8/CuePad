@@ -109,7 +109,7 @@ private struct AgentPanel: View {
 }
 
 /// 侧栏列表，结构见 `SidebarOutline`：顶上是搜索框（点它把搜索页推在当前页上并聚焦），Cue（`CueSidebarItem`），任务与会话，置顶与最近的项目
-/// （末尾未分类与"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。选中的那一行垫选中底。
+/// （末尾"全部项目"），底部归档、回收站与设置（同步到不了 Mac 时设置那一行带一个点）。选中的那一行垫选中底。
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -144,17 +144,12 @@ private struct SplitSidebar: View {
                         header("置顶")
                         ForEach(outline.pinned) { row($0, catalog, now: now[$0.id]) }
                     }
-                    if !outline.recent.isEmpty || outline.unfiled > 0 {
+                    if !outline.recent.isEmpty {
                         header("最近")
                         ForEach(outline.recent) { row($0, catalog, now: now[$0.id]) }
-                        if outline.unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, icon: .unfiled, badge: outline.unfiled) }
                     }
-                    // 没有最近一组（项目全置顶、还没有项目）时也在：书架是新建项目与看全部的地方。
-                    // 上面一个项目分组都没有时，它自成一组，与去处隔开分组间距
-                    if SidebarOutline.showsAllProjects {
-                        SidebarRow(entry: .allProjects, badge: catalog.projects.count)
-                            .padding(.top, outline.projects.isEmpty && outline.unfiled == 0 ? Self.groupGap : 0)
-                    }
+                    // 没有最近一组（项目全置顶）时也在：书架是新建项目与看全部的地方
+                    if SidebarOutline.showsAllProjects { SidebarRow(entry: .allProjects, badge: catalog.projects.count) }
                 }
                 VStack(alignment: .leading, spacing: Self.rowGap) {
                     ForEach(SidebarOutline.footer, id: \.self) { SidebarRow(entry: $0, alert: $0 == .settings ? syncAlert : nil) }
@@ -163,7 +158,7 @@ private struct SplitSidebar: View {
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
-        .observing(services.store, into: $leading, onError: workspace.fail) { TaskBoard.leading(try $0.startedTasks()) }
+        .observing(services.store, into: $leading, onError: workspace.fail) { ProjectNow.leading(try $0.startedTasks()) }
     }
 
     private static let rowGap: CGFloat = 2
@@ -214,7 +209,7 @@ private struct SidebarSearchField: View {
     }
 }
 
-/// 侧栏最上面的 Cue：头像、名字、此刻在做什么、"等你 N"，点开 Cue 页。
+/// 侧栏最上面的 Cue：头像、名字、"在管 N · 等你 M"（`CueStatusRow`），点开 Cue 页。
 private struct CueSidebarItem: View {
     @Environment(Navigation.self) private var navigation
 

@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// Agent 分组标题旁与 Agent 整页右上的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
-/// 开好后关掉表单、在内容区打开新会话的整页。还没有项目时从这里新建的项目，建好回到这张表单（它默认选最近活跃的，就是新建的那个）。
+/// 会话页顶上一排右端的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
+/// 开好后关掉表单、在内容区打开新会话的整页。
 /// 这台 Mac 上一家 Agent 都不能用（`MacAgents`）时置灰，悬停说为什么（`whyNone`）；读到的这一份交给表单。
 struct NewSessionButton: View {
     @Binding var showing: Bool
@@ -19,10 +19,7 @@ struct NewSessionButton: View {
             .help(none ? agents.map { "开不了新会话：\($0.whyNone)" } ?? "" : "开一个新的 Agent 会话")
             .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
             .panel(isPresented: $showing) {
-                NewSessionForm(agents: agents, createProject: {
-                    showing = false
-                    workspace.projectForm = .init(created: { _ in showing = true })
-                }) { id in
+                NewSessionForm(agents: agents) { id in
                     showing = false
                     workspace.show(.session(id))
                 }
@@ -30,14 +27,12 @@ struct NewSessionButton: View {
     }
 }
 
-/// 新会话开在哪、用哪个 Agent 与模型：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
+/// 新会话开在哪、用哪个 Agent 与模型：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目开工时这台 Mac 建好工作区（`MacExecutor`）。
 /// 开场的话下面一排选 Agent、模型与思考强度（`PiConfigControls.init(choice:)`，与手机的新会话、Cue 同一排）：Agent 只列这台 Mac 上能用的（`agents`，由 + 读来），
 /// 默认上次选的（`MacAgents.preferred`，选了就记作下次的默认，同手机）；模型与思考强度默认跟着这家的默认，换了 Agent 回到默认。一家都不能用时写为什么（`whyNone`）、开不了。
-/// 还没有项目时说一句为什么，主按钮是"新建项目"（关掉表单、打开新建项目）。
 struct NewSessionForm: View {
     /// 这台 Mac 上的 Agent；还没读到为 nil。
     let agents: MacAgents?
-    var createProject: () -> Void = {}
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -63,43 +58,37 @@ struct NewSessionForm: View {
 
     var body: some View {
         let places = ProjectFolders.launchPlaces(
-            projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
+            projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost, workMac: nil)
         // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         let agent = agents?.preferred(services.settings.lastAgent)
         VStack(alignment: .leading, spacing: 12) {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
-            if places.isEmpty {
-                Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
-                    .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
-            } else {
-                ScrollView {
-                    // 行的底向两边让出一截，留在滚动区里不被裁
-                    VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
-                }
-                .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
-                TextField("开场的话（可不填）", text: $prompt, palette: palette, axis: .vertical)
-                    .textFieldStyle(.plain).lineLimit(2...5)
-                    .onSubmit { if let place, let agents, let agent, place.binding != nil, stage != .opening { start(place, choice(agents, agent)) } }
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .paper(radius: 10)
-                    .accessibilityLabel("开场的话")
-                if let agents, let agent {
-                    PiConfigControls(choice: choice(agents, agent)) {
-                        services.settings.lastAgent = $0
-                        model = nil
-                    } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
-                    .disabled(stage == .opening)
-                }
+            ScrollView {
+                // 行的底向两边让出一截，留在滚动区里不被裁
+                VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
+            }
+            .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
+            TextField("开场的话（可不填）", text: $prompt, palette: palette, axis: .vertical)
+                .textFieldStyle(.plain).lineLimit(2...5)
+                .onSubmit { if let place, let agents, let agent, stage != .opening { start(place, choice(agents, agent)) } }
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .paper(radius: 10)
+                .accessibilityLabel("开场的话")
+            if let agents, let agent {
+                PiConfigControls(choice: choice(agents, agent)) {
+                    services.settings.lastAgent = $0
+                    model = nil
+                } chooseModel: { model = $0 } chooseThinking: { thinking = $0 }
+                .disabled(stage == .opening)
             }
             HStack(spacing: 8) {
                 switch stage {
                 case .idle:
                     if let agents, agents.agents.isEmpty {
                         Text(agents.whyNone).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
-                    } else if let place {
-                        Text(place.binding == nil ? "「\(place.project.name)」还没有文件夹" : "在后台开，不占终端")
-                            .font(Typography.meta).foregroundStyle(palette.ink3)
+                    } else {
+                        Text("在后台开，不占终端").font(Typography.meta).foregroundStyle(palette.ink3)
                     }
                 case .opening:
                     Spinner(.small)
@@ -111,22 +100,11 @@ struct NewSessionForm: View {
                     Text(reason).font(Typography.meta).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                if places.isEmpty {
-                    Button("新建项目", action: createProject)
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                } else if let place, place.binding == nil {
-                    // 选好文件夹后项目目录刷新，这一处就换成"开始"
-                    Button("选文件夹…") { workspace.chooseFolder(for: place.project) }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                } else {
-                    // ↩ 开始（浮层开着时 ⌘ 组合键只交给主菜单，⌘↩ 到不了这里），换行用 ⌥↩
-                    Button("开始") { if let place, let agents, let agent { start(place, choice(agents, agent)) } }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(place == nil || agent == nil || stage == .opening)
-                }
+                // ↩ 开始（浮层开着时 ⌘ 组合键只交给主菜单，⌘↩ 到不了这里），换行用 ⌥↩
+                Button("开始") { if let place, let agents, let agent { start(place, choice(agents, agent)) } }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(place == nil || agent == nil || stage == .opening)
             }
             .controlSize(.small)
         }
@@ -139,11 +117,7 @@ struct NewSessionForm: View {
         Button { chosen = place.id } label: {
             HStack(spacing: 8) {
                 ProjectGlyph(project: place.project, size: 13)
-                Text(place.project.name).foregroundStyle(place.binding == nil ? palette.ink2 : palette.ink).lineLimit(1)
-                if place.binding == nil {
-                    Image(.folderMissing).font(Typography.meta).foregroundStyle(palette.ink3)
-                        .help("还没有文件夹").accessibilityLabel("还没有文件夹")
-                }
+                Text(place.project.name).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 if selected { Image(.checked).foregroundStyle(palette.ink2).accessibilityHidden(true) }
             }

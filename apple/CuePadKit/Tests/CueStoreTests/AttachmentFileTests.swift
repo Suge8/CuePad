@@ -33,8 +33,8 @@ import Testing
     let hash = try store.files.store(data)
     #expect(try records().isEmpty)  // 没被引用的图片不登记、不上传
 
-    let card = try await store.createCard(in: nil, body: "看 ![](cuepad://img/\(hash))")
-    _ = try await store.createCard(in: nil, body: "![](cuepad://img/\(hash)) 又一次")
+    let card = try await store.createCard(body: "看 ![](cuepad://img/\(hash))")
+    _ = try await store.createCard(body: "![](cuepad://img/\(hash)) 又一次")
     #expect(try records() == [[hash, "\(data.count)", "png"]])
 
     let later = try store.files.store(pngData(width: 12, height: 12, shade: 0.1))

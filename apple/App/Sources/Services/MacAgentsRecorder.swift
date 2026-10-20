@@ -36,7 +36,7 @@ final class MacAgentsRecorder {
         let before = latest
         let round = Task { [self] in
             _ = await before?.result
-            if redetecting || agents.statuses.count < AgentKind.allCases.count { await agents.redetect() }
+            if redetecting || !agents.detected { await agents.redetect() }
             probed = agents.statuses
             let found = await agents.probe()
             let name = SCDynamicStoreCopyComputerName(nil, nil) as String?

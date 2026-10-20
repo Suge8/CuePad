@@ -2,10 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、此刻在做什么、"等你 N"、展开的箭头；
+/// 手机与 iPad 的 Cue 页头：一块实底玻璃，平时是左右各离屏边 21 点、56 点高的一条——头像、名字、"在管 N · 等你 M"（`CueStatusLine` 的 tally）、展开的箭头；
 /// 点它从顶部长出面板（同一块玻璃长高）：手机上 Cue 的总面板（`CueNowPanel`：大脑、上下文、等你、在做、
 /// 全部会话、额度、记忆、设置），手机上 Cue 的这些只有这一个入口。
-/// 与 Mac 侧栏的 Cue 行与 Agent 区、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
+/// 与 Mac 侧栏的 Cue 名片、菜单栏面板是同一套件、同一份数据（`CueWatch`、`Workspace.liveWork`）。
 /// 点页头、点面板外、在页头上往上划都收起；点面板里的一项先收起再去那里。
 /// 动效：玻璃随无回弹弹簧（`Motion.panel`，0.25 秒）长大，面板的几行只淡入、下移 6 点，箭头转半圈；减弱动态效果时直接到终态。
 /// 页头浮在对话上（对话让出固定的 `reserve`），展开不改对话的布局，长大的只有这一小块；展开与否只在这里（不进 `CueWatch`：侧栏也读它）。
@@ -82,13 +82,11 @@ struct CueHeader: View {
                 .padding(.leading, (Self.height - CueAvatar.Size.header.box) / 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(cue.name).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                CueStatusLine(fallback: cue.lastSaid, font: .subheadline).lineLimit(1)
+                CueStatusLine(tally: true, font: .subheadline).lineLimit(1)
             }
             // 页头是定高的一条：字号跟着动态字体放大到这一档为止，再大第二行就被裁掉
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             Spacer(minLength: 6)
-            // 展开时等你那一行在面板里，页头不再重复
-            WaitingCount(count: expanded ? 0 : cue.waiting).font(.subheadline)
             Image(.expand).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                 .rotationEffect(.degrees(expanded ? 180 : 0))
                 .padding(.trailing, 18)
@@ -96,8 +94,6 @@ struct CueHeader: View {
         }
         .frame(height: Self.height)
         .contentShape(.rect)
-        .animation(Motion.quick, value: cue.waiting)
-        .animation(Motion.quick, value: cue.lastSaid)
         .animation(Motion.quick, value: cue.presence)
         .accessibilityElement(children: .combine)
     }
@@ -112,7 +108,7 @@ struct CueHeader: View {
 /// 第一行左边是它的大脑（Agent、模型与思考强度，`CueConfigControls`；还没选在哪台运行时没有），右边是它在哪台运行与齿轮，点它推入设置
 /// （`CueSettingsScreen`：在哪台 Mac 上运行、不用先问的事、工具步骤与名字；放在第一行是因为下面的会话一多，面板就要滚，末尾的入口看不见）；
 /// 启用了接着是上下文用量（`CueContextCard`，与 Mac 同一个），然后是等你（卡片就在页面下方，点它收起面板）、在做（前几个，
-/// 同 Mac 侧栏的 Agent 区；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
+/// 同 Mac 菜单栏面板；区头写一共几个会话、几个子代理在跑，多出的在列末就地展开）、全部会话（推入 Agent 整页）、额度与记忆。
 /// 放不下时面板里面滚。
 private struct CueNowPanel: View {
     let close: () -> Void

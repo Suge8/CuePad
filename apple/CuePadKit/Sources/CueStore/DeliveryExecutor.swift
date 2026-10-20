@@ -127,14 +127,37 @@ extension CueStore {
       DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND mode IN (\(sqlList(modes)))", orderBy: "createdAt, rowid")
   }
 
+  /// Cue 开出的新会话：Cue 写的开新会话请求（还在库里的）按认领标识对上的会话记录，时刻是那条记录写下的时候（开它的那台 Mac 的时钟）。
+  /// 请求写下时会话还没有，对上记录才算开出来了。
+  public func cueOpenedSessions() throws -> [CueOpenedSession] {
+    try db.query(
+      """
+      SELECT s.sessionID, r.cardID, s.createdAt FROM deliveryRequests r
+        JOIN piSessionStates s ON s.launchToken = CASE WHEN json_valid(r.content) THEN json_extract(r.content, '$.token') END
+      WHERE r.origin = '\(DeliveryOrigin.cue.rawValue)' AND r.mode = '\(DeliveryMode.start.rawValue)'
+      ORDER BY s.createdAt
+      """
+    ) { CueOpenedSession(session: $0.text(0), card: $0.uuidOrNil(1), at: $0.date(2)) }
+  }
+
   /// 等到投送请求有结果（已送达或没能送达）：订阅库的变化，别的进程（执行它的 Mac 上的 App、同步拉回的结果）写下也收得到。
-  /// 请求在等待期间被删掉时抛 `CueStoreError.notFound`。
-  public nonisolated func outcome(of request: UUID) async throws -> DeliveryRequest {
-    for try await current in observe({ try $0.deliveryRequest(request) }) {
+  /// 请求在等待期间被撤回、清理时抛 `CueStoreError.notFound`。
+  public nonisolated func outcome(of request: DeliveryRequest) async throws -> DeliveryRequest {
+    for try await current in observe({ try $0.latest(of: request) }) {
       guard let current else { throw CueStoreError.notFound }
       if !current.isOpen { return current }
     }
     throw CancellationError()
+  }
+
+  /// 投送请求此刻的样子：记录还在就是它；发出的话已成了对话里的消息（请求随之收走，见 `applyTranscript`）就是已送达；
+  /// 都不是（撤回、清理了）为 nil。
+  public func latest(of request: DeliveryRequest) throws -> DeliveryRequest? {
+    if let current = try deliveryRequest(request.id) { return current }
+    guard try db.first("SELECT 1 FROM piMessages WHERE deliveryID = ?", [request.id], { _ in true }) != nil else { return nil }
+    var arrived = request
+    arrived.status = .known(.succeeded)
+    return arrived
   }
 
   /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
@@ -224,31 +247,32 @@ extension CueStore {
   /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 没能送达的话（`send`）在对话里留着等用户重发或移除（重发写成后移除它），Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`），
-  /// 两者都只在完成早于 `undeliveredCutoff` 时清理。
-  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
+  /// 发出的话（`send`）不按保留期清：送到的等它成了对话里的消息时随之收走（`applyTranscript`），气泡才不会在进对话之前没了；
+  /// 没能送达的留着等用户重发或移除（重发写成后移除它）。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
+  /// 这几种都至多留到完成早于 `keptCutoff`。
+  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
-    let undelivered = """
-      status = 'failed' AND (mode = '\(DeliveryMode.send.rawValue)' OR origin IS '\(DeliveryOrigin.cue.rawValue)') AND completedAt >= ?3
+    let kept = """
+      completedAt >= ?3 AND (mode = '\(DeliveryMode.send.rawValue)' OR (status = 'failed' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
       """
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?2
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
         AND \(Self.launchUnclaimed)
       """
-    let arguments: [any SQLBindable] = [cutoff, claimCutoff, undeliveredCutoff]
+    let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
     return try write {
       try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(undelivered))",
+        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
         arguments)
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(undelivered))", arguments) { _ in true } != nil
+      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
     }
   }
 
 }
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
-/// 把结果写回请求；完成的请求保留 `retention` 后清理（等认领的开新会话请求最多留到 `maxAge`，见 `deleteCompletedDeliveries`）。
+/// 把结果写回请求；完成的请求保留 `retention` 后清理（发出的话等它进对话、等认领的开新会话请求等认领，见 `deleteCompletedDeliveries`）。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 暂时没成的（`DeliveryOutcome.transient`）重试一次，再不成按失败写回；
@@ -374,8 +398,8 @@ public actor DeliveryExecutor {
     CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
-  /// 没能送达的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
-  private static let undeliveredRetention: TimeInterval = 7 * 86_400
+  /// 发出的话与 Cue 的失败请求最多留多久（与对话的保留期一样是 7 天）。
+  private static let keptRetention: TimeInterval = 7 * 86_400
 
   private func scheduleCleanup() {
     guard cleanup == nil else { return }
@@ -391,7 +415,7 @@ public actor DeliveryExecutor {
     let now = timing.now()
     return try await store.deleteCompletedDeliveries(
       before: now.addingTimeInterval(-retention.seconds), claimCutoff: now.addingTimeInterval(-maxAge.seconds),
-      undeliveredCutoff: now.addingTimeInterval(-Self.undeliveredRetention))
+      keptCutoff: now.addingTimeInterval(-Self.keptRetention))
   }
 
   private func cleanupFinished(rescheduling: Bool) {

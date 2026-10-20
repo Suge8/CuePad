@@ -210,6 +210,7 @@ DEFINE SCHEMA
         askRule       ENCRYPTED STRING,
         askShots      ENCRYPTED STRING,
         setAsideBy    STRING,
+        wake          STRING,
         acceptance    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -248,9 +249,9 @@ DEFINE SCHEMA
         detail        ENCRYPTED STRING,
         modifiedAt    INT64,
         round         STRING,
-        woke          STRING,
         context       STRING,
         leftToYou     STRING,
+        woke          STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

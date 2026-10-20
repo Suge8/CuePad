@@ -24,8 +24,8 @@ import Testing
   @Test func purgingCardKeepsImagesOthersStillReferenceAndDropsTheRest() async throws {
     let shared = try await image(0.1)
     let solo = try await image(0.2)
-    let doomed = try await store.createCard(in: nil, body: ref(shared) + ref(solo))
-    _ = try await store.createCard(in: nil, body: ref(shared))
+    let doomed = try await store.createCard(body: ref(shared) + ref(solo))
+    _ = try await store.createCard(body: ref(shared))
 
     try await store.purgeCard(doomed.id)
 
@@ -35,8 +35,8 @@ import Testing
 
   @Test func imageReferencedOnlyByTrashedCardSurvivesUntilThatCardIsPurged() async throws {
     let hash = try await image(0.1)
-    let kept = try await store.createCard(in: nil, body: ref(hash))
-    let other = try await store.createCard(in: nil, body: ref(hash))
+    let kept = try await store.createCard(body: ref(hash))
+    let other = try await store.createCard(body: ref(hash))
     try await store.trashCard(kept.id)
 
     try await store.purgeCard(other.id)
@@ -48,7 +48,7 @@ import Testing
 
   @Test func imageNotYetInsertedIntoAnyCardIsNotTouchedByUnrelatedPurges() async throws {
     let pending = try await image(0.1)  // 刚粘贴、正文还没保存
-    let card = try await store.createCard(in: nil, body: "plain")
+    let card = try await store.createCard(body: "plain")
     try await store.purgeCard(card.id)
     #expect(try exists(pending))
   }
@@ -56,7 +56,7 @@ import Testing
   @Test func imageReferencedBySendRecordSnapshotSurvivesPurgingItsCard() async throws {
     let sent = try await image(0.1)
     let unsent = try await image(0.2)
-    let card = try await store.createCard(in: nil, body: ref(sent) + ref(unsent))
+    let card = try await store.createCard(body: ref(sent) + ref(unsent))
     try await store.recordSend(
       ref(sent), to: SendTarget(kind: .piSession, name: "s", ref: "s1"), card: card.id)  // 快照只含 sent
 
@@ -69,7 +69,7 @@ import Testing
   /// 你在 Cue 页发的图片：卡片永久删除后，Cue 对话里还引用着就留着。
   @Test func imageStillInTheCueConversationSurvivesPurgingItsCard() async throws {
     let hash = try await image(0.1)
-    let card = try await store.createCard(in: nil, body: ref(hash))
+    let card = try await store.createCard(body: ref(hash))
     try await store.addCueMessage(.you, text: ref(hash))
     try await store.purgeCard(card.id)
     #expect(try exists(hash))

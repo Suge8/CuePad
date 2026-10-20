@@ -70,7 +70,7 @@ enum IOSInteractionBench {
         guard projects.count >= 2 else { fail("演示库里不到两个项目") }
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
         guard let task = tasks.first else { fail("演示库里没有任务") }
-        guard let idea = try? await store.cards(in: nil).first else { fail("演示库里没有未分类的灵感") }
+        guard let idea = try? await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
         /// `press`：请测量脚本在这一点真按（长按或轻点由脚本按名字定），从手指按下起量；不给时从 `action` 发出起量。
         func step(_ name: String, window: Duration = .milliseconds(800), press: CGPoint? = nil, _ action: () -> Void = {}) async {
             guard wants(name) else { return }
@@ -176,9 +176,9 @@ enum IOSInteractionBench {
             try? await Task.sleep(for: .seconds(1))
         }
         if wants("长文打字·编辑页") {
-            // 从它所在的未分类页推入（同点开它的那条路）：直接从书架推入时 UIKit 的交互转场断言崩溃
+            // 从它所在的项目页推入（同点开它的那条路）：直接从书架推入时 UIKit 的交互转场断言崩溃
             try? await workspace.services.store.updateCard(card) { $0.body = text }
-            navigation.select(.unfiled)
+            navigation.select(.project(Project.defaultID))
             try? await Task.sleep(for: .seconds(1.5))
             navigation.push(.card(card))
             await type("编辑页", into: CueTextView.self, pastes: false)

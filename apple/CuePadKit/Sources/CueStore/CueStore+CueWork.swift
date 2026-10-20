@@ -8,12 +8,8 @@ public struct HandOffPlan: Equatable, Sendable {
   public enum Destination: Equatable, Sendable {
     /// 叶子绑着的会话：Pi 的会话 id、显示名、由哪台 Mac 执行（会话所在的那台；记录还没到时是发起的这台，手机上为 nil）。
     case session(id: String, title: String, host: String?)
-    /// 在项目绑定的文件夹开新会话，由绑了文件夹的那台 Mac 执行（发起的这台绑了就是它）。
+    /// 在项目的文件夹开新会话，由 `CueStore.launchHost` 定的那台 Mac 执行（那台没绑文件夹时它先建工作区）。
     case launch(project: UUID, host: String)
-    /// 项目哪台 Mac 都没绑文件夹，开不了会话。
-    case noFolder(project: UUID, projectName: String)
-    /// 未分类的任务没有文件夹，开不了会话。
-    case unfiled
   }
 
   /// 交给会话的叶子。
@@ -25,25 +21,31 @@ public struct HandOffPlan: Equatable, Sendable {
   public var name: String?
 }
 
-/// Cue 眼里的一个项目（`CueStore.cueProjects`）。
-public struct CueProject: Identifiable, Equatable, Sendable {
-  public var id: UUID
-  public var name: String
-  /// 绑了文件夹（开得了会话）。
-  public var hasFolder: Bool
-
-  public init(id: UUID, name: String, hasFolder: Bool) {
-    self.id = id
-    self.name = name
-    self.hasFolder = hasFolder
-  }
-}
-
-/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`CueStore.cueBoardActive`）归值班的 Cue 管，其余是你手上的清单。
+/// 看板（`CueStore.cueBoard`）：没做完的事，加上不归没做完的事的活会话。在做的（`active`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
   /// 不归没做完的事的活会话（`CueStore.isLoose`：他直接开的、终端里的，和只有已完成的事绑着的），最近有动静的在前。
   public var sessions: [PiSessionState]
+
+  /// 在做的：在做的事（`CueBoardItem.isActive`）按看板顺序，再是不归没做完的事的活会话。信封与 peek 的"在做"、在管（`CueTally`）都是它；
+  /// 会话都结束了、没人在做的事不在内，留在你手上的清单里。只问有没有时读 `CueStore.cueBoardActive`（同一条规则，不读整块看板）。
+  public var active: [CueWork] { tasks.filter(\.isActive).map(CueWork.task) + sessions.map(CueWork.session) }
+}
+
+/// 在做的一件（`CueBoard.active`）：在做的事，或不归没做完的事的活会话。
+public enum CueWork: Identifiable, Equatable, Sendable {
+  case task(CueBoardItem)
+  case session(PiSessionState)
+
+  public var id: String {
+    switch self {
+    case .task(let item): "task/\(item.id.uuidString)"
+    case .session(let state): "session/\(state.sessionID)"
+    }
+  }
+
+  /// 在做的事的顶层任务；会话为 nil。
+  public var task: Card? { if case .task(let item) = self { item.task } else { nil } }
 }
 
 /// 看板上的一件事：一个没做完的顶层任务。在做的（`isActive`）归值班的 Cue 管，其余是你手上的清单。
@@ -77,7 +79,7 @@ public struct CueBoardLeaf: Equatable, Sendable {
 
 /// 某时刻之后，有会话的事或不归没做完的事的会话里的一处变化。
 public struct CueChange: Equatable, Sendable {
-  public enum Kind: String, Sendable, CaseIterable {
+  public enum Kind: String, Codable, Sendable, CaseIterable {
     /// 会话停下：这一轮做完歇下，或做到一半被打断（`interrupted`，会话状态是 `PiWorkState.interrupted`）
     case settled
     /// 会话在等回答
@@ -101,7 +103,7 @@ public struct CueChange: Equatable, Sendable {
   public var leaf: Card?
   /// 变化所在的会话；任务完成这类不在会话上的变化为 nil。
   public var session: PiSessionState?
-  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的、扩展投进来的机器消息开的都不算。
+  /// 这一轮是他直接在会话里说的（`CueStore.turnOpener`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
   public var byUser: Bool
   /// 事件发生的时刻（给 Cue 看）；分新旧看 `seq`
   public var at: Date
@@ -251,9 +253,9 @@ extension CueStore {
   /// 任务交到哪：给任务，按它干活的叶子（`homeLeaf`）定。界面的"开始"、手机的发给 Agent 与 Cue 的开工都按它：
   /// 1. 叶子绑着会话，就交给那个会话；
   /// 2. 没绑，而同一件事的别的步骤绑着会话（`continuableSession`），就接着用它（上下文不丢；话送到时叶子绑上它；已结束的执行时先恢复）；
-  /// 3. 否则在项目绑定的文件夹开一个以叶子标题命名的新会话（这台 Mac 绑了就在这台，否则别的 Mac 里按名字排第一台）。
+  /// 3. 否则在项目的文件夹开一个以叶子标题命名的新会话，由哪台 Mac 开见 `launchHost`。
   /// `fresh` 跳过 1、2，总是开新会话（界面"绑定会话"里的"开新会话"、Cue 开工带 fresh）；`agent` 给了就只接着用这一家的会话。
-  /// `host` 是发起的这台 Mac，手机为 nil。不是任务抛 `notATask`。
+  /// `host` 是发起的这台 Mac，手机为 nil。不是任务抛 `notATask`；要开新会话而一台 Mac 都没有（只会在手机上）抛 `noMac`。
   public func handOffPlan(_ task: UUID, host: String?, fresh: Bool = false, agent: AgentKind? = nil) throws -> HandOffPlan {
     let leaf = try workingLeaf(of: task)
     return HandOffPlan(
@@ -268,17 +270,14 @@ extension CueStore {
     if !fresh, let session = try continuableSession(for: leaf.id, agent: agent) {
       return .session(id: session.sessionID, title: session.title, host: session.hostID)
     }
-    guard let project = leaf.projectID else { return .unfiled }
-    guard let launchHost = try launchHost(for: project, preferring: host) else {
-      return .noFolder(project: project, projectName: try find(Project.self, project)?.name ?? "")
-    }
-    return .launch(project: project, host: launchHost)
+    guard let launchHost = try launchHost(for: leaf.projectID, preferring: host) else { throw CueStoreError.noMac }
+    return .launch(project: leaf.projectID, host: launchHost)
   }
 
   /// 开工：把叶子（没有步骤的任务）的正文（标题连同下面的话）作为第一句交到 `handOffPlan` 定下的地方（界面的"开始"与 Cue 的 start
   /// 同一条规则，含接着用上一步的会话与 `fresh`）：接着用上一步的会话时是它的下一句（规则同 `speak`），开新会话时它是第一句。正文发出后留在任务上。
   /// 接着用上一步的会话时，话送到才绑上（同开新会话"开成了才绑"），送到前算发送中（`sendingLeaves`）。
-  /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`，开不了会话抛 `noFolder`。
+  /// 叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`。
   /// `agent` 给了就只接着用这一家的会话；`agent`、`model`（这家的写法，`AgentKind.modelKey`）与 `thinking` 只用于开新会话，
   /// 开哪家见 `launchAgent`。
   public func startLeaf(
@@ -301,8 +300,6 @@ extension CueStore {
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
         agent: kind, model: key, thinking: thinking)
       return try requestLaunch(launch, title: plan.name ?? "", on: host, card: card.id, cue: cue)
-    case .noFolder(_, let projectName): throw CueStoreError.noFolder(projectName)
-    case .unfiled: throw CueStoreError.noFolder("")
     }
   }
 
@@ -405,19 +402,17 @@ extension CueStore {
     return try turnOpener(sessionID) == .user
   }
 
-  /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记与他那一轮里 Cue 不插嘴都只认它）：
-  /// 取会话里最近一条你一方或机器的消息——机器消息（扩展投进来的，如 FireCode 交回结果）既不算他的也不算 Cue 的；
-  /// 你一方的按来源分（`PiChatMessage.saidByCue`）。会话里还没有这两种消息为 nil。
+  /// 会话最近（或正在跑）的这一轮是谁开的，唯一的一处（"他说的"标记、他那一轮里 Cue 不插嘴、停下归谁接手都只认它）：
+  /// 取会话里最近一句你一方的话，按来源分（`PiChatMessage.saidByCue`）。扩展投进来的机器消息（FireCode 交回子代理结果、审查结论）
+  /// 开的轮不另算：它是那句话派出去的活交回来了，同等子代理只歇下一次一样，从那句起到真正歇下是一件事。会话里还没有你一方的话为 nil。
   private func turnOpener(_ sessionID: String) throws -> TurnOpener? {
     guard let last = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.machine.rawValue)')", [sessionID],
-      orderBy: "seq DESC, id DESC", limit: 1
+      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
     ).first else { return nil }
-    guard last.role == .known(.user) else { return .machine }
     return last.saidByCue(try cueSentDeliveries(among: [last.deliveryID].compactMap(\.self))) ? .cue : .user
   }
 
-  private enum TurnOpener { case user, cue, machine }
+  private enum TurnOpener { case user, cue }
 
   /// 这些叶子里正在开新会话的：带着叶子的开新会话请求还在路上，或成功了、会话记录还没到（还没认领）。
   /// 只认会被认领的那条（同 `claimLaunchedCards`）：它是带着这张卡的最近一次交给；之后又交给了别处，或亲手绑定、解绑作废了它（`forgetLaunches`），就不算。
@@ -444,11 +439,20 @@ extension CueStore {
   }
 
   /// 项目在哪台 Mac 上绑了文件夹：这台 Mac 绑了就是它，否则别的 Mac 里按名字排第一台；都没绑为 nil。
-  private func launchHost(for project: UUID, preferring host: String?) throws -> String? {
+  /// 在项目里开新会话由哪台 Mac 开（`host` 是发起的这台，手机为 nil）：项目绑着文件夹就在绑了的那台（发起的这台绑了就是它，
+  /// 否则按 Mac 名排第一台）——那里是它真正的代码；哪台都没绑时是发起的这台，手机发起的是 `workMac`。那台 Mac 开工时建工作区并绑定
+  /// （`MacExecutor`）。一台 Mac 都没有为 nil。
+  public func launchHost(for project: UUID, preferring host: String?) throws -> String? {
     if let host, try directory(of: project) != nil { return host }
     let hosts = try db.query(
       "SELECT hostID FROM directoryBindings WHERE projectID = ? ORDER BY \(DirectoryBinding.macNameSQL), hostID", [project]) { $0.text(0) }
-    return host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first
+    return try host.flatMap { hosts.contains($0) ? $0 : nil } ?? hosts.first ?? host ?? workMac()
+  }
+
+  /// 手机上没绑文件夹的项目交给哪台 Mac：Cue 运行的那台（活本来就在那里派），没启用 Cue 时按名字排第一台；一台 Mac 都没有为 nil。
+  public func workMac() throws -> String? {
+    if let host = try cueProfile()?.activeHost { return host }
+    return try allMacAgents().first?.hostID
   }
 
   /// 一句话作为提问的答案：选择题给选项原文或从 1 起的序号，收自己写的回答的（`PiQuestion.allowsOther`）其余文字照写；
@@ -493,19 +497,21 @@ extension CueStore {
 
   /// Cue 做完一件事：算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的步骤抛 `stepsRemaining`、什么都不改；否则完成它，
   /// 结束没人再用的会话（`endUnusedSessions`，同你点圆圈 `toggleDone`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果
-  /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。
+  /// （`CueReport.text`：标题加证据要点，关联任务）：做完告诉你；你不认可就把它改回没做完，或直接告诉 Cue。结果上只挂 Cue 点名的图（`shots`，
+  /// 证明结论的最终成果、`CueShot.checked` 过的），没点名就不挂；这件事发到手机的其余文件仍在它的会话里。点名的不在发到手机的里抛 `shotMissing`、什么都不改。
   /// 已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。
   /// 证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（步骤与已完成的为 nil）与结束请求。
   @discardableResult
-  public func finishTask(_ task: UUID, evidence: [String]) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
+  public func finishTask(_ task: UUID, evidence: [String], shots: [CueShot] = []) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
       try checkStepsDone(task)
+      try checkShots(shots)
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let finished = card.status != .done
       _ = try applyStatus(task, .done)
       let ended = try endUnusedSessions(of: task, cue: true)
       guard finished, card.parentID == nil else { return (nil, ended) }
-      return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), task: task), ended)
+      return (try insertCueMessage(.cue, text: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task), ended)
     }
   }
 
@@ -641,21 +647,15 @@ extension CueStore {
 
   // MARK: 看板与变化
 
-  /// 所有项目（没进回收站的，顺序同 `projects()`）与有没有绑文件夹（本机或任何一台 Mac）：Cue 据此知道活能放进哪里、哪里开得了会话。
-  public func cueProjects() throws -> [CueProject] {
-    let bound = Set(try db.query("SELECT projectID FROM projectDirectories UNION SELECT projectID FROM directoryBindings") { $0.uuid(0) })
-    return try projects().map { CueProject(id: $0.id, name: $0.name, hasFolder: bound.contains($0.id)) }
-  }
-
-  /// 看板在不在做事的唯一规则：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
+  /// 看板在不在做事（`CueBoard.active` 不为空）：有不归没做完的事的活会话，或有在做的事（`CueBoardItem.isActive`）。
   /// 不读整块看板、有活会话就不看各件事：值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
   public func cueBoardActive() throws -> Bool {
     try db.first("SELECT 1 FROM piSessionStates WHERE \(Self.isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
       || boardItems(try topTasks(where: Self.onBoard)).contains(where: \.isActive)
   }
 
-  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
-  /// 在做的（`cueBoardActive`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化与 peek 都按它。
+  /// 看板：所有没做完的顶层任务（没删除、没归档），按项目顺序，同项目按手动顺序；加上不归没做完的事的活会话（`isLoose`）。
+  /// 在做的（`CueBoard.active`）是值班的 Cue 管的，其余是你手上的清单（Cue 巡视时看）。信封、变化、peek 与在管都按它。
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
@@ -738,7 +738,7 @@ extension CueStore {
   /// （这些从 `marks.sessions` 之后算；还没开成会话的事也报），叶子或任务完成（从 `marks.tasks` 之后算），
   /// 等子代理停住（停住的时刻在 `marks.stalls` 之后、不晚于 `now`；序号是会话记录的）。等子代理本身不是变化：子代理的结果交回、会话为它跑完那一轮歇下才报。
   /// 会话里用户说的话不另报：他那一轮歇下时变化标着这一轮是他说的（`CueChange.byUser`）。
-  /// 会话停着（`CueChange.isStop`）归谁接手只在这里定（`hisStop`）：Cue 开的这一轮归 Cue；他或机器开的、停下时他在场（`SessionPresence`）归他，
+  /// 会话停着（`CueChange.isStop`）归谁接手只在这里定（`hisStop`）：Cue 开的这一轮归 Cue；他开的（机器消息开的跟着它之前那句，见 `turnOpener`）、停下时他在场（`SessionPresence`）归他，
   /// 不报给 Cue、记进 `held`。管理器把上次的 `held` 交回来：归他的停下等他离开，会话还停在那一次、也没留给他（`CueLeft`）就作为变化报给 Cue。
   public func cueChanges(after marks: CueMarks, held: [String: Date] = [:], at now: Date = .now) throws -> CueChanges {
     var held = held
@@ -962,26 +962,23 @@ extension CueStore {
   }
 
 
-  /// 一批顶层任务各自的交付物（唯一的规则）：任务与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
+  /// 一件顶层任务的交付物（唯一的规则）：它与它的步骤用过的会话（正在用的与换下来的，`Card.formerSessionIDs`）
   /// 在任务开工（`Card.startedSQL`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
-  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 页里一句话下面挂哪几份按话的先后再切（`CueThread`）。没有的任务不在结果里。
-  public func deliverables(of tasks: [UUID]) throws -> [UUID: [PiPreview]] {
-    guard !tasks.isEmpty else { return [:] }
-    let rows = try db.query(
+  /// 不另记"哪些是交付物"：会话发到手机本来就是给人看的。Cue 在 peek 里看这份清单，做完时从中点名要挂在结果上的几张（`finishTask` 的 shots）。
+  public func deliverables(of task: UUID) throws -> [PiPreview] {
+    try db.query(
       """
-      WITH tops(id) AS (SELECT value FROM json_each(?1)),
-      used(task, session) AS (
-        SELECT COALESCE(c.parentID, c.id), c.piSessionID FROM cards c
-        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.piSessionID IS NOT NULL
-        UNION SELECT COALESCE(c.parentID, c.id), f.value FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE (c.id IN tops OR c.parentID IN tops) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
-      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", ")), u.task
-      FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = u.task
+      WITH used(session) AS (
+        SELECT piSessionID FROM cards
+        WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND deletedAt IS NULL AND piSessionID IS NOT NULL
+        UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
+        WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
+      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", "))
+      FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
       WHERE p.createdAt >= COALESCE(\(Card.startedSQL("t")), t.todoAt)
       ORDER BY p.createdAt, p.id
-      """, [Self.idList(tasks)]
-    ) { (task: $0.uuid(Int32(PiPreview.columns.count)), preview: PiPreview(row: $0)) }
-    return Dictionary(grouping: rows, by: \.task).mapValues { $0.map(\.preview) }
+      """, [task]
+    ) { PiPreview(row: $0) }
   }
 
   private func topTasks(

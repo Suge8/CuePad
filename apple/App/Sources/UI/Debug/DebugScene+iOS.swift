@@ -4,18 +4,19 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、unfiled、editor、tasks（任务页，窄屏底部与宽屏侧栏的"任务"）、agent（会话页，窄屏底部与宽屏侧栏的"会话"）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
+/// iOS 画面（`-CuePadScene`）：shelf（书架，窄屏底部的"项目"、宽屏侧栏的"全部项目"）、cue（Cue 页，iPad 侧栏展开；`-CuePadCuePanel YES` 页头一出现就展开成面板（`end` 再滚到面板底），`-CuePadPanelCycle YES` 就绪后反复开合；`-CuePadCuePresence disabled` 看启用卡）、cuememory（再打开"Cue 记得什么"）、cuesettings（再推入 Cue 的设置）、project、older、editor、tasks（任务页，窄屏底部与宽屏侧栏的"任务"）、agent（会话页，窄屏底部与宽屏侧栏的"会话"）、send、search、trash、archive、settings、sidebar（iPad 展开侧栏）；不给是打开 App 的第一屏（Cue 页）。
 /// search 是搜索页，出现即聚焦并填入 `-CuePadSearch`；`-CuePadSearchScope sessions` 打开在会话那一栏。
 /// task 打开进行中第一条的任务气泡（没有落点、在上方居中；没有进行中的就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（`-CuePadNotify YES`：走点锁屏通知的那条路进去；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
 /// style：视觉样板（`StyleBoard`）盖在最上层；icons：图标总览（`IconSheet`，iPad 竖屏一屏）。
-/// widgets：小组件的小号与中号（`DebugWidgetStage`）；share：分享扩展的表单（`DebugShareStage`）。两者都盖在最上层。
+/// widgets：小组件的小号与中号（`DebugWidgetStage`）；activity：实时活动的各态（`DebugActivityStage`）；share：分享扩展的表单（`DebugShareStage`）。都盖在最上层。
 /// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态，对运行在它上面的 Cue 说的话也会交给 Cue（见 `runDemoMac`）。
 /// `-CuePadCuePresence away`（cue 画面）：一夜里 Cue 陆续说了几句，回到 Cue 页从新消息读起；`-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页、
 /// 那几句这时才来，再回到 Cue 页，录"离开很久后回来"的定位（`awayIfAsked`）。
+/// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有在管与等你），验收锁屏与灵动岛；`simctl io screenshot` 拍不到灵动岛，录一小段取帧。
 /// cuepanel：iPad 在项目页旁开着右侧 Cue 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     /// 模拟器当作接了电脑键盘、聚焦不弹软键盘：清掉输入法的硬件键盘布局后照常弹出（私有选择子，只在 Debug 里）。
@@ -42,7 +43,7 @@ extension DebugScene {
         func open(_ route: Route) { navigation.select(route) }
         func openCard() async {
             if let project { open(.project(project)) }
-            if let card = await card(in: project, store: workspace.services.store) { navigation.push(.card(card)) }
+            if let card = await card(in: project ?? Project.defaultID, store: workspace.services.store) { navigation.push(.card(card)) }
         }
         switch scene {
         case "shelf": open(.shelf)
@@ -54,14 +55,13 @@ extension DebugScene {
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
-        case "unfiled": open(.unfiled)
         case "trash": open(.trash)
         case "archive": open(.archive)
         case "settings": open(.settings)
         case "editor": await openCard()
         case "send":
             await openCard()
-            if let id = await card(in: project, store: workspace.services.store),
+            if let id = await card(in: project ?? Project.defaultID, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) {
                 let outbox = Outbox(content: Outgoing.text(of: card), card: id, project: project)
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
@@ -93,6 +93,8 @@ extension DebugScene {
             await seedCueRows(workspace.services)
             navigation.show(.agent)
         case "tasks":
+            // 看板的等你列：配 -CuePadDemo 时写入 Cue 的等你（会话在问的随演示 Mac 的会话来）
+            if defaults.bool(forKey: "CuePadDemo") { await seedCue(workspace.services) }
             navigation.show(.tasks)
         case "task":
             let store = workspace.services.store
@@ -115,13 +117,13 @@ extension DebugScene {
             if defaults.string(forKey: "CuePadBench") == "chatdepth" { Task { await ChatDepthBench.run() } }
         case "newsession":
             navigation.show(.agent)
-            var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（头部引导选文件夹）
+            var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（交给 Cue 那台 Mac 建工作区）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
                 sheet.launched = try? await workspace.services.launchSession(
                     in: table, prompt: "看看 scheduler 的重连问题", title: "圆桌", on: "demo-mac", card: nil, agent: .pi)
             }
-            navigation.startNewSession(sheet, hasProjects: workspace.catalog?.projects.isEmpty == false)
+            navigation.newSession = sheet
         case "folderpicker":
             // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
             let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"

@@ -48,11 +48,27 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
+  /// 两台设备离线时各自建了默认项目（同一个固定 id），各往里记了东西，Mac 上还改了名：同步后两边只有一个默认项目，
+  /// 名字是改过的那个（新装设备的那一版修改时间是 0，盖不回"默认"），两条灵感都在里面。
+  @Test func defaultProjectsCreatedOfflineOnTwoDevicesMergeIntoOne() async throws {
+    try await mac.store.updateProject(Project.defaultID) { $0.name = "收件" }
+    let fromMac = try await mac.store.createCard(body: "Mac 上记的")
+    let fromPhone = try await phone.store.createCard(body: "手机上记的")
+    try await cloud.exchange()
+    try await cloud.exchange()
+
+    for rig in [mac, phone] {
+      let homes = try await rig.store.projects().filter(\.isDefault)
+      #expect(homes.map(\.name) == ["收件"])
+      #expect(Set(try await rig.store.cards(in: Project.defaultID).map(\.id)) == [fromMac.id, fromPhone.id])
+    }
+  }
+
   /// Agent 发到手机的预览：Mac 写预览记录与文件，手机拿到记录和一模一样的文件；Mac 过期清理后手机的记录与文件也没了。
   @Test func aPreviewAndItsFileTravelToThePhoneAndGoWhenTheMacDropsIt() async throws {
     let source = mac.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: source)
-    let preview = try await mac.store.addPreviews(filesAt: [source], title: "登录页", sessionID: "s1")[0].preview
+    let preview = try await mac.store.addPreviews([(source, "登录页")], sessionID: "s1")[0].preview
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.previews(of: "s1").first)
@@ -88,11 +104,10 @@ import Testing
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
   }
 
+  /// 发出的话：手机写、Mac 执行，结果回到手机；Mac 把这句写进对话时收走请求，收走也同步到手机，气泡由对话里那条接替。
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
-    let executor = DeliveryExecutor(
-      store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
-    ) { _ in .succeeded }
+    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", timing: clock.timing, onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
@@ -105,11 +120,12 @@ import Testing
     #expect(roundTrip >= .zero && roundTrip < .seconds(60))
     #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
-    await clock.waitForSleeper()
-    clock.advance(.seconds(61))
-    _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
-    try await cloud.exchange()  // 清理同步过去
+    let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
+    try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: PiRecap()))
+    #expect(try await mac.store.deliveryRequest(request.id) == nil)
+    try await cloud.exchange()  // 收走同步过去
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
+    #expect(try await phone.store.piMessages(of: "s1").map(\.deliveryID) == [request.id])
     await executor.stop()
   }
 

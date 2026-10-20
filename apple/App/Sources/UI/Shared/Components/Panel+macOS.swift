@@ -25,7 +25,7 @@ extension View {
     func panelHost() -> some View { modifier(PanelHostModifier()) }
 }
 
-/// 本窗口此刻的浮层，后开的在上（右上角的面板总在模态浮层之下）。
+/// 本窗口此刻的浮层，后开的在上。
 @Observable
 final class PanelHost {
     struct Shown: Identifiable {
@@ -44,7 +44,7 @@ final class PanelHost {
     /// 模态浮层弹出前的焦点，收起后交还（同系统 sheet）；弹出时先让窗口交出焦点，打字不会落进下面的编辑器。
     @ObservationIgnored private var responders: [UUID: Weak<NSResponder>] = [:]
     /// 各浮层占的地方与弹出它的视图（`takes`）。
-    @ObservationIgnored fileprivate var bounds: [UUID: Bounds] = [:]
+    @ObservationIgnored fileprivate var areas: [UUID: Weak<NSView>] = [:]
     /// 有浮层时本窗口的按键与点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
 
@@ -69,13 +69,9 @@ final class PanelHost {
                 window.makeFirstResponder(nil)
             }
             if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
-        } else if case .bubble = entry.style {
-            // 气泡在右上角的面板之上（从面板里的任务点开的也盖在它上面），外面那一下先关它。
-            // 焦点交出去、收起时不交还（同点在别处）：开着时打字不落进下面的输入栏；交还的话换一条时输入栏要先展开再收起，大库里一次多约 2000M 指令
-            window?.makeFirstResponder(nil)
-            withAnimation(Motion.snappy) { shown.append(entry) }
         } else {
-            withAnimation(Motion.snappy) { shown.insert(entry, at: 0) }
+            // 气泡：不动焦点（同系统 popover）：输入栏聚焦时交出焦点，它要收起再重排，开一次多约 800M 指令、点击回合多十几毫秒（实测）
+            withAnimation(Motion.snappy) { shown.append(entry) }
         }
         if monitor == nil {
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
@@ -91,7 +87,7 @@ final class PanelHost {
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
-        bounds[id] = nil
+        areas[id] = nil
         released(id)
     }
 
@@ -113,8 +109,7 @@ final class PanelHost {
     }
 
     /// 这个事件由浮层接下（不再交给窗口）则为真。关法只有一套：Esc 或在最上面那一层外面按下鼠标（左右键、本窗口任意处，含工具栏），关它。
-    /// 这一下交不交给下面同系统：模态的接下（sheet 外点不穿透）；右上角的面板同 SwiftUI 的 popover（实测），照常落到下面，
-    /// 只有落在弹出它的视图（锚点，如侧栏的"任务"）上时接下——否则它松开时又把面板开回来。
+    /// 这一下交不交给下面同系统：模态的接下（sheet 外点不穿透）；气泡照常落到下面（点另一条任务就是换成它的气泡）。
     /// 模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的
     /// 输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），不问整个窗口。
     /// 不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
@@ -129,10 +124,9 @@ final class PanelHost {
             if NSApp.mainMenu?.performKeyEquivalent(with: event) != true { _ = (window.firstResponder as? NSView)?.performKeyEquivalent(with: event) }
             return true
         }
-        let bounds = bounds[top.id]
-        if bounds?.panel.contains(event) == true { return false }
+        if areas[top.id]?.contains(event) == true { return false }
         top.close()
-        return top.modal || bounds?.anchor.contains(event) == true
+        return top.modal
     }
 
     private static let escape: UInt16 = 53
@@ -148,12 +142,6 @@ extension Weak<NSView> {
         guard let value else { return false }
         return value.bounds.contains(value.convert(event.locationInWindow, from: nil))
     }
-}
-
-/// 一个浮层占的地方（`PanelLayer` 垫在内容下面）与弹出它的视图（`WindowPanel` 垫在调用处下面，开着时才有）。
-private struct Bounds {
-    var panel = Weak<NSView>()
-    var anchor = Weak<NSView>()
 }
 
 /// 垫在一块界面下面、量它占的地方的空视图（不接点按）；建好时交给 `mark` 登记。
@@ -186,9 +174,6 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background {
-                if key != nil { AreaMark { [host, token] in host.bounds[token, default: Bounds()].anchor.value = $0 } }
-            }
             .onChange(of: Mode(key: key, retained: retained), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
                     host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close, open: mode.key != nil)
@@ -241,8 +226,7 @@ private struct WindowReader: NSViewRepresentable {
 }
 
 /// 浮层那一层。模态的：压暗整窗的底（挡住下面的悬停与滚动），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
-/// 右上角的面板：页面轻轻压暗（不拦点按，背后透出来的卡片不和面板里的字抢），面板原地淡入淡出、不滑动——位置逐帧变时，AppKit 每帧
-/// 重算整窗的鼠标跟踪区并重设光标（`NSTrackingAreaAKManager setCursorForMouseLocation`），前台每次开合 17～19 帧超时；淡入淡出不改几何，没有这笔。
+/// 气泡（不压暗）摆法在 `BubbleFrame`。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette
@@ -252,15 +236,8 @@ private struct PanelLayer: View {
 
     var body: some View {
         ZStack {
-            if host.shown.contains(where: { $0.style == .side }) {
-                palette.backdrop.ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
-            }
             ForEach(host.shown) { shown in
-                switch shown.style {
-                case .sheet, .fullScreen: modal(shown)
-                case .side: side(shown)
-                case .bubble: EmptyView()
-                }
+                if shown.modal { modal(shown) }
             }
             bubbles
         }
@@ -288,14 +265,6 @@ private struct PanelLayer: View {
         }
     }
 
-    private func side(_ shown: PanelHost.Shown) -> some View {
-        shown.content
-            .background { area(shown.id) }
-            .padding(.trailing, 12).padding(.top, 6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .transition(.opacity)
-    }
-
     /// 气泡：量窗口的那一层一直在，气泡在它里面进出（进出场要挂在被插入、移除的那一层上）；顶上让出工具栏那一条。
     private var bubbles: some View {
         GeometryReader { proxy in
@@ -312,10 +281,12 @@ private struct PanelLayer: View {
         .ignoresSafeArea()
     }
 
-    private static let bubbleInsets = EdgeInsets(top: 52, leading: 12, bottom: 12, trailing: 12)
+    /// 顶上让出工具栏那一条。
+    private static let bubbleInsets = EdgeInsets(
+        top: 52, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
 
     private func area(_ id: UUID) -> some View {
-        AreaMark { [host] in host.bounds[id, default: Bounds()].panel.value = $0 }
+        AreaMark { [host] in host.areas[id] = Weak(value: $0) }
     }
 }
 

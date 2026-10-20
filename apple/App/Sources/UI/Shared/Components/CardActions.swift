@@ -41,8 +41,6 @@ struct CardActions: View {
                 Button(project.name) { workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) } }
                     .disabled(card.parentID == nil && project.id == here)
             }
-            Button(CaptureCopy.unfiled) { workspace.perform { try await $0.moveCard(id, to: .top(project: nil), after: nil) } }
-                .disabled(card.parentID == nil && here == nil)
         }
     }
 }

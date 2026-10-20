@@ -185,12 +185,10 @@ struct AgentIntegrationTests {
         try await integration().install(.pi)
         let moved = root.appending(path: "Other/CuePad.app/Contents/Helpers/cuepad")
 
-        for kind in [AgentKind.pi] {
-            #expect(await integration(cuepad: moved).status(of: kind).files == .outdated)
-            try await integration(cuepad: moved).install(kind)
-            #expect(try String(contentsOf: skillFile(kind), encoding: .utf8).contains(moved.path))
-            #expect(await integration(cuepad: moved).status(of: kind).files == .current)
-        }
+        #expect(await integration(cuepad: moved).status(of: .pi).files == .outdated)
+        try await integration(cuepad: moved).install(.pi)
+        #expect(try String(contentsOf: skillFile(.pi), encoding: .utf8).contains(moved.path))
+        #expect(await integration(cuepad: moved).status(of: .pi).files == .current)
     }
 
     @Test func anOlderPiExtensionIsOutdatedAndInstallUpgradesIt() async throws {

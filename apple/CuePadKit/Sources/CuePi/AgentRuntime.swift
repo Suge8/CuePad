@@ -75,6 +75,9 @@ public protocol AgentRuntime: AnyObject {
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript
     /// 历史索引读到了这家的一个会话文件（开着的会话增量跟读）：会话状态有要从文件里得知的，由接入自己取。
     func read(_ update: PiHistoryUpdate)
+    /// 这家哪些会话归 CuePad 管（与索引同一个范围，App 随接入换）：终端里开的会话在范围里才接上桥，已接上的出了范围就下桥，
+    /// 每次换了范围补上此刻在跑的。托管的会话不受它管。启动后、给范围之前一个终端会话都不接。
+    func follow(_ scope: PiHistoryScope)
 }
 
 extension AgentRuntime {
@@ -95,6 +98,9 @@ extension AgentRuntime {
 
     /// 状态全来自 Agent 自己报的，用不着会话文件。
     public func read(_ update: PiHistoryUpdate) {}
+
+    /// 终端里的会话不经接入上报（Pi 经桥扩展，装了才有）或整个接入只在接入期间运行（OpenCode）。
+    public func follow(_ scope: PiHistoryScope) {}
 
     /// 会话文件里的：从头读一遍。
     public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript {

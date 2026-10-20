@@ -30,7 +30,7 @@ import Testing
     let server = ScriptedServer([{ _ in throw CKError(.zoneNotFound) }])
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let card = try await rig.store.createCard(in: nil, body: "新装后第一条")
+    let card = try await rig.store.createCard(body: "新装后第一条")
 
     #expect(await sender.send([rig.id(card.id)]))
     #expect(await server.zonesSaved == 1)
@@ -43,19 +43,20 @@ import Testing
     let limited = CKError(.requestRateLimited, userInfo: [CKErrorRetryAfterKey: 60.0])
     let server = ScriptedServer([{ records in SentRecords(saved: [records[0]], failedSaves: [(records[1], limited)]) }])
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
-    _ = try await rig.store.createCard(in: nil, body: "一")
-    _ = try await rig.store.createCard(in: nil, body: "二")
+    try await rig.simulatePush()  // 新库的默认项目先传上去
+    _ = try await rig.store.createCard(body: "一")
+    _ = try await rig.store.createCard(body: "二")
     await sender.start()
     await sender.flush()
 
-    try await Task.sleep(for: .milliseconds(300))
+    await quietPeriod(.milliseconds(300))
     #expect(await server.uploads.count == 1)
     #expect(try await rig.reconcileDelta().saves.count == 1)  // 被限流的那条仍待推送
     await sender.stop()
   }
 
   /// 一轮做完、回答落进对话：手机多久看到回答取决于它多快传上去。回答（对话与会话近况）随本机提交在合并窗口后就发，
-  /// 不等会话状态细节的节流（这时还挂着一条工作中的细节）。
+  /// 不等会话状态细节的节流（这时还挂着一条工作中的细节；节流走手动时钟、永不到点，等它就会等到测试时限）。
   @Test func aNewReplyIsUploadedRightAfterItIsWritten() async throws {
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
@@ -67,15 +68,12 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 挂起的细节
     await sender.flush()  // 发送者闲下来：回答从提交触发开始算
 
-    let written = ContinuousClock.now
     let reply = PiChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "改好了，测试全过", at: .now)
     try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [reply], recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了，测试全过")))
     let message = try #require(try RawDB(rig.fixture.url).rows("SELECT id FROM piMessages").first?[0])
     await server.waitUntil { batches in
       batches.contains { $0.saves.contains(message) } && batches.filter { $0.saves.contains(state) }.count >= 2
     }
-
-    #expect(ContinuousClock.now - written < .seconds(1))  // 合并窗口 0.3 秒加一次上传
     await sender.stop()
   }
 }

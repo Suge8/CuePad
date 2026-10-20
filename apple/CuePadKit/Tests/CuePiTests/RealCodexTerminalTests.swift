@@ -73,6 +73,7 @@ struct RealCodexTerminalTests {
                 bridge: later, paths: rig.codex.paths, hooks: rig.hooks, codex: { [locator = rig.codex.locator] in locator.candidates("codex").first },
                 locate: { [locator = rig.codex.locator] in locator })
             try runtime.start()
+            runtime.follow(.all)  // 测试台装了钩子：同 App 检测出接入了
             try await eventually("认出了终端里正在跑的会话") {
                 later.session(sessionID: session.sessionID).map { $0.displayName == "终端里的会话" && $0.state.isWorking } ?? false
             }
@@ -105,6 +106,7 @@ struct RealCodexTerminalTests {
                 bridge: later, paths: rig.codex.paths, hooks: AgentHookServer(path: rig.codex.root.appending(path: "s2/hooks.sock")),
                 codex: { [locator = rig.codex.locator] in locator.candidates("codex").first }, locate: { [locator = rig.codex.locator] in locator })
             try runtime.start()
+            runtime.follow(.all)
             try await eventually("晚启动也认出在等子代理") {
                 later.session(sessionID: session.sessionID).map { $0.state == .delegating && $0.subagents.map(\.name) == ["fruit"] } ?? false
             }

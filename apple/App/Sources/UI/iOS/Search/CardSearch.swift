@@ -12,20 +12,20 @@ nonisolated private struct SearchData: Sendable, Equatable {
 
     /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
     struct Group: Identifiable, Sendable, Equatable {
+        var id: UUID
         var project: Project?
         var cards: [CardEntry]
-        var id: UUID? { project?.id }
     }
 
     static func grouped(_ cards: [Card], projects: [Project]) -> [Group] {
         let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
-        var order: [UUID?] = []
-        var buckets: [UUID?: [CardEntry]] = [:]
+        var order: [UUID] = []
+        var buckets: [UUID: [CardEntry]] = [:]
         for card in cards {
             if buckets[card.projectID] == nil { order.append(card.projectID) }
             buckets[card.projectID, default: []].append(CardEntry(card))
         }
-        return order.map { Group(project: $0.flatMap { byID[$0] }, cards: buckets[$0] ?? []) }
+        return order.map { Group(id: $0, project: byID[$0], cards: buckets[$0] ?? []) }
     }
 }
 
@@ -66,7 +66,7 @@ struct CardSearchResults: View {
                     ForEach(data.groups) { group in
                         HStack(spacing: 6) {
                             ProjectGlyph(project: group.project, size: 12)
-                            SectionHeader(title: group.project?.name ?? CaptureCopy.unfiled, count: nil).padding(.horizontal, -4)
+                            SectionHeader(title: group.project?.name ?? "", count: nil).padding(.horizontal, -4)
                         }
                         .padding(.top, 8)
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
@@ -124,7 +124,6 @@ private struct FilterChips: View {
         ChipRow {
             Menu {
                 Button("全部") { query.project = nil }
-                Button(CaptureCopy.unfiled) { query.project = .some(nil) }
                 Divider()
                 ForEach(projects) { project in Button(project.name) { query.project = project.id } }
             } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
@@ -148,11 +147,7 @@ private struct FilterChips: View {
     }
 
     private var projectLabel: String {
-        switch query.project {
-        case .none: "全部"
-        case .some(.none): CaptureCopy.unfiled
-        case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
-        }
+        query.project.flatMap { id in projects.first { $0.id == id }?.name } ?? "全部"
     }
 
     private var sentLabel: String {
