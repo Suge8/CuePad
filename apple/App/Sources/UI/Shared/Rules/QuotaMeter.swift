@@ -99,7 +99,7 @@ nonisolated struct QuotaMeter: Equatable {
     /// 窗口长度的叫法：5 小时、本周（7 天）、其余按天或小时。
     static func windowName(seconds: Int) -> String {
         switch seconds {
-        case 7 * 86_400: "本周"
+        case QuotaWindow.week: "本周"
         case let s where s % 86_400 == 0: "\(s / 86_400) 天"
         default: "\(Int((Double(seconds) / 3_600).rounded())) 小时"
         }

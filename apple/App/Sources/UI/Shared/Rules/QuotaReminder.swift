@@ -6,9 +6,8 @@ import Foundation
 /// 同一标识的待发通知原地换成最新的剩余。提醒时刻已过的不排，所以一个窗口每次重置前最多响一次：响过的不会再排，
 /// 第一次观测就晚于提醒时刻的也不补。
 /// 5 小时这类短窗口不提醒：几小时就转一圈，提醒只是噪音；按模型的周额度不提醒：与整个账号的本周一起重置、先卡住的是整个账号的。
-nonisolated struct QuotaReminder: Equatable {
+nonisolated struct QuotaReminder {
     static let lead: TimeInterval = 12 * 3_600
-    static let week = 7 * 86_400
     /// 本地通知标识的前缀：重排时认出哪些待发通知是这里排的
     static let prefix = "cuepad.quota/"
 
@@ -23,7 +22,7 @@ nonisolated struct QuotaReminder: Equatable {
     /// `now` 之后还要响的提醒，每个账号至多一条。
     static func due(_ quotas: [AccountQuota], at now: Date) -> [QuotaReminder] {
         quotas.compactMap { quota in
-            guard let window = quota.windows.first(where: { $0.seconds == week && $0.model == nil }) else { return nil }
+            guard let window = quota.windows.first(where: { $0.seconds == QuotaWindow.week && $0.model == nil }) else { return nil }
             let fireAt = window.resetsAt.addingTimeInterval(-lead)
             guard fireAt > now else { return nil }
             let meter = QuotaMeter.Window(window, at: fireAt)

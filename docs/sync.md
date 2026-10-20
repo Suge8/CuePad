@@ -77,8 +77,8 @@ Mac 上开着是人看得到主窗口（露在屏上，有没有焦点都算）�
   - 你没在看：没在哪台在线的 Mac 上开着它说的那一页（会话页、Cue 页，见「开着哪一页」）。手机的那条不算；手机前台收到推送时按本机此刻开着哪一页定弹不弹（`AlertCenter`）。所以你在 Mac 上开着那一页时手机不响，你在手机上开着时手机前台不弹、Mac 照常提示。
 - iPhone：锁屏通知由 CloudKit 查询订阅在服务端生成，不靠 App 在后台运行。会话状态记录与 Cue 的消息都带明文可查询的 `notify` 标志，是一次性事件标志：写下的那一刻按 `reaches` 置位（会话的只由会话所在的 Mac 写，Cue 留给你的也由它补上；Cue 的在值班的 Mac 上写下时），只存在于未上传的版本上，上传即清、远端带回来的不留（理由与规则见 `PiStateRecorder` 与 `AlertSubscriptions`）。取舍：通知反映服务端收到记录那一刻的状态，标志在上传前被状态已前进的写入取代就不送出；状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。前台不展示 Agent 的系统通知，提示是 App 内横幅（读同步来的会话状态，不依赖推送是否到达）。
 - Mac 不注册远程通知、签名里没有推送权限（aps-environment），收不到这些推送；同步到达本来也不靠推送（见「拉取节奏」）。
-- 手机前台收到 Agent 或 Cue 的通知、后台收到同步区变化的静默推送，都立即拉一次（`AlertCenter.pushed`、`IOSAppDelegate`），不等切一次后台。Mac 上 Agent 与 Cue 的提示都是本机发的本地通知，出口只有 `AlertCenter.post`（开关、提示音与 `reaches` 都在那里）：Agent 的不分会话在本机还是别的 Mac，同一条路（`LiveSessions` → `SessionAlertTracker` 认出状态转换与刚留给你的，本次运行第一次读到的只记基线）；Cue 的由值班的 Mac 读库（`CueService.followNotifications`）。前台后台都是系统横幅加声音（macOS 27 实测前台回复里带 `.sound` 系统就会弹横幅，所以不另出窗口里的提示条），免打扰只认系统的专注模式。打开会话时撤掉它那一组已送达的通知。"等你"的通知、手机推送标志与"等你 N"、Dock 角标同一条规则。
-- 周额度提醒不走上面这套：两端各自按同步来的额度记录排系统的定时本地通知（`QuotaReminder`、`AlertCenter.remind`），到点不靠 App 在跑、手机上也不靠推送；不问 `reaches`，没有开关。
+- 手机前台收到 Agent 或 Cue 的通知、后台收到同步区变化的静默推送，都立即拉一次（`AlertCenter.pushed`、`IOSAppDelegate`），不等切一次后台。Mac 的提示都是本机发的本地通知，出口只有 `AlertCenter.post`（开关、提示音、`reaches` 与征求权限都在那里）：Agent 的不分会话在本机还是别的 Mac，同一条路（`LiveSessions` → `SessionAlertTracker` 认出状态转换与刚留给你的，本次运行第一次读到的只记基线）；Cue 的由值班的 Mac 读库（`CueService.followNotifications`）。前台后台都是系统横幅加声音（macOS 27 实测前台回复里带 `.sound` 系统就会弹横幅，所以不另出窗口里的提示条），免打扰只认系统的专注模式。打开会话时撤掉它那一组已送达的通知。"等你"的通知、手机推送标志与"等你 N"、Dock 角标同一条规则。
+- 周额度提醒（`QuotaReminder`）两端同一个出口 `AlertCenter.post`，排成定时本地通知：到点不靠 App 在跑，手机上也不靠推送；不问 `reaches`，没有开关。
 - Mac 的提示音：通知中心只在 ~/Library/Sounds 与系统声音目录里找声音，不看 App 包；一个声音名找不到过一次，之后装上了也播兜底音。所以先把选中的那段装进去再发（`AlertSounds`）。这几个文件卸载 App 后会留下，也会出现在系统设置的提示音列表里。
 - 改订阅的定义（谓词、选项、通知文案 key）等于改 schema，见 [release.md](release.md)。
 
