@@ -3,12 +3,6 @@ import AppKit
 import CueText
 import SwiftUI
 
-extension PickedImage {
-    static func converted(_ data: Data) -> Data? {
-        NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: quality])
-    }
-}
-
 extension ComposerSource {
     static var imageChoices: [(title: String, icon: Icon, source: ComposerSource)] { [("图片文件…", .photo, .files)] }
 }
