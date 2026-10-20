@@ -51,7 +51,7 @@ struct ProjectPage: View {
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
-                        withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+                        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .padding(.top, 8)
                     .ignoresSafeArea(edges: .top)

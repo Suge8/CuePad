@@ -90,7 +90,7 @@ struct CuePage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(Motion.panel, value: cue.showsRun)
+        .animation(Motion.snappy, value: cue.showsRun)
         .background(palette.desk)
     }
     #else
