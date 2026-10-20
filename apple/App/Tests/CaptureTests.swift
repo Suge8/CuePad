@@ -28,16 +28,15 @@ struct CaptureTests {
         #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
     }
 
-    @Test func 没选项目或项目已删除时进默认项目() async throws {
+    @Test func 所选项目已删除时进默认项目() async throws {
         let gone = try await services.store.createProject(name: "Gone", color: "#000000")
         try await services.store.trashProject(gone.id)
-        try CaptureQueue.enqueue(ShareContent(text: "a"), project: nil, into: queue)
         try CaptureQueue.enqueue(ShareContent(text: "b"), project: gone.id, into: queue)
         try CaptureQueue.enqueue(ShareContent(text: "c"), project: UUID(), into: queue)
 
         await services.drainCaptures()
 
-        #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["a", "b", "c"])
+        #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["b", "c"])
     }
 
     /// 扩展还没写完的条目跳过、不删；入库失败的条目保留并报告；都不挡其他条目。
@@ -47,8 +46,8 @@ struct CaptureTests {
         try png.write(to: unfinished.appending(path: "image-1.png"))
         try CaptureQueue.enqueue(
             ShareContent(text: "坏图", images: [.init(data: Data("not an image".utf8), fileExtension: "png")]),
-            project: nil, into: queue, now: Date(timeIntervalSince1970: 1))
-        try CaptureQueue.enqueue(ShareContent(text: "好的"), project: nil, into: queue, now: Date(timeIntervalSince1970: 2))
+            project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 1))
+        try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue, now: Date(timeIntervalSince1970: 2))
 
         await services.drainCaptures()
 
@@ -61,7 +60,7 @@ struct CaptureTests {
     @Test func 收到扩展的通知后自动入库() async throws {
         services.startCaptureIngest()
         defer { services.cancelBackgroundWork() }
-        try CaptureQueue.enqueue(ShareContent(text: "来自扩展"), project: nil, into: queue)
+        try CaptureQueue.enqueue(ShareContent(text: "来自扩展"), project: Project.defaultID, into: queue)
 
         DarwinNotifications.post(CaptureQueue.notification)
 
