@@ -28,7 +28,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     struct Options: Sendable {
         var protocolVersion = PiWire.protocolVersion
-        var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"
         var model: WireModel? = WireModel(id: "test-model")
@@ -200,7 +199,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     private func hello() -> [String: Any] {
         var msg: [String: Any] = [
-            "t": "hello", "protocol": options.protocolVersion, "extensionVersion": options.extensionVersion,
+            "t": "hello", "protocol": options.protocolVersion, "extensionVersion": 1,
             "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "mode": options.mode,
             "term": options.env,
             "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull()]) { a, _ in a },

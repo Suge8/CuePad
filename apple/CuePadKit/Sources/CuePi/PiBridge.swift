@@ -131,7 +131,7 @@ public final class PiBridge {
 
         private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
             guard let session else { throw PiBridgeError.sessionEnded }
-            guard session.state != .incompatible else { throw session.upgrading ? PiBridgeError.upgradingExtension : .incompatibleExtension }
+            guard !session.upgrading else { throw PiBridgeError.upgradingExtension }
             nextCommand += 1
             let commandID = "c\(nextCommand)"
             let data = try encode(commandID)
@@ -275,8 +275,8 @@ public final class PiBridge {
     public func attach(_ session: PiSession, via link: any SessionLink) {
         controls[session.id] = link
         var session = session
-        let before = slots.first { $0.id == session.id && $0.session.state != .incompatible }.map(\.session.carried)
-            ?? (session.state == .incompatible ? nil : carried.removeValue(forKey: session.sessionID))
+        let before = slots.first { $0.id == session.id && !$0.session.upgrading }.map(\.session.carried)
+            ?? (session.upgrading ? nil : carried.removeValue(forKey: session.sessionID))
         if let before, before.state.phase == session.state.phase {
             session.stateSince = before.times.stateSince
             session.busySince = before.times.busySince ?? session.busySince
@@ -316,14 +316,11 @@ public final class PiBridge {
         releasing.remove(id)
         guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
         let session = slots.remove(at: index).session
-        if reason == .reload, session.state != .incompatible { carried[session.sessionID] = session.carried }
+        if reason == .reload, !session.upgrading { carried[session.sessionID] = session.carried }
         emit(.ended(session, reason: reason))
     }
 
     // MARK: 托管的会话
-
-    /// 从这个扩展版本起，扩展换了新版本就在空闲时自己重新载入（`PiSession.upgrading`）；更早的协议号不同时要在终端里 /reload。
-    nonisolated static let selfReloadingExtension = 29
 
     /// 托管的会话什么时候请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲的（两边会各写各的；正在跑一轮的等它做完、状态变化时再看）；
     /// 歇着满 `hostedIdle` 的（为自己起了进程的 Claude Code、Codex；Pi 自己计时，App 退出后照常在；OpenCode 的会话在它的服务里，没有进程要关）。
@@ -395,7 +392,7 @@ public final class PiBridge {
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
             // 协议版本不同的会话：之后的消息格式不可知，只认告别（同 hello 只读认得出的一项：重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
-            if link.session?.state == .incompatible {
+            if link.session?.upgrading == true {
                 link.bye = PiWire.otherProtocolBye(line) ?? link.bye
                 continue
             }
@@ -418,7 +415,7 @@ public final class PiBridge {
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
-                extensionVersion: hello.extensionVersion, state: work.state, detail: work.detail,
+                state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
@@ -430,7 +427,7 @@ public final class PiBridge {
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
-                terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
+                terminal: PiTerminal(), state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             session.hosted = hello.hosted

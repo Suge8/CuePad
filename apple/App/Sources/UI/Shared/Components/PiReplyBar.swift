@@ -96,8 +96,6 @@ struct PiReplyBar: View {
         switch reply {
         case .answerAbove: notice("先在上面作答", icon: .above)
         case .unanswerable: notice(Self.unanswerable, icon: .mac)
-        // 怎么接上在顶上的玻璃标题里（点它看说明，`PiShown.explanation`），这里不重复
-        case .restartPi: notice("这个会话现在发不了", icon: .cannotSend)
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
                 if let commandProgress { progressLine(commandProgress) }

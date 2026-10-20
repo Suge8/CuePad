@@ -306,7 +306,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var session = PiSession(
             id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
             pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
-            extensionVersion: 0, state: .settled, stateSince: .now)
+            state: .settled, stateSince: .now)
         apply(thread, to: &session)
         return session
     }
@@ -480,7 +480,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
             id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex,
             sessionFile: transcript ? input["transcript_path"]?.string.map { URL(filePath: $0) } : nil,
             pid: pid, cwd: URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
-            extensionVersion: 0, state: .settled, stateSince: .now)
+            state: .settled, stateSince: .now)
         attach(session)
         return tracked[session.id]!
     }

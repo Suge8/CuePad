@@ -202,7 +202,6 @@ public enum CueEnvelope {
     case .error: "出错"
     case .ended: "已结束"
     case .interrupted: "做到一半被打断"
-    case .incompatible: "旧版扩展，要他在终端里 /reload"
     case nil: state.rawValue
     }
   }

@@ -90,7 +90,7 @@ final class AgentIntegrations {
         if let failure { throw failure }
     }
 
-    /// 新装或升级；已在运行的 Pi 会话空闲时自己重新载入扩展（更早的旧扩展要在终端里 /reload）。
+    /// 新装或升级；已在运行的 Pi 会话空闲时自己重新载入扩展。
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
     }

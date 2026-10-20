@@ -83,7 +83,7 @@ final class ClaudeHostedSession: SessionLink {
         let pid = process.pid
         var session = PiSession(
             id: PiSession.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
-            cwd: cwd, terminal: PiTerminal(), extensionVersion: 0, state: .settled, stateSince: .now)
+            cwd: cwd, terminal: PiTerminal(), state: .settled, stateSince: .now)
         session.hosted = true
         session.launchToken = launchToken
         session.name = known?.name

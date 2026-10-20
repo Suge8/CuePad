@@ -4,7 +4,7 @@ import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
-    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话记为 `.incompatible`（`OtherProtocolHello`、`PiSession.upgrading`）
+    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话等它换上新扩展（`OtherProtocolHello`、`PiSession.upgrading`）
     static let protocolVersion = 16
 
     struct State: Decodable {
@@ -43,7 +43,6 @@ enum PiWire {
 
     struct Hello: Decodable {
         var protocolVersion: Int
-        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -60,13 +59,12 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
+            case sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
-            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
@@ -85,7 +83,6 @@ enum PiWire {
     /// `sessionFile` 也读：进程退出时说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
-        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
@@ -96,13 +93,12 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
+            case sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
-            extensionVersion = (try? c.decode(Int.self, forKey: .extensionVersion)) ?? 0
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try? c.decode(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)

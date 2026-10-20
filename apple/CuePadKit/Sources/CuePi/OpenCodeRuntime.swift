@@ -515,7 +515,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         if bridge.session(id: id) == nil {
             var session = PiSession(
                 id: id, sessionID: sessionID, agent: .opencode, sessionFile: nil, pid: connection.pid,
-                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: PiTerminal(), extensionVersion: 0,
+                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: PiTerminal(),
                 state: .settled, stateSince: .now)
             fill(&session)
             bridge.attach(session, via: self)

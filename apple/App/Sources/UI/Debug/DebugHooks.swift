@@ -15,8 +15,6 @@ enum DebugHooks {
         var editorSelection: NSRange?
         /// 每一轮的经过、子代理名册与 Cue 页折起的动态一开始就展开（`-CuePadToolsOpen`）。
         var toolsOpen = false
-        /// 推入页顶栏有说明时直接弹出（`-CuePadExplain`）。
-        var explain = false
         /// 设置里的崩溃报告直接弹出（`-CuePadCrashSheet`）。
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话（`-CuePadDemoMac`）：隔离模式没有同步也送得到。
